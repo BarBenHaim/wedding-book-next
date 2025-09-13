@@ -1,11 +1,10 @@
 // src/app/layout.js
-import { Geist, Geist_Mono } from 'next/font/google'
-import { Noto_Serif_Hebrew } from 'next/font/google'
+import { Geist, Geist_Mono, Noto_Serif_Hebrew } from 'next/font/google'
 import './globals.css'
 
-const geistSans = Geist({ subsets: ['latin'] })
-const geistMono = Geist_Mono({ subsets: ['latin'] })
-const notoHebrew = Noto_Serif_Hebrew({ subsets: ['hebrew'], weight: ['400', '700'] })
+const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
+const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
+const notoHebrew = Noto_Serif_Hebrew({ subsets: ['hebrew'], weight: ['400', '700'], variable: '--font-noto-hebrew' })
 
 export const metadata = {
     title: 'Wedding Book',
@@ -14,8 +13,9 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
     return (
-        <html lang='he'>
-            <body className={`${geistSans.className} ${geistMono.className} ${notoHebrew.className} antialiased`}>
+        <html lang='he' className={`${geistSans.variable} ${geistMono.variable} ${notoHebrew.variable}`}>
+            {/* זה מבטל mismatch שנגרם על ידי תוספים או הבדלי server/client */}
+            <body suppressHydrationWarning className='antialiased'>
                 {children}
             </body>
         </html>
