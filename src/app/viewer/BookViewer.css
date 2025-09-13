@@ -5,6 +5,7 @@
     background-color: #f7f3ee;
     min-height: 100vh;
     direction: rtl;
+    color: black;
 }
 
 .editor-panel {
@@ -27,4 +28,3 @@
     align-items: center;
     justify-content: center;
 }
-
