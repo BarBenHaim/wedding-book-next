@@ -22,30 +22,6 @@ export default function BookBuilder() {
         setPages(updated)
     }
 
-    const handleGenerateAI = async () => {
-        const prompt = `אתה מחולל ספר חתונה על בסיס התוכן הבא:\n\n${JSON.stringify(
-            pages,
-            null,
-            2
-        )}\n\nצור מבנה לספר: פרקים, עמודים, תוכן וכו'. הפלט בפורמט JSON.`
-
-        const res = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
-            },
-            body: JSON.stringify({
-                model: 'gpt-4',
-                messages: [{ role: 'user', content: prompt }],
-            }),
-        })
-
-        const data = await res.json()
-        const output = data.choices?.[0]?.message?.content
-        console.log('📘 AI Response:', output)
-    }
-
     const handleGoToViewer = () => {
         localStorage.setItem('bookPages', JSON.stringify(pages))
         router.push('/viewer')
@@ -83,10 +59,6 @@ export default function BookBuilder() {
 
             <button className='btn' onClick={handleGoToViewer}>
                 📖 הצג כתצוגת ספר פתוח
-            </button>
-
-            <button className='btn generate' onClick={handleGenerateAI}>
-                🧠 צור ספר עם AI
             </button>
         </div>
     )

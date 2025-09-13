@@ -14,9 +14,9 @@ export async function saveEntry(type, content) {
             content,
             name: type === 'text' ? extractName(content) : 'תמונה מהאורח',
             timestamp: Date.now(),
-            id: `local_${Date.now()}`
+            id: `local_${Date.now()}`,
         }
-        
+
         const existingEntries = JSON.parse(localStorage.getItem('weddingEntries') || '[]')
         existingEntries.push(entry)
         localStorage.setItem('weddingEntries', JSON.stringify(existingEntries))
