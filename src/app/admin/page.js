@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getEntries } from '../../utils/classifyMedia'
+import { getEntries } from '../../lib/classifyMedia'
 
 export default function AdminDashboard() {
     const [entries, setEntries] = useState([])

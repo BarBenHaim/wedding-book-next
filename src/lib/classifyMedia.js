@@ -1,4 +1,4 @@
-import { db, storage } from '../lib/firebaseConfig'
+import { db, storage } from './firebaseConfig'
 import { ref as dbRef, push, set } from 'firebase/database'
 import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage'
 import { ref, get } from 'firebase/database'

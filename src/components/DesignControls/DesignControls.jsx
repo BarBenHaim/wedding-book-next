@@ -1,5 +1,5 @@
 import './DesignControls.css'
-import TextureSelector from './TextureSelector'
+import TextureSelector from '../TextureSelector/TextureSelector'
 
 export default function DesignControls({ settings, onChange }) {
     const handleUploadTexture = e => {

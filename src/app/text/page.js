@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { saveEntry } from '../../utils/classifyMedia'
+import { saveEntry } from '../../lib/classifyMedia'
 
 export default function TextPage() {
     const [name, setName] = useState('')

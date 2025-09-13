@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useRef } from 'react'
 import HTMLFlipBook from 'react-pageflip'
-import BookPageTemplate from '../../components/BookPageTemplate'
-import DesignControls from '../../components/DesignControls'
+import BookPageTemplate from '../../components/BookPageTemplate/BookPageTemplate'
+import DesignControls from '../../components/DesignControls/DesignControls'
 import mediaSample from '../../lib/mediaSample.json'
 import './BookViewer.css'
 

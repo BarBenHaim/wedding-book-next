@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { saveEntry } from '../../utils/classifyMedia'
+import { saveEntry } from '../../lib/classifyMedia'
 
 export default function PhotoPage() {
     const liveVideoRef = useRef(null)

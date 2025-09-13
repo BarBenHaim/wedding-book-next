@@ -12,8 +12,6 @@ const firebaseConfig = {
     databaseURL: process.env.NEXT_PUBLIC_DATABASE_URL,
 }
 
-console.log('STORAGE BUCKET:', process.env.NEXT_PUBLIC_STORAGE_BUCKET)
-
 // Only initialize Firebase if we have real config values
 let app, storage, db
 
