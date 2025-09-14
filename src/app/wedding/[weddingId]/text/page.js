@@ -1,26 +1,36 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { saveEntry } from '../../lib/classifyMedia'
+import { useRouter, useParams } from 'next/navigation'
+import { saveEntry } from '../../../../lib/classifyMedia'
 
 export default function TextPage() {
     const [name, setName] = useState('')
     const [text, setText] = useState('')
     const [submitting, setSubmitting] = useState(false)
     const router = useRouter()
+    const { weddingId } = useParams() // נקבל את ה־ID מה־URL
 
-    function onSubmit(e) {
+    async function onSubmit(e) {
         e.preventDefault()
         if (!text.trim()) return
+        if (!weddingId) {
+            alert('לא נמצא מזהה חתונה')
+            return
+        }
 
         setSubmitting(true)
 
         const fullText = name ? `${name}:\n${text}` : text
-        saveEntry('text', fullText)
-
-        setSubmitting(false)
-        router.push('/thanks')
+        try {
+            await saveEntry(weddingId, 'text', fullText) // נעביר את ה־weddingId
+            router.push(`/wedding/${weddingId}/thanks`)
+        } catch (err) {
+            console.error('Error saving entry:', err)
+            alert('שגיאה בשמירת הברכה')
+        } finally {
+            setSubmitting(false)
+        }
     }
 
     return (

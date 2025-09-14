@@ -1,20 +1,23 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getEntries } from '../../lib/classifyMedia'
+import { getEntries } from '../../../../lib/classifyMedia'
+import { useParams } from 'next/navigation'
 
 export default function AdminDashboard() {
     const [entries, setEntries] = useState([])
     const [loading, setLoading] = useState(true)
+    const { weddingId } = useParams() // מזהה החתונה מה־URL
 
     useEffect(() => {
         async function fetchData() {
-            const data = await getEntries()
+            if (!weddingId) return
+            const data = await getEntries(weddingId) // נעביר את ה־weddingId
             setEntries(data)
             setLoading(false)
         }
         fetchData()
-    }, [])
+    }, [weddingId])
 
     if (loading) {
         return (
@@ -28,7 +31,9 @@ export default function AdminDashboard() {
     return (
         <div className='container'>
             <h1>לוח בקרה לחתן ולכלה</h1>
-            <p>בחרו ברכות ותמונות לספר שלכם:</p>
+            <p>
+                ברכות ותמונות לחתונה: <strong>{weddingId}</strong>
+            </p>
 
             <div className='grid'>
                 {entries.map((entry, idx) => (
@@ -41,7 +46,7 @@ export default function AdminDashboard() {
                             <img src={entry.content} alt='ברכה מצולמת' width='200' style={{ borderRadius: 8 }} />
                         )}
                         <p style={{ fontSize: 12, color: '#888' }}>
-                            {new Date(entry.timestamp).toLocaleString('he-IL')}
+                            {entry.timestamp ? new Date(entry.timestamp).toLocaleString('he-IL') : '—'}
                         </p>
                     </div>
                 ))}

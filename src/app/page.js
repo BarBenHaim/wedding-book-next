@@ -1,26 +1,34 @@
+'use client'
+
 import Link from 'next/link'
+import { useState } from 'react'
 
 export default function Home() {
+    const [weddingId, setWeddingId] = useState('')
+
     return (
         <div className='container'>
             <div className='card' style={{ textAlign: 'center' }}>
-                <h1 className='title'>📖 ספר ברכות החתונה</h1>
-                <p>ברוכים הבאים לספר הברכות הדיגיטלי שלנו</p>
+                <h1 className='title'>📖 ברוכים הבאים ל־Wedding Book</h1>
+                <p>הכניסו מזהה חתונה או השתמשו בלינק שקיבלתם מהזוג:</p>
 
-                <div style={{ display: 'flex', gap: 16, marginTop: 32, flexWrap: 'wrap', justifyContent: 'center' }}>
-                    <Link href='/text' className='btn btn-primary'>
-                        ✍️ כתיבת ברכה
+                <input
+                    type='text'
+                    placeholder='מזהה חתונה (w123)'
+                    value={weddingId}
+                    onChange={e => setWeddingId(e.target.value)}
+                    style={{ padding: 12, marginTop: 12, borderRadius: 8, border: '1px solid #ccc' }}
+                />
+
+                {weddingId && (
+                    <Link
+                        href={`/wedding/${weddingId}`}
+                        className='btn btn-primary'
+                        style={{ marginTop: 16, display: 'inline-block' }}
+                    >
+                        עבור לחתונה
                     </Link>
-                    <Link href='/photo' className='btn btn-gold'>
-                        📷 צילום ברכה
-                    </Link>
-                    <Link href='/admin' className='btn'>
-                        👑 לוח בקרה
-                    </Link>
-                    <Link href='/viewer' className='btn'>
-                        📖 צפייה בספר
-                    </Link>
-                </div>
+                )}
             </div>
         </div>
     )

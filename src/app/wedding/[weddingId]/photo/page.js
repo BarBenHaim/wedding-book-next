@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { saveEntry } from '../../lib/classifyMedia'
+import { useRouter, useParams } from 'next/navigation'
+import { saveEntry } from '../../../../lib/classifyMedia'
 
 export default function PhotoPage() {
     const liveVideoRef = useRef(null)
@@ -10,20 +10,22 @@ export default function PhotoPage() {
     const [photoUrl, setPhotoUrl] = useState('')
     const [photoBlob, setPhotoBlob] = useState(null)
     const router = useRouter()
+    const { weddingId } = useParams()
 
     useEffect(() => {
         initCamera()
-
         return () => {
             if (stream) {
                 stream.getTracks().forEach(t => t.stop())
             }
         }
-    }, [])
+    }, []) // פעם אחת בלבד
 
     async function initCamera() {
         try {
-            const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+            const s = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'user', width: 640, height: 480 },
+            })
             setStream(s)
             if (liveVideoRef.current) {
                 liveVideoRef.current.srcObject = s
@@ -57,14 +59,19 @@ export default function PhotoPage() {
         setPhotoUrl('')
     }
 
-    function upload() {
-        if (!photoBlob) return
+    async function upload() {
+        if (!photoBlob || !weddingId) return
 
         const reader = new FileReader()
-        reader.onloadend = () => {
+        reader.onloadend = async () => {
             const dataUrl = reader.result
-            saveEntry('photo', dataUrl)
-            router.push('/thanks')
+            try {
+                await saveEntry(weddingId, 'photo', dataUrl)
+                router.push(`/wedding/${weddingId}/thanks`)
+            } catch (err) {
+                console.error('Error uploading photo:', err)
+                alert('שגיאה בהעלאת התמונה')
+            }
         }
 
         reader.readAsDataURL(photoBlob)
@@ -75,19 +82,19 @@ export default function PhotoPage() {
             <div className='card'>
                 <h2 className='title'>📷 צילום ברכה בתמונה</h2>
 
-                {/* תצוגת מצלמה חיה */}
                 {!photoUrl && (
                     <video
                         ref={liveVideoRef}
                         autoPlay
                         playsInline
                         muted
-                        style={{ width: '100%', borderRadius: 12, background: '#000' }}
+                        style={{ width: '100%', maxWidth: 400, borderRadius: 12, background: '#000' }}
                     />
                 )}
 
-                {/* תצוגת תמונה לאחר צילום */}
-                {photoUrl && <img src={photoUrl} alt='תמונה שצולמה' style={{ width: '100%', borderRadius: 12 }} />}
+                {photoUrl && (
+                    <img src={photoUrl} alt='תמונה שצולמה' style={{ width: '100%', maxWidth: 400, borderRadius: 12 }} />
+                )}
 
                 <div style={{ display: 'flex', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
                     {!photoUrl && (

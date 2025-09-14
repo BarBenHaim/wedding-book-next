@@ -1,6 +1,7 @@
 // src/app/layout.js
 import { Geist, Geist_Mono, Noto_Serif_Hebrew } from 'next/font/google'
 import './globals.css'
+import Header from '@/components/Header/Header'
 
 const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
@@ -16,6 +17,8 @@ export default function RootLayout({ children }) {
         <html lang='he' className={`${geistSans.variable} ${geistMono.variable} ${notoHebrew.variable}`}>
             {/* זה מבטל mismatch שנגרם על ידי תוספים או הבדלי server/client */}
             <body suppressHydrationWarning className='antialiased'>
+                <Header />
+
                 {children}
             </body>
         </html>

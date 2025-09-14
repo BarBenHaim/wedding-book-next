@@ -1,22 +1,22 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import { useParams } from 'next/navigation'
 import HTMLFlipBook from 'react-pageflip'
-import BookPageTemplate from '../../components/BookPageTemplate/BookPageTemplate'
-import DesignControls from '../../components/DesignControls/DesignControls'
-import mediaSample from '../../lib/mediaSample.json'
+import BookPageTemplate from '../../../../components/BookPageTemplate/BookPageTemplate'
+import DesignControls from '../../../../components/DesignControls/DesignControls'
+import { getEntries } from '../../../../lib/classifyMedia'
 import './BookViewer.css'
 
 export default function BookViewer() {
-    const [pages, setPages] = useState(() => {
-        return JSON.parse(localStorage.getItem('bookPages')) || mediaSample
-    })
-
+    const [pages, setPages] = useState([])
+    const [loading, setLoading] = useState(true)
     const [dimensions, setDimensions] = useState(getBookDimensions())
     const [styleSettings, setStyleSettings] = useState(() => {
         return JSON.parse(localStorage.getItem('bookStyle')) || defaultStyle
     })
 
+    const { weddingId } = useParams()
     const resizeTimeout = useRef(null)
     const bookRef = useRef(null)
 
@@ -44,6 +44,25 @@ export default function BookViewer() {
         handleResize()
         return () => window.removeEventListener('resize', handleResize)
     }, [])
+
+    useEffect(() => {
+        async function fetchData() {
+            if (!weddingId) return
+            const data = await getEntries(weddingId)
+            setPages(data)
+            setLoading(false)
+        }
+
+        fetchData()
+    }, [weddingId])
+
+    if (loading) {
+        return (
+            <div className='container'>
+                <h2>📖 טוען את הספר...</h2>
+            </div>
+        )
+    }
 
     return (
         <div className='book-layout'>
