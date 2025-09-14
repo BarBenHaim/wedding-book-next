@@ -2,33 +2,35 @@ import { db, storage } from './firebaseClient'
 import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 
-export async function saveEntry(weddingId, type, content) {
+export async function saveEntry(weddingId, entry) {
     try {
-        if (type === 'text') {
-            await addDoc(collection(db, 'weddings', weddingId, 'entries'), {
-                type: 'text',
-                content,
-                name: extractName(content),
-                timestamp: serverTimestamp(),
-            })
-        } else if (type === 'photo') {
+        let imageUrl = null
+
+        // אם יש תמונה (dataURL או Blob)
+        if (entry.image) {
             const filename = `photo-${Date.now()}.jpg`
             const photoRef = storageRef(storage, `weddings/${weddingId}/${filename}`)
 
-            // ממירים את ה־dataURL ל־Blob לפני העלאה
-            const response = await fetch(content)
-            const blob = await response.blob()
+            let blob
+            if (typeof entry.image === 'string') {
+                // אם זה dataURL
+                const response = await fetch(entry.image)
+                blob = await response.blob()
+            } else {
+                // אם זה Blob ישירות
+                blob = entry.image
+            }
 
             await uploadBytes(photoRef, blob)
-            const downloadURL = await getDownloadURL(photoRef)
-
-            await addDoc(collection(db, 'weddings', weddingId, 'entries'), {
-                type: 'photo',
-                content: downloadURL,
-                name: 'תמונה מהאורח',
-                timestamp: serverTimestamp(),
-            })
+            imageUrl = await getDownloadURL(photoRef)
         }
+
+        await addDoc(collection(db, 'weddings', weddingId, 'entries'), {
+            name: entry.name || 'אורח אנונימי',
+            text: entry.text || null,
+            imageUrl,
+            timestamp: serverTimestamp(),
+        })
     } catch (err) {
         console.error('Error saving entry:', err)
         throw err
@@ -50,9 +52,4 @@ export async function getEntries(weddingId) {
         console.error('Error getting entries:', err)
         return []
     }
-}
-
-function extractName(content) {
-    if (!content.includes(':\n')) return ''
-    return content.split(':\n')[0].trim()
 }

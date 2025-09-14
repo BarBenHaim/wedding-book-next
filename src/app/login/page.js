@@ -1,5 +1,4 @@
 'use client'
-import '../login/login.css'
 
 import { useState } from 'react'
 import { signInWithEmailAndPassword } from 'firebase/auth'

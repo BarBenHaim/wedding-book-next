@@ -26,35 +26,47 @@ export default function Header() {
 
     async function handleLogout() {
         await signOut(auth)
-        localStorage.removeItem('weddingId') // נקה גם את ה־ID
+        localStorage.removeItem('weddingId')
         router.push('/')
     }
 
     return (
-        <header style={{ padding: '16px', borderBottom: '1px solid #ddd', marginBottom: '20px' }}>
-            <nav style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <header className='sticky top-0 left-0 right-0 h-16 z-50 border-b border-pink-100 bg-white/80 backdrop-blur-md shadow-sm'>
+            <nav className='mx-auto flex max-w-6xl items-center justify-between px-6 py-4'>
+                {/* לוגו */}
                 <Link
                     href={weddingId ? `/wedding/${weddingId}` : '/'}
-                    className='logo'
-                    style={{ fontWeight: 'bold', fontSize: '1.2rem' }}
+                    className='text-xl font-serif font-bold text-pink-600 hover:text-pink-700 transition'
                 >
                     💍 Wedding Book
                 </Link>
 
-                <div style={{ display: 'flex', gap: '12px' }}>
+                {/* פעולות */}
+                <div className='flex items-center gap-4'>
                     {!user ? (
                         <>
-                            <Link href='/login' className='btn btn-primary'>
+                            <Link
+                                href='/login'
+                                className='rounded-lg bg-pink-500 px-4 py-2 text-sm font-medium text-white shadow hover:bg-pink-600 transition'
+                            >
                                 התחברות
                             </Link>
-                            <Link href='/register' className='btn btn-gold'>
+                            <Link
+                                href='/register'
+                                className='rounded-lg border border-pink-400 px-4 py-2 text-sm font-medium text-pink-600 hover:bg-pink-50 transition'
+                            >
                                 הרשמה
                             </Link>
                         </>
                     ) : (
                         <>
-                            <span style={{ fontSize: '0.9rem', color: '#555' }}>מחובר כ: {user.email}</span>
-                            <button onClick={handleLogout} className='btn'>
+                            <span className='text-sm text-gray-600 hidden sm:inline'>
+                                מחובר כ־ <span className='font-medium'>{user.email}</span>
+                            </span>
+                            <button
+                                onClick={handleLogout}
+                                className='rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition'
+                            >
                                 התנתקות
                             </button>
                         </>

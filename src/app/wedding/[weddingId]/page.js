@@ -1,50 +1,40 @@
-'use client'
-
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
-import { onAuthStateChanged } from 'firebase/auth'
-import { auth } from '../../../lib/firebaseClient'
-import { useParams } from 'next/navigation'
+import { notFound } from 'next/navigation'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../../../lib/firebaseClient'
 
-export default function WeddingHome() {
-    const [user, setUser] = useState(null)
-    const { weddingId } = useParams()
+export default async function WeddingHome({ params }) {
+    const { weddingId } = params
 
-    useEffect(() => {
-        const unsub = onAuthStateChanged(auth, setUser)
-        return () => unsub()
-    }, [])
+    // בודק במסד הנתונים אם החתונה קיימת
+    const ref = doc(db, 'weddings', weddingId)
+    const snap = await getDoc(ref)
+
+    if (!snap.exists()) {
+        notFound() // שולח ל-app/not-found.js
+    }
 
     return (
-        <div className='container'>
-            <div className='card' style={{ textAlign: 'center' }}>
-                <h1 className='title'>📖 ספר ברכות החתונה</h1>
-                <p>
+        <div className='container mx-auto px-4 py-12'>
+            <div className='rounded-xl bg-white p-8 text-center shadow-lg'>
+                <h1 className='mb-4 text-3xl font-serif text-gray-800'>📖 ספר ברכות החתונה</h1>
+                <p className='text-gray-600'>
                     ברוכים הבאים לחתונה: <strong>{weddingId}</strong>
                 </p>
 
-                <div style={{ display: 'flex', gap: 16, marginTop: 32, flexWrap: 'wrap', justifyContent: 'center' }}>
-                    {/* אורחים */}
-                    <Link href={`/wedding/${weddingId}/text`} className='btn btn-primary'>
+                <div className='mt-8 flex flex-wrap items-center justify-center gap-4'>
+                    <Link
+                        href={`/wedding/${weddingId}/text`}
+                        className='rounded-lg bg-pink-500 px-6 py-3 text-white shadow hover:bg-pink-600 transition'
+                    >
                         ✍️ כתיבת ברכה
                     </Link>
-                    <Link href={`/wedding/${weddingId}/photo`} className='btn btn-gold'>
+                    <Link
+                        href={`/wedding/${weddingId}/photo`}
+                        className='rounded-lg bg-yellow-400 px-6 py-3 text-gray-800 shadow hover:bg-yellow-500 transition'
+                    >
                         📷 צילום ברכה
                     </Link>
-
-                    {/* חתן/כלה */}
-                    {user ? (
-                        <>
-                            <Link href={`/wedding/${weddingId}/viewer`} className='btn'>
-                                📖 צפייה בספר
-                            </Link>
-                            <Link href={`/wedding/${weddingId}/admin`} className='btn'>
-                                👑 לוח בקרה
-                            </Link>
-                        </>
-                    ) : (
-                        <></>
-                    )}
                 </div>
             </div>
         </div>
