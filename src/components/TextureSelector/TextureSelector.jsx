@@ -1,5 +1,3 @@
-import './TextureSelector.css'
-
 export default function TextureSelector({ value, onChange }) {
     const textures = [
         { id: 'none', name: 'ללא', url: '' },
