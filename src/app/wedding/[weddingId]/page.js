@@ -41,19 +41,9 @@ export default function WeddingHome() {
                             <Link href={`/wedding/${weddingId}/admin`} className='btn'>
                                 👑 לוח בקרה
                             </Link>
-                            <Link href='/logout' className='btn'>
-                                🚪 התנתקות
-                            </Link>
                         </>
                     ) : (
-                        <>
-                            <Link href='/login' className='btn btn-primary'>
-                                🔑 התחברות
-                            </Link>
-                            <Link href='/register' className='btn btn-gold'>
-                                📝 הרשמה
-                            </Link>
-                        </>
+                        <></>
                     )}
                 </div>
             </div>
