@@ -15,8 +15,15 @@ export default function LoginPage() {
     async function handleLogin(e) {
         e.preventDefault()
         try {
-            await signInWithEmailAndPassword(auth, email, password)
-            router.push('/admin')
+            const userCredential = await signInWithEmailAndPassword(auth, email, password)
+            const userId = userCredential.user.uid
+            const weddingId = userId // באותו פורמט כמו ברישום
+
+            // אופציונלי: שמירה בלוקאל סטורג'
+            localStorage.setItem('weddingId', weddingId)
+
+            // הפנייה לדשבורד
+            router.push(`wedding/${weddingId}/admin`)
         } catch (err) {
             setError('שגיאה בהתחברות: ' + err.message)
         }

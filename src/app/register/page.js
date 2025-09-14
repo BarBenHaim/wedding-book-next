@@ -37,7 +37,7 @@ export default function RegisterPage() {
             localStorage.setItem('weddingId', weddingId)
 
             // הפניה ללוח הניהול עם ה־weddingId
-            router.push(`/admin/${weddingId}`)
+            router.push(`wedding/${weddingId}/admin`)
         } catch (err) {
             setError('שגיאה בהרשמה: ' + err.message)
         }
