@@ -2,15 +2,15 @@
 const defaultStyle = {
     backgroundColor: '#fdfaf6',
     fontFamily: `'Noto Serif Hebrew', 'David Libre', serif`,
-    fontSize: 20,
+    fontSize: 42, // ערכי אמת (A4)
     fontColor: '#3a2f2f',
     borderColor: '#d8bfa4',
-    borderWidth: 2,
+    borderWidth: 8,
     borderRadius: 0,
     textureUrl: 'https://www.transparenttextures.com/patterns/paper-fibers.png',
     imageStyle: {
-        maxWidth: '85%',
-        maxHeight: '300px',
+        maxWidth: '2000px',
+        maxHeight: '1600px',
         boxShadow: '0 6px 18px rgba(0,0,0,0.15)',
         border: '1px solid #EDEDED',
         background: '#fff',

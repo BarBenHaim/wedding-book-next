@@ -1,23 +1,17 @@
 'use client'
 
-import { useMemo } from 'react'
-import TextureSelector from '../TextureSelector/TextureSelector'
-import defaultStyle from '@/app/wedding/[weddingId]/viewer/defultStyle'
-
-// ברירות מחדל
 const BASE_DEFAULTS = {
     backgroundColor: '#fdfaf6',
     fontFamily: `'Noto Serif Hebrew', 'David Libre', serif`,
-    fontSize: 18,
+    fontSize: 42, // ערכי אמת ל־A4
     fontColor: '#3a2f2f',
     borderColor: '#d8bfa4',
-    borderWidth: 2,
+    borderWidth: 8,
     borderRadius: 0,
     textureUrl: '',
     imageStyle: {
-        width: '100%',
-        maxWidth: '95%',
-        maxHeight: '80%',
+        maxWidth: '2000px',
+        maxHeight: '1600px',
         borderRadius: '0%',
         boxShadow: 'none',
         borderColor: '#000000',
@@ -30,84 +24,31 @@ const BASE_DEFAULTS = {
     },
 }
 
-// כלי נגישות: בדיקת קונטרסט
-function hexToRgb(hex) {
-    const c = hex.replace('#', '')
-    const bigint = parseInt(
-        c.length === 3
-            ? c
-                  .split('')
-                  .map(x => x + x)
-                  .join('')
-            : c,
-        16
-    )
-    return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 }
-}
-function luminance({ r, g, b }) {
-    const a = [r, g, b].map(v => {
-        v /= 255
-        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
-    })
-    return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2]
-}
-function contrastRatio(hex1, hex2) {
-    try {
-        const L1 = luminance(hexToRgb(hex1)) + 0.05
-        const L2 = luminance(hexToRgb(hex2)) + 0.05
-        return (Math.max(L1, L2) / Math.min(L1, L2)).toFixed(2)
-    } catch {
-        return '—'
-    }
-}
-
 export default function DesignControls({ settings, onChange }) {
-    const ratio = useMemo(
-        () => contrastRatio(settings.fontColor, settings.backgroundColor),
-        [settings.fontColor, settings.backgroundColor]
-    )
-
-    const handleUploadTexture = e => {
-        const file = e.target.files?.[0]
-        if (!file) return
-        const reader = new FileReader()
-        reader.onload = () => onChange({ textureUrl: reader.result })
-        reader.readAsDataURL(file)
-    }
-
     const resetToDefault = () => onChange({ ...BASE_DEFAULTS })
     const saveAsDefault = () => {
         if (typeof window !== 'undefined') {
             localStorage.setItem('bookStyle', JSON.stringify(settings))
-            alert('העיצוב נשמר כברירת מחדל 🎉')
+            alert('🎉 העיצוב נשמר כברירת מחדל')
         }
     }
 
     return (
-        <div
-            dir='rtl'
-            className='
-                space-y-6 
-                max-h-none 
-                md:max-h-[90vh] md:overflow-y-auto 
-                pr-1
-            '
-        >
+        <div dir='rtl' className='space-y-6 md:max-h-[90vh] md:overflow-y-auto pr-1'>
             {/* כותרת + פעולות */}
             <div className='flex items-center justify-between'>
-                <h3 className='text-lg font-semibold text-gray-800 flex items-center gap-2'>🎨 עיצוב הספר</h3>
                 <div className='flex gap-2'>
                     <button
                         type='button'
                         onClick={resetToDefault}
-                        className='rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50'
+                        className='rounded-lg border border-gray-300 bg-white/80 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 transition'
                     >
                         איפוס
                     </button>
                     <button
                         type='button'
                         onClick={saveAsDefault}
-                        className='rounded-md bg-pink-500 px-3 py-1.5 text-sm text-white shadow hover:bg-pink-600'
+                        className='rounded-lg bg-gradient-to-r from-purple-600 to-pink-500 px-3 py-1.5 text-sm font-medium text-white shadow'
                     >
                         שמור כברירת מחדל
                     </button>
@@ -115,8 +56,8 @@ export default function DesignControls({ settings, onChange }) {
             </div>
 
             {/* צבעים וטיפוגרפיה */}
-            <section className='rounded-xl border border-gray-200 bg-white/70 p-3'>
-                <h4 className='mb-3 text-sm font-medium text-gray-700'>טיפוגרפיה וצבעים</h4>
+            <section className='rounded-xl border border-gray-200 bg-white/80 backdrop-blur-md p-4'>
+                <h4 className='mb-3 text-sm font-semibold text-gray-800'>טיפוגרפיה וצבעים</h4>
 
                 <div className='grid grid-cols-2 gap-4'>
                     <div className='flex items-center justify-between'>
@@ -144,7 +85,7 @@ export default function DesignControls({ settings, onChange }) {
                     <select
                         value={settings.fontFamily}
                         onChange={e => onChange({ fontFamily: e.target.value })}
-                        className='w-full rounded-md border-gray-300 shadow-sm focus:border-pink-400 focus:ring-2 focus:ring-pink-200'
+                        className='w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-purple-400 focus:ring-2 focus:ring-purple-200'
                     >
                         <option value={`'Noto Serif Hebrew', 'David Libre', serif`}>Noto Serif Hebrew</option>
                         <option value={`'David Libre', serif`}>David Libre</option>
@@ -159,8 +100,8 @@ export default function DesignControls({ settings, onChange }) {
                     <div className='flex items-center gap-3'>
                         <input
                             type='range'
-                            min='14'
-                            max='36'
+                            min='20'
+                            max='80'
                             value={settings.fontSize}
                             onChange={e => onChange({ fontSize: parseInt(e.target.value) })}
                             className='w-full accent-pink-500'
@@ -171,9 +112,8 @@ export default function DesignControls({ settings, onChange }) {
             </section>
 
             {/* מסגרת עמוד */}
-            <section className='rounded-xl border border-gray-200 bg-white/70 p-3'>
-                <h4 className='mb-3 text-sm font-medium text-gray-700'>מסגרת העמוד</h4>
-
+            <section className='rounded-xl border border-gray-200 bg-white/80 backdrop-blur-md p-4'>
+                <h4 className='mb-3 text-sm font-semibold text-gray-800'>מסגרת העמוד</h4>
                 <div className='grid grid-cols-2 gap-4'>
                     <div className='flex items-center justify-between'>
                         <label className='text-sm text-gray-700'>צבע מסגרת</label>
@@ -190,7 +130,7 @@ export default function DesignControls({ settings, onChange }) {
                             <input
                                 type='range'
                                 min='0'
-                                max='10'
+                                max='20'
                                 value={settings.borderWidth}
                                 onChange={e => onChange({ borderWidth: parseInt(e.target.value) })}
                                 className='w-full accent-pink-500'
@@ -202,105 +142,77 @@ export default function DesignControls({ settings, onChange }) {
             </section>
 
             {/* עיצוב תמונה */}
-            <section className='rounded-xl border border-gray-200 bg-white/70 p-3'>
-                <h4 className='mb-3 text-sm font-medium text-gray-700'>עיצוב תמונה</h4>
+            <section className='rounded-xl border border-gray-200 bg-white/80 backdrop-blur-md p-4'>
+                <h4 className='mb-3 text-sm font-semibold text-gray-800'>עיצוב תמונה</h4>
 
-                {/* רוחב */}
-                <div className='mb-3'>
-                    <label className='block text-sm text-gray-700'>רוחב תמונה (%)</label>
-                    <input
-                        type='range'
-                        min='30'
-                        max='95'
-                        value={parseInt(settings.imageStyle?.width) || 80}
-                        onChange={e =>
-                            onChange({
-                                imageStyle: {
-                                    ...settings.imageStyle,
-                                    width: `${e.target.value}%`,
-                                },
-                            })
-                        }
-                        className='w-full accent-pink-500'
-                    />
-                    <span className='text-sm text-gray-600'>{settings.imageStyle?.width || '80%'}</span>
-                </div>
+                <div className='space-y-4'>
+                    <div>
+                        <label className='mb-1 block text-sm text-gray-700'>רדיוס פינות תמונה</label>
+                        <input
+                            type='range'
+                            min='0'
+                            max='50'
+                            value={parseInt(settings.imageStyle.borderRadius)}
+                            onChange={e =>
+                                onChange({
+                                    imageStyle: { ...settings.imageStyle, borderRadius: `${e.target.value}%` },
+                                })
+                            }
+                            className='w-full accent-pink-500'
+                        />
+                    </div>
 
-                {/* עיגוליות */}
-                <div className='mb-3'>
-                    <label className='block text-sm text-gray-700'>עיגוליות פינות (%)</label>
-                    <input
-                        type='range'
-                        min='0'
-                        max='50'
-                        value={parseInt(settings.imageStyle?.borderRadius) || 0}
-                        onChange={e =>
-                            onChange({
-                                imageStyle: {
-                                    ...settings.imageStyle,
-                                    borderRadius: `${e.target.value}%`,
-                                },
-                            })
-                        }
-                        className='w-full accent-pink-500'
-                    />
-                    <span className='text-sm text-gray-600'>{settings.imageStyle?.borderRadius || '0%'}</span>
-                </div>
+                    <div>
+                        <label className='mb-1 block text-sm text-gray-700'>עובי מסגרת תמונה</label>
+                        <input
+                            type='range'
+                            min='0'
+                            max='20'
+                            value={parseInt(settings.imageStyle.borderWidth)}
+                            onChange={e =>
+                                onChange({
+                                    imageStyle: { ...settings.imageStyle, borderWidth: `${e.target.value}px` },
+                                })
+                            }
+                            className='w-full accent-pink-500'
+                        />
+                    </div>
 
-                {/* צבע מסגרת תמונה */}
-                <div className='mb-3 flex items-center justify-between'>
-                    <label className='text-sm text-gray-700'>צבע מסגרת</label>
-                    <input
-                        type='color'
-                        value={settings.imageStyle?.borderColor || '#000000'}
-                        onChange={e =>
-                            onChange({
-                                imageStyle: {
-                                    ...settings.imageStyle,
-                                    borderColor: e.target.value,
-                                },
-                            })
-                        }
-                        className='h-9 w-16 cursor-pointer rounded border border-gray-300 shadow-sm'
-                    />
-                </div>
+                    <div>
+                        <label className='mb-1 block text-sm text-gray-700'>סגנון מסגרת</label>
+                        <select
+                            value={settings.imageStyle.borderStyle}
+                            onChange={e =>
+                                onChange({
+                                    imageStyle: { ...settings.imageStyle, borderStyle: e.target.value },
+                                })
+                            }
+                            className='w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm'
+                        >
+                            <option value='solid'>Solid</option>
+                            <option value='dashed'>Dashed</option>
+                            <option value='dotted'>Dotted</option>
+                            <option value='double'>Double</option>
+                        </select>
+                    </div>
 
-                {/* עובי מסגרת תמונה */}
-                <div className='mb-3'>
-                    <label className='block text-sm text-gray-700'>עובי מסגרת (px)</label>
-                    <input
-                        type='range'
-                        min='0'
-                        max='10'
-                        value={parseInt(settings.imageStyle?.borderWidth) || 0}
-                        onChange={e =>
-                            onChange({
-                                imageStyle: {
-                                    ...settings.imageStyle,
-                                    borderWidth: `${e.target.value}`,
-                                },
-                            })
-                        }
-                        className='w-full accent-pink-500'
-                    />
-                    <span className='text-sm text-gray-600'>{settings.imageStyle?.borderWidth || '0'}px</span>
-                </div>
-            </section>
-
-            {/* טקסטורות */}
-            <section className='rounded-xl border border-gray-200 bg-white/70 p-3'>
-                <h4 className='mb-3 text-sm font-medium text-gray-700'>טקסטורה</h4>
-                <div className='mb-3'>
-                    <TextureSelector value={settings.textureUrl} onChange={url => onChange({ textureUrl: url })} />
-                </div>
-                <div>
-                    <label className='mb-1 block text-sm text-gray-700'>או העלה טקסטורה משלך</label>
-                    <input
-                        type='file'
-                        accept='image/*'
-                        onChange={handleUploadTexture}
-                        className='block w-full cursor-pointer text-sm text-gray-600 file:mr-4 file:rounded-md file:border-0 file:bg-pink-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-pink-600 hover:file:bg-pink-100'
-                    />
+                    <div>
+                        <label className='mb-1 block text-sm text-gray-700'>צל לתמונה</label>
+                        <select
+                            value={settings.imageStyle.boxShadow}
+                            onChange={e =>
+                                onChange({
+                                    imageStyle: { ...settings.imageStyle, boxShadow: e.target.value },
+                                })
+                            }
+                            className='w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm'
+                        >
+                            <option value='none'>ללא</option>
+                            <option value='0 2px 6px rgba(0,0,0,0.2)'>קטן</option>
+                            <option value='0 6px 18px rgba(0,0,0,0.25)'>בינוני</option>
+                            <option value='0 12px 24px rgba(0,0,0,0.3)'>גדול</option>
+                        </select>
+                    </div>
                 </div>
             </section>
         </div>

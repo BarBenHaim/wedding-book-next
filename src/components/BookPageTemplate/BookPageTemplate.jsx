@@ -1,14 +1,26 @@
 // BookPageTemplate.jsx
-export default function BookPageTemplate({ entry, styleSettings }) {
+export default function BookPageTemplate({ entry, styleSettings, printMode = false }) {
     const hasName = Boolean(entry.name)
     const hasText = Boolean(entry.text)
     const hasImage = Boolean(entry.imageUrl)
+
+    // יחס הקטנה – במסך קטן פי 4 מהפרינט
+    const scaleFactor = printMode ? 1 : 0.25
+
+    // פונקציה שממירה ערכים
+    const scale = value => {
+        if (typeof value === 'number') return value * scaleFactor + 'px'
+        if (typeof value === 'string' && value.endsWith('px')) {
+            return parseFloat(value) * scaleFactor + 'px'
+        }
+        return value // אחוזים או ערכים שלא קשורים לגודל
+    }
 
     return (
         <div
             className='
                 relative h-full flex flex-col items-center text-center
-                p-6 rounded-2xl box-border border shadow-lg transition-all
+                rounded-2xl box-border border shadow-lg transition-all
             '
             style={{
                 backgroundColor: styleSettings.backgroundColor,
@@ -16,16 +28,25 @@ export default function BookPageTemplate({ entry, styleSettings }) {
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 fontFamily: styleSettings.fontFamily,
-                fontSize: `${styleSettings.fontSize}px`,
+                fontSize: scale(styleSettings.fontSize),
                 color: styleSettings.fontColor,
                 borderColor: styleSettings.borderColor,
-                borderWidth: styleSettings.borderWidth,
-                borderRadius: styleSettings.borderRadius,
+                borderWidth: scale(styleSettings.borderWidth),
+                borderRadius: scale(styleSettings.borderRadius),
+                padding: scale(120),
             }}
         >
-            {/* שם האורח בפינה ימין למעלה */}
+            {/* שם האורח */}
             {hasName && (
-                <div className='absolute top-2 right-3 text-sm opacity-70' style={{ color: styleSettings.fontColor }}>
+                <div
+                    className='absolute opacity-70'
+                    style={{
+                        top: scale(20),
+                        right: scale(30),
+                        color: styleSettings.fontColor,
+                        fontSize: scale(styleSettings.fontSize * 0.7),
+                    }}
+                >
                     {entry.name}
                 </div>
             )}
@@ -40,17 +61,20 @@ export default function BookPageTemplate({ entry, styleSettings }) {
                         ...styleSettings.imageStyle,
                         display: 'block',
                         margin: '0 auto',
+                        maxHeight: scale(1600),
+                        maxWidth: scale(2000),
+                        objectFit: 'contain',
                     }}
                 />
             )}
 
             {/* ברכה */}
             {hasText && (
-                <div className='flex-none mt-2 max-w-[85%]'>
+                <div className='flex-none mt-4' style={{ maxWidth: '85%' }}>
                     <p
-                        className='whitespace-pre-line leading-relaxed text-base sm:text-lg'
+                        className='whitespace-pre-line leading-relaxed'
                         style={{
-                            fontSize: `${styleSettings.fontSize * 0.95}px`,
+                            fontSize: scale(styleSettings.fontSize),
                             color: styleSettings.fontColor,
                         }}
                     >

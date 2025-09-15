@@ -13,5 +13,5 @@ export default async function WeddingLayout({ children, params }) {
         notFound()
     }
 
-    return <div className='min-h-screen bg-white'>{children}</div>
+    return <div className='min-h-[calc(100vh-4rem)] bg-white'>{children}</div>
 }
