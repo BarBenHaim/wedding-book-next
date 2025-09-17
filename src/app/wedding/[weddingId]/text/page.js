@@ -141,15 +141,15 @@ export default function TextPage() {
                         {activeTab === 'text' && (
                             <div className='flex flex-col h-full animate-fadeIn'>
                                 <label className='block text-right text-sm font-medium text-gray-700'>
-                                    הברכה שלכם (עד 500 תווים)
+                                    הברכה שלכם (עד 175 תווים)
                                 </label>
                                 <textarea
                                     value={text}
-                                    onChange={e => setText(e.target.value.slice(0, 500))}
+                                    onChange={e => setText(e.target.value.slice(0, 175))}
                                     placeholder='כתבו כאן...'
                                     className='mt-2 flex-1 resize-none rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 text-gray-700 shadow-sm focus:border-purple-400 focus:ring-2 focus:ring-purple-200'
                                 />
-                                <div className='mt-1 text-right text-xs text-gray-500'>{text.length}/500</div>
+                                <div className='mt-1 text-right text-xs text-gray-500'>{text.length}/175</div>
                             </div>
                         )}
 

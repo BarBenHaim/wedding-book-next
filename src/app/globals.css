@@ -29,3 +29,12 @@ html,
 body {
     direction: rtl; /* כל האתר RTL */
 }
+
+body:-webkit-scrollbar {
+    display: none;
+}
+/* מבטל רווח/חפיפה בין דפים */
+.book-flip {
+    margin-left: auto !important;
+    margin-right: auto !important;
+}

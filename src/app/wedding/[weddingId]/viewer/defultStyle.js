@@ -1,21 +1,24 @@
-// src/styles/defaultStyle.js
-const defaultStyle = {
-    backgroundColor: '#fdfaf6',
+'use client'
+
+const BASE_DEFAULTS = {
+    backgroundColor: '#ffffff',
     fontFamily: `'Noto Serif Hebrew', 'David Libre', serif`,
-    fontSize: 42, // ערכי אמת (A4)
-    fontColor: '#3a2f2f',
+    fontSize: 3, // % מהגובה
+    fontColor: '#000000',
     borderColor: '#d8bfa4',
-    borderWidth: 8,
-    borderRadius: 0,
-    textureUrl: 'https://www.transparenttextures.com/patterns/paper-fibers.png',
+    borderWidth: 0.5, // % מהרוחב
+    borderRadius: 0, // % מהרוחב
+    pagePadding: 3, // % מהגובה
+    textureUrl: '',
     imageStyle: {
-        maxWidth: '2000px',
-        maxHeight: '1600px',
-        boxShadow: '0 6px 18px rgba(0,0,0,0.15)',
-        border: '1px solid #EDEDED',
-        background: '#fff',
-        objectFit: 'contain',
+        width: 80, // % מהרוחב
+        height: 60, // % מהגובה
+        marginTop: 5, // % מהגובה
+        borderRadius: '0%',
+        borderWidth: '0px',
+        borderStyle: 'solid',
+        boxShadow: 'none',
     },
 }
 
-export default defaultStyle
+export default BASE_DEFAULTS

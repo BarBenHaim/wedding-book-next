@@ -1,50 +1,39 @@
-// BookPageTemplate.jsx
-export default function BookPageTemplate({ entry, styleSettings, printMode = false }) {
+export default function BookPageTemplate({ entry, styleSettings, scaledWidth, scaledHeight }) {
     const hasName = Boolean(entry.name)
     const hasText = Boolean(entry.text)
     const hasImage = Boolean(entry.imageUrl)
 
-    // יחס הקטנה – במסך קטן פי 4 מהפרינט
-    const scaleFactor = printMode ? 1 : 0.25
-
-    // פונקציה שממירה ערכים
-    const scale = value => {
-        if (typeof value === 'number') return value * scaleFactor + 'px'
-        if (typeof value === 'string' && value.endsWith('px')) {
-            return parseFloat(value) * scaleFactor + 'px'
-        }
-        return value // אחוזים או ערכים שלא קשורים לגודל
-    }
+    // פונקציות עזר
+    const w = percent => (percent / 100) * scaledWidth
+    const h = percent => (percent / 100) * scaledHeight
 
     return (
         <div
-            className='
-                relative h-full flex flex-col items-center text-center
-                rounded-2xl box-border border shadow-lg transition-all
-            '
+            className='relative flex flex-col items-center text-center box-border'
             style={{
+                width: '100%',
+                height: '100%',
                 backgroundColor: styleSettings.backgroundColor,
                 backgroundImage: styleSettings.textureUrl ? `url(${styleSettings.textureUrl})` : 'none',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 fontFamily: styleSettings.fontFamily,
-                fontSize: scale(styleSettings.fontSize),
                 color: styleSettings.fontColor,
-                borderColor: styleSettings.borderColor,
-                borderWidth: scale(styleSettings.borderWidth),
-                borderRadius: scale(styleSettings.borderRadius),
-                padding: scale(120),
+
+                border: `${w(styleSettings.borderWidth)}px solid ${styleSettings.borderColor}`,
+                borderRadius: w(styleSettings.borderRadius),
+                padding: h(styleSettings.pagePadding),
             }}
         >
             {/* שם האורח */}
             {hasName && (
                 <div
-                    className='absolute opacity-70'
                     style={{
-                        top: scale(20),
-                        right: scale(30),
-                        color: styleSettings.fontColor,
-                        fontSize: scale(styleSettings.fontSize * 0.7),
+                        position: 'absolute',
+                        top: h(2),
+                        right: w(2),
+                        fontSize: h(styleSettings.fontSize),
+                        opacity: 0.7,
                     }}
                 >
                     {entry.name}
@@ -56,26 +45,29 @@ export default function BookPageTemplate({ entry, styleSettings, printMode = fal
                 <img
                     src={entry.imageUrl}
                     alt='תמונה מהאורח'
-                    className='mx-auto'
                     style={{
-                        ...styleSettings.imageStyle,
-                        display: 'block',
-                        margin: '0 auto',
-                        maxHeight: scale(1600),
-                        maxWidth: scale(2000),
+                        width: `${styleSettings.imageStyle.width}%`,
+                        maxHeight: `${styleSettings.imageStyle.height}%`,
+                        borderRadius: styleSettings.imageStyle.borderRadius,
+                        borderWidth: styleSettings.imageStyle.borderWidth,
+                        borderStyle: styleSettings.imageStyle.borderStyle,
+                        boxShadow: styleSettings.imageStyle.boxShadow,
                         objectFit: 'contain',
+                        marginTop: `${styleSettings.imageStyle.marginTop}%`,
+                        display: 'block',
                     }}
                 />
             )}
 
-            {/* ברכה */}
+            {/* טקסט */}
             {hasText && (
-                <div className='flex-none mt-4' style={{ maxWidth: '85%' }}>
+                <div style={{ maxWidth: '85%', marginTop: h(3) }}>
                     <p
-                        className='whitespace-pre-line leading-relaxed'
                         style={{
-                            fontSize: scale(styleSettings.fontSize),
+                            fontSize: h(styleSettings.fontSize),
                             color: styleSettings.fontColor,
+                            lineHeight: 1.4,
+                            whiteSpace: 'pre-line',
                         }}
                     >
                         {entry.text}

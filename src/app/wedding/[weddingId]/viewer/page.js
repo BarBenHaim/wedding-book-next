@@ -21,19 +21,19 @@ export default function BookViewer() {
     const hiddenRef = useRef(null)
     const { weddingId } = useParams()
 
-    // יחס A4 landscape ב־300DPI
-    const PRINT_WIDTH = 3508
-    const PRINT_HEIGHT = 2480
+    // בסיס אמיתי 20x20 ס״מ = 2362px
+    const PRINT_WIDTH = 2362
+    const PRINT_HEIGHT = 2362
 
     function getBookDimensions() {
         const screenWidth = window.innerWidth
-        const width = screenWidth > 768 ? screenWidth * 0.35 : screenWidth * 0.85
-        const height = width * (PRINT_HEIGHT / PRINT_WIDTH)
-        return { width: Math.round(width), height: Math.round(height) }
+        const width = screenWidth * 0.5
+        return { width, height: width } // תמיד ריבוע
     }
 
     useEffect(() => {
         setDimensions(getBookDimensions())
+
         async function fetchData() {
             if (!weddingId) return
             const data = await getEntries(weddingId)
@@ -62,9 +62,9 @@ export default function BookViewer() {
         const pageEls = hiddenRef.current.querySelectorAll('.page-for-pdf')
 
         const pdf = new jsPDF({
-            orientation: 'landscape',
-            unit: 'px',
-            format: [PRINT_WIDTH, PRINT_HEIGHT],
+            orientation: 'portrait',
+            unit: 'mm',
+            format: [200, 200], // 20 ס״מ × 20 ס״מ
         })
 
         for (let i = 0; i < pageEls.length; i++) {
@@ -75,7 +75,7 @@ export default function BookViewer() {
             })
             const imgData = canvas.toDataURL('image/jpeg', 1.0)
             if (i > 0) pdf.addPage()
-            pdf.addImage(imgData, 'JPEG', 0, 0, PRINT_WIDTH, PRINT_HEIGHT)
+            pdf.addImage(imgData, 'JPEG', 0, 0, 200, 200)
         }
 
         pdf.save('wedding-book.pdf')
@@ -83,7 +83,7 @@ export default function BookViewer() {
 
     if (loading) {
         return (
-            <div className='flex h-[calc(100vh-4rem)] flex-col items-center justify-center bg-gradient-to-br from-purple-50 via-white to-purple-100 text-gray-700'>
+            <div className='flex h-[calc(100vh-4rem)] flex-col items-center justify-center text-gray-700'>
                 <div className='animate-spin rounded-full h-12 w-12 border-4 border-purple-400 border-t-transparent mb-4'></div>
                 <p className='text-sm font-medium'>טוען את ספר הזיכרונות…</p>
             </div>
@@ -92,27 +92,35 @@ export default function BookViewer() {
 
     return (
         <>
-            {/* תצוגה רגילה */}
             <div className='relative flex h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 via-white to-purple-100'>
-                {/* Glow רקע */}
-                <div className='absolute -top-24 left-0 h-72 w-72 rounded-full bg-purple-300/30 blur-3xl'></div>
-                <div className='absolute bottom-0 right-0 h-96 w-96 rounded-full bg-pink-300/30 blur-3xl'></div>
-
                 <main className='relative z-10 flex flex-1 items-center justify-center p-6 gap-6'>
                     {/* פאנל עיצוב */}
-                    <aside className='hidden lg:block w-1/4 border-l border-gray-200 bg-white/80 backdrop-blur-md p-6 shadow-xl rounded-l-2xl'>
+                    <aside className=' lg:block w-1/4 border-l border-gray-200 bg-white/80 backdrop-blur-md p-6 shadow-xl rounded-l-2xl'>
                         <h2 className='mb-6 text-xl font-bold text-gray-800'>עיצוב הספר</h2>
                         <DesignControls settings={styleSettings} onChange={handleStyleChange} />
                     </aside>
 
                     {/* ספר */}
-                    <HTMLFlipBook width={dimensions.width} height={dimensions.height} size='fixed' drawShadow showCover>
+                    <HTMLFlipBook
+                        width={dimensions.width}
+                        height={dimensions.height}
+                        size='stretch'
+                        drawShadow={false}
+                        showCover={false}
+                        mobileScrollSupport
+                        className='book-flip'
+                    >
                         {pages.map((entry, index) => (
-                            <div key={index} className='page'>
+                            <div
+                                key={index}
+                                className='page'
+                                style={{ width: dimensions.width, height: dimensions.height }}
+                            >
                                 <BookPageTemplate
                                     entry={entry}
                                     styleSettings={styleSettings}
-                                    printMode={false} // מצב צפייה
+                                    scaledWidth={dimensions.width} // למסך
+                                    scaledHeight={dimensions.height}
                                 />
                             </div>
                         ))}
@@ -123,12 +131,11 @@ export default function BookViewer() {
             {/* כפתור הורדה */}
             <button
                 onClick={handleDownloadPDF}
-                className='w-full rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 px-4 py-3 text-white font-medium shadow hover:scale-105 transition'
+                className='rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 px-4 py-3 text-white font-medium shadow hover:scale-105 transition mt-4 w-full'
             >
                 📥 הורד כ־PDF
             </button>
 
-            {/* גרסה מוסתרת להדפסה */}
             {/* גרסה מוסתרת להדפסה */}
             <div
                 ref={hiddenRef}
@@ -156,7 +163,8 @@ export default function BookViewer() {
                         <BookPageTemplate
                             entry={entry}
                             styleSettings={styleSettings}
-                            printMode={true} // מצב הדפסה
+                            scaledWidth={PRINT_WIDTH} // ל־PDF
+                            scaledHeight={PRINT_HEIGHT}
                         />
                     </div>
                 ))}
