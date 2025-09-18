@@ -1,16 +1,18 @@
 'use client'
 
 import { useState } from 'react'
+// מייבא פונטים עבריים מהקובץ fonts.js
+import { heebo, frankRuhl, secular, davidLibre, notoHebrew } from '@/app/fonts'
 
 // ברירות מחדל
 const BASE_DEFAULTS = {
     backgroundColor: '#ffffff',
-    fontFamily: `'Noto Serif Hebrew', 'David Libre', serif`,
+    fontClass: notoHebrew.className, // עברית כברירת מחדל
     fontSize: 3,
     fontColor: '#000000',
     borderColor: '#d8bfa4',
     borderWidth: 0.5,
-    borderRadius: 0, // תמיד 0
+    borderRadius: 0,
     pagePadding: 3,
     textureUrl: '',
     imageStyle: {
@@ -25,65 +27,65 @@ const BASE_DEFAULTS = {
     },
 }
 
-// פריסטים מעוצבים
+// פריסטים מעוצבים לעברית
 export const PRESETS = [
     {
         name: 'קלאסי זהב',
         values: {
             ...BASE_DEFAULTS,
-            backgroundColor: '#fffdf5',
-            fontFamily: `'Cinzel Decorative', serif`,
-            fontColor: '#3a2f2f',
+            backgroundColor: '#fffdf8',
+            fontClass: frankRuhl.className,
+            fontColor: '#4b3b18',
             borderColor: '#d4af37',
             borderWidth: 1.2,
-            pagePadding: 5,
+            pagePadding: 6,
             textureUrl: 'https://www.transparenttextures.com/patterns/gold-scale.png',
             imageStyle: {
                 ...BASE_DEFAULTS.imageStyle,
-                borderWidth: '2px',
+                borderWidth: '3px',
                 borderStyle: 'solid',
                 borderColor: '#d4af37',
-                boxShadow: '0 4px 18px rgba(212,175,55,0.25)',
+                boxShadow: '0 4px 18px rgba(212,175,55,0.35)',
             },
         },
     },
     {
-        name: 'רומנטי תחרה',
+        name: 'ורוד יוקרה',
         values: {
             ...BASE_DEFAULTS,
-            backgroundColor: '#fff8fb',
-            fontFamily: `'Great Vibes', cursive`,
-            fontColor: '#9b4677',
-            borderColor: '#e5bcd3',
-            borderWidth: 1,
-            pagePadding: 6,
-            textureUrl: 'https://www.transparenttextures.com/patterns/lace.png',
+            backgroundColor: '#fff6f9',
+            fontClass: davidLibre.className,
+            fontColor: '#b03060',
+            borderColor: '#f3c0d1',
+            borderWidth: 1.5,
+            pagePadding: 7,
+            textureUrl: 'https://www.transparenttextures.com/patterns/white-paper.png',
             imageStyle: {
                 ...BASE_DEFAULTS.imageStyle,
                 borderWidth: '2px',
                 borderStyle: 'dashed',
-                borderColor: '#e5bcd3',
-                boxShadow: '0 3px 10px rgba(155,70,119,0.2)',
+                borderColor: '#f3c0d1',
+                boxShadow: '0 4px 12px rgba(176,48,96,0.25)',
             },
         },
     },
     {
-        name: 'מודרני אלגנטי',
+        name: 'מודרני נקי',
         values: {
             ...BASE_DEFAULTS,
-            backgroundColor: '#ffffff',
-            fontFamily: `'Montserrat', sans-serif`,
-            fontColor: '#111111',
-            borderColor: '#000000',
-            borderWidth: 0.8,
-            pagePadding: 4,
-            textureUrl: 'https://www.transparenttextures.com/patterns/paper-fibers.png',
+            backgroundColor: '#fafafa',
+            fontClass: heebo.className,
+            fontColor: '#222222',
+            borderColor: '#cccccc',
+            borderWidth: 1,
+            pagePadding: 5,
+            textureUrl: 'https://www.transparenttextures.com/patterns/linen.png',
             imageStyle: {
                 ...BASE_DEFAULTS.imageStyle,
-                borderWidth: '1px',
+                borderWidth: '2px',
                 borderStyle: 'solid',
-                borderColor: '#000',
-                boxShadow: '0 6px 14px rgba(0,0,0,0.15)',
+                borderColor: '#333',
+                boxShadow: '0 8px 18px rgba(0,0,0,0.15)',
             },
         },
     },
@@ -91,19 +93,19 @@ export const PRESETS = [
         name: 'כפרי טבעי',
         values: {
             ...BASE_DEFAULTS,
-            backgroundColor: '#f9fdf9',
-            fontFamily: `'Cormorant Garamond', serif`,
-            fontColor: '#3b5231',
-            borderColor: '#bcd3a3',
-            borderWidth: 1,
-            pagePadding: 7,
+            backgroundColor: '#fdfcf7',
+            fontClass: notoHebrew.className,
+            fontColor: '#3f5035',
+            borderColor: '#c9d7b5',
+            borderWidth: 1.2,
+            pagePadding: 8,
             textureUrl: 'https://www.transparenttextures.com/patterns/wood-pattern.png',
             imageStyle: {
                 ...BASE_DEFAULTS.imageStyle,
                 borderWidth: '2px',
                 borderStyle: 'solid',
-                borderColor: '#bcd3a3',
-                boxShadow: '0 5px 15px rgba(59,82,49,0.3)',
+                borderColor: '#c9d7b5',
+                boxShadow: '0 5px 15px rgba(63,80,53,0.3)',
             },
         },
     },
@@ -112,7 +114,7 @@ export const PRESETS = [
         values: {
             ...BASE_DEFAULTS,
             backgroundColor: '#1e1e1e',
-            fontFamily: `'Playfair Display SC', serif`,
+            fontClass: secular.className,
             fontColor: '#f0e6d2',
             borderColor: '#a67c52',
             borderWidth: 1.5,
@@ -148,16 +150,17 @@ export default function DesignControls({ settings, onChange }) {
                         <button
                             key={idx}
                             onClick={() => applyPreset(preset)}
-                            className={`flex flex-col items-center justify-center h-28 rounded-lg border transition shadow-sm hover:scale-105 ${
+                            className={`flex flex-col items-center justify-center h-32 rounded-lg border transition shadow-sm hover:scale-105 ${
                                 activePreset === preset.name ? 'border-pink-500 shadow-md' : 'border-gray-300'
-                            }`}
+                            } ${preset.values.fontClass}`}
                             style={{
                                 background: preset.values.backgroundColor,
-                                fontFamily: preset.values.fontFamily,
                                 color: preset.values.fontColor,
                             }}
                         >
                             <span className='text-xs mb-2'>{preset.name}</span>
+                            {/* preview עם טקסט בעברית */}
+                            <span className='text-sm'>ספר החתונה</span>
                             <div
                                 className='w-12 h-8 rounded-sm'
                                 style={{

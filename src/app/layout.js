@@ -8,7 +8,7 @@ const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
 const notoHebrew = Noto_Serif_Hebrew({ subsets: ['hebrew'], weight: ['400', '700'], variable: '--font-noto-hebrew' })
 
-export const metadata = {
+const metadata = {
     title: 'Wedding Book',
     description: 'ספר ברכות דיגיטלי לחתונה',
 }
