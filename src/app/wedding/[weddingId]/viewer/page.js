@@ -7,6 +7,7 @@ import DesignControls from '../../../../components/DesignControls/DesignControls
 import { getEntries } from '../../../../lib/classifyMedia'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defultStyle'
+import { BASE_SIZE } from '@/lib/unitUtils'
 
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
@@ -14,25 +15,21 @@ import jsPDF from 'jspdf'
 export default function BookViewer() {
     const [pages, setPages] = useState([])
     const [loading, setLoading] = useState(true)
-    const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
+    const [viewerSize, setViewerSize] = useState(BASE_SIZE) // גודל ספר למסך
     const [styleSettings, setStyleSettings] = useState(() =>
         typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('bookStyle')) || defaultStyle : defaultStyle
     )
     const hiddenRef = useRef(null)
     const { weddingId } = useParams()
 
-    // בסיס אמיתי 20x20 ס״מ = 2362px
-    const PRINT_WIDTH = 2362
-    const PRINT_HEIGHT = 2362
-
     function getBookDimensions() {
         const screenWidth = window.innerWidth
-        const width = screenWidth * 0.5
-        return { width, height: width } // תמיד ריבוע
+        const width = screenWidth * 0.5 // ספר במסך
+        return width
     }
 
     useEffect(() => {
-        setDimensions(getBookDimensions())
+        setViewerSize(getBookDimensions())
 
         async function fetchData() {
             if (!weddingId) return
@@ -42,9 +39,7 @@ export default function BookViewer() {
         }
         fetchData()
 
-        const handleResize = () => {
-            setDimensions(getBookDimensions())
-        }
+        const handleResize = () => setViewerSize(getBookDimensions())
         window.addEventListener('resize', handleResize)
         return () => window.removeEventListener('resize', handleResize)
     }, [weddingId])
@@ -64,7 +59,7 @@ export default function BookViewer() {
         const pdf = new jsPDF({
             orientation: 'portrait',
             unit: 'mm',
-            format: [200, 200], // 20 ס״מ × 20 ס״מ
+            format: [200, 200], // 20×20 ס״מ
         })
 
         for (let i = 0; i < pageEls.length; i++) {
@@ -102,25 +97,21 @@ export default function BookViewer() {
 
                     {/* ספר */}
                     <HTMLFlipBook
-                        width={dimensions.width}
-                        height={dimensions.height}
-                        size='stretch'
+                        width={viewerSize}
+                        height={viewerSize}
+                        size='fixed'
                         drawShadow={false}
                         showCover={false}
                         mobileScrollSupport
                         className='book-flip'
                     >
                         {pages.map((entry, index) => (
-                            <div
-                                key={index}
-                                className='page'
-                                style={{ width: dimensions.width, height: dimensions.height }}
-                            >
+                            <div key={index} className='page' style={{ width: viewerSize, height: viewerSize }}>
                                 <BookPageTemplate
                                     entry={entry}
                                     styleSettings={styleSettings}
-                                    scaledWidth={dimensions.width} // למסך
-                                    scaledHeight={dimensions.height}
+                                    scaledWidth={viewerSize} // למסך
+                                    scaledHeight={viewerSize}
                                 />
                             </div>
                         ))}
@@ -154,17 +145,13 @@ export default function BookViewer() {
                     <div
                         key={idx}
                         className='page-for-pdf'
-                        style={{
-                            width: PRINT_WIDTH,
-                            height: PRINT_HEIGHT,
-                            background: '#fff',
-                        }}
+                        style={{ width: BASE_SIZE, height: BASE_SIZE, background: '#fff' }}
                     >
                         <BookPageTemplate
                             entry={entry}
                             styleSettings={styleSettings}
-                            scaledWidth={PRINT_WIDTH} // ל־PDF
-                            scaledHeight={PRINT_HEIGHT}
+                            scaledWidth={BASE_SIZE} // ל־PDF
+                            scaledHeight={BASE_SIZE}
                         />
                     </div>
                 ))}
