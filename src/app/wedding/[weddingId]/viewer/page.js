@@ -27,7 +27,6 @@ export default function BookViewer() {
         const width = screenWidth * 0.3 // ספר במסך
         return width
     }
-
     useEffect(() => {
         setViewerSize(getBookDimensions())
 
@@ -39,9 +38,19 @@ export default function BookViewer() {
         }
         fetchData()
 
-        const handleResize = () => setViewerSize(getBookDimensions())
+        let resizeTimer
+        const handleResize = () => {
+            clearTimeout(resizeTimer)
+            resizeTimer = setTimeout(() => {
+                setViewerSize(getBookDimensions())
+            }, 500) // דיבאונס 200ms
+        }
+
         window.addEventListener('resize', handleResize)
-        return () => window.removeEventListener('resize', handleResize)
+        return () => {
+            clearTimeout(resizeTimer)
+            window.removeEventListener('resize', handleResize)
+        }
     }, [weddingId])
 
     const handleStyleChange = updated => {
@@ -97,9 +106,10 @@ export default function BookViewer() {
 
                     {/* ספר */}
                     <HTMLFlipBook
+                        key={viewerSize} // ⬅️ מכריח רינדור מחדש כשמשתנה
                         width={viewerSize}
-                        usePortrait={false} // ⬅️ מכריח מצב ספר (דו־עמוד)
                         height={viewerSize}
+                        usePortrait={false}
                         size='fixed'
                         drawShadow={false}
                         showCover={false}
