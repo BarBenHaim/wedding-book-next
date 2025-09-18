@@ -21,6 +21,7 @@ const BASE_DEFAULTS = {
         borderWidth: '0px',
         borderStyle: 'solid',
         boxShadow: 'none',
+        objectFit: 'cover',
     },
 }
 
@@ -198,18 +199,6 @@ export default function DesignControls({ settings, onChange }) {
                 </div>
 
                 <div>
-                    <label className='block text-xs font-medium mb-1'>גודל טקסט (% מהגובה)</label>
-                    <input
-                        type='range'
-                        min='1'
-                        max='10'
-                        value={settings.fontSize}
-                        onChange={e => onChange({ fontSize: parseInt(e.target.value) })}
-                        className='w-full'
-                    />
-                </div>
-
-                <div>
                     <label className='block text-xs font-medium mb-1'>עובי מסגרת (% מהרוחב)</label>
                     <input
                         type='range'
@@ -217,80 +206,6 @@ export default function DesignControls({ settings, onChange }) {
                         max='5'
                         value={settings.borderWidth}
                         onChange={e => onChange({ borderWidth: parseInt(e.target.value) })}
-                        className='w-full'
-                    />
-                </div>
-
-                <div>
-                    <label className='block text-xs font-medium mb-1'>Padding (% מהגובה)</label>
-                    <input
-                        type='range'
-                        min='0'
-                        max='10'
-                        value={settings.pagePadding}
-                        onChange={e => onChange({ pagePadding: parseInt(e.target.value) })}
-                        className='w-full'
-                    />
-                </div>
-            </section>
-
-            {/* שליטה בתמונה */}
-            <section className='rounded-xl border border-gray-200 bg-white/90 p-4 shadow-sm space-y-4'>
-                <h4 className='text-sm font-bold text-gray-700'>תמונה</h4>
-
-                <div>
-                    <label className='block text-xs font-medium mb-1'>רוחב (% מהרוחב)</label>
-                    <input
-                        type='range'
-                        min='10'
-                        max='100'
-                        value={settings.imageStyle.width}
-                        onChange={e =>
-                            onChange({
-                                imageStyle: {
-                                    ...settings.imageStyle,
-                                    width: parseInt(e.target.value),
-                                },
-                            })
-                        }
-                        className='w-full'
-                    />
-                </div>
-
-                <div>
-                    <label className='block text-xs font-medium mb-1'>גובה (% מהגובה)</label>
-                    <input
-                        type='range'
-                        min='10'
-                        max='100'
-                        value={settings.imageStyle.height}
-                        onChange={e =>
-                            onChange({
-                                imageStyle: {
-                                    ...settings.imageStyle,
-                                    height: parseInt(e.target.value),
-                                },
-                            })
-                        }
-                        className='w-full'
-                    />
-                </div>
-
-                <div>
-                    <label className='block text-xs font-medium mb-1'>מרווח עליון (% מהגובה)</label>
-                    <input
-                        type='range'
-                        min='0'
-                        max='20'
-                        value={settings.imageStyle.marginTop}
-                        onChange={e =>
-                            onChange({
-                                imageStyle: {
-                                    ...settings.imageStyle,
-                                    marginTop: parseInt(e.target.value),
-                                },
-                            })
-                        }
                         className='w-full'
                     />
                 </div>

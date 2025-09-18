@@ -28,7 +28,12 @@ export default function TextPage() {
     async function initCamera() {
         try {
             const s = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'user', width: 640, height: 480 },
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 1920 },
+                    height: { ideal: 1440 },
+                    aspectRatio: 4 / 3,
+                },
             })
             setStream(s)
             if (liveVideoRef.current) liveVideoRef.current.srcObject = s
@@ -40,19 +45,25 @@ export default function TextPage() {
     function takePhoto() {
         const video = liveVideoRef.current
         if (!video) return
+
         const canvas = document.createElement('canvas')
         canvas.width = video.videoWidth
         canvas.height = video.videoHeight
         const ctx = canvas.getContext('2d')
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-        canvas.toBlob(blob => {
-            if (blob) {
-                const url = URL.createObjectURL(blob)
-                setPhotoBlob(blob)
-                setPhotoUrl(url)
-                setCameraOpen(false)
-            }
-        }, 'image/jpeg')
+
+        canvas.toBlob(
+            blob => {
+                if (blob) {
+                    const url = URL.createObjectURL(blob)
+                    setPhotoBlob(blob)
+                    setPhotoUrl(url)
+                    setCameraOpen(false) // סגירת מצלמה → נשאר רק הפריים שצולם
+                }
+            },
+            'image/jpeg',
+            0.95
+        )
     }
 
     async function onSubmit(e) {
@@ -136,8 +147,8 @@ export default function TextPage() {
                         />
                     </div>
 
-                    {/* תוכן טאב */}
-                    <div className='relative h-[320px] transition-all'>
+                    {/* טאב תוכן – גובה קבוע */}
+                    <div className='relative h-[400px] transition-all'>
                         {activeTab === 'text' && (
                             <div className='flex flex-col h-full animate-fadeIn'>
                                 <label className='block text-right text-sm font-medium text-gray-700'>
@@ -155,7 +166,8 @@ export default function TextPage() {
 
                         {activeTab === 'photo' && (
                             <div className='flex flex-col h-full animate-fadeIn space-y-4'>
-                                <div className='relative flex-1 w-full rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden shadow'>
+                                {/* קונטיינר ביחס 4:3 */}
+                                <div className='relative flex-1 aspect-[4/3] w-full rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden shadow'>
                                     {!photoUrl && !cameraOpen && (
                                         <span className='text-gray-400 text-sm'>עדיין לא נוספה תמונה</span>
                                     )}
@@ -166,7 +178,7 @@ export default function TextPage() {
                                             autoPlay
                                             playsInline
                                             muted
-                                            className='absolute inset-0 h-full w-full object-cover'
+                                            className='absolute inset-0 w-full h-full object-cover'
                                         />
                                     )}
 
@@ -174,7 +186,7 @@ export default function TextPage() {
                                         <img
                                             src={photoUrl}
                                             alt='תמונה שצולמה'
-                                            className='absolute inset-0 h-full w-full object-cover'
+                                            className='absolute inset-0 w-full h-full object-cover'
                                         />
                                     )}
                                 </div>
