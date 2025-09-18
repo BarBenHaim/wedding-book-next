@@ -10,9 +10,10 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
 
     return (
         <div
-            className='relative flex flex-col items-center text-center box-border'
+            className='relative flex flex-col items-center text-center box-border '
             style={{
                 width: '100%',
+
                 height: '100%',
                 backgroundColor: styleSettings.backgroundColor,
                 backgroundImage: styleSettings.textureUrl ? `url(${styleSettings.textureUrl})` : 'none',
@@ -47,12 +48,12 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                     {entry.name}
                 </div>
             )}
-
             {/* תמונה */}
             {hasImage && (
                 <div
                     style={{
                         width: w(styleSettings.imageStyle.width),
+                        maxWidth: '100%',
                         height: h(styleSettings.imageStyle.height),
                         marginTop: h(styleSettings.imageStyle.marginTop),
                         display: 'flex',
@@ -76,7 +77,6 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                     />
                 </div>
             )}
-
             {/* טקסט */}
             {hasText && (
                 <div

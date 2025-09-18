@@ -24,7 +24,7 @@ export default function BookViewer() {
 
     function getBookDimensions() {
         const screenWidth = window.innerWidth
-        const width = screenWidth * 0.5 // ספר במסך
+        const width = screenWidth * 0.3 // ספר במסך
         return width
     }
 
@@ -98,6 +98,7 @@ export default function BookViewer() {
                     {/* ספר */}
                     <HTMLFlipBook
                         width={viewerSize}
+                        usePortrait={false} // ⬅️ מכריח מצב ספר (דו־עמוד)
                         height={viewerSize}
                         size='fixed'
                         drawShadow={false}
