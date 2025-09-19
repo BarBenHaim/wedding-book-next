@@ -1,5 +1,22 @@
 const BASE_SIZE = 2362
 
+// מסגרות אפשריות (זהות למה שיש ב-DesignControls)
+const IMAGE_FRAMES = {
+    none: {},
+    gold: {
+        border: '4px solid #d4af37',
+        boxShadow: '0 4px 15px rgba(212,175,55,0.3)',
+    },
+    vintage: {
+        border: '6px double #7a5230',
+        boxShadow: 'inset 0 0 10px rgba(0,0,0,0.4)',
+    },
+    modern: {
+        border: 'none',
+        boxShadow: '0 6px 15px rgba(0,0,0,0.25)',
+    },
+}
+
 export default function BookPageTemplate({ entry, styleSettings, scaledWidth, scaledHeight }) {
     const hasName = Boolean(entry.name)
     const hasText = Boolean(entry.text)
@@ -10,16 +27,14 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
 
     return (
         <div
-            className='relative flex flex-col items-center text-center box-border '
+            className='relative flex flex-col items-center text-center box-border'
             style={{
                 width: '100%',
-
                 height: '100%',
                 backgroundColor: styleSettings.backgroundColor,
                 backgroundImage: styleSettings.textureUrl ? `url(${styleSettings.textureUrl})` : 'none',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
-                fontFamily: styleSettings.fontFamily,
                 color: styleSettings.fontColor,
                 border: `${w(styleSettings.borderWidth)}px solid ${styleSettings.borderColor}`,
                 borderRadius: w(styleSettings.borderRadius),
@@ -30,17 +45,17 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
             {/* שם האורח */}
             {hasName && (
                 <div
+                    className={styleSettings.fontClass}
                     style={{
-                        position: 'absolute',
                         top: h(2),
                         right: w(2),
-                        fontSize: h(styleSettings.fontSize * 0.8), // טיפה קטן מהטקסט
+                        fontSize: h(styleSettings.fontSize * 0.8),
                         lineHeight: 1.2,
                         color: styleSettings.fontColor,
                         opacity: 0.8,
-                        maxWidth: w(60), // הרבה יותר גמיש
+                        maxWidth: w(60),
                         textAlign: 'right',
-                        whiteSpace: 'normal', // שורות שבורות במקום חתוך
+                        whiteSpace: 'normal',
                         wordWrap: 'break-word',
                         zIndex: 5,
                     }}
@@ -48,6 +63,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                     {entry.name}
                 </div>
             )}
+
             {/* תמונה */}
             {hasImage && (
                 <div
@@ -68,15 +84,15 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                             width: '100%',
                             height: '100%',
                             borderRadius: styleSettings.imageStyle.borderRadius,
-                            borderWidth: styleSettings.imageStyle.borderWidth,
-                            borderStyle: styleSettings.imageStyle.borderStyle,
-                            boxShadow: styleSettings.imageStyle.boxShadow,
                             objectFit: 'cover',
                             display: 'block',
+                            // חיבור בין סגנונות בסיס לסגנון המסגרת
+                            ...IMAGE_FRAMES[styleSettings.imageStyle.frame || 'none'],
                         }}
                     />
                 </div>
             )}
+
             {/* טקסט */}
             {hasText && (
                 <div
@@ -86,6 +102,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                     }}
                 >
                     <p
+                        className={styleSettings.fontClass}
                         style={{
                             fontSize: h(styleSettings.fontSize),
                             color: styleSettings.fontColor,

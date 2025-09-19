@@ -1,25 +1,36 @@
-// src/app/layout.js
-import { Geist, Geist_Mono, Noto_Serif_Hebrew } from 'next/font/google'
+// src/app/layout.tsx
 import './globals.css'
 import Header from '@/components/Header/Header'
-import Footer from '@/components/Footer/Footer'
-
-const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
-const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
-const notoHebrew = Noto_Serif_Hebrew({ subsets: ['hebrew'], weight: ['400', '700'], variable: '--font-noto-hebrew' })
-
-const metadata = {
-    title: 'Wedding Book',
-    description: 'ספר ברכות דיגיטלי לחתונה',
-}
+import {
+    geistSans,
+    geistMono,
+    notoHebrew,
+    frankRuhl,
+    secular,
+    davidLibre,
+    heebo,
+    greatVibes,
+    cinzel,
+    parisienne,
+    cormorant,
+    playfairSC,
+} from './fonts'
 
 export default function RootLayout({ children }) {
     return (
-        <html lang='he' className={`${geistSans.variable} ${geistMono.variable} ${notoHebrew.variable}`}>
-            {/* זה מבטל mismatch שנגרם על ידי תוספים או הבדלי server/client */}
-            <body suppressHydrationWarning className='antialiased'>
+        <html lang='he' dir='rtl'>
+            <body
+                suppressHydrationWarning
+                className={`
+          antialiased
+          ${geistSans.variable} ${geistMono.variable}
+          ${notoHebrew.variable} ${frankRuhl.variable}
+          ${secular.variable} ${davidLibre.variable} ${heebo.variable}
+          ${greatVibes.variable} ${cinzel.variable} ${parisienne.variable}
+          ${cormorant.variable} ${playfairSC.variable}
+        `}
+            >
                 <Header />
-
                 {children}
             </body>
         </html>

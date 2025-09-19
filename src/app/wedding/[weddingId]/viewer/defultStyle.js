@@ -6,17 +6,17 @@ const BASE_DEFAULTS = {
     fontSize: 3, // % מהגובה
     fontColor: '#000000',
     borderColor: '#d8bfa4',
-    borderWidth: 0.5, // % מהרוחב
+    borderWidth: 0, // % מהרוחב
     borderRadius: 0, // % מהרוחב
-    pagePadding: 3, // % מהגובה
+    pagePadding: 0, // % מהגובה
     textureUrl: '',
     imageStyle: {
-        width: 80, // % מהרוחב
-        height: 60, // % מהגובה
-        marginTop: 5, // % מהגובה
+        width: 90, // % מהרוחב
+        height: 70, // % מהגובה
+        marginTop: 0, // % מהגובה
         borderRadius: '0%',
         borderWidth: '0px',
-        borderStyle: 'solid',
+        borderStyle: 'none',
         boxShadow: 'none',
     },
 }

@@ -24,7 +24,7 @@ export default function BookViewer() {
 
     function getBookDimensions() {
         const screenWidth = window.innerWidth
-        const width = screenWidth * 0.3 // ספר במסך
+        const width = screenWidth * 0.35 // ספר במסך
         return width
     }
     useEffect(() => {
@@ -60,15 +60,15 @@ export default function BookViewer() {
             localStorage.setItem('bookStyle', JSON.stringify(newSettings))
         }
     }
-
     async function handleDownloadPDF() {
         if (!hiddenRef.current) return
         const pageEls = hiddenRef.current.querySelectorAll('.page-for-pdf')
 
+        const mmSize = 200 // 20 ס״מ
         const pdf = new jsPDF({
             orientation: 'portrait',
             unit: 'mm',
-            format: [200, 200], // 20×20 ס״מ
+            format: [mmSize, mmSize],
         })
 
         for (let i = 0; i < pageEls.length; i++) {
@@ -77,9 +77,11 @@ export default function BookViewer() {
                 useCORS: true,
                 backgroundColor: '#fff',
             })
+
             const imgData = canvas.toDataURL('image/jpeg', 1.0)
+
             if (i > 0) pdf.addPage()
-            pdf.addImage(imgData, 'JPEG', 0, 0, 200, 200)
+            pdf.addImage(imgData, 'JPEG', 0, 0, mmSize, mmSize) // כל עמוד 20×20 ס״מ
         }
 
         pdf.save('wedding-book.pdf')
@@ -97,7 +99,7 @@ export default function BookViewer() {
     return (
         <>
             <div className='relative flex h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 via-white to-purple-100'>
-                <main className='relative z-10 flex flex-1 items-center justify-center p-6 gap-6'>
+                <main className='relative z-10 flex flex-1 items-center justify-start p-6 gap-6'>
                     {/* פאנל עיצוב */}
                     <aside className=' lg:block w-1/4 border-l border-gray-200 bg-white/80 backdrop-blur-md p-6 shadow-xl rounded-l-2xl'>
                         <h2 className='mb-6 text-xl font-bold text-gray-800'>עיצוב הספר</h2>
