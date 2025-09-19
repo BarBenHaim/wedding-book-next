@@ -1,6 +1,6 @@
 const BASE_SIZE = 2362
 
-// מסגרות אפשריות (זהות למה שיש ב-DesignControls)
+// מסגרות אפשריות
 const IMAGE_FRAMES = {
     none: {},
     gold: {
@@ -71,27 +71,15 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 <div
                     style={{
                         width: w(styleSettings.imageStyle.width),
-                        maxWidth: '100%',
                         height: h(styleSettings.imageStyle.height),
                         marginTop: h(styleSettings.imageStyle.marginTop),
-                        justifyContent: 'center',
-                        alignItems: 'center',
+                        backgroundImage: `url(${entry.imageUrl})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        borderRadius: styleSettings.imageStyle.borderRadius,
+                        ...IMAGE_FRAMES[styleSettings.imageStyle.frame || 'none'],
                     }}
-                >
-                    <img
-                        src={entry.imageUrl}
-                        alt='תמונה מהאורח'
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            borderRadius: styleSettings.imageStyle.borderRadius,
-                            objectFit: 'cover',
-
-                            // חיבור בין סגנונות בסיס לסגנון המסגרת
-                            ...IMAGE_FRAMES[styleSettings.imageStyle.frame || 'none'],
-                        }}
-                    />
-                </div>
+                />
             )}
 
             {/* טקסט */}

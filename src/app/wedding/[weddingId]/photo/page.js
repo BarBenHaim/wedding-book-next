@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import Cropper from 'react-easy-crop'
 import { saveEntry } from '../../../../lib/classifyMedia'
 
 export default function TextPage() {
@@ -13,6 +14,13 @@ export default function TextPage() {
     const [stream, setStream] = useState(null)
     const [cameraOpen, setCameraOpen] = useState(false)
     const [submitting, setSubmitting] = useState(false)
+
+    // crop state (רק להעלאות, לא לצילום)
+    const [crop, setCrop] = useState({ x: 0, y: 0 })
+    const [zoom, setZoom] = useState(1)
+    const [minZoom, setMinZoom] = useState(1)
+    const [croppedAreaPixels, setCroppedAreaPixels] = useState(null)
+    const [isUpload, setIsUpload] = useState(false) // האם זו תמונה שהועלתה
 
     const liveVideoRef = useRef(null)
     const router = useRouter()
@@ -58,7 +66,8 @@ export default function TextPage() {
                     const url = URL.createObjectURL(blob)
                     setPhotoBlob(blob)
                     setPhotoUrl(url)
-                    setCameraOpen(false) // סגירת מצלמה → נשאר רק הפריים שצולם
+                    setIsUpload(false) // צילום → לא crop
+                    setCameraOpen(false)
                 }
             },
             'image/jpeg',
@@ -66,9 +75,55 @@ export default function TextPage() {
         )
     }
 
+    function getCoverZoom(imageWidth, imageHeight, frameWidth, frameHeight) {
+        const scaleX = frameWidth / imageWidth
+        const scaleY = frameHeight / imageHeight
+        return Math.max(scaleX, scaleY) // zoom cover
+    }
+
+    async function getCroppedImage(imageSrc, croppedAreaPixels) {
+        const image = await createImage(imageSrc)
+        const canvas = document.createElement('canvas')
+        canvas.width = croppedAreaPixels.width
+        canvas.height = croppedAreaPixels.height
+        const ctx = canvas.getContext('2d')
+
+        ctx.drawImage(
+            image,
+            croppedAreaPixels.x,
+            croppedAreaPixels.y,
+            croppedAreaPixels.width,
+            croppedAreaPixels.height,
+            0,
+            0,
+            croppedAreaPixels.width,
+            croppedAreaPixels.height
+        )
+
+        return new Promise(resolve => {
+            canvas.toBlob(
+                blob => {
+                    resolve(blob)
+                },
+                'image/jpeg',
+                0.95
+            )
+        })
+    }
+
+    function createImage(url) {
+        return new Promise((resolve, reject) => {
+            const image = new Image()
+            image.addEventListener('load', () => resolve(image))
+            image.addEventListener('error', error => reject(error))
+            image.setAttribute('crossOrigin', 'anonymous')
+            image.src = url
+        })
+    }
+
     async function onSubmit(e) {
         e.preventDefault()
-        if (!text.trim() && !photoBlob) return
+        if (!text.trim() && !photoUrl) return
         if (!weddingId) {
             alert('לא נמצא מזהה חתונה')
             return
@@ -76,10 +131,17 @@ export default function TextPage() {
 
         setSubmitting(true)
         try {
+            let finalImage = photoBlob
+
+            // אם זו תמונה שהועלתה → חותכים לפי crop
+            if (isUpload && photoUrl && croppedAreaPixels) {
+                finalImage = await getCroppedImage(photoUrl, croppedAreaPixels)
+            }
+
             await saveEntry(weddingId, {
-                name: name || 'אורח אנונימי',
+                name: name || null,
                 text: text.trim() || null,
-                image: photoBlob || null,
+                image: finalImage || null,
             })
             router.push(`/wedding/${weddingId}/thanks`)
         } catch (err) {
@@ -147,7 +209,7 @@ export default function TextPage() {
                         />
                     </div>
 
-                    {/* טאב תוכן – גובה קבוע */}
+                    {/* טאב תוכן */}
                     <div className='relative h-[400px] transition-all'>
                         {activeTab === 'text' && (
                             <div className='flex flex-col h-full animate-fadeIn'>
@@ -166,10 +228,11 @@ export default function TextPage() {
 
                         {activeTab === 'photo' && (
                             <div className='flex flex-col h-full animate-fadeIn space-y-4'>
-                                {/* קונטיינר ביחס 4:3 */}
-                                <div className='relative flex-1 aspect-[4/3] w-full rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden shadow'>
+                                <div className='relative flex-1 aspect-[4/3] w-full rounded-lg border border-gray-200 bg-gray-50 overflow-hidden shadow'>
                                     {!photoUrl && !cameraOpen && (
-                                        <span className='text-gray-400 text-sm'>עדיין לא נוספה תמונה</span>
+                                        <span className='flex h-full w-full items-center justify-center text-gray-400 text-sm'>
+                                            עדיין לא נוספה תמונה
+                                        </span>
                                     )}
 
                                     {cameraOpen && (
@@ -182,25 +245,85 @@ export default function TextPage() {
                                         />
                                     )}
 
-                                    {photoUrl && (
+                                    {/* העלאה עם cropper */}
+                                    {photoUrl && !cameraOpen && isUpload && (
+                                        <Cropper
+                                            image={photoUrl}
+                                            crop={crop}
+                                            zoom={zoom}
+                                            minZoom={minZoom}
+                                            aspect={4 / 3}
+                                            cropShape='rect'
+                                            showGrid={false}
+                                            restrictPosition={false}
+                                            style={{
+                                                containerStyle: { backgroundColor: 'transparent' },
+                                                cropAreaStyle: { border: 'none', boxShadow: 'none' },
+                                            }}
+                                            onCropChange={setCrop}
+                                            onZoomChange={setZoom}
+                                            onCropComplete={(croppedArea, croppedAreaPixels) => {
+                                                setCroppedAreaPixels(croppedAreaPixels)
+                                            }}
+                                        />
+                                    )}
+
+                                    {/* צילום מוצג כמו שהוא */}
+                                    {photoUrl && !cameraOpen && !isUpload && (
                                         <img
                                             src={photoUrl}
-                                            alt='תמונה שצולמה'
+                                            alt='תמונה'
                                             className='absolute inset-0 w-full h-full object-cover'
                                         />
                                     )}
                                 </div>
 
                                 {/* כפתורי פעולה */}
-                                <div className='flex justify-center gap-4'>
+                                <div className='flex flex-wrap justify-center gap-4'>
                                     {!photoUrl && !cameraOpen && (
-                                        <button
-                                            type='button'
-                                            onClick={() => setCameraOpen(true)}
-                                            className='rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 px-6 py-3 text-white font-medium shadow-lg hover:scale-105 transition'
-                                        >
-                                            הפעל מצלמה
-                                        </button>
+                                        <>
+                                            <button
+                                                type='button'
+                                                onClick={() => setCameraOpen(true)}
+                                                className='rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 px-6 py-3 text-white font-medium shadow-lg hover:scale-105 transition'
+                                            >
+                                                הפעל מצלמה
+                                            </button>
+
+                                            <label className='rounded-xl cursor-pointer border border-gray-300 bg-white px-6 py-3 font-medium text-gray-700 shadow hover:bg-gray-50 transition'>
+                                                העלה תמונה
+                                                <input
+                                                    type='file'
+                                                    accept='image/*'
+                                                    className='hidden'
+                                                    onChange={e => {
+                                                        const file = e.target.files?.[0]
+                                                        if (file) {
+                                                            const url = URL.createObjectURL(file)
+                                                            setPhotoBlob(file)
+                                                            setPhotoUrl(url)
+                                                            setIsUpload(true)
+
+                                                            // לחשב zoom התחלתי ל-cover
+                                                            const img = new Image()
+                                                            img.onload = () => {
+                                                                const frameWidth = 400
+                                                                const frameHeight = 300
+                                                                const initialZoom = getCoverZoom(
+                                                                    img.width,
+                                                                    img.height,
+                                                                    frameWidth,
+                                                                    frameHeight
+                                                                )
+                                                                setZoom(initialZoom)
+                                                                setMinZoom(initialZoom)
+                                                            }
+                                                            img.src = url
+                                                        }
+                                                    }}
+                                                />
+                                            </label>
+                                        </>
                                     )}
 
                                     {cameraOpen && (
@@ -229,6 +352,7 @@ export default function TextPage() {
                                                 setPhotoUrl('')
                                                 setPhotoBlob(null)
                                                 setCameraOpen(false)
+                                                setIsUpload(false)
                                             }}
                                             className='rounded-xl border border-gray-300 bg-white px-6 py-3 font-medium text-gray-700 shadow hover:bg-gray-50 transition'
                                         >
@@ -236,6 +360,20 @@ export default function TextPage() {
                                         </button>
                                     )}
                                 </div>
+
+                                {/* שליטה בזום – רק להעלאה */}
+                                {photoUrl && !cameraOpen && isUpload && (
+                                    <div className='flex items-center justify-center gap-2'>
+                                        <input
+                                            type='range'
+                                            min={minZoom}
+                                            max={3}
+                                            step={0.1}
+                                            value={zoom}
+                                            onChange={e => setZoom(Number(e.target.value))}
+                                        />
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -243,7 +381,7 @@ export default function TextPage() {
                     {/* שליחה */}
                     <button
                         type='submit'
-                        disabled={submitting || (!text.trim() && !photoBlob)}
+                        disabled={submitting || (!text.trim() && !photoUrl)}
                         className='w-full rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 px-6 py-3 text-lg font-semibold text-white shadow-lg hover:scale-105 transition disabled:cursor-not-allowed disabled:opacity-50'
                     >
                         {submitting ? 'שולח...' : 'שלח ברכה'}
