@@ -54,6 +54,8 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         color: styleSettings.fontColor,
                         opacity: 0.8,
                         maxWidth: w(60),
+                        marginTop: h(2.5),
+                        marginBottom: h(1.5),
                         textAlign: 'right',
                         whiteSpace: 'normal',
                         wordWrap: 'break-word',
@@ -72,7 +74,6 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         maxWidth: '100%',
                         height: h(styleSettings.imageStyle.height),
                         marginTop: h(styleSettings.imageStyle.marginTop),
-                        display: 'flex',
                         justifyContent: 'center',
                         alignItems: 'center',
                     }}
@@ -85,7 +86,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                             height: '100%',
                             borderRadius: styleSettings.imageStyle.borderRadius,
                             objectFit: 'cover',
-                            display: 'block',
+
                             // חיבור בין סגנונות בסיס לסגנון המסגרת
                             ...IMAGE_FRAMES[styleSettings.imageStyle.frame || 'none'],
                         }}
@@ -99,6 +100,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                     style={{
                         maxWidth: w(85),
                         marginTop: h(3),
+                        display: 'inline-block',
                     }}
                 >
                     <p
@@ -109,6 +111,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                             lineHeight: 1.5,
                             whiteSpace: 'pre-line',
                             wordWrap: 'break-word',
+                            display: 'inline-block',
                         }}
                     >
                         {entry.text}

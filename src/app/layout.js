@@ -28,7 +28,7 @@ export default function RootLayout({ children }) {
           ${secular.variable} ${davidLibre.variable} ${heebo.variable}
           ${greatVibes.variable} ${cinzel.variable} ${parisienne.variable}
           ${cormorant.variable} ${playfairSC.variable}
-        `}
+          `}
             >
                 <Header />
                 {children}
