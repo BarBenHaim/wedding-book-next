@@ -3,83 +3,63 @@
 import { useState } from 'react'
 import { heebo, frankRuhl, secular, davidLibre, notoHebrew } from '@/app/fonts'
 
-/* ברירות מחדל */
 const BASE_DEFAULTS = {
     backgroundColor: '#ffffff',
     fontClass: notoHebrew.className,
-    fontWeight: '400',
     fontColor: '#000000',
-    pageBorder: 'none',
-    borderRadius: 'none',
-    imageStyle: { frame: 'none', width: 90, height: 70 },
+    texture: null,
+    decorations: [],
+    imageStyle: { width: 90, height: 70 },
 }
 
-/* צבעים */
-const COLOR_OPTIONS = {
-    backgrounds: ['#ffffff', '#fffdf8', '#fff6f9', '#1e1e1e'],
-    texts: ['#000000', '#4b3b18', '#b03060', '#f0e6d2'],
-}
+/* טקסטורות */
+const TEXTURES = [
+    { name: 'נייר', url: '/textures/paper.png' },
+    { name: 'פשתן', url: '/textures/linen.png' },
+    { name: 'שיש', url: '/textures/marble.png' },
+    { name: 'נצנצים', url: '/textures/glitter.png' },
+]
 
-/* מסגרות תמונה */
-const IMAGE_FRAMES = {
-    none: { style: {} },
-    gold: { style: { border: '3px solid #d4af37', boxShadow: '0 2px 8px rgba(212,175,55,0.3)' } },
-    vintage: { style: { border: '4px double #7a5230', boxShadow: 'inset 0 0 6px rgba(0,0,0,0.4)' } },
-    modern: { style: { border: 'none', boxShadow: '0 3px 8px rgba(0,0,0,0.25)' } },
-}
-
-/* מסגרות עמוד */
-const PAGE_BORDERS = {
-    none: { style: {} },
-    gold: { style: { border: '4px solid #d4af37' } },
-    classic: { style: { border: '2px solid #000000' } },
-    modern: { style: { border: '2px dashed #888888' } },
-}
+/* דקורציות */
+const DECORATIONS = [
+    { icon: '❤️', value: 'hearts' },
+    { icon: '⭐', value: 'stars' },
+    { icon: '🌸', value: 'flowers' },
+    { icon: '✨', value: 'sparkles' },
+]
 
 /* פריסטים */
 const PRESETS = [
     {
-        name: 'קלאסי זהב',
-        values: {
-            ...BASE_DEFAULTS,
-            backgroundColor: '#fffdf8',
-            fontClass: frankRuhl.className,
-            fontColor: '#4b3b18',
-            imageStyle: { frame: 'gold', width: 90, height: 80 },
-            pageBorder: 'gold',
-        },
-    },
-    {
-        name: 'ורוד יוקרה',
+        name: 'רומנטי',
+        preview: '/previews/romantic.png',
         values: {
             ...BASE_DEFAULTS,
             backgroundColor: '#fff6f9',
             fontClass: davidLibre.className,
             fontColor: '#b03060',
-            imageStyle: { frame: 'vintage', width: 90, height: 80 },
-            pageBorder: 'classic',
+            decorations: ['flowers'],
         },
     },
     {
-        name: 'מודרני נקי',
+        name: 'כוכבים',
+        preview: '/previews/stars.png',
         values: {
             ...BASE_DEFAULTS,
-            backgroundColor: '#fafafa',
-            fontClass: heebo.className,
-            fontColor: '#222',
-            imageStyle: { frame: 'modern', width: 90, height: 80 },
-            pageBorder: 'modern',
+            backgroundColor: '#0f172a',
+            fontClass: frankRuhl.className,
+            fontColor: '#facc15',
+            decorations: ['stars'],
         },
     },
     {
         name: 'אלגנטי כהה',
+        preview: '/previews/dark.png',
         values: {
             ...BASE_DEFAULTS,
             backgroundColor: '#1e1e1e',
             fontClass: secular.className,
             fontColor: '#f0e6d2',
-            imageStyle: { frame: 'modern', width: 90, height: 80 },
-            pageBorder: 'none',
         },
     },
 ]
@@ -92,61 +72,59 @@ export default function DesignControls({ settings, onChange }) {
         onChange(preset.values)
     }
 
-    const resetToDefault = () => {
-        setActivePreset(null)
-        onChange(BASE_DEFAULTS)
-    }
-
     return (
-        <div dir='rtl' className='space-y-4 pr-1 font-sans text-sm'>
+        <div
+            dir='rtl'
+            className='flex flex-col gap-8 font-sans text-sm h-full overflow-y-auto p-4 bg-gradient-to-b from-white/70 to-white/30 backdrop-blur-xl rounded-3xl'
+        >
             {/* פריסטים */}
-            <section className=' border-gray-200 bg-white/95  shadow-sm'>
-                <h4 className=' font-semibold text-gray-800 text-sm'>🎨 סגנון מוכן</h4>
-                <div className='grid grid-cols-2 gap-2'>
+            <section>
+                <h4 className='mb-4 text-xs font-semibold text-gray-500 tracking-wide'>סגנון מוכן</h4>
+                <div className='grid grid-cols-3 gap-4'>
                     {PRESETS.map((preset, idx) => (
                         <button
                             key={idx}
                             onClick={() => applyPreset(preset)}
-                            className={`flex flex-col items-center justify-center h-20 rounded-md border transition hover:scale-[1.02] ${
-                                activePreset === preset.name ? 'border-pink-500 shadow' : 'border-gray-300'
-                            } ${preset.values.fontClass}`}
-                            style={{ background: preset.values.backgroundColor, color: preset.values.fontColor }}
+                            className={`rounded-2xl overflow-hidden shadow-sm transition hover:scale-[1.05] ${
+                                activePreset === preset.name ? 'ring-2 ring-pink-400 shadow-lg' : 'ring-1 ring-gray-200'
+                            }`}
                         >
-                            <span className='text-[10px]'>{preset.name}</span>
-                            <span className='text-sm'>ספר החתונה</span>
+                            <img src={preset.preview} alt={preset.name} className='w-full h-24 object-cover' />
                         </button>
                     ))}
                 </div>
             </section>
 
-            {/* בחירת פונט */}
-            <section className='rounded-lg border border-gray-200 bg-white/95 p-3 shadow-sm'>
-                <h4 className='mb-2 font-semibold text-gray-800 text-sm'>📝 פונט</h4>
-                <div className='grid grid-cols-2 gap-2'>
+            {/* פונט */}
+            <section>
+                <h4 className='mb-4 text-xs font-semibold text-gray-500 tracking-wide'>פונט</h4>
+                <div className='flex justify-between'>
                     {[notoHebrew, frankRuhl, davidLibre, heebo, secular].map((font, idx) => (
                         <button
                             key={idx}
                             onClick={() => onChange({ fontClass: font.className })}
-                            className={`p-2 border rounded-md bg-gray-50 hover:scale-[1.02] ${
-                                settings.fontClass === font.className ? 'border-pink-500 bg-pink-50' : 'border-gray-300'
+                            className={`w-12 h-12 flex items-center justify-center rounded-full transition backdrop-blur-md ${
+                                settings.fontClass === font.className
+                                    ? 'bg-pink-100 ring-2 ring-pink-400'
+                                    : 'bg-white/60 ring-1 ring-gray-200'
                             }`}
                         >
-                            <span className={`${font.className} block text-sm`}>ספר החתונה</span>
+                            <span className={`${font.className} text-lg`}>א</span>
                         </button>
                     ))}
                 </div>
             </section>
 
-            {/* צבע טקסט */}
-            <section className='rounded-lg border border-gray-200 bg-white/95 p-3 shadow-sm'>
-                <h4 className='mb-2 font-semibold text-gray-800 text-sm'>🎨 צבע טקסט</h4>
-                <div className='flex gap-2 flex-wrap'>
-                    {COLOR_OPTIONS.texts.map(c => (
+            {/* צבעים */}
+            <section>
+                <h4 className='mb-4 text-xs font-semibold text-gray-500 tracking-wide'>צבעים</h4>
+                <div className='flex justify-between'>
+                    {['#000000', '#4b3b18', '#b03060', '#f0e6d2'].map(c => (
                         <button
                             key={c}
                             onClick={() => onChange({ fontColor: c })}
-                            className={`w-8 h-8 rounded-full transition hover:scale-105 ${
-                                settings.fontColor === c ? 'ring-2 ring-pink-500' : 'ring-1 ring-gray-300'
+                            className={`w-10 h-10 rounded-full transition ${
+                                settings.fontColor === c ? 'ring-2 ring-pink-400' : 'ring-1 ring-gray-200'
                             }`}
                             style={{ backgroundColor: c }}
                         />
@@ -154,71 +132,50 @@ export default function DesignControls({ settings, onChange }) {
                 </div>
             </section>
 
-            {/* צבע רקע */}
-            <section className='rounded-lg border border-gray-200 bg-white/95 p-3 shadow-sm'>
-                <h4 className='mb-2 font-semibold text-gray-800 text-sm'>🖼️ צבע רקע</h4>
-                <div className='flex gap-2 flex-wrap'>
-                    {COLOR_OPTIONS.backgrounds.map(c => (
+            {/* טקסטורות */}
+            <section>
+                <h4 className='mb-4 text-xs font-semibold text-gray-500 tracking-wide'>טקסטורות</h4>
+                <div className='grid grid-cols-4 gap-3'>
+                    {TEXTURES.map(tex => (
                         <button
-                            key={c}
-                            onClick={() => onChange({ backgroundColor: c })}
-                            className={`w-8 h-8 rounded-md transition hover:scale-105 ${
-                                settings.backgroundColor === c ? 'ring-2 ring-pink-500' : 'ring-1 ring-gray-300'
+                            key={tex.name}
+                            onClick={() => onChange({ texture: tex.url })}
+                            className={`rounded-xl overflow-hidden transition hover:scale-[1.05] ${
+                                settings.texture === tex.url ? 'ring-2 ring-pink-400' : 'ring-1 ring-gray-200'
                             }`}
-                            style={{ backgroundColor: c }}
-                        />
-                    ))}
-                </div>
-            </section>
-
-            {/* מסגרת עמוד */}
-            <section className='rounded-lg border border-gray-200 bg-white/95 p-3 shadow-sm'>
-                <h4 className='mb-2 font-semibold text-gray-800 text-sm'>📖 מסגרת עמוד</h4>
-                <div className='flex gap-2 flex-wrap'>
-                    {Object.entries(PAGE_BORDERS).map(([key, val]) => (
-                        <button
-                            key={key}
-                            onClick={() => onChange({ pageBorder: key })}
-                            className={`w-16 h-10 flex items-center justify-center rounded-md text-[10px] transition hover:scale-[1.02] ${
-                                settings.pageBorder === key
-                                    ? 'border-2 border-pink-500 bg-pink-50'
-                                    : 'border border-gray-300'
-                            }`}
-                            style={val.style}
                         >
-                            {key !== 'none' ? '' : 'ללא'}
+                            <img src={tex.url} alt={tex.name} className='w-full h-14 object-cover' />
                         </button>
                     ))}
                 </div>
             </section>
 
-            {/* מסגרת תמונה */}
-            <section className='rounded-lg border border-gray-200 bg-white/95 p-3 shadow-sm'>
-                <h4 className='mb-2 font-semibold text-gray-800 text-sm'>🖼️ מסגרת תמונה</h4>
-                <div className='grid grid-cols-2 gap-2'>
-                    {Object.entries(IMAGE_FRAMES).map(([key, val]) => (
+            {/* דקורציות */}
+            {/* דקורציות */}
+            <section>
+                <h4 className='mb-4 text-xs font-semibold text-gray-500 tracking-wide'>אלמנטים</h4>
+                <div className='flex gap-3 flex-wrap'>
+                    {DECORATIONS.map(deco => (
                         <button
-                            key={key}
-                            onClick={() => onChange({ imageStyle: { ...settings.imageStyle, frame: key } })}
-                            className={`p-2 rounded-md bg-gray-50 flex items-center justify-center hover:scale-[1.02] ${
-                                settings.imageStyle.frame === key
-                                    ? 'border-2 border-pink-500 bg-pink-50'
-                                    : 'border border-gray-300'
+                            key={deco.value}
+                            onClick={() =>
+                                onChange({
+                                    decorations: (settings.decorations ?? []).includes(deco.value)
+                                        ? (settings.decorations ?? []).filter(d => d !== deco.value)
+                                        : [...(settings.decorations ?? []), deco.value],
+                                })
+                            }
+                            className={`w-12 h-12 flex items-center justify-center rounded-2xl text-xl transition backdrop-blur-md ${
+                                (settings.decorations ?? []).includes(deco.value)
+                                    ? 'bg-pink-100 ring-2 ring-pink-400'
+                                    : 'bg-white/60 ring-1 ring-gray-200'
                             }`}
                         >
-                            <div className='w-14 h-10 bg-white' style={val.style} />
+                            {deco.icon}
                         </button>
                     ))}
                 </div>
             </section>
-
-            {/* איפוס */}
-            <button
-                onClick={resetToDefault}
-                className='w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-xs font-medium hover:bg-gray-200 transition'
-            >
-                איפוס לברירת מחדל
-            </button>
         </div>
     )
 }

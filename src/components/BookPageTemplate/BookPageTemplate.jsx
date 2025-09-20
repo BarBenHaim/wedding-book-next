@@ -1,22 +1,5 @@
 const BASE_SIZE = 2362
 
-// מסגרות אפשריות
-const IMAGE_FRAMES = {
-    none: {},
-    gold: {
-        border: '4px solid #d4af37',
-        boxShadow: '0 4px 15px rgba(212,175,55,0.3)',
-    },
-    vintage: {
-        border: '6px double #7a5230',
-        boxShadow: 'inset 0 0 10px rgba(0,0,0,0.4)',
-    },
-    modern: {
-        border: 'none',
-        boxShadow: '0 6px 15px rgba(0,0,0,0.25)',
-    },
-}
-
 export default function BookPageTemplate({ entry, styleSettings, scaledWidth, scaledHeight }) {
     const hasName = Boolean(entry.name)
     const hasText = Boolean(entry.text)
@@ -27,37 +10,60 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
 
     return (
         <div
-            className='relative flex flex-col items-center text-center box-border'
+            className='relative flex flex-col items-center text-center box-border overflow-hidden'
             style={{
                 width: '100%',
                 height: '100%',
                 backgroundColor: styleSettings.backgroundColor,
-                backgroundImage: styleSettings.textureUrl ? `url(${styleSettings.textureUrl})` : 'none',
+                backgroundImage: styleSettings.texture ? `url(${styleSettings.texture})` : 'none',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 color: styleSettings.fontColor,
-                border: `${w(styleSettings.borderWidth)}px solid ${styleSettings.borderColor}`,
-                borderRadius: w(styleSettings.borderRadius),
-                padding: h(styleSettings.pagePadding),
+                borderRadius: w(styleSettings.borderRadius || 0),
+                padding: h(styleSettings.pagePadding || 4),
                 boxSizing: 'border-box',
             }}
         >
+            {/* דקורציות */}
+            {styleSettings.decorations?.includes('stars') && (
+                <div className='absolute inset-0 pointer-events-none'>
+                    <div className='absolute top-6 left-6 text-yellow-400 text-2xl'>⭐</div>
+                    <div className='absolute bottom-10 right-10 text-yellow-300 text-xl'>⭐</div>
+                    <div className='absolute top-1/2 left-1/4 text-yellow-200 text-lg'>⭐</div>
+                </div>
+            )}
+            {styleSettings.decorations?.includes('hearts') && (
+                <div className='absolute inset-0 pointer-events-none'>
+                    <div className='absolute top-8 right-8 text-pink-400 text-2xl'>❤️</div>
+                    <div className='absolute bottom-6 left-12 text-red-400 text-xl'>❤️</div>
+                </div>
+            )}
+            {styleSettings.decorations?.includes('flowers') && (
+                <div className='absolute inset-0 pointer-events-none'>
+                    <div className='absolute top-10 left-10 text-pink-300 text-2xl'>🌸</div>
+                    <div className='absolute bottom-8 right-8 text-pink-200 text-xl'>🌸</div>
+                </div>
+            )}
+            {styleSettings.decorations?.includes('sparkles') && (
+                <div className='absolute inset-0 pointer-events-none'>
+                    <div className='absolute top-4 right-1/3 text-purple-300 text-2xl'>✨</div>
+                    <div className='absolute bottom-12 left-1/4 text-pink-300 text-xl'>✨</div>
+                </div>
+            )}
+
             {/* שם האורח */}
             {hasName && (
                 <div
                     className={styleSettings.fontClass}
                     style={{
-                        top: h(2),
-                        right: w(2),
-                        fontSize: h(styleSettings.fontSize * 0.8),
+                        fontSize: h(styleSettings.fontSize * 0.7 || 24),
                         lineHeight: 1.2,
                         color: styleSettings.fontColor,
-                        opacity: 0.8,
+                        opacity: 0.85,
                         maxWidth: w(60),
-                        marginTop: h(2.5),
-                        marginBottom: h(1.5),
+                        marginTop: h(2),
+                        marginBottom: h(2),
                         textAlign: 'right',
-                        whiteSpace: 'normal',
                         wordWrap: 'break-word',
                         zIndex: 5,
                     }}
@@ -69,15 +75,15 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
             {/* תמונה */}
             {hasImage && (
                 <div
+                    className='rounded-xl shadow-md'
                     style={{
-                        width: w(styleSettings.imageStyle.width),
-                        height: h(styleSettings.imageStyle.height),
-                        marginTop: h(styleSettings.imageStyle.marginTop),
+                        width: w(styleSettings.imageStyle?.width || 90),
+                        height: h(styleSettings.imageStyle?.height || 70),
+                        marginTop: h(2),
                         backgroundImage: `url(${entry.imageUrl})`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
-                        borderRadius: styleSettings.imageStyle.borderRadius,
-                        ...IMAGE_FRAMES[styleSettings.imageStyle.frame || 'none'],
+                        borderRadius: styleSettings.imageStyle?.borderRadius || '12px',
                     }}
                 />
             )}
@@ -94,12 +100,11 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                     <p
                         className={styleSettings.fontClass}
                         style={{
-                            fontSize: h(styleSettings.fontSize),
+                            fontSize: h(styleSettings.fontSize || 28),
                             color: styleSettings.fontColor,
                             lineHeight: 1.5,
                             whiteSpace: 'pre-line',
                             wordWrap: 'break-word',
-                            display: 'inline-block',
                         }}
                     >
                         {entry.text}
