@@ -1,3 +1,5 @@
+'use client'
+
 const BASE_SIZE = 2362
 
 export default function BookPageTemplate({ entry, styleSettings, scaledWidth, scaledHeight }) {
@@ -16,6 +18,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 height: '100%',
                 backgroundColor: styleSettings.backgroundColor,
                 backgroundImage: styleSettings.texture ? `url(${styleSettings.texture})` : 'none',
+                backgroundRepeat: 'repeat',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 color: styleSettings.fontColor,
@@ -24,31 +27,17 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 boxSizing: 'border-box',
             }}
         >
-            {/* דקורציות */}
-            {styleSettings.decorations?.includes('stars') && (
-                <div className='absolute inset-0 pointer-events-none'>
-                    <div className='absolute top-6 left-6 text-yellow-400 text-2xl'>⭐</div>
-                    <div className='absolute bottom-10 right-10 text-yellow-300 text-xl'>⭐</div>
-                    <div className='absolute top-1/2 left-1/4 text-yellow-200 text-lg'>⭐</div>
-                </div>
-            )}
-            {styleSettings.decorations?.includes('hearts') && (
-                <div className='absolute inset-0 pointer-events-none'>
-                    <div className='absolute top-8 right-8 text-pink-400 text-2xl'>❤️</div>
-                    <div className='absolute bottom-6 left-12 text-red-400 text-xl'>❤️</div>
-                </div>
-            )}
-            {styleSettings.decorations?.includes('flowers') && (
-                <div className='absolute inset-0 pointer-events-none'>
-                    <div className='absolute top-10 left-10 text-pink-300 text-2xl'>🌸</div>
-                    <div className='absolute bottom-8 right-8 text-pink-200 text-xl'>🌸</div>
-                </div>
-            )}
-            {styleSettings.decorations?.includes('sparkles') && (
-                <div className='absolute inset-0 pointer-events-none'>
-                    <div className='absolute top-4 right-1/3 text-purple-300 text-2xl'>✨</div>
-                    <div className='absolute bottom-12 left-1/4 text-pink-300 text-xl'>✨</div>
-                </div>
+            {/* מסגרת מעל הכל */}
+            {styleSettings.frame && (
+                <img
+                    src={styleSettings.frame}
+                    alt='frame'
+                    className='pointer-events-none absolute top-0 left-0 w-full h-full'
+                    style={{
+                        objectFit: 'cover',
+                        zIndex: 10,
+                    }}
+                />
             )}
 
             {/* שם האורח */}
@@ -56,7 +45,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 <div
                     className={styleSettings.fontClass}
                     style={{
-                        fontSize: h(styleSettings.fontSize * 0.7 || 24),
+                        fontSize: h((styleSettings.fontSizePercent || 3) * 0.7),
                         lineHeight: 1.2,
                         color: styleSettings.fontColor,
                         opacity: 0.85,
@@ -66,6 +55,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         textAlign: 'right',
                         wordWrap: 'break-word',
                         zIndex: 5,
+                        position: 'relative',
                     }}
                 >
                     {entry.name}
@@ -75,7 +65,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
             {/* תמונה */}
             {hasImage && (
                 <div
-                    className='rounded-xl shadow-md'
+                    className='rounded-xl shadow-md relative'
                     style={{
                         width: w(styleSettings.imageStyle?.width || 90),
                         height: h(styleSettings.imageStyle?.height || 70),
@@ -84,6 +74,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
                         borderRadius: styleSettings.imageStyle?.borderRadius || '12px',
+                        zIndex: 5,
                     }}
                 />
             )}
@@ -95,12 +86,14 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         maxWidth: w(85),
                         marginTop: h(3),
                         display: 'inline-block',
+                        position: 'relative',
+                        zIndex: 5,
                     }}
                 >
                     <p
                         className={styleSettings.fontClass}
                         style={{
-                            fontSize: h(styleSettings.fontSize || 28),
+                            fontSize: h(styleSettings.fontSizePercent || 3),
                             color: styleSettings.fontColor,
                             lineHeight: 1.5,
                             whiteSpace: 'pre-line',
