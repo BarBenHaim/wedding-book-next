@@ -6,6 +6,7 @@ import { heebo, frankRuhl, secular, davidLibre, notoHebrew } from '@/app/fonts'
 /* --- מסגרות --- */
 import frame1 from '../../media/frames/frame1.png'
 import frame2 from '../../media/frames/frame2.png'
+import frame3 from '../../media/frames/frame3.png'
 
 /* --- טקסטורות --- */
 import tex1 from '../../media/textures/tex1.png'
@@ -19,6 +20,9 @@ import tex8 from '../../media/textures/tex8.png'
 import tex9 from '../../media/textures/tex9.png'
 import tex10 from '../../media/textures/tex10.png'
 import tex11 from '../../media/textures/tex11.png'
+import tex12 from '../../media/textures/tex12.png'
+import tex13 from '../../media/textures/tex13.png'
+import tex14 from '../../media/textures/tex14.png'
 
 /* --- ברירות מחדל --- */
 const BASE_DEFAULTS = {
@@ -123,7 +127,7 @@ const BACKGROUNDS = [
 ]
 
 /* --- טקסטורות --- */
-const texturesImports = [tex1, tex2, tex3, tex4, tex5, tex6, tex7, tex8, tex9, tex10, tex11]
+const texturesImports = [tex1, tex2, tex3, tex4, tex5, tex6, tex7, tex8, tex9, tex10, tex11, tex12, tex13, tex14]
 
 const TEXTURES = [
     { name: 'חלק', url: null },
@@ -134,7 +138,7 @@ const TEXTURES = [
 ]
 
 /* --- מסגרות --- */
-const framesImports = [frame1, frame2]
+const framesImports = [frame1, frame2, frame3]
 
 const FRAMES = [
     { name: 'ללא מסגרת', url: null },
