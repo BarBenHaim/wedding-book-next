@@ -32,10 +32,10 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 <img
                     src={styleSettings.frame}
                     alt='frame'
-                    className='pointer-events-none absolute top-0 left-0 w-full h-full'
+                    className='absolute top-0 left-0 w-full h-full pointer-events-none'
                     style={{
-                        objectFit: 'cover',
                         zIndex: 10,
+                        objectFit: 'cover',
                     }}
                 />
             )}
@@ -45,14 +45,13 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 <div
                     className={styleSettings.fontClass}
                     style={{
-                        fontSize: h((styleSettings.fontSizePercent || 3) * 0.7),
-                        lineHeight: 1.2,
+                        fontSize: h(styleSettings.nameFontSizePercent ?? styleSettings.fontSizePercent * 0.7),
                         color: styleSettings.fontColor,
                         opacity: 0.85,
-                        maxWidth: w(60),
-                        marginTop: h(2),
-                        marginBottom: h(2),
-                        textAlign: 'right',
+                        marginTop: h(styleSettings.nameMarginTop ?? 2),
+                        marginBottom: h(styleSettings.nameMarginBottom ?? 2),
+                        textAlign: styleSettings.nameAlign ?? 'right',
+                        maxWidth: w(styleSettings.nameMaxWidth ?? 60),
                         wordWrap: 'break-word',
                         zIndex: 5,
                         position: 'relative',
@@ -67,13 +66,12 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 <div
                     className='rounded-xl shadow-md relative'
                     style={{
-                        width: w(styleSettings.imageStyle?.width || 90),
-                        height: h(styleSettings.imageStyle?.height || 70),
-                        marginTop: h(2),
+                        width: w(styleSettings.imageStyle?.width ?? 90),
+                        height: h(styleSettings.imageStyle?.height ?? 70),
                         backgroundImage: `url(${entry.imageUrl})`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
-                        borderRadius: styleSettings.imageStyle?.borderRadius || '12px',
+                        borderRadius: styleSettings.imageStyle?.borderRadius ?? '12px',
                         zIndex: 5,
                     }}
                 />
@@ -83,7 +81,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
             {hasText && (
                 <div
                     style={{
-                        maxWidth: w(85),
+                        maxWidth: w(styleSettings.textMaxWidth ?? 85),
                         marginTop: h(3),
                         display: 'inline-block',
                         position: 'relative',
@@ -93,7 +91,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                     <p
                         className={styleSettings.fontClass}
                         style={{
-                            fontSize: h(styleSettings.fontSizePercent || 3),
+                            fontSize: h(styleSettings.fontSizePercent ?? 3),
                             color: styleSettings.fontColor,
                             lineHeight: 1.5,
                             whiteSpace: 'pre-line',

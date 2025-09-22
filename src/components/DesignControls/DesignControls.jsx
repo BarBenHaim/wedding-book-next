@@ -3,19 +3,11 @@
 import { useState } from 'react'
 import { heebo, frankRuhl, secular, davidLibre, notoHebrew } from '@/app/fonts'
 
+/* --- מסגרות --- */
 import frame1 from '../../media/frames/frame1.png'
 import frame2 from '../../media/frames/frame2.png'
-import frame3 from '../../media/frames/frame3.png'
-import frame4 from '../../media/frames/frame4.png'
-import frame5 from '../../media/frames/frame5.png'
-import frame6 from '../../media/frames/frame6.png'
-import frame7 from '../../media/frames/frame7.png'
-import frame8 from '../../media/frames/frame8.png'
-import frame9 from '../../media/frames/frame9.png'
-import frame10 from '../../media/frames/frame10.png'
-import frame11 from '../../media/frames/frame11.png'
-import frame12 from '../../media/frames/frame12.png'
 
+/* --- טקסטורות --- */
 import tex1 from '../../media/textures/tex1.png'
 import tex2 from '../../media/textures/tex2.png'
 import tex3 from '../../media/textures/tex3.png'
@@ -28,86 +20,99 @@ import tex9 from '../../media/textures/tex9.png'
 import tex10 from '../../media/textures/tex10.png'
 import tex11 from '../../media/textures/tex11.png'
 
+/* --- ברירות מחדל --- */
 const BASE_DEFAULTS = {
     backgroundColor: '#ffffff',
     fontClass: notoHebrew.className,
     fontColor: '#000000',
-    texture: null, // טקסטורה כרקע
-    frame: null, // מסגרת נפרדת
+    texture: null,
+    frame: null,
+    frameColor: '#000000',
     fontSizePercent: 3,
-    imageStyle: { width: 70, height: 70 },
+    imageStyle: { width: 85, height: 70 },
 }
 
-/* פריסטים */
+/* --- פריסטים --- */
 const PRESETS = [
     {
-        name: 'רומנטי עדין',
-        previewColor: '#fff6f9',
-        values: {
-            ...BASE_DEFAULTS,
-            backgroundColor: '#fff6f9',
-            fontClass: heebo.className,
-            fontColor: '#8b1e3f',
-            texture: tex4.src,
-            frame: null,
-            fontSizePercent: 4,
-            imageStyle: { width: 80, height: 65 },
-        },
-    },
-    {
-        name: 'קלאסי זהב',
-        previewColor: '#fdfaf6',
-        values: {
-            ...BASE_DEFAULTS,
-            backgroundColor: '#fdfaf6',
-            fontClass: secular.className,
-            fontColor: '#b68c2d',
-            texture: null,
-            frame: tex3.src,
-            fontSizePercent: 4,
-            imageStyle: { width: 80, height: 65 },
-        },
-    },
-    {
-        name: 'כהה אלגנטי',
-        previewColor: '#1e1e1e',
-        values: {
-            ...BASE_DEFAULTS,
-            backgroundColor: '#1e1e1e',
-            fontClass: frankRuhl.className,
-            fontColor: '#f0e6d2',
-            texture: tex2.src,
-            frame: frame1.src,
-        },
-    },
-    {
-        name: 'המיוחד של ברקודה',
-        previewColor: '#46dbf5ff',
-        values: {
-            ...BASE_DEFAULTS,
-            backgroundColor: '#1e1e1e',
-            fontClass: notoHebrew.className,
-            fontColor: '#000000ff',
-            texture: tex4.src,
-            imageStyle: { width: 85, height: 65, borderRadius: 40 },
-        },
-    },
-    {
-        name: 'מינימליסטי',
+        name: 'קלאסי',
         previewColor: '#ffffffff',
         values: {
             ...BASE_DEFAULTS,
-            backgroundColor: '#1e1e1e',
-            fontClass: notoHebrew.className,
+            backgroundColor: '#ffffffff',
+            fontClass: heebo.className,
             fontColor: '#000000ff',
-            texture: tex4.src,
-            frame: frame4.src,
-            imageStyle: { width: 85, height: 65, borderRadius: 20 },
+            frame: frame2.src,
+            fontSizePercent: 3.5,
+            imageStyle: { width: 85, height: 70 },
+            nameMarginTop: 1,
+            textMaxWidth: 80,
+        },
+    },
+    {
+        name: 'כמעט קלאסי',
+        previewColor: '#1e1e1e',
+        values: {
+            ...BASE_DEFAULTS,
+            backgroundColor: '#ffffffff',
+            fontClass: heebo.className,
+            fontColor: '#000000ff',
+            frame: frame1.src,
+            texture: tex3.src,
+            fontSizePercent: 3,
+            imageStyle: { width: 75, height: 65 },
+            nameMarginTop: 4,
+            textMaxWidth: 75,
+        },
+    },
+    {
+        name: 'חתונה מהאגדות',
+        previewColor: '#e9d251ff',
+        values: {
+            ...BASE_DEFAULTS,
+            backgroundColor: '#e9d251ff',
+            fontClass: heebo.className,
+            fontColor: '#000000ff',
+            texture: tex6.src,
+            fontSizePercent: 3,
+            imageStyle: { width: 75, height: 65 },
+            nameMarginTop: 4,
+            textMaxWidth: 75,
+        },
+    },
+    {
+        name: 'פרחוני',
+        previewColor: '#ed95ffff',
+        values: {
+            ...BASE_DEFAULTS,
+            backgroundColor: '#ed95ffff',
+            fontClass: heebo.className,
+            fontColor: '#000000ff',
+            texture: tex8.src,
+            fontSizePercent: 3.5,
+            imageStyle: { width: 85, height: 65, borderRadius: '10px' },
+            nameMarginTop: 3,
+            textMaxWidth: 80,
+        },
+    },
+    {
+        name: 'תביא',
+        previewColor: '#262227ff',
+        values: {
+            ...BASE_DEFAULTS,
+            backgroundColor: '#262227ff',
+            fontClass: heebo.className,
+            fontColor: '#000000ff',
+            texture: tex7.src,
+            fontSizePercent: 3.5,
+            imageStyle: { width: 70, height: 65, borderRadius: '10px' },
+            nameMarginTop: 5,
+            textMaxWidth: 80,
         },
     },
 ]
 
-/* רקעים */
+/* --- רקעים --- */
 const BACKGROUNDS = [
     { name: 'לבן', value: '#ffffff' },
     { name: 'קרם', value: '#fdfaf6' },
@@ -117,19 +122,8 @@ const BACKGROUNDS = [
     { name: 'שחור אלגנטי', value: '#1f2937' },
 ]
 
-const texturesImports = [
-    tex1,
-    tex2,
-    tex3,
-    tex4,
-    tex5,
-    tex6,
-    tex7,
-    tex8,
-    tex9,
-    // tex10,
-    tex11,
-]
+/* --- טקסטורות --- */
+const texturesImports = [tex1, tex2, tex3, tex4, tex5, tex6, tex7, tex8, tex9, tex10, tex11]
 
 const TEXTURES = [
     { name: 'חלק', url: null },
@@ -139,45 +133,31 @@ const TEXTURES = [
     })),
 ]
 
-// נשים את כל ה־imports במערך
-const framesImports = [
-    frame1,
-    frame2,
-    frame3,
-    frame4,
-    frame5,
-    frame6,
-    frame7,
-    // frame8,
-    // frame9,
-    frame10,
-    frame11,
-    frame12,
-]
+/* --- מסגרות --- */
+const framesImports = [frame1, frame2]
 
-// נבנה את ה־array של המסגרות
 const FRAMES = [
-    { name: 'ללא', url: null },
+    { name: 'ללא מסגרת', url: null },
     ...framesImports.map((f, i) => ({
         name: `מסגרת ${i + 1}`,
         url: f,
     })),
 ]
 
-/* צבעי טקסט */
+/* --- צבעי טקסט --- */
 const FONT_COLORS = [
     { name: 'שחור', value: '#000000' },
-    { name: 'זהב', value: '#b68c2d' },
+    { name: 'זהב', value: '#d4af37' },
     { name: 'בורדו', value: '#8b1e3f' },
     { name: 'כהה אלגנטי', value: '#1f2937' },
     { name: 'שמנת', value: '#f8f4ec' },
     { name: 'לבן', value: '#ffffff' },
 ]
 
-/* פונטים */
+/* --- פונטים --- */
 const FONTS = [notoHebrew, frankRuhl, davidLibre, heebo, secular]
 
-/* גדלי טקסט */
+/* --- גדלי טקסט --- */
 const FONT_SIZES = [
     { name: 'קטן', value: 2.5 },
     { name: 'בינוני', value: 2.8 },
@@ -185,6 +165,7 @@ const FONT_SIZES = [
     { name: 'ענק', value: 4 },
 ]
 
+/* --- קומפוננטת השליטה --- */
 export default function DesignControls({ settings, onChange }) {
     const [activePreset, setActivePreset] = useState(null)
 
@@ -254,7 +235,7 @@ export default function DesignControls({ settings, onChange }) {
                 </div>
             </section>
 
-            {/* טקסטורות כרקע */}
+            {/* טקסטורות */}
             <section>
                 <h4 className='mb-3 text-xs font-semibold text-gray-600'>טקסטורות</h4>
                 <div className='grid grid-cols-2 gap-3'>
@@ -273,32 +254,6 @@ export default function DesignControls({ settings, onChange }) {
                             ) : (
                                 <div className='w-full h-16 flex items-center justify-center text-gray-500 text-xs'>
                                     חלק
-                                </div>
-                            )}
-                        </button>
-                    ))}
-                </div>
-            </section>
-
-            {/* מסגרות */}
-            <section>
-                <h4 className='mb-3 text-xs font-semibold text-gray-600'>מסגרת</h4>
-                <div className='grid grid-cols-2 gap-3'>
-                    {FRAMES.map(frame => (
-                        <button
-                            key={frame.name}
-                            onClick={() => applyFrame(frame.url ? frame.url.src : null)}
-                            className={`rounded-md border transition-all duration-200 ${
-                                settings.frame === (frame.url ? frame.url.src : null)
-                                    ? 'ring-2 ring-pink-400 shadow'
-                                    : 'ring-1 ring-gray-200 hover:ring-gray-400'
-                            }`}
-                        >
-                            {frame.url ? (
-                                <img src={frame.url.src} alt={frame.name} className='w-full h-16 object-cover' />
-                            ) : (
-                                <div className='w-full h-16 flex items-center justify-center text-gray-500 text-xs'>
-                                    ללא
                                 </div>
                             )}
                         </button>
@@ -362,6 +317,32 @@ export default function DesignControls({ settings, onChange }) {
                             style={{ backgroundColor: c.value }}
                             title={c.name}
                         />
+                    ))}
+                </div>
+            </section>
+
+            {/* מסגרות */}
+            <section>
+                <h4 className='mb-3 text-xs font-semibold text-gray-600'>מסגרות</h4>
+                <div className='grid grid-cols-3 gap-2'>
+                    {FRAMES.map(f => (
+                        <button
+                            key={f.name}
+                            onClick={() => applyFrame(f.url ? f.url.src : null)}
+                            className={`rounded-md border transition-all duration-200 ${
+                                settings.frame === (f.url ? f.url.src : null)
+                                    ? 'ring-2 ring-pink-400 shadow'
+                                    : 'ring-1 ring-gray-200 hover:ring-gray-400'
+                            }`}
+                        >
+                            {f.url ? (
+                                <img src={f.url.src} alt={f.name} className='w-full h-16 object-cover' />
+                            ) : (
+                                <div className='w-full h-16 flex items-center justify-center text-gray-500 text-xs'>
+                                    ללא
+                                </div>
+                            )}
+                        </button>
                     ))}
                 </div>
             </section>
