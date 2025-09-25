@@ -31,115 +31,25 @@ import tex16 from '../../media/textures/tex16.png'
 import tex17 from '../../media/textures/tex17.png'
 import tex18 from '../../media/textures/tex18.png'
 
-/* --- ברירות מחדל --- */
-const BASE_DEFAULTS = {
-    backgroundColor: '#ffffff',
-    fontClass: notoHebrew.className,
-    fontColor: '#000000',
-    texture: null,
-    frame: null,
-    fontSizePercent: 3,
-    imageStyle: { width: 85, height: 70 },
-
-    /* כריכה */
-    coverTitle: 'החתונה שלנו',
-    coverSubtitle: '',
-    coverTitleSizePercent: 6,
-    coverSubtitleSizePercent: 3,
-}
-
 /* --- פריסטים --- */
 const PRESETS = [
     {
         name: 'קלאסי',
-        previewColor: '#ffffff',
-        values: {
-            ...BASE_DEFAULTS,
-            backgroundColor: '#ffffff',
-            fontClass: heebo.className,
-            fontColor: '#000000',
-            frame: frame2.src,
-            fontSizePercent: 3.5,
-            imageStyle: { width: 85, height: 70 },
-            nameMarginTop: 1,
-            textMaxWidth: 80,
-        },
+        preview: '#fff',
+        values: { backgroundColor: '#fff', fontClass: heebo.className, fontColor: '#000', frame: frame2.src },
     },
-    {
-        name: 'כמעט קלאסי',
-        previewColor: '#1e1e1e',
-        values: {
-            ...BASE_DEFAULTS,
-            backgroundColor: '#ffffff',
-            fontClass: heebo.className,
-            fontColor: '#000000',
-            frame: frame1.src,
-            texture: tex3.src,
-            fontSizePercent: 3,
-            imageStyle: { width: 75, height: 65 },
-            nameMarginTop: 4,
-            textMaxWidth: 75,
-        },
-    },
-    {
-        name: 'חתונה מהאגדות',
-        previewColor: '#e9d251',
-        values: {
-            ...BASE_DEFAULTS,
-            backgroundColor: '#e9d251',
-            fontClass: heebo.className,
-            fontColor: '#000000',
-            texture: tex6.src,
-            fontSizePercent: 3,
-            imageStyle: { width: 75, height: 65 },
-            nameMarginTop: 4,
-            textMaxWidth: 75,
-        },
-    },
-    {
-        name: 'פרחוני',
-        previewColor: '#ed95ff',
-        values: {
-            ...BASE_DEFAULTS,
-            backgroundColor: '#ed95ff',
-            fontClass: heebo.className,
-            fontColor: '#000000',
-            texture: tex8.src,
-            fontSizePercent: 3.5,
-            imageStyle: { width: 85, height: 65, borderRadius: '10px' },
-            nameMarginTop: 3,
-            textMaxWidth: 80,
-        },
-    },
-    {
-        name: 'כהה אלגנטי',
-        previewColor: '#262227',
-        values: {
-            ...BASE_DEFAULTS,
-            backgroundColor: '#262227',
-            fontClass: heebo.className,
-            fontColor: '#ffffff',
-            texture: tex7.src,
-            fontSizePercent: 3.5,
-            imageStyle: { width: 70, height: 65, borderRadius: '10px' },
-            nameMarginTop: 5,
-            textMaxWidth: 80,
-        },
-    },
+    { name: 'כמעט קלאסי', preview: '#eee', values: { backgroundColor: '#fff', texture: tex3.src, frame: frame1.src } },
+    { name: 'אגדות', preview: '#e9d251', values: { backgroundColor: '#e9d251', texture: tex6.src } },
+    { name: 'פרחוני', preview: '#ed95ff', values: { backgroundColor: '#ed95ff', texture: tex8.src } },
+    { name: 'כהה', preview: '#262227', values: { backgroundColor: '#262227', fontColor: '#fff', texture: tex7.src } },
 ]
 
 /* --- רקעים --- */
-const BACKGROUNDS = [
-    { name: 'לבן', value: '#ffffff' },
-    { name: 'קרם', value: '#fdfaf6' },
-    { name: 'ורוד פסטל', value: '#fde2e4' },
-    { name: 'תכלת עדין', value: '#e0f2fe' },
-    { name: 'אפור בהיר', value: '#f3f4f6' },
-    { name: 'שחור אלגנטי', value: '#1f2937' },
-]
+const BACKGROUNDS = ['#ffffff', '#fdfaf6', '#fde2e4', '#e0f2fe', '#f3f4f6', '#1f2937']
 
 /* --- טקסטורות --- */
-const texturesImports = [
+const TEXTURES = [
+    null,
     tex1,
     tex2,
     tex3,
@@ -160,27 +70,13 @@ const texturesImports = [
     tex18,
 ]
 
-const TEXTURES = [{ name: 'חלק', url: null }, ...texturesImports.map((t, i) => ({ name: `טקסטורה ${i + 1}`, url: t }))]
-
 /* --- מסגרות --- */
-const framesImports = [frame1, frame2, frame3, frame4, frame5, frame6]
-
-const FRAMES = [{ name: 'ללא מסגרת', url: null }, ...framesImports.map((f, i) => ({ name: `מסגרת ${i + 1}`, url: f }))]
-
-/* --- צבעי טקסט --- */
-const FONT_COLORS = [
-    { name: 'שחור', value: '#000000' },
-    { name: 'זהב', value: '#d4af37' },
-    { name: 'בורדו', value: '#8b1e3f' },
-    { name: 'כהה אלגנטי', value: '#1f2937' },
-    { name: 'שמנת', value: '#f8f4ec' },
-    { name: 'לבן', value: '#ffffff' },
-]
+const FRAMES = [null, frame1, frame2, frame3, frame4, frame5, frame6]
 
 /* --- פונטים --- */
 const FONTS = [notoHebrew, frankRuhl, davidLibre, heebo, secular]
 
-/* --- גדלי טקסט --- */
+/* --- גדלים --- */
 const FONT_SIZES = [
     { name: 'קטן', value: 2.5 },
     { name: 'בינוני', value: 2.8 },
@@ -188,7 +84,9 @@ const FONT_SIZES = [
     { name: 'ענק', value: 4 },
 ]
 
-/* --- קומפוננטת השליטה --- */
+/* --- צבעי טקסט --- */
+const FONT_COLORS = ['#000000', '#d4af37', '#8b1e3f', '#1f2937', '#f8f4ec', '#ffffff']
+
 export default function DesignControls({ settings, onChange }) {
     const [activePreset, setActivePreset] = useState(null)
 
@@ -197,54 +95,41 @@ export default function DesignControls({ settings, onChange }) {
         onChange(preset.values)
     }
 
-    const applyBackground = bg => onChange({ ...settings, backgroundColor: bg })
-    const applyTexture = texUrl => onChange({ ...settings, texture: texUrl })
-    const applyFrame = frameUrl => onChange({ ...settings, frame: frameUrl })
-
     return (
         <div
             dir='rtl'
-            className='flex flex-col gap-8 font-sans text-sm h-full overflow-y-auto p-6 bg-white rounded-2xl shadow border border-gray-200'
+            className='grid grid-cols-2 gap-4 text-sm p-4 bg-white rounded-xl shadow border border-gray-200 overflow-y-auto'
         >
             {/* פריסטים */}
-            <section>
-                <h4 className='mb-3 text-xs font-semibold text-gray-600'>פריסטים</h4>
-                <div className='grid grid-cols-2 gap-3'>
+            <section className='col-span-2'>
+                <h4 className='mb-2 text-xs font-medium text-gray-600'>פריסטים</h4>
+                <div className='grid grid-cols-5 gap-2'>
                     {PRESETS.map((preset, idx) => (
                         <button
                             key={idx}
                             onClick={() => applyPreset(preset)}
-                            className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-200 ${
-                                activePreset === preset.name
-                                    ? 'ring-2 ring-pink-400 shadow'
-                                    : 'border-gray-200 hover:border-gray-400'
+                            className={`h-12 rounded-lg border ${
+                                activePreset === preset.name ? 'ring-2 ring-pink-400' : ''
                             }`}
-                        >
-                            <div
-                                className='w-full h-12 rounded-md shadow-inner mb-2'
-                                style={{ backgroundColor: preset.previewColor }}
-                            />
-                            <span className='text-xs text-gray-700'>{preset.name}</span>
-                        </button>
+                            style={{ background: preset.preview }}
+                            title={preset.name}
+                        />
                     ))}
                 </div>
             </section>
 
             {/* רקעים */}
             <section>
-                <h4 className='mb-3 text-xs font-semibold text-gray-600'>רקע</h4>
-                <div className='grid grid-cols-6 gap-2'>
+                <h4 className='mb-2 text-xs font-medium text-gray-600'>רקע</h4>
+                <div className='flex flex-wrap gap-2'>
                     {BACKGROUNDS.map(bg => (
                         <button
-                            key={bg.value}
-                            onClick={() => applyBackground(bg.value)}
-                            className={`h-8 w-8 rounded-md transition ${
-                                settings.backgroundColor === bg.value
-                                    ? 'ring-2 ring-pink-400 shadow'
-                                    : 'ring-1 ring-gray-200 hover:ring-gray-400'
+                            key={bg}
+                            onClick={() => onChange({ ...settings, backgroundColor: bg })}
+                            className={`h-7 w-7 rounded-full ${
+                                settings.backgroundColor === bg ? 'ring-2 ring-pink-400' : ''
                             }`}
-                            style={{ backgroundColor: bg.value }}
-                            title={bg.name}
+                            style={{ backgroundColor: bg }}
                         />
                     ))}
                 </div>
@@ -252,24 +137,20 @@ export default function DesignControls({ settings, onChange }) {
 
             {/* טקסטורות */}
             <section>
-                <h4 className='mb-3 text-xs font-semibold text-gray-600'>טקסטורות</h4>
-                <div className='grid grid-cols-2 gap-3'>
-                    {TEXTURES.map(tex => (
+                <h4 className='mb-2 text-xs font-medium text-gray-600'>טקסטורות</h4>
+                <div className='grid grid-cols-4 gap-2'>
+                    {TEXTURES.map((tex, idx) => (
                         <button
-                            key={tex.name}
-                            onClick={() => applyTexture(tex.url ? tex.url.src : null)}
-                            className={`rounded-md border transition-all duration-200 ${
-                                settings.texture === (tex.url ? tex.url.src : null)
-                                    ? 'ring-2 ring-pink-400 shadow'
-                                    : 'ring-1 ring-gray-200 hover:ring-gray-400'
+                            key={idx}
+                            onClick={() => onChange({ ...settings, texture: tex ? tex.src : null })}
+                            className={`aspect-square rounded-md border overflow-hidden ${
+                                settings.texture === (tex ? tex.src : null) ? 'ring-2 ring-pink-400' : ''
                             }`}
                         >
-                            {tex.url ? (
-                                <img src={tex.url.src} alt={tex.name} className='w-full h-16 object-cover' />
+                            {tex ? (
+                                <img src={tex.src} className='w-full h-full object-cover' />
                             ) : (
-                                <div className='w-full h-16 flex items-center justify-center text-gray-500 text-xs'>
-                                    חלק
-                                </div>
+                                <span className='text-[10px] text-gray-400'>חלק</span>
                             )}
                         </button>
                     ))}
@@ -278,19 +159,17 @@ export default function DesignControls({ settings, onChange }) {
 
             {/* פונטים */}
             <section>
-                <h4 className='mb-3 text-xs font-semibold text-gray-600'>פונט</h4>
+                <h4 className='mb-2 text-xs font-medium text-gray-600'>פונט</h4>
                 <div className='flex gap-2 flex-wrap'>
                     {FONTS.map((font, idx) => (
                         <button
                             key={idx}
                             onClick={() => onChange({ ...settings, fontClass: font.className })}
-                            className={`w-12 h-12 flex items-center justify-center rounded-full transition-all duration-200 ${
-                                settings.fontClass === font.className
-                                    ? 'bg-pink-100 ring-2 ring-pink-400'
-                                    : 'bg-white ring-1 ring-gray-200 hover:shadow'
+                            className={`w-9 h-9 flex items-center justify-center rounded-md ${
+                                settings.fontClass === font.className ? 'bg-pink-100 ring-2 ring-pink-400' : 'border'
                             }`}
                         >
-                            <span className={`${font.className} text-base`}>אב</span>
+                            <span className={`${font.className} text-sm`}>אב</span>
                         </button>
                     ))}
                 </div>
@@ -298,16 +177,14 @@ export default function DesignControls({ settings, onChange }) {
 
             {/* גודל טקסט */}
             <section>
-                <h4 className='mb-3 text-xs font-semibold text-gray-600'>גודל טקסט</h4>
-                <div className='flex gap-2'>
+                <h4 className='mb-2 text-xs font-medium text-gray-600'>גודל טקסט</h4>
+                <div className='flex gap-2 flex-wrap'>
                     {FONT_SIZES.map(size => (
                         <button
                             key={size.value}
                             onClick={() => onChange({ ...settings, fontSizePercent: size.value })}
-                            className={`px-3 py-1 rounded-md text-xs font-medium transition ${
-                                settings.fontSizePercent === size.value
-                                    ? 'bg-pink-100 text-pink-700 ring-2 ring-pink-400'
-                                    : 'bg-white text-gray-700 border border-gray-200 hover:border-gray-400'
+                            className={`px-2 py-1 rounded-full text-xs ${
+                                settings.fontSizePercent === size.value ? 'bg-pink-100 ring-2 ring-pink-400' : 'border'
                             }`}
                         >
                             {size.name}
@@ -316,21 +193,16 @@ export default function DesignControls({ settings, onChange }) {
                 </div>
             </section>
 
-            {/* צבעי טקסט */}
+            {/* צבע טקסט */}
             <section>
-                <h4 className='mb-3 text-xs font-semibold text-gray-600'>צבע טקסט</h4>
-                <div className='grid grid-cols-6 gap-2'>
+                <h4 className='mb-2 text-xs font-medium text-gray-600'>צבע טקסט</h4>
+                <div className='flex flex-wrap gap-2'>
                     {FONT_COLORS.map(c => (
                         <button
-                            key={c.value}
-                            onClick={() => onChange({ ...settings, fontColor: c.value })}
-                            className={`h-8 w-8 rounded-full transition ${
-                                settings.fontColor === c.value
-                                    ? 'ring-2 ring-pink-400 shadow'
-                                    : 'ring-1 ring-gray-200 hover:ring-gray-400'
-                            }`}
-                            style={{ backgroundColor: c.value }}
-                            title={c.name}
+                            key={c}
+                            onClick={() => onChange({ ...settings, fontColor: c })}
+                            className={`h-7 w-7 rounded-full ${settings.fontColor === c ? 'ring-2 ring-pink-400' : ''}`}
+                            style={{ backgroundColor: c }}
                         />
                     ))}
                 </div>
@@ -338,48 +210,43 @@ export default function DesignControls({ settings, onChange }) {
 
             {/* מסגרות */}
             <section>
-                <h4 className='mb-3 text-xs font-semibold text-gray-600'>מסגרות</h4>
-                <div className='grid grid-cols-3 gap-2'>
-                    {FRAMES.map(f => (
+                <h4 className='mb-2 text-xs font-medium text-gray-600'>מסגרות</h4>
+                <div className='grid grid-cols-4 gap-2'>
+                    {FRAMES.map((f, idx) => (
                         <button
-                            key={f.name}
-                            onClick={() => applyFrame(f.url ? f.url.src : null)}
-                            className={`rounded-md border transition-all duration-200 ${
-                                settings.frame === (f.url ? f.url.src : null)
-                                    ? 'ring-2 ring-pink-400 shadow'
-                                    : 'ring-1 ring-gray-200 hover:ring-gray-400'
+                            key={idx}
+                            onClick={() => onChange({ ...settings, frame: f ? f.src : null })}
+                            className={`aspect-square rounded-md border overflow-hidden ${
+                                settings.frame === (f ? f.src : null) ? 'ring-2 ring-pink-400' : ''
                             }`}
                         >
-                            {f.url ? (
-                                <img src={f.url.src} alt={f.name} className='w-full h-16 object-cover' />
+                            {f ? (
+                                <img src={f.src} className='w-full h-full object-cover' />
                             ) : (
-                                <div className='w-full h-16 flex items-center justify-center text-gray-500 text-xs'>
-                                    ללא
-                                </div>
+                                <span className='text-[10px] text-gray-400'>ללא</span>
                             )}
                         </button>
                     ))}
                 </div>
             </section>
 
-            {/* 🎉 טקסט כריכה */}
-            <section>
-                <h4 className='mb-2 text-xs font-semibold text-gray-600'>טקסט כריכה</h4>
-                <div className='flex flex-col gap-2'>
-                    <label className='text-xs text-gray-600'>כותרת</label>
+            {/* כריכה */}
+            <section className='col-span-2'>
+                <h4 className='mb-2 text-xs font-medium text-gray-600'>כריכה</h4>
+                <div className='grid grid-cols-2 gap-2'>
                     <input
                         type='text'
+                        placeholder='כותרת'
                         value={settings.coverTitle || ''}
                         onChange={e => onChange({ ...settings, coverTitle: e.target.value })}
-                        className='border rounded-md px-2 py-1 text-sm'
+                        className='border rounded px-2 py-1 text-xs'
                     />
-
-                    <label className='text-xs text-gray-600'>תת־כותרת</label>
                     <input
                         type='text'
+                        placeholder='תת־כותרת'
                         value={settings.coverSubtitle || ''}
                         onChange={e => onChange({ ...settings, coverSubtitle: e.target.value })}
-                        className='border rounded-md px-2 py-1 text-sm'
+                        className='border rounded px-2 py-1 text-xs'
                     />
                 </div>
             </section>

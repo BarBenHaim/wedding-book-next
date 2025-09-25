@@ -20,6 +20,7 @@ export default function BookViewer() {
         typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('bookStyle')) || defaultStyle : defaultStyle
     )
     const hiddenRef = useRef(null)
+    const bookRef = useRef(null)
     const { weddingId } = useParams()
 
     function getBookDimensions() {
@@ -101,70 +102,92 @@ export default function BookViewer() {
 
     return (
         <>
-            <div className='relative flex h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 via-white to-purple-100'>
-                <main className='relative z-10 flex flex-1 items-center justify-start p-6 gap-6'>
+            <div className='relative flex h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 via-white to-purple-100 overflow-hidden'>
+                <main className='relative z-10 flex flex-1'>
                     {/* פאנל עיצוב */}
-                    <aside className='lg:block w-1/4 border-l border-gray-200 bg-white/80 backdrop-blur-md p-6 shadow-xl rounded-l-2xl'>
+                    <aside className='lg:block w-1/4 border-l border-gray-200 bg-white/80 backdrop-blur-md p-6 shadow-xl rounded-l-2xl overflow-y-auto'>
                         <h2 className='mb-6 text-xl font-bold text-gray-800'>עיצוב הספר</h2>
                         <DesignControls settings={styleSettings} onChange={handleStyleChange} />
                     </aside>
 
-                    {/* ספר */}
-                    <HTMLFlipBook
-                        key={`${viewerSize}-${pages.length}`} // 👈 רינדור מחדש בטוח
-                        width={viewerSize}
-                        height={viewerSize}
-                        usePortrait={false}
-                        size='fixed'
-                        drawShadow={false}
-                        showCover={!!hasCover}
-                        mobileScrollSupport
-                        className='book-flip'
-                    >
-                        {/* כריכה קדמית */}
-                        {hasCover && (
-                            <div style={{ width: viewerSize, height: viewerSize }}>
-                                <BookCoverTemplate
-                                    styleSettings={styleSettings}
-                                    scaledWidth={viewerSize}
-                                    scaledHeight={viewerSize}
-                                />
-                            </div>
-                        )}
+                    {/* מרכז הספר */}
+                    <div className='flex flex-1 flex-col items-center justify-center'>
+                        {/* ספר */}
+                        <HTMLFlipBook
+                            ref={bookRef}
+                            key={`${viewerSize}-${pages.length}`}
+                            width={viewerSize}
+                            height={viewerSize}
+                            usePortrait={false}
+                            size='fixed'
+                            drawShadow={false}
+                            showCover={!!hasCover}
+                            clickEventForward={false}
+                            swipeDistance={0}
+                            mobileScrollSupport={false}
+                            className='book-flip'
+                        >
+                            {/* כריכה קדמית */}
+                            {hasCover && (
+                                <div style={{ width: viewerSize, height: viewerSize }}>
+                                    <BookCoverTemplate
+                                        styleSettings={styleSettings}
+                                        scaledWidth={viewerSize}
+                                        scaledHeight={viewerSize}
+                                    />
+                                </div>
+                            )}
 
-                        {/* דפים פנימיים לפי הסדר */}
-                        {pages.map(entry => (
-                            <div key={entry.id} style={{ width: viewerSize, height: viewerSize }}>
-                                <BookPageTemplate
-                                    entry={entry}
-                                    styleSettings={styleSettings}
-                                    scaledWidth={viewerSize}
-                                    scaledHeight={viewerSize}
-                                />
-                            </div>
-                        ))}
+                            {/* דפים פנימיים */}
+                            {pages.map(entry => (
+                                <div key={entry.id} style={{ width: viewerSize, height: viewerSize }}>
+                                    <BookPageTemplate
+                                        entry={entry}
+                                        styleSettings={styleSettings}
+                                        scaledWidth={viewerSize}
+                                        scaledHeight={viewerSize}
+                                    />
+                                </div>
+                            ))}
 
-                        {/* כריכה אחורית */}
-                        {hasCover && (
-                            <div style={{ width: viewerSize, height: viewerSize }}>
-                                <BookCoverTemplate
-                                    styleSettings={styleSettings}
-                                    scaledWidth={viewerSize}
-                                    scaledHeight={viewerSize}
-                                />
-                            </div>
-                        )}
-                    </HTMLFlipBook>
+                            {/* כריכה אחורית */}
+                            {hasCover && (
+                                <div style={{ width: viewerSize, height: viewerSize }}>
+                                    <BookCoverTemplate
+                                        styleSettings={styleSettings}
+                                        scaledWidth={viewerSize}
+                                        scaledHeight={viewerSize}
+                                    />
+                                </div>
+                            )}
+                        </HTMLFlipBook>
+
+                        {/* חצים */}
+                        <div className='flex gap-6 mt-6'>
+                            <button
+                                onClick={() => bookRef.current?.pageFlip().flipPrev()}
+                                className='rounded-full bg-white shadow p-3 hover:bg-purple-100 transition'
+                            >
+                                ➡️
+                            </button>
+                            <button
+                                onClick={() => bookRef.current?.pageFlip().flipNext()}
+                                className='rounded-full bg-white shadow p-3 hover:bg-purple-100 transition'
+                            >
+                                ⬅️
+                            </button>
+                        </div>
+
+                        {/* כפתור הורדה */}
+                        <button
+                            onClick={handleDownloadPDF}
+                            className='mt-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 px-6 py-3 text-white font-medium shadow hover:scale-105 transition'
+                        >
+                            📥 הורד כ־PDF
+                        </button>
+                    </div>
                 </main>
             </div>
-
-            {/* כפתור הורדה */}
-            <button
-                onClick={handleDownloadPDF}
-                className='rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 px-4 py-3 text-white font-medium shadow hover:scale-105 transition mt-4 w-full'
-            >
-                📥 הורד כ־PDF
-            </button>
 
             {/* גרסה מוסתרת להדפסה */}
             <div
@@ -191,7 +214,7 @@ export default function BookViewer() {
                     </div>
                 )}
 
-                {/* דפים פנימיים לפי הסדר */}
+                {/* דפים פנימיים */}
                 {pages.map(entry => (
                     <div
                         key={entry.id}
