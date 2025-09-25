@@ -6,18 +6,15 @@ export async function saveEntry(weddingId, entry) {
     try {
         let imageUrl = null
 
-        // אם יש תמונה (dataURL או Blob)
         if (entry.image) {
             const filename = `photo-${Date.now()}.jpg`
             const photoRef = storageRef(storage, `weddings/${weddingId}/${filename}`)
 
             let blob
             if (typeof entry.image === 'string') {
-                // אם זה dataURL
                 const response = await fetch(entry.image)
                 blob = await response.blob()
             } else {
-                // אם זה Blob ישירות
                 blob = entry.image
             }
 
@@ -30,6 +27,7 @@ export async function saveEntry(weddingId, entry) {
             text: entry.text || null,
             imageUrl,
             timestamp: serverTimestamp(),
+            orderIndex: null, // חדש: כברירת מחדל ריק
         })
     } catch (err) {
         console.error('Error saving entry:', err)
@@ -40,7 +38,7 @@ export async function saveEntry(weddingId, entry) {
 export async function getEntries(weddingId) {
     try {
         const snapshot = await getDocs(collection(db, 'weddings', weddingId, 'entries'))
-        return snapshot.docs.map(doc => {
+        let entries = snapshot.docs.map(doc => {
             const data = doc.data()
             return {
                 id: doc.id,
@@ -48,6 +46,17 @@ export async function getEntries(weddingId) {
                 timestamp: data.timestamp?.toDate ? data.timestamp.toDate().getTime() : data.timestamp || null,
             }
         })
+
+        // מיון בצד הלקוח:
+        // קודם לפי orderIndex אם קיים, אחרת לפי timestamp
+        entries.sort((a, b) => {
+            const aOrder = a.orderIndex ?? Infinity
+            const bOrder = b.orderIndex ?? Infinity
+            if (aOrder !== bOrder) return aOrder - bOrder
+            return (a.timestamp || 0) - (b.timestamp || 0)
+        })
+
+        return entries
     } catch (err) {
         console.error('Error getting entries:', err)
         return []

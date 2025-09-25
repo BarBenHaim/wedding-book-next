@@ -38,21 +38,26 @@ const BASE_DEFAULTS = {
     fontColor: '#000000',
     texture: null,
     frame: null,
-    frameColor: '#000000',
     fontSizePercent: 3,
     imageStyle: { width: 85, height: 70 },
+
+    /* כריכה */
+    coverTitle: 'החתונה שלנו',
+    coverSubtitle: '',
+    coverTitleSizePercent: 6,
+    coverSubtitleSizePercent: 3,
 }
 
 /* --- פריסטים --- */
 const PRESETS = [
     {
         name: 'קלאסי',
-        previewColor: '#ffffffff',
+        previewColor: '#ffffff',
         values: {
             ...BASE_DEFAULTS,
-            backgroundColor: '#ffffffff',
+            backgroundColor: '#ffffff',
             fontClass: heebo.className,
-            fontColor: '#000000ff',
+            fontColor: '#000000',
             frame: frame2.src,
             fontSizePercent: 3.5,
             imageStyle: { width: 85, height: 70 },
@@ -65,9 +70,9 @@ const PRESETS = [
         previewColor: '#1e1e1e',
         values: {
             ...BASE_DEFAULTS,
-            backgroundColor: '#ffffffff',
+            backgroundColor: '#ffffff',
             fontClass: heebo.className,
-            fontColor: '#000000ff',
+            fontColor: '#000000',
             frame: frame1.src,
             texture: tex3.src,
             fontSizePercent: 3,
@@ -78,12 +83,12 @@ const PRESETS = [
     },
     {
         name: 'חתונה מהאגדות',
-        previewColor: '#e9d251ff',
+        previewColor: '#e9d251',
         values: {
             ...BASE_DEFAULTS,
-            backgroundColor: '#e9d251ff',
+            backgroundColor: '#e9d251',
             fontClass: heebo.className,
-            fontColor: '#000000ff',
+            fontColor: '#000000',
             texture: tex6.src,
             fontSizePercent: 3,
             imageStyle: { width: 75, height: 65 },
@@ -93,12 +98,12 @@ const PRESETS = [
     },
     {
         name: 'פרחוני',
-        previewColor: '#ed95ffff',
+        previewColor: '#ed95ff',
         values: {
             ...BASE_DEFAULTS,
-            backgroundColor: '#ed95ffff',
+            backgroundColor: '#ed95ff',
             fontClass: heebo.className,
-            fontColor: '#000000ff',
+            fontColor: '#000000',
             texture: tex8.src,
             fontSizePercent: 3.5,
             imageStyle: { width: 85, height: 65, borderRadius: '10px' },
@@ -107,13 +112,13 @@ const PRESETS = [
         },
     },
     {
-        name: 'תביא',
-        previewColor: '#262227ff',
+        name: 'כהה אלגנטי',
+        previewColor: '#262227',
         values: {
             ...BASE_DEFAULTS,
-            backgroundColor: '#262227ff',
+            backgroundColor: '#262227',
             fontClass: heebo.className,
-            fontColor: '#000000ff',
+            fontColor: '#ffffff',
             texture: tex7.src,
             fontSizePercent: 3.5,
             imageStyle: { width: 70, height: 65, borderRadius: '10px' },
@@ -155,24 +160,12 @@ const texturesImports = [
     tex18,
 ]
 
-const TEXTURES = [
-    { name: 'חלק', url: null },
-    ...texturesImports.map((t, i) => ({
-        name: `טקסטורה ${i + 1}`,
-        url: t,
-    })),
-]
+const TEXTURES = [{ name: 'חלק', url: null }, ...texturesImports.map((t, i) => ({ name: `טקסטורה ${i + 1}`, url: t }))]
 
 /* --- מסגרות --- */
 const framesImports = [frame1, frame2, frame3, frame4, frame5, frame6]
 
-const FRAMES = [
-    { name: 'ללא מסגרת', url: null },
-    ...framesImports.map((f, i) => ({
-        name: `מסגרת ${i + 1}`,
-        url: f,
-    })),
-]
+const FRAMES = [{ name: 'ללא מסגרת', url: null }, ...framesImports.map((f, i) => ({ name: `מסגרת ${i + 1}`, url: f }))]
 
 /* --- צבעי טקסט --- */
 const FONT_COLORS = [
@@ -204,17 +197,9 @@ export default function DesignControls({ settings, onChange }) {
         onChange(preset.values)
     }
 
-    const applyBackground = bg => {
-        onChange({ ...settings, backgroundColor: bg })
-    }
-
-    const applyTexture = texUrl => {
-        onChange({ ...settings, texture: texUrl })
-    }
-
-    const applyFrame = frameUrl => {
-        onChange({ ...settings, frame: frameUrl })
-    }
+    const applyBackground = bg => onChange({ ...settings, backgroundColor: bg })
+    const applyTexture = texUrl => onChange({ ...settings, texture: texUrl })
+    const applyFrame = frameUrl => onChange({ ...settings, frame: frameUrl })
 
     return (
         <div
@@ -374,6 +359,28 @@ export default function DesignControls({ settings, onChange }) {
                             )}
                         </button>
                     ))}
+                </div>
+            </section>
+
+            {/* 🎉 טקסט כריכה */}
+            <section>
+                <h4 className='mb-2 text-xs font-semibold text-gray-600'>טקסט כריכה</h4>
+                <div className='flex flex-col gap-2'>
+                    <label className='text-xs text-gray-600'>כותרת</label>
+                    <input
+                        type='text'
+                        value={settings.coverTitle || ''}
+                        onChange={e => onChange({ ...settings, coverTitle: e.target.value })}
+                        className='border rounded-md px-2 py-1 text-sm'
+                    />
+
+                    <label className='text-xs text-gray-600'>תת־כותרת</label>
+                    <input
+                        type='text'
+                        value={settings.coverSubtitle || ''}
+                        onChange={e => onChange({ ...settings, coverSubtitle: e.target.value })}
+                        className='border rounded-md px-2 py-1 text-sm'
+                    />
                 </div>
             </section>
         </div>
