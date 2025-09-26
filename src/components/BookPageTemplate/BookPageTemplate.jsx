@@ -23,20 +23,17 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 backgroundPosition: 'center',
                 color: styleSettings.fontColor,
                 borderRadius: w(styleSettings.borderRadius || 0),
-                padding: h(styleSettings.pagePadding || 4),
+                padding: h(styleSettings.pagePadding ?? 4),
                 boxSizing: 'border-box',
             }}
         >
-            {/* מסגרת מעל הכל */}
+            {/* מסגרת */}
             {styleSettings.frame && (
                 <img
                     src={styleSettings.frame}
                     alt='frame'
                     className='absolute top-0 left-0 w-full h-full pointer-events-none'
-                    style={{
-                        zIndex: 10,
-                        objectFit: 'cover',
-                    }}
+                    style={{ zIndex: 10, objectFit: 'cover' }}
                 />
             )}
 
@@ -45,16 +42,19 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 <div
                     className={styleSettings.fontClass}
                     style={{
-                        fontSize: h(styleSettings.nameFontSizePercent ?? styleSettings.fontSizePercent * 0.7),
+                        fontSize: h(
+                            styleSettings.nameFontSizePercent ??
+                                (styleSettings.fontSizePercent ? styleSettings.fontSizePercent * 0.7 : 2.1)
+                        ),
                         color: styleSettings.fontColor,
                         opacity: 0.85,
                         marginTop: h(styleSettings.nameMarginTop ?? 2),
                         marginBottom: h(styleSettings.nameMarginBottom ?? 2),
-                        textAlign: styleSettings.nameAlign ?? 'right',
+                        textAlign: styleSettings.nameAlign ?? 'center',
                         maxWidth: w(styleSettings.nameMaxWidth ?? 60),
                         wordWrap: 'break-word',
-                        zIndex: 5,
                         position: 'relative',
+                        zIndex: 5,
                     }}
                 >
                     {entry.name}
@@ -72,6 +72,14 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
                         borderRadius: styleSettings.imageStyle?.borderRadius ?? '12px',
+                        marginTop: h(styleSettings.imageMarginTop ?? 2),
+                        marginBottom: h(styleSettings.imageMarginBottom ?? 2),
+                        alignSelf:
+                            styleSettings.imageAlign === 'left'
+                                ? 'flex-start'
+                                : styleSettings.imageAlign === 'right'
+                                ? 'flex-end'
+                                : 'center',
                         zIndex: 5,
                     }}
                 />
@@ -82,8 +90,8 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 <div
                     style={{
                         maxWidth: w(styleSettings.textMaxWidth ?? 85),
-                        marginTop: h(3),
-                        display: 'inline-block',
+                        marginTop: h(styleSettings.textMarginTop ?? 3),
+                        textAlign: styleSettings.textAlign ?? 'center',
                         position: 'relative',
                         zIndex: 5,
                     }}
@@ -93,7 +101,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         style={{
                             fontSize: h(styleSettings.fontSizePercent ?? 3),
                             color: styleSettings.fontColor,
-                            lineHeight: 1.5,
+                            lineHeight: styleSettings.textLineHeight ?? 1.5,
                             whiteSpace: 'pre-line',
                             wordWrap: 'break-word',
                         }}

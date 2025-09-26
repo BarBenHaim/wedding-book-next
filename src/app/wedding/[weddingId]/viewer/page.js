@@ -113,22 +113,20 @@ export default function BookViewer() {
                     {/* מרכז הספר */}
                     <div className='flex flex-1 flex-col items-center justify-center'>
                         {/* ספר */}
-                        <HTMLFlipBook
-                            ref={bookRef}
-                            key={`${viewerSize}-${pages.length}`}
-                            width={viewerSize}
-                            height={viewerSize}
-                            usePortrait={false}
-                            size='fixed'
-                            drawShadow={false}
-                            showCover={!!hasCover}
-                            clickEventForward={false}
-                            swipeDistance={0}
-                            mobileScrollSupport={false}
-                            className='book-flip'
-                        >
-                            {/* כריכה קדמית */}
-                            {hasCover && (
+                        {hasCover || pages.length > 0 ? (
+                            <HTMLFlipBook
+                                ref={bookRef}
+                                key={`${viewerSize}-${pages.length}`}
+                                width={viewerSize}
+                                height={viewerSize}
+                                usePortrait={false}
+                                size='fixed'
+                                drawShadow={false}
+                                showCover={!!hasCover}
+                                mobileScrollSupport={false}
+                                className='book-flip'
+                            >
+                                {/* כריכה קדמית */}
                                 <div style={{ width: viewerSize, height: viewerSize }}>
                                     <BookCoverTemplate
                                         styleSettings={styleSettings}
@@ -136,22 +134,24 @@ export default function BookViewer() {
                                         scaledHeight={viewerSize}
                                     />
                                 </div>
-                            )}
 
-                            {/* דפים פנימיים */}
-                            {pages.map(entry => (
-                                <div key={entry.id} style={{ width: viewerSize, height: viewerSize }}>
-                                    <BookPageTemplate
-                                        entry={entry}
-                                        styleSettings={styleSettings}
-                                        scaledWidth={viewerSize}
-                                        scaledHeight={viewerSize}
-                                    />
-                                </div>
-                            ))}
+                                {/* דפים פנימיים */}
+                                {pages.length > 0 ? (
+                                    pages.map(entry => (
+                                        <div key={entry.id} style={{ width: viewerSize, height: viewerSize }}>
+                                            <BookPageTemplate
+                                                entry={entry}
+                                                styleSettings={styleSettings}
+                                                scaledWidth={viewerSize}
+                                                scaledHeight={viewerSize}
+                                            />
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div style={{ width: viewerSize, height: viewerSize }} />
+                                )}
 
-                            {/* כריכה אחורית */}
-                            {hasCover && (
+                                {/* כריכה אחורית */}
                                 <div style={{ width: viewerSize, height: viewerSize }}>
                                     <BookCoverTemplate
                                         styleSettings={styleSettings}
@@ -159,9 +159,10 @@ export default function BookViewer() {
                                         scaledHeight={viewerSize}
                                     />
                                 </div>
-                            )}
-                        </HTMLFlipBook>
-
+                            </HTMLFlipBook>
+                        ) : (
+                            <p className='text-gray-400 text-sm'>אין עדיין דפים להצגה</p>
+                        )}
                         {/* חצים */}
                         <div className='flex gap-6 mt-6'>
                             <button
@@ -177,7 +178,6 @@ export default function BookViewer() {
                                 ⬅️
                             </button>
                         </div>
-
                         {/* כפתור הורדה */}
                         <button
                             onClick={handleDownloadPDF}

@@ -34,18 +34,102 @@ import tex18 from '../../media/textures/tex18.png'
 /* --- פריסטים --- */
 const PRESETS = [
     {
-        name: 'קלאסי',
-        preview: '#fff',
-        values: { backgroundColor: '#fff', fontClass: heebo.className, fontColor: '#000', frame: frame2.src },
+        name: 'קלאסי לבן',
+        preview: '#ffffff',
+        values: {
+            backgroundColor: '#ffffff',
+            fontClass: heebo.className,
+            fontColor: '#000000',
+            frame: frame2.src,
+            texture: null,
+
+            fontSizePercent: 3.5,
+            imageStyle: { width: 85, height: 70 },
+            nameMarginTop: 4,
+            textMaxWidth: 80,
+        },
     },
-    { name: 'כמעט קלאסי', preview: '#eee', values: { backgroundColor: '#fff', texture: tex3.src, frame: frame1.src } },
-    { name: 'אגדות', preview: '#e9d251', values: { backgroundColor: '#e9d251', texture: tex6.src } },
-    { name: 'פרחוני', preview: '#ed95ff', values: { backgroundColor: '#ed95ff', texture: tex8.src } },
-    { name: 'כהה', preview: '#262227', values: { backgroundColor: '#262227', fontColor: '#fff', texture: tex7.src } },
+    {
+        name: 'שמנת אלגנטי',
+        preview: '#fdf6ec',
+        values: {
+            backgroundColor: '#fdf6ec',
+            fontClass: heebo.className,
+            fontColor: '#000000',
+            texture: tex3.src,
+            frame: frame1.src,
+            fontSizePercent: 3,
+            imageStyle: { width: 75, height: 65 },
+            nameMarginTop: 8,
+            nameMarginBottom: 0,
+            textMaxWidth: 75,
+        },
+    },
+
+    {
+        name: 'ורוד עדין',
+        preview: '#fde2e4',
+        values: {
+            backgroundColor: '#fde2e4',
+            fontClass: heebo.className,
+            fontColor: '#000000',
+            texture: tex8.src,
+            frame: null,
+            fontSizePercent: 3.5,
+            imageStyle: { width: 85, height: 65, borderRadius: '10px' },
+            nameMarginTop: 6,
+            textMaxWidth: 80,
+        },
+    },
+    {
+        name: 'ורוד ',
+        preview: '#f8f1f1ff',
+        values: {
+            backgroundColor: '#f8f1f1ff',
+            fontClass: heebo.className,
+            fontColor: '#000000',
+            texture: tex18.src,
+            frame: null,
+            fontSizePercent: 3.5,
+            imageStyle: { width: 85, height: 65, borderRadius: '10px' },
+            nameMarginTop: 6,
+            textMaxWidth: 80,
+        },
+    },
+    {
+        name: 'טבע ',
+        preview: '#93d198ff',
+        values: {
+            backgroundColor: '#93d198ff',
+            fontClass: heebo.className,
+            fontColor: '#000000',
+            texture: tex16.src,
+            frame: null,
+            fontSizePercent: 3.5,
+            imageStyle: { width: 85, height: 65, borderRadius: '10px' },
+            nameMarginTop: 6,
+            textMaxWidth: 80,
+        },
+    },
+    {
+        name: 'ציור',
+        preview: '#c4b5ecff',
+        values: {
+            backgroundColor: '#c4b5ecff',
+            fontClass: heebo.className,
+            fontColor: '#000000',
+            texture: tex12.src,
+            frame: null,
+            fontSizePercent: 3.5,
+            imageStyle: { width: 85, height: 65, borderRadius: '10px' },
+            nameMarginTop: 6,
+            textMaxWidth: 80,
+        },
+    },
 ]
 
 /* --- רקעים --- */
-const BACKGROUNDS = ['#ffffff', '#fdfaf6', '#fde2e4', '#e0f2fe', '#f3f4f6', '#1f2937']
+const BACKGROUNDS = ['#ffffff', '#fdf6ec', '#fde2e4', '#e8f0fe', '#f3f3f3', '#2c2c2c']
 
 /* --- טקסטורות --- */
 const TEXTURES = [
@@ -74,7 +158,13 @@ const TEXTURES = [
 const FRAMES = [null, frame1, frame2, frame3, frame4, frame5, frame6]
 
 /* --- פונטים --- */
-const FONTS = [notoHebrew, frankRuhl, davidLibre, heebo, secular]
+const FONTS = [
+    { font: notoHebrew, label: 'Noto Hebrew' },
+    { font: frankRuhl, label: 'Frank Ruhl' },
+    { font: davidLibre, label: 'David Libre' },
+    { font: heebo, label: 'Heebo' },
+    { font: secular, label: 'Secular One' },
+]
 
 /* --- גדלים --- */
 const FONT_SIZES = [
@@ -85,7 +175,7 @@ const FONT_SIZES = [
 ]
 
 /* --- צבעי טקסט --- */
-const FONT_COLORS = ['#000000', '#d4af37', '#8b1e3f', '#1f2937', '#f8f4ec', '#ffffff']
+const FONT_COLORS = ['#000000', '#d4af37', '#8b1e3f', '#2c2c2c', '#f8f4ec', '#ffffff']
 
 export default function DesignControls({ settings, onChange }) {
     const [activePreset, setActivePreset] = useState(null)
@@ -98,35 +188,39 @@ export default function DesignControls({ settings, onChange }) {
     return (
         <div
             dir='rtl'
-            className='grid grid-cols-2 gap-4 text-sm p-4 bg-white rounded-xl shadow border border-gray-200 overflow-y-auto'
+            className='flex flex-col gap-5 text-sm p-5 bg-white rounded-2xl shadow-lg border border-gray-200 overflow-y-auto'
         >
             {/* פריסטים */}
-            <section className='col-span-2'>
-                <h4 className='mb-2 text-xs font-medium text-gray-600'>פריסטים</h4>
+            <section>
+                <h4 className='mb-2 text-xs font-semibold text-gray-700'>🎨 פריסטים</h4>
                 <div className='grid grid-cols-5 gap-2'>
                     {PRESETS.map((preset, idx) => (
                         <button
                             key={idx}
                             onClick={() => applyPreset(preset)}
-                            className={`h-12 rounded-lg border ${
+                            className={`h-14 rounded-lg border overflow-hidden ${
                                 activePreset === preset.name ? 'ring-2 ring-pink-400' : ''
                             }`}
                             style={{ background: preset.preview }}
                             title={preset.name}
-                        />
+                        >
+                            <span className='text-[10px] font-medium text-gray-700 bg-white/70 px-1 rounded absolute bottom-1 right-1'>
+                                {preset.name}
+                            </span>
+                        </button>
                     ))}
                 </div>
             </section>
 
             {/* רקעים */}
             <section>
-                <h4 className='mb-2 text-xs font-medium text-gray-600'>רקע</h4>
+                <h4 className='mb-2 text-xs font-semibold text-gray-700'>🖌️ רקע</h4>
                 <div className='flex flex-wrap gap-2'>
                     {BACKGROUNDS.map(bg => (
                         <button
                             key={bg}
                             onClick={() => onChange({ ...settings, backgroundColor: bg })}
-                            className={`h-7 w-7 rounded-full ${
+                            className={`h-7 w-7 rounded-full shadow ${
                                 settings.backgroundColor === bg ? 'ring-2 ring-pink-400' : ''
                             }`}
                             style={{ backgroundColor: bg }}
@@ -137,13 +231,13 @@ export default function DesignControls({ settings, onChange }) {
 
             {/* טקסטורות */}
             <section>
-                <h4 className='mb-2 text-xs font-medium text-gray-600'>טקסטורות</h4>
-                <div className='grid grid-cols-4 gap-2'>
+                <h4 className='mb-2 text-xs font-semibold text-gray-700'>🖼️ טקסטורות</h4>
+                <div className='grid grid-cols-5 gap-2'>
                     {TEXTURES.map((tex, idx) => (
                         <button
                             key={idx}
                             onClick={() => onChange({ ...settings, texture: tex ? tex.src : null })}
-                            className={`aspect-square rounded-md border overflow-hidden ${
+                            className={`aspect-square rounded-md border overflow-hidden relative ${
                                 settings.texture === (tex ? tex.src : null) ? 'ring-2 ring-pink-400' : ''
                             }`}
                         >
@@ -159,17 +253,18 @@ export default function DesignControls({ settings, onChange }) {
 
             {/* פונטים */}
             <section>
-                <h4 className='mb-2 text-xs font-medium text-gray-600'>פונט</h4>
-                <div className='flex gap-2 flex-wrap'>
-                    {FONTS.map((font, idx) => (
+                <h4 className='mb-2 text-xs font-semibold text-gray-700'>🔤 פונט</h4>
+                <div className='grid grid-cols-2 gap-2'>
+                    {FONTS.map((f, idx) => (
                         <button
                             key={idx}
-                            onClick={() => onChange({ ...settings, fontClass: font.className })}
-                            className={`w-9 h-9 flex items-center justify-center rounded-md ${
-                                settings.fontClass === font.className ? 'bg-pink-100 ring-2 ring-pink-400' : 'border'
+                            onClick={() => onChange({ ...settings, fontClass: f.font.className })}
+                            className={`flex flex-col items-center justify-center rounded-lg border p-2 ${
+                                settings.fontClass === f.font.className ? 'bg-pink-50 ring-2 ring-pink-400' : ''
                             }`}
                         >
-                            <span className={`${font.className} text-sm`}>אב</span>
+                            <span className={`${f.font.className} text-base`}>אב</span>
+                            <span className='text-[10px] text-gray-600 mt-1'>{f.label}</span>
                         </button>
                     ))}
                 </div>
@@ -177,13 +272,13 @@ export default function DesignControls({ settings, onChange }) {
 
             {/* גודל טקסט */}
             <section>
-                <h4 className='mb-2 text-xs font-medium text-gray-600'>גודל טקסט</h4>
+                <h4 className='mb-2 text-xs font-semibold text-gray-700'>🔠 גודל טקסט</h4>
                 <div className='flex gap-2 flex-wrap'>
                     {FONT_SIZES.map(size => (
                         <button
                             key={size.value}
                             onClick={() => onChange({ ...settings, fontSizePercent: size.value })}
-                            className={`px-2 py-1 rounded-full text-xs ${
+                            className={`px-3 py-1 rounded-full text-xs ${
                                 settings.fontSizePercent === size.value ? 'bg-pink-100 ring-2 ring-pink-400' : 'border'
                             }`}
                         >
@@ -195,13 +290,15 @@ export default function DesignControls({ settings, onChange }) {
 
             {/* צבע טקסט */}
             <section>
-                <h4 className='mb-2 text-xs font-medium text-gray-600'>צבע טקסט</h4>
+                <h4 className='mb-2 text-xs font-semibold text-gray-700'>🎨 צבע טקסט</h4>
                 <div className='flex flex-wrap gap-2'>
                     {FONT_COLORS.map(c => (
                         <button
                             key={c}
                             onClick={() => onChange({ ...settings, fontColor: c })}
-                            className={`h-7 w-7 rounded-full ${settings.fontColor === c ? 'ring-2 ring-pink-400' : ''}`}
+                            className={`h-7 w-7 rounded-full shadow ${
+                                settings.fontColor === c ? 'ring-2 ring-pink-400' : ''
+                            }`}
                             style={{ backgroundColor: c }}
                         />
                     ))}
@@ -210,7 +307,7 @@ export default function DesignControls({ settings, onChange }) {
 
             {/* מסגרות */}
             <section>
-                <h4 className='mb-2 text-xs font-medium text-gray-600'>מסגרות</h4>
+                <h4 className='mb-2 text-xs font-semibold text-gray-700'>📐 מסגרות</h4>
                 <div className='grid grid-cols-4 gap-2'>
                     {FRAMES.map((f, idx) => (
                         <button
@@ -231,8 +328,8 @@ export default function DesignControls({ settings, onChange }) {
             </section>
 
             {/* כריכה */}
-            <section className='col-span-2'>
-                <h4 className='mb-2 text-xs font-medium text-gray-600'>כריכה</h4>
+            <section>
+                <h4 className='mb-2 text-xs font-semibold text-gray-700'>📖 כריכה</h4>
                 <div className='grid grid-cols-2 gap-2'>
                     <input
                         type='text'
