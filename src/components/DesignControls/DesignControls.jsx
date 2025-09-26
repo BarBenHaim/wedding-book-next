@@ -15,7 +15,6 @@ import frame6 from '../../media/frames/frame6.png'
 import tex1 from '../../media/textures/tex1.png'
 import tex2 from '../../media/textures/tex2.png'
 import tex3 from '../../media/textures/tex3.png'
-import tex4 from '../../media/textures/tex4.png'
 import tex5 from '../../media/textures/tex5.png'
 import tex6 from '../../media/textures/tex6.png'
 import tex7 from '../../media/textures/tex7.png'
@@ -152,7 +151,6 @@ const TEXTURES = [
     tex1,
     tex2,
     tex3,
-    tex4,
     tex5,
     tex6,
     tex7,

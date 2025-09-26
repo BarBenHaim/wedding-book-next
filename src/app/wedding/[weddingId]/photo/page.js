@@ -153,7 +153,7 @@ export default function TextPage() {
     }
 
     return (
-        <div className='relative flex min-h-[calc(100vh-4rem)] items-center justify-center bg-gradient-to-br from-purple-50 via-white to-purple-100 px-6 py-12 font-sans'>
+        <div className='relative flex h-[calc(100vh-4rem)]  items-center justify-center bg-gradient-to-br from-purple-50 via-white to-purple-100 px-6 py-12 font-sans'>
             {/* Glow רקע */}
             <div className='absolute -top-24 left-10 h-72 w-72 rounded-full bg-purple-300/30 blur-3xl'></div>
             <div className='absolute bottom-0 right-0 h-96 w-96 rounded-full bg-pink-300/30 blur-3xl'></div>

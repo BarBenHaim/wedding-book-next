@@ -5,30 +5,18 @@
     --foreground: #171717;
 }
 
-@theme inline {
-    --color-background: var(--background);
-    --color-foreground: var(--foreground);
-}
-
-@media (prefers-color-scheme: light) {
-    :root {
-        --background: #171717;
-        --foreground: #ffffff;
-    }
-}
-
 body {
     background: var(--background);
     color: var(--foreground);
 }
 
-html,
-body {
-    direction: rtl; /* כל האתר RTL */
+* {
+    font-family: Heebo;
 }
 
-::-webkit-scrollbar {
-    display: none;
+html,
+body {
+    direction: rtl;
 }
 
 img {

@@ -15,6 +15,7 @@ import {
     cormorant,
     playfairSC,
 } from './fonts'
+import Footer from '@/components/Footer/Footer'
 
 export default function RootLayout({ children }) {
     return (

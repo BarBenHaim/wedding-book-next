@@ -7,12 +7,17 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
     const hasText = Boolean(entry.text)
     const hasImage = Boolean(entry.imageUrl)
 
+    const elementsCount = [hasName, hasText, hasImage].filter(Boolean).length
+    const onlyOne = elementsCount === 1
+
     const w = percent => (percent / 100) * scaledWidth
     const h = percent => (percent / 100) * scaledHeight
 
     return (
         <div
-            className='relative flex flex-col items-center text-center box-border overflow-hidden'
+            className={`relative flex flex-col items-center text-center box-border overflow-hidden ${
+                onlyOne ? 'justify-center' : ''
+            }`}
             style={{
                 width: '100%',
                 height: '100%',
@@ -48,8 +53,8 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         ),
                         color: styleSettings.fontColor,
                         opacity: 0.85,
-                        marginTop: h(styleSettings.nameMarginTop ?? 2),
-                        marginBottom: h(styleSettings.nameMarginBottom ?? 2),
+                        marginTop: onlyOne ? 0 : h(styleSettings.nameMarginTop ?? 2),
+                        marginBottom: onlyOne ? 0 : h(styleSettings.nameMarginBottom ?? 2),
                         textAlign: styleSettings.nameAlign ?? 'center',
                         maxWidth: w(styleSettings.nameMaxWidth ?? 60),
                         wordWrap: 'break-word',
@@ -72,8 +77,8 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
                         borderRadius: styleSettings.imageStyle?.borderRadius ?? '12px',
-                        marginTop: h(styleSettings.imageMarginTop ?? 2),
-                        marginBottom: h(styleSettings.imageMarginBottom ?? 2),
+                        marginTop: onlyOne ? 0 : h(styleSettings.imageMarginTop ?? 2),
+                        marginBottom: onlyOne ? 0 : h(styleSettings.imageMarginBottom ?? 2),
                         alignSelf:
                             styleSettings.imageAlign === 'left'
                                 ? 'flex-start'
@@ -90,7 +95,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 <div
                     style={{
                         maxWidth: w(styleSettings.textMaxWidth ?? 85),
-                        marginTop: h(styleSettings.textMarginTop ?? 3),
+                        marginTop: onlyOne ? 0 : h(styleSettings.textMarginTop ?? 3),
                         textAlign: styleSettings.textAlign ?? 'center',
                         position: 'relative',
                         zIndex: 5,
