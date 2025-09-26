@@ -40,6 +40,9 @@ export default function Header() {
     async function handleLogout() {
         await signOut(auth)
         localStorage.removeItem('weddingId')
+
+        await fetch('/api/logout', { method: 'POST' })
+
         router.push('/')
     }
 

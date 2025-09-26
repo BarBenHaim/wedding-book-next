@@ -11,6 +11,7 @@ import defaultStyle from '@/app/wedding/[weddingId]/viewer/defultStyle'
 import { BASE_SIZE } from '@/lib/unitUtils'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
+import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 
 export default function BookViewer() {
     const [pages, setPages] = useState([])
@@ -102,145 +103,153 @@ export default function BookViewer() {
 
     return (
         <>
-            <div className='relative flex h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 via-white to-purple-100 overflow-hidden'>
-                <main className='relative z-10 flex flex-1'>
-                    {/* פאנל עיצוב */}
-                    <aside className='lg:block w-1/4 border-l border-gray-200 bg-white/80 backdrop-blur-md p-6 shadow-xl rounded-l-2xl overflow-y-auto'>
-                        <h2 className='mb-6 text-xl font-bold text-gray-800'>עיצוב הספר</h2>
-                        <DesignControls settings={styleSettings} onChange={handleStyleChange} />
-                    </aside>
+            <AdminPageWrapper>
+                <div className='relative flex h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 via-white to-purple-100 overflow-hidden'>
+                    <main className='relative z-10 flex flex-1'>
+                        {/* פאנל עיצוב */}
+                        <aside className='lg:block w-1/4 border-l border-gray-200 bg-white/80 backdrop-blur-md p-6 shadow-xl rounded-l-2xl overflow-y-auto'>
+                            <h2 className='mb-6 text-xl font-bold text-gray-800'>עיצוב הספר</h2>
+                            <DesignControls settings={styleSettings} onChange={handleStyleChange} />
+                        </aside>
 
-                    {/* מרכז הספר */}
-                    <div className='flex flex-1 flex-col items-center justify-center'>
-                        {/* ספר */}
-                        {hasCover || pages.length > 0 ? (
-                            <HTMLFlipBook
-                                ref={bookRef}
-                                key={`${viewerSize}-${pages.length}`}
-                                width={viewerSize}
-                                height={viewerSize}
-                                usePortrait={false}
-                                size='fixed'
-                                drawShadow={false}
-                                showCover={!!hasCover}
-                                mobileScrollSupport={false}
-                                className='book-flip'
-                            >
-                                {/* כריכה קדמית */}
-                                <div style={{ width: viewerSize, height: viewerSize }}>
-                                    <BookCoverTemplate
-                                        styleSettings={styleSettings}
-                                        scaledWidth={viewerSize}
-                                        scaledHeight={viewerSize}
-                                    />
-                                </div>
+                        {/* מרכז הספר */}
+                        <div className='flex flex-1 flex-col items-center justify-center'>
+                            {/* ספר */}
+                            {hasCover || pages.length > 0 ? (
+                                <HTMLFlipBook
+                                    ref={bookRef}
+                                    key={`${viewerSize}-${pages.length}`}
+                                    width={viewerSize}
+                                    height={viewerSize}
+                                    usePortrait={false}
+                                    size='fixed'
+                                    drawShadow={false}
+                                    showCover={!!hasCover}
+                                    mobileScrollSupport={false}
+                                    className='book-flip'
+                                >
+                                    {/* כריכה קדמית */}
+                                    <div style={{ width: viewerSize, height: viewerSize }}>
+                                        <BookCoverTemplate
+                                            styleSettings={styleSettings}
+                                            scaledWidth={viewerSize}
+                                            scaledHeight={viewerSize}
+                                        />
+                                    </div>
 
-                                {/* דפים פנימיים */}
-                                {pages.length > 0 ? (
-                                    pages.map(entry => (
-                                        <div key={entry.id} style={{ width: viewerSize, height: viewerSize }}>
-                                            <BookPageTemplate
-                                                entry={entry}
-                                                styleSettings={styleSettings}
-                                                scaledWidth={viewerSize}
-                                                scaledHeight={viewerSize}
-                                            />
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div style={{ width: viewerSize, height: viewerSize }} />
-                                )}
+                                    {/* דפים פנימיים */}
+                                    {pages.length > 0 ? (
+                                        pages.map(entry => (
+                                            <div key={entry.id} style={{ width: viewerSize, height: viewerSize }}>
+                                                <BookPageTemplate
+                                                    entry={entry}
+                                                    styleSettings={styleSettings}
+                                                    scaledWidth={viewerSize}
+                                                    scaledHeight={viewerSize}
+                                                />
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div style={{ width: viewerSize, height: viewerSize }} />
+                                    )}
 
-                                {/* כריכה אחורית */}
-                                <div style={{ width: viewerSize, height: viewerSize }}>
-                                    <BookCoverTemplate
-                                        styleSettings={styleSettings}
-                                        scaledWidth={viewerSize}
-                                        scaledHeight={viewerSize}
-                                    />
-                                </div>
-                            </HTMLFlipBook>
-                        ) : (
-                            <p className='text-gray-400 text-sm'>אין עדיין דפים להצגה</p>
-                        )}
-                        {/* חצים */}
-                        <div className='flex gap-6 mt-6'>
+                                    {/* כריכה אחורית */}
+                                    <div style={{ width: viewerSize, height: viewerSize }}>
+                                        <BookCoverTemplate
+                                            styleSettings={styleSettings}
+                                            scaledWidth={viewerSize}
+                                            scaledHeight={viewerSize}
+                                        />
+                                    </div>
+                                </HTMLFlipBook>
+                            ) : (
+                                <p className='text-gray-400 text-sm'>אין עדיין דפים להצגה</p>
+                            )}
+                            {/* חצים */}
+                            <div className='flex gap-6 mt-6'>
+                                <button
+                                    onClick={() => bookRef.current?.pageFlip().flipPrev()}
+                                    className='rounded-full bg-white shadow p-3 hover:bg-purple-100 transition'
+                                >
+                                    ➡️
+                                </button>
+                                <button
+                                    onClick={() => bookRef.current?.pageFlip().flipNext()}
+                                    className='rounded-full bg-white shadow p-3 hover:bg-purple-100 transition'
+                                >
+                                    ⬅️
+                                </button>
+                            </div>
+                            {/* כפתור הורדה */}
                             <button
-                                onClick={() => bookRef.current?.pageFlip().flipPrev()}
-                                className='rounded-full bg-white shadow p-3 hover:bg-purple-100 transition'
+                                onClick={handleDownloadPDF}
+                                className='mt-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 px-6 py-3 text-white font-medium shadow hover:scale-105 transition'
                             >
-                                ➡️
-                            </button>
-                            <button
-                                onClick={() => bookRef.current?.pageFlip().flipNext()}
-                                className='rounded-full bg-white shadow p-3 hover:bg-purple-100 transition'
-                            >
-                                ⬅️
+                                📥 הורד כ־PDF
                             </button>
                         </div>
-                        {/* כפתור הורדה */}
-                        <button
-                            onClick={handleDownloadPDF}
-                            className='mt-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 px-6 py-3 text-white font-medium shadow hover:scale-105 transition'
+                    </main>
+                </div>
+
+                {/* גרסה מוסתרת להדפסה */}
+                <div
+                    ref={hiddenRef}
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: 0,
+                        height: 0,
+                        overflow: 'hidden',
+                        opacity: 0,
+                        pointerEvents: 'none',
+                    }}
+                >
+                    {/* כריכה קדמית */}
+                    {hasCover && (
+                        <div
+                            className='page-for-pdf'
+                            style={{ width: BASE_SIZE, height: BASE_SIZE, background: '#fff' }}
                         >
-                            📥 הורד כ־PDF
-                        </button>
-                    </div>
-                </main>
-            </div>
+                            <BookCoverTemplate
+                                styleSettings={styleSettings}
+                                scaledWidth={BASE_SIZE}
+                                scaledHeight={BASE_SIZE}
+                            />
+                        </div>
+                    )}
 
-            {/* גרסה מוסתרת להדפסה */}
-            <div
-                ref={hiddenRef}
-                style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    width: 0,
-                    height: 0,
-                    overflow: 'hidden',
-                    opacity: 0,
-                    pointerEvents: 'none',
-                }}
-            >
-                {/* כריכה קדמית */}
-                {hasCover && (
-                    <div className='page-for-pdf' style={{ width: BASE_SIZE, height: BASE_SIZE, background: '#fff' }}>
-                        <BookCoverTemplate
-                            styleSettings={styleSettings}
-                            scaledWidth={BASE_SIZE}
-                            scaledHeight={BASE_SIZE}
-                        />
-                    </div>
-                )}
+                    {/* דפים פנימיים */}
+                    {pages.map(entry => (
+                        <div
+                            key={entry.id}
+                            className='page-for-pdf'
+                            style={{ width: BASE_SIZE, height: BASE_SIZE, background: '#fff' }}
+                        >
+                            <BookPageTemplate
+                                entry={entry}
+                                styleSettings={styleSettings}
+                                scaledWidth={BASE_SIZE}
+                                scaledHeight={BASE_SIZE}
+                            />
+                        </div>
+                    ))}
 
-                {/* דפים פנימיים */}
-                {pages.map(entry => (
-                    <div
-                        key={entry.id}
-                        className='page-for-pdf'
-                        style={{ width: BASE_SIZE, height: BASE_SIZE, background: '#fff' }}
-                    >
-                        <BookPageTemplate
-                            entry={entry}
-                            styleSettings={styleSettings}
-                            scaledWidth={BASE_SIZE}
-                            scaledHeight={BASE_SIZE}
-                        />
-                    </div>
-                ))}
-
-                {/* כריכה אחורית */}
-                {hasCover && (
-                    <div className='page-for-pdf' style={{ width: BASE_SIZE, height: BASE_SIZE, background: '#fff' }}>
-                        <BookCoverTemplate
-                            styleSettings={styleSettings}
-                            scaledWidth={BASE_SIZE}
-                            scaledHeight={BASE_SIZE}
-                        />
-                    </div>
-                )}
-            </div>
+                    {/* כריכה אחורית */}
+                    {hasCover && (
+                        <div
+                            className='page-for-pdf'
+                            style={{ width: BASE_SIZE, height: BASE_SIZE, background: '#fff' }}
+                        >
+                            <BookCoverTemplate
+                                styleSettings={styleSettings}
+                                scaledWidth={BASE_SIZE}
+                                scaledHeight={BASE_SIZE}
+                            />
+                        </div>
+                    )}
+                </div>
+            </AdminPageWrapper>
         </>
     )
 }

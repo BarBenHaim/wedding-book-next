@@ -1,19 +1,27 @@
 import { NextResponse } from 'next/server'
-import { getFirestore } from 'firebase-admin/firestore'
-import { initializeApp, getApps, cert } from 'firebase-admin/app'
+import { adminDb, adminAuth } from '@/lib/firebaseAdmin'
 
-// נאתחל Firebase Admin פעם אחת בלבד
-if (!getApps().length) {
-    initializeApp({
-        credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)),
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    })
+// פונקציית עזר לבדוק טוקן
+async function verifyUser(req) {
+    const authHeader = req.headers.get('authorization')
+    if (!authHeader?.startsWith('Bearer ')) return null
+
+    const token = authHeader.split('Bearer ')[1]
+    try {
+        const decoded = await adminAuth.verifyIdToken(token)
+        return decoded
+    } catch {
+        return null
+    }
 }
 
-const db = getFirestore()
-
-// קריאה של כל הברכות עבור חתונה מסוימת
+// GET - קריאה של כל הברכות
 export async function GET(req) {
+    const user = await verifyUser(req)
+    if (!user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(req.url)
     const weddingId = searchParams.get('weddingId')
 
@@ -21,13 +29,19 @@ export async function GET(req) {
         return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
     }
 
-    const snapshot = await db.collection('weddings').doc(weddingId).collection('entries').get()
+    const snapshot = await adminDb.collection('weddings').doc(weddingId).collection('entries').get()
+
     const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
     return NextResponse.json(entries)
 }
 
-// הוספת ברכה חדשה לחתונה מסוימת
+// POST - הוספת ברכה חדשה
 export async function POST(req) {
+    const user = await verifyUser(req)
+    if (!user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(req.url)
     const weddingId = searchParams.get('weddingId')
 
@@ -35,11 +49,11 @@ export async function POST(req) {
         return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
     }
 
-    const { type, content, user } = await req.json()
-    await db.collection('weddings').doc(weddingId).collection('entries').add({
+    const { type, content } = await req.json()
+    await adminDb.collection('weddings').doc(weddingId).collection('entries').add({
         type,
         content,
-        user,
+        user: user.uid,
         timestamp: new Date(),
     })
 

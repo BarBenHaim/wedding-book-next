@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../../lib/firebaseClient'
 import { useRouter } from 'next/navigation'
+import { getIdToken } from 'firebase/auth'
 
 export default function LoginPage() {
     const [email, setEmail] = useState('')
@@ -15,10 +16,20 @@ export default function LoginPage() {
         e.preventDefault()
         try {
             const userCredential = await signInWithEmailAndPassword(auth, email, password)
-            const userId = userCredential.user.uid
-            const weddingId = userId // עד שתביא מה־DB
+            const user = userCredential.user
 
+            // שולפים ID token מה־Firebase Auth
+            const token = await getIdToken(user, true)
+            await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token }),
+            })
+
+            // weddingId – כרגע שווה ל־uid, אחר כך תביא מ־DB
+            const weddingId = user.uid
             localStorage.setItem('weddingId', weddingId)
+
             router.push(`/wedding/${weddingId}/admin`)
         } catch (err) {
             setError('שגיאה בהתחברות: ' + err.message)

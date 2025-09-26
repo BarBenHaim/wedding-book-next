@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createUserWithEmailAndPassword } from 'firebase/auth'
+import { createUserWithEmailAndPassword, getIdToken } from 'firebase/auth'
 import { auth, db } from '../../lib/firebaseClient'
 import { useRouter } from 'next/navigation'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
@@ -21,16 +21,30 @@ export default function RegisterPage() {
                 return
             }
 
+            // יצירת משתמש ב־Firebase
             const userCredential = await createUserWithEmailAndPassword(auth, email, password)
-            const userId = userCredential.user.uid
-            const weddingId = userId
+            const user = userCredential.user
+            const weddingId = user.uid
 
+            // יצירת מסמך לחתונה ב־Firestore
             await setDoc(doc(db, 'weddings', weddingId), {
                 ownerEmail: email,
                 createdAt: serverTimestamp(),
             })
 
+            // השגת ID Token מה־user
+            const token = await getIdToken(user, true)
+
+            // שמירת token ב־cookie דרך API
+            await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token }),
+            })
+
+            // אפשר גם להשאיר weddingId ב־localStorage אם צריך בקליינט
             localStorage.setItem('weddingId', weddingId)
+
             router.push(`/wedding/${weddingId}/admin`)
         } catch (err) {
             setError('שגיאה בהרשמה: ' + err.message)
