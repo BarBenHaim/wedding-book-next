@@ -94,7 +94,7 @@ export default function BookViewer() {
 
     if (loading) {
         return (
-            <div className='flex h-[calc(100vh-4rem)] flex-col items-center justify-center text-gray-700'>
+            <div className='flex  flex-col items-center justify-center text-gray-700'>
                 <div className='animate-spin rounded-full h-12 w-12 border-4 border-purple-400 border-t-transparent mb-4'></div>
                 <p className='text-sm font-medium'>טוען את ספר הזיכרונות…</p>
             </div>

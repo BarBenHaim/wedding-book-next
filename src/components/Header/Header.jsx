@@ -103,12 +103,23 @@ export default function Header() {
                     )}
                 </div>
 
-                {/* לוגו */}
+                {/* Great Vibes */}
                 <button
                     onClick={handleLogoClick}
-                    className='text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent hover:opacity-80 transition'
+                    style={{
+                        fontFamily: "'Great Vibes', cursive",
+                        fontSize: '26px',
+                        backgroundImage: 'linear-gradient(to right, #ec4899, #9333ea)',
+                        WebkitBackgroundClip: 'text',
+                        color: 'transparent',
+                        fontWeight: '100',
+                        transition: 'opacity 0.3s',
+                        textAlign: 'left',
+                    }}
+                    onMouseOver={e => (e.currentTarget.style.opacity = '0.8')}
+                    onMouseOut={e => (e.currentTarget.style.opacity = '1')}
                 >
-                    💍 Wedding Book
+                    Wedding Tales
                 </button>
             </nav>
         </header>

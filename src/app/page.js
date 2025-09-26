@@ -18,7 +18,7 @@ export default function Home() {
             <div className='absolute bottom-0 right-0 h-[28rem] w-[28rem] rounded-full bg-pink-300/30 blur-3xl'></div>
 
             {/* תוכן ראשי */}
-            <div className='relative z-10 flex flex-1 flex-col justify-between items-center text-center px-6 py-10'>
+            <div className='relative z-10 flex flex-1 flex-col justify-center items-center text-center px-6 py-10 gap-40'>
                 {/* Hero */}
                 <section>
                     <h1 className='text-4xl md:text-6xl font-extrabold text-gray-900 leading-snug mb-4'>
