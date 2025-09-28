@@ -7,28 +7,14 @@ import { heebo, frankRuhl, secular, davidLibre, notoHebrew } from '@/app/fonts'
 import frame1 from '../../media/frames/frame1.png'
 import frame2 from '../../media/frames/frame2.png'
 import frame3 from '../../media/frames/frame3.png'
-import frame4 from '../../media/frames/frame4.png'
-import frame5 from '../../media/frames/frame5.png'
-import frame6 from '../../media/frames/frame6.png'
 
 /* --- טקסטורות --- */
 import tex1 from '../../media/textures/tex1.png'
 import tex2 from '../../media/textures/tex2.png'
 import tex3 from '../../media/textures/tex3.png'
+import tex4 from '../../media/textures/tex4.png'
 import tex5 from '../../media/textures/tex5.png'
 import tex6 from '../../media/textures/tex6.png'
-import tex7 from '../../media/textures/tex7.png'
-import tex8 from '../../media/textures/tex8.png'
-import tex9 from '../../media/textures/tex9.png'
-import tex10 from '../../media/textures/tex10.png'
-import tex11 from '../../media/textures/tex11.png'
-import tex12 from '../../media/textures/tex12.png'
-import tex13 from '../../media/textures/tex13.png'
-import tex14 from '../../media/textures/tex14.png'
-import tex15 from '../../media/textures/tex15.png'
-import tex16 from '../../media/textures/tex16.png'
-import tex17 from '../../media/textures/tex17.png'
-import tex18 from '../../media/textures/tex18.png'
 
 /* --- פריסטים --- */
 const PRESETS = [
@@ -42,9 +28,10 @@ const PRESETS = [
             frame: frame2.src,
             texture: null,
 
-            fontSizePercent: 3.5,
+            fontSizePercent: 2.8,
             imageStyle: { width: 85, height: 70 },
             nameMarginTop: 4,
+            textMarginTop: 0,
             textMaxWidth: 80,
         },
     },
@@ -55,61 +42,16 @@ const PRESETS = [
             backgroundColor: '#fdf6ec',
             fontClass: heebo.className,
             fontColor: '#000000',
-            texture: tex3.src,
+            texture: tex1.src,
             frame: frame1.src,
-            fontSizePercent: 3,
+            fontSizePercent: 2.5,
             imageStyle: { width: 75, height: 65 },
             nameMarginTop: 8,
             nameMarginBottom: 0,
-            textMaxWidth: 75,
+            textMaxWidth: 70,
         },
     },
 
-    {
-        name: 'ורוד עדין',
-        preview: '#fde2e4',
-        values: {
-            backgroundColor: '#fde2e4',
-            fontClass: heebo.className,
-            fontColor: '#000000',
-            texture: tex8.src,
-            frame: null,
-            fontSizePercent: 3.5,
-            imageStyle: { width: 85, height: 65, borderRadius: '10px' },
-            nameMarginTop: 6,
-            textMaxWidth: 80,
-        },
-    },
-    {
-        name: 'ורוד ',
-        preview: '#f8f1f1ff',
-        values: {
-            backgroundColor: '#f8f1f1ff',
-            fontClass: heebo.className,
-            fontColor: '#000000',
-            texture: tex18.src,
-            frame: null,
-            fontSizePercent: 3.5,
-            imageStyle: { width: 85, height: 65, borderRadius: '10px' },
-            nameMarginTop: 6,
-            textMaxWidth: 80,
-        },
-    },
-    {
-        name: 'טבע ',
-        preview: '#93d198ff',
-        values: {
-            backgroundColor: '#93d198ff',
-            fontClass: heebo.className,
-            fontColor: '#000000',
-            texture: tex16.src,
-            frame: null,
-            fontSizePercent: 3.5,
-            imageStyle: { width: 85, height: 65, borderRadius: '10px' },
-            nameMarginTop: 6,
-            textMaxWidth: 80,
-        },
-    },
     {
         name: 'ציור',
         preview: '#c4b5ecff',
@@ -117,27 +59,12 @@ const PRESETS = [
             backgroundColor: '#c4b5ecff',
             fontClass: heebo.className,
             fontColor: '#000000',
-            texture: tex12.src,
+            texture: tex5.src,
             frame: null,
             fontSizePercent: 3,
             imageStyle: { width: 85, height: 70, borderRadius: '10px' },
-            nameMarginTop: 6,
-            textMaxWidth: 80,
-        },
-    },
-    {
-        name: 'מסגרת',
-        preview: '#353535ff',
-        values: {
-            backgroundColor: '#ffffffff',
-            fontClass: heebo.className,
-            fontColor: '#000000',
-            frame: frame4.src,
-            texture: null,
-            fontSizePercent: 3,
-            imageStyle: { width: 75, height: 65, borderRadius: '10px' },
-            nameMarginTop: 8,
-            textMaxWidth: 75,
+            nameMarginTop: 2,
+            textMaxWidth: 70,
         },
     },
 ]
@@ -146,29 +73,10 @@ const PRESETS = [
 const BACKGROUNDS = ['#ffffff', '#fdf6ec', '#fde2e4', '#e8f0fe', '#f3f3f3', '#2c2c2c']
 
 /* --- טקסטורות --- */
-const TEXTURES = [
-    null,
-    tex1,
-    tex2,
-    tex3,
-    tex5,
-    tex6,
-    tex7,
-    tex8,
-    tex9,
-    tex10,
-    tex11,
-    tex12,
-    tex13,
-    tex14,
-    tex15,
-    tex16,
-    tex17,
-    tex18,
-]
+const TEXTURES = [null, tex1, tex2, tex3, tex5, tex6]
 
 /* --- מסגרות --- */
-const FRAMES = [null, frame1, frame2, frame3, frame4, frame5, frame6]
+const FRAMES = [null, frame1, frame2, frame3]
 
 /* --- פונטים --- */
 const FONTS = [
@@ -184,7 +92,6 @@ const FONT_SIZES = [
     { name: 'קטן', value: 2.5 },
     { name: 'בינוני', value: 2.8 },
     { name: 'גדול', value: 3 },
-    { name: 'ענק', value: 4 },
 ]
 
 /* --- צבעי טקסט --- */

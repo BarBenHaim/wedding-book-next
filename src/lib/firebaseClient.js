@@ -14,8 +14,9 @@ const firebaseConfig = {
 }
 
 // ודא שלא נאתחל פעמיים
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0]
+const firebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0]
 
-export const auth = getAuth(app)
-export const db = getFirestore(app)
-export const storage = getStorage(app)
+export const auth = getAuth(firebaseApp)
+export const db = getFirestore(firebaseApp)
+export const storage = getStorage(firebaseApp)
+export const app = firebaseApp
