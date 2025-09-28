@@ -151,7 +151,6 @@ export default function BookViewer() {
                 <main className='relative z-10 flex flex-1'>
                     {/* פאנל עיצוב */}
                     <aside className='lg:block w-1/4 border-l border-gray-200 bg-white/80 backdrop-blur-md p-6 shadow-xl rounded-l-2xl overflow-y-auto'>
-                        <h2 className='mb-6 text-xl font-bold text-gray-800'>עיצוב הספר</h2>
                         <DesignControls settings={styleSettings} onChange={handleStyleChange} />
 
                         {/* בחירת גודל */}
@@ -216,15 +215,6 @@ export default function BookViewer() {
                                         />
                                     </div>
                                 ))}
-
-                                {/* כריכה אחורית */}
-                                <div style={{ width: viewerSize, height: viewerSize }}>
-                                    <BookCoverTemplate
-                                        styleSettings={styleSettings}
-                                        scaledWidth={viewerSize}
-                                        scaledHeight={viewerSize}
-                                    />
-                                </div>
                             </HTMLFlipBook>
                         ) : (
                             <p className='text-gray-400 text-sm'>אין עדיין דפים להצגה</p>
