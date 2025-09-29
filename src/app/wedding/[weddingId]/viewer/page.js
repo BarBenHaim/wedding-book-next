@@ -208,15 +208,6 @@ export default function BookViewer() {
                                         />
                                     </div>
                                 ))}
-
-                                {/* כריכה אחורית */}
-                                <div style={{ width: viewerSize, height: viewerSize }}>
-                                    <BookCoverTemplate
-                                        styleSettings={styleSettings}
-                                        scaledWidth={viewerSize}
-                                        scaledHeight={viewerSize}
-                                    />
-                                </div>
                             </HTMLFlipBook>
                         ) : (
                             <p className='text-gray-400 text-sm'>אין עדיין דפים להצגה</p>
