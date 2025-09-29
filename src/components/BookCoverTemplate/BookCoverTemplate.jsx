@@ -1,61 +1,75 @@
 'use client'
 
 export default function BookCoverTemplate({ styleSettings, scaledWidth, scaledHeight }) {
-    const w = percent => (percent / 100) * scaledWidth
-    const h = percent => (percent / 100) * scaledHeight
+    const w = p => (p / 100) * scaledWidth
+    const h = p => (p / 100) * scaledHeight
+    const coverFontSize = ((styleSettings.coverFontSizePercent || 3) / 100) * scaledWidth
 
     return (
         <div
             className='relative flex flex-col items-center justify-center text-center overflow-hidden'
             style={{
-                width: '100%',
-                height: '100%',
+                width: scaledWidth,
+                height: scaledHeight,
                 backgroundColor: styleSettings.backgroundColor,
-                backgroundImage: styleSettings.texture ? `url(${styleSettings.texture})` : 'none',
+                backgroundImage: `url(${styleSettings.coverTexture || styleSettings.texture || ''})`,
                 backgroundSize: 'cover',
-                backgroundRepeat: 'repeat',
-                backgroundPosition: 'center',
-                color: styleSettings.fontColor,
             }}
         >
-            {/* כותרת הכריכה */}
-            <h1
-                className={styleSettings.fontClass}
-                style={{
-                    fontSize: h(styleSettings.coverTitleSizePercent ?? 6),
-                    fontWeight: 'bold',
-                    color: styleSettings.fontColor,
-                }}
-            >
-                {styleSettings.coverTitle || 'החתונה שלנו'}
-            </h1>
+            {/* מסגרת */}
+            {styleSettings.coverFrame && (
+                <img
+                    src={styleSettings.coverFrame}
+                    alt='frame'
+                    className='absolute inset-0 w-full h-full object-contain pointer-events-none'
+                    style={{ zIndex: 5 }}
+                />
+            )}
 
-            {/* תת־כותרת (אופציונלי) */}
-            {styleSettings.coverSubtitle && (
-                <p
+            {/* תמונה */}
+            {styleSettings.coverImage && (
+                <img
+                    src={styleSettings.coverImage}
+                    alt='cover'
+                    style={{
+                        position: 'absolute',
+                        top: h(styleSettings.coverImageY || 0),
+                        left: w(styleSettings.coverImageX || 0),
+                        width: w(styleSettings.coverImageScale || 80),
+                        height: 'auto',
+                        objectFit: 'contain',
+                        zIndex: 1,
+                    }}
+                />
+            )}
+
+            {/* טקסט */}
+            {styleSettings.coverTitle && (
+                <h1
                     className={styleSettings.fontClass}
                     style={{
-                        fontSize: h(styleSettings.coverSubtitleSizePercent ?? 3),
-                        marginTop: h(2),
-                        opacity: 0.9,
                         color: styleSettings.fontColor,
+                        fontSize: `${coverFontSize}px`,
+                        zIndex: 10,
+                        marginTop: h(styleSettings.nameMarginTop || 5),
+                        maxWidth: w(styleSettings.textMaxWidth || 80),
+                    }}
+                >
+                    {styleSettings.coverTitle}
+                </h1>
+            )}
+            {styleSettings.coverSubtitle && (
+                <h2
+                    className={`${styleSettings.fontClass} mt-2`}
+                    style={{
+                        color: styleSettings.fontColor,
+                        fontSize: `${coverFontSize * 0.7}px`,
+                        zIndex: 10,
+                        maxWidth: w(styleSettings.textMaxWidth || 80),
                     }}
                 >
                     {styleSettings.coverSubtitle}
-                </p>
-            )}
-
-            {/* מסגרת */}
-            {styleSettings.frame && (
-                <img
-                    src={styleSettings.frame}
-                    alt='frame'
-                    className='absolute top-0 left-0 w-full h-full pointer-events-none'
-                    style={{
-                        zIndex: 10,
-                        objectFit: 'cover',
-                    }}
-                />
+                </h2>
             )}
         </div>
     )

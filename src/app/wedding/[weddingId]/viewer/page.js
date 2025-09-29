@@ -17,12 +17,13 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 export default function BookViewer() {
     const [pages, setPages] = useState([])
     const [loading, setLoading] = useState(true)
-    const [viewerSize, setViewerSize] = useState(2362) // ברירת מחדל 20x20 ב־300dpi
+    const [viewerSize, setViewerSize] = useState(2362)
     const [baseSize, setBaseSize] = useState(2362)
     const [pdfSize, setPdfSize] = useState(200) // מ״מ
     const [styleSettings, setStyleSettings] = useState(() =>
         typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('bookStyle')) || defaultStyle : defaultStyle
     )
+    const [mode, setMode] = useState('book')
     const hiddenRef = useRef(null)
     const bookRef = useRef(null)
     const { weddingId } = useParams()
@@ -66,18 +67,16 @@ export default function BookViewer() {
         }
     }
 
-    // בחירת גודל ספר
     function handleSelectSize(sizeCm) {
         if (sizeCm === 20) {
-            setPdfSize(200) // 200 מ״מ
-            setBaseSize(2362) // 20 ס״מ ב־300dpi
+            setPdfSize(200)
+            setBaseSize(2362)
         } else if (sizeCm === 30) {
-            setPdfSize(300) // 300 מ״מ
-            setBaseSize(3543) // 30 ס״מ ב־300dpi
+            setPdfSize(300)
+            setBaseSize(3543)
         }
     }
 
-    // פונקציית עזר - טוענת את כל התמונות ב־container לפני צילום
     async function loadImages(container) {
         const imgs = container.querySelectorAll('img')
         const promises = Array.from(imgs).map(
@@ -87,7 +86,7 @@ export default function BookViewer() {
                         resolve()
                     } else {
                         img.onload = () => resolve()
-                        img.onerror = () => resolve() // גם במקרה של שגיאה נמשיך
+                        img.onerror = () => resolve()
                     }
                 })
         )
@@ -98,7 +97,6 @@ export default function BookViewer() {
         if (!hiddenRef.current) return
         const pageEls = hiddenRef.current.querySelectorAll('.page-for-pdf')
 
-        // ודא שכל התמונות נטענו לפני צילום
         await loadImages(hiddenRef.current)
 
         const pdf = new jsPDF({
@@ -118,15 +116,11 @@ export default function BookViewer() {
             pdf.addImage(imgData, 'JPEG', 0, 0, pdfSize, pdfSize)
         }
 
-        // הפקה כ־Blob
         const pdfBlob = pdf.output('blob')
-
-        // העלאה ל־Firebase Storage
         const fileRef = ref(storage, `wedding-books/book-${Date.now()}.pdf`)
         await uploadBytes(fileRef, pdfBlob)
         const downloadURL = await getDownloadURL(fileRef)
 
-        // שליחת לינק במייל דרך ה־API שלך
         await fetch('/api/send-pdf', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -151,36 +145,27 @@ export default function BookViewer() {
                 <main className='relative z-10 flex flex-1'>
                     {/* פאנל עיצוב */}
                     <aside className='lg:block w-1/4 border-l border-gray-200 bg-white/80 backdrop-blur-md p-6 shadow-xl rounded-l-2xl overflow-y-auto'>
-                        <DesignControls settings={styleSettings} onChange={handleStyleChange} />
-
-                        {/* בחירת גודל */}
-                        <div className='mt-6'>
-                            <h3 className='font-medium mb-2'>בחר גודל ספר</h3>
-                            <div className='flex gap-3'>
-                                <button
-                                    onClick={() => handleSelectSize(20)}
-                                    className={`px-4 py-2 rounded-lg border ${
-                                        pdfSize === 200 ? 'bg-purple-600 text-white' : 'bg-white'
-                                    }`}
-                                >
-                                    20×20 ס״מ
-                                </button>
-                                <button
-                                    onClick={() => handleSelectSize(30)}
-                                    className={`px-4 py-2 rounded-lg border ${
-                                        pdfSize === 300 ? 'bg-purple-600 text-white' : 'bg-white'
-                                    }`}
-                                >
-                                    30×30 ס״מ
-                                </button>
-                            </div>
-                            <p className='mt-2 text-sm text-gray-600'>
-                                גודל נוכחי: {pdfSize / 10}×{pdfSize / 10} ס״מ
-                            </p>
-                        </div>
+                        <DesignControls
+                            settings={styleSettings}
+                            onChange={handleStyleChange}
+                            mode={mode}
+                            onModeChange={newMode => {
+                                setMode(newMode)
+                                if (bookRef.current) {
+                                    const api = bookRef.current.pageFlip()
+                                    if (newMode === 'cover') {
+                                        api.flip(0) // כריכה קדמית
+                                    } else {
+                                        api.flip(1) // עמוד ראשון
+                                    }
+                                }
+                            }}
+                            pdfSize={pdfSize}
+                            onSizeChange={handleSelectSize}
+                        />
                     </aside>
 
-                    {/* מרכז הספר */}
+                    {/* מרכז */}
                     <div className='flex flex-1 flex-col items-center justify-center'>
                         {hasCover || pages.length > 0 ? (
                             <HTMLFlipBook
@@ -194,6 +179,14 @@ export default function BookViewer() {
                                 showCover={!!hasCover}
                                 mobileScrollSupport={false}
                                 className='book-flip'
+                                onFlip={e => {
+                                    const currentPage = e.data
+                                    if (currentPage === 0 || currentPage === pages.length + 1) {
+                                        setMode('cover')
+                                    } else {
+                                        setMode('book')
+                                    }
+                                }}
                             >
                                 {/* כריכה קדמית */}
                                 <div style={{ width: viewerSize, height: viewerSize }}>
@@ -215,6 +208,15 @@ export default function BookViewer() {
                                         />
                                     </div>
                                 ))}
+
+                                {/* כריכה אחורית */}
+                                <div style={{ width: viewerSize, height: viewerSize }}>
+                                    <BookCoverTemplate
+                                        styleSettings={styleSettings}
+                                        scaledWidth={viewerSize}
+                                        scaledHeight={viewerSize}
+                                    />
+                                </div>
                             </HTMLFlipBook>
                         ) : (
                             <p className='text-gray-400 text-sm'>אין עדיין דפים להצגה</p>
@@ -245,7 +247,6 @@ export default function BookViewer() {
                     pointerEvents: 'none',
                 }}
             >
-                {/* כריכה קדמית */}
                 {hasCover && (
                     <div className='page-for-pdf' style={{ width: baseSize, height: baseSize, background: '#fff' }}>
                         <BookCoverTemplate
@@ -256,7 +257,6 @@ export default function BookViewer() {
                     </div>
                 )}
 
-                {/* דפים פנימיים */}
                 {pages.map(entry => (
                     <div
                         key={entry.id}
@@ -272,7 +272,6 @@ export default function BookViewer() {
                     </div>
                 ))}
 
-                {/* כריכה אחורית */}
                 {hasCover && (
                     <div className='page-for-pdf' style={{ width: baseSize, height: baseSize, background: '#fff' }}>
                         <BookCoverTemplate
