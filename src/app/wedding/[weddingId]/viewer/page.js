@@ -24,17 +24,29 @@ export default function BookViewer() {
         typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('bookStyle')) || defaultStyle : defaultStyle
     )
     const [mode, setMode] = useState('book')
+    const [isMobile, setIsMobile] = useState(false)
+
     const hiddenRef = useRef(null)
     const bookRef = useRef(null)
     const { weddingId } = useParams()
 
     function getBookDimensions() {
         const screenWidth = window.innerWidth
-        return screenWidth * 0.35
+        if (screenWidth < 640) {
+            return screenWidth * 0.9
+        } else if (screenWidth < 1024) {
+            return screenWidth * 0.7
+        } else {
+            return screenWidth * 0.35
+        }
     }
 
     useEffect(() => {
-        setViewerSize(getBookDimensions())
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 768)
+            setViewerSize(getBookDimensions())
+        }
+        checkMobile()
 
         async function fetchData() {
             if (!weddingId) return
@@ -48,8 +60,8 @@ export default function BookViewer() {
         const handleResize = () => {
             clearTimeout(resizeTimer)
             resizeTimer = setTimeout(() => {
-                setViewerSize(getBookDimensions())
-            }, 500)
+                checkMobile()
+            }, 300)
         }
 
         window.addEventListener('resize', handleResize)
@@ -82,9 +94,8 @@ export default function BookViewer() {
         const promises = Array.from(imgs).map(
             img =>
                 new Promise(resolve => {
-                    if (img.complete) {
-                        resolve()
-                    } else {
+                    if (img.complete) resolve()
+                    else {
                         img.onload = () => resolve()
                         img.onerror = () => resolve()
                     }
@@ -132,7 +143,7 @@ export default function BookViewer() {
 
     if (loading) {
         return (
-            <div className='flex flex-col items-center justify-center text-gray-700'>
+            <div className='flex flex-col items-center justify-center text-gray-700 h-screen'>
                 <div className='animate-spin rounded-full h-12 w-12 border-4 border-purple-400 border-t-transparent mb-4'></div>
                 <p className='text-sm font-medium'>טוען את ספר הזיכרונות…</p>
             </div>
@@ -142,9 +153,13 @@ export default function BookViewer() {
     return (
         <AdminPageWrapper>
             <div className='relative flex h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 via-white to-purple-100 overflow-hidden'>
-                <main className='relative z-10 flex flex-1'>
+                <main className='relative z-10 flex flex-1 flex-col lg:flex-row'>
                     {/* פאנל עיצוב */}
-                    <aside className='lg:block w-1/4 border-l border-gray-200 bg-white/80 backdrop-blur-md p-6 shadow-xl rounded-l-2xl overflow-y-auto'>
+                    <aside
+                        className={`${
+                            isMobile ? 'order-2 w-full border-t' : 'w-1/4 border-l'
+                        } border-gray-200 bg-white/80 backdrop-blur-md p-4 sm:p-6 shadow-xl rounded-none lg:rounded-l-2xl overflow-y-auto`}
+                    >
                         <DesignControls
                             settings={styleSettings}
                             onChange={handleStyleChange}
@@ -154,9 +169,9 @@ export default function BookViewer() {
                                 if (bookRef.current) {
                                     const api = bookRef.current.pageFlip()
                                     if (newMode === 'cover') {
-                                        api.flip(0) // כריכה קדמית
+                                        api.flip(0)
                                     } else {
-                                        api.flip(1) // עמוד ראשון
+                                        api.flip(1)
                                     }
                                 }
                             }}
@@ -165,19 +180,20 @@ export default function BookViewer() {
                         />
                     </aside>
 
-                    {/* מרכז */}
-                    <div className='flex flex-1 flex-col items-center justify-center'>
+                    {/* הספר */}
+                    <div className='flex flex-1 flex-col items-center justify-center p-4 sm:p-6'>
                         {hasCover || pages.length > 0 ? (
                             <HTMLFlipBook
                                 ref={bookRef}
-                                key={`${viewerSize}-${pages.length}`}
+                                key={`${viewerSize}-${pages.length}-${isMobile}`}
                                 width={viewerSize}
                                 height={viewerSize}
-                                usePortrait={false}
+                                usePortrait={isMobile} // במובייל עמוד אחד
+                                singlePage={isMobile} // מראה עמוד יחיד
                                 size='fixed'
                                 drawShadow={false}
                                 showCover={!!hasCover}
-                                mobileScrollSupport={false}
+                                mobileScrollSupport={true}
                                 className='book-flip'
                                 onFlip={e => {
                                     const currentPage = e.data
@@ -212,13 +228,30 @@ export default function BookViewer() {
                         ) : (
                             <p className='text-gray-400 text-sm'>אין עדיין דפים להצגה</p>
                         )}
-
-                        {/* כפתור הורדה */}
                         <button
                             onClick={handleDownloadPDF}
-                            className='mt-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 px-6 py-3 text-white font-medium shadow hover:scale-105 transition'
+                            className='relative mt-10 rounded-full 
+             text-xs sm:text-sm font-medium
+             overflow-hidden cursor-pointer group
+             p-px bg-gradient-to-r from-purple-600 to-pink-500'
                         >
-                            📥 הורד כ־PDF ({pdfSize / 10}×{pdfSize / 10} ס״מ)
+                            {/* שכבת מילוי משמאל לימין */}
+                            <span
+                                className='absolute left-0 top-0 h-full w-0 
+               bg-gradient-to-r from-purple-600 to-pink-500
+               group-hover:w-full
+               transition-all duration-500 ease-out'
+                            />
+
+                            {/* תוכן */}
+                            <span
+                                className='relative z-10 block rounded-full 
+               bg-white group-hover:bg-transparent
+               text-gray-900 group-hover:text-white
+               px-5 py-2 transition-colors duration-500'
+                            >
+                                ✨ שלח להדפסה ({pdfSize / 10}×{pdfSize / 10} ס״מ)
+                            </span>
                         </button>
                     </div>
                 </main>

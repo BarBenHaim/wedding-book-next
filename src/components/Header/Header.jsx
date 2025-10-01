@@ -65,13 +65,13 @@ export default function Header() {
                         <>
                             <button
                                 onClick={() => router.push('/login')}
-                                className='rounded-full bg-gradient-to-r from-purple-600 to-pink-500 px-5 py-2 text-sm font-medium text-white shadow-md hover:scale-105 transition'
+                                className='rounded-full bg-gradient-to-r from-purple-600 to-pink-500 px-5 py-2 text-sm font-medium text-white shadow-md  cursor-pointer'
                             >
                                 התחברות
                             </button>
                             <button
                                 onClick={() => router.push('/register')}
-                                className='rounded-full border border-purple-400 px-5 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 transition'
+                                className='rounded-full border border-purple-400 px-5 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 transition cursor-pointer'
                             >
                                 הרשמה
                             </button>
@@ -83,19 +83,19 @@ export default function Header() {
                         <>
                             <button
                                 onClick={() => router.push(`/wedding/${weddingId}/viewer`)}
-                                className='rounded-full bg-purple-100 px-4 py-2 text-sm font-medium text-purple-700 hover:bg-purple-200 transition'
+                                className='rounded-full bg-purple-100 px-4 py-2 text-sm font-medium text-purple-700 hover:bg-purple-200 transition cursor-pointer'
                             >
                                 צפייה בספר
                             </button>
                             <button
                                 onClick={() => router.push(`/wedding/${weddingId}/admin`)}
-                                className='rounded-full bg-pink-100 px-4 py-2 text-sm font-medium text-pink-700 hover:bg-pink-200 transition'
+                                className='rounded-full bg-pink-100 px-4 py-2 text-sm font-medium text-pink-700 hover:bg-pink-200 transition cursor-pointer'
                             >
                                 ניהול
                             </button>
                             <button
                                 onClick={handleLogout}
-                                className='rounded-full bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition'
+                                className='rounded-full bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition cursor-pointer'
                             >
                                 התנתקות
                             </button>
@@ -105,6 +105,7 @@ export default function Header() {
 
                 {/* Great Vibes */}
                 <button
+                    className='cursor-pointer'
                     onClick={handleLogoClick}
                     style={{
                         fontFamily: "'Great Vibes', cursive",
