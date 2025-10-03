@@ -29,7 +29,7 @@ const PRESETS = [
             imageStyle: { width: 80, height: 70, borderRadius: 0 },
             nameMarginTop: 4,
             textMaxWidth: 70,
-            imageMarginTop: 0,
+            imageMarginTop: 2,
         },
     },
     {
@@ -45,7 +45,7 @@ const PRESETS = [
             imageStyle: { width: 75, height: 65 },
             nameMarginTop: 8,
             textMaxWidth: 70,
-            imageMarginTop: 0,
+            imageMarginTop: 2,
         },
     },
     {
@@ -75,10 +75,10 @@ const PRESETS = [
             frame: frame4.src,
             fontSizePercent: 2.5,
             imageStyle: { width: 75, height: 65, borderRadius: 0 },
-            nameMarginTop: 8,
+            nameMarginTop: 1,
             textMaxWidth: 70,
 
-            imageMarginTop: 0,
+            imageMarginTop: 8,
         },
     },
     {
