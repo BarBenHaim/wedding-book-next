@@ -61,7 +61,7 @@ const PRESETS = [
             imageStyle: { width: 75, height: 65 },
             nameMarginTop: 8,
             textMaxWidth: 70,
-            imageMarginTop: 0,
+            imageMarginTop: 2,
         },
     },
     {
@@ -79,22 +79,6 @@ const PRESETS = [
             textMaxWidth: 70,
 
             imageMarginTop: 8,
-        },
-    },
-    {
-        name: 'מלא ',
-        preview: '#c4b5ecff',
-        values: {
-            backgroundColor: '#ffffffff',
-            fontClass: heebo.className,
-            fontColor: '#000000',
-            frame: null,
-            texture: tex1.src,
-            fontSizePercent: 2.5,
-            imageStyle: { width: 95, height: 78, borderRadius: '0px' },
-            nameMarginTop: 1.5,
-            textMaxWidth: 80,
-            imageMarginTop: -1,
         },
     },
 ]
@@ -316,14 +300,15 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                 type='text'
                                 placeholder='כותרת'
                                 value={settings.coverTitle || ''}
-                                onChange={e => onChange({ ...settings, coverTitle: e.target.value })}
+                                onChange={e => onChange({ coverTitle: e.target.value })} // שולח רק מה שצריך
                                 className='border rounded px-2 py-1 text-xs shadow-sm w-full'
                             />
+
                             <input
                                 type='text'
                                 placeholder='תת־כותרת'
                                 value={settings.coverSubtitle || ''}
-                                onChange={e => onChange({ ...settings, coverSubtitle: e.target.value })}
+                                onChange={e => onChange({ coverSubtitle: e.target.value })}
                                 className='border rounded px-2 py-1 text-xs shadow-sm w-full'
                             />
                         </div>
@@ -479,6 +464,69 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                         }`}
                     >
                         30×30
+                    </button>
+                </div>
+            </Card>
+            <Card title='🖼️ מיקום תמונת כריכה'>
+                <div className='flex gap-2'>
+                    <label className='text-xs'>X (%)</label>
+                    <input
+                        type='number'
+                        value={settings.coverImageX || 50}
+                        onChange={e => onChange({ ...settings, coverImageX: parseFloat(e.target.value) })}
+                        className='border rounded px-2 py-1 text-xs w-16 text-center'
+                    />
+                    <label className='text-xs'>Y (%)</label>
+                    <input
+                        type='number'
+                        value={settings.coverImageY || 50}
+                        onChange={e => onChange({ ...settings, coverImageY: parseFloat(e.target.value) })}
+                        className='border rounded px-2 py-1 text-xs w-16 text-center'
+                    />
+                </div>
+            </Card>
+
+            <Card title='📝 מיקום וסגנון טקסט'>
+                <div className='flex gap-2'>
+                    <button
+                        onClick={() => onChange({ ...settings, coverTextAlign: 'left' })}
+                        className={`px-2 py-1 rounded ${
+                            settings.coverTextAlign === 'left' ? 'bg-pink-100 ring-2 ring-pink-400' : 'border'
+                        }`}
+                    >
+                        שמאל
+                    </button>
+                    <button
+                        onClick={() => onChange({ ...settings, coverTextAlign: 'center' })}
+                        className={`px-2 py-1 rounded ${
+                            !settings.coverTextAlign || settings.coverTextAlign === 'center'
+                                ? 'bg-pink-100 ring-2 ring-pink-400'
+                                : 'border'
+                        }`}
+                    >
+                        מרכז
+                    </button>
+                    <button
+                        onClick={() => onChange({ ...settings, coverTextAlign: 'right' })}
+                        className={`px-2 py-1 rounded ${
+                            settings.coverTextAlign === 'right' ? 'bg-pink-100 ring-2 ring-pink-400' : 'border'
+                        }`}
+                    >
+                        ימין
+                    </button>
+                </div>
+                <div className='flex gap-2 mt-2'>
+                    <button
+                        onClick={() =>
+                            onChange({
+                                ...settings,
+                                coverTextBg: settings.coverTextBg ? null : 'rgba(255,255,255,0.8)',
+                                coverTextColor: '#000000',
+                            })
+                        }
+                        className='px-3 py-1 rounded border'
+                    >
+                        {settings.coverTextBg ? '❌ בלי רקע' : '⬜ רקע לבן'}
                     </button>
                 </div>
             </Card>

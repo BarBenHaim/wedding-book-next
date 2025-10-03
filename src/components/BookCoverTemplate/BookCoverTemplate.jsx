@@ -1,8 +1,6 @@
 'use client'
 
 export default function BookCoverTemplate({ styleSettings, scaledWidth, scaledHeight }) {
-    const w = p => (p / 100) * scaledWidth
-    const h = p => (p / 100) * scaledHeight
     const coverFontSize = ((styleSettings.coverFontSizePercent || 3) / 100) * scaledWidth
 
     return (
@@ -12,12 +10,18 @@ export default function BookCoverTemplate({ styleSettings, scaledWidth, scaledHe
                 width: scaledWidth,
                 height: scaledHeight,
                 backgroundColor: styleSettings.backgroundColor,
-                backgroundImage: `url(${styleSettings.coverTexture || styleSettings.texture || ''})`,
+                backgroundImage: styleSettings.coverImage
+                    ? `url(${styleSettings.coverImage})`
+                    : styleSettings.coverTexture || styleSettings.texture
+                    ? `url(${styleSettings.coverTexture || styleSettings.texture})`
+                    : 'none',
                 backgroundSize: 'cover',
+                backgroundPosition: `${styleSettings.coverImageX || 50}% ${styleSettings.coverImageY || 50}%`,
+                backgroundRepeat: 'no-repeat',
             }}
         >
             {/* מסגרת */}
-            {styleSettings.coverFrame && (
+            {styleSettings.coverFrame && styleSettings.coverFrame !== 'none' && (
                 <img
                     src={styleSettings.coverFrame}
                     alt='frame'
@@ -26,50 +30,53 @@ export default function BookCoverTemplate({ styleSettings, scaledWidth, scaledHe
                 />
             )}
 
-            {/* תמונה */}
-            {styleSettings.coverImage && (
-                <img
-                    src={styleSettings.coverImage}
-                    alt='cover'
-                    style={{
-                        position: 'absolute',
-                        top: h(styleSettings.coverImageY || 0),
-                        left: w(styleSettings.coverImageX || 0),
-                        width: w(styleSettings.coverImageScale || 80),
-                        height: 'auto',
-                        objectFit: 'contain',
-                        zIndex: 1,
-                    }}
-                />
-            )}
-
             {/* טקסט */}
-            {styleSettings.coverTitle && (
-                <h1
-                    className={styleSettings.fontClass}
+            {(styleSettings.coverTitle || styleSettings.coverSubtitle) && (
+                <div
                     style={{
-                        color: styleSettings.fontColor,
-                        fontSize: `${coverFontSize}px`,
+                        position: 'relative',
                         zIndex: 10,
-                        marginTop: h(styleSettings.nameMarginTop || 5),
-                        maxWidth: w(styleSettings.textMaxWidth || 80),
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems:
+                            styleSettings.coverTextAlign === 'right'
+                                ? 'flex-end'
+                                : styleSettings.coverTextAlign === 'left'
+                                ? 'flex-start'
+                                : 'center',
+                        background: styleSettings.coverTextBg || 'transparent',
+                        padding: styleSettings.coverTextBg ? '0.5em 1em' : 0,
+                        borderRadius: styleSettings.coverTextBg ? '8px' : 0,
                     }}
                 >
-                    {styleSettings.coverTitle}
-                </h1>
-            )}
-            {styleSettings.coverSubtitle && (
-                <h2
-                    className={`${styleSettings.fontClass} mt-2`}
-                    style={{
-                        color: styleSettings.fontColor,
-                        fontSize: `${coverFontSize * 0.7}px`,
-                        zIndex: 10,
-                        maxWidth: w(styleSettings.textMaxWidth || 80),
-                    }}
-                >
-                    {styleSettings.coverSubtitle}
-                </h2>
+                    {styleSettings.coverTitle && (
+                        <h1
+                            className={styleSettings.fontClass}
+                            style={{
+                                color: styleSettings.coverTextColor || styleSettings.fontColor,
+                                fontSize: `${coverFontSize}px`,
+                                margin: 0,
+                                maxWidth: ((styleSettings.textMaxWidth || 80) / 100) * scaledWidth,
+                            }}
+                        >
+                            {styleSettings.coverTitle}
+                        </h1>
+                    )}
+                    {styleSettings.coverSubtitle && (
+                        <h2
+                            className={`${styleSettings.fontClass}`}
+                            style={{
+                                color: styleSettings.coverTextColor || styleSettings.fontColor,
+                                fontSize: `${coverFontSize * 0.7}px`,
+                                margin: 0,
+                                marginTop: '0.5em',
+                                maxWidth: ((styleSettings.textMaxWidth || 80) / 100) * scaledWidth,
+                            }}
+                        >
+                            {styleSettings.coverSubtitle}
+                        </h2>
+                    )}
+                </div>
             )}
         </div>
     )

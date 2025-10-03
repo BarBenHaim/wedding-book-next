@@ -72,13 +72,12 @@ export default function BookViewer() {
     }, [weddingId])
 
     const handleStyleChange = updated => {
-        const newSettings = { ...styleSettings, ...updated }
+        const newSettings = { ...styleSettings, ...updated } // תמיד ממזג
         setStyleSettings(newSettings)
         if (typeof window !== 'undefined') {
             localStorage.setItem('bookStyle', JSON.stringify(newSettings))
         }
     }
-
     function handleSelectSize(sizeCm) {
         if (sizeCm === 20) {
             setPdfSize(200)
