@@ -48,7 +48,7 @@ export default function BookViewer() {
         async function fetchData() {
             if (!weddingId) return
             const data = await getEntries(weddingId)
-            setPages(data.reverse()) // דפדוף RTL
+            setPages(data.reverse()) // RTL order
             setLoading(false)
         }
         fetchData()
@@ -97,16 +97,16 @@ export default function BookViewer() {
         await Promise.all(promises)
     }
 
-    // ✅ פונקציה משותפת ליצירת PDF, עם תמיכה בכיוון RTL וכריכה אחורית אמיתית
     async function generatePDF(reverseOrder = true) {
         if (!hiddenRef.current) return
         const pageEls = Array.from(hiddenRef.current.querySelectorAll('.page-for-pdf'))
         await loadImages(hiddenRef.current)
-
-        // הפוך את הסדר אם זה RTL
         const orderedPages = reverseOrder ? pageEls.reverse() : pageEls
-
-        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [pdfSize, pdfSize] })
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: [pdfSize, pdfSize],
+        })
 
         for (let i = 0; i < orderedPages.length; i++) {
             const canvas = await html2canvas(orderedPages[i], {
@@ -118,18 +118,15 @@ export default function BookViewer() {
             if (i > 0) pdf.addPage()
             pdf.addImage(imgData, 'JPEG', 0, 0, pdfSize, pdfSize)
         }
-
         return pdf
     }
 
-    // 📤 העלאה ל־Firebase + שליחה
     async function handleDownloadPDF() {
         const pdf = await generatePDF(true)
         const pdfBlob = pdf.output('blob')
         const fileRef = ref(storage, `wedding-books/book-${Date.now()}.pdf`)
         await uploadBytes(fileRef, pdfBlob)
         const downloadURL = await getDownloadURL(fileRef)
-
         await fetch('/api/send-pdf', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -137,7 +134,6 @@ export default function BookViewer() {
         })
     }
 
-    // 💾 הורדה לוקאלית בלבד
     async function handleDownloadLocalPDF() {
         const pdf = await generatePDF(true)
         pdf.save(`WeddingBook-${Date.now()}.pdf`)
@@ -169,12 +165,21 @@ export default function BookViewer() {
                             onChange={handleStyleChange}
                             mode={mode}
                             onModeChange={newMode => {
+                                if (!bookRef.current) return
+                                const api = bookRef.current.pageFlip()
+
                                 setMode(newMode)
-                                if (bookRef.current) {
-                                    const api = bookRef.current.pageFlip()
-                                    if (newMode === 'cover') api.flip(0)
-                                    else api.flip(1)
-                                }
+
+                                // נמתין מעט לוודא שהספר מוכן (חשוב למנוע לאגים)
+                                setTimeout(() => {
+                                    if (newMode === 'cover') {
+                                        // ✅ קפיצה ישירה לכריכה הקדמית (עמוד אחרון)
+                                        api.turnToPage(pages.length)
+                                    } else {
+                                        // ✅ קפיצה ישירה לתחילת הספר (עמוד 1)
+                                        api.turnToPage(1)
+                                    }
+                                }, 100)
                             }}
                             pdfSize={pdfSize}
                             onSizeChange={handleSelectSize}
@@ -197,13 +202,13 @@ export default function BookViewer() {
                                     showCover={!!hasCover}
                                     mobileScrollSupport={true}
                                     className='book-flip'
-                                    startPage={pages.length} // נתחיל בכריכה האחורית, לא באמצע
+                                    startPage={pages.length + 1}
                                     onFlip={e => {
                                         const currentPage = e.data
-                                        const totalPages = pages.length + 1 //  + פנימיים + קדמית
+                                        const totalPages = pages.length + 2 // כולל אחורית וקדמית
 
-                                        // ✅ זיהוי מדויק של מצב הכריכה
-                                        if (currentPage === 0 || currentPage === totalPages - 1) {
+                                        // ✅ זיהוי נכון של הכריכה הקדמית בלבד
+                                        if (currentPage === totalPages - 1) {
                                             if (mode !== 'cover') setMode('cover')
                                         } else {
                                             if (mode !== 'book') setMode('book')
@@ -226,6 +231,7 @@ export default function BookViewer() {
                                             />
                                         </div>
                                     ))}
+
                                     {/* כריכה קדמית */}
                                     <div style={{ width: viewerSize, height: viewerSize }}>
                                         <BookCoverTemplate
