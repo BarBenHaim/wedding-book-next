@@ -82,63 +82,6 @@ export default function BookViewer() {
         }
     }
 
-    async function loadImages(container) {
-        const imgs = container.querySelectorAll('img')
-        const promises = Array.from(imgs).map(
-            img =>
-                new Promise(resolve => {
-                    if (img.complete) resolve()
-                    else {
-                        img.onload = resolve
-                        img.onerror = resolve
-                    }
-                })
-        )
-        await Promise.all(promises)
-    }
-
-    async function generatePDF(reverseOrder = true) {
-        if (!hiddenRef.current) return
-        const pageEls = Array.from(hiddenRef.current.querySelectorAll('.page-for-pdf'))
-        await loadImages(hiddenRef.current)
-        const orderedPages = reverseOrder ? pageEls.reverse() : pageEls
-        const pdf = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: [pdfSize, pdfSize],
-        })
-
-        for (let i = 0; i < orderedPages.length; i++) {
-            const canvas = await html2canvas(orderedPages[i], {
-                scale: 2,
-                useCORS: true,
-                backgroundColor: '#fff',
-            })
-            const imgData = canvas.toDataURL('image/jpeg', 1.0)
-            if (i > 0) pdf.addPage()
-            pdf.addImage(imgData, 'JPEG', 0, 0, pdfSize, pdfSize)
-        }
-        return pdf
-    }
-
-    async function handleDownloadPDF() {
-        const pdf = await generatePDF(true)
-        const pdfBlob = pdf.output('blob')
-        const fileRef = ref(storage, `wedding-books/book-${Date.now()}.pdf`)
-        await uploadBytes(fileRef, pdfBlob)
-        const downloadURL = await getDownloadURL(fileRef)
-        await fetch('/api/send-pdf', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: downloadURL }),
-        })
-    }
-
-    async function handleDownloadLocalPDF() {
-        const pdf = await generatePDF(true)
-        pdf.save(`WeddingBook-${Date.now()}.pdf`)
-    }
-
     const hasCover = styleSettings.coverTitle?.trim() || styleSettings.coverSubtitle?.trim()
 
     if (loading) {
@@ -164,32 +107,40 @@ export default function BookViewer() {
                             settings={styleSettings}
                             onChange={handleStyleChange}
                             mode={mode}
-                            onModeChange={newMode => {
-                                if (!bookRef.current) return
-                                const api = bookRef.current.pageFlip()
-
-                                setMode(newMode)
-
-                                // נמתין מעט לוודא שהספר מוכן (חשוב למנוע לאגים)
-                                setTimeout(() => {
-                                    if (newMode === 'cover') {
-                                        // ✅ קפיצה ישירה לכריכה הקדמית (עמוד אחרון)
-                                        api.turnToPage(pages.length)
-                                    } else {
-                                        // ✅ קפיצה ישירה לתחילת הספר (עמוד 1)
-                                        api.turnToPage(1)
-                                    }
-                                }, 100)
-                            }}
+                            onModeChange={newMode => setMode(newMode)}
                             pdfSize={pdfSize}
                             onSizeChange={handleSelectSize}
                         />
                     </aside>
 
-                    {/* הספר */}
+                    {/* הספר / הכריכה */}
                     <div className='flex flex-1 flex-col items-center justify-center p-4 sm:p-6 overflow-hidden'>
                         <div className='flex items-center justify-center' style={{ height: viewerSize }}>
-                            {hasCover || pages.length > 0 ? (
+                            {mode === 'cover' ? (
+                                <div
+                                    className='flex items-center justify-center transition-all duration-300'
+                                    style={{ width: viewerSize, height: viewerSize }}
+                                >
+                                    <HTMLFlipBook
+                                        width={viewerSize}
+                                        height={viewerSize}
+                                        size='fixed'
+                                        usePortrait={true}
+                                        singlePage={true}
+                                        drawShadow={false}
+                                        showCover={false}
+                                        className='book-flip'
+                                    >
+                                        <div style={{ width: viewerSize, height: viewerSize }}>
+                                            <BookCoverTemplate
+                                                styleSettings={styleSettings}
+                                                scaledWidth={viewerSize}
+                                                scaledHeight={viewerSize}
+                                            />
+                                        </div>
+                                    </HTMLFlipBook>
+                                </div>
+                            ) : (
                                 <HTMLFlipBook
                                     ref={bookRef}
                                     key={`${viewerSize}-${pages.length}-${isMobile}`}
@@ -205,22 +156,15 @@ export default function BookViewer() {
                                     startPage={pages.length + 1}
                                     onFlip={e => {
                                         const currentPage = e.data
-                                        const totalPages = pages.length + 2 // כולל אחורית וקדמית
-
-                                        // ✅ זיהוי נכון של הכריכה הקדמית בלבד
-                                        if (currentPage === totalPages - 1) {
-                                            if (mode !== 'cover') setMode('cover')
-                                        } else {
-                                            if (mode !== 'book') setMode('book')
-                                        }
+                                        const totalPages = pages.length + 2
+                                        if (currentPage === totalPages - 1) setMode('cover')
+                                        else setMode('book')
                                     }}
                                 >
-                                    {/* כריכה אחורית */}
                                     <div style={{ width: viewerSize, height: viewerSize }}>
                                         <BookBackCoverTemplate scaledWidth={viewerSize} scaledHeight={viewerSize} />
                                     </div>
 
-                                    {/* דפים פנימיים */}
                                     {pages.map(entry => (
                                         <div key={entry.id} style={{ width: viewerSize, height: viewerSize }}>
                                             <BookPageTemplate
@@ -232,7 +176,6 @@ export default function BookViewer() {
                                         </div>
                                     ))}
 
-                                    {/* כריכה קדמית */}
                                     <div style={{ width: viewerSize, height: viewerSize }}>
                                         <BookCoverTemplate
                                             styleSettings={styleSettings}
@@ -241,73 +184,10 @@ export default function BookViewer() {
                                         />
                                     </div>
                                 </HTMLFlipBook>
-                            ) : (
-                                <p className='text-gray-400 text-sm'>אין עדיין דפים להצגה</p>
                             )}
                         </div>
-
-                        <button
-                            onClick={handleDownloadPDF}
-                            className='relative mt-10 rounded-full text-xs sm:text-sm font-medium overflow-hidden cursor-pointer group p-px bg-gradient-to-r from-purple-600 to-pink-500'
-                        >
-                            <span className='absolute left-0 top-0 h-full w-0 bg-gradient-to-r from-purple-600 to-pink-500 group-hover:w-full transition-all duration-500 ease-out' />
-                            <span className='relative z-10 block rounded-full bg-white group-hover:bg-transparent text-gray-900 group-hover:text-white px-5 py-2 transition-colors duration-500'>
-                                ✨ שלח להדפסה ({pdfSize / 10}×{pdfSize / 10} ס״מ)
-                            </span>
-                        </button>
-
-                        <button
-                            onClick={handleDownloadLocalPDF}
-                            className='relative mt-4 rounded-full text-xs sm:text-sm font-medium overflow-hidden cursor-pointer group p-px bg-gradient-to-r from-pink-500 to-purple-500'
-                        >
-                            <span className='absolute left-0 top-0 h-full w-0 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-500 ease-out' />
-                            <span className='relative z-10 block rounded-full bg-white group-hover:bg-transparent text-gray-900 group-hover:text-white px-5 py-2 transition-colors duration-500'>
-                                💾 הורד למחשב ({pdfSize / 10}×{pdfSize / 10} ס״מ)
-                            </span>
-                        </button>
                     </div>
                 </main>
-            </div>
-
-            {/* גרסה מוסתרת להדפסה */}
-            <div
-                ref={hiddenRef}
-                style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    width: 0,
-                    height: 0,
-                    overflow: 'hidden',
-                    opacity: 0,
-                    pointerEvents: 'none',
-                }}
-            >
-                {/* כריכה אחורית אמיתית */}
-                <div className='page-for-pdf' style={{ width: baseSize, height: baseSize, background: '#fff' }}>
-                    <BookBackCoverTemplate scaledWidth={baseSize} scaledHeight={baseSize} />
-                </div>
-
-                {/* דפים פנימיים */}
-                {pages.map(entry => (
-                    <div
-                        key={entry.id}
-                        className='page-for-pdf'
-                        style={{ width: baseSize, height: baseSize, background: '#fff' }}
-                    >
-                        <BookPageTemplate
-                            entry={entry}
-                            styleSettings={styleSettings}
-                            scaledWidth={baseSize}
-                            scaledHeight={baseSize}
-                        />
-                    </div>
-                ))}
-
-                {/* כריכה קדמית */}
-                <div className='page-for-pdf' style={{ width: baseSize, height: baseSize, background: '#fff' }}>
-                    <BookCoverTemplate styleSettings={styleSettings} scaledWidth={baseSize} scaledHeight={baseSize} />
-                </div>
             </div>
         </AdminPageWrapper>
     )

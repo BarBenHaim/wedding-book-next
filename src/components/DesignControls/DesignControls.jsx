@@ -66,9 +66,9 @@ const PRESETS = [
     },
     {
         name: 'מסגרת מרובעת',
-        preview: '#c4b5ecff',
+        preview: '#ffffff',
         values: {
-            backgroundColor: '#ffffffff',
+            backgroundColor: '#ffffff',
             fontClass: heebo.className,
             fontColor: '#000000',
             texture: null,
@@ -77,22 +77,14 @@ const PRESETS = [
             imageStyle: { width: 75, height: 65, borderRadius: 0 },
             nameMarginTop: 1,
             textMaxWidth: 70,
-
             imageMarginTop: 8,
         },
     },
 ]
 
-/* --- רקעים --- */
 const BACKGROUNDS = ['#ffffff', '#fdf6ec', '#fde2e4', '#e8f0fe', '#f3f3f3', '#2c2c2c']
-
-/* --- טקסטורות --- */
 const TEXTURES = [tex1, tex2, tex3]
-
-/* --- מסגרות --- */
 const FRAMES = [frame1, frame2, frame3, frame4]
-
-/* --- פונטים --- */
 const FONTS = [
     { font: notoHebrew, label: 'Noto Hebrew' },
     { font: frankRuhl, label: 'Frank Ruhl' },
@@ -100,15 +92,11 @@ const FONTS = [
     { font: heebo, label: 'Heebo' },
     { font: secular, label: 'Secular One' },
 ]
-
-/* --- גדלים --- */
 const FONT_SIZES = [
     { name: 'קטן', value: 2.5 },
     { name: 'בינוני', value: 2.8 },
     { name: 'גדול', value: 3 },
 ]
-
-/* --- צבעי טקסט --- */
 const FONT_COLORS = ['#000000', '#d4af37', '#8b1e3f', '#2c2c2c', '#f8f4ec', '#ffffff']
 
 export default function DesignControls({ settings, onChange, mode, onModeChange, pdfSize, onSizeChange }) {
@@ -125,12 +113,6 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
             {children}
         </div>
     )
-
-    /* 📦 עדכון ערכי תמונת כריכה */
-    const updateCoverImageValue = (field, delta) => {
-        const val = parseFloat(settings[field] || 0) + delta
-        onChange({ ...settings, [field]: val })
-    }
 
     return (
         <div dir='rtl' className='flex flex-col gap-3 text-sm p-4 bg-gray-50 rounded-xl shadow-inner'>
@@ -154,14 +136,14 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                 </button>
             </div>
 
-            {/* 📘 מצב ספר */}
+            {/* ===================== מצב ספר ===================== */}
             {mode === 'book' && (
                 <>
                     <Card title='🎨 פריסטים'>
                         <div className='grid grid-cols-3 gap-2'>
-                            {PRESETS.map((preset, idx) => (
+                            {PRESETS.map(preset => (
                                 <button
-                                    key={idx}
+                                    key={preset.name}
                                     onClick={() => applyPreset(preset)}
                                     className={`relative h-16 rounded-md border overflow-hidden transition hover:scale-105 ${
                                         activePreset === preset.name ? 'ring-2 ring-pink-400' : ''
@@ -201,9 +183,9 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                             >
                                 ללא
                             </button>
-                            {TEXTURES.map((tex, idx) => (
+                            {TEXTURES.map(tex => (
                                 <button
-                                    key={idx}
+                                    key={tex.src}
                                     onClick={() => onChange({ ...settings, texture: tex.src })}
                                     className={`aspect-square rounded border overflow-hidden ${
                                         settings.texture === tex.src ? 'ring-2 ring-pink-400' : ''
@@ -275,9 +257,9 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                             >
                                 ללא
                             </button>
-                            {FRAMES.map((f, idx) => (
+                            {FRAMES.map(f => (
                                 <button
-                                    key={idx}
+                                    key={f.src}
                                     onClick={() => onChange({ ...settings, frame: f.src })}
                                     className={`aspect-square rounded border overflow-hidden ${
                                         settings.frame === f.src ? 'ring-2 ring-pink-400' : ''
@@ -291,99 +273,106 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                 </>
             )}
 
-            {/* 🎨 מצב כריכה */}
+            {/* ===================== מצב כריכה ===================== */}
             {mode === 'cover' && (
-                <>
-                    <Card title='📖 תוכן הכריכה'>
-                        <div className='grid grid-cols-2 gap-2'>
-                            <input
-                                type='text'
-                                placeholder='כותרת'
-                                value={settings.coverTitle || ''}
-                                onChange={e => onChange({ coverTitle: e.target.value })} // שולח רק מה שצריך
-                                className='border rounded px-2 py-1 text-xs shadow-sm w-full'
-                            />
-
-                            <input
-                                type='text'
-                                placeholder='תת־כותרת'
-                                value={settings.coverSubtitle || ''}
-                                onChange={e => onChange({ coverSubtitle: e.target.value })}
-                                className='border rounded px-2 py-1 text-xs shadow-sm w-full'
-                            />
-                        </div>
-
-                        <div className='flex gap-2 mt-3'>
-                            {[
-                                { name: 'קטן', val: 2.5 },
-                                { name: 'בינוני', val: 3 },
-                                { name: 'גדול', val: 3.5 },
-                            ].map(size => (
-                                <button
-                                    key={size.val}
-                                    onClick={() => onChange({ ...settings, coverFontSizePercent: size.val })}
-                                    className={`px-3 py-1 rounded-full text-xs ${
-                                        settings.coverFontSizePercent === size.val
-                                            ? 'bg-pink-100 ring-2 ring-pink-400'
-                                            : 'border'
-                                    }`}
-                                >
-                                    {size.name}
-                                </button>
-                            ))}
+                <div className='animate-fadeIn space-y-3'>
+                    <Card title='📖 טקסט כריכה'>
+                        <input
+                            type='text'
+                            placeholder='כותרת ראשית'
+                            value={settings.coverTitle || ''}
+                            onChange={e => onChange({ coverTitle: e.target.value })}
+                            className='border rounded px-2 py-1 text-xs w-full mb-2'
+                        />
+                        <input
+                            type='text'
+                            placeholder='תת־כותרת'
+                            value={settings.coverSubtitle || ''}
+                            onChange={e => onChange({ coverSubtitle: e.target.value })}
+                            className='border rounded px-2 py-1 text-xs w-full'
+                        />
+                    </Card>
+                    <Card title='⬜ רקע טקסט'>
+                        <div className='flex gap-2'>
+                            <button
+                                onClick={() =>
+                                    onChange({
+                                        ...settings,
+                                        coverTextBg: settings.coverTextBg ? null : 'rgba(255,255,255,0.8)',
+                                        coverTextColor: '#000000',
+                                    })
+                                }
+                                className='px-3 py-1 rounded border text-xs'
+                            >
+                                {settings.coverTextBg ? '❌ בלי רקע' : '⬜ רקע לבן'}
+                            </button>
                         </div>
                     </Card>
 
                     <Card title='🖼️ תמונת כריכה'>
-                        <input
-                            type='file'
-                            accept='image/*'
-                            onChange={e => {
-                                const file = e.target.files[0]
-                                if (file) {
-                                    const url = URL.createObjectURL(file)
-                                    onChange({ ...settings, coverImage: url })
-                                }
-                            }}
-                            className='text-xs mb-2'
-                        />
-                        <div className='grid grid-cols-3 gap-2'>
-                            {['coverImageX', 'coverImageY', 'coverImageScale'].map(field => (
-                                <div key={field} className='flex flex-col items-center'>
-                                    <label className='text-[10px] mb-1'>
-                                        {field === 'coverImageX' ? 'X' : field === 'coverImageY' ? 'Y' : 'Scale'} (%)
-                                    </label>
-                                    <div className='flex items-center gap-1'>
-                                        <button
-                                            className='px-2 py-1 border rounded bg-gray-50 hover:bg-gray-100'
-                                            onClick={() => updateCoverImageValue(field, -1)}
-                                        >
-                                            –
-                                        </button>
-                                        <input
-                                            type='number'
-                                            value={settings[field] || 0}
-                                            onChange={e =>
-                                                onChange({ ...settings, [field]: parseFloat(e.target.value) })
-                                            }
-                                            className='border rounded px-2 py-1 text-xs w-16 text-center'
-                                        />
-                                        <button
-                                            className='px-2 py-1 border rounded bg-gray-50 hover:bg-gray-100'
-                                            onClick={() => updateCoverImageValue(field, 1)}
-                                        >
-                                            +
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
+                        {!settings.coverImage ? (
+                            <input
+                                type='file'
+                                accept='image/*'
+                                onChange={e => {
+                                    const file = e.target.files[0]
+                                    if (file) {
+                                        const url = URL.createObjectURL(file)
+                                        onChange({ coverImage: url })
+                                    }
+                                }}
+                                className='text-xs'
+                            />
+                        ) : (
+                            <div className='relative'>
+                                <img
+                                    src={settings.coverImage}
+                                    alt='Cover'
+                                    className='w-full mt-2 rounded shadow border'
+                                />
+                                <button
+                                    onClick={() => onChange({ coverImage: null })}
+                                    className='absolute top-2 left-2 bg-white/90 border border-gray-300 rounded-full px-2 py-1 text-[10px] hover:bg-red-100'
+                                >
+                                    ❌ הסר תמונה
+                                </button>
+                            </div>
+                        )}
+                    </Card>
+
+                    <Card title='📍 מיקום תמונה'>
+                        <div className='flex gap-2 flex-wrap items-center'>
+                            <label className='text-xs'>X (%)</label>
+                            <input
+                                type='number'
+                                value={settings.coverImageX || 50}
+                                onChange={e => onChange({ ...settings, coverImageX: parseFloat(e.target.value) })}
+                                className='border rounded px-2 py-1 text-xs w-16 text-center'
+                            />
+                            <label className='text-xs'>Y (%)</label>
+                            <input
+                                type='number'
+                                value={settings.coverImageY || 50}
+                                onChange={e => onChange({ ...settings, coverImageY: parseFloat(e.target.value) })}
+                                className='border rounded px-2 py-1 text-xs w-16 text-center'
+                            />
+                            <label className='text-xs ml-2'>Scale</label>
+                            <input
+                                type='range'
+                                min='20'
+                                max='200'
+                                value={settings.coverImageScale || 100}
+                                onChange={e => onChange({ ...settings, coverImageScale: parseFloat(e.target.value) })}
+                                className='w-24'
+                            />
+                            <span className='text-[10px]'>{settings.coverImageScale || 100}%</span>
                         </div>
                     </Card>
 
-                    <Card title='🎨 טקסטורת כריכה'>
+                    <Card title='🎨 טקסטורה כריכה'>
                         <div className='flex flex-wrap gap-2'>
                             <button
-                                onClick={() => onChange({ ...settings, coverTexture: null })}
+                                onClick={() => onChange({ coverTexture: null })}
                                 className={`px-2 py-1 rounded text-xs ${
                                     !settings.coverTexture ? 'bg-pink-100 ring-2 ring-pink-400' : 'border'
                                 }`}
@@ -391,17 +380,17 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                 כמו בספר
                             </button>
                             <button
-                                onClick={() => onChange({ ...settings, coverTexture: 'none' })}
+                                onClick={() => onChange({ coverTexture: 'none' })}
                                 className={`px-2 py-1 rounded text-xs ${
                                     settings.coverTexture === 'none' ? 'bg-pink-100 ring-2 ring-pink-400' : 'border'
                                 }`}
                             >
                                 ללא
                             </button>
-                            {TEXTURES.map((tex, idx) => (
+                            {TEXTURES.map(tex => (
                                 <button
-                                    key={idx}
-                                    onClick={() => onChange({ ...settings, coverTexture: tex.src })}
+                                    key={tex.src}
+                                    onClick={() => onChange({ coverTexture: tex.src })}
                                     className={`h-10 w-10 rounded border overflow-hidden ${
                                         settings.coverTexture === tex.src ? 'ring-2 ring-pink-400' : ''
                                     }`}
@@ -415,7 +404,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                     <Card title='📐 מסגרת כריכה'>
                         <div className='flex flex-wrap gap-2'>
                             <button
-                                onClick={() => onChange({ ...settings, coverFrame: null })}
+                                onClick={() => onChange({ coverFrame: null })}
                                 className={`px-2 py-1 rounded text-xs ${
                                     !settings.coverFrame ? 'bg-pink-100 ring-2 ring-pink-400' : 'border'
                                 }`}
@@ -423,17 +412,17 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                 כמו בספר
                             </button>
                             <button
-                                onClick={() => onChange({ ...settings, coverFrame: 'none' })}
+                                onClick={() => onChange({ coverFrame: 'none' })}
                                 className={`px-2 py-1 rounded text-xs ${
                                     settings.coverFrame === 'none' ? 'bg-pink-100 ring-2 ring-pink-400' : 'border'
                                 }`}
                             >
                                 ללא
                             </button>
-                            {FRAMES.map((f, idx) => (
+                            {FRAMES.map(f => (
                                 <button
-                                    key={idx}
-                                    onClick={() => onChange({ ...settings, coverFrame: f.src })}
+                                    key={f.src}
+                                    onClick={() => onChange({ coverFrame: f.src })}
                                     className={`h-10 w-10 rounded border overflow-hidden ${
                                         settings.coverFrame === f.src ? 'ring-2 ring-pink-400' : ''
                                     }`}
@@ -443,11 +432,11 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                             ))}
                         </div>
                     </Card>
-                </>
+                </div>
             )}
 
             {/* 📏 גודל ספר */}
-            <Card title='גודל ספר'>
+            <Card title='📏 גודל הספר'>
                 <div className='flex gap-2'>
                     <button
                         onClick={() => onSizeChange(20)}
@@ -464,69 +453,6 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                         }`}
                     >
                         30×30
-                    </button>
-                </div>
-            </Card>
-            <Card title='🖼️ מיקום תמונת כריכה'>
-                <div className='flex gap-2'>
-                    <label className='text-xs'>X (%)</label>
-                    <input
-                        type='number'
-                        value={settings.coverImageX || 50}
-                        onChange={e => onChange({ ...settings, coverImageX: parseFloat(e.target.value) })}
-                        className='border rounded px-2 py-1 text-xs w-16 text-center'
-                    />
-                    <label className='text-xs'>Y (%)</label>
-                    <input
-                        type='number'
-                        value={settings.coverImageY || 50}
-                        onChange={e => onChange({ ...settings, coverImageY: parseFloat(e.target.value) })}
-                        className='border rounded px-2 py-1 text-xs w-16 text-center'
-                    />
-                </div>
-            </Card>
-
-            <Card title='📝 מיקום וסגנון טקסט'>
-                <div className='flex gap-2'>
-                    <button
-                        onClick={() => onChange({ ...settings, coverTextAlign: 'left' })}
-                        className={`px-2 py-1 rounded ${
-                            settings.coverTextAlign === 'left' ? 'bg-pink-100 ring-2 ring-pink-400' : 'border'
-                        }`}
-                    >
-                        שמאל
-                    </button>
-                    <button
-                        onClick={() => onChange({ ...settings, coverTextAlign: 'center' })}
-                        className={`px-2 py-1 rounded ${
-                            !settings.coverTextAlign || settings.coverTextAlign === 'center'
-                                ? 'bg-pink-100 ring-2 ring-pink-400'
-                                : 'border'
-                        }`}
-                    >
-                        מרכז
-                    </button>
-                    <button
-                        onClick={() => onChange({ ...settings, coverTextAlign: 'right' })}
-                        className={`px-2 py-1 rounded ${
-                            settings.coverTextAlign === 'right' ? 'bg-pink-100 ring-2 ring-pink-400' : 'border'
-                        }`}
-                    >
-                        ימין
-                    </button>
-                </div>
-                <div className='flex gap-2 mt-2'>
-                    <button
-                        onClick={() =>
-                            onChange({
-                                ...settings,
-                                coverTextBg: settings.coverTextBg ? null : 'rgba(255,255,255,0.8)',
-                                coverTextColor: '#000000',
-                            })
-                        }
-                        className='px-3 py-1 rounded border'
-                    >
-                        {settings.coverTextBg ? '❌ בלי רקע' : '⬜ רקע לבן'}
                     </button>
                 </div>
             </Card>
