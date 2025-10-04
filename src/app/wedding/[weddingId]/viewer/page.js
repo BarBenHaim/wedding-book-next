@@ -97,19 +97,34 @@ export default function BookViewer() {
         await Promise.all(promises)
     }
 
-    async function handleDownloadPDF() {
+    // ✅ פונקציה משותפת ליצירת PDF, עם תמיכה בכיוון RTL וכריכה אחורית אמיתית
+    async function generatePDF(reverseOrder = true) {
         if (!hiddenRef.current) return
-        const pageEls = hiddenRef.current.querySelectorAll('.page-for-pdf')
+        const pageEls = Array.from(hiddenRef.current.querySelectorAll('.page-for-pdf'))
         await loadImages(hiddenRef.current)
 
+        // הפוך את הסדר אם זה RTL
+        const orderedPages = reverseOrder ? pageEls.reverse() : pageEls
+
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [pdfSize, pdfSize] })
-        for (let i = 0; i < pageEls.length; i++) {
-            const canvas = await html2canvas(pageEls[i], { scale: 2, useCORS: true, backgroundColor: '#fff' })
+
+        for (let i = 0; i < orderedPages.length; i++) {
+            const canvas = await html2canvas(orderedPages[i], {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#fff',
+            })
             const imgData = canvas.toDataURL('image/jpeg', 1.0)
             if (i > 0) pdf.addPage()
             pdf.addImage(imgData, 'JPEG', 0, 0, pdfSize, pdfSize)
         }
 
+        return pdf
+    }
+
+    // 📤 העלאה ל־Firebase + שליחה
+    async function handleDownloadPDF() {
+        const pdf = await generatePDF(true)
         const pdfBlob = pdf.output('blob')
         const fileRef = ref(storage, `wedding-books/book-${Date.now()}.pdf`)
         await uploadBytes(fileRef, pdfBlob)
@@ -122,25 +137,9 @@ export default function BookViewer() {
         })
     }
 
+    // 💾 הורדה לוקאלית בלבד
     async function handleDownloadLocalPDF() {
-        if (!hiddenRef.current) return
-        const pageEls = hiddenRef.current.querySelectorAll('.page-for-pdf')
-        await loadImages(hiddenRef.current)
-
-        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [pdfSize, pdfSize] })
-
-        for (let i = 0; i < pageEls.length; i++) {
-            const canvas = await html2canvas(pageEls[i], {
-                scale: 2,
-                useCORS: true,
-                backgroundColor: '#fff',
-            })
-            const imgData = canvas.toDataURL('image/jpeg', 1.0)
-            if (i > 0) pdf.addPage()
-            pdf.addImage(imgData, 'JPEG', 0, 0, pdfSize, pdfSize)
-        }
-
-        // 📥 הורדה לוקאלית בלבד
+        const pdf = await generatePDF(true)
         pdf.save(`WeddingBook-${Date.now()}.pdf`)
     }
 
@@ -278,16 +277,12 @@ export default function BookViewer() {
                     pointerEvents: 'none',
                 }}
             >
-                {hasCover && (
-                    <div className='page-for-pdf' style={{ width: baseSize, height: baseSize, background: '#fff' }}>
-                        <BookCoverTemplate
-                            styleSettings={styleSettings}
-                            scaledWidth={baseSize}
-                            scaledHeight={baseSize}
-                        />
-                    </div>
-                )}
+                {/* כריכה אחורית אמיתית */}
+                <div className='page-for-pdf' style={{ width: baseSize, height: baseSize, background: '#fff' }}>
+                    <BookBackCoverTemplate scaledWidth={baseSize} scaledHeight={baseSize} />
+                </div>
 
+                {/* דפים פנימיים */}
                 {pages.map(entry => (
                     <div
                         key={entry.id}
@@ -303,15 +298,10 @@ export default function BookViewer() {
                     </div>
                 ))}
 
-                {hasCover && (
-                    <div className='page-for-pdf' style={{ width: baseSize, height: baseSize, background: '#fff' }}>
-                        <BookCoverTemplate
-                            styleSettings={styleSettings}
-                            scaledWidth={baseSize}
-                            scaledHeight={baseSize}
-                        />
-                    </div>
-                )}
+                {/* כריכה קדמית */}
+                <div className='page-for-pdf' style={{ width: baseSize, height: baseSize, background: '#fff' }}>
+                    <BookCoverTemplate styleSettings={styleSettings} scaledWidth={baseSize} scaledHeight={baseSize} />
+                </div>
             </div>
         </AdminPageWrapper>
     )
