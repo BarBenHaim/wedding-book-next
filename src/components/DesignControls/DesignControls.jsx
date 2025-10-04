@@ -136,7 +136,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
         <div dir='rtl' className='flex flex-col gap-3 text-sm p-4 bg-gray-50 rounded-xl shadow-inner'>
             {/* 🔀 מצב */}
             <div className='flex mb-4 gap-2'>
-                {/* <button
+                <button
                     onClick={() => onModeChange('book')}
                     className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
                         mode === 'book' ? 'bg-purple-600 text-white shadow' : 'bg-white border'
@@ -151,7 +151,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                     }`}
                 >
                     🎨 כריכה
-                </button> */}
+                </button>
             </div>
 
             {/* 📘 מצב ספר */}

@@ -194,19 +194,6 @@ export default function AdminDashboard() {
                                                             {...provided.dragHandleProps}
                                                             className='flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow hover:shadow-md transition'
                                                         >
-                                                            {/* תמונה */}
-                                                            {entry.imageUrl ? (
-                                                                <img
-                                                                    src={entry.imageUrl}
-                                                                    alt='thumb'
-                                                                    className='h-16 w-16 object-cover rounded-lg border'
-                                                                />
-                                                            ) : (
-                                                                <div className='h-16 w-16 flex items-center justify-center rounded-lg bg-gray-100 text-gray-400 text-sm'>
-                                                                    ללא תמונה
-                                                                </div>
-                                                            )}
-
                                                             {/* תוכן */}
                                                             <div className='flex-1'>
                                                                 {editingId === entry.id ? (
