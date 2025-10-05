@@ -5,6 +5,9 @@ export const fetchCache = 'force-no-store'
 import { NextResponse } from 'next/server'
 import { adminDb, adminAuth } from '@/lib/firebaseAdmin'
 
+// בזמן build אין בקשות אמיתיות, אז ניצור fallback שמחזיר תשובה פשוטה
+const isBuild = process.env.NEXT_PHASE === 'phase-production-build'
+
 // פונקציית עזר לבדוק טוקן
 async function verifyUser(req) {
     const authHeader = req.headers.get('authorization')
@@ -21,36 +24,30 @@ async function verifyUser(req) {
 
 // GET - קריאה של כל הברכות
 export async function GET(req) {
+    if (isBuild) return NextResponse.json({ ok: true }) // בזמן build מחזיר תשובה ריקה
+
     const user = await verifyUser(req)
-    if (!user) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
     const weddingId = searchParams.get('weddingId')
-
-    if (!weddingId) {
-        return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
-    }
+    if (!weddingId) return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
 
     const snapshot = await adminDb.collection('weddings').doc(weddingId).collection('entries').get()
-
     const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
     return NextResponse.json(entries)
 }
 
+// POST - הוספת ברכה חדשה
 export async function POST(req) {
+    if (isBuild) return NextResponse.json({ ok: true }) // בזמן build מחזיר תשובה ריקה
+
     const user = await verifyUser(req)
-    if (!user) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
     const weddingId = searchParams.get('weddingId')
-
-    if (!weddingId) {
-        return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
-    }
+    if (!weddingId) return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
 
     let body
     try {
@@ -60,9 +57,7 @@ export async function POST(req) {
     }
 
     const { type, content } = body || {}
-    if (!type || !content) {
-        return NextResponse.json({ error: 'Missing type or content' }, { status: 400 })
-    }
+    if (!type || !content) return NextResponse.json({ error: 'Missing type or content' }, { status: 400 })
 
     await adminDb.collection('weddings').doc(weddingId).collection('entries').add({
         type,
