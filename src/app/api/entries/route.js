@@ -35,7 +35,6 @@ export async function GET(req) {
     return NextResponse.json(entries)
 }
 
-// POST - הוספת ברכה חדשה
 export async function POST(req) {
     const user = await verifyUser(req)
     if (!user) {
@@ -49,7 +48,18 @@ export async function POST(req) {
         return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
     }
 
-    const { type, content } = await req.json()
+    let body
+    try {
+        body = await req.json()
+    } catch {
+        return NextResponse.json({ error: 'Invalid or empty JSON body' }, { status: 400 })
+    }
+
+    const { type, content } = body || {}
+    if (!type || !content) {
+        return NextResponse.json({ error: 'Missing type or content' }, { status: 400 })
+    }
+
     await adminDb.collection('weddings').doc(weddingId).collection('entries').add({
         type,
         content,
