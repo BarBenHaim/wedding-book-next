@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 export default function NotFound() {
     return (
         <div className='flex h-[calc(100vh-4rem)] flex-col items-center justify-center bg-gradient-to-br from-pink-50 to-white text-center px-6'>
@@ -7,12 +9,7 @@ export default function NotFound() {
                 נראה שהקישור שהזנת לא מוביל לחתונה קיימת. בדוק את הכתובת או חזור לעמוד הראשי.
             </p>
 
-            <a
-                href='/'
-                className='mt-8 inline-block rounded-lg bg-pink-500 px-8 py-3 text-lg font-medium text-white shadow hover:bg-pink-600 transition'
-            >
-                חזרה לעמוד הבית
-            </a>
+            <Link href='/'>חזרה לעמוד הראשי</Link>
         </div>
     )
 }
