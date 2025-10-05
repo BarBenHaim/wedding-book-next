@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../../../lib/firebaseClient'
 
@@ -8,10 +7,6 @@ export default async function WeddingHome({ params }) {
 
     const ref = doc(db, 'weddings', weddingId)
     const snap = await getDoc(ref)
-
-    if (!snap.exists()) {
-        notFound()
-    }
 
     return (
         <div className='relative min-h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 via-white to-purple-100 font-sans flex flex-col items-center justify-center px-6'>
