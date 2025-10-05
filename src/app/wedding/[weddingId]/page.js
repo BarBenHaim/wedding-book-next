@@ -1,12 +1,27 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../../../lib/firebaseClient'
 
-export default async function WeddingHome({ params }) {
+export default function WeddingHome({ params }) {
     const { weddingId } = params
+    const [exists, setExists] = useState(null)
 
-    const ref = doc(db, 'weddings', weddingId)
-    const snap = await getDoc(ref)
+    useEffect(() => {
+        async function checkWedding() {
+            try {
+                const ref = doc(db, 'weddings', weddingId)
+                const snap = await getDoc(ref)
+                setExists(snap.exists())
+            } catch (err) {
+                console.error('Error fetching wedding data:', err)
+                setExists(false)
+            }
+        }
+        checkWedding()
+    }, [weddingId])
 
     return (
         <div className='relative min-h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 via-white to-purple-100 font-sans flex flex-col items-center justify-center px-6'>
