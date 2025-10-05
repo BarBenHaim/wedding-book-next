@@ -23,6 +23,14 @@ export default function WeddingHome({ params }) {
         checkWedding()
     }, [weddingId])
 
+    if (exists === false) {
+        return (
+            <div className='flex h-screen items-center justify-center text-gray-700 text-lg'>
+                לא נמצאה החתונה הזו 💔
+            </div>
+        )
+    }
+
     return (
         <div className='relative min-h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 via-white to-purple-100 font-sans flex flex-col items-center justify-center px-6'>
             {/* Glow רקע */}
