@@ -1,6 +1,6 @@
 [
     {
-        "origin": ["http://localhost:3000", "https://wedding-memories-maker.web.app"],
+        "origin": ["http://localhost:3000", "https://the-wedding-gift.vercel.app"],
         "method": ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"],
         "maxAgeSeconds": 3600,
         "responseHeader": ["Content-Type", "Authorization", "x-goog-meta-*"]
