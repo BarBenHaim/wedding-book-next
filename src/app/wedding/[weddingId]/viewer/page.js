@@ -76,6 +76,9 @@ export default function BookViewer() {
         if (sizeCm === 20) {
             setPdfSize(200)
             setBaseSize(2362)
+        } else if (sizeCm === 21) {
+            setPdfSize(210)
+            setBaseSize(2480)
         } else if (sizeCm === 30) {
             setPdfSize(300)
             setBaseSize(3543)
@@ -159,6 +162,131 @@ export default function BookViewer() {
     async function handleDownloadLocalPDF() {
         const pdf = await generatePDF(true)
         pdf.save(`WeddingBook-${Date.now()}.pdf`)
+    }
+
+    // 📚 הורדה נפרדת של 3 קבצי PDF (כריכה קדמית / ספר / כריכה אחורית)
+    async function handleDownloadSplitPDFs() {
+        if (!hiddenRef.current) return
+
+        const pagesEls = Array.from(hiddenRef.current.querySelectorAll('.page-for-pdf'))
+        if (pagesEls.length < 3) return
+
+        const backCoverEl = pagesEls[0]
+        const bookPagesEls = pagesEls.slice(1, -1)
+        const frontCoverEl = pagesEls[pagesEls.length - 1]
+
+        async function renderToPDF(elements, filename) {
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: [pdfSize, pdfSize],
+            })
+            for (let i = 0; i < elements.length; i++) {
+                const canvas = await html2canvas(elements[i], {
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: '#ffffff',
+                })
+                const imgData = canvas.toDataURL('image/jpeg', 1.0)
+                if (i > 0) pdf.addPage()
+                pdf.addImage(imgData, 'JPEG', 0, 0, pdfSize, pdfSize)
+            }
+            pdf.save(`${filename}.pdf`)
+        }
+
+        await renderToPDF([frontCoverEl], 'WeddingBook-Cover')
+        await renderToPDF(bookPagesEls.reverse(), 'WeddingBook-Content')
+        await renderToPDF([backCoverEl], 'WeddingBook-BackCover')
+    }
+
+    // 📘 הורדה בפורמט LULU (Bleed + DPI משופר)
+    // 📘 הורדה בפורמט LULU (Bleed + DPI משופר)
+    async function handleDownloadLuluPDFs() {
+        if (!hiddenRef.current) return
+
+        const pagesEls = Array.from(hiddenRef.current.querySelectorAll('.page-for-pdf'))
+        if (pagesEls.length < 3) return
+
+        const backCoverEl = pagesEls[0]
+        const bookPagesEls = pagesEls.slice(1, -1)
+        const frontCoverEl = pagesEls[pagesEls.length - 1]
+
+        // ✅ הגדרות מדויקות לפי Lulu 8.5x8.5"
+        const pageSizeMM = 216 // גודל העמוד ללא bleed
+        const bleedMM = 3.175 // bleed מכל צד
+        const bleedSizeMM = pageSizeMM + bleedMM * 2 // סה"כ גודל כולל bleed
+
+        async function renderToLuluPDF(elements, filename) {
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: [bleedSizeMM, bleedSizeMM], // גודל מותאם ל-Lulu
+            })
+
+            for (let i = 0; i < elements.length; i++) {
+                const canvas = await html2canvas(elements[i], {
+                    scale: 3, // חדות גבוהה (~300 DPI)
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: '#ffffff',
+                })
+                const imgData = canvas.toDataURL('image/jpeg', 1.0)
+
+                if (i > 0) pdf.addPage()
+                pdf.addImage(imgData, 'JPEG', 0, 0, bleedSizeMM, bleedSizeMM)
+            }
+
+            pdf.save(`${filename}-LULU.pdf`)
+        }
+
+        await renderToLuluPDF([frontCoverEl], 'WeddingBook-Cover')
+        await renderToLuluPDF(bookPagesEls.reverse(), 'WeddingBook-Content')
+        await renderToLuluPDF([backCoverEl], 'WeddingBook-BackCover')
+    }
+
+    // 🟦 הורדת כריכה מלאה ל-Lulu (Hardcover Case Wrap): 19" × 10.25", Spine 0.25"
+    async function handleDownloadHardcoverCoverLulu() {
+        if (!hiddenRef.current) return
+
+        const pagesEls = Array.from(hiddenRef.current.querySelectorAll('.page-for-pdf'))
+        if (pagesEls.length < 3) return
+
+        const backCoverEl = pagesEls[0]
+        const frontCoverEl = pagesEls[pagesEls.length - 1]
+
+        // מידות לפי התבנית ששלחת
+        const TOTAL_W_MM = 482.6 // 19"
+        const TOTAL_H_MM = 260.35 // 10.25"
+        const SPINE_MM = 6.35 // 0.25"
+        const PANEL_W_MM = (TOTAL_W_MM - SPINE_MM) / 2 // רוחב כל צד (גב/קדמי)
+
+        // לצילום חד ~300DPI
+        const [backCanvas, frontCanvas] = await Promise.all([
+            html2canvas(backCoverEl, { scale: 3, useCORS: true, allowTaint: true, backgroundColor: '#ffffff' }),
+            html2canvas(frontCoverEl, { scale: 3, useCORS: true, allowTaint: true, backgroundColor: '#ffffff' }),
+        ])
+
+        const backImg = backCanvas.toDataURL('image/jpeg', 1.0)
+        const frontImg = frontCanvas.toDataURL('image/jpeg', 1.0)
+
+        const pdf = new jsPDF({
+            orientation: 'landscape', // לא חובה, אבל נוח ללייאאוט רחב
+            unit: 'mm',
+            format: [TOTAL_W_MM, TOTAL_H_MM],
+        })
+
+        // רקע/צבע לשדרה (אופציונלי)
+        const spineColor = styleSettings?.spineColor || '#FFFFFF'
+        pdf.setFillColor(spineColor)
+        pdf.rect(PANEL_W_MM, 0, SPINE_MM, TOTAL_H_MM, 'F')
+
+        // גב שמאל
+        pdf.addImage(backImg, 'JPEG', 0, 0, PANEL_W_MM, TOTAL_H_MM)
+        // קדמית ימין
+        pdf.addImage(frontImg, 'JPEG', PANEL_W_MM + SPINE_MM, 0, PANEL_W_MM, TOTAL_H_MM)
+
+        pdf.save('WeddingBook-Cover-Hardcover-LULU.pdf')
     }
 
     const hasCover = styleSettings.coverTitle?.trim() || styleSettings.coverSubtitle?.trim()
@@ -290,6 +418,34 @@ export default function BookViewer() {
                                 <span className='absolute left-0 top-0 h-full w-0 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-500 ease-out' />
                                 <span className='relative z-10 block rounded-full bg-white group-hover:bg-transparent text-gray-900 group-hover:text-white px-5 py-2 transition-colors duration-500'>
                                     💾 הורד למחשב ({pdfSize / 10}×{pdfSize / 10} ס״מ)
+                                </span>
+                            </button>
+                            <button
+                                onClick={handleDownloadSplitPDFs}
+                                className='relative rounded-full text-xs sm:text-sm font-medium overflow-hidden cursor-pointer group p-px bg-gradient-to-r from-purple-500 to-pink-400'
+                            >
+                                <span className='absolute left-0 top-0 h-full w-0 bg-gradient-to-r from-purple-500 to-pink-400 group-hover:w-full transition-all duration-500 ease-out' />
+                                <span className='relative z-10 block rounded-full bg-white group-hover:bg-transparent text-gray-900 group-hover:text-white px-5 py-2 transition-colors duration-500'>
+                                    🧾 הורד בשלושה חלקים (כריכה קדמית / ספר / אחורית)
+                                </span>
+                            </button>
+
+                            <button
+                                onClick={handleDownloadLuluPDFs}
+                                className='relative rounded-full text-xs sm:text-sm font-medium overflow-hidden cursor-pointer group p-px bg-gradient-to-r from-blue-600 to-purple-500'
+                            >
+                                <span className='absolute left-0 top-0 h-full w-0 bg-gradient-to-r from-blue-600 to-purple-500 group-hover:w-full transition-all duration-500 ease-out' />
+                                <span className='relative z-10 block rounded-full bg-white group-hover:bg-transparent text-gray-900 group-hover:text-white px-5 py-2 transition-colors duration-500'>
+                                    📘 LULU הורדה (כריכה / ספר / אחורית)
+                                </span>
+                            </button>
+                            <button
+                                onClick={handleDownloadHardcoverCoverLulu}
+                                className='relative rounded-full text-xs sm:text-sm font-medium overflow-hidden cursor-pointer group p-px bg-gradient-to-r from-indigo-600 to-blue-500'
+                            >
+                                <span className='absolute left-0 top-0 h-full w-0 bg-gradient-to-r from-indigo-600 to-blue-500 group-hover:w-full transition-all duration-500 ease-out' />
+                                <span className='relative z-10 block rounded-full bg-white group-hover:bg-transparent text-gray-900 group-hover:text-white px-5 py-2 transition-colors duration-500'>
+                                    🖼️ הורד כריכה קדמית (LULU)
                                 </span>
                             </button>
                         </div>

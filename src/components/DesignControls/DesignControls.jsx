@@ -454,6 +454,14 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                     >
                         30×30
                     </button>
+                    <button
+                        onClick={() => onSizeChange(21)}
+                        className={`px-3 py-1 rounded ${
+                            pdfSize === 210 ? 'bg-purple-600 text-white' : 'bg-white border'
+                        }`}
+                    >
+                        21x21
+                    </button>
                 </div>
             </Card>
         </div>
