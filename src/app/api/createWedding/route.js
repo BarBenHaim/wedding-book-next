@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server'
-import { adminDb, adminAuth } from '@/lib/firebaseAdmin'
 import nodemailer from 'nodemailer'
 
 export async function POST(req) {
     try {
         const body = await req.json()
+        const { billing, id } = body
 
-        // מידע שמגיע מווקומרס
-        const { id, billing } = body
         const email = billing?.email
         const name = `${billing?.first_name || ''} ${billing?.last_name || ''}`.trim()
 
@@ -15,24 +13,11 @@ export async function POST(req) {
             return NextResponse.json({ error: 'Missing email' }, { status: 400 })
         }
 
-        // 1️⃣ צור wedding חדש
-        const weddingRef = await adminDb.collection('weddings').add({
-            name,
-            email,
-            createdAt: new Date(),
-            orderId: id,
-        })
-        const weddingId = weddingRef.id
-
-        // 2️⃣ צור משתמש חדש במערכת
+        // סיסמה רנדומלית
         const password = Math.random().toString(36).slice(-8)
-        const userRecord = await adminAuth.createUser({
-            email,
-            password,
-            displayName: name,
-        })
+        const weddingId = `wed_${id}`
 
-        // 3️⃣ שלח מייל עם פרטי הגישה
+        // שליחת מייל
         const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
@@ -47,19 +32,20 @@ export async function POST(req) {
             subject: 'החתונה שלך מוכנה 🎉',
             html: `
                 <p>היי ${name},</p>
-                <p>החתונה שלך נוצרה בהצלחה!</p>
-                <p>התחבר/י כאן: <a href="https://the-wedding-gift.vercel.app/login">כניסה לחשבון</a></p>
+                <p>תודה על ההזמנה! החתונה שלך נוצרה בהצלחה.</p>
+                <p>הנה הפרטים שלך:</p>
                 <p><b>שם משתמש:</b> ${email}<br>
-                <b>סיסמה:</b> ${password}</p>
-                <p>מזהה החתונה שלך: ${weddingId}</p>
+                <b>סיסמה:</b> ${password}<br>
+                <b>מזהה החתונה:</b> ${weddingId}</p>
+                <p><a href="https://the-wedding-gift.vercel.app/login">להתחברות למערכת</a></p>
             `,
         }
 
         await transporter.sendMail(mailOptions)
 
-        return NextResponse.json({ success: true, weddingId })
+        return NextResponse.json({ success: true, email, weddingId })
     } catch (err) {
-        console.error(err)
-        return NextResponse.json({ error: 'Internal error', details: err.message }, { status: 500 })
+        console.error('❌ Error:', err)
+        return NextResponse.json({ error: err.message }, { status: 500 })
     }
 }

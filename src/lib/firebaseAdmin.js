@@ -2,14 +2,20 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore } from 'firebase-admin/firestore'
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+const rawKey = process.env.FIREBASE_PRIVATE_KEY || ''
+const privateKey = rawKey
+    .replace(/\\n/g, '\n') // ממיר \n רגיל
+    .replace(/\\\\n/g, '\n') // ממיר \\n כפול
+    .replace(/"/g, '') // מסיר מרכאות אם יש
+    .trim() // מסיר רווחים
 
 const app =
     getApps().length === 0
         ? initializeApp({
               credential: cert({
-                  ...serviceAccount,
-                  private_key: serviceAccount.private_key.replace(/\\n/g, '\n'),
+                  project_id: process.env.FIREBASE_PROJECT_ID,
+                  client_email: process.env.FIREBASE_CLIENT_EMAIL,
+                  private_key: privateKey,
               }),
           })
         : getApps()[0]
