@@ -1,28 +1,38 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/firebaseAdmin' // זה הקובץ שבו אתה מגדיר את Firebase Admin
-import { collection, doc, setDoc } from 'firebase/firestore'
-import { v4 as uuidv4 } from 'uuid'
+import { adminDb, adminAuth } from '@/lib/firebaseAdmin'
 import nodemailer from 'nodemailer'
 
 export async function POST(req) {
     try {
         const body = await req.json()
-        const { order_id, email, name } = body
 
-        // צור מזהה חתונה ייחודי
-        const weddingId = uuidv4()
+        // מידע שמגיע מווקומרס
+        const { id, billing } = body
+        const email = billing?.email
+        const name = `${billing?.first_name || ''} ${billing?.last_name || ''}`.trim()
 
-        // שמירה במסד הנתונים שלך (Firestore)
-        await setDoc(doc(db, 'weddings', weddingId), {
-            weddingId,
-            email,
+        if (!email) {
+            return NextResponse.json({ error: 'Missing email' }, { status: 400 })
+        }
+
+        // 1️⃣ צור wedding חדש
+        const weddingRef = await adminDb.collection('weddings').add({
             name,
-            order_id,
-            createdAt: new Date().toISOString(),
-            entries: [], // אפשר לשים מקום לברכות/תמונות עתידיות
+            email,
+            createdAt: new Date(),
+            orderId: id,
+        })
+        const weddingId = weddingRef.id
+
+        // 2️⃣ צור משתמש חדש במערכת
+        const password = Math.random().toString(36).slice(-8)
+        const userRecord = await adminAuth.createUser({
+            email,
+            password,
+            displayName: name,
         })
 
-        // שליחת מייל ללקוח עם פרטי גישה
+        // 3️⃣ שלח מייל עם פרטי הגישה
         const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
@@ -31,25 +41,25 @@ export async function POST(req) {
             },
         })
 
-        await transporter.sendMail({
+        const mailOptions = {
             from: `"Wedding Tales" <${process.env.MAIL_USER}>`,
             to: email,
-            subject: 'ברוכים הבאים ל-Wedding Tales 💜',
+            subject: 'החתונה שלך מוכנה 🎉',
             html: `
-        <p>היי ${name},</p>
-        <p>איזה כיף שהצטרפתם ל-Wedding Tales!</p>
-        <p>הנה הלינק האישי שלכם:</p>
-        <a href="https://weddingtales.com/wedding/${weddingId}/upload">
-          כניסה לפלטפורמה שלכם
-        </a>
-        <br><br>
-        <p>אנחנו מאחלים לכם חוויה קסומה וזיכרונות מרגשים 💍</p>
-      `,
-        })
+                <p>היי ${name},</p>
+                <p>החתונה שלך נוצרה בהצלחה!</p>
+                <p>התחבר/י כאן: <a href="https://the-wedding-gift.vercel.app/login">כניסה לחשבון</a></p>
+                <p><b>שם משתמש:</b> ${email}<br>
+                <b>סיסמה:</b> ${password}</p>
+                <p>מזהה החתונה שלך: ${weddingId}</p>
+            `,
+        }
+
+        await transporter.sendMail(mailOptions)
 
         return NextResponse.json({ success: true, weddingId })
-    } catch (error) {
-        console.error('❌ Error creating wedding:', error)
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (err) {
+        console.error(err)
+        return NextResponse.json({ error: 'Internal error', details: err.message }, { status: 500 })
     }
 }
