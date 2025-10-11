@@ -2,6 +2,72 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const fetchCache = 'force-no-store'
 
-import handler from '@/server/api/entries'
+import { NextResponse } from 'next/server'
+import { adminDb, adminAuth } from '@/lib/firebaseAdmin'
 
-export { handler as GET, handler as POST }
+export async function GET(req) {
+    const authHeader = req.headers.get('authorization')
+    if (!authHeader?.startsWith('Bearer ')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const token = authHeader.split('Bearer ')[1]
+    let decoded
+    try {
+        decoded = await adminAuth.verifyIdToken(token)
+    } catch {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(req.url)
+    const weddingId = searchParams.get('weddingId')
+    if (!weddingId) {
+        return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
+    }
+
+    const snapshot = await adminDb.collection('weddings').doc(weddingId).collection('entries').get()
+    const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    return NextResponse.json(entries)
+}
+
+export async function POST(req) {
+    const authHeader = req.headers.get('authorization')
+    if (!authHeader?.startsWith('Bearer ')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const token = authHeader.split('Bearer ')[1]
+    let decoded
+    try {
+        decoded = await adminAuth.verifyIdToken(token)
+    } catch {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(req.url)
+    const weddingId = searchParams.get('weddingId')
+    if (!weddingId) {
+        return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
+    }
+
+    let body
+    try {
+        body = await req.json()
+    } catch {
+        return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+    }
+
+    const { type, content } = body || {}
+    if (!type || !content) {
+        return NextResponse.json({ error: 'Missing type or content' }, { status: 400 })
+    }
+
+    await adminDb.collection('weddings').doc(weddingId).collection('entries').add({
+        type,
+        content,
+        user: decoded.uid,
+        timestamp: new Date(),
+    })
+
+    return NextResponse.json({ success: true })
+}
