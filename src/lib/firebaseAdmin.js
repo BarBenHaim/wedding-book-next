@@ -21,6 +21,13 @@ const app =
           })
         : getApp()
 
+console.log('🔐 Firebase credentials loaded:', {
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
+    keySnippet: process.env.FIREBASE_PRIVATE_KEY?.slice(0, 40),
+})
+
 // שמירה על שמות ברורים
 export const adminDb = getFirestore(app)
 export const adminAuth = getAuth(app)
