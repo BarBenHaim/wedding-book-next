@@ -1,24 +1,22 @@
-import { initializeApp, cert, getApps } from 'firebase-admin/app'
-import { getAuth } from 'firebase-admin/auth'
+import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
-
-const rawKey = process.env.FIREBASE_PRIVATE_KEY || ''
-const privateKey = rawKey
-    .replace(/\\n/g, '\n') // ממיר \n רגיל
-    .replace(/\\\\n/g, '\n') // ממיר \\n כפול
-    .replace(/"/g, '') // מסיר מרכאות אם יש
-    .trim() // מסיר רווחים
+import { getAuth } from 'firebase-admin/auth'
+import { getStorage } from 'firebase-admin/storage'
 
 const app =
     getApps().length === 0
         ? initializeApp({
               credential: cert({
-                  project_id: process.env.FIREBASE_PROJECT_ID,
-                  client_email: process.env.FIREBASE_CLIENT_EMAIL,
-                  private_key: privateKey,
+                  projectId: process.env.FIREBASE_PROJECT_ID,
+                  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+                  privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
               }),
+              storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
           })
-        : getApps()[0]
+        : getApp()
 
-export const adminAuth = getAuth(app)
-export const adminDb = getFirestore(app)
+console.log('PRIVATE_KEY starts with:', process.env.FIREBASE_PRIVATE_KEY.slice(0, 30))
+
+export const db = getFirestore(app)
+export const auth = getAuth(app)
+export const storage = getStorage(app)
