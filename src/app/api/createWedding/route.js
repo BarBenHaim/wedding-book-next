@@ -4,6 +4,9 @@ import { db } from '@/lib/firebaseAdmin'
 import { doc, setDoc } from 'firebase/firestore'
 import crypto from 'crypto'
 
+console.log('MAIL_USER:', process.env.MAIL_USER)
+console.log('MAIL_PASS:', process.env.MAIL_PASS ? '✅ Loaded' : '❌ Missing')
+
 export async function POST(req) {
     try {
         // ✅ אימות החתימה של WooCommerce
@@ -37,6 +40,10 @@ export async function POST(req) {
             createdAt: new Date().toISOString(),
             status: 'active',
         })
+
+        if (!process.env.MAIL_USER || !process.env.MAIL_PASS) {
+            console.error('❌ Missing MAIL_USER or MAIL_PASS environment variables')
+        }
 
         const transporter = nodemailer.createTransport({
             service: 'gmail',
