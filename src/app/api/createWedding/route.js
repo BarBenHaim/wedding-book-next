@@ -1,9 +1,24 @@
 import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
+import { db } from '@/lib/firebaseAdmin'
+import { doc, setDoc } from 'firebase/firestore'
+import crypto from 'crypto'
 
 export async function POST(req) {
     try {
-        const body = await req.json()
+        // ✅ אימות החתימה של WooCommerce
+        const signature = req.headers.get('x-wc-webhook-signature')
+        const rawBody = await req.text()
+
+        const secret = process.env.WC_WEBHOOK_SECRET
+        const generatedSignature = crypto.createHmac('sha256', secret).update(rawBody).digest('base64')
+
+        if (signature !== generatedSignature) {
+            return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+        }
+
+        // עכשיו נמשיך כרגיל
+        const body = JSON.parse(rawBody)
         const { billing, id } = body
 
         const email = billing?.email
@@ -13,11 +28,16 @@ export async function POST(req) {
             return NextResponse.json({ error: 'Missing email' }, { status: 400 })
         }
 
-        // סיסמה רנדומלית
         const password = Math.random().toString(36).slice(-8)
         const weddingId = `wed_${id}`
 
-        // שליחת מייל
+        await setDoc(doc(db, 'weddings', weddingId), {
+            weddingId,
+            user: { name, email, password },
+            createdAt: new Date().toISOString(),
+            status: 'active',
+        })
+
         const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
