@@ -1,34 +1,39 @@
-import { NextResponse } from 'next/server'
-import crypto from 'crypto'
-import nodemailer from 'nodemailer'
-import { adminDb as db } from '@/lib/firebaseAdmin'
-
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const fetchCache = 'force-no-store'
 export const preferredRegion = 'iad1'
 
+import { NextResponse } from 'next/server'
+import nodemailer from 'nodemailer'
+import crypto from 'crypto'
+import { adminDb as db } from '@/lib/firebaseAdmin'
+
 export async function POST(req) {
     try {
-        const rawBody = await req.text()
+        const buffer = Buffer.from(await req.arrayBuffer()) // 🟢 זה הפתרון המדויק
+        const rawBody = buffer.toString('utf8')
         const signature = req.headers.get('x-wc-webhook-signature')
         const secret = process.env.WC_WEBHOOK_SECRET
 
         console.log('🧪 Signature header present?:', !!signature, '| body length:', rawBody.length)
 
-        // 🟢 שלב 1: אם אין חתימה או זה בדיקה – החזר OK
+        // בדיקה ראשונית (בדיקת חיבור)
         if (!signature || rawBody.length < 50) {
             console.log('⚠️ WooCommerce ping or missing signature → returning 200 OK')
             return new Response('OK', { status: 200 })
         }
 
-        // 🟢 שלב 2: צור את החתימה בדיוק כמו WooCommerce
+        if (!secret) {
+            console.error('❌ Missing WC_WEBHOOK_SECRET')
+            return NextResponse.json({ error: 'Missing secret' }, { status: 500 })
+        }
+
+        // 🟣 יצירת החתימה בדיוק כמו WooCommerce
         const generatedSignature = crypto
             .createHmac('sha256', secret)
-            .update(Buffer.from(rawBody, 'utf8')) // חשוב מאוד!
+            .update(buffer) // לא .update(rawBody)!
             .digest('base64')
 
-        // השוואה
         if (signature !== generatedSignature) {
             console.warn('⚠️ Invalid signature.')
             console.log('Expected:', generatedSignature)
@@ -36,7 +41,9 @@ export async function POST(req) {
             return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
         }
 
-        // 🟢 שלב 3: עכשיו הגוף מאומת – אפשר לפרסר
+        console.log('✅ Valid signature, processing order...')
+
+        // כעת אפשר לפרסר
         const body = JSON.parse(rawBody)
         const { billing, id } = body || {}
         const email = billing?.email
@@ -63,13 +70,13 @@ export async function POST(req) {
             to: email,
             subject: 'החתונה שלך מוכנה 🎉',
             html: `
-        <p>היי ${name},</p>
-        <p>תודה על ההזמנה! החתונה שלך נוצרה בהצלחה.</p>
-        <p><b>שם משתמש:</b> ${email}<br>
-        <b>סיסמה:</b> ${password}<br>
-        <b>מזהה החתונה:</b> ${weddingId}</p>
-        <p><a href="https://the-wedding-gift.vercel.app/login">להתחברות למערכת</a></p>
-      `,
+                <p>היי ${name},</p>
+                <p>תודה על ההזמנה! החתונה שלך נוצרה בהצלחה.</p>
+                <p><b>שם משתמש:</b> ${email}<br>
+                <b>סיסמה:</b> ${password}<br>
+                <b>מזהה החתונה:</b> ${weddingId}</p>
+                <p><a href="https://the-wedding-gift.vercel.app/login">להתחברות למערכת</a></p>
+            `,
         })
 
         console.log('✅ Email sent to:', email, 'for weddingId:', weddingId)
