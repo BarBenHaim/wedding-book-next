@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const fetchCache = 'force-no-store'
+export const preferredRegion = 'iad1' // לא חובה, רק כדי לוודא ריצה על Node
 
 import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
