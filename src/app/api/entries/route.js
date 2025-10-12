@@ -26,7 +26,6 @@ export async function GET(req) {
     }
 
     const snapshot = await db.collection('weddings').doc(weddingId).collection('entries').get()
-
     const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
     return NextResponse.json(entries)
 }

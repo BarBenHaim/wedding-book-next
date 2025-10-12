@@ -21,6 +21,12 @@ const app =
           })
         : getApp()
 
+// שמירה על שמות ברורים
 export const adminDb = getFirestore(app)
 export const adminAuth = getAuth(app)
 export const adminStorage = getStorage(app)
+
+// תאימות לקוד ישן (כדי שלא תצטרך לשנות בכל מקום)
+export const db = adminDb
+export const auth = adminAuth
+export const storage = adminStorage

@@ -5,24 +5,22 @@ export const fetchCache = 'force-no-store'
 import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import crypto from 'crypto'
-import { db } from '@/lib/firebaseAdmin' // רק טעינה – firebaseAdmin כבר מדפיס דיבוג
+import { adminDb as db } from '@/lib/firebaseAdmin' // ✅ שינוי מומלץ
 
 export async function GET() {
-    // כדי שלא תראה 405 כשנכנסים ידנית
     return new Response('✅ /api/createWedding is up. Use POST with WooCommerce.', { status: 200 })
 }
 
 export async function POST(req) {
     try {
-        // --- DEBUG: הדפסות סביבתיות בטוחות ---
         console.log('🧪 MAIL_USER present?:', !!process.env.MAIL_USER)
         console.log('🧪 MAIL_PASS present?:', !!process.env.MAIL_PASS)
         console.log('🧪 WC_WEBHOOK_SECRET present?:', !!process.env.WC_WEBHOOK_SECRET)
 
-        // אימות חתימת WooCommerce
         const signature = req.headers.get('x-wc-webhook-signature')
         const secret = process.env.WC_WEBHOOK_SECRET
         const rawBody = await req.text()
+
         console.log('🧪 Signature header present?:', !!signature, ' body length:', rawBody.length)
 
         if (!secret) {
@@ -41,7 +39,6 @@ export async function POST(req) {
             return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
         }
 
-        // גוף הבקשה
         let body
         try {
             body = JSON.parse(rawBody)
@@ -57,11 +54,9 @@ export async function POST(req) {
             return NextResponse.json({ error: 'Missing email or order id' }, { status: 400 })
         }
 
-        // יצירת מזהה וסיסמה
         const password = Math.random().toString(36).slice(-8)
         const weddingId = `wed_${id}`
 
-        // כתיבה ל-Firestore
         await db.collection('weddings').doc(weddingId).set({
             weddingId,
             user: { name, email, password },
@@ -69,7 +64,6 @@ export async function POST(req) {
             status: 'active',
         })
 
-        // בדיקת משתני מייל לפני יצירת transporter
         if (!process.env.MAIL_USER || !process.env.MAIL_PASS) {
             console.error('❌ Missing mail creds:', {
                 MAIL_USER: !!process.env.MAIL_USER,
@@ -91,18 +85,18 @@ export async function POST(req) {
             to: email,
             subject: 'החתונה שלך מוכנה 🎉',
             html: `
-        <p>היי ${name},</p>
-        <p>תודה על ההזמנה! החתונה שלך נוצרה בהצלחה.</p>
-        <p>הנה הפרטים שלך:</p>
-        <p><b>שם משתמש:</b> ${email}<br>
-        <b>סיסמה:</b> ${password}<br>
-        <b>מזהה החתונה:</b> ${weddingId}</p>
-        <p><a href="https://the-wedding-gift.vercel.app/login">להתחברות למערכת</a></p>
-      `,
+                <p>היי ${name},</p>
+                <p>תודה על ההזמנה! החתונה שלך נוצרה בהצלחה.</p>
+                <p>הנה הפרטים שלך:</p>
+                <p><b>שם משתמש:</b> ${email}<br>
+                <b>סיסמה:</b> ${password}<br>
+                <b>מזהה החתונה:</b> ${weddingId}</p>
+                <p><a href="https://the-wedding-gift.vercel.app/login">להתחברות למערכת</a></p>
+            `,
         }
 
         await transporter.sendMail(mailOptions)
-        console.log('✅ Email sent to:', email, ' for weddingId:', weddingId)
+        console.log('✅ Email sent to:', email, 'for weddingId:', weddingId)
 
         return NextResponse.json({ success: true, email, weddingId })
     } catch (err) {
