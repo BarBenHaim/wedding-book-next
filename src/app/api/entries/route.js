@@ -3,7 +3,7 @@ export const runtime = 'nodejs'
 export const fetchCache = 'force-no-store'
 
 import { NextResponse } from 'next/server'
-import { adminDb, adminAuth } from '@/lib/firebaseAdmin'
+import { db, auth } from '@/lib/firebaseAdmin'
 
 export async function GET(req) {
     const authHeader = req.headers.get('authorization')
@@ -14,7 +14,7 @@ export async function GET(req) {
     const token = authHeader.split('Bearer ')[1]
     let decoded
     try {
-        decoded = await adminAuth.verifyIdToken(token)
+        decoded = await auth.verifyIdToken(token)
     } catch {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -25,7 +25,8 @@ export async function GET(req) {
         return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
     }
 
-    const snapshot = await adminDb.collection('weddings').doc(weddingId).collection('entries').get()
+    const snapshot = await db.collection('weddings').doc(weddingId).collection('entries').get()
+
     const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
     return NextResponse.json(entries)
 }
@@ -39,7 +40,7 @@ export async function POST(req) {
     const token = authHeader.split('Bearer ')[1]
     let decoded
     try {
-        decoded = await adminAuth.verifyIdToken(token)
+        decoded = await auth.verifyIdToken(token)
     } catch {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -62,7 +63,7 @@ export async function POST(req) {
         return NextResponse.json({ error: 'Missing type or content' }, { status: 400 })
     }
 
-    await adminDb.collection('weddings').doc(weddingId).collection('entries').add({
+    await db.collection('weddings').doc(weddingId).collection('entries').add({
         type,
         content,
         user: decoded.uid,
