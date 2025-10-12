@@ -14,22 +14,28 @@ export async function GET() {
 
 export async function POST(req) {
     try {
-        // --- DEBUG: הדפס כל ה-Headers שמגיעים בפועל ---
+        // --- DEBUG: הצגת כל ה-Headers שמגיעים ---
         const headersEntries = Array.from(req.headers.entries())
         const headersObj = Object.fromEntries(headersEntries)
         console.log('🧪 Incoming headers:', headersObj)
         console.log('🧪 Content-Type:', req.headers.get('content-type'))
 
-        // --- בדיקות ENV בסיסיות ---
+        // --- בדיקות ENV ---
         console.log('🧪 MAIL_USER present?:', !!process.env.MAIL_USER)
         console.log('🧪 MAIL_PASS present?:', !!process.env.MAIL_PASS)
         console.log('🧪 WC_WEBHOOK_SECRET present?:', !!process.env.WC_WEBHOOK_SECRET)
 
-        // --- אימות חתימה של Woo ---
-        const signature = req.headers.get('x-wc-webhook-signature') // case-insensitive
+        // --- חתימה של WooCommerce ---
+        const signature = req.headers.get('x-wc-webhook-signature')
         const secret = process.env.WC_WEBHOOK_SECRET
         const rawBody = await req.text()
         console.log('🧪 Signature header present?:', !!signature, '| body length:', rawBody.length)
+
+        // 🟡 אם זו קריאת בדיקה או שאין חתימה → רק נחזיר OK כדי שווקומרס יאשר את ה־Webhook
+        if (!signature || rawBody.length < 50) {
+            console.log('⚠️ WooCommerce test or missing signature → returning 200 OK')
+            return new Response('OK', { status: 200 })
+        }
 
         if (!secret) {
             console.error('❌ Missing WC_WEBHOOK_SECRET')
@@ -37,24 +43,12 @@ export async function POST(req) {
         }
 
         const generatedSignature = crypto.createHmac('sha256', secret).update(rawBody).digest('base64')
-
-        if (!signature) {
-            console.warn('⚠️ Missing x-wc-webhook-signature header entirely.')
-            // החזרה עם 401 כדי ש-Woo תראה שזה חתימה חסרה ולא תקלה פנימית
-            return NextResponse.json({ error: 'Missing signature header' }, { status: 401 })
-        }
-
         if (signature !== generatedSignature) {
-            console.warn(
-                '⚠️ Invalid signature. Got:',
-                signature?.slice(0, 12),
-                'Expected:',
-                generatedSignature.slice(0, 12)
-            )
+            console.warn('⚠️ Invalid signature.')
             return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
         }
 
-        // --- פרסון גוף ---
+        // --- ניתוח גוף ההודעה ---
         let body
         try {
             body = JSON.parse(rawBody)
@@ -65,14 +59,16 @@ export async function POST(req) {
         const { billing, id } = body || {}
         const email = billing?.email
         const name = `${billing?.first_name || ''} ${billing?.last_name || ''}`.trim()
+
         if (!email || !id) {
             return NextResponse.json({ error: 'Missing email or order id' }, { status: 400 })
         }
 
-        // --- כתיבה ל-Firestore ---
+        // --- יצירת מזהה וסיסמה ---
         const password = Math.random().toString(36).slice(-8)
         const weddingId = `wed_${id}`
 
+        // --- כתיבה ל־Firestore ---
         await db.collection('weddings').doc(weddingId).set({
             weddingId,
             user: { name, email, password },
@@ -99,14 +95,14 @@ export async function POST(req) {
             to: email,
             subject: 'החתונה שלך מוכנה 🎉',
             html: `
-        <p>היי ${name},</p>
-        <p>תודה על ההזמנה! החתונה שלך נוצרה בהצלחה.</p>
-        <p>הנה הפרטים שלך:</p>
-        <p><b>שם משתמש:</b> ${email}<br>
-        <b>סיסמה:</b> ${password}<br>
-        <b>מזהה החתונה:</b> ${weddingId}</p>
-        <p><a href="https://the-wedding-gift.vercel.app/login">להתחברות למערכת</a></p>
-      `,
+                <p>היי ${name},</p>
+                <p>תודה על ההזמנה! החתונה שלך נוצרה בהצלחה.</p>
+                <p>הנה הפרטים שלך:</p>
+                <p><b>שם משתמש:</b> ${email}<br>
+                <b>סיסמה:</b> ${password}<br>
+                <b>מזהה החתונה:</b> ${weddingId}</p>
+                <p><a href="https://the-wedding-gift.vercel.app/login">להתחברות למערכת</a></p>
+            `,
         })
 
         console.log('✅ Email sent to:', email, 'for weddingId:', weddingId)
