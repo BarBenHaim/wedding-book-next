@@ -12,8 +12,8 @@ import defaultStyle from '@/app/wedding/[weddingId]/viewer/defultStyle'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
-import { storage } from '@/lib/firebaseClient'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { storage } from '@/lib/firebaseClient'
 
 export default function BookViewer() {
     const [pages, setPages] = useState([])
@@ -26,7 +26,6 @@ export default function BookViewer() {
     )
     const [mode, setMode] = useState('book')
     const [isMobile, setIsMobile] = useState(false)
-
     const hiddenRef = useRef(null)
     const bookRef = useRef(null)
     const { weddingId } = useParams()
@@ -48,7 +47,7 @@ export default function BookViewer() {
         async function fetchData() {
             if (!weddingId) return
             const data = await getEntries(weddingId)
-            setPages(data.reverse()) // RTL order
+            setPages(data.reverse())
             setLoading(false)
         }
         fetchData()
@@ -85,89 +84,35 @@ export default function BookViewer() {
         }
     }
 
-    // 🧾 טוען תמונות לפני הפקת PDF
-    async function loadImages(container) {
+    // 🧩 המרת blob images ל-base64
+    async function fixBlobImages(container) {
         const imgs = container.querySelectorAll('img')
-        const promises = Array.from(imgs).map(
-            img =>
-                new Promise(resolve => {
-                    if (img.complete) resolve()
-                    else {
-                        img.onload = resolve
-                        img.onerror = resolve
-                    }
-                })
-        )
-        await Promise.all(promises)
-    }
-
-    async function generatePDF(reverseOrder = true) {
-        if (!hiddenRef.current) return
-        const pageEls = Array.from(hiddenRef.current.querySelectorAll('.page-for-pdf'))
-
-        // לוודא שכל התמונות נטענות
         await Promise.all(
-            Array.from(hiddenRef.current.querySelectorAll('img')).map(img => {
+            Array.from(imgs).map(async img => {
                 if (img.src.startsWith('blob:')) {
-                    // המרה ל־base64 לפני הצילום
-                    return fetch(img.src)
-                        .then(r => r.blob())
-                        .then(blob => {
-                            const reader = new FileReader()
-                            reader.onloadend = () => (img.src = reader.result)
+                    try {
+                        const blob = await fetch(img.src).then(r => r.blob())
+                        const reader = new FileReader()
+                        await new Promise(res => {
+                            reader.onloadend = () => {
+                                img.src = reader.result
+                                res()
+                            }
                             reader.readAsDataURL(blob)
                         })
+                    } catch (e) {
+                        console.warn('⚠️ בעיה בהמרת blob לתמונה:', e)
+                    }
                 }
-                return Promise.resolve()
             })
         )
-
-        const orderedPages = reverseOrder ? pageEls.reverse() : pageEls
-        const pdf = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: [pdfSize, pdfSize],
-        })
-
-        for (let i = 0; i < orderedPages.length; i++) {
-            const canvas = await html2canvas(orderedPages[i], {
-                scale: 2,
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: '#ffffff',
-            })
-            const imgData = canvas.toDataURL('image/jpeg', 1.0)
-            if (i > 0) pdf.addPage()
-            pdf.addImage(imgData, 'JPEG', 0, 0, pdfSize, pdfSize)
-        }
-
-        return pdf
     }
 
-    // ☁️ שליחה ל-Firebase ולמייל
-    async function handleDownloadPDF() {
-        const pdf = await generatePDF(true)
-        const pdfBlob = pdf.output('blob')
-        const fileRef = ref(storage, `wedding-books/book-${Date.now()}.pdf`)
-        await uploadBytes(fileRef, pdfBlob)
-        const downloadURL = await getDownloadURL(fileRef)
-        await fetch('/api/send-pdf', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: downloadURL }),
-        })
-    }
-
-    // 💾 הורדה מקומית
-    async function handleDownloadLocalPDF() {
-        const pdf = await generatePDF(true)
-        pdf.save(`WeddingBook-${Date.now()}.pdf`)
-    }
-
-    // 📚 הורדה נפרדת של 3 קבצי PDF (כריכה קדמית / ספר / כריכה אחורית)
-    async function handleDownloadSplitPDFs() {
+    // 💌 שליחת שני ה־PDFים למייל (Lulu תקני + כיוון כריכות הפוך)
+    async function handleSendToEmail() {
         if (!hiddenRef.current) return
 
+        await fixBlobImages(hiddenRef.current)
         const pagesEls = Array.from(hiddenRef.current.querySelectorAll('.page-for-pdf'))
         if (pagesEls.length < 3) return
 
@@ -175,136 +120,170 @@ export default function BookViewer() {
         const bookPagesEls = pagesEls.slice(1, -1)
         const frontCoverEl = pagesEls[pagesEls.length - 1]
 
-        async function renderToPDF(elements, filename) {
+        // --- תוכן (8.5"x8.5" עם bleed) ---
+        const pageSizeMM = 216
+        const bleedMM = 3.175
+        const bleedSizeMM = pageSizeMM + bleedMM * 2
+
+        const pdfContent = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: [bleedSizeMM, bleedSizeMM],
+        })
+
+        // מההתחלה לסוף
+        for (let i = 0; i < bookPagesEls.length; i++) {
+            const canvas = await html2canvas(bookPagesEls[i], {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#fff',
+            })
+            const imgData = canvas.toDataURL('image/jpeg', 1.0)
+            if (i > 0) pdfContent.addPage()
+            pdfContent.addImage(imgData, 'JPEG', 0, 0, bleedSizeMM, bleedSizeMM)
+        }
+
+        // --- כריכות Lulu 19"x10.25" עם Spine 0.25" (קדמית שמאל, אחורית ימין) ---
+        await fixBlobImages(frontCoverEl)
+        await fixBlobImages(backCoverEl)
+
+        const TOTAL_W_MM = 482.6
+        const TOTAL_H_MM = 260.35
+        const SPINE_MM = 6.35
+        const PANEL_W_MM = (TOTAL_W_MM - SPINE_MM) / 2
+
+        const pdfCovers = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: [TOTAL_W_MM, TOTAL_H_MM],
+        })
+
+        const [frontCanvas, backCanvas] = await Promise.all([
+            html2canvas(frontCoverEl, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fff' }),
+            html2canvas(backCoverEl, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fff' }),
+        ])
+        const frontImg = frontCanvas.toDataURL('image/jpeg', 1.0)
+        const backImg = backCanvas.toDataURL('image/jpeg', 1.0)
+
+        // צד שמאל = קדמית
+        pdfCovers.addImage(frontImg, 'JPEG', 0, 0, PANEL_W_MM, TOTAL_H_MM)
+        // Spine
+        pdfCovers.setFillColor('#FFFFFF')
+        pdfCovers.rect(PANEL_W_MM, 0, SPINE_MM, TOTAL_H_MM, 'F')
+        // צד ימין = אחורית
+        pdfCovers.addImage(backImg, 'JPEG', PANEL_W_MM + SPINE_MM, 0, PANEL_W_MM, TOTAL_H_MM)
+
+        async function uploadAndSend(pdf, filename) {
+            const blob = pdf.output('blob')
+            const fileRef = ref(storage, `wedding-books/${filename}-${Date.now()}.pdf`)
+            await uploadBytes(fileRef, blob)
+            const url = await getDownloadURL(fileRef)
+            await fetch('/api/send-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url }),
+            })
+        }
+
+        await uploadAndSend(pdfContent, 'WeddingBook-Content-LULU')
+        await uploadAndSend(pdfCovers, 'WeddingBook-Covers-LULU')
+
+        alert('📩 שני הקבצים נשלחו למייל בהצלחה!')
+    }
+
+    // 📘 הורדה לשני קבצים (Lulu תקני + כיוון כריכות הפוך)
+    async function handleDownloadLuluPDFs() {
+        if (!hiddenRef.current) return
+        await fixBlobImages(hiddenRef.current)
+        const pagesEls = Array.from(hiddenRef.current.querySelectorAll('.page-for-pdf'))
+        if (pagesEls.length < 3) return
+
+        const backCoverEl = pagesEls[0]
+        const bookPagesEls = pagesEls.slice(1, -1)
+        const frontCoverEl = pagesEls[pagesEls.length - 1]
+
+        const pageSizeMM = 216
+        const bleedMM = 3.175
+        const bleedSizeMM = pageSizeMM + bleedMM * 2
+
+        async function renderToLuluPDF(elements, filename) {
             const pdf = new jsPDF({
                 orientation: 'portrait',
                 unit: 'mm',
-                format: [pdfSize, pdfSize],
+                format: [bleedSizeMM, bleedSizeMM],
             })
             for (let i = 0; i < elements.length; i++) {
                 const canvas = await html2canvas(elements[i], {
                     scale: 2,
                     useCORS: true,
                     allowTaint: true,
-                    backgroundColor: '#ffffff',
+                    backgroundColor: '#fff',
                 })
                 const imgData = canvas.toDataURL('image/jpeg', 1.0)
-                if (i > 0) pdf.addPage()
-                pdf.addImage(imgData, 'JPEG', 0, 0, pdfSize, pdfSize)
-            }
-            pdf.save(`${filename}.pdf`)
-        }
-
-        await renderToPDF([frontCoverEl], 'WeddingBook-Cover')
-        await renderToPDF(bookPagesEls.reverse(), 'WeddingBook-Content')
-        await renderToPDF([backCoverEl], 'WeddingBook-BackCover')
-    }
-
-    // 📘 הורדה בפורמט LULU (Bleed + DPI משופר)
-    // 📘 הורדה בפורמט LULU (Bleed + DPI משופר)
-    async function handleDownloadLuluPDFs() {
-        if (!hiddenRef.current) return
-
-        const pagesEls = Array.from(hiddenRef.current.querySelectorAll('.page-for-pdf'))
-        if (pagesEls.length < 3) return
-
-        const backCoverEl = pagesEls[0]
-        const bookPagesEls = pagesEls.slice(1, -1)
-        const frontCoverEl = pagesEls[pagesEls.length - 1]
-
-        // ✅ הגדרות מדויקות לפי Lulu 8.5x8.5"
-        const pageSizeMM = 216 // גודל העמוד ללא bleed
-        const bleedMM = 3.175 // bleed מכל צד
-        const bleedSizeMM = pageSizeMM + bleedMM * 2 // סה"כ גודל כולל bleed
-
-        async function renderToLuluPDF(elements, filename) {
-            const pdf = new jsPDF({
-                orientation: 'portrait',
-                unit: 'mm',
-                format: [bleedSizeMM, bleedSizeMM], // גודל מותאם ל-Lulu
-            })
-
-            for (let i = 0; i < elements.length; i++) {
-                const canvas = await html2canvas(elements[i], {
-                    scale: 3, // חדות גבוהה (~300 DPI)
-                    useCORS: true,
-                    allowTaint: true,
-                    backgroundColor: '#ffffff',
-                })
-                const imgData = canvas.toDataURL('image/jpeg', 1.0)
-
                 if (i > 0) pdf.addPage()
                 pdf.addImage(imgData, 'JPEG', 0, 0, bleedSizeMM, bleedSizeMM)
             }
-
-            pdf.save(`${filename}-LULU.pdf`)
+            const blob = pdf.output('blob')
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `${filename}.pdf`
+            a.click()
+            URL.revokeObjectURL(url)
         }
 
-        await renderToLuluPDF([frontCoverEl], 'WeddingBook-Cover')
-        await renderToLuluPDF(bookPagesEls.reverse(), 'WeddingBook-Content')
-        await renderToLuluPDF([backCoverEl], 'WeddingBook-BackCover')
-    }
+        await renderToLuluPDF(bookPagesEls, 'WeddingBook-Content-LULU')
 
-    // 🟦 הורדת כריכה מלאה ל-Lulu (Hardcover Case Wrap): 19" × 10.25", Spine 0.25"
-    async function handleDownloadHardcoverCoverLulu() {
-        if (!hiddenRef.current) return
-
-        const pagesEls = Array.from(hiddenRef.current.querySelectorAll('.page-for-pdf'))
-        if (pagesEls.length < 3) return
-
-        const backCoverEl = pagesEls[0]
-        const frontCoverEl = pagesEls[pagesEls.length - 1]
-
-        // מידות לפי התבנית ששלחת
-        const TOTAL_W_MM = 482.6 // 19"
-        const TOTAL_H_MM = 260.35 // 10.25"
-        const SPINE_MM = 6.35 // 0.25"
-        const PANEL_W_MM = (TOTAL_W_MM - SPINE_MM) / 2 // רוחב כל צד (גב/קדמי)
-
-        // לצילום חד ~300DPI
-        const [backCanvas, frontCanvas] = await Promise.all([
-            html2canvas(backCoverEl, { scale: 3, useCORS: true, allowTaint: true, backgroundColor: '#ffffff' }),
-            html2canvas(frontCoverEl, { scale: 3, useCORS: true, allowTaint: true, backgroundColor: '#ffffff' }),
-        ])
-
-        const backImg = backCanvas.toDataURL('image/jpeg', 1.0)
-        const frontImg = frontCanvas.toDataURL('image/jpeg', 1.0)
+        const TOTAL_W_MM = 482.6
+        const TOTAL_H_MM = 260.35
+        const SPINE_MM = 6.35
+        const PANEL_W_MM = (TOTAL_W_MM - SPINE_MM) / 2
 
         const pdf = new jsPDF({
-            orientation: 'landscape', // לא חובה, אבל נוח ללייאאוט רחב
+            orientation: 'landscape',
             unit: 'mm',
             format: [TOTAL_W_MM, TOTAL_H_MM],
         })
 
-        // רקע/צבע לשדרה (אופציונלי)
-        const spineColor = styleSettings?.spineColor || '#FFFFFF'
-        pdf.setFillColor(spineColor)
+        const [frontCanvas, backCanvas] = await Promise.all([
+            html2canvas(frontCoverEl, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fff' }),
+            html2canvas(backCoverEl, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fff' }),
+        ])
+        const frontImg = frontCanvas.toDataURL('image/jpeg', 1.0)
+        const backImg = backCanvas.toDataURL('image/jpeg', 1.0)
+
+        // צד שמאל = קדמית
+        pdf.addImage(frontImg, 'JPEG', 0, 0, PANEL_W_MM, TOTAL_H_MM)
+        // Spine
+        pdf.setFillColor('#FFFFFF')
         pdf.rect(PANEL_W_MM, 0, SPINE_MM, TOTAL_H_MM, 'F')
+        // צד ימין = אחורית
+        pdf.addImage(backImg, 'JPEG', PANEL_W_MM + SPINE_MM, 0, PANEL_W_MM, TOTAL_H_MM)
 
-        // גב שמאל
-        pdf.addImage(backImg, 'JPEG', 0, 0, PANEL_W_MM, TOTAL_H_MM)
-        // קדמית ימין
-        pdf.addImage(frontImg, 'JPEG', PANEL_W_MM + SPINE_MM, 0, PANEL_W_MM, TOTAL_H_MM)
-
-        pdf.save('WeddingBook-Cover-Hardcover-LULU.pdf')
+        const blob2 = pdf.output('blob')
+        const url2 = URL.createObjectURL(blob2)
+        const a2 = document.createElement('a')
+        a2.href = url2
+        a2.download = 'WeddingBook-Covers-LULU.pdf'
+        a2.click()
+        URL.revokeObjectURL(url2)
     }
 
     const hasCover = styleSettings.coverTitle?.trim() || styleSettings.coverSubtitle?.trim()
 
-    if (loading) {
+    if (loading)
         return (
             <div className='flex flex-col items-center justify-center text-gray-700 h-screen'>
                 <div className='animate-spin rounded-full h-12 w-12 border-4 border-purple-400 border-t-transparent mb-4'></div>
                 <p className='text-sm font-medium'>טוען את ספר הזיכרונות…</p>
             </div>
         )
-    }
 
     return (
         <AdminPageWrapper>
             <div className='relative flex h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 via-white to-purple-100 overflow-hidden'>
                 <main className='relative z-10 flex flex-1 flex-col lg:flex-row'>
-                    {/* 🎛️ פאנל עיצוב */}
                     <aside
                         className={`${
                             isMobile ? 'order-2 w-full border-t' : 'w-1/4 border-l'
@@ -320,11 +299,9 @@ export default function BookViewer() {
                         />
                     </aside>
 
-                    {/* 📖 הספר / הכריכה */}
                     <div className='flex flex-1 flex-col items-center justify-center p-4 sm:p-6 overflow-hidden'>
                         <div className='flex items-center justify-center' style={{ height: viewerSize }}>
                             {mode === 'cover' ? (
-                                // מצב עריכת כריכה בלבד
                                 <div
                                     className='flex items-center justify-center transition-all duration-300'
                                     style={{ width: viewerSize, height: viewerSize }}
@@ -333,8 +310,8 @@ export default function BookViewer() {
                                         width={viewerSize}
                                         height={viewerSize}
                                         size='fixed'
-                                        usePortrait={true}
-                                        singlePage={true}
+                                        usePortrait
+                                        singlePage
                                         drawShadow={false}
                                         showCover={false}
                                         className='book-flip'
@@ -349,7 +326,6 @@ export default function BookViewer() {
                                     </HTMLFlipBook>
                                 </div>
                             ) : (
-                                // מצב ספר מלא
                                 <HTMLFlipBook
                                     ref={bookRef}
                                     key={`${viewerSize}-${pages.length}-${isMobile}`}
@@ -360,22 +336,12 @@ export default function BookViewer() {
                                     singlePage={isMobile}
                                     drawShadow={false}
                                     showCover={!!hasCover}
-                                    mobileScrollSupport={true}
+                                    mobileScrollSupport
                                     className='book-flip'
-                                    startPage={pages.length + 1}
-                                    onFlip={e => {
-                                        const currentPage = e.data
-                                        const totalPages = pages.length + 2
-                                        if (currentPage === totalPages - 1) setMode('cover')
-                                        else setMode('book')
-                                    }}
                                 >
-                                    {/* כריכה אחורית */}
                                     <div style={{ width: viewerSize, height: viewerSize }}>
                                         <BookBackCoverTemplate scaledWidth={viewerSize} scaledHeight={viewerSize} />
                                     </div>
-
-                                    {/* דפים פנימיים */}
                                     {pages.map(entry => (
                                         <div key={entry.id} style={{ width: viewerSize, height: viewerSize }}>
                                             <BookPageTemplate
@@ -386,8 +352,6 @@ export default function BookViewer() {
                                             />
                                         </div>
                                     ))}
-
-                                    {/* כריכה קדמית */}
                                     <div style={{ width: viewerSize, height: viewerSize }}>
                                         <BookCoverTemplate
                                             styleSettings={styleSettings}
@@ -399,53 +363,24 @@ export default function BookViewer() {
                             )}
                         </div>
 
-                        {/* 📥 כפתורי הורדה / שליחה */}
                         <div className='flex flex-col items-center mt-8 space-y-3'>
-                            <button
-                                onClick={handleDownloadPDF}
-                                className='relative rounded-full text-xs sm:text-sm font-medium overflow-hidden cursor-pointer group p-px bg-gradient-to-r from-purple-600 to-pink-500'
-                            >
-                                <span className='absolute left-0 top-0 h-full w-0 bg-gradient-to-r from-purple-600 to-pink-500 group-hover:w-full transition-all duration-500 ease-out' />
-                                <span className='relative z-10 block rounded-full bg-white group-hover:bg-transparent text-gray-900 group-hover:text-white px-5 py-2 transition-colors duration-500'>
-                                    ✨ שלח להדפסה ({pdfSize / 10}×{pdfSize / 10} ס״מ)
-                                </span>
-                            </button>
-
-                            <button
-                                onClick={handleDownloadLocalPDF}
-                                className='relative rounded-full text-xs sm:text-sm font-medium overflow-hidden cursor-pointer group p-px bg-gradient-to-r from-pink-500 to-purple-500'
-                            >
-                                <span className='absolute left-0 top-0 h-full w-0 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-500 ease-out' />
-                                <span className='relative z-10 block rounded-full bg-white group-hover:bg-transparent text-gray-900 group-hover:text-white px-5 py-2 transition-colors duration-500'>
-                                    💾 הורד למחשב ({pdfSize / 10}×{pdfSize / 10} ס״מ)
-                                </span>
-                            </button>
-                            <button
-                                onClick={handleDownloadSplitPDFs}
-                                className='relative rounded-full text-xs sm:text-sm font-medium overflow-hidden cursor-pointer group p-px bg-gradient-to-r from-purple-500 to-pink-400'
-                            >
-                                <span className='absolute left-0 top-0 h-full w-0 bg-gradient-to-r from-purple-500 to-pink-400 group-hover:w-full transition-all duration-500 ease-out' />
-                                <span className='relative z-10 block rounded-full bg-white group-hover:bg-transparent text-gray-900 group-hover:text-white px-5 py-2 transition-colors duration-500'>
-                                    🧾 הורד בשלושה חלקים (כריכה קדמית / ספר / אחורית)
-                                </span>
-                            </button>
-
                             <button
                                 onClick={handleDownloadLuluPDFs}
                                 className='relative rounded-full text-xs sm:text-sm font-medium overflow-hidden cursor-pointer group p-px bg-gradient-to-r from-blue-600 to-purple-500'
                             >
                                 <span className='absolute left-0 top-0 h-full w-0 bg-gradient-to-r from-blue-600 to-purple-500 group-hover:w-full transition-all duration-500 ease-out' />
                                 <span className='relative z-10 block rounded-full bg-white group-hover:bg-transparent text-gray-900 group-hover:text-white px-5 py-2 transition-colors duration-500'>
-                                    📘 LULU הורדה (כריכה / ספר / אחורית)
+                                    📘 הורדה ל־LULU (תוכן + כריכות)
                                 </span>
                             </button>
+
                             <button
-                                onClick={handleDownloadHardcoverCoverLulu}
-                                className='relative rounded-full text-xs sm:text-sm font-medium overflow-hidden cursor-pointer group p-px bg-gradient-to-r from-indigo-600 to-blue-500'
+                                onClick={handleSendToEmail}
+                                className='relative rounded-full text-xs sm:text-sm font-medium overflow-hidden cursor-pointer group p-px bg-gradient-to-r from-pink-500 to-purple-600'
                             >
-                                <span className='absolute left-0 top-0 h-full w-0 bg-gradient-to-r from-indigo-600 to-blue-500 group-hover:w-full transition-all duration-500 ease-out' />
+                                <span className='absolute left-0 top-0 h-full w-0 bg-gradient-to-r from-pink-500 to-purple-600 group-hover:w-full transition-all duration-500 ease-out' />
                                 <span className='relative z-10 block rounded-full bg-white group-hover:bg-transparent text-gray-900 group-hover:text-white px-5 py-2 transition-colors duration-500'>
-                                    🖼️ הורד כריכה קדמית (LULU)
+                                    💌 שלח למייל
                                 </span>
                             </button>
                         </div>
@@ -453,7 +388,7 @@ export default function BookViewer() {
                 </main>
             </div>
 
-            {/* 🧾 גרסה מוסתרת ל-PDF */}
+            {/* גרסה מוסתרת ל־PDF */}
             <div
                 ref={hiddenRef}
                 style={{
