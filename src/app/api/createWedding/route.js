@@ -48,16 +48,19 @@ export async function POST(req) {
 
         const weddingId = userRecord.uid
 
-        // --- יצירת מסמך חתונה תואם למבנה שלך ---
+        // --- יצירת מסמך חתונה ---
         await db.collection('weddings').doc(weddingId).set(
             {
                 ownerEmail: email,
                 createdAt: FieldValue.serverTimestamp(),
-                orderId, // נשמר רק לצורך מעקב
+                orderId,
             },
             { merge: true }
         )
         console.log('💾 Wedding created →', weddingId)
+
+        // --- הכנת קישור לעמוד האישי ---
+        const portalUrl = `https://the-wedding-gift.vercel.app/wedding/${weddingId}/portal`
 
         // --- שליחת מייל ---
         const transporter = nodemailer.createTransport({
@@ -65,22 +68,45 @@ export async function POST(req) {
             auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS },
         })
 
+        const html = `
+        <div style="font-family:Heebo,sans-serif;direction:rtl;text-align:right;padding:20px">
+          <h2>🎉 מזל טוב ${name || ''}!</h2>
+          <p>החתונה שלך נוצרה בהצלחה ב-Wedding Tales 🎊</p>
+
+          <h3>פרטי גישה:</h3>
+          <ul>
+            <li><b>אימייל:</b> ${email}</li>
+            ${password ? `<li><b>סיסמה ראשונית:</b> ${password}</li>` : ''}
+            <li><b>מזהה חתונה:</b> ${weddingId}</li>
+          </ul>
+
+          <p>להתחברות למערכת: <a href="https://the-wedding-gift.vercel.app/login">לחצו כאן</a></p>
+
+          <hr style="margin:25px 0;border:none;border-top:1px solid #eee"/>
+
+          <h3>📱 עמוד החתונה שלכם</h3>
+          <p>בעמוד האישי שלכם תוכלו:</p>
+          <ul>
+            <li>להציג ברקוד ענק לסריקה באירוע</li>
+            <li>לשתף את הקישור בוואטסאפ לכל האורחים</li>
+            <li>להוריד קובץ PDF מוכן להדפסה עם ה-QR</li>
+          </ul>
+          <p>לכניסה לעמוד האישי שלכם לחצו כאן:  
+            <a href="${portalUrl}" style="color:#8B5CF6;">${portalUrl}</a>
+          </p>
+
+          <p style="margin-top:25px;">באהבה,<br>צוות Wedding Tales 💜</p>
+        </div>
+        `
+
         await transporter.sendMail({
             from: `"Wedding Tales" <${process.env.MAIL_USER}>`,
             to: email,
             subject: 'החתונה שלך מוכנה 🎉',
-            html: `
-        <p>היי ${name || ''},</p>
-        <p>החתונה שלך נוצרה בהצלחה! עכשיו יש לך גישה מלאה למערכת.</p>
-        <p><b>אימייל:</b> ${email}<br>
-        ${password ? `<b>סיסמה ראשונית:</b> ${password}<br>` : ''}
-        <b>מזהה חתונה:</b> ${weddingId}</p>
-        <p><a href="https://the-wedding-gift.vercel.app/login">להתחברות למערכת</a></p>
-        <p style="font-size:12px;color:#666">אם כבר יש לך משתמש, הסיסמה שלך לא שונתה.</p>
-      `,
+            html,
         })
-        console.log('📧 Email sent successfully to:', email)
 
+        console.log('📧 Email sent successfully to:', email)
         return NextResponse.json({ success: true, weddingId, email })
     } catch (err) {
         console.error('❌ Fatal error in createWedding:', err)
