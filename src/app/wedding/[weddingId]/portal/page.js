@@ -1,72 +1,100 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import QRCode from 'react-qr-code'
-import { useState } from 'react'
+import QRCodeStyling from 'qr-code-styling'
 
 export default function WeddingPortal() {
     const { weddingId } = useParams()
-    const [showQR, setShowQR] = useState(false)
     const guestLink = `${process.env.NEXT_PUBLIC_BASE_URL}/wedding/${weddingId}`
+    const qrRef = useRef(null)
+    const qrCode = useRef(null)
 
-    function handleShare() {
-        const text = `💍 ברוכים הבאים לחתונה שלנו!\n\nהעלו תמונות וברכות בקישור 👇\n${guestLink}`
-        const url = `https://wa.me/?text=${encodeURIComponent(text)}`
-        window.open(url, '_blank')
-    }
+    useEffect(() => {
+        qrCode.current = new QRCodeStyling({
+            data: guestLink,
+            width: 240,
+            height: 240,
+            type: 'svg',
+            margin: 10,
+            qrOptions: {
+                errorCorrectionLevel: 'H',
+            },
+            dotsOptions: {
+                color: '#9333ea', // סגול (כמו המותג)
+                type: 'rounded',
+            },
+            backgroundOptions: {
+                color: '#ffffff',
+            },
+            cornersSquareOptions: {
+                color: '#ec4899', // ורוד (כמו המותג)
+                type: 'extra-rounded',
+            },
+            cornersDotOptions: {
+                color: '#9333ea',
+            },
+            image: '/logo-small.png', // תמונה קטנה במרכז (תוסיף ל-public)
+            imageOptions: {
+                crossOrigin: 'anonymous',
+                margin: 4,
+                imageSize: 0.3,
+            },
+        })
 
-    async function handleDownloadPDF() {
-        const response = await fetch(`/api/generate-qr-pdf?weddingId=${weddingId}`)
-        const blob = await response.blob()
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `WeddingTales-QR-${weddingId}.pdf`
-        a.click()
-        URL.revokeObjectURL(url)
+        qrCode.current.append(qrRef.current)
+    }, [guestLink])
+
+    async function handleDownload(type = 'png') {
+        await qrCode.current.download({ name: `WeddingTales-QR-${weddingId}`, extension: type })
     }
 
     return (
-        <div className='min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-white via-purple-50 to-pink-50 px-6 py-12 text-center font-[Heebo]'>
-            <h1 className='text-3xl font-bold text-gray-900 mb-4'>🎉 מזל טוב!</h1>
-            <p className='text-gray-600 max-w-md mb-8'>
-                זהו העמוד האישי שלכם ב-Wedding Tales. מכאן תוכלו לשתף את האורחים, להציג את הברקוד באולם ולהדפיס גרסה
-                מוכנה.
+        <div className='min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-white via-purple-50 to-pink-50 px-6 py-16 font-[Heebo] text-center'>
+            <h1 className='text-4xl font-bold text-gray-900 mb-4'>העמוד האישי שלכם מוכן 🎉</h1>
+            <p className='text-gray-700 max-w-md mb-10 leading-relaxed'>
+                הורידו שלט להדפסה או את הברקוד המעוצב — והפכו את זה לחלק מהחתונה שלכם 💍
             </p>
 
-            {!showQR ? (
+            <div ref={qrRef} className='bg-white p-6 rounded-xl shadow-md mb-6' />
+
+            <div className='flex flex-col sm:flex-row gap-4'>
                 <button
-                    onClick={() => setShowQR(true)}
+                    onClick={() => handleDownload('pdf')}
                     className='px-6 py-3 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-medium shadow-md hover:opacity-90 transition'
                 >
-                    הצג ברקוד על המסך 📱
-                </button>
-            ) : (
-                <div className='bg-white p-6 rounded-xl shadow-lg mb-6'>
-                    <QRCode value={guestLink} size={240} />
-                </div>
-            )}
-
-            <div className='flex flex-col sm:flex-row gap-4 mt-4'>
-                <button
-                    onClick={handleShare}
-                    className='px-5 py-2 rounded-full bg-green-500 text-white font-medium hover:bg-green-600 transition'
-                >
-                    שתפו בוואטסאפ 💬
+                    הורידו שלט להדפסה 🖨️
                 </button>
 
                 <button
-                    onClick={handleDownloadPDF}
-                    className='px-5 py-2 rounded-full bg-purple-600 text-white font-medium hover:bg-purple-700 transition'
+                    onClick={() => handleDownload('png')}
+                    className='px-6 py-3 rounded-full bg-white border border-purple-300 text-purple-700 font-medium hover:bg-purple-50 transition'
                 >
-                    הורידו קובץ להדפסה 🖨️
+                    הורידו רק את הברקוד 🎨
                 </button>
             </div>
 
-            <div className='mt-10 text-sm text-gray-500 max-w-xs'>
-                <p>1️⃣ סורקים את הברקוד</p>
-                <p>2️⃣ מצלמים ומברכים</p>
-                <p>3️⃣ הכול נאסף לספר שלכם 🎁</p>
+            <div className='mt-10 text-gray-600 text-sm max-w-sm leading-relaxed'>
+                <p>💡 מומלץ לשים את הברקוד ליד הבר או עמדת הצילום.</p>
+                <p>🖼️ אפשר לשלב אותו בעיצוב השלטים שלכם או על המסך באולם.</p>
+                <p>📱 כל סריקה תוביל את האורחים לעמוד הברכות שלכם.</p>
+            </div>
+
+            <div className='mt-16 text-gray-500 text-sm'>
+                <p>
+                    נוצר באהבה על ידי{' '}
+                    <span
+                        style={{
+                            fontFamily: "'Great Vibes', cursive",
+                            fontSize: '20px',
+                            backgroundImage: 'linear-gradient(to right, #ec4899, #9333ea)',
+                            WebkitBackgroundClip: 'text',
+                            color: 'transparent',
+                        }}
+                    >
+                        Wedding Tales
+                    </span>
+                </p>
             </div>
         </div>
     )
