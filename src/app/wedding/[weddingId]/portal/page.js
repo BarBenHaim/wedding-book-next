@@ -25,7 +25,6 @@ export default function WeddingPortal() {
         const canvas = document.createElement('canvas')
         const ctx = canvas.getContext('2d')
         const img = new Image()
-
         const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
         const url = URL.createObjectURL(svgBlob)
 
@@ -40,51 +39,68 @@ export default function WeddingPortal() {
             a.click()
             URL.revokeObjectURL(url)
         }
-
         img.src = url
     }
 
     return (
-        <div className='min-h-screen flex flex-col items-center bg-gradient-to-br from-white via-purple-50 to-pink-50 px-6 py-16 font-[Heebo] text-center'>
-            {/* פתיח */}
-            <h1 className='text-4xl font-bold text-gray-900 mb-4'>העמוד האישי שלכם מוכן 🎉</h1>
-            <p className='text-gray-700 max-w-md mb-10 leading-relaxed'>
-                מכאן תוכלו לשתף את האורחים, להוריד שלט מוכן להדפסה או רק את הברקוד עצמו. כל מה שצריך כדי לגרום לכולם
-                להיות חלק מהיום שלכם 💍
+        <div className='min-h-screen flex flex-col items-center bg-gradient-to-b from-white to-[#f8f5ff] px-6 py-16 font-[Heebo] text-center'>
+            {/* כותרת חתונתית */}
+            <h1
+                className='text-5xl mb-4'
+                style={{
+                    fontFamily: "'Great Vibes', cursive",
+                    backgroundImage: 'linear-gradient(to right, #ec4899, #9333ea)',
+                    WebkitBackgroundClip: 'text',
+                    color: 'transparent',
+                    fontWeight: '400',
+                }}
+            >
+                Wedding Tales
+            </h1>
+
+            {/* טקסט פתיחה */}
+            <h2 className='text-3xl font-semibold text-gray-800 mb-3'>השלט שלכם מוכן 💍</h2>
+            <p className='text-gray-600 max-w-md mb-10 leading-relaxed'>
+                הורידו שלט יפה ומוכן להדפסה או רק את הברקוד עצמו, ותנו לאורחים שלכם להפוך לחלק מהיום שלכם 🎉
             </p>
 
             {/* QR */}
-            <div id='qr-code' className='bg-white p-6 rounded-xl shadow-md mb-6'>
-                <QRCode value={guestLink} size={240} />
+            <div id='qr-code' className='bg-white p-8 rounded-2xl shadow-lg mb-6 border border-purple-100'>
+                <QRCode value={guestLink} size={260} />
             </div>
 
             {/* כפתורים */}
-            <div className='flex flex-col sm:flex-row gap-4 mb-12'>
+            <div className='flex flex-col sm:flex-row gap-4 mb-10'>
                 <button
                     onClick={handleDownloadPDF}
-                    className='px-6 py-3 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-medium shadow-md hover:opacity-90 transition'
+                    className='px-8 py-3 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-medium shadow-md hover:opacity-90 transition'
                 >
-                    הורידו שלט להדפסה 🖨️
+                    📄 הורידו שלט מוכן להדפסה
                 </button>
 
                 <button
                     onClick={handleDownloadQR}
-                    className='px-6 py-3 rounded-full bg-white border border-purple-300 text-purple-700 font-medium hover:bg-purple-50 transition'
+                    className='px-8 py-3 rounded-full bg-white border border-purple-300 text-purple-700 font-medium hover:bg-purple-50 transition'
                 >
-                    הורידו רק את הברקוד 📷
+                    🎨 הורידו רק את הברקוד
                 </button>
             </div>
 
-            {/* המלצות קצרות */}
-            <div className='max-w-md text-gray-700 text-sm leading-relaxed space-y-3'>
-                <p>💡 מומלץ להדפיס כמה עותקים של השלט ולתלות באזורים מרכזיים – ליד הבר, עמדת הצילום והכניסה.</p>
-                <p>📱 אפשר גם לשלוח את הקישור בקבוצת הוואטסאפ אחרי האירוע כדי לאסוף עוד רגעים וברכות.</p>
-                <p>✨ כל מה שתעלו יופיע אוטומטית בספר החתונה שלכם.</p>
+            {/* אזור הוראות עם טיפים אישיים */}
+            <div className='max-w-md text-gray-800 text-sm leading-relaxed space-y-4 bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-purple-100 shadow-sm'>
+                <h3 className='text-lg font-semibold text-purple-700 mb-2'>איך להשתמש בשלט? 💡</h3>
+                <ul className='text-right list-disc list-inside space-y-2'>
+                    <li>תלו את השלט במקום בולט — ליד הבר, עמדת הצילום או בכניסה.</li>
+                    <li>מומלץ להדפיס על נייר איכותי בגודל A4 או A3.</li>
+                    <li>אפשר להוסיף כמה שלטים באולם כדי שכל האורחים יראו.</li>
+                    <li>אפשר גם להציג את הברקוד על מסך או טלוויזיה באולם.</li>
+                    <li>כל סריקה תוביל ישירות לעמוד שלכם — בלי צורך באפליקציה!</li>
+                </ul>
             </div>
 
             {/* קישור ישיר */}
-            <div className='mt-12 text-xs text-gray-400 max-w-xs break-words'>
-                <p>קישור ישיר לעמוד האורחים:</p>
+            <div className='mt-10 text-xs text-gray-400 max-w-xs break-words'>
+                <p>קישור לעמוד שלכם:</p>
                 <a
                     href={guestLink}
                     target='_blank'
@@ -96,7 +112,7 @@ export default function WeddingPortal() {
             </div>
 
             {/* חתימה */}
-            <div className='mt-16 text-gray-500 text-sm'>
+            <div className='mt-14 text-gray-400 text-sm'>
                 <p>
                     נוצר באהבה על ידי{' '}
                     <span

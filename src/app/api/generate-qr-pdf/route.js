@@ -6,11 +6,12 @@ import path from 'path'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// פונקציה שמסדרת מילים בעברית (בלי להפוך אותיות)
-function reorderHebrewWords(text) {
+// ✅ תמיכה בעברית (ללא שבירת רווחים)
+function fixHebrew(text) {
     const hebrewRegex = /[\u0590-\u05FF]/
     if (!hebrewRegex.test(text)) return text
-    return text.split(' ').reverse().join(' ')
+    const parts = text.match(/[^\s]+|\s+/g) || []
+    return parts.reverse().join('')
 }
 
 export async function GET(req) {
@@ -19,6 +20,7 @@ export async function GET(req) {
         const weddingId = searchParams.get('weddingId')
         const guestLink = `${process.env.NEXT_PUBLIC_BASE_URL}/wedding/${weddingId}`
 
+        // ✅ טעינת פונט עברי
         const fontPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansHebrew-Regular.ttf')
         if (!fs.existsSync(fontPath)) throw new Error('Font not found')
         const fontBuffer = fs.readFileSync(fontPath)
@@ -34,41 +36,68 @@ export async function GET(req) {
 
         const buffers = []
         doc.on('data', buffers.push.bind(buffers))
+        const { width, height } = doc.page
 
-        // רקע
-        doc.rect(0, 0, doc.page.width, doc.page.height).fill('#faf7ff')
-        doc.fillColor('#000')
+        // ✅ רקע לבן מלא
+        doc.rect(0, 0, width, height).fill('#FFFFFF')
 
-        // כותרת
-        doc.fontSize(26)
-            .fillColor('#9333ea')
-            .text(reorderHebrewWords('ברכו את הזוג'), 0, 80, { align: 'right', width: doc.page.width - 80 })
+        // 🌸 גרדיאנט רך עם נגיעה לבנדר־ורוד
+        const gradientSteps = 40
+        for (let i = 0; i < gradientSteps; i++) {
+            const t = i / gradientSteps
+            const r = 248 + (255 - 248) * t
+            const g = 245 + (255 - 245) * t
+            const b = 255
+            doc.save()
+            doc.fillColor(`rgb(${r},${g},${b})`)
+            doc.rect(0, (height / gradientSteps) * i, width, height / gradientSteps).fill()
+            doc.restore()
+        }
 
-        // תת־כותרת
-        doc.fontSize(14)
-            .fillColor('#ec4899')
-            .text(reorderHebrewWords('סרקו את הקוד או העתיקו את הקישור כדי להעלות תמונות וברכות 💌'), 0, 120, {
-                align: 'right',
-                width: doc.page.width - 80,
-            })
+        // ✨ מסגרת דקה ורכה
+        doc.lineWidth(2)
+            .strokeColor('#e5d8ff')
+            .roundedRect(40, 40, width - 80, height - 80, 25)
+            .stroke()
 
-        // QR
+        // 💜 כותרת ראשית
+        doc.fontSize(36).fillColor('#8B5CF6').text(fixHebrew('סרקו והעלו לנו תמונה או ברכה'), 0, 100, {
+            align: 'center',
+            width,
+        })
+
+        // קו ורוד מתחת לכותרת
+        doc.lineWidth(2)
+            .moveTo(width / 2 - 70, 150)
+            .lineTo(width / 2 + 70, 150)
+            .strokeColor('#EC4899')
+            .stroke()
+
+        // 💬 טקסט הסבר קטן מתחת לכותרת
+        doc.fontSize(16).fillColor('#666666').text(fixHebrew('צלמו, ברכו או שתפו רגע קטן שלכם מהחתונה שלנו '), 0, 170, {
+            align: 'center',
+            width,
+        })
+
+        // 📷 QR במרכז
         const qrResponse = await fetch(
-            `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(guestLink)}`
+            `https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(guestLink)}`
         )
         const qrBuffer = Buffer.from(await qrResponse.arrayBuffer())
-        doc.image(qrBuffer, doc.page.width / 2 - 140, 240, { width: 280 })
+        const qrX = width / 2 - 140
+        const qrY = 260
+        doc.rect(qrX - 10, qrY - 10, 300, 300)
+            .fill('#ffffff')
+            .stroke('#EDE9FE')
+        doc.image(qrBuffer, qrX, qrY, { width: 280 })
 
-        // טיפ
+        // 🌿 חתימה תחתונה
         doc.fontSize(12)
-            .fillColor('#555')
-            .text(reorderHebrewWords('💡 מומלץ להדפיס ולתלות ליד הבר או עמדת הצילום'), 0, 540, {
-                align: 'right',
-                width: doc.page.width - 80,
+            .fillColor('#a1a1aa')
+            .text(fixHebrew('נוצר באהבה עם Wedding Tales'), 0, height - 80, {
+                align: 'center',
+                width,
             })
-
-        // לינק
-        doc.fontSize(10).fillColor('#777').text(guestLink, 0, 580, { align: 'center', width: doc.page.width })
 
         doc.end()
 
