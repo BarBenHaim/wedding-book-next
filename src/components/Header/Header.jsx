@@ -78,21 +78,30 @@ export default function Header() {
                         </>
                     ) : null}
 
-                    {/* אם יש משתמש → מוסיפים גישה ל־viewer ו־admin */}
                     {user && weddingId && (
                         <>
                             <button
                                 onClick={() => router.push(`/wedding/${weddingId}/viewer`)}
                                 className='rounded-full bg-purple-100 px-4 py-2 text-sm font-medium text-purple-700 hover:bg-purple-200 transition cursor-pointer'
                             >
-                                צפייה בספר
+                                עיצוב הספר
                             </button>
+
                             <button
                                 onClick={() => router.push(`/wedding/${weddingId}/admin`)}
                                 className='rounded-full bg-pink-100 px-4 py-2 text-sm font-medium text-pink-700 hover:bg-pink-200 transition cursor-pointer'
                             >
-                                ניהול
+                                ניהול הברכות
                             </button>
+
+                            {/* חדש: פורטל QR ושיתוף */}
+                            <button
+                                onClick={() => router.push(`/wedding/${weddingId}/portal`)}
+                                className='rounded-full bg-gradient-to-r from-purple-600 to-pink-500 px-4 py-2 text-sm font-medium text-white shadow-md hover:opacity-90 transition cursor-pointer'
+                            >
+                                QR ושיתוף
+                            </button>
+
                             <button
                                 onClick={handleLogout}
                                 className='rounded-full bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition cursor-pointer'

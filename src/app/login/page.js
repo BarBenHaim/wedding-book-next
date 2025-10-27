@@ -30,7 +30,7 @@ export default function LoginPage() {
             const weddingId = user.uid
             localStorage.setItem('weddingId', weddingId)
 
-            router.push(`/wedding/${weddingId}/admin`)
+            router.push(`/wedding/${weddingId}/portal`)
         } catch (err) {
             setError('שגיאה בהתחברות: ' + err.message)
         }
