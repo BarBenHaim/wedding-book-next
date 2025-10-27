@@ -30,16 +30,26 @@ export default function BookViewer() {
     const bookRef = useRef(null)
     const { weddingId } = useParams()
 
+    // ✅ חישוב גודל הספר לפי רוחב וגם גובה זמין (מותאם מובייל)
     function getBookDimensions() {
-        const screenWidth = window.innerWidth
-        if (screenWidth < 640) return screenWidth * 0.9
-        else if (screenWidth < 1024) return screenWidth * 0.7
-        else return screenWidth * 0.35
+        const w = window.innerWidth
+        const h = window.innerHeight
+
+        const HEADER = 64 // 4rem
+        const CONTROLS = w < 1024 ? 260 : 0 // כש־DesignControls למטה
+        const BUTTONS = 84 // כפתורי ההורדה
+        const PADDING = 24
+
+        const byWidth = w < 640 ? w * 0.9 : w < 1024 ? w * 0.7 : w * 0.35
+
+        const availHeight = h - HEADER - CONTROLS - BUTTONS - PADDING
+        return Math.max(180, Math.min(byWidth, availHeight))
     }
 
     useEffect(() => {
         const checkMobile = () => {
-            setIsMobile(window.innerWidth < 768)
+            const isMob = window.innerWidth < 768
+            setIsMobile(isMob)
             setViewerSize(getBookDimensions())
         }
         checkMobile()
@@ -84,7 +94,6 @@ export default function BookViewer() {
         }
     }
 
-    // 🧩 המרת blob images ל-base64
     async function fixBlobImages(container) {
         const imgs = container.querySelectorAll('img')
         await Promise.all(
@@ -108,7 +117,6 @@ export default function BookViewer() {
         )
     }
 
-    // 💌 שליחת שני ה־PDFים למייל (Lulu תקני + כיוון כריכות הפוך)
     async function handleSendToEmail() {
         if (!hiddenRef.current) return
 
@@ -120,7 +128,6 @@ export default function BookViewer() {
         const bookPagesEls = pagesEls.slice(1, -1)
         const frontCoverEl = pagesEls[pagesEls.length - 1]
 
-        // --- תוכן (8.5"x8.5" עם bleed) ---
         const pageSizeMM = 216
         const bleedMM = 3.175
         const bleedSizeMM = pageSizeMM + bleedMM * 2
@@ -131,7 +138,6 @@ export default function BookViewer() {
             format: [bleedSizeMM, bleedSizeMM],
         })
 
-        // מההתחלה לסוף
         for (let i = 0; i < bookPagesEls.length; i++) {
             const canvas = await html2canvas(bookPagesEls[i], {
                 scale: 2,
@@ -144,7 +150,6 @@ export default function BookViewer() {
             pdfContent.addImage(imgData, 'JPEG', 0, 0, bleedSizeMM, bleedSizeMM)
         }
 
-        // --- כריכות Lulu 19"x10.25" עם Spine 0.25" (קדמית שמאל, אחורית ימין) ---
         await fixBlobImages(frontCoverEl)
         await fixBlobImages(backCoverEl)
 
@@ -166,12 +171,9 @@ export default function BookViewer() {
         const frontImg = frontCanvas.toDataURL('image/jpeg', 1.0)
         const backImg = backCanvas.toDataURL('image/jpeg', 1.0)
 
-        // צד שמאל = קדמית
         pdfCovers.addImage(frontImg, 'JPEG', 0, 0, PANEL_W_MM, TOTAL_H_MM)
-        // Spine
         pdfCovers.setFillColor('#FFFFFF')
         pdfCovers.rect(PANEL_W_MM, 0, SPINE_MM, TOTAL_H_MM, 'F')
-        // צד ימין = אחורית
         pdfCovers.addImage(backImg, 'JPEG', PANEL_W_MM + SPINE_MM, 0, PANEL_W_MM, TOTAL_H_MM)
 
         async function uploadAndSend(pdf, filename) {
@@ -192,7 +194,6 @@ export default function BookViewer() {
         alert('📩 שני הקבצים נשלחו למייל בהצלחה!')
     }
 
-    // 📘 הורדה לשני קבצים (Lulu תקני + כיוון כריכות הפוך)
     async function handleDownloadLuluPDFs() {
         if (!hiddenRef.current) return
         await fixBlobImages(hiddenRef.current)
@@ -253,12 +254,9 @@ export default function BookViewer() {
         const frontImg = frontCanvas.toDataURL('image/jpeg', 1.0)
         const backImg = backCanvas.toDataURL('image/jpeg', 1.0)
 
-        // צד שמאל = קדמית
         pdf.addImage(frontImg, 'JPEG', 0, 0, PANEL_W_MM, TOTAL_H_MM)
-        // Spine
         pdf.setFillColor('#FFFFFF')
         pdf.rect(PANEL_W_MM, 0, SPINE_MM, TOTAL_H_MM, 'F')
-        // צד ימין = אחורית
         pdf.addImage(backImg, 'JPEG', PANEL_W_MM + SPINE_MM, 0, PANEL_W_MM, TOTAL_H_MM)
 
         const blob2 = pdf.output('blob')
@@ -282,7 +280,7 @@ export default function BookViewer() {
 
     return (
         <AdminPageWrapper>
-            <div className='relative flex h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 via-white to-purple-100 overflow-hidden'>
+            <div className='relative flex min-h-[calc(100dvh-4rem)] bg-gradient-to-br from-purple-50 via-white to-purple-100 overflow-y-auto lg:overflow-hidden'>
                 <main className='relative z-10 flex flex-1 flex-col lg:flex-row'>
                     <aside
                         className={`${
@@ -299,69 +297,62 @@ export default function BookViewer() {
                         />
                     </aside>
 
-                    <div className='flex flex-1 flex-col items-center justify-center p-4 sm:p-6 overflow-hidden'>
-                        <div className='flex items-center justify-center' style={{ height: viewerSize }}>
-                            {mode === 'cover' ? (
-                                <div
-                                    className='flex items-center justify-center transition-all duration-300'
-                                    style={{ width: viewerSize, height: viewerSize }}
-                                >
-                                    <HTMLFlipBook
-                                        width={viewerSize}
-                                        height={viewerSize}
-                                        size='fixed'
-                                        usePortrait
-                                        singlePage
-                                        drawShadow={false}
-                                        showCover={false}
-                                        className='book-flip'
-                                    >
-                                        <div style={{ width: viewerSize, height: viewerSize }}>
-                                            <BookCoverTemplate
-                                                styleSettings={styleSettings}
-                                                scaledWidth={viewerSize}
-                                                scaledHeight={viewerSize}
-                                            />
-                                        </div>
-                                    </HTMLFlipBook>
+                    <div className='flex flex-1 flex-col items-center justify-center p-4 sm:p-6'>
+                        {mode === 'cover' ? (
+                            <HTMLFlipBook
+                                width={viewerSize}
+                                height={viewerSize}
+                                size='fixed'
+                                usePortrait
+                                singlePage
+                                drawShadow={false}
+                                showCover={false}
+                                className='book-flip'
+                            >
+                                <div style={{ width: viewerSize, height: viewerSize }}>
+                                    <BookCoverTemplate
+                                        styleSettings={styleSettings}
+                                        scaledWidth={viewerSize}
+                                        scaledHeight={viewerSize}
+                                    />
                                 </div>
-                            ) : (
-                                <HTMLFlipBook
-                                    ref={bookRef}
-                                    key={`${viewerSize}-${pages.length}-${isMobile}`}
-                                    width={viewerSize}
-                                    height={viewerSize}
-                                    size='fixed'
-                                    usePortrait={isMobile}
-                                    singlePage={isMobile}
-                                    drawShadow={false}
-                                    showCover={!!hasCover}
-                                    mobileScrollSupport
-                                    className='book-flip'
-                                >
-                                    <div style={{ width: viewerSize, height: viewerSize }}>
-                                        <BookBackCoverTemplate scaledWidth={viewerSize} scaledHeight={viewerSize} />
-                                    </div>
-                                    {pages.map(entry => (
-                                        <div key={entry.id} style={{ width: viewerSize, height: viewerSize }}>
-                                            <BookPageTemplate
-                                                entry={entry}
-                                                styleSettings={styleSettings}
-                                                scaledWidth={viewerSize}
-                                                scaledHeight={viewerSize}
-                                            />
-                                        </div>
-                                    ))}
-                                    <div style={{ width: viewerSize, height: viewerSize }}>
-                                        <BookCoverTemplate
+                            </HTMLFlipBook>
+                        ) : (
+                            <HTMLFlipBook
+                                ref={bookRef}
+                                key={`${viewerSize}-${pages.length}-${isMobile}`}
+                                width={viewerSize}
+                                height={viewerSize}
+                                size='fixed'
+                                usePortrait={isMobile}
+                                singlePage={isMobile}
+                                drawShadow={false}
+                                showCover={!!hasCover}
+                                mobileScrollSupport
+                                className='book-flip'
+                            >
+                                <div style={{ width: viewerSize, height: viewerSize }}>
+                                    <BookBackCoverTemplate scaledWidth={viewerSize} scaledHeight={viewerSize} />
+                                </div>
+                                {pages.map(entry => (
+                                    <div key={entry.id} style={{ width: viewerSize, height: viewerSize }}>
+                                        <BookPageTemplate
+                                            entry={entry}
                                             styleSettings={styleSettings}
                                             scaledWidth={viewerSize}
                                             scaledHeight={viewerSize}
                                         />
                                     </div>
-                                </HTMLFlipBook>
-                            )}
-                        </div>
+                                ))}
+                                <div style={{ width: viewerSize, height: viewerSize }}>
+                                    <BookCoverTemplate
+                                        styleSettings={styleSettings}
+                                        scaledWidth={viewerSize}
+                                        scaledHeight={viewerSize}
+                                    />
+                                </div>
+                            </HTMLFlipBook>
+                        )}
 
                         <div className='flex flex-col items-center mt-8 space-y-3'>
                             <button
