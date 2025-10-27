@@ -195,7 +195,7 @@ export async function GET(req) {
         /* -------------------- חתימת מותג (ללא שינוי טקסט) -------------------- */
         doc.fontSize(12)
             .fillColor('#a1a1aa')
-            .text(fixHebrew('נוצר באהבה עם Tales Wedding'), 0, height - 80, {
+            .text(fixHebrew(' נוצר באהבה עם Tales Wedding'), 0, height - 80, {
                 align: 'center',
                 width,
             })
