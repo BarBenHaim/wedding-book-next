@@ -197,6 +197,30 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                         </div>
                     </Card>
 
+                    <Card title='📐 מסגרות'>
+                        <div className='grid grid-cols-5 gap-2'>
+                            <button
+                                onClick={() => onChange({ ...settings, frame: null })}
+                                className={`px-2 py-1 rounded text-xs ${
+                                    !settings.frame ? 'bg-pink-100 ring-2 ring-pink-400' : 'border'
+                                }`}
+                            >
+                                ללא
+                            </button>
+                            {FRAMES.map(f => (
+                                <button
+                                    key={f.src}
+                                    onClick={() => onChange({ ...settings, frame: f.src })}
+                                    className={`aspect-square rounded border overflow-hidden ${
+                                        settings.frame === f.src ? 'ring-2 ring-pink-400' : ''
+                                    }`}
+                                >
+                                    <img src={f.src} className='w-full h-full object-cover' />
+                                </button>
+                            ))}
+                        </div>
+                    </Card>
+
                     <Card title='🔤 פונטים'>
                         <div className='grid grid-cols-3 gap-2'>
                             {FONTS.map(f => (
@@ -243,30 +267,6 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                     }`}
                                     style={{ backgroundColor: c }}
                                 />
-                            ))}
-                        </div>
-                    </Card>
-
-                    <Card title='📐 מסגרות'>
-                        <div className='grid grid-cols-5 gap-2'>
-                            <button
-                                onClick={() => onChange({ ...settings, frame: null })}
-                                className={`px-2 py-1 rounded text-xs ${
-                                    !settings.frame ? 'bg-pink-100 ring-2 ring-pink-400' : 'border'
-                                }`}
-                            >
-                                ללא
-                            </button>
-                            {FRAMES.map(f => (
-                                <button
-                                    key={f.src}
-                                    onClick={() => onChange({ ...settings, frame: f.src })}
-                                    className={`aspect-square rounded border overflow-hidden ${
-                                        settings.frame === f.src ? 'ring-2 ring-pink-400' : ''
-                                    }`}
-                                >
-                                    <img src={f.src} className='w-full h-full object-cover' />
-                                </button>
                             ))}
                         </div>
                     </Card>
@@ -434,36 +434,6 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                     </Card>
                 </div>
             )}
-
-            {/* 📏 גודל ספר */}
-            <Card title='📏 גודל הספר'>
-                <div className='flex gap-2'>
-                    <button
-                        onClick={() => onSizeChange(20)}
-                        className={`px-3 py-1 rounded ${
-                            pdfSize === 200 ? 'bg-purple-600 text-white' : 'bg-white border'
-                        }`}
-                    >
-                        20×20
-                    </button>
-                    <button
-                        onClick={() => onSizeChange(30)}
-                        className={`px-3 py-1 rounded ${
-                            pdfSize === 300 ? 'bg-purple-600 text-white' : 'bg-white border'
-                        }`}
-                    >
-                        30×30
-                    </button>
-                    <button
-                        onClick={() => onSizeChange(21)}
-                        className={`px-3 py-1 rounded ${
-                            pdfSize === 210 ? 'bg-purple-600 text-white' : 'bg-white border'
-                        }`}
-                    >
-                        21x21
-                    </button>
-                </div>
-            </Card>
         </div>
     )
 }
