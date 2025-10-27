@@ -6,7 +6,7 @@ import path from 'path'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// ✅ תמיכה בעברית (ללא שבירת רווחים)
+// ✅ תמיכה בעברית
 function fixHebrew(text) {
     const hebrewRegex = /[\u0590-\u05FF]/
     if (!hebrewRegex.test(text)) return text
@@ -18,6 +18,10 @@ export async function GET(req) {
     try {
         const { searchParams } = new URL(req.url)
         const weddingId = searchParams.get('weddingId')
+        const fg = searchParams.get('fg') || '8B5CF6' // צבע קדמי (סגול)
+        const bg = searchParams.get('bg') || 'FFFFFF' // רקע לבן
+        const includeLogo = searchParams.get('logo') === 'true'
+
         const guestLink = `${process.env.NEXT_PUBLIC_BASE_URL}/wedding/${weddingId}`
 
         // ✅ טעינת פונט עברי
@@ -38,10 +42,9 @@ export async function GET(req) {
         doc.on('data', buffers.push.bind(buffers))
         const { width, height } = doc.page
 
-        // ✅ רקע לבן מלא
+        // ✅ רקע
         doc.rect(0, 0, width, height).fill('#FFFFFF')
 
-        // 🌸 גרדיאנט רך עם נגיעה לבנדר־ורוד
         const gradientSteps = 40
         for (let i = 0; i < gradientSteps; i++) {
             const t = i / gradientSteps
@@ -54,44 +57,78 @@ export async function GET(req) {
             doc.restore()
         }
 
-        // ✨ מסגרת דקה ורכה
+        // ✨ מסגרת
         doc.lineWidth(2)
-            .strokeColor('#e5d8ff')
+            .strokeColor('#E5D8FF')
             .roundedRect(40, 40, width - 80, height - 80, 25)
             .stroke()
 
-        // 💜 כותרת ראשית
+        // 💜 כותרת
         doc.fontSize(36).fillColor('#8B5CF6').text(fixHebrew('סרקו והעלו לנו תמונה או ברכה'), 0, 100, {
             align: 'center',
             width,
         })
 
-        // קו ורוד מתחת לכותרת
+        // קו
         doc.lineWidth(2)
             .moveTo(width / 2 - 70, 150)
             .lineTo(width / 2 + 70, 150)
             .strokeColor('#EC4899')
             .stroke()
 
-        // 💬 טקסט הסבר קטן מתחת לכותרת
-        doc.fontSize(16).fillColor('#666666').text(fixHebrew('צלמו, ברכו או שתפו רגע קטן שלכם מהחתונה שלנו '), 0, 170, {
+        // טקסט משנה
+        doc.fontSize(16).fillColor('#666').text(fixHebrew('צלמו, ברכו או שתפו רגע קטן שלכם מהחתונה שלנו 💜'), 0, 170, {
             align: 'center',
             width,
         })
 
-        // 📷 QR במרכז
-        const qrResponse = await fetch(
-            `https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(guestLink)}`
-        )
-        const qrBuffer = Buffer.from(await qrResponse.arrayBuffer())
-        const qrX = width / 2 - 140
-        const qrY = 260
-        doc.rect(qrX - 10, qrY - 10, 300, 300)
-            .fill('#ffffff')
-            .stroke('#EDE9FE')
-        doc.image(qrBuffer, qrX, qrY, { width: 280 })
+        // 📷 יצירת QR צבעוני
+        let qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(
+            guestLink
+        )}&color=${fg}&bgcolor=${bg}`
 
-        // 🌿 חתימה תחתונה
+        // עם לוגו אם קיים
+        if (includeLogo) {
+            const logoPath = path.join(process.cwd(), 'public', 'logo-gradient.png')
+            if (fs.existsSync(logoPath)) {
+                // נוריד את הברקוד
+                const qrResponse = await fetch(qrUrl)
+                const qrBuffer = Buffer.from(await qrResponse.arrayBuffer())
+                const qrX = width / 2 - 140
+                const qrY = 260
+
+                // מסגרת
+                doc.rect(qrX - 10, qrY - 10, 300, 300)
+                    .fill('#ffffff')
+                    .stroke('#EDE9FE')
+                doc.image(qrBuffer, qrX, qrY, { width: 280 })
+
+                // לוגו במרכז
+                doc.circle(width / 2, qrY + 140, 25).fill('#fff')
+                doc.image(logoPath, width / 2 - 20, qrY + 120, { width: 40 })
+            } else {
+                // בלי לוגו
+                const qrResponse = await fetch(qrUrl)
+                const qrBuffer = Buffer.from(await qrResponse.arrayBuffer())
+                const qrX = width / 2 - 140
+                const qrY = 260
+                doc.rect(qrX - 10, qrY - 10, 300, 300)
+                    .fill('#ffffff')
+                    .stroke('#EDE9FE')
+                doc.image(qrBuffer, qrX, qrY, { width: 280 })
+            }
+        } else {
+            const qrResponse = await fetch(qrUrl)
+            const qrBuffer = Buffer.from(await qrResponse.arrayBuffer())
+            const qrX = width / 2 - 140
+            const qrY = 260
+            doc.rect(qrX - 10, qrY - 10, 300, 300)
+                .fill('#ffffff')
+                .stroke('#EDE9FE')
+            doc.image(qrBuffer, qrX, qrY, { width: 280 })
+        }
+
+        // חתימה
         doc.fontSize(12)
             .fillColor('#a1a1aa')
             .text(fixHebrew('נוצר באהבה עם Wedding Tales'), 0, height - 80, {
