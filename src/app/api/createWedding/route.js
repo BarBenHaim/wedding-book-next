@@ -60,7 +60,7 @@ export async function POST(req) {
         console.log('💾 Wedding created →', weddingId)
 
         // --- הכנת קישור לעמוד האישי ---
-        const portalUrl = `https://the-wedding-gift.vercel.app/wedding/${weddingId}/portal`
+        const portalUrl = `https://app.weddingtales.co.il/wedding/${weddingId}/portal`
 
         // --- שליחת מייל ---
         const transporter = nodemailer.createTransport({
@@ -80,7 +80,7 @@ export async function POST(req) {
             <li><b>מזהה חתונה:</b> ${weddingId}</li>
           </ul>
 
-          <p>להתחברות למערכת: <a href="https://the-wedding-gift.vercel.app/login">לחצו כאן</a></p>
+          <p>להתחברות למערכת: <a href="https://app.weddingtales.co.il/login">לחצו כאן</a></p>
 
           <hr style="margin:25px 0;border:none;border-top:1px solid #eee"/>
 
