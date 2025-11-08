@@ -69,12 +69,12 @@ export default function Header() {
                             >
                                 התחברות
                             </button>
-                            <button
+                            {/* <button
                                 onClick={() => router.push('/register')}
                                 className='rounded-full border border-purple-400 px-5 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 transition cursor-pointer'
                             >
                                 הרשמה
-                            </button>
+                            </button> */}
                         </>
                     ) : null}
 

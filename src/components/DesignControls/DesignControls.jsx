@@ -139,7 +139,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
             {/* ===================== מצב ספר ===================== */}
             {mode === 'book' && (
                 <>
-                    <Card title='🎨 פריסטים'>
+                    <Card title='🎨 פריסטים (מומלץ)'>
                         <div className='grid grid-cols-3 gap-2'>
                             {PRESETS.map(preset => (
                                 <button
