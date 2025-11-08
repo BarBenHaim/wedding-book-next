@@ -355,7 +355,7 @@ export default function BookViewer() {
                         )}
 
                         <div className='flex flex-col items-center mt-8 space-y-3'>
-                            <button
+                            {/* <button
                                 onClick={handleDownloadLuluPDFs}
                                 className='relative rounded-full text-xs sm:text-sm font-medium overflow-hidden cursor-pointer group p-px bg-gradient-to-r from-blue-600 to-purple-500'
                             >
@@ -363,7 +363,7 @@ export default function BookViewer() {
                                 <span className='relative z-10 block rounded-full bg-white group-hover:bg-transparent text-gray-900 group-hover:text-white px-5 py-2 transition-colors duration-500'>
                                     📘 הורדה ל־LULU (תוכן + כריכות)
                                 </span>
-                            </button>
+                            </button> */}
 
                             <button
                                 onClick={handleSendToEmail}
@@ -371,7 +371,7 @@ export default function BookViewer() {
                             >
                                 <span className='absolute left-0 top-0 h-full w-0 bg-gradient-to-r from-pink-500 to-purple-600 group-hover:w-full transition-all duration-500 ease-out' />
                                 <span className='relative z-10 block rounded-full bg-white group-hover:bg-transparent text-gray-900 group-hover:text-white px-5 py-2 transition-colors duration-500'>
-                                    💌 שלח למייל
+                                    שליחת הספר להדפסה{' '}
                                 </span>
                             </button>
                         </div>

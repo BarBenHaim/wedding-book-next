@@ -118,54 +118,6 @@ export default function AdminDashboard() {
                         <p className='text-gray-600'>כאן תנהלו הגדרות, ברכות ותמונות.</p>
                     </div>
 
-                    {/* הגדרות ספר */}
-                    <section className='rounded-2xl bg-white/90 backdrop-blur-sm p-6 shadow-lg'>
-                        <h2 className='mb-4 text-xl font-semibold text-purple-700 flex items-center gap-2'>
-                            🎨 הגדרות ספר
-                        </h2>
-                        <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
-                            <input
-                                placeholder='שם הכלה'
-                                value={brideName}
-                                onChange={e => setBrideName(e.target.value)}
-                                className='rounded-lg border border-purple-200 bg-purple-50 px-4 py-2'
-                            />
-                            <input
-                                placeholder='שם החתן'
-                                value={groomName}
-                                onChange={e => setGroomName(e.target.value)}
-                                className='rounded-lg border border-purple-200 bg-purple-50 px-4 py-2'
-                            />
-                            <input
-                                placeholder='קישור לתמונת כריכה'
-                                value={backgroundImage}
-                                onChange={e => setBackgroundImage(e.target.value)}
-                                className='rounded-lg border border-purple-200 bg-purple-50 px-4 py-2'
-                            />
-                            <input
-                                placeholder='קישור לתמונת זוג'
-                                value={coupleImage}
-                                onChange={e => setCoupleImage(e.target.value)}
-                                className='rounded-lg border border-purple-200 bg-purple-50 px-4 py-2'
-                            />
-                        </div>
-                        {coupleImage && (
-                            <div className='mt-4 flex justify-center'>
-                                <img
-                                    src={coupleImage}
-                                    alt='תמונת זוג'
-                                    className='w-32 h-32 rounded-full object-cover border-4 border-purple-200 shadow'
-                                />
-                            </div>
-                        )}
-                        <button
-                            onClick={handleSaveSettings}
-                            className='mt-6 rounded-lg bg-gradient-to-r from-purple-600 to-pink-500 px-6 py-2 text-white font-medium shadow hover:scale-105 transition'
-                        >
-                            💾 שמור שינויים
-                        </button>
-                    </section>
-
                     {/* ניהול תכנים */}
                     <section>
                         <div className='flex items-center justify-between mb-4'>

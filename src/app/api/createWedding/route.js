@@ -70,31 +70,18 @@ export async function POST(req) {
 
         const html = `
         <div style="font-family:Heebo,sans-serif;direction:rtl;text-align:right;padding:20px">
-          <h2>🎉 מזל טוב ${name || ''}!</h2>
+          <h2>מזל טוב ${name || ''}!</h2>
           <p>החתונה שלך נוצרה בהצלחה ב-Wedding Tales 🎊</p>
 
-          <h3>פרטי גישה:</h3>
+          <h3>פרטי הגישה שלך:</h3>
           <ul>
             <li><b>אימייל:</b> ${email}</li>
-            ${password ? `<li><b>סיסמה ראשונית:</b> ${password}</li>` : ''}
-            <li><b>מזהה חתונה:</b> ${weddingId}</li>
+            ${password ? `<li><b>סיסמה:</b> ${password}</li>` : ''}
           </ul>
 
           <p>להתחברות למערכת: <a href="https://app.weddingtales.co.il/login">לחצו כאן</a></p>
 
           <hr style="margin:25px 0;border:none;border-top:1px solid #eee"/>
-
-          <h3>📱 עמוד החתונה שלכם</h3>
-          <p>בעמוד האישי שלכם תוכלו:</p>
-          <ul>
-            <li>להציג ברקוד ענק לסריקה באירוע</li>
-            <li>לשתף את הקישור בוואטסאפ לכל האורחים</li>
-            <li>להוריד קובץ PDF מוכן להדפסה עם ה-QR</li>
-          </ul>
-          <p>לכניסה לעמוד האישי שלכם לחצו כאן:  
-            <a href="${portalUrl}" style="color:#8B5CF6;">${portalUrl}</a>
-          </p>
-
           <p style="margin-top:25px;">באהבה,<br>צוות Wedding Tales 💜</p>
         </div>
         `
@@ -102,7 +89,7 @@ export async function POST(req) {
         await transporter.sendMail({
             from: `"Wedding Tales" <${process.env.MAIL_USER}>`,
             to: email,
-            subject: 'החתונה שלך מוכנה 🎉',
+            subject: 'החתונה שלך מוכנה',
             html,
         })
 
