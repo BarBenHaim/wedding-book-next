@@ -130,16 +130,24 @@ export async function POST(req) {
 
         // --- פירוק גוף ---
         const body = JSON.parse(rawBody)
-        const { billing, id: orderId, status } = body || {}
+        const { billing, id, status } = body || {}
+
+        // הפיכה ל-string כדי למנוע null/undefined
+        const orderId = id ? String(id) : null
+
+        if (!orderId) {
+            console.error('❌ Invalid orderId:', orderId)
+            return NextResponse.json({ error: 'Invalid order id' }, { status: 400 })
+        }
 
         const email = billing?.email?.trim()
         const name = `${billing?.first_name || ''} ${billing?.last_name || ''}`.trim()
 
-        if (!email || !orderId) return NextResponse.json({ error: 'Missing email or order id' }, { status: 400 })
+        if (!email) return NextResponse.json({ error: 'Missing email' }, { status: 400 })
 
-        // --- שמירת ה-JSON הגולמי של כל האירוע ---
-        await db.collection('ordersRaw').doc(orderId.toString()).set({
-            body: body,
+        // --- שמירת ההזמנה כמו שהיא Firestore ---
+        await db.collection('ordersRaw').doc(orderId).set({
+            body,
             receivedAt: FieldValue.serverTimestamp(),
         })
 
@@ -157,8 +165,8 @@ export async function POST(req) {
             return NextResponse.json({ skipped: true, reason: 'already_created' })
         }
 
-        // --- מנגנון Lock למניעת race condition ---
-        const lockRef = db.collection('ordersLocks').doc(orderId.toString())
+        // --- מנגנון Lock למניעת ריצות כפולות ---
+        const lockRef = db.collection('ordersLocks').doc(orderId)
         const lockSnap = await lockRef.get()
 
         if (lockSnap.exists) {
