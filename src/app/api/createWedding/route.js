@@ -137,6 +137,12 @@ export async function POST(req) {
 
         if (!email || !orderId) return NextResponse.json({ error: 'Missing email or order id' }, { status: 400 })
 
+        // --- שמירת ה-JSON הגולמי של כל האירוע ---
+        await db.collection('ordersRaw').doc(orderId.toString()).set({
+            body: body,
+            receivedAt: FieldValue.serverTimestamp(),
+        })
+
         // --- בדיקת סטטוס (רק אחרי תשלום) ---
         if (!['processing', 'completed'].includes(status)) {
             console.log(`⏭️ Skipping order ${orderId} due to status: ${status}`)
@@ -152,7 +158,7 @@ export async function POST(req) {
         }
 
         // --- מנגנון Lock למניעת race condition ---
-        const lockRef = db.collection('ordersLocks').doc(orderId)
+        const lockRef = db.collection('ordersLocks').doc(orderId.toString())
         const lockSnap = await lockRef.get()
 
         if (lockSnap.exists) {
