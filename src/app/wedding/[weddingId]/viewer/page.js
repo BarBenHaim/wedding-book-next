@@ -296,8 +296,20 @@ export default function BookViewer() {
                             onSizeChange={handleSelectSize}
                         />
                     </aside>
-
                     <div className='flex flex-1 flex-col items-center justify-center p-4 sm:p-6'>
+                        <p
+                            className='
+        text-xs           /* פונט קטן מאוד במובייל */
+        md:text-sm        /* פונט רגיל בדסקטופ */
+        mt-[0px]          /* מובייל */
+        md:mt-[-8vw]      /* דסקטופ */
+        md:mb-[2vw]       
+        text-gray-500
+    '
+                        >
+                            התמונות ייצאו מצוין בהדפסה, כאן זו רק תצוגה מקדימה.
+                        </p>
+
                         {mode === 'cover' ? (
                             <HTMLFlipBook
                                 width={viewerSize}
@@ -353,7 +365,6 @@ export default function BookViewer() {
                                 </div>
                             </HTMLFlipBook>
                         )}
-
                         <div className='flex flex-col items-center mt-8 space-y-3'>
                             {/* <button
                                 onClick={handleDownloadLuluPDFs}
