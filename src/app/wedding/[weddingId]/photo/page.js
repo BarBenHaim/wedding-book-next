@@ -15,6 +15,9 @@ export default function TextPage() {
     const [cameraOpen, setCameraOpen] = useState(false)
     const [submitting, setSubmitting] = useState(false)
 
+    // חדש – צד מצלמה (קדמית / אחורית)
+    const [cameraFacing, setCameraFacing] = useState('user')
+
     // crop state (רק להעלאות, לא לצילום)
     const [crop, setCrop] = useState({ x: 0, y: 0 })
     const [zoom, setZoom] = useState(1)
@@ -37,7 +40,7 @@ export default function TextPage() {
         try {
             const s = await navigator.mediaDevices.getUserMedia({
                 video: {
-                    facingMode: 'user',
+                    facingMode: cameraFacing, // שימוש במצלמה הנוכחית (קדמית/אחורית)
                     width: { ideal: 1920 },
                     height: { ideal: 1440 },
                     aspectRatio: 4 / 3,
@@ -66,7 +69,7 @@ export default function TextPage() {
                     const url = URL.createObjectURL(blob)
                     setPhotoBlob(blob)
                     setPhotoUrl(url)
-                    setIsUpload(false) // צילום → לא crop
+                    setIsUpload(false) // צילום → ללא crop
                     setCameraOpen(false)
                 }
             },
@@ -123,7 +126,19 @@ export default function TextPage() {
 
     async function onSubmit(e) {
         e.preventDefault()
-        if (!text.trim() && !photoUrl) return
+
+        // חובה ברכה
+        if (!text.trim()) {
+            alert('יש לכתוב ברכה קודם 🙂')
+            return
+        }
+
+        // חובה תמונה
+        if (!photoUrl) {
+            alert('יש להוסיף תמונה 🙂')
+            return
+        }
+
         if (!weddingId) {
             alert('לא נמצא מזהה חתונה')
             return
@@ -140,7 +155,7 @@ export default function TextPage() {
 
             await saveEntry(weddingId, {
                 name: name || null,
-                text: text.trim() || null,
+                text: text.trim(),
                 image: finalImage || null,
             })
             router.push(`/wedding/${weddingId}/thanks`)
@@ -153,7 +168,7 @@ export default function TextPage() {
     }
 
     return (
-        <div className='relative flex h-[calc(100vh-4rem)]  items-center justify-center bg-gradient-to-br from-purple-50 via-white to-purple-100 px-6 py-12 font-sans'>
+        <div className='relative flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-purple-100 px-6 py-6 font-sans'>
             {/* Glow רקע */}
             <div className='absolute -top-24 left-10 h-72 w-72 rounded-full bg-purple-300/30 blur-3xl'></div>
             <div className='absolute bottom-0 right-0 h-96 w-96 rounded-full bg-pink-300/30 blur-3xl'></div>
@@ -161,9 +176,6 @@ export default function TextPage() {
             {/* כרטיס */}
             <div className='relative z-10 w-full max-w-3xl rounded-2xl bg-white/90 backdrop-blur-md p-8 shadow-2xl'>
                 <h2 className='mb-3 text-center text-3xl font-bold text-gray-800'>השאירו ברכה ותמונה לזוג</h2>
-                <p className='mb-8 text-center text-sm text-gray-600'>
-                    תוכלו לבחור אם לכתוב ברכה אישית או להוסיף תמונה (מומלץ לשלב את שניהם 💜)
-                </p>
 
                 {/* Tabs */}
                 <div className='mb-8 flex justify-center gap-6 border-b border-gray-200'>
@@ -328,6 +340,19 @@ export default function TextPage() {
 
                                     {cameraOpen && (
                                         <>
+                                            {/* כפתור החלפת מצלמה – רק במובייל */}
+                                            <button
+                                                type='button'
+                                                onClick={() => {
+                                                    setCameraFacing(prev => (prev === 'user' ? 'environment' : 'user'))
+                                                    setCameraOpen(false)
+                                                    setTimeout(() => setCameraOpen(true), 100)
+                                                }}
+                                                className='md:hidden rounded-full border border-gray-300 bg-white px-4 py-2 font-medium text-gray-700 shadow hover:bg-gray-50 transition'
+                                            >
+                                                🔁
+                                            </button>
+
                                             <button
                                                 type='button'
                                                 onClick={takePhoto}
@@ -378,10 +403,10 @@ export default function TextPage() {
                         )}
                     </div>
 
-                    {/* שליחה */}
+                    {/* שליחה – חובה טקסט + חובה תמונה */}
                     <button
                         type='submit'
-                        disabled={submitting || (!text.trim() && !photoUrl)}
+                        disabled={submitting || !text.trim() || !photoUrl}
                         className='w-full rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 px-6 py-3 text-lg font-semibold text-white shadow-lg hover:scale-105 transition disabled:cursor-not-allowed disabled:opacity-50'
                     >
                         {submitting ? 'שולח...' : 'שלח ברכה'}
