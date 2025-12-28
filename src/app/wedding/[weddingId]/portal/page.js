@@ -16,7 +16,7 @@ const PdfIcon = () => (
 )
 
 const LinkIcon = () => (
-    <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+    <svg className='w-4 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
         <path
             strokeLinecap='round'
             strokeLinejoin='round'
