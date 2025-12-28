@@ -158,7 +158,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                         </div>
                     </Card>
 
-                    <Card title='🖌️ רקע'>
+                    {/* <Card title='🖌️ רקע'>
                         <div className='flex flex-wrap gap-2'>
                             {BACKGROUNDS.map(bg => (
                                 <button
@@ -171,8 +171,8 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                 />
                             ))}
                         </div>
-                    </Card>
-
+                    </Card> */}
+                    {/* 
                     <Card title='🖼️ טקסטורות'>
                         <div className='grid grid-cols-6 gap-2'>
                             <button
@@ -195,9 +195,9 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                 </button>
                             ))}
                         </div>
-                    </Card>
+                    </Card> */}
 
-                    <Card title='📐 מסגרות'>
+                    {/* <Card title='📐 מסגרות'>
                         <div className='grid grid-cols-5 gap-2'>
                             <button
                                 onClick={() => onChange({ ...settings, frame: null })}
@@ -219,7 +219,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                 </button>
                             ))}
                         </div>
-                    </Card>
+                    </Card> */}
 
                     <Card title='🔤 פונטים'>
                         <div className='grid grid-cols-3 gap-2'>
@@ -237,7 +237,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                             ))}
                         </div>
                     </Card>
-
+                    {/* 
                     <Card title='🔠 גודל טקסט'>
                         <div className='flex gap-2 flex-wrap'>
                             {FONT_SIZES.map(size => (
@@ -254,9 +254,9 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                 </button>
                             ))}
                         </div>
-                    </Card>
+                    </Card> */}
 
-                    <Card title='🎨 צבע טקסט'>
+                    {/* <Card title='🎨 צבע טקסט'>
                         <div className='flex flex-wrap gap-2'>
                             {FONT_COLORS.map(c => (
                                 <button
@@ -269,7 +269,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                 />
                             ))}
                         </div>
-                    </Card>
+                    </Card> */}
                 </>
             )}
 
