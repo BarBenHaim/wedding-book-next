@@ -93,7 +93,7 @@ const FONTS = [
 
 /* --- רכיבי UX מתקדמים --- */
 
-// רכיב אינפוט חכם (מונע ריענונים מיותרים בהקלדה)
+// רכיב אינפוט חכם
 const BufferedInput = ({ value, onChange, placeholder, className }) => {
     const [localValue, setLocalValue] = useState(value || '')
 
@@ -128,11 +128,9 @@ const PositionPad = ({ x, y, onChange }) => {
         if (!containerRef.current) return
         const rect = containerRef.current.getBoundingClientRect()
 
-        // חישוב אחוזים יחסיים (0 עד 100)
         let newX = ((clientX - rect.left) / rect.width) * 100
         let newY = ((clientY - rect.top) / rect.height) * 100
 
-        // הגבלת גבולות
         newX = Math.max(0, Math.min(100, newX))
         newY = Math.max(0, Math.min(100, newY))
 
@@ -152,8 +150,6 @@ const PositionPad = ({ x, y, onChange }) => {
 
         window.addEventListener('mousemove', onMouseMove)
         window.addEventListener('mouseup', onMouseUp)
-
-        // תמיכה בטאץ' לניידים
         window.addEventListener('touchmove', e => handleMove(e.touches[0].clientX, e.touches[0].clientY))
         window.addEventListener('touchend', onMouseUp)
 
@@ -171,7 +167,6 @@ const PositionPad = ({ x, y, onChange }) => {
                 <span>מיקום</span>
                 <span>לחצי וגררי</span>
             </div>
-            {/* המשטח עצמו */}
             <div
                 ref={containerRef}
                 onMouseDown={onMouseDown}
@@ -183,16 +178,13 @@ const PositionPad = ({ x, y, onChange }) => {
                     isDragging ? 'border-pink-400 bg-pink-50' : ''
                 }`}
             >
-                {/* קווי עזר */}
                 <div className='absolute top-1/2 left-0 w-full h-px bg-gray-200 pointer-events-none' />
                 <div className='absolute left-1/2 top-0 w-px h-full bg-gray-200 pointer-events-none' />
 
-                {/* הידית (הנקודה) */}
                 <div
                     className='absolute w-6 h-6 bg-white border-2 border-pink-500 rounded-full shadow-lg transform -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-transform duration-75'
                     style={{ left: `${x}%`, top: `${y}%`, scale: isDragging ? '1.2' : '1' }}
                 >
-                    {/* צלב קטן בתוך הנקודה */}
                     <div className='w-full h-full flex items-center justify-center'>
                         <div className='w-1 h-1 bg-pink-500 rounded-full' />
                     </div>
@@ -218,6 +210,19 @@ export default function DesignControls({ settings, onChange, mode, onModeChange 
     const applyPreset = preset => {
         setActivePreset(preset.name)
         onChange(preset.values)
+    }
+
+    // 🔥 פונקציה חדשה לטיפול בהעלאת תמונה - המרה ל-Base64 כדי שתישמר ב-Storage
+    const handleImageUpload = e => {
+        const file = e.target.files[0]
+        if (!file) return
+
+        const reader = new FileReader()
+        reader.onloadend = () => {
+            // התוצאה כאן היא מחרוזת Base64 ארוכה שנשמרת ב-LocalStorage
+            onChange({ ...settings, coverImage: reader.result })
+        }
+        reader.readAsDataURL(file)
     }
 
     return (
@@ -339,14 +344,12 @@ export default function DesignControls({ settings, onChange, mode, onModeChange 
                                 <label className='flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-pink-50 hover:border-pink-300 transition-all'>
                                     <span className='text-2xl mb-1'>📷</span>
                                     <span className='text-xs text-gray-500'>העלאת תמונה</span>
+                                    {/* 🔥 שימוש בפונקציה החדשה להעלאה */}
                                     <input
                                         type='file'
                                         accept='image/*'
                                         className='hidden'
-                                        onChange={e => {
-                                            const file = e.target.files[0]
-                                            if (file) onChange({ coverImage: URL.createObjectURL(file) })
-                                        }}
+                                        onChange={handleImageUpload}
                                     />
                                 </label>
                             ) : (
@@ -374,7 +377,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange 
                                         </button>
                                     </div>
 
-                                    {/* 🔥 המשטח החדש - מחליף את הסליידרים */}
+                                    {/* 🔥 המשטח החדש */}
                                     <PositionPad
                                         x={settings.coverImageX || 50}
                                         y={settings.coverImageY || 50}
@@ -383,7 +386,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange 
                                         }
                                     />
 
-                                    {/* סליידר לזום נשאר (כי הוא מימד שלישי) */}
+                                    {/* סליידר לזום */}
                                     <div>
                                         <div className='flex justify-between text-[10px] text-gray-400 mb-1'>
                                             <span>זום (Zoom)</span>
@@ -392,7 +395,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange 
                                         <input
                                             type='range'
                                             min={20}
-                                            max={200}
+                                            max={500} // 🔥 הוגדל ל-500 לפי בקשתך
                                             value={settings.coverImageScale || 100}
                                             onChange={e =>
                                                 onChange({ ...settings, coverImageScale: parseFloat(e.target.value) })
@@ -406,20 +409,35 @@ export default function DesignControls({ settings, onChange, mode, onModeChange 
 
                         <Card title='עיצוב ורקע'>
                             <div className='grid grid-cols-4 gap-2'>
+                                {/* כפתור אוטומטי (ברירת מחדל של הספר) */}
                                 <button
                                     onClick={() => onChange({ coverTexture: null, coverFrame: null })}
                                     className={`aspect-square rounded-lg flex flex-col items-center justify-center text-[10px] border transition-all ${
-                                        !settings.coverTexture && !settings.coverFrame
+                                        settings.coverTexture === null && settings.coverFrame === null
                                             ? 'bg-pink-50 border-pink-400 text-pink-700'
                                             : 'bg-white hover:bg-gray-50'
                                     }`}
                                 >
                                     אוטומטי
                                 </button>
+
+                                {/* 🔥 כפתור ללא (נקי) */}
+                                <button
+                                    onClick={() => onChange({ coverTexture: 'none', coverFrame: 'none' })}
+                                    className={`aspect-square rounded-lg flex flex-col items-center justify-center text-[10px] border transition-all ${
+                                        settings.coverTexture === 'none'
+                                            ? 'bg-pink-50 border-pink-400 text-pink-700'
+                                            : 'bg-white hover:bg-gray-50'
+                                    }`}
+                                >
+                                    ללא
+                                </button>
+
+                                {/* כפתורי טקסטורות */}
                                 {TEXTURES.map((tex, i) => (
                                     <button
                                         key={i}
-                                        onClick={() => onChange({ coverTexture: tex.src })}
+                                        onClick={() => onChange({ coverTexture: tex.src, coverFrame: 'none' })} // בחרתי שזה יבטל מסגרת אוטומטית כשבוחרים רקע
                                         className={`aspect-square rounded-lg border overflow-hidden transition-all ${
                                             settings.coverTexture === tex.src
                                                 ? 'ring-2 ring-pink-400 border-transparent'
