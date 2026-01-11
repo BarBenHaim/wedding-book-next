@@ -54,7 +54,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         color: styleSettings.fontColor,
                         opacity: 0.85,
                         marginTop: onlyOne ? 0 : h(styleSettings.nameMarginTop ?? 2),
-                        marginBottom: onlyOne ? 0 : h(styleSettings.nameMarginBottom ?? 2),
+                        marginBottom: onlyOne ? 0 : h(styleSettings.nameMarginBottom ?? 1),
                         textAlign: styleSettings.nameAlign ?? 'center',
                         maxWidth: w(styleSettings.nameMaxWidth ?? 60),
                         wordWrap: 'break-word',
@@ -95,7 +95,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 <div
                     style={{
                         maxWidth: w(styleSettings.textMaxWidth ?? 85),
-                        marginTop: onlyOne ? 0 : h(styleSettings.textMarginTop ?? 3),
+                        marginTop: onlyOne ? 0 : h(styleSettings.textMarginTop ?? 0),
                         textAlign: styleSettings.textAlign ?? 'center',
                         position: 'relative',
                         zIndex: 5,

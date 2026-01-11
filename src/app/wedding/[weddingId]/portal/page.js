@@ -1,7 +1,9 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import { doc, getDoc, updateDoc } from 'firebase/firestore' // ייבוא פיירבייס
+import { db } from '../../../../lib/firebaseClient'
 
 // --- אייקונים מעוצבים ---
 const PdfIcon = () => (
@@ -16,7 +18,7 @@ const PdfIcon = () => (
 )
 
 const LinkIcon = () => (
-    <svg className='w-4 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+    <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
         <path
             strokeLinecap='round'
             strokeLinejoin='round'
@@ -27,8 +29,8 @@ const LinkIcon = () => (
 )
 
 const CheckIcon = () => (
-    <svg className='w-4 h-5 text-green-500' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-        <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2.5} d='M5 13l4 4L19 7' />
+    <svg className='w-5 h-5 text-green-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+        <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M5 13l4 4L19 7' />
     </svg>
 )
 
@@ -40,13 +42,59 @@ const WhatsAppIcon = () => (
 
 export default function WeddingPortal() {
     const { weddingId } = useParams()
-    const guestLink = useMemo(() => `${process.env.NEXT_PUBLIC_BASE_URL}/wedding/${weddingId}`, [weddingId])
+
+    // State לשמות
+    const [brideName, setBrideName] = useState('')
+    const [groomName, setGroomName] = useState('')
+
     const [downloading, setDownloading] = useState(false)
     const [copied, setCopied] = useState(false)
+
+    // טעינת שמות קיימים מה-DB
+    useEffect(() => {
+        if (!weddingId) return
+        async function fetchNames() {
+            try {
+                const docRef = doc(db, 'weddings', weddingId)
+                const docSnap = await getDoc(docRef)
+                if (docSnap.exists()) {
+                    const data = docSnap.data()
+                    if (data.brideName) setBrideName(data.brideName)
+                    if (data.groomName) setGroomName(data.groomName)
+                }
+            } catch (error) {
+                console.error('Error fetching names:', error)
+            }
+        }
+        fetchNames()
+    }, [weddingId])
+
+    // שמירת שמות ל-DB (באירוע onBlur)
+    async function saveNamesToDB() {
+        if (!weddingId) return
+        try {
+            const docRef = doc(db, 'weddings', weddingId)
+            await updateDoc(docRef, {
+                brideName: brideName,
+                groomName: groomName,
+            })
+        } catch (error) {
+            console.error('Error saving names:', error)
+        }
+    }
+
+    const guestLink = useMemo(() => {
+        const baseUrl =
+            process.env.NEXT_PUBLIC_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+        return `${baseUrl}/wedding/${weddingId}`
+    }, [weddingId])
 
     async function handleDownloadPDF() {
         try {
             setDownloading(true)
+            // נשמור שוב ליתר ביטחון לפני היצירה
+            await saveNamesToDB()
+
             const params = new URLSearchParams({ weddingId: String(weddingId || '') })
             const response = await fetch(`/api/generate-qr-pdf?${params.toString()}`)
             const blob = await response.blob()
@@ -68,25 +116,25 @@ export default function WeddingPortal() {
     }
 
     function handleShareWhatsApp() {
-        const url = `https://wa.me/?text=${encodeURIComponent(
-            `היי! נשמח שתעלו תמונות וברכות לאלבום החתונה שלנו כאן: ✨\n${guestLink}`
-        )}`
+        // שימוש בשמות בהודעה אם קיימים
+        const names = brideName && groomName ? `של ${brideName} ו${groomName}` : ''
+        const text = `היי! נשמח שתעלו תמונות וברכות לאלבום החתונה ${names} כאן: ✨\n${guestLink}`
+
+        const url = `https://wa.me/?text=${encodeURIComponent(text)}`
         window.open(url, '_blank')
     }
 
     return (
-        // רקע עדין ויוקרתי (גרדיאנט פסטלי)
-        <div className=' h-[calc(100vh-4rem)] bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex flex-col items-center justify-center p-4 font-[Heebo]'>
-            {/* כרטיס ראשי צף עם אפקט זכוכית */}
+        <div className='min-h-[calc(100vh-4rem)] bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex flex-col items-center justify-center p-4 font-sans'>
             <div className='w-full max-w-lg bg-white/80 backdrop-blur-xl rounded-[2.5rem] shadow-2xl border border-white/50 p-8 md:p-12 relative overflow-hidden'>
-                {/* קישוט רקע עדין */}
+                {/* קישוט רקע */}
                 <div className='absolute top-0 right-0 w-64 h-64 bg-purple-200/30 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none'></div>
                 <div className='absolute bottom-0 left-0 w-64 h-64 bg-pink-200/30 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none'></div>
 
                 {/* לוגו */}
-                <div className='text-center mb-10 relative z-10'>
+                <div className='text-center mb-6 relative z-10'>
                     <h1
-                        className='text-3xl mb-2 drop-shadow-sm'
+                        className='text-4xl mb-2 drop-shadow-sm'
                         style={{
                             fontFamily: "'Great Vibes', cursive",
                             backgroundImage: 'linear-gradient(to right, #ec4899, #8b5cf6)',
@@ -98,10 +146,31 @@ export default function WeddingPortal() {
                     </h1>
                 </div>
 
+                {/* --- אזור שמות החתן והכלה (חדש!) --- */}
+                <div className='relative z-10 flex items-center justify-center gap-4 mb-10' dir='rtl'>
+                    <input
+                        type='text'
+                        value={brideName}
+                        onChange={e => setBrideName(e.target.value)}
+                        onBlur={saveNamesToDB}
+                        placeholder='שם הכלה'
+                        className='w-1/2 bg-transparent border-b-2 border-purple-200 focus:border-purple-500 outline-none text-center text-xl md:text-2xl font-bold text-gray-800 placeholder-purple-300 py-1 transition-colors'
+                    />
+                    <span className='text-3xl text-purple-400 font-[Great Vibes]'>&</span>
+                    <input
+                        type='text'
+                        value={groomName}
+                        onChange={e => setGroomName(e.target.value)}
+                        onBlur={saveNamesToDB}
+                        placeholder='שם החתן'
+                        className='w-1/2 bg-transparent border-b-2 border-purple-200 focus:border-purple-500 outline-none text-center text-xl md:text-2xl font-bold text-gray-800 placeholder-purple-300 py-1 transition-colors'
+                    />
+                </div>
+
                 <div className='space-y-8 relative z-10'>
-                    {/* --- חלק 1: הורדת שלט --- */}
+                    {/* כפתור הורדת שלט */}
                     <div className='text-center'>
-                        <h2 className='text-2xl font-bold text-gray-800 mb-2'>הדפסת שלט לאירוע </h2>
+                        <h2 className='text-xl font-bold text-gray-800 mb-2'>הדפסת שלט לאירוע</h2>
                         <p className='text-gray-500 text-sm mb-6 px-4 leading-relaxed'>
                             הכינו את האורחים! הורידו שלט מעוצב עם ברקוד, הדפיסו, ותלו בכניסה לאולם.
                         </p>
@@ -119,7 +188,7 @@ export default function WeddingPortal() {
                             ) : (
                                 <>
                                     <PdfIcon />
-                                    <span>הורידו שלט מוכן (PDF)</span>
+                                    <span>הורדת שלט מוכן (PDF)</span>
                                 </>
                             )}
                         </button>
@@ -127,7 +196,31 @@ export default function WeddingPortal() {
 
                     <div className='w-full h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent'></div>
 
-                    {/* --- חלק 2: שיתוף דיגיטלי --- */}
+                    {/* שיתוף דיגיטלי */}
+                    <div className='text-center'>
+                        <h2 className='text-xl font-bold text-gray-800 mb-4'>או שתפו קישור ישיר 💌</h2>
+
+                        <div className='flex items-center gap-2 bg-white/50 border border-gray-200 rounded-xl p-2 mb-4 hover:border-purple-200 transition-colors'>
+                            <div className='flex-1 text-left text-sm text-gray-500 truncate px-2 font-mono dir-ltr'>
+                                {guestLink}
+                            </div>
+                            <button
+                                onClick={handleCopy}
+                                className='bg-white text-gray-600 p-2.5 rounded-lg shadow-sm border border-gray-100 hover:bg-gray-50 hover:text-purple-600 transition'
+                                title='העתק קישור'
+                            >
+                                {copied ? <CheckIcon /> : <LinkIcon />}
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={handleShareWhatsApp}
+                            className='w-full py-3.5 rounded-xl bg-[#25D366] text-white font-bold shadow-md hover:shadow-green-500/30 hover:bg-[#20bd5a] hover:scale-[1.02] active:scale-[0.98] transition flex items-center justify-center gap-2'
+                        >
+                            <WhatsAppIcon />
+                            <span>שליחה בוואטסאפ</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 

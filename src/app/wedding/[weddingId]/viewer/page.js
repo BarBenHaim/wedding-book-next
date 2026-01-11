@@ -1,79 +1,84 @@
 'use client'
 
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import HTMLFlipBook from 'react-pageflip'
-import DesignControls from '../../../../components/DesignControls/DesignControls'
-import { getEntries } from '../../../../lib/classifyMedia'
-import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
-import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
-import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
-import defaultStyle from '@/app/wedding/[weddingId]/viewer/defultStyle'
-import html2canvas from 'html2canvas'
-import jsPDF from 'jspdf'
-import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage } from '@/lib/firebaseClient'
 
+/* --- רכיבים פנימיים --- */
+import DesignControls from '../../../../components/DesignControls/DesignControls'
+import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
+import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
+import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
+import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
+
+/* --- לוגיקה ונתונים --- */
+import { getEntries } from '../../../../lib/classifyMedia'
+import defaultStyle from '@/app/wedding/[weddingId]/viewer/defultStyle'
+
 export default function BookViewer() {
-    const [pages, setPages] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [viewerSize, setViewerSize] = useState(2362)
-    const [baseSize, setBaseSize] = useState(2362)
-    const [pdfSize, setPdfSize] = useState(200)
-    const [styleSettings, setStyleSettings] = useState(() =>
-        typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('bookStyle')) || defaultStyle : defaultStyle
-    )
-    const [mode, setMode] = useState('book')
-    const [isMobile, setIsMobile] = useState(false)
-    const hiddenRef = useRef(null)
-    const bookRef = useRef(null)
     const { weddingId } = useParams()
 
-    // ✅ חישוב גודל הספר לפי רוחב וגם גובה זמין (מותאם מובייל)
-    function getBookDimensions() {
+    // --- State ---
+    const [pages, setPages] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [mode, setMode] = useState('book')
+    const [viewerSize, setViewerSize] = useState(500)
+    const [baseSize] = useState(2362)
+    const [isMobile, setIsMobile] = useState(false)
+    const [styleSettings, setStyleSettings] = useState(defaultStyle)
+
+    const hiddenRef = useRef(null)
+
+    // --- טעינה ---
+    useEffect(() => {
+        const init = async () => {
+            if (typeof window !== 'undefined') {
+                const savedStyle = localStorage.getItem('bookStyle')
+                if (savedStyle) setStyleSettings(JSON.parse(savedStyle))
+            }
+            if (weddingId) {
+                const data = await getEntries(weddingId)
+                setPages(data.reverse())
+                setLoading(false)
+            }
+        }
+        init()
+    }, [weddingId])
+
+    // --- חישוב גודל ---
+    const calculateBookSize = useCallback(() => {
         const w = window.innerWidth
         const h = window.innerHeight
+        const mobile = w < 1024
+        setIsMobile(mobile)
 
-        const HEADER = 64 // 4rem
-        const CONTROLS = w < 1024 ? 260 : 0 // כש־DesignControls למטה
-        const BUTTONS = 84 // כפתורי ההורדה
-        const PADDING = 24
+        const HEADER_H = 64
+        const SIDEBAR_W = 380
+        const PADDING_TOP = 60 // רווח מלמעלה
+        const PADDING_BOTTOM = 100 // רווח לכפתור
 
-        const byWidth = w < 640 ? w * 0.9 : w < 1024 ? w * 0.7 : w * 0.35
+        const availableWidth = mobile ? w - 20 : w - SIDEBAR_W - 60
+        const availableHeight = h - HEADER_H - PADDING_TOP - PADDING_BOTTOM
 
-        const availHeight = h - HEADER - CONTROLS - BUTTONS - PADDING
-        return Math.max(180, Math.min(byWidth, availHeight))
-    }
+        let optimalSize = 0
+
+        if (mobile) {
+            optimalSize = Math.min(availableWidth, availableHeight)
+        } else {
+            // בדסקטופ הספר כפול
+            optimalSize = Math.min(availableWidth / 2, availableHeight)
+        }
+
+        setViewerSize(Math.floor(Math.min(Math.max(optimalSize, 280), 750)))
+    }, [])
 
     useEffect(() => {
-        const checkMobile = () => {
-            const isMob = window.innerWidth < 768
-            setIsMobile(isMob)
-            setViewerSize(getBookDimensions())
-        }
-        checkMobile()
-
-        async function fetchData() {
-            if (!weddingId) return
-            const data = await getEntries(weddingId)
-            setPages(data.reverse())
-            setLoading(false)
-        }
-        fetchData()
-
-        let resizeTimer
-        const handleResize = () => {
-            clearTimeout(resizeTimer)
-            resizeTimer = setTimeout(checkMobile, 300)
-        }
-
-        window.addEventListener('resize', handleResize)
-        return () => {
-            clearTimeout(resizeTimer)
-            window.removeEventListener('resize', handleResize)
-        }
-    }, [weddingId])
+        calculateBookSize()
+        window.addEventListener('resize', calculateBookSize)
+        return () => window.removeEventListener('resize', calculateBookSize)
+    }, [calculateBookSize])
 
     const handleStyleChange = updated => {
         const newSettings = { ...styleSettings, ...updated }
@@ -81,247 +86,104 @@ export default function BookViewer() {
         if (typeof window !== 'undefined') localStorage.setItem('bookStyle', JSON.stringify(newSettings))
     }
 
-    function handleSelectSize(sizeCm) {
-        if (sizeCm === 20) {
-            setPdfSize(200)
-            setBaseSize(2362)
-        } else if (sizeCm === 21) {
-            setPdfSize(210)
-            setBaseSize(2480)
-        } else if (sizeCm === 30) {
-            setPdfSize(300)
-            setBaseSize(3543)
-        }
+    const handleSendToEmail = async () => {
+        alert('כאן תופעל יצירת ה-PDF')
     }
-
-    async function fixBlobImages(container) {
-        const imgs = container.querySelectorAll('img')
-        await Promise.all(
-            Array.from(imgs).map(async img => {
-                if (img.src.startsWith('blob:')) {
-                    try {
-                        const blob = await fetch(img.src).then(r => r.blob())
-                        const reader = new FileReader()
-                        await new Promise(res => {
-                            reader.onloadend = () => {
-                                img.src = reader.result
-                                res()
-                            }
-                            reader.readAsDataURL(blob)
-                        })
-                    } catch (e) {
-                        console.warn('⚠️ בעיה בהמרת blob לתמונה:', e)
-                    }
-                }
-            })
-        )
-    }
-
-    async function handleSendToEmail() {
-        if (!hiddenRef.current) return
-
-        await fixBlobImages(hiddenRef.current)
-        const pagesEls = Array.from(hiddenRef.current.querySelectorAll('.page-for-pdf'))
-        if (pagesEls.length < 3) return
-
-        const backCoverEl = pagesEls[0]
-        const bookPagesEls = pagesEls.slice(1, -1)
-        const frontCoverEl = pagesEls[pagesEls.length - 1]
-
-        const pageSizeMM = 216
-        const bleedMM = 3.175
-        const bleedSizeMM = pageSizeMM + bleedMM * 2
-
-        const pdfContent = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: [bleedSizeMM, bleedSizeMM],
-        })
-
-        for (let i = 0; i < bookPagesEls.length; i++) {
-            const canvas = await html2canvas(bookPagesEls[i], {
-                scale: 2,
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: '#fff',
-            })
-            const imgData = canvas.toDataURL('image/jpeg', 1.0)
-            if (i > 0) pdfContent.addPage()
-            pdfContent.addImage(imgData, 'JPEG', 0, 0, bleedSizeMM, bleedSizeMM)
-        }
-
-        await fixBlobImages(frontCoverEl)
-        await fixBlobImages(backCoverEl)
-
-        const TOTAL_W_MM = 482.6
-        const TOTAL_H_MM = 260.35
-        const SPINE_MM = 6.35
-        const PANEL_W_MM = (TOTAL_W_MM - SPINE_MM) / 2
-
-        const pdfCovers = new jsPDF({
-            orientation: 'landscape',
-            unit: 'mm',
-            format: [TOTAL_W_MM, TOTAL_H_MM],
-        })
-
-        const [frontCanvas, backCanvas] = await Promise.all([
-            html2canvas(frontCoverEl, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fff' }),
-            html2canvas(backCoverEl, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fff' }),
-        ])
-        const frontImg = frontCanvas.toDataURL('image/jpeg', 1.0)
-        const backImg = backCanvas.toDataURL('image/jpeg', 1.0)
-
-        pdfCovers.addImage(frontImg, 'JPEG', 0, 0, PANEL_W_MM, TOTAL_H_MM)
-        pdfCovers.setFillColor('#FFFFFF')
-        pdfCovers.rect(PANEL_W_MM, 0, SPINE_MM, TOTAL_H_MM, 'F')
-        pdfCovers.addImage(backImg, 'JPEG', PANEL_W_MM + SPINE_MM, 0, PANEL_W_MM, TOTAL_H_MM)
-
-        async function uploadAndSend(pdf, filename) {
-            const blob = pdf.output('blob')
-            const fileRef = ref(storage, `wedding-books/${filename}-${Date.now()}.pdf`)
-            await uploadBytes(fileRef, blob)
-            const url = await getDownloadURL(fileRef)
-            await fetch('/api/send-pdf', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url }),
-            })
-        }
-
-        await uploadAndSend(pdfContent, 'WeddingBook-Content-LULU')
-        await uploadAndSend(pdfCovers, 'WeddingBook-Covers-LULU')
-
-        alert('📩 שני הקבצים נשלחו למייל בהצלחה!')
-    }
-
-    async function handleDownloadLuluPDFs() {
-        if (!hiddenRef.current) return
-        await fixBlobImages(hiddenRef.current)
-        const pagesEls = Array.from(hiddenRef.current.querySelectorAll('.page-for-pdf'))
-        if (pagesEls.length < 3) return
-
-        const backCoverEl = pagesEls[0]
-        const bookPagesEls = pagesEls.slice(1, -1)
-        const frontCoverEl = pagesEls[pagesEls.length - 1]
-
-        const pageSizeMM = 216
-        const bleedMM = 3.175
-        const bleedSizeMM = pageSizeMM + bleedMM * 2
-
-        async function renderToLuluPDF(elements, filename) {
-            const pdf = new jsPDF({
-                orientation: 'portrait',
-                unit: 'mm',
-                format: [bleedSizeMM, bleedSizeMM],
-            })
-            for (let i = 0; i < elements.length; i++) {
-                const canvas = await html2canvas(elements[i], {
-                    scale: 2,
-                    useCORS: true,
-                    allowTaint: true,
-                    backgroundColor: '#fff',
-                })
-                const imgData = canvas.toDataURL('image/jpeg', 1.0)
-                if (i > 0) pdf.addPage()
-                pdf.addImage(imgData, 'JPEG', 0, 0, bleedSizeMM, bleedSizeMM)
-            }
-            const blob = pdf.output('blob')
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = `${filename}.pdf`
-            a.click()
-            URL.revokeObjectURL(url)
-        }
-
-        await renderToLuluPDF(bookPagesEls, 'WeddingBook-Content-LULU')
-
-        const TOTAL_W_MM = 482.6
-        const TOTAL_H_MM = 260.35
-        const SPINE_MM = 6.35
-        const PANEL_W_MM = (TOTAL_W_MM - SPINE_MM) / 2
-
-        const pdf = new jsPDF({
-            orientation: 'landscape',
-            unit: 'mm',
-            format: [TOTAL_W_MM, TOTAL_H_MM],
-        })
-
-        const [frontCanvas, backCanvas] = await Promise.all([
-            html2canvas(frontCoverEl, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fff' }),
-            html2canvas(backCoverEl, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fff' }),
-        ])
-        const frontImg = frontCanvas.toDataURL('image/jpeg', 1.0)
-        const backImg = backCanvas.toDataURL('image/jpeg', 1.0)
-
-        pdf.addImage(frontImg, 'JPEG', 0, 0, PANEL_W_MM, TOTAL_H_MM)
-        pdf.setFillColor('#FFFFFF')
-        pdf.rect(PANEL_W_MM, 0, SPINE_MM, TOTAL_H_MM, 'F')
-        pdf.addImage(backImg, 'JPEG', PANEL_W_MM + SPINE_MM, 0, PANEL_W_MM, TOTAL_H_MM)
-
-        const blob2 = pdf.output('blob')
-        const url2 = URL.createObjectURL(blob2)
-        const a2 = document.createElement('a')
-        a2.href = url2
-        a2.download = 'WeddingBook-Covers-LULU.pdf'
-        a2.click()
-        URL.revokeObjectURL(url2)
-    }
-
-    const hasCover = styleSettings.coverTitle?.trim() || styleSettings.coverSubtitle?.trim()
 
     if (loading)
         return (
-            <div className='flex flex-col items-center justify-center text-gray-700 h-screen'>
-                <div className='animate-spin rounded-full h-12 w-12 border-4 border-purple-400 border-t-transparent mb-4'></div>
-                <p className='text-sm font-medium'>טוען את ספר הזיכרונות…</p>
+            <div className='flex flex-col items-center justify-center h-screen bg-gradient-to-br from-purple-50 via-white to-purple-100'>
+                <div className='animate-spin rounded-full h-8 w-8 border-[3px] border-purple-200 border-t-purple-600 mb-4 shadow-sm'></div>
+                <p className='text-purple-900 font-medium tracking-wide'>טוען את הספר...</p>
             </div>
         )
 
+    const hasCover = styleSettings.coverTitle || styleSettings.coverImage
+
     return (
         <AdminPageWrapper>
-            <div className='relative flex min-h-[calc(100dvh-4rem)] bg-gradient-to-br from-purple-50 via-white to-purple-100 overflow-y-auto lg:overflow-hidden'>
-                <main className='relative z-10 flex flex-1 flex-col lg:flex-row'>
-                    <aside
-                        className={`${
-                            isMobile ? 'order-2 w-full border-t' : 'w-1/4 border-l'
-                        } border-gray-200 bg-white/80 backdrop-blur-md p-4 sm:p-6 shadow-xl rounded-none lg:rounded-l-2xl overflow-y-auto`}
-                    >
+            {/* רקע: Gradient כמו ב-WeddingHome 
+                מבנה: RTL + Flex 
+            */}
+            <div
+                dir='rtl'
+                className='relative flex flex-col-reverse lg:flex-row h-[calc(100vh-64px)] overflow-hidden bg-gradient-to-br from-purple-50 font-sans'
+            >
+                {/* --- Glow Effects (כמו ב-WeddingHome) --- */}
+
+                {/* --- צד ימין: סרגל כלים --- */}
+                <aside
+                    className={`
+                    relative z-20 flex flex-col shrink-0 
+                    bg-white/80 backdrop-blur-md border-l border-white/50  transition-all
+                    ${isMobile ? 'h-[350px] w-full border-t rounded-t-3xl' : 'h-full w-[380px]'}
+                `}
+                >
+                    <div className='h-full overflow-hidden'>
                         <DesignControls
                             settings={styleSettings}
                             onChange={handleStyleChange}
                             mode={mode}
-                            onModeChange={newMode => setMode(newMode)}
-                            pdfSize={pdfSize}
-                            onSizeChange={handleSelectSize}
+                            onModeChange={setMode}
                         />
-                    </aside>
-                    <div className='flex flex-1 flex-col items-center justify-center p-4 sm:p-6'>
-                        <p
-                            className='
-        text-xs           /* פונט קטן מאוד במובייל */
-        md:text-sm        /* פונט רגיל בדסקטופ */
-        mt-[0px]          /* מובייל */
-        md:mt-[-8vw]      /* דסקטופ */
-        md:mb-[2vw]       
-        text-gray-500
-    '
-                        >
-                            התמונות ייצאו מצוין בהדפסה, כאן זו רק תצוגה מקדימה.
-                        </p>
+                    </div>
+                </aside>
 
+                {/* --- צד שמאל: אזור התצוגה --- */}
+                <main
+                    className={`
+                    relative z-10 flex-1 flex flex-col p-6 overflow-hidden transition-all duration-500 ease-in-out
+                    
+                    /* 🔥 לוגיקת יישור משופרת: */
+                    ${
+                        isMobile
+                            ? 'items-center justify-center' // במובייל: תמיד ממורכז!
+                            : mode === 'book'
+                            ? 'items-start justify-start pt-12 px-10' // דסקטופ ספר: מוצמד להתחלה
+                            : 'items-center justify-center' // דסקטופ כריכה: ממורכז
+                    }
+                `}
+                >
+                    {/* תווית "תצוגה מקדימה" */}
+                    <div
+                        className={`
+                        absolute z-10 pointer-events-none transition-all duration-500
+                        ${mode === 'book' ? 'top-4 right-8 opacity-60' : 'top-8 opacity-80'}
+                    `}
+                    >
+                        <span
+                            className='
+                            bg-white/60 backdrop-blur-sm text-purple-900 px-4 py-1.5 rounded-full text-xs font-bold 
+                            shadow-sm ring-1 ring-purple-100/50 flex items-center gap-2
+                        '
+                        >
+                            <span className='relative flex h-2 w-2'>
+                                <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75'></span>
+                                <span className='relative inline-flex rounded-full h-2 w-2 bg-pink-500'></span>
+                            </span>
+                            תצוגה מקדימה
+                        </span>
+                    </div>
+
+                    {/* קונטיינר הספר */}
+                    <div
+                        className='relative transition-all duration-700 ease-out  rounded-sm shrink-0'
+                        style={{
+                            width: viewerSize,
+                            height: viewerSize,
+                        }}
+                    >
                         {mode === 'cover' ? (
                             <HTMLFlipBook
                                 width={viewerSize}
                                 height={viewerSize}
                                 size='fixed'
-                                usePortrait
-                                singlePage
-                                drawShadow={false}
+                                usePortrait={true}
                                 showCover={false}
+                                drawShadow={false}
                                 className='book-flip'
                             >
-                                <div style={{ width: viewerSize, height: viewerSize }}>
+                                <div className='demo-page'>
                                     <BookCoverTemplate
                                         styleSettings={styleSettings}
                                         scaledWidth={viewerSize}
@@ -331,23 +193,22 @@ export default function BookViewer() {
                             </HTMLFlipBook>
                         ) : (
                             <HTMLFlipBook
-                                ref={bookRef}
-                                key={`${viewerSize}-${pages.length}-${isMobile}`}
+                                key={`${viewerSize}-${isMobile}`}
                                 width={viewerSize}
                                 height={viewerSize}
                                 size='fixed'
                                 usePortrait={isMobile}
-                                singlePage={isMobile}
-                                drawShadow={false}
                                 showCover={!!hasCover}
-                                mobileScrollSupport
+                                mobileScrollSupport={true}
                                 className='book-flip'
+                                drawShadow={false}
+                                flippable={true}
                             >
-                                <div style={{ width: viewerSize, height: viewerSize }}>
+                                <div className='demo-page  shadow-inner'>
                                     <BookBackCoverTemplate scaledWidth={viewerSize} scaledHeight={viewerSize} />
                                 </div>
                                 {pages.map(entry => (
-                                    <div key={entry.id} style={{ width: viewerSize, height: viewerSize }}>
+                                    <div key={entry.id} className='demo-page  border-l border-purple-50/30'>
                                         <BookPageTemplate
                                             entry={entry}
                                             styleSettings={styleSettings}
@@ -356,7 +217,7 @@ export default function BookViewer() {
                                         />
                                     </div>
                                 ))}
-                                <div style={{ width: viewerSize, height: viewerSize }}>
+                                <div className='demo-page shadow-inner'>
                                     <BookCoverTemplate
                                         styleSettings={styleSettings}
                                         scaledWidth={viewerSize}
@@ -365,55 +226,48 @@ export default function BookViewer() {
                                 </div>
                             </HTMLFlipBook>
                         )}
-                        <div className='flex flex-col items-center mt-8 space-y-3'>
-                            {/* <button
-                                onClick={handleDownloadLuluPDFs}
-                                className='relative rounded-full text-xs sm:text-sm font-medium overflow-hidden cursor-pointer group p-px bg-gradient-to-r from-blue-600 to-purple-500'
-                            >
-                                <span className='absolute left-0 top-0 h-full w-0 bg-gradient-to-r from-blue-600 to-purple-500 group-hover:w-full transition-all duration-500 ease-out' />
-                                <span className='relative z-10 block rounded-full bg-white group-hover:bg-transparent text-gray-900 group-hover:text-white px-5 py-2 transition-colors duration-500'>
-                                    📘 הורדה ל־LULU (תוכן + כריכות)
-                                </span>
-                            </button> */}
+                    </div>
 
+                    {/* 🔥 כפתור הדפסה גרדיאנט צבעוני (כמו ב-WeddingHome)
+                        ממוקם קבוע במרכז למטה */}
+                    {!isMobile && (
+                        <div className='absolute bottom-8 left-1/2 -translate-x-1/2 z-30'>
                             <button
                                 onClick={handleSendToEmail}
-                                className='relative rounded-full text-xs sm:text-sm font-medium overflow-hidden cursor-pointer group p-px bg-gradient-to-r from-pink-500 to-purple-600'
+                                className='
+                                    group flex items-center gap-3 
+                                    bg-gradient-to-r from-purple-600 to-pink-500 text-white 
+                                    px-8 py-3 rounded-xl shadow-lg shadow-purple-500/20 
+                                    cursor-pointer transition-all duration-300 transform
+                                    hover:scale-105 hover:shadow-purple-500/40
+                                '
                             >
-                                <span className='absolute left-0 top-0 h-full w-0 bg-gradient-to-r from-pink-500 to-purple-600 group-hover:w-full transition-all duration-500 ease-out' />
-                                <span className='relative z-10 block rounded-full bg-white group-hover:bg-transparent text-gray-900 group-hover:text-white px-5 py-2 transition-colors duration-500'>
-                                    שליחת הספר להדפסה{' '}
-                                </span>
+                                <span className='text-sm font-bold tracking-wide'>שליחה להדפסה</span>
+                                <span className='text-xl group-hover:rotate-12 transition-transform duration-300'></span>
                             </button>
                         </div>
-                    </div>
+                    )}
                 </main>
             </div>
 
-            {/* גרסה מוסתרת ל־PDF */}
+            {/* --- PDF Render Area --- */}
             <div
                 ref={hiddenRef}
+                aria-hidden='true'
                 style={{
                     position: 'fixed',
+                    left: '-9999px',
                     top: 0,
-                    left: 0,
-                    width: 0,
-                    height: 0,
+                    width: baseSize,
+                    height: baseSize,
                     overflow: 'hidden',
-                    opacity: 0,
-                    pointerEvents: 'none',
                 }}
             >
-                <div className='page-for-pdf' style={{ width: baseSize, height: baseSize, background: '#fff' }}>
+                <div className='page-for-pdf' style={{ width: baseSize, height: baseSize }}>
                     <BookBackCoverTemplate scaledWidth={baseSize} scaledHeight={baseSize} />
                 </div>
-
                 {pages.map(entry => (
-                    <div
-                        key={entry.id}
-                        className='page-for-pdf'
-                        style={{ width: baseSize, height: baseSize, background: '#fff' }}
-                    >
+                    <div key={entry.id} className='page-for-pdf' style={{ width: baseSize, height: baseSize }}>
                         <BookPageTemplate
                             entry={entry}
                             styleSettings={styleSettings}
@@ -422,8 +276,7 @@ export default function BookViewer() {
                         />
                     </div>
                 ))}
-
-                <div className='page-for-pdf' style={{ width: baseSize, height: baseSize, background: '#fff' }}>
+                <div className='page-for-pdf' style={{ width: baseSize, height: baseSize }}>
                     <BookCoverTemplate styleSettings={styleSettings} scaledWidth={baseSize} scaledHeight={baseSize} />
                 </div>
             </div>

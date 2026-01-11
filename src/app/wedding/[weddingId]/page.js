@@ -1,20 +1,39 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+// 1. הוספנו את 'use' לרשימת הייבוא
+import { useEffect, useState, use } from 'react'
 import Link from 'next/link'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../../../lib/firebaseClient'
 
 export default function WeddingHome({ params }) {
-    const { weddingId } = params
+    // 2. פתיחת ה-Promise באמצעות use()
+    const { weddingId } = use(params)
+
     const [exists, setExists] = useState(null)
+    const [names, setNames] = useState(null) // State לשמות הזוג
 
     useEffect(() => {
         async function checkWedding() {
+            if (!weddingId) return
+
             try {
                 const ref = doc(db, 'weddings', weddingId)
                 const snap = await getDoc(ref)
-                setExists(snap.exists())
+
+                if (snap.exists()) {
+                    setExists(true)
+                    const data = snap.data()
+                    // שמירת השמות אם קיימים
+                    if (data.brideName || data.groomName) {
+                        setNames({
+                            bride: data.brideName || '',
+                            groom: data.groomName || '',
+                        })
+                    }
+                } else {
+                    setExists(false)
+                }
             } catch (err) {
                 console.error('Error fetching wedding data:', err)
                 setExists(false)
@@ -39,11 +58,17 @@ export default function WeddingHome({ params }) {
 
             {/* Hero */}
             <div className='relative z-10 text-center max-w-3xl mb-12'>
-                <h1 className='text-5xl font-extrabold text-gray-900 mb-6'>
-                    ברוכים הבאים <br />
-                    <span className='bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent'>
-                        לספר הברכות
-                    </span>
+                <h1 className='text-4xl md:text-5xl font-extrabold text-gray-900 mb-6 leading-tight'>
+                    <br />
+                    ספר הברכות של {/* הצגת השמות רק אם נטענו */}
+                    <br />
+                    {names && (
+                        <>
+                            <span className='bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent'>
+                                {names.bride} & {names.groom}
+                            </span>
+                        </>
+                    )}
                 </h1>
                 <p className='text-lg text-gray-600'>
                     זהו המקום לשתף את הרגעים שלכם, לכתוב ברכות מרגשות ולהוסיף תמונות שישמרו לנצח.
