@@ -1,3 +1,4 @@
+// src/lib/firebaseAdmin.js
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 import { getAuth } from 'firebase-admin/auth'
@@ -21,19 +22,8 @@ const app =
           })
         : getApp()
 
-console.log('🔐 Firebase credentials loaded:', {
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
-    keySnippet: process.env.FIREBASE_PRIVATE_KEY?.slice(0, 40),
-})
-
-// שמירה על שמות ברורים
+// הסרנו את התאימות הישנה!
+// מעכשיו קוראים לזה adminDb, adminAuth כדי למנוע יבוא בטעות לצד הלקוח.
 export const adminDb = getFirestore(app)
 export const adminAuth = getAuth(app)
 export const adminStorage = getStorage(app)
-
-// תאימות לקוד ישן (כדי שלא תצטרך לשנות בכל מקום)
-export const db = adminDb
-export const auth = adminAuth
-export const storage = adminStorage
