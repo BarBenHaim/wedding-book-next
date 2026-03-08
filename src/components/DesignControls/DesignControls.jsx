@@ -76,7 +76,7 @@ const PRESETS = [
             frame: frame4.src,
             fontSizePercent: 2.5,
             imageStyle: { width: 75, height: 65, borderRadius: 0 },
-            nameMarginTop: 1,
+            nameMarginTop: 1.5,
             textMaxWidth: 70,
             imageMarginTop: 8,
         },

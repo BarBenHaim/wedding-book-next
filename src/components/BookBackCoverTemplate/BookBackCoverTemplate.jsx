@@ -22,7 +22,7 @@ export default function BookBackCoverTemplate({ scaledWidth, scaledHeight }) {
         const h = scaledHeight
 
         const drawCanvas = async () => {
-            // המתנה לטעינת פונטים כדי למנוע קפיצות וטקסט מכוער
+            // המתנה לטעינת פונטים
             try {
                 await document.fonts.ready
             } catch (e) {
@@ -38,7 +38,7 @@ export default function BookBackCoverTemplate({ scaledWidth, scaledHeight }) {
             ctx.fillStyle = bg
             ctx.fillRect(0, 0, w, h)
 
-            // 2. לב שקוף ברקע (הטאץ' הייחודי שלכם)
+            // 2. לב שקוף ברקע
             const heartGradient = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.35)
             heartGradient.addColorStop(0, 'rgba(139,92,246,0.08)')
             heartGradient.addColorStop(1, 'transparent')
@@ -72,16 +72,23 @@ export default function BookBackCoverTemplate({ scaledWidth, scaledHeight }) {
 
             // תת־כותרת
             ctx.font = `300 ${w * 0.035}px "Heebo", sans-serif`
-            ctx.fillStyle = '#6b7280'
+            ctx.fillStyle = '#3a3a3a'
             ctx.fillText('זכרונות שנשארים לנצח', w / 2, subtitleY)
 
-            // --- אזור תחתון: כתובת האתר בלבד (נקי ומינימליסטי) ---
-            const bottomY = h * 0.95
+            // --- אזור תחתון: כתובת וזכויות יוצרים (נקי ומרווח) ---
+            const bottomY = h * 0.93 // הכתובת יושבת מעט גבוה יותר כדי לתת אוויר
+            const copyrightY = h * 0.965 // הזכויות שמורות ממש בתחתית, כמו חותמת
 
-            ctx.font = `300 ${w * 0.025}px "Heebo", sans-serif`
-            ctx.fillStyle = '#6b7280' // אפור עדין מאוד שלא גונב את ההצגה
-            // רווחים קטנים בין האותיות למראה יוקרתי (במידה והפונט תומך, אחרת זה פשוט יראה נקי)
+            // כתובת האתר - הצבע כהה ('קצת יותר שחור') ובולט בדיוק במידה
+            ctx.font = `400 ${w * 0.026}px "Heebo", sans-serif`
+            ctx.fillStyle = '#111111'
             ctx.fillText('weddingtales.co.il', w / 2, bottomY)
+
+            // זכויות שמורות - פונט קטן ועדין יותר, לא מתחרה בכתובת האתר
+            const currentYear = new Date().getFullYear()
+            ctx.font = `300 ${w * 0.016}px "Heebo", sans-serif`
+            ctx.fillStyle = '#333333'
+            ctx.fillText(`© כל הזכויות שמורות ${currentYear} `, w / 2, copyrightY)
 
             setIsReady(true)
         }
