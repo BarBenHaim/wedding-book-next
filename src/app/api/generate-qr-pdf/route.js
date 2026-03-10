@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import PDFDocument from 'pdfkit'
 import fs from 'fs'
 import path from 'path'
-import QRCode from 'qrcode'
+import QRCode from 'qrcode' // שימוש בספרייה לקבלת המידע הגולמי
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -14,19 +14,11 @@ export async function GET(req) {
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://weddingtales.co.il'
         const guestLink = `${baseUrl}/wedding/${weddingId}`
 
-        // שימוש בנתיבים בטוחים יותר לפרודקשן
+        // נתיבי קבצים
         const fontPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansHebrew-Regular.ttf')
-        const bgPath = path.join(process.cwd(), 'public', 'backgrounds', 'wedding-bg.png')
-
-        // בדיקה אסינכרונית כדי לא לתקוע את השרת
-        try {
-            await fs.promises.access(fontPath, fs.constants.R_OK)
-        } catch (e) {
-            console.error('Font file is missing in path:', fontPath)
-            return NextResponse.json(
-                { error: 'Font file missing. Please check /public/fonts directory.' },
-                { status: 500 },
-            )
+        // בדיקה למניעת קריסה
+        if (!fs.existsSync(fontPath)) {
+            return NextResponse.json({ error: 'Font file missing' }, { status: 500 })
         }
 
         const doc = new PDFDocument({
@@ -42,42 +34,29 @@ export async function GET(req) {
         // ==========================================
         // 1. רקע (תמונה מלאה)
         // ==========================================
-        try {
-            await fs.promises.access(bgPath, fs.constants.R_OK)
+        const bgPath = path.join(process.cwd(), 'public', 'backgrounds', 'wedding-bg.png')
+        if (fs.existsSync(bgPath)) {
             doc.image(bgPath, 0, 0, { width: width, height: height })
-        } catch (e) {
-            console.warn('Background image not found, proceeding with white background.')
-            // ה-PDF פשוט ימשיך עם רקע לבן אם התמונה חסרה
         }
 
         // ==========================================
         // 2. ברקוד מעוצב (וקטורי)
         // ==========================================
-        const qrSize = 280
+
+        const qrSize = 280 // גודל הברקוד
         const qrX = width / 2 - qrSize / 2
-        const qrY = height * 0.45 // מיקמתי את זה בשליש האמצעי כדי שייראה מאוזן
+        const qrY = 280 // מיקום אנכי (אפשר לשחק עם זה)
 
         try {
             // יצירת המידע הגולמי (מטריצה של 0 ו-1)
             const qrData = QRCode.create(guestLink, {
-                errorCorrectionLevel: 'M',
+                errorCorrectionLevel: 'M', // רמה בינונית כדי לאפשר עיצוב נקי
                 version: 0,
             })
 
-            // צבע המותג של Wedding Tales (סגול יוקרתי)
-            const brandColor = '#4a0c83'
-            drawSpecialQR(doc, qrData, qrX, qrY, qrSize, brandColor)
-
-            // ==========================================
-            // 3. טקסט קריאה לפעולה (Call To Action)
-            // ==========================================
-
-            doc.fontSize(14)
-                .fillColor('#9ca3af') // אפור בהיר לתת-טקסט
-                .text('weddingtales.co.il', 0, qrY + qrSize + 65, {
-                    align: 'center',
-                    width: width,
-                })
+            // קריאה לפונקציה שמציירת את הצורות המיוחדות
+            // פרמטר אחרון הוא הצבע - שמתי שחור, אפשר לשנות לסגול המותג שלך (#9333ea)
+            drawSpecialQR(doc, qrData, qrX, qrY, qrSize, '#000000')
         } catch (e) {
             console.error('QR Generation Error:', e)
         }
@@ -95,35 +74,37 @@ export async function GET(req) {
             },
         })
     } catch (err) {
-        console.error('PDF Final Error:', err)
+        console.error('PDF Error:', err)
         return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 })
     }
 }
 
 /**
- * פונקציה לציור ברקוד מעוצב - Apple/Premium Style
+ * פונקציה לציור ברקוד מעוצב
  */
 function drawSpecialQR(doc, qrData, x, y, size, color) {
     const modules = qrData.modules
     const count = modules.size
     const cellSize = size / count
 
-    // === הגדרות שליטה על העיצוב (Premium Tuning) ===
+    // === הגדרות שליטה על העיצוב ===
 
-    // 0.85 נותן מרווח קטן ואלגנטי בין הריבועים (לא צפוף מדי)
-    const fillPercentage = 0.95
+    // 1. כמה המקום הריבוע תופס? (0.8 = 80%, יוצר רווחים. 1.0 = ללא רווחים)
+    // מומלץ: 0.85 למראה יוקרתי, 0.9 למראה צפוף יותר
+    const fillPercentage = 1
 
-    // 3 נותן עיגול עדין ("Squircle" כמו האייקונים באייפון)
+    // 2. כמה עגולות הפינות? (0 = שפיץ, 10 = עגול מאוד)
+    // מומלץ: 2 עד 4 למראה ריבועי רך ("אייפון")
     const borderRadius = 0
-    // ===============================================
+
+    // ===============================
 
     const drawSize = cellSize * fillPercentage
     const offset = (cellSize - drawSize) / 2
 
-    // רקע לבן נקי מתחת לברקוד כדי להבליט אותו מעל תמונת הרקע
+    // רקע לבן נקי מתחת לברקוד
     doc.save()
-    // הגדלתי מעט את הרדיוס של המסגרת הלבנה שיתאים לעיצוב העגול
-    doc.roundedRect(x - 20, y - 20, size + 40, size + 40, 20).fill('#FFFFFF')
+    doc.roundedRect(x - 15, y - 15, size + 30, size + 30, 15).fill('#FFFFFF')
     doc.restore()
 
     doc.fillColor(color)
@@ -134,7 +115,7 @@ function drawSpecialQR(doc, qrData, x, y, size, color) {
                 const drawX = x + col * cellSize + offset
                 const drawY = y + row * cellSize + offset
 
-                // ציור הריבוע המעוגל
+                // כאן אנחנו משתמשים במשתנה borderRadius שהגדרנו למעלה
                 doc.roundedRect(drawX, drawY, drawSize, drawSize, borderRadius)
             }
         }

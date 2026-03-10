@@ -133,10 +133,41 @@ export default function WeddingPortal() {
                 {/* כפתורי פעולה */}
                 <div className='space-y-8 relative z-10'>
                     <button
-                        onClick={() => {/* פונקציית PDF */}}
-                        className='w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-pink-500 to-violet-600 text-white font-bold text-lg shadow-lg hover:scale-[1.02] transition-all flex items-center justify-center gap-3'
+                        onClick={async () => {
+                            try {
+                                setDownloading(true)
+                                const url = `/api/generate-qr-pdf?weddingId=${weddingId}`
+                                const res = await fetch(url)
+                                if (!res.ok) throw new Error('PDF generation failed')
+                                const blob = await res.blob()
+                                const a = document.createElement('a')
+                                a.href = URL.createObjectURL(blob)
+                                a.download = `WeddingTales-${brideName || 'wedding'}-${groomName || ''}.pdf`
+                                a.click()
+                                URL.revokeObjectURL(a.href)
+                            } catch (err) {
+                                console.error('PDF download error:', err)
+                                alert('שגיאה ביצירת ה-PDF. נסו שוב.')
+                            } finally {
+                                setDownloading(false)
+                            }
+                        }}
+                        disabled={downloading}
+                        className='w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-pink-500 to-violet-600 text-white font-bold text-lg shadow-lg hover:scale-[1.02] transition-all flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100'
                     >
-                        <PdfIcon /> <span>הורדת שלט מוכן (PDF)</span>
+                        {downloading ? (
+                            <>
+                                <svg className='w-6 h-6 animate-spin' fill='none' viewBox='0 0 24 24'>
+                                    <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4'/>
+                                    <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8v8z'/>
+                                </svg>
+                                <span>יוצר PDF...</span>
+                            </>
+                        ) : (
+                            <>
+                                <PdfIcon /> <span>הורדת שלט מוכן (PDF)</span>
+                            </>
+                        )}
                     </button>
 
                     <div className='w-full h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent'></div>
