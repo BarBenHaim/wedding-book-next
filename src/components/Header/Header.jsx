@@ -7,18 +7,23 @@ import { useRouter, usePathname } from 'next/navigation'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../../lib/firebaseClient'
 
+const SUPER_ADMIN_EMAIL = 'barbenbh@gmail.com'
+
 export default function Header() {
     const [user, setUser] = useState(null)
     const [menuOpen, setMenuOpen] = useState(false)
     const router = useRouter()
     const pathname = usePathname()
 
+    // Extract weddingId directly from the current URL path — highest priority
     const weddingIdFromUrl = pathname.startsWith('/wedding/') ? pathname.split('/')[2] : null
 
-    const [weddingId, setWeddingId] = useState(null)
+    // personalWeddingId: the logged-in user's own wedding (from localStorage / Firestore)
+    const [personalWeddingId, setPersonalWeddingId] = useState(null)
 
+    // Resolve auth state once and cache the personal wedding id
     useEffect(() => {
-        onAuthStateChanged(auth, async currentUser => {
+        const unsub = onAuthStateChanged(auth, async currentUser => {
             setUser(currentUser)
 
             if (currentUser) {
@@ -30,12 +35,18 @@ export default function Header() {
                         localStorage.setItem('weddingId', id)
                     }
                 }
-                setWeddingId(id || weddingIdFromUrl)
+                setPersonalWeddingId(id || null)
             } else {
-                setWeddingId(weddingIdFromUrl)
+                setPersonalWeddingId(null)
             }
         })
-    }, [weddingIdFromUrl])
+        return () => unsub()
+    }, []) // run once on mount
+
+    // URL wins over personal id — recalculates on every pathname change
+    const activeId = weddingIdFromUrl ?? personalWeddingId
+
+    const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL
 
     async function handleLogout() {
         await signOut(auth)
@@ -45,10 +56,12 @@ export default function Header() {
     }
 
     function handleLogoClick() {
-        if (weddingIdFromUrl) router.push(`/wedding/${weddingIdFromUrl}`)
-        else {
-            const id = localStorage.getItem('weddingId')
-            router.push(id ? `/wedding/${id}` : '/')
+        // If currently inside any wedding URL, go to that wedding's root
+        if (weddingIdFromUrl) {
+            router.push(`/wedding/${weddingIdFromUrl}`)
+        } else {
+            // Fall back to personal wedding or home
+            router.push(personalWeddingId ? `/wedding/${personalWeddingId}` : '/')
         }
     }
 
@@ -56,8 +69,8 @@ export default function Header() {
         <>
             <header className='sticky top-0 left-0 right-0 z-50 bg-white/70 backdrop-blur-md shadow-sm'>
                 <nav className='mx-auto flex max-w-7xl items-center justify-between px-6 py-3'>
-                    {/* ✔ אייקון המבורגר — רק למשתמש מחובר + weddingId */}
-                    {user && weddingId && (
+                    {/* ✔ אייקון המבורגר — רק למשתמש מחובר + activeId */}
+                    {user && activeId && (
                         <div className='md:hidden'>
                             <button
                                 onClick={() => setMenuOpen(prev => !prev)}
@@ -81,36 +94,48 @@ export default function Header() {
                             </button>
                         )}
 
-                        {user && weddingId && (
+                        {user && activeId && (
                             <>
                                 <button
-                                    onClick={() => router.push(`/wedding/${weddingId}/viewer`)}
+                                    onClick={() => router.push(`/wedding/${activeId}/viewer`)}
                                     className='rounded-full bg-purple-100 px-4 py-2 text-sm font-medium text-purple-700 hover:bg-purple-200 transition cursor-pointer'
                                 >
                                     עיצוב הספר
                                 </button>
 
                                 <button
-                                    onClick={() => router.push(`/wedding/${weddingId}/admin`)}
+                                    onClick={() => router.push(`/wedding/${activeId}/admin`)}
                                     className='rounded-full bg-pink-100 px-4 py-2 text-sm font-medium text-pink-700 hover:bg-pink-200 transition cursor-pointer'
                                 >
                                     ניהול הברכות
                                 </button>
 
                                 <button
-                                    onClick={() => router.push(`/wedding/${weddingId}/portal`)}
+                                    onClick={() => router.push(`/wedding/${activeId}/portal`)}
                                     className='rounded-full bg-gradient-to-r from-purple-600 to-pink-500 px-4 py-2 text-sm font-medium text-white shadow-md hover:opacity-90 transition cursor-pointer'
                                 >
                                     QR ושיתוף
                                 </button>
-
-                                <button
-                                    onClick={handleLogout}
-                                    className='rounded-full bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition cursor-pointer'
-                                >
-                                    התנתקות
-                                </button>
                             </>
+                        )}
+
+                        {/* Super Admin Dashboard — always visible for super admin */}
+                        {isSuperAdmin && (
+                            <button
+                                onClick={() => router.push('/admin')}
+                                className='rounded-full bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200 transition cursor-pointer'
+                            >
+                                Super Admin
+                            </button>
+                        )}
+
+                        {user && (
+                            <button
+                                onClick={handleLogout}
+                                className='rounded-full bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition cursor-pointer'
+                            >
+                                התנתקות
+                            </button>
                         )}
                     </div>
 
@@ -159,11 +184,11 @@ export default function Header() {
                     )}
 
                     {/* כפתורי משתמש מחובר */}
-                    {user && weddingId && (
+                    {user && activeId && (
                         <>
                             <button
                                 onClick={() => {
-                                    router.push(`/wedding/${weddingId}/viewer`)
+                                    router.push(`/wedding/${activeId}/viewer`)
                                     setMenuOpen(false)
                                 }}
                                 className='text-gray-700 text-lg self-start'
@@ -173,7 +198,7 @@ export default function Header() {
 
                             <button
                                 onClick={() => {
-                                    router.push(`/wedding/${weddingId}/admin`)
+                                    router.push(`/wedding/${activeId}/admin`)
                                     setMenuOpen(false)
                                 }}
                                 className='text-gray-700 text-lg self-start'
@@ -183,24 +208,39 @@ export default function Header() {
 
                             <button
                                 onClick={() => {
-                                    router.push(`/wedding/${weddingId}/portal`)
+                                    router.push(`/wedding/${activeId}/portal`)
                                     setMenuOpen(false)
                                 }}
                                 className='text-gray-700 text-lg self-start'
                             >
                                 QR ושיתוף
                             </button>
-
-                            <button
-                                onClick={() => {
-                                    handleLogout()
-                                    setMenuOpen(false)
-                                }}
-                                className='text-gray-700 text-lg self-start'
-                            >
-                                התנתקות
-                            </button>
                         </>
+                    )}
+
+                    {/* Super Admin Dashboard — always visible in drawer for super admin */}
+                    {isSuperAdmin && (
+                        <button
+                            onClick={() => {
+                                router.push('/admin')
+                                setMenuOpen(false)
+                            }}
+                            className='text-indigo-600 text-lg self-start font-medium'
+                        >
+                            Super Admin
+                        </button>
+                    )}
+
+                    {user && (
+                        <button
+                            onClick={() => {
+                                handleLogout()
+                                setMenuOpen(false)
+                            }}
+                            className='text-gray-700 text-lg self-start'
+                        >
+                            התנתקות
+                        </button>
                     )}
                 </div>
             </div>
