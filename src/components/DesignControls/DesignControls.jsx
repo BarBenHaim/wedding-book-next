@@ -204,7 +204,7 @@ const Card = ({ title, children, className = '' }) => (
 )
 
 /* --- הקומפוננטה הראשית --- */
-export default function DesignControls({ settings, onChange, mode, onModeChange }) {
+export default function DesignControls({ settings, onChange, mode, onModeChange, saveStatus = 'idle' }) {
     const [activePreset, setActivePreset] = useState(null)
 
     const applyPreset = preset => {
@@ -227,7 +227,25 @@ export default function DesignControls({ settings, onChange, mode, onModeChange 
 
     return (
         <div dir='rtl' className='flex flex-col gap-3 h-full bg-gray-50/50 p-2'>
-            {/* טאבים ראשיים */}
+
+            {/* ── Save Status Indicator ── */}
+            <div className='flex items-center justify-end h-5 px-1 shrink-0'>
+                {saveStatus === 'saving' && (
+                    <span className='flex items-center gap-1.5 text-[11px] text-gray-400 font-medium'>
+                        <span className='w-2.5 h-2.5 rounded-full border-2 border-gray-300 border-t-gray-500 animate-spin' />
+                        שומר...
+                    </span>
+                )}
+                {saveStatus === 'saved' && (
+                    <span className='flex items-center gap-1 text-[11px] text-emerald-600 font-semibold animate-fadeIn'>
+                        <svg className='w-3 h-3' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={3}>
+                            <path strokeLinecap='round' strokeLinejoin='round' d='M5 13l4 4L19 7' />
+                        </svg>
+                        נשמר
+                    </span>
+                )}
+            </div>
+            {/* ── טאבים ראשיים ── */}
             <div className='bg-gray-200 p-1 rounded-xl flex gap-1 shadow-inner shrink-0'>
                 <button
                     onClick={() => onModeChange('book')}
@@ -247,6 +265,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange 
                 </button>
             </div>
 
+            {/* Controls area */}
             <div className='flex-1 overflow-y-auto pr-1 pl-1 space-y-4 pb-10 scrollbar-hide'>
                 {/* === מצב ספר === */}
                 {mode === 'book' && (
@@ -449,6 +468,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange 
                                 ))}
                             </div>
                         </Card>
+
                     </div>
                 )}
             </div>

@@ -4,7 +4,8 @@ import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import HTMLFlipBook from 'react-pageflip'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { storage } from '@/lib/firebaseClient'
+import { storage, db } from '@/lib/firebaseClient'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 
@@ -38,11 +39,14 @@ export default function BookViewer() {
 
     const [pages, setPages] = useState([])
     const [loading, setLoading] = useState(true)
+    const [designLoading, setDesignLoading] = useState(true)
     const [mode, setMode] = useState('book')
     const [viewerSize, setViewerSize] = useState(500)
     const [isMobile, setIsMobile] = useState(false)
     const [styleSettings, setStyleSettings] = useState(defaultStyle)
     const [isGenerating, setIsGenerating] = useState(false)
+    const [saveStatus, setSaveStatus] = useState('idle') // 'idle' | 'saving' | 'saved'
+    const saveTimerRef = useRef(null)
 
     // Refs לאזורי ההדפסה הנסתרים
     const contentRef = useRef(null)
@@ -50,14 +54,30 @@ export default function BookViewer() {
 
     useEffect(() => {
         const init = async () => {
-            if (typeof window !== 'undefined') {
-                const savedStyle = localStorage.getItem('bookStyle')
-                if (savedStyle) setStyleSettings(JSON.parse(savedStyle))
-            }
             if (weddingId) {
+                // Load entries
                 const data = await getEntries(weddingId)
                 setPages(data.reverse())
                 setLoading(false)
+
+                // Load cover design from Firestore
+                try {
+                    const snap = await getDoc(doc(db, 'weddings', weddingId))
+                    if (snap.exists()) {
+                        const firestoreData = snap.data()
+                        if (firestoreData.coverDesign) {
+                            setStyleSettings({ ...defaultStyle, ...firestoreData.coverDesign })
+                        } else if (typeof window !== 'undefined') {
+                            // Migration: fall back to localStorage if never saved to Firestore
+                            const savedStyle = localStorage.getItem('bookStyle')
+                            if (savedStyle) setStyleSettings(JSON.parse(savedStyle))
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to load cover design:', err)
+                } finally {
+                    setDesignLoading(false)
+                }
             }
         }
         init()
@@ -84,9 +104,26 @@ export default function BookViewer() {
         return () => window.removeEventListener('resize', calculateBookSize)
     }, [calculateBookSize])
 
+    // ── Debounced Firestore save ─────────────────────────────────────────────
+    const saveCoverDesign = useCallback((newSettings) => {
+        setSaveStatus('saving')
+        clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = setTimeout(async () => {
+            try {
+                await setDoc(doc(db, 'weddings', weddingId), { coverDesign: newSettings }, { merge: true })
+                setSaveStatus('saved')
+                setTimeout(() => setSaveStatus('idle'), 2500)
+            } catch (err) {
+                console.error('Failed to save cover design:', err)
+                setSaveStatus('idle')
+            }
+        }, 800)
+    }, [weddingId])
+
     const handleStyleChange = updated => {
         const newSettings = { ...styleSettings, ...updated }
         setStyleSettings(newSettings)
+        saveCoverDesign(newSettings)
     }
 
     // --- יצירת PDF גנרית (מקבלת קונפיגורציה) ---
@@ -158,7 +195,14 @@ export default function BookViewer() {
         }
     }
 
-    if (loading) return <div>Loading...</div>
+    if (loading || designLoading) return (
+        <div className='flex h-[calc(100vh-64px)] items-center justify-center bg-gradient-to-br from-purple-50 via-white to-pink-50'>
+            <div className='flex flex-col items-center gap-4'>
+                <div className='animate-spin rounded-full h-10 w-10 border-[3px] border-purple-200 border-t-purple-600' />
+                <p className='text-sm text-gray-400 font-medium'>טוען את עיצוב הכריכה...</p>
+            </div>
+        </div>
+    )
 
     const hasCover = styleSettings.coverTitle || styleSettings.coverImage
 
@@ -200,6 +244,7 @@ export default function BookViewer() {
                             onChange={handleStyleChange}
                             mode={mode}
                             onModeChange={setMode}
+                            saveStatus={saveStatus}
                         />
                     </div>
                 </aside>
