@@ -8,6 +8,7 @@ import nodemailer from 'nodemailer'
 import crypto from 'crypto'
 import { adminDb as db, adminAuth } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
+import { generateSlug } from '@/lib/generateSlug'
 
 export async function POST(req) {
     try {
@@ -97,12 +98,19 @@ export async function POST(req) {
         // אנחנו משתמשים ב-orderId בתור ה-weddingId כדי שלקוח יוכל שיהיו לו כמה חתונות במקביל
         const weddingId = orderId
 
+        // יצירת slug קצר וייחודי לקישור יפה
+        let slug = generateSlug()
+        // וידוא שה-slug לא קיים כבר
+        const slugCheck = await db.collection('weddings').where('slug', '==', slug).limit(1).get()
+        if (!slugCheck.empty) slug = generateSlug() // retry once — collision is extremely rare
+
         await db.collection('weddings').doc(weddingId).set(
             {
                 ownerId: userRecord.uid, // הקישור החשוב ללקוח במערכת
                 ownerEmail: email,
                 createdAt: FieldValue.serverTimestamp(),
                 orderId,
+                slug,
             },
             { merge: true },
         )

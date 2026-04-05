@@ -5,7 +5,7 @@ import { adminAuth } from '@/lib/firebaseAdmin'
 export async function middleware(req) {
     const path = req.nextUrl.pathname
 
-    if (path.includes('/admin') || path.includes('/viewer')) {
+    if (path.includes('/admin') || path.includes('/viewer') || path.includes('/portal')) {
         const token = req.cookies.get('session')?.value
 
         if (!token) {
@@ -24,5 +24,5 @@ export async function middleware(req) {
 }
 
 export const config = {
-    matcher: ['/wedding/:*/admin', '/wedding/:*/viewer'],
+    matcher: ['/wedding/:*/admin', '/wedding/:*/viewer', '/wedding/:*/portal'],
 }

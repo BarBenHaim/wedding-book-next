@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { auth } from '../../lib/firebaseClient'
 import { useRouter, usePathname } from 'next/navigation'
-import { doc, getDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, limit } from 'firebase/firestore'
 import { db } from '../../lib/firebaseClient'
 
 const SUPER_ADMIN_EMAIL = 'barbenbh@gmail.com'
@@ -41,10 +41,20 @@ export default function Header() {
             if (currentUser) {
                 let id = localStorage.getItem('weddingId')
                 if (!id) {
-                    const userDoc = await getDoc(doc(db, 'users', currentUser.uid))
-                    if (userDoc.exists() && userDoc.data().weddingId) {
-                        id = userDoc.data().weddingId
-                        localStorage.setItem('weddingId', id)
+                    // חיפוש חתונה לפי ownerId ב-Firestore
+                    try {
+                        const q = query(
+                            collection(db, 'weddings'),
+                            where('ownerId', '==', currentUser.uid),
+                            limit(1)
+                        )
+                        const snap = await getDocs(q)
+                        if (!snap.empty) {
+                            id = snap.docs[0].id
+                            localStorage.setItem('weddingId', id)
+                        }
+                    } catch (err) {
+                        console.error('Error finding wedding:', err)
                     }
                 }
                 setPersonalWeddingId(id || null)
@@ -82,17 +92,17 @@ export default function Header() {
         <>
             <header className='sticky top-0 left-0 right-0 z-50 bg-[#F5F5F5]/80 backdrop-blur-md shadow-sm border-b border-[#AA8840]/10'>
                 <nav className='mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 py-3'>
-                    {/* Hamburger — 44px touch target */}
+                    {/* Hamburger — premium gold style */}
                     {user && activeId && (
                         <div className='md:hidden'>
                             <button
                                 onClick={() => setMenuOpen(prev => !prev)}
-                                className='relative w-11 h-11 flex flex-col justify-center items-center gap-[5px] rounded-xl hover:bg-[#AA8840]/5 active:bg-[#AA8840]/10 transition-colors'
+                                className='relative w-11 h-11 flex flex-col justify-center items-center rounded-xl border border-[#AA8840]/20 bg-white/60 backdrop-blur-sm shadow-sm hover:shadow-md hover:border-[#AA8840]/40 active:scale-95 transition-all duration-200'
                                 aria-label='תפריט'
                             >
-                                <span className={`block h-0.5 w-5 bg-[#18140F] rounded transition-all duration-300 ${menuOpen ? 'rotate-45 translate-y-[7px]' : ''}`} />
-                                <span className={`block h-0.5 w-5 bg-[#18140F] rounded transition-all duration-300 ${menuOpen ? 'opacity-0' : ''}`} />
-                                <span className={`block h-0.5 w-5 bg-[#18140F] rounded transition-all duration-300 ${menuOpen ? '-rotate-45 -translate-y-[7px]' : ''}`} />
+                                <span className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out ${menuOpen ? 'w-[18px] bg-[#AA8840] rotate-45 translate-y-[5px]' : 'w-[18px] bg-[#AA8840]/70'}`} />
+                                <span className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out mt-[4px] ${menuOpen ? 'w-0 opacity-0' : 'w-[12px] bg-[#AA8840]/50'}`} />
+                                <span className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out mt-[4px] ${menuOpen ? 'w-[18px] bg-[#AA8840] -rotate-45 -translate-y-[5px]' : 'w-[18px] bg-[#AA8840]/70'}`} />
                             </button>
                         </div>
                     )}

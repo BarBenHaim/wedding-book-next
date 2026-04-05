@@ -6,121 +6,135 @@ import { auth } from '@/lib/firebaseClient'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-    CalendarDays,
-    Settings2,
-    ExternalLink,
-    Crown,
-    Users,
-    Hash,
-    MessageCircle,
-    AlertCircle,
-    Loader2,
-    Heart,
-    Sparkles,
-    Search,
-    ChevronUp,
-    ChevronDown,
-    ChevronsUpDown,
-    Zap,
-    ArrowUpDown,
-    CheckCircle2,
+    CalendarDays, Settings2, ExternalLink, Crown, Users, Hash,
+    MessageCircle, AlertCircle, Loader2, Heart, Sparkles, Search,
+    ChevronUp, ChevronDown, ChevronsUpDown, Zap, ArrowUpDown,
+    CheckCircle2, Trash2, KeyRound, Download, Database, X,
+    ChevronRight, Eye, Link2, Mail, Shield, HardDrive, RefreshCw,
+    AlertTriangle, Copy, Clock,
 } from 'lucide-react'
 
 // ─── Data Fetching ────────────────────────────────────────────────────────────
+async function getToken() {
+    return getIdToken(auth.currentUser)
+}
+
 async function fetchAllWeddings() {
-    const token = await getIdToken(auth.currentUser)
+    const token = await getToken()
     const res = await fetch('/api/admin/weddings', {
         headers: { Authorization: `Bearer ${token}` },
     })
-    if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error || `HTTP ${res.status}`)
-    }
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
     return res.json()
+}
+
+async function deleteWedding(weddingId) {
+    const token = await getToken()
+    const res = await fetch('/api/admin/weddings', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ weddingId }),
+    })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Delete failed')
+    return res.json()
+}
+
+async function resetPassword(email) {
+    const token = await getToken()
+    const res = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+    })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Reset failed')
+    return res.json()
+}
+
+async function downloadBackup() {
+    const token = await getToken()
+    const res = await fetch('/api/admin/backup', {
+        headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) throw new Error('Backup failed')
+    const blob = await res.blob()
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `wedding-tales-backup-${new Date().toISOString().split('T')[0]}.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDate(isoString) {
     if (!isoString) return '—'
-    try {
-        return new Date(isoString).toLocaleDateString('he-IL')
-    } catch {
-        return isoString
-    }
+    try { return new Date(isoString).toLocaleDateString('he-IL') } catch { return isoString }
 }
 
-function coupleLabel(wedding) {
-    const { brideName, groomName, ownerEmail } = wedding
-    if (brideName || groomName) {
-        return [brideName, groomName].filter(Boolean).join(' & ')
-    }
-    return ownerEmail || '—'
+function coupleLabel(w) {
+    if (w.brideName || w.groomName) return [w.brideName, w.groomName].filter(Boolean).join(' & ')
+    return w.ownerEmail || '—'
 }
 
-function getWeddingStatus(weddingDate) {
-    if (!weddingDate) return 'unknown'
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const date = new Date(weddingDate)
-    date.setHours(0, 0, 0, 0)
+function getWeddingStatus(d) {
+    if (!d) return 'unknown'
+    const today = new Date(); today.setHours(0,0,0,0)
+    const date = new Date(d); date.setHours(0,0,0,0)
     const diff = date - today
-    if (diff === 0) return 'today'
-    if (diff > 0) return 'upcoming'
-    return 'past'
+    return diff === 0 ? 'today' : diff > 0 ? 'upcoming' : 'past'
 }
 
-function isToday(isoString) {
-    return getWeddingStatus(isoString) === 'today'
-}
-
-// ─── Loading ──────────────────────────────────────────────────────────────────
-function LoadingState() {
-    return (
-        <div className='flex flex-col items-center justify-center py-40 gap-5'>
-            <div className='relative'>
-                <div className='w-16 h-16 rounded-full bg-gradient-to-br from-[#AA8840] to-[#c9a44e] opacity-20 animate-ping absolute inset-0' />
-                <div className='w-16 h-16 rounded-full bg-gradient-to-br from-[#AA8840] to-[#c9a44e] flex items-center justify-center relative'>
-                    <Loader2 size={28} className='text-white animate-spin' />
-                </div>
-            </div>
-            <p className='text-gray-400 text-sm tracking-wide'>טוען חתונות...</p>
-        </div>
-    )
-}
-
-// ─── Error ────────────────────────────────────────────────────────────────────
-function ErrorState({ message }) {
-    return (
-        <div className='flex flex-col items-center justify-center py-40 gap-4'>
-            <div className='w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center'>
-                <AlertCircle size={28} className='text-red-500' />
-            </div>
-            <p className='text-gray-800 font-semibold'>שגיאה בטעינת הנתונים</p>
-            <p className='text-sm text-red-600 bg-red-50 border border-red-200 px-4 py-2 rounded-xl'>
-                {message}
-            </p>
-        </div>
-    )
-}
-
-// ─── Empty ────────────────────────────────────────────────────────────────────
-function EmptyState() {
-    return (
-        <div className='flex flex-col items-center justify-center py-40 gap-4'>
-            <div className='w-14 h-14 rounded-2xl bg-[#AA8840]/10 flex items-center justify-center'>
-                <Heart size={28} className='text-[#AA8840]' />
-            </div>
-            <p className='text-gray-400 text-sm'>אין חתונות בטבלה עדיין.</p>
-        </div>
-    )
-}
-
-// ─── Stat Card ────────────────────────────────────────────────────────────────
-function StatCard({ icon: Icon, label, value, iconBg, iconColor, pulse = false }) {
+// ─── Toast ───────────────────────────────────────────────────────────────────
+function Toast({ message, type = 'success', onClose }) {
+    useEffect(() => { const t = setTimeout(onClose, 4000); return () => clearTimeout(t) }, [onClose])
+    const colors = type === 'success'
+        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+        : 'bg-red-50 border-red-200 text-red-700'
     return (
         <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+            className={`fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-xl border shadow-lg text-sm font-semibold ${colors}`}
+        >
+            {message}
+        </motion.div>
+    )
+}
+
+// ─── Confirm Modal ───────────────────────────────────────────────────────────
+function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCancel }) {
+    return (
+        <div className='fixed inset-0 z-[90] flex items-center justify-center bg-black/40 backdrop-blur-sm' onClick={onCancel}>
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                className='bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl' dir='rtl'
+                onClick={e => e.stopPropagation()}
+            >
+                <div className='flex items-start gap-3 mb-4'>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${danger ? 'bg-red-100' : 'bg-[#AA8840]/10'}`}>
+                        {danger ? <AlertTriangle size={20} className='text-red-500' /> : <KeyRound size={20} className='text-[#AA8840]' />}
+                    </div>
+                    <div>
+                        <h3 className='font-bold text-gray-800'>{title}</h3>
+                        <p className='text-sm text-gray-500 mt-1'>{message}</p>
+                    </div>
+                </div>
+                <div className='flex gap-2 justify-end'>
+                    <button onClick={onCancel} className='px-4 py-2 text-sm text-gray-500 hover:bg-gray-50 rounded-lg'>ביטול</button>
+                    <button
+                        onClick={onConfirm}
+                        className={`px-4 py-2 text-sm font-bold text-white rounded-lg ${danger ? 'bg-red-500 hover:bg-red-600' : 'bg-[#AA8840] hover:bg-[#96773a]'}`}
+                    >
+                        {confirmLabel}
+                    </button>
+                </div>
+            </motion.div>
+        </div>
+    )
+}
+
+// ─── Stat Card ───────────────────────────────────────────────────────────────
+function StatCard({ icon: Icon, label, value, iconBg, iconColor, pulse = false }) {
+    return (
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
             className='relative overflow-hidden rounded-2xl p-5 bg-white/90 backdrop-blur-md border border-[#AA8840]/15 shadow-md'
             whileHover={{ y: -2, transition: { duration: 0.2 } }}
         >
@@ -130,9 +144,7 @@ function StatCard({ icon: Icon, label, value, iconBg, iconColor, pulse = false }
                     <p className='text-3xl font-black text-gray-800 leading-none'>{value}</p>
                 </div>
                 <div className={`relative w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
-                    {pulse && (
-                        <div className={`absolute inset-0 rounded-xl animate-ping opacity-30 ${iconBg}`} />
-                    )}
+                    {pulse && <div className={`absolute inset-0 rounded-xl animate-ping opacity-30 ${iconBg}`} />}
                     <Icon size={20} className={`${iconColor} relative z-10`} />
                 </div>
             </div>
@@ -140,370 +152,348 @@ function StatCard({ icon: Icon, label, value, iconBg, iconColor, pulse = false }
     )
 }
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
+// ─── Status Badge ────────────────────────────────────────────────────────────
 function StatusBadge({ weddingDate }) {
-    const status = getWeddingStatus(weddingDate)
-
-    if (status === 'today') return (
-        <span className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200'>
-            <span className='w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse' />
-            היום
-        </span>
-    )
-
-    if (status === 'upcoming') return (
-        <span className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200'>
-            <span className='w-1.5 h-1.5 rounded-full bg-indigo-400' />
-            עתידית
-        </span>
-    )
-
-    if (status === 'past') return (
-        <span className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-slate-500 bg-slate-100 border border-slate-200'>
-            <CheckCircle2 size={10} className='text-slate-400' />
-            עברה
-        </span>
-    )
-
-    return (
-        <span className='inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold text-gray-400 bg-gray-100 border border-gray-200'>
-            —
-        </span>
-    )
+    const s = getWeddingStatus(weddingDate)
+    if (s === 'today') return <span className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200'><span className='w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse' />היום</span>
+    if (s === 'upcoming') return <span className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200'><span className='w-1.5 h-1.5 rounded-full bg-indigo-400' />עתידית</span>
+    if (s === 'past') return <span className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-slate-500 bg-slate-100 border border-slate-200'><CheckCircle2 size={10} />עברה</span>
+    return <span className='inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold text-gray-400 bg-gray-100 border border-gray-200'>—</span>
 }
 
-// ─── Greetings Badge ──────────────────────────────────────────────────────────
+// ─── Greetings Badge ─────────────────────────────────────────────────────────
 function GreetingsBadge({ count }) {
     const n = count ?? 0
-    if (n === 0) return (
-        <span className='inline-flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold bg-gray-100 text-gray-400 border border-gray-200'>
-            {n}
-        </span>
-    )
-    if (n < 10) return (
-        <span className='inline-flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold bg-blue-50 text-blue-600 border border-blue-200'>
-            {n}
-        </span>
-    )
-    return (
-        <span className='inline-flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold bg-emerald-50 text-emerald-700 border border-emerald-200'>
-            {n}
-        </span>
-    )
+    if (n === 0) return <span className='inline-flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold bg-gray-100 text-gray-400 border border-gray-200'>{n}</span>
+    if (n < 10) return <span className='inline-flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold bg-blue-50 text-blue-600 border border-blue-200'>{n}</span>
+    return <span className='inline-flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold bg-emerald-50 text-emerald-700 border border-emerald-200'>{n}</span>
 }
 
-// ─── Sortable Header ──────────────────────────────────────────────────────────
+// ─── Sortable Header ─────────────────────────────────────────────────────────
 function SortableHeader({ children, sortKey, currentSort, onSort, justify = 'end' }) {
     const isActive = currentSort.key === sortKey
-    const dir = currentSort.dir
-
     const handleClick = () => {
-        if (!isActive) {
-            onSort({ key: sortKey, dir: 'asc' })
-        } else if (dir === 'asc') {
-            onSort({ key: sortKey, dir: 'desc' })
-        } else {
-            onSort({ key: null, dir: null })
-        }
+        if (!isActive) onSort({ key: sortKey, dir: 'asc' })
+        else if (currentSort.dir === 'asc') onSort({ key: sortKey, dir: 'desc' })
+        else onSort({ key: null, dir: null })
     }
-
     return (
-        <th
-            onClick={handleClick}
-            className={`px-6 py-4 font-semibold cursor-pointer select-none transition-colors duration-150 hover:text-gray-700 ${isActive ? 'text-[#AA8840]' : 'text-gray-400'}`}
-        >
+        <th onClick={handleClick}
+            className={`px-6 py-4 font-semibold cursor-pointer select-none transition-colors hover:text-gray-700 ${isActive ? 'text-[#AA8840]' : 'text-gray-400'}`}>
             <span className={`flex items-center gap-1.5 ${justify === 'center' ? 'justify-center' : justify === 'start' ? 'justify-start' : 'justify-end'}`}>
                 {children}
-                <AnimatePresence mode='wait' initial={false}>
-                    {isActive && dir === 'asc' && (
-                        <motion.span key='up' initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }}>
-                            <ChevronUp size={13} className='text-[#AA8840]' />
-                        </motion.span>
-                    )}
-                    {isActive && dir === 'desc' && (
-                        <motion.span key='down' initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} transition={{ duration: 0.15 }}>
-                            <ChevronDown size={13} className='text-[#AA8840]' />
-                        </motion.span>
-                    )}
-                    {!isActive && (
-                        <motion.span key='neutral' initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-                            <ChevronsUpDown size={12} className='text-gray-300' />
-                        </motion.span>
-                    )}
-                </AnimatePresence>
+                {isActive && currentSort.dir === 'asc' && <ChevronUp size={13} className='text-[#AA8840]' />}
+                {isActive && currentSort.dir === 'desc' && <ChevronDown size={13} className='text-[#AA8840]' />}
+                {!isActive && <ChevronsUpDown size={12} className='text-gray-300' />}
             </span>
         </th>
     )
 }
 
-// ─── Search Bar ───────────────────────────────────────────────────────────────
-function SearchBar({ value, onChange }) {
+// ─── Wedding Detail Panel (Database Explorer) ────────────────────────────────
+function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword }) {
+    if (!wedding) return null
+
+    const fields = [
+        { label: 'מזהה חתונה', value: wedding.id, icon: Hash, mono: true },
+        { label: 'Slug', value: wedding.slug || '—', icon: Link2, mono: true },
+        { label: 'שם כלה', value: wedding.brideName || '—', icon: Heart },
+        { label: 'שם חתן', value: wedding.groomName || '—', icon: Heart },
+        { label: 'תאריך חתונה', value: formatDate(wedding.weddingDate), icon: CalendarDays },
+        { label: 'אימייל בעלים', value: wedding.ownerEmail || '—', icon: Mail },
+        { label: 'מזהה בעלים (UID)', value: wedding.ownerId || '—', icon: Shield, mono: true },
+        { label: 'מזהה הזמנה', value: wedding.orderId ? `#${wedding.orderId}` : '—', icon: Hash, mono: true },
+        { label: 'סה"כ ברכות', value: String(wedding.greetingsCount ?? 0), icon: MessageCircle },
+        { label: 'נוצר בתאריך', value: wedding.createdAt ? formatDate(wedding.createdAt) : '—', icon: Clock },
+    ]
+
     return (
-        <div className='relative' dir='rtl'>
-            <Search size={15} className='absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none' />
-            <input
-                type='text'
-                value={value}
-                onChange={e => onChange(e.target.value)}
-                placeholder='חיפוש לפי שם זוג או אימייל...'
-                className='w-full pr-10 pl-4 py-2.5 rounded-xl text-sm text-gray-700 placeholder:text-gray-400 outline-none transition-all duration-200 border border-[#AA8840]/20 bg-[#AA8840]/5 focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10'
-            />
-            {value && (
-                <button
-                    onClick={() => onChange('')}
-                    className='absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 transition-colors text-xs'
-                >
-                    ✕
+        <motion.div
+            initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 30 }}
+            className='fixed top-0 left-0 h-full w-full sm:w-[420px] bg-white shadow-2xl z-[80] overflow-y-auto border-r border-[#AA8840]/15'
+            dir='rtl'
+        >
+            {/* Header */}
+            <div className='sticky top-0 bg-white/95 backdrop-blur-sm border-b border-[#AA8840]/15 px-6 py-4 flex items-center justify-between z-10'>
+                <div className='flex items-center gap-3'>
+                    <div className='w-9 h-9 rounded-xl bg-gradient-to-br from-[#AA8840] to-[#c9a44e] flex items-center justify-center'>
+                        <Database size={16} className='text-white' />
+                    </div>
+                    <div>
+                        <h3 className='font-bold text-gray-800 text-sm'>פרטי חתונה</h3>
+                        <p className='text-xs text-gray-400'>{coupleLabel(wedding)}</p>
+                    </div>
+                </div>
+                <button onClick={onClose} className='w-9 h-9 rounded-xl bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-colors'>
+                    <X size={16} className='text-gray-500' />
                 </button>
-            )}
-        </div>
-    )
-}
+            </div>
 
-// ─── Action Icon Button ───────────────────────────────────────────────────────
-function ActionIconBtn({ href, icon: Icon, tooltip, variant = 'primary' }) {
-    const base = 'w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 border'
-    const styles = {
-        primary: 'bg-[#AA8840]/10 border-[#AA8840]/20 text-[#AA8840] hover:bg-[#AA8840]/20 hover:border-[#AA8840]/30',
-        secondary: 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-700',
-    }
-    return (
-        <a href={href} target='_blank' rel='noopener noreferrer' title={tooltip} className={`${base} ${styles[variant]}`}>
-            <Icon size={15} />
-        </a>
-    )
-}
+            {/* Status */}
+            <div className='px-6 py-4 border-b border-gray-100'>
+                <StatusBadge weddingDate={wedding.weddingDate} />
+            </div>
 
-// ─── Main Table ───────────────────────────────────────────────────────────────
-function WeddingsTable({ weddings, sort, onSort }) {
-    if (weddings.length === 0) return <EmptyState />
-
-    return (
-        <div className='overflow-x-auto'>
-            <table className='w-full text-sm text-right' style={{ minWidth: '720px' }}>
-                {/* ── thead ── */}
-                <thead>
-                    <tr className='border-b border-[#AA8840]/15 text-[11px] uppercase tracking-widest bg-[#AA8840]/5'>
-                        <th className='px-6 py-4 text-gray-300 font-semibold w-12'>#</th>
-
-                        <SortableHeader sortKey='couple' currentSort={sort} onSort={onSort}>
-                            <Users size={11} /> זוג
-                        </SortableHeader>
-
-                        <SortableHeader sortKey='date' currentSort={sort} onSort={onSort}>
-                            <CalendarDays size={11} /> תאריך
-                        </SortableHeader>
-
-                        <th className='px-6 py-4 font-semibold text-gray-400 text-center'>סטטוס</th>
-
-                        <SortableHeader sortKey='greetings' currentSort={sort} onSort={onSort} justify='center'>
-                            <MessageCircle size={11} /> ברכות
-                        </SortableHeader>
-
-                        <th className='px-6 py-4 font-semibold text-gray-400'>
-                            <span className='flex items-center gap-1.5 justify-end'>
-                                <Hash size={11} /> הזמנה
-                            </span>
-                        </th>
-
-                        <th className='px-6 py-4 font-semibold text-gray-400 text-center'>פעולות</th>
-                    </tr>
-                </thead>
-
-                {/* ── tbody ── */}
-                <tbody className='divide-y divide-gray-100'>
-                    <AnimatePresence initial={false}>
-                        {weddings.map((w, i) => (
-                            <motion.tr
-                                key={w.id}
-                                layout
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ duration: 0.18 }}
-                                className='group hover:bg-[#AA8840]/5 transition-colors duration-150'
+            {/* Fields (visual DB) */}
+            <div className='px-6 py-4 space-y-1'>
+                <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>Firestore Document</p>
+                {fields.map(f => (
+                    <div key={f.label} className='flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0 group'>
+                        <f.icon size={14} className='text-gray-300 flex-shrink-0' />
+                        <div className='flex-1 min-w-0'>
+                            <p className='text-[10px] text-gray-400 uppercase tracking-wider'>{f.label}</p>
+                            <p className={`text-sm text-gray-800 truncate ${f.mono ? 'font-mono text-xs' : 'font-medium'}`}>
+                                {f.value}
+                            </p>
+                        </div>
+                        {f.value !== '—' && (
+                            <button
+                                onClick={() => navigator.clipboard.writeText(f.value)}
+                                className='opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-all'
+                                title='העתק'
                             >
-                                {/* Index */}
-                                <td className='px-6 py-4'>
-                                    <div className='w-7 h-7 rounded-full bg-[#AA8840]/10 flex items-center justify-center text-[#AA8840]/60 text-xs font-bold group-hover:bg-[#AA8840]/20 transition-colors'>
-                                        {i + 1}
-                                    </div>
-                                </td>
+                                <Copy size={11} className='text-gray-400' />
+                            </button>
+                        )}
+                    </div>
+                ))}
+            </div>
 
-                                {/* Couple */}
-                                <td className='px-6 py-4'>
-                                    <div className='text-right'>
-                                        <div className='font-semibold text-gray-800'>{coupleLabel(w)}</div>
-                                        {w.ownerEmail && (w.brideName || w.groomName) && (
-                                            <div className='text-xs text-gray-400 mt-0.5'>{w.ownerEmail}</div>
-                                        )}
-                                    </div>
-                                </td>
+            {/* Recommendations */}
+            <div className='px-6 py-4 border-t border-gray-100'>
+                <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>המלצות</p>
+                <div className='space-y-2'>
+                    {!wedding.brideName && !wedding.groomName && (
+                        <div className='flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl'>
+                            <AlertTriangle size={14} className='text-amber-500 mt-0.5 flex-shrink-0' />
+                            <p className='text-xs text-amber-700'>חסרים שמות הזוג — כנראה הזוג עדיין לא נכנס לפורטל</p>
+                        </div>
+                    )}
+                    {!wedding.weddingDate && (
+                        <div className='flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl'>
+                            <AlertTriangle size={14} className='text-amber-500 mt-0.5 flex-shrink-0' />
+                            <p className='text-xs text-amber-700'>לא הוגדר תאריך חתונה</p>
+                        </div>
+                    )}
+                    {!wedding.slug && (
+                        <div className='flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl'>
+                            <AlertTriangle size={14} className='text-amber-500 mt-0.5 flex-shrink-0' />
+                            <p className='text-xs text-amber-700'>אין slug — הקישור הקצר לא יעבוד. ייווצר אוטומטית כשהזוג ייכנס לפורטל</p>
+                        </div>
+                    )}
+                    {(wedding.greetingsCount ?? 0) === 0 && (
+                        <div className='flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl'>
+                            <MessageCircle size={14} className='text-blue-500 mt-0.5 flex-shrink-0' />
+                            <p className='text-xs text-blue-700'>אין ברכות עדיין — כדאי לוודא שהזוג שיתף את הלינק</p>
+                        </div>
+                    )}
+                    {getWeddingStatus(wedding.weddingDate) === 'past' && (wedding.greetingsCount ?? 0) === 0 && (
+                        <div className='flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl'>
+                            <Trash2 size={14} className='text-red-500 mt-0.5 flex-shrink-0' />
+                            <p className='text-xs text-red-700'>חתונה שעברה ללא ברכות — מומלץ למחוק</p>
+                        </div>
+                    )}
+                    {getWeddingStatus(wedding.weddingDate) !== 'past' && (wedding.greetingsCount ?? 0) > 0 && wedding.brideName && (
+                        <div className='flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl'>
+                            <CheckCircle2 size={14} className='text-emerald-500 mt-0.5 flex-shrink-0' />
+                            <p className='text-xs text-emerald-700'>הכל נראה תקין — החתונה פעילה עם ברכות</p>
+                        </div>
+                    )}
+                </div>
+            </div>
 
-                                {/* Date */}
-                                <td className='px-6 py-4 text-gray-500 whitespace-nowrap text-sm tabular-nums'>
-                                    {formatDate(w.weddingDate)}
-                                </td>
+            {/* Quick Links */}
+            <div className='px-6 py-4 border-t border-gray-100'>
+                <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>קישורים מהירים</p>
+                <div className='grid grid-cols-2 gap-2'>
+                    <a href={`/wedding/${wedding.id}/admin`} target='_blank' rel='noreferrer'
+                        className='flex items-center gap-2 p-3 rounded-xl bg-gray-50 hover:bg-[#AA8840]/5 border border-gray-100 hover:border-[#AA8840]/20 transition-all text-sm font-medium text-gray-600'>
+                        <Settings2 size={14} className='text-[#AA8840]' /> ניהול ברכות
+                    </a>
+                    <a href={`/wedding/${wedding.id}/portal`} target='_blank' rel='noreferrer'
+                        className='flex items-center gap-2 p-3 rounded-xl bg-gray-50 hover:bg-[#AA8840]/5 border border-gray-100 hover:border-[#AA8840]/20 transition-all text-sm font-medium text-gray-600'>
+                        <Link2 size={14} className='text-[#AA8840]' /> פורטל
+                    </a>
+                    <a href={`/wedding/${wedding.id}/viewer`} target='_blank' rel='noreferrer'
+                        className='flex items-center gap-2 p-3 rounded-xl bg-gray-50 hover:bg-[#AA8840]/5 border border-gray-100 hover:border-[#AA8840]/20 transition-all text-sm font-medium text-gray-600'>
+                        <Eye size={14} className='text-[#AA8840]' /> עיצוב הספר
+                    </a>
+                    <a href={`/wedding/${wedding.id}`} target='_blank' rel='noreferrer'
+                        className='flex items-center gap-2 p-3 rounded-xl bg-gray-50 hover:bg-[#AA8840]/5 border border-gray-100 hover:border-[#AA8840]/20 transition-all text-sm font-medium text-gray-600'>
+                        <ExternalLink size={14} className='text-[#AA8840]' /> דף האורחים
+                    </a>
+                </div>
+            </div>
 
-                                {/* Status Badge */}
-                                <td className='px-6 py-4 text-center'>
-                                    <StatusBadge weddingDate={w.weddingDate} />
-                                </td>
+            {/* Actions */}
+            <div className='px-6 py-4 border-t border-gray-100 space-y-2'>
+                <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>פעולות</p>
+                {wedding.ownerEmail && (
+                    <button onClick={() => onResetPassword(wedding.ownerEmail)}
+                        className='w-full flex items-center gap-3 p-3 rounded-xl bg-[#AA8840]/5 border border-[#AA8840]/15 hover:bg-[#AA8840]/10 transition-all text-sm font-semibold text-[#AA8840]'>
+                        <KeyRound size={16} /> שלח איפוס סיסמה ל-{wedding.ownerEmail}
+                    </button>
+                )}
+                <button onClick={() => onDelete(wedding)}
+                    className='w-full flex items-center gap-3 p-3 rounded-xl bg-red-50 border border-red-200 hover:bg-red-100 transition-all text-sm font-semibold text-red-600'>
+                    <Trash2 size={16} /> מחק חתונה לצמיתות
+                </button>
+            </div>
 
-                                {/* Greetings */}
-                                <td className='px-6 py-4 text-center'>
-                                    <GreetingsBadge count={w.greetingsCount} />
-                                </td>
-
-                                {/* Order ID */}
-                                <td className='px-6 py-4 text-right'>
-                                    {w.orderId ? (
-                                        <span className='font-mono text-xs bg-gray-100 text-gray-500 px-2.5 py-1 rounded-lg border border-gray-200'>
-                                            #{w.orderId}
-                                        </span>
-                                    ) : (
-                                        <span className='text-gray-300 italic text-xs'>Manual</span>
-                                    )}
-                                </td>
-
-                                {/* Actions */}
-                                <td className='px-6 py-4'>
-                                    <div className='flex items-center justify-center gap-2'>
-                                        <ActionIconBtn
-                                            href={`/wedding/${w.id}/admin`}
-                                            icon={Settings2}
-                                            tooltip='נהל כזוג'
-                                            variant='primary'
-                                        />
-                                        <ActionIconBtn
-                                            href={`/wedding/${w.id}`}
-                                            icon={ExternalLink}
-                                            tooltip='צפה באלבום'
-                                            variant='secondary'
-                                        />
-                                    </div>
-                                </td>
-                            </motion.tr>
-                        ))}
-                    </AnimatePresence>
-                </tbody>
-            </table>
-        </div>
+            <div className='h-8' />
+        </motion.div>
     )
 }
 
-// ─── Page Content ─────────────────────────────────────────────────────────────
+// ─── Main Content ────────────────────────────────────────────────────────────
 function AdminDashboardContent() {
     const [weddings, setWeddings] = useState([])
     const [status, setStatus] = useState('loading')
     const [error, setError] = useState(null)
     const [searchQuery, setSearchQuery] = useState('')
     const [sort, setSort] = useState({ key: 'date', dir: 'asc' })
+    const [selectedWedding, setSelectedWedding] = useState(null)
+    const [modal, setModal] = useState(null)
+    const [toast, setToast] = useState(null)
+    const [actionLoading, setActionLoading] = useState(false)
 
-    useEffect(() => {
+    const loadWeddings = useCallback(() => {
+        setStatus('loading')
         fetchAllWeddings()
-            .then(data => {
-                setWeddings(data)
-                setStatus('ok')
-            })
-            .catch(err => {
-                setError(err.message)
-                setStatus('error')
-            })
+            .then(data => { setWeddings(data); setStatus('ok') })
+            .catch(err => { setError(err.message); setStatus('error') })
     }, [])
 
-    // ── Derived stats ──
+    useEffect(() => { loadWeddings() }, [loadWeddings])
+
+    // Stats
     const totalGreetings = weddings.reduce((sum, w) => sum + (w.greetingsCount ?? 0), 0)
-    const todayCount = weddings.filter(w => isToday(w.weddingDate)).length
+    const todayCount = weddings.filter(w => getWeddingStatus(w.weddingDate) === 'today').length
     const upcomingCount = weddings.filter(w => getWeddingStatus(w.weddingDate) === 'upcoming').length
 
-    // ── Filter ──
+    // Filter + Sort
     const filtered = useMemo(() => {
         if (!searchQuery.trim()) return weddings
         const q = searchQuery.toLowerCase().trim()
-        return weddings.filter(w => {
-            const label = coupleLabel(w).toLowerCase()
-            const email = (w.ownerEmail || '').toLowerCase()
-            return label.includes(q) || email.includes(q)
-        })
+        return weddings.filter(w =>
+            coupleLabel(w).toLowerCase().includes(q) || (w.ownerEmail || '').toLowerCase().includes(q) || (w.orderId || '').includes(q) || (w.id || '').includes(q)
+        )
     }, [weddings, searchQuery])
 
-    // ── Sort ──
     const sorted = useMemo(() => {
         if (!sort.key) return filtered
         return [...filtered].sort((a, b) => {
-            let valA, valB
-            if (sort.key === 'date') {
-                valA = a.weddingDate ? new Date(a.weddingDate).getTime() : 0
-                valB = b.weddingDate ? new Date(b.weddingDate).getTime() : 0
-            } else if (sort.key === 'couple') {
-                valA = coupleLabel(a).toLowerCase()
-                valB = coupleLabel(b).toLowerCase()
-            } else if (sort.key === 'greetings') {
-                valA = a.greetingsCount ?? 0
-                valB = b.greetingsCount ?? 0
-            }
-            if (valA < valB) return sort.dir === 'asc' ? -1 : 1
-            if (valA > valB) return sort.dir === 'asc' ? 1 : -1
-            return 0
+            let vA, vB
+            if (sort.key === 'date') { vA = a.weddingDate ? new Date(a.weddingDate).getTime() : 0; vB = b.weddingDate ? new Date(b.weddingDate).getTime() : 0 }
+            else if (sort.key === 'couple') { vA = coupleLabel(a).toLowerCase(); vB = coupleLabel(b).toLowerCase() }
+            else if (sort.key === 'greetings') { vA = a.greetingsCount ?? 0; vB = b.greetingsCount ?? 0 }
+            return vA < vB ? (sort.dir === 'asc' ? -1 : 1) : vA > vB ? (sort.dir === 'asc' ? 1 : -1) : 0
         })
     }, [filtered, sort])
 
-    const handleSort = useCallback((newSort) => {
-        setSort(newSort.key ? newSort : { key: null, dir: null })
-    }, [])
+    // ─── Actions ──
+    function handleDeleteWedding(wedding) {
+        setModal({
+            title: 'מחיקת חתונה',
+            message: `האם אתה בטוח שרוצה למחוק את החתונה של ${coupleLabel(wedding)}? הפעולה תמחק את כל הברכות (${wedding.greetingsCount ?? 0}) ולא ניתנת לביטול.`,
+            confirmLabel: 'מחק לצמיתות',
+            danger: true,
+            onConfirm: async () => {
+                setModal(null)
+                setActionLoading(true)
+                try {
+                    await deleteWedding(wedding.id)
+                    setWeddings(prev => prev.filter(w => w.id !== wedding.id))
+                    setSelectedWedding(null)
+                    setToast({ message: `החתונה של ${coupleLabel(wedding)} נמחקה בהצלחה`, type: 'success' })
+                } catch (err) {
+                    setToast({ message: `שגיאה: ${err.message}`, type: 'error' })
+                } finally {
+                    setActionLoading(false)
+                }
+            },
+        })
+    }
 
-    // ── Stats config ──
+    function handleResetPassword(email) {
+        setModal({
+            title: 'איפוס סיסמה',
+            message: `סיסמה חדשה תיווצר ותישלח למייל ${email}. האם להמשיך?`,
+            confirmLabel: 'שלח סיסמה חדשה',
+            danger: false,
+            onConfirm: async () => {
+                setModal(null)
+                setActionLoading(true)
+                try {
+                    await resetPassword(email)
+                    setToast({ message: `סיסמה חדשה נשלחה ל-${email}`, type: 'success' })
+                } catch (err) {
+                    setToast({ message: `שגיאה: ${err.message}`, type: 'error' })
+                } finally {
+                    setActionLoading(false)
+                }
+            },
+        })
+    }
+
+    async function handleBackup() {
+        setActionLoading(true)
+        try {
+            await downloadBackup()
+            setToast({ message: 'גיבוי הורד בהצלחה', type: 'success' })
+        } catch (err) {
+            setToast({ message: `שגיאה בגיבוי: ${err.message}`, type: 'error' })
+        } finally {
+            setActionLoading(false)
+        }
+    }
+
     const stats = [
-        {
-            icon: Heart,
-            label: 'סך חתונות',
-            value: weddings.length,
-            iconBg: 'bg-[#AA8840]/10',
-            iconColor: 'text-[#AA8840]',
-        },
-        {
-            icon: MessageCircle,
-            label: 'סך ברכות',
-            value: totalGreetings,
-            iconBg: 'bg-[#c9a44e]/10',
-            iconColor: 'text-[#c9a44e]',
-        },
-        {
-            icon: Zap,
-            label: 'חתונות היום',
-            value: todayCount,
-            iconBg: 'bg-emerald-100',
-            iconColor: 'text-emerald-600',
-            pulse: todayCount > 0,
-        },
-        {
-            icon: CalendarDays,
-            label: 'חתונות קרובות',
-            value: upcomingCount,
-            iconBg: 'bg-indigo-100',
-            iconColor: 'text-indigo-600',
-        },
+        { icon: Heart, label: 'סך חתונות', value: weddings.length, iconBg: 'bg-[#AA8840]/10', iconColor: 'text-[#AA8840]' },
+        { icon: MessageCircle, label: 'סך ברכות', value: totalGreetings, iconBg: 'bg-[#c9a44e]/10', iconColor: 'text-[#c9a44e]' },
+        { icon: Zap, label: 'חתונות היום', value: todayCount, iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600', pulse: todayCount > 0 },
+        { icon: CalendarDays, label: 'חתונות קרובות', value: upcomingCount, iconBg: 'bg-indigo-100', iconColor: 'text-indigo-600' },
     ]
 
     return (
-        <div
-            className='min-h-screen py-10 px-4 sm:px-10 bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da]'
-            dir='rtl'
-        >
+        <div className='min-h-screen py-10 px-4 sm:px-10 bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da]' dir='rtl'>
+            {/* Toast */}
+            <AnimatePresence>{toast && <Toast {...toast} onClose={() => setToast(null)} />}</AnimatePresence>
+
+            {/* Confirm Modal */}
+            {modal && <ConfirmModal {...modal} onCancel={() => setModal(null)} />}
+
+            {/* Detail Panel Overlay */}
+            <AnimatePresence>
+                {selectedWedding && (
+                    <>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className='fixed inset-0 bg-black/30 z-[70]' onClick={() => setSelectedWedding(null)} />
+                        <WeddingDetailPanel
+                            wedding={selectedWedding}
+                            onClose={() => setSelectedWedding(null)}
+                            onDelete={handleDeleteWedding}
+                            onResetPassword={handleResetPassword}
+                        />
+                    </>
+                )}
+            </AnimatePresence>
+
+            {/* Loading overlay */}
+            {actionLoading && (
+                <div className='fixed inset-0 z-[95] flex items-center justify-center bg-black/20 backdrop-blur-sm'>
+                    <Loader2 size={32} className='text-[#AA8840] animate-spin' />
+                </div>
+            )}
+
             {/* Ambient orbs */}
             <div className='fixed -top-24 left-10 h-72 w-72 rounded-full bg-[#AA8840]/8 blur-3xl pointer-events-none' />
             <div className='fixed bottom-10 right-10 h-80 w-80 rounded-full bg-[#AA8840]/6 blur-3xl pointer-events-none' />
 
             <div className='max-w-7xl mx-auto relative'>
 
-                {/* ── Page Header ── */}
-                <motion.div
-                    initial={{ opacity: 0, y: -12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.35 }}
-                    className='flex items-center justify-between mb-8'
-                >
+                {/* Page Header */}
+                <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className='flex items-center justify-between mb-8'>
                     <div className='flex items-center gap-4'>
                         <div className='relative'>
                             <div className='w-13 h-13 rounded-2xl bg-gradient-to-br from-[#AA8840] to-[#c9a44e] flex items-center justify-center shadow-lg shadow-[#AA8840]/20 p-3'>
@@ -512,41 +502,49 @@ function AdminDashboardContent() {
                             <div className='absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-white animate-pulse' />
                         </div>
                         <div>
-                            <h1 className='text-2xl font-black text-gray-900 leading-tight tracking-tight'>
-                                Command Center
-                            </h1>
+                            <h1 className='text-2xl font-black text-gray-900 leading-tight tracking-tight'>Command Center</h1>
                             <p className='text-sm text-gray-400 mt-0.5 flex items-center gap-1.5'>
-                                <Sparkles size={12} className='text-[#AA8840]' />
-                                Wedding Tales — Super Admin
+                                <Sparkles size={12} className='text-[#AA8840]' /> Wedding Tales — Super Admin
                             </p>
                         </div>
                     </div>
 
-                    {/* Live indicator */}
-                    <div className='hidden sm:flex items-center gap-2 bg-white/80 border border-[#AA8840]/15 rounded-full px-4 py-2 backdrop-blur-sm shadow-sm'>
-                        <span className='w-2 h-2 rounded-full bg-emerald-400 animate-pulse' />
-                        <span className='text-gray-500 text-xs font-medium'>Live</span>
+                    {/* Top Actions */}
+                    <div className='flex items-center gap-2'>
+                        <button onClick={handleBackup} title='הורד גיבוי JSON'
+                            className='hidden sm:flex items-center gap-2 bg-white/80 border border-[#AA8840]/15 rounded-xl px-4 py-2.5 backdrop-blur-sm shadow-sm hover:bg-white hover:border-[#AA8840]/30 transition-all text-sm font-medium text-gray-600'>
+                            <HardDrive size={14} className='text-[#AA8840]' /> גיבוי
+                        </button>
+                        <button onClick={loadWeddings} title='רענן נתונים'
+                            className='w-10 h-10 rounded-xl bg-white/80 border border-[#AA8840]/15 flex items-center justify-center backdrop-blur-sm shadow-sm hover:bg-white transition-all'>
+                            <RefreshCw size={15} className='text-gray-500' />
+                        </button>
+                        <div className='hidden sm:flex items-center gap-2 bg-white/80 border border-[#AA8840]/15 rounded-full px-4 py-2 backdrop-blur-sm shadow-sm'>
+                            <span className='w-2 h-2 rounded-full bg-emerald-400 animate-pulse' />
+                            <span className='text-gray-500 text-xs font-medium'>Live</span>
+                        </div>
                     </div>
                 </motion.div>
 
-                {/* ── Stat Cards ── */}
+                {/* Stat Cards */}
                 {status === 'ok' && (
                     <div className='grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6'>
-                        {stats.map((s, i) => (
-                            <motion.div key={s.label} transition={{ delay: 0.05 * i }}>
-                                <StatCard {...s} />
-                            </motion.div>
-                        ))}
+                        {stats.map((s, i) => <motion.div key={s.label} transition={{ delay: 0.05 * i }}><StatCard {...s} /></motion.div>)}
                     </div>
                 )}
 
-                {/* ── Main Card ── */}
-                <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.15 }}
-                    className='rounded-2xl border border-[#AA8840]/15 overflow-hidden bg-white/90 backdrop-blur-md shadow-lg'
-                >
+                {/* Mobile backup button */}
+                <div className='sm:hidden mb-4'>
+                    <button onClick={handleBackup}
+                        className='w-full flex items-center justify-center gap-2 bg-white/80 border border-[#AA8840]/15 rounded-xl px-4 py-3 shadow-sm text-sm font-medium text-gray-600'>
+                        <HardDrive size={14} className='text-[#AA8840]' /> הורד גיבוי מלא
+                    </button>
+                </div>
+
+                {/* Main Table Card */}
+                <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+                    className='rounded-2xl border border-[#AA8840]/15 overflow-hidden bg-white/90 backdrop-blur-md shadow-lg'>
+
                     {/* Card header */}
                     <div className='px-6 py-4 border-b border-[#AA8840]/15 bg-white/70 flex flex-col sm:flex-row sm:items-center gap-3'>
                         <div className='flex items-center gap-3 flex-1'>
@@ -558,45 +556,126 @@ function AdminDashboardContent() {
                                 </span>
                             )}
                         </div>
-
                         {status === 'ok' && (
-                            <div className='w-full sm:w-72'>
-                                <SearchBar value={searchQuery} onChange={setSearchQuery} />
+                            <div className='w-full sm:w-72 relative' dir='rtl'>
+                                <Search size={15} className='absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none' />
+                                <input type='text' value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                                    placeholder='חיפוש לפי שם, אימייל, מזהה...'
+                                    className='w-full pr-10 pl-4 py-2.5 rounded-xl text-sm text-gray-700 placeholder:text-gray-400 outline-none transition-all border border-[#AA8840]/20 bg-[#AA8840]/5 focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10' />
+                                {searchQuery && (
+                                    <button onClick={() => setSearchQuery('')}
+                                        className='absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 text-xs'>✕</button>
+                                )}
                             </div>
                         )}
                     </div>
 
                     {/* Sort ribbon */}
                     {sort.key && status === 'ok' && (
-                        <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            className='px-6 py-2 border-b border-[#AA8840]/10 bg-[#AA8840]/5 flex items-center gap-2'
-                        >
+                        <div className='px-6 py-2 border-b border-[#AA8840]/10 bg-[#AA8840]/5 flex items-center gap-2'>
                             <ArrowUpDown size={11} className='text-[#AA8840]/60' />
                             <span className='text-xs text-[#AA8840]'>
                                 מיון לפי {sort.key === 'date' ? 'תאריך' : sort.key === 'couple' ? 'שם זוג' : 'ברכות'}
                                 {' '}({sort.dir === 'asc' ? 'עולה' : 'יורד'})
                             </span>
-                            <button
-                                onClick={() => setSort({ key: null, dir: null })}
-                                className='mr-auto text-xs text-gray-400 hover:text-gray-600 transition-colors'
-                            >
-                                נקה ✕
-                            </button>
-                        </motion.div>
+                            <button onClick={() => setSort({ key: null, dir: null })} className='mr-auto text-xs text-gray-400 hover:text-gray-600'>נקה ✕</button>
+                        </div>
                     )}
 
                     {/* Body */}
-                    {status === 'loading' && <LoadingState />}
-                    {status === 'error' && <ErrorState message={error} />}
-                    {status === 'ok' && <WeddingsTable weddings={sorted} sort={sort} onSort={handleSort} />}
+                    {status === 'loading' && (
+                        <div className='flex flex-col items-center justify-center py-40 gap-5'>
+                            <div className='relative'>
+                                <div className='w-16 h-16 rounded-full bg-gradient-to-br from-[#AA8840] to-[#c9a44e] opacity-20 animate-ping absolute inset-0' />
+                                <div className='w-16 h-16 rounded-full bg-gradient-to-br from-[#AA8840] to-[#c9a44e] flex items-center justify-center relative'>
+                                    <Loader2 size={28} className='text-white animate-spin' />
+                                </div>
+                            </div>
+                            <p className='text-gray-400 text-sm'>טוען חתונות...</p>
+                        </div>
+                    )}
+                    {status === 'error' && (
+                        <div className='flex flex-col items-center justify-center py-40 gap-4'>
+                            <div className='w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center'>
+                                <AlertCircle size={28} className='text-red-500' />
+                            </div>
+                            <p className='text-gray-800 font-semibold'>שגיאה בטעינת הנתונים</p>
+                            <p className='text-sm text-red-600 bg-red-50 border border-red-200 px-4 py-2 rounded-xl'>{error}</p>
+                        </div>
+                    )}
+                    {status === 'ok' && sorted.length === 0 && (
+                        <div className='flex flex-col items-center justify-center py-40 gap-4'>
+                            <div className='w-14 h-14 rounded-2xl bg-[#AA8840]/10 flex items-center justify-center'>
+                                <Heart size={28} className='text-[#AA8840]' />
+                            </div>
+                            <p className='text-gray-400 text-sm'>אין חתונות בטבלה עדיין.</p>
+                        </div>
+                    )}
+                    {status === 'ok' && sorted.length > 0 && (
+                        <div className='overflow-x-auto'>
+                            <table className='w-full text-sm text-right' style={{ minWidth: '780px' }}>
+                                <thead>
+                                    <tr className='border-b border-[#AA8840]/15 text-[11px] uppercase tracking-widest bg-[#AA8840]/5'>
+                                        <th className='px-6 py-4 text-gray-300 font-semibold w-12'>#</th>
+                                        <SortableHeader sortKey='couple' currentSort={sort} onSort={setSort}><Users size={11} /> זוג</SortableHeader>
+                                        <SortableHeader sortKey='date' currentSort={sort} onSort={setSort}><CalendarDays size={11} /> תאריך</SortableHeader>
+                                        <th className='px-6 py-4 font-semibold text-gray-400 text-center'>סטטוס</th>
+                                        <SortableHeader sortKey='greetings' currentSort={sort} onSort={setSort} justify='center'><MessageCircle size={11} /> ברכות</SortableHeader>
+                                        <th className='px-6 py-4 font-semibold text-gray-400'><span className='flex items-center gap-1.5 justify-end'><Hash size={11} /> הזמנה</span></th>
+                                        <th className='px-6 py-4 font-semibold text-gray-400 text-center'>פעולות</th>
+                                    </tr>
+                                </thead>
+                                <tbody className='divide-y divide-gray-100'>
+                                    {sorted.map((w, i) => (
+                                        <tr key={w.id}
+                                            onClick={() => setSelectedWedding(w)}
+                                            className='group hover:bg-[#AA8840]/5 transition-colors cursor-pointer'>
+                                            <td className='px-6 py-4'>
+                                                <div className='w-7 h-7 rounded-full bg-[#AA8840]/10 flex items-center justify-center text-[#AA8840]/60 text-xs font-bold group-hover:bg-[#AA8840]/20 transition-colors'>
+                                                    {i + 1}
+                                                </div>
+                                            </td>
+                                            <td className='px-6 py-4'>
+                                                <div className='text-right'>
+                                                    <div className='font-semibold text-gray-800'>{coupleLabel(w)}</div>
+                                                    {w.ownerEmail && (w.brideName || w.groomName) && <div className='text-xs text-gray-400 mt-0.5'>{w.ownerEmail}</div>}
+                                                </div>
+                                            </td>
+                                            <td className='px-6 py-4 text-gray-500 whitespace-nowrap text-sm tabular-nums'>{formatDate(w.weddingDate)}</td>
+                                            <td className='px-6 py-4 text-center'><StatusBadge weddingDate={w.weddingDate} /></td>
+                                            <td className='px-6 py-4 text-center'><GreetingsBadge count={w.greetingsCount} /></td>
+                                            <td className='px-6 py-4 text-right'>
+                                                {w.orderId
+                                                    ? <span className='font-mono text-xs bg-gray-100 text-gray-500 px-2.5 py-1 rounded-lg border border-gray-200'>#{w.orderId}</span>
+                                                    : <span className='text-gray-300 italic text-xs'>Manual</span>}
+                                            </td>
+                                            <td className='px-6 py-4'>
+                                                <div className='flex items-center justify-center gap-1' onClick={e => e.stopPropagation()}>
+                                                    <button onClick={() => setSelectedWedding(w)} title='פתח פרטים'
+                                                        className='w-8 h-8 rounded-lg bg-[#AA8840]/10 border border-[#AA8840]/20 text-[#AA8840] hover:bg-[#AA8840]/20 flex items-center justify-center transition-all'>
+                                                        <Database size={13} />
+                                                    </button>
+                                                    {w.ownerEmail && (
+                                                        <button onClick={() => handleResetPassword(w.ownerEmail)} title='איפוס סיסמה'
+                                                            className='w-8 h-8 rounded-lg bg-gray-50 border border-gray-200 text-gray-500 hover:text-[#AA8840] hover:bg-[#AA8840]/5 flex items-center justify-center transition-all'>
+                                                            <KeyRound size={13} />
+                                                        </button>
+                                                    )}
+                                                    <button onClick={() => handleDeleteWedding(w)} title='מחק חתונה'
+                                                        className='w-8 h-8 rounded-lg bg-gray-50 border border-gray-200 text-gray-400 hover:text-red-500 hover:bg-red-50 hover:border-red-200 flex items-center justify-center transition-all'>
+                                                        <Trash2 size={13} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </motion.div>
 
-                {/* Footer */}
-                <p className='text-center text-xs text-gray-300 mt-8'>
-                    גישה מוגבלת לאדמין בלבד • Wedding Tales Command Center
-                </p>
+                <p className='text-center text-xs text-gray-300 mt-8'>גישה מוגבלת לאדמין בלבד • Wedding Tales Command Center</p>
             </div>
         </div>
     )

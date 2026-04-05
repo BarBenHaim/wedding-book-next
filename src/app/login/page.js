@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { signInWithEmailAndPassword } from 'firebase/auth'
-import { auth } from '../../lib/firebaseClient'
+import { signInWithEmailAndPassword, getIdToken } from 'firebase/auth'
+import { collection, query, where, getDocs, limit } from 'firebase/firestore'
+import { auth, db } from '../../lib/firebaseClient'
 import { useRouter } from 'next/navigation'
-import { getIdToken } from 'firebase/auth'
 import Link from 'next/link'
 
 export default function LoginPage() {
@@ -31,8 +31,17 @@ export default function LoginPage() {
                 body: JSON.stringify({ token }),
             })
 
-            // weddingId – כרגע שווה ל־uid, אחר כך תביא מ־DB
-            const weddingId = user.uid
+            // חיפוש החתונה של המשתמש ב-Firestore לפי ownerId
+            let weddingId = user.uid // fallback לתאימות אחורה
+            const q = query(
+                collection(db, 'weddings'),
+                where('ownerId', '==', user.uid),
+                limit(1)
+            )
+            const snap = await getDocs(q)
+            if (!snap.empty) {
+                weddingId = snap.docs[0].id
+            }
             localStorage.setItem('weddingId', weddingId)
 
             router.push(`/wedding/${weddingId}/portal`)
@@ -124,13 +133,10 @@ export default function LoginPage() {
 
                 {error && <p className='mt-4 text-center text-sm text-red-600 bg-red-50 rounded-xl py-2.5 px-3'>{error}</p>}
 
-                {/* Link to register */}
+                {/* Help text */}
                 <div className='mt-6 pt-5 border-t border-gray-100 text-center'>
-                    <p className='text-sm text-gray-500'>
-                        עדיין אין לכם חשבון?{' '}
-                        <Link href='/register' className='text-[#AA8840] font-semibold hover:underline'>
-                            הרשמה
-                        </Link>
+                    <p className='text-sm text-gray-400'>
+                        פרטי ההתחברות נשלחו למייל שלכם לאחר הרכישה
                     </p>
                 </div>
             </div>

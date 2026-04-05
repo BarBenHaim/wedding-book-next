@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { getEntries } from '../../../../lib/classifyMedia'
 import { useParams } from 'next/navigation'
 import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore'
-import { db } from '../../../../lib/firebaseClient'
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db, storage } from '../../../../lib/firebaseClient'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import { Heebo } from 'next/font/google'
@@ -36,6 +37,12 @@ const DragIcon = () => (
     </svg>
 )
 
+const ImageIcon = () => (
+    <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor' className='w-4.5 h-4.5'>
+        <path fillRule='evenodd' d='M1.5 6a2.25 2.25 0 0 1 2.25-2.25h16.5A2.25 2.25 0 0 1 22.5 6v12a2.25 2.25 0 0 1-2.25 2.25H3.75A2.25 2.25 0 0 1 1.5 18V6ZM3 16.06V18c0 .414.336.75.75.75h16.5A.75.75 0 0 0 21 18v-1.94l-2.69-2.689a1.5 1.5 0 0 0-2.12 0l-.88.879.97.97a.75.75 0 1 1-1.06 1.06l-5.16-5.159a1.5 1.5 0 0 0-2.12 0L3 16.061Zm10.125-7.81a1.125 1.125 0 1 1 2.25 0 1.125 1.125 0 0 1-2.25 0Z' clipRule='evenodd' />
+    </svg>
+)
+
 export default function AdminDashboard() {
     const [entries, setEntries] = useState([])
     const [loading, setLoading] = useState(true)
@@ -43,6 +50,9 @@ export default function AdminDashboard() {
     const [editValues, setEditValues] = useState({ name: '', text: '' })
     const [expandedId, setExpandedId] = useState(null)
     const [currentPage, setCurrentPage] = useState(1)
+    const [uploadingImageId, setUploadingImageId] = useState(null)
+    const fileInputRef = useRef(null)
+    const replaceTargetId = useRef(null)
     const { weddingId } = useParams()
 
     useEffect(() => {
@@ -108,6 +118,37 @@ export default function AdminDashboard() {
         await batch.commit()
     }
 
+    function triggerImageReplace(entryId) {
+        replaceTargetId.current = entryId
+        fileInputRef.current?.click()
+    }
+
+    async function handleImageFileChange(e) {
+        const file = e.target.files?.[0]
+        if (!file || !replaceTargetId.current) return
+        const entryId = replaceTargetId.current
+        replaceTargetId.current = null
+        e.target.value = '' // reset input
+
+        setUploadingImageId(entryId)
+        try {
+            const filename = `photo-${Date.now()}.jpg`
+            const photoRef = storageRef(storage, `weddings/${weddingId}/${filename}`)
+            await uploadBytes(photoRef, file)
+            const newUrl = await getDownloadURL(photoRef)
+
+            await updateDoc(doc(db, 'weddings', weddingId, 'entries', entryId), {
+                imageUrl: newUrl,
+            })
+            setEntries(prev => prev.map(ent => (ent.id === entryId ? { ...ent, imageUrl: newUrl } : ent)))
+        } catch (err) {
+            console.error('Error replacing image:', err)
+            alert('שגיאה בהעלאת התמונה')
+        } finally {
+            setUploadingImageId(null)
+        }
+    }
+
     if (loading) {
         return (
             <div className='flex h-screen items-center justify-center bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da]'>
@@ -121,6 +162,15 @@ export default function AdminDashboard() {
             <div
                 className={`min-h-screen bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-[#AA8840]/5 via-[#F5F5F5] to-[#c9a44e]/5 px-4 sm:px-6 py-6 md:p-12 font-sans text-gray-800 animate-fadeIn ${heebo.className}`}
             >
+                {/* Hidden file input for image replacement */}
+                <input
+                    ref={fileInputRef}
+                    type='file'
+                    accept='image/*'
+                    className='hidden'
+                    onChange={handleImageFileChange}
+                />
+
                 {/* Header */}
                 <div className='max-w-4xl mx-auto mb-6 md:mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6 pb-5 border-b border-[#AA8840]/15'>
                     <div>
@@ -209,13 +259,21 @@ export default function AdminDashboard() {
                                                                 <>
                                                                     {/* Photo area — lazy loaded thumbnail */}
                                                                     {entry.imageUrl && (
-                                                                        <div className='w-full aspect-[4/3] bg-gray-50 overflow-hidden'>
+                                                                        <div className='relative w-full aspect-[4/3] bg-gray-50 overflow-hidden'>
                                                                             <img
                                                                                 src={entry.imageUrl}
                                                                                 alt=''
                                                                                 loading='lazy'
                                                                                 className='w-full h-full object-cover group-hover:scale-105 transition-transform duration-500'
                                                                             />
+                                                                            {uploadingImageId === entry.id && (
+                                                                                <div className='absolute inset-0 bg-black/40 flex items-center justify-center'>
+                                                                                    <svg className='w-8 h-8 text-white animate-spin' fill='none' viewBox='0 0 24 24'>
+                                                                                        <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4'/>
+                                                                                        <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8v8z'/>
+                                                                                    </svg>
+                                                                                </div>
+                                                                            )}
                                                                         </div>
                                                                     )}
 
@@ -266,6 +324,14 @@ export default function AdminDashboard() {
                                                                             >
                                                                                 <EditIcon />
                                                                                 <span>ערוך</span>
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => triggerImageReplace(entry.id)}
+                                                                                disabled={uploadingImageId === entry.id}
+                                                                                className='flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-gray-400 hover:text-[#AA8840] hover:bg-[#AA8840]/5 rounded-lg active:scale-95 transition-all disabled:opacity-50'
+                                                                            >
+                                                                                <ImageIcon />
+                                                                                <span>{entry.imageUrl ? 'החלף תמונה' : 'הוסף תמונה'}</span>
                                                                             </button>
                                                                             <button
                                                                                 onClick={() => handleDeleteEntry(entry.id)}

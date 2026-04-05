@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import { useMemo, useState, useEffect } from 'react'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '../../../../lib/firebaseClient'
+import { generateSlug } from '../../../../lib/generateSlug'
 
 // ייבוא רכיב לוח השנה המקצועי
 import DatePicker from 'react-datepicker'
@@ -29,6 +30,7 @@ export default function WeddingPortal() {
     const [groomName, setGroomName] = useState('')
     const [weddingDate, setWeddingDate] = useState(null)
     const [selectedBg, setSelectedBg] = useState('wedding-bg')
+    const [slug, setSlug] = useState('')
 
     const [downloading, setDownloading] = useState(false)
     const [copied, setCopied] = useState(false)
@@ -45,6 +47,15 @@ export default function WeddingPortal() {
                     if (data.brideName) setBrideName(data.brideName)
                     if (data.groomName) setGroomName(data.groomName)
                     if (data.weddingDate) setWeddingDate(new Date(data.weddingDate))
+
+                    // טעינת slug — אם אין, ניצור אחד אוטומטית
+                    if (data.slug) {
+                        setSlug(data.slug)
+                    } else {
+                        const newSlug = generateSlug()
+                        await setDoc(docRef, { slug: newSlug }, { merge: true })
+                        setSlug(newSlug)
+                    }
                 }
             } catch (error) { console.error('Error fetching:', error) }
         }
@@ -66,20 +77,19 @@ export default function WeddingPortal() {
 
     const guestLink = useMemo(() => {
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+        if (slug) return `${baseUrl}/w/${slug}`
         return `${baseUrl}/wedding/${weddingId}`
-    }, [weddingId])
+    }, [weddingId, slug])
 
     // Display-friendly link
     const displayLink = useMemo(() => {
-        if (brideName && groomName) {
-            return `weddingtales.co.il/${brideName}-${groomName}`
-        }
         const baseHost = process.env.NEXT_PUBLIC_BASE_URL
             ? new URL(process.env.NEXT_PUBLIC_BASE_URL).host
             : (typeof window !== 'undefined' ? window.location.host : '')
+        if (slug) return `${baseHost}/w/${slug}`
         const shortId = weddingId?.slice(0, 8) || ''
         return `${baseHost}/wedding/${shortId}...`
-    }, [weddingId, brideName, groomName])
+    }, [weddingId, slug])
 
     return (
         <div className='min-h-[calc(100vh-4rem)] bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da] flex flex-col items-center justify-center px-4 py-6 font-sans' dir='rtl'>
@@ -203,7 +213,7 @@ export default function WeddingPortal() {
                             try {
                                 setDownloading(true)
                                 const bgFile = BG_OPTIONS.find(b => b.id === selectedBg)?.file || 'wedding-bg.png'
-                                const url = `/api/generate-qr-pdf?weddingId=${weddingId}&bg=${encodeURIComponent(bgFile)}`
+                                const url = `/api/generate-qr-pdf?weddingId=${weddingId}&bg=${encodeURIComponent(bgFile)}${slug ? `&slug=${slug}` : ''}`
                                 const res = await fetch(url)
                                 if (!res.ok) throw new Error('PDF generation failed')
                                 const blob = await res.blob()

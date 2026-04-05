@@ -12,8 +12,9 @@ export async function GET(req) {
         const { searchParams } = new URL(req.url)
         const weddingId = searchParams.get('weddingId') || 'demo'
         const bgFile = searchParams.get('bg') || 'wedding-bg.png'
+        const slug = searchParams.get('slug') || ''
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://weddingtales.co.il'
-        const guestLink = `${baseUrl}/wedding/${weddingId}`
+        const guestLink = slug ? `${baseUrl}/w/${slug}` : `${baseUrl}/wedding/${weddingId}`
 
         // נתיבי קבצים
         const fontPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansHebrew-Regular.ttf')
