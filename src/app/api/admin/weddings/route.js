@@ -74,6 +74,7 @@ export async function GET(req) {
                     slug: data.slug ?? null,
                     greetingsCount,
                     createdAt,
+                    printOrder: data.printOrder ?? null,
                 }
             })
         )

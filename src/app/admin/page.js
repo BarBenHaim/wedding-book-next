@@ -11,7 +11,7 @@ import {
     ChevronUp, ChevronDown, ChevronsUpDown, Zap, ArrowUpDown,
     CheckCircle2, Trash2, KeyRound, Download, Database, X,
     ChevronRight, Eye, Link2, Mail, Shield, HardDrive, RefreshCw,
-    AlertTriangle, Copy, Clock,
+    AlertTriangle, Copy, Clock, Printer, Package, Truck,
 } from 'lucide-react'
 
 // ─── Data Fetching ────────────────────────────────────────────────────────────
@@ -47,6 +47,24 @@ async function resetPassword(email) {
         body: JSON.stringify({ email }),
     })
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Reset failed')
+    return res.json()
+}
+
+async function checkLuluStatus(printJobId) {
+    const token = await getToken()
+    const res = await fetch(`/api/lulu/status?printJobId=${printJobId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
+    return res.json()
+}
+
+async function listLuluJobs() {
+    const token = await getToken()
+    const res = await fetch('/api/lulu/status?all=true', {
+        headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
     return res.json()
 }
 
@@ -169,6 +187,16 @@ function GreetingsBadge({ count }) {
     return <span className='inline-flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold bg-emerald-50 text-emerald-700 border border-emerald-200'>{n}</span>
 }
 
+// ─── Print Status Badge ─────────────────────────────────────────────────────
+function PrintBadge({ printOrder }) {
+    if (!printOrder) return <span className='text-gray-300 text-xs'>—</span>
+    return (
+        <span className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200'>
+            <Printer size={10} /> הוזמן
+        </span>
+    )
+}
+
 // ─── Sortable Header ─────────────────────────────────────────────────────────
 function SortableHeader({ children, sortKey, currentSort, onSort, justify = 'end' }) {
     const isActive = currentSort.key === sortKey
@@ -191,7 +219,7 @@ function SortableHeader({ children, sortKey, currentSort, onSort, justify = 'end
 }
 
 // ─── Wedding Detail Panel (Database Explorer) ────────────────────────────────
-function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword }) {
+function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onCheckLuluStatus }) {
     if (!wedding) return null
 
     const fields = [
@@ -205,7 +233,10 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword }) {
         { label: 'מזהה הזמנה', value: wedding.orderId ? `#${wedding.orderId}` : '—', icon: Hash, mono: true },
         { label: 'סה"כ ברכות', value: String(wedding.greetingsCount ?? 0), icon: MessageCircle },
         { label: 'נוצר בתאריך', value: wedding.createdAt ? formatDate(wedding.createdAt) : '—', icon: Clock },
+        { label: 'סטטוס הדפסה', value: wedding.printOrder ? 'הוזמן' : 'לא הוזמן', icon: Printer },
     ]
+
+    const po = wedding.printOrder
 
     return (
         <motion.div
@@ -301,6 +332,72 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword }) {
                     )}
                 </div>
             </div>
+
+            {/* Print Order Details */}
+            {po && (
+                <div className='px-6 py-4 border-t border-gray-100'>
+                    <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>
+                        <span className='inline-flex items-center gap-1.5'><Package size={10} /> הזמנת הדפסה</span>
+                    </p>
+                    <div className='bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2'>
+                        <div className='flex items-center justify-between'>
+                            <span className='text-xs text-gray-500'>מזהה Lulu</span>
+                            <span className='text-xs font-mono bg-white px-2 py-0.5 rounded border border-emerald-200'>{po.printJobId}</span>
+                        </div>
+                        <div className='flex items-center justify-between'>
+                            <span className='text-xs text-gray-500'>סטטוס</span>
+                            <span className='text-xs font-bold text-emerald-700'>{po.luluStatus}</span>
+                        </div>
+                        <div className='flex items-center justify-between'>
+                            <span className='text-xs text-gray-500'>תאריך הזמנה</span>
+                            <span className='text-xs text-gray-700'>{po.orderedAt ? new Date(po.orderedAt).toLocaleString('he-IL') : '—'}</span>
+                        </div>
+                        <div className='flex items-center justify-between'>
+                            <span className='text-xs text-gray-500'>עמודים</span>
+                            <span className='text-xs text-gray-700'>{po.pageCount}</span>
+                        </div>
+                        {po.estimatedCost && (
+                            <div className='flex items-center justify-between'>
+                                <span className='text-xs text-gray-500'>עלות משוערת</span>
+                                <span className='text-xs font-bold text-[#AA8840]'>{po.estimatedCost} {po.currency}</span>
+                            </div>
+                        )}
+                        <hr className='border-emerald-200' />
+                        <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold pt-1'>
+                            <span className='inline-flex items-center gap-1'><Truck size={9} /> משלוח אל</span>
+                        </p>
+                        <div className='text-xs text-gray-700 space-y-0.5'>
+                            <p>{po.shippingAddress?.name}</p>
+                            <p>{po.shippingAddress?.street1}{po.shippingAddress?.street2 ? `, ${po.shippingAddress.street2}` : ''}</p>
+                            <p>{po.shippingAddress?.city} {po.shippingAddress?.postcode}</p>
+                            <p>{po.shippingAddress?.countryCode}</p>
+                            {po.shippingAddress?.phone && <p>טלפון: {po.shippingAddress.phone}</p>}
+                        </div>
+                        <hr className='border-emerald-200' />
+                        <div className='flex gap-2 pt-1'>
+                            {po.contentUrl && (
+                                <a href={po.contentUrl} target='_blank' rel='noreferrer'
+                                    className='flex-1 text-center text-xs py-1.5 rounded-lg bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-colors font-medium'>
+                                    תוכן PDF
+                                </a>
+                            )}
+                            {po.coverUrl && (
+                                <a href={po.coverUrl} target='_blank' rel='noreferrer'
+                                    className='flex-1 text-center text-xs py-1.5 rounded-lg bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-colors font-medium'>
+                                    כריכה PDF
+                                </a>
+                            )}
+                        </div>
+                        {po.printJobId && (
+                            <button
+                                onClick={() => onCheckLuluStatus(po.printJobId)}
+                                className='w-full text-center text-xs py-2 mt-1 rounded-lg bg-[#AA8840]/10 border border-[#AA8840]/20 text-[#AA8840] hover:bg-[#AA8840]/20 transition-colors font-bold flex items-center justify-center gap-1.5'>
+                                <RefreshCw size={11} /> בדוק סטטוס ב-Lulu
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Quick Links */}
             <div className='px-6 py-4 border-t border-gray-100'>
@@ -436,6 +533,25 @@ function AdminDashboardContent() {
         })
     }
 
+    async function handleCheckLuluStatus(printJobId) {
+        setActionLoading(true)
+        try {
+            const result = await checkLuluStatus(printJobId)
+            const statusMsg = [
+                `סטטוס: ${result.status}`,
+                result.trackingUrls?.length ? `מעקב: ${result.trackingUrls.join(', ')}` : null,
+                result.costs ? `עלות: ${result.costs.total_cost_incl_tax} ${result.costs.currency}` : null,
+                result.statusMessages?.length ? `הודעות: ${result.statusMessages.join('; ')}` : null,
+            ].filter(Boolean).join('\n')
+            setToast({ message: `Lulu #${printJobId}: ${result.status}`, type: 'success' })
+            alert(`פרטי הזמנה #${printJobId}:\n\n${statusMsg}`)
+        } catch (err) {
+            setToast({ message: `שגיאה בבדיקת סטטוס: ${err.message}`, type: 'error' })
+        } finally {
+            setActionLoading(false)
+        }
+    }
+
     async function handleBackup() {
         setActionLoading(true)
         try {
@@ -474,6 +590,7 @@ function AdminDashboardContent() {
                             onClose={() => setSelectedWedding(null)}
                             onDelete={handleDeleteWedding}
                             onResetPassword={handleResetPassword}
+                            onCheckLuluStatus={handleCheckLuluStatus}
                         />
                     </>
                 )}
@@ -613,7 +730,7 @@ function AdminDashboardContent() {
                     )}
                     {status === 'ok' && sorted.length > 0 && (
                         <div className='overflow-x-auto'>
-                            <table className='w-full text-sm text-right' style={{ minWidth: '780px' }}>
+                            <table className='w-full text-sm text-right' style={{ minWidth: '880px' }}>
                                 <thead>
                                     <tr className='border-b border-[#AA8840]/15 text-[11px] uppercase tracking-widest bg-[#AA8840]/5'>
                                         <th className='px-6 py-4 text-gray-300 font-semibold w-12'>#</th>
@@ -621,6 +738,7 @@ function AdminDashboardContent() {
                                         <SortableHeader sortKey='date' currentSort={sort} onSort={setSort}><CalendarDays size={11} /> תאריך</SortableHeader>
                                         <th className='px-6 py-4 font-semibold text-gray-400 text-center'>סטטוס</th>
                                         <SortableHeader sortKey='greetings' currentSort={sort} onSort={setSort} justify='center'><MessageCircle size={11} /> ברכות</SortableHeader>
+                                        <th className='px-6 py-4 font-semibold text-gray-400 text-center'><span className='flex items-center gap-1.5 justify-center'><Printer size={11} /> הדפסה</span></th>
                                         <th className='px-6 py-4 font-semibold text-gray-400'><span className='flex items-center gap-1.5 justify-end'><Hash size={11} /> הזמנה</span></th>
                                         <th className='px-6 py-4 font-semibold text-gray-400 text-center'>פעולות</th>
                                     </tr>
@@ -644,6 +762,7 @@ function AdminDashboardContent() {
                                             <td className='px-6 py-4 text-gray-500 whitespace-nowrap text-sm tabular-nums'>{formatDate(w.weddingDate)}</td>
                                             <td className='px-6 py-4 text-center'><StatusBadge weddingDate={w.weddingDate} /></td>
                                             <td className='px-6 py-4 text-center'><GreetingsBadge count={w.greetingsCount} /></td>
+                                            <td className='px-6 py-4 text-center'><PrintBadge printOrder={w.printOrder} /></td>
                                             <td className='px-6 py-4 text-right'>
                                                 {w.orderId
                                                     ? <span className='font-mono text-xs bg-gray-100 text-gray-500 px-2.5 py-1 rounded-lg border border-gray-200'>#{w.orderId}</span>

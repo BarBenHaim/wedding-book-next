@@ -14,6 +14,7 @@ import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
+import PrintOrderModal from '@/components/PrintOrderModal/PrintOrderModal'
 import { getEntries } from '../../../../lib/classifyMedia'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defultStyle'
 
@@ -45,6 +46,8 @@ export default function BookViewer() {
     const [isMobile, setIsMobile] = useState(false)
     const [styleSettings, setStyleSettings] = useState(defaultStyle)
     const [isGenerating, setIsGenerating] = useState(false)
+    const [showPrintModal, setShowPrintModal] = useState(false)
+    const [printStatus, setPrintStatus] = useState('idle') // 'idle' | 'generating' | 'uploading' | 'ordering' | 'done' | 'error'
     const [saveStatus, setSaveStatus] = useState('idle') // 'idle' | 'saving' | 'saved'
     const saveTimerRef = useRef(null)
 
@@ -180,28 +183,48 @@ export default function BookViewer() {
         return await getDownloadURL(storageRef)
     }
 
-    const handleSendToEmail = async () => {
+    const handlePrintOrder = async (shippingAddress) => {
         setIsGenerating(true)
+        setPrintStatus('generating')
         try {
             // 1. יצירת תוכן (Content) - דפים נפרדים
             const contentUrl = await generatePdfFromRef(contentRef, 'WeddingBook-Content', CONTENT_CONFIG)
 
             // 2. יצירת כריכה (Spread) - דף אחד רחב
+            setPrintStatus('uploading')
             const coversUrl = await generatePdfFromRef(fullCoverRef, 'WeddingBook-Covers', COVER_CONFIG)
 
             if (!contentUrl || !coversUrl) throw new Error('Failed to generate PDFs')
 
-            await fetch('/api/send-book-email', {
+            // 3. שליחה ל-Lulu Print API
+            setPrintStatus('ordering')
+            const res = await fetch('/api/lulu/create-order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ weddingId, contentUrl, coversUrl }),
+                body: JSON.stringify({
+                    weddingId,
+                    contentUrl,
+                    coverUrl: coversUrl,
+                    pageCount: pages.length,
+                    shippingAddress,
+                    quantity: 1,
+                }),
             })
 
-            alert('הספר נשלח בהצלחה! הקבצים הותאמו לדפוס.')
+            const data = await res.json()
+
+            if (!res.ok) throw new Error(data.error || 'Failed to create print order')
+
+            setPrintStatus('done')
+            setShowPrintModal(false)
+            alert(`ההזמנה נוצרה בהצלחה! 🎉\nמספר הזמנה: ${data.printJobId}\nהספר בדרך אליכם.`)
         } catch (error) {
-            alert('אירעה שגיאה ביצירת הספר. נסה שוב.')
+            console.error('Print order error:', error)
+            setPrintStatus('error')
+            alert(`אירעה שגיאה: ${error.message}\nנסו שוב מאוחר יותר.`)
         } finally {
             setIsGenerating(false)
+            setTimeout(() => setPrintStatus('idle'), 1000)
         }
     }
 
@@ -332,14 +355,21 @@ export default function BookViewer() {
                     {!isMobile && (
                         <div className='mt-6 z-30'>
                             <button
-                                onClick={handleSendToEmail}
+                                onClick={() => setShowPrintModal(true)}
                                 disabled={isGenerating}
                                 className='group flex items-center justify-center gap-3 px-8 py-3.5 rounded-2xl gold-shimmer text-white font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed'
                             >
                                 {isGenerating ? (
                                     <>
                                         <div className='w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin'></div>
-                                        <span className='text-sm font-bold tracking-wide'>מעבד קבצים...</span>
+                                        <span className='text-sm font-bold tracking-wide'>
+                                            {printStatus === 'generating' && 'מייצר קבצי PDF...'}
+                                            {printStatus === 'uploading' && 'מעלה קבצים...'}
+                                            {printStatus === 'ordering' && 'שולח להדפסה...'}
+                                            {printStatus === 'done' && 'ההזמנה נוצרה!'}
+                                            {printStatus === 'error' && 'שגיאה'}
+                                            {printStatus === 'idle' && 'מעבד...'}
+                                        </span>
                                     </>
                                 ) : (
                                     <>
@@ -352,6 +382,15 @@ export default function BookViewer() {
                     )}
                 </main>
             </div>
+
+            {/* --- Print Order Modal --- */}
+            {showPrintModal && (
+                <PrintOrderModal
+                    onClose={() => setShowPrintModal(false)}
+                    onSubmit={handlePrintOrder}
+                    isLoading={isGenerating}
+                />
+            )}
 
             {/* --- Hidden Print Area --- */}
             <div style={{ position: 'fixed', left: '-9999px', top: 0 }}>
