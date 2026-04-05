@@ -7,6 +7,7 @@ import {
     Secular_One,
     David_Libre,
     Heebo,
+    Assistant,
 } from 'next/font/google'
 
 import { Great_Vibes, Cinzel_Decorative, Parisienne, Cormorant_Garamond, Playfair_Display_SC } from 'next/font/google'
@@ -18,6 +19,13 @@ export const notoHebrew = Noto_Serif_Hebrew({
     subsets: ['hebrew'],
     weight: ['400', '700'],
     variable: '--font-noto-hebrew',
+})
+
+// פונט ראשי לתבנית Royal Gold
+export const assistant = Assistant({
+    subsets: ['hebrew', 'latin'],
+    weight: ['300', '400', '600', '700', '800'],
+    variable: '--font-assistant',
 })
 
 // פונטים עבריים יוקרתיים

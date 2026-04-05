@@ -30,7 +30,7 @@ const names = [
 ]
 
 // ברכה דיפולטית אחידה
-const defaultText = 'מזל טוב! מאחלים לכם המון אהבה ושמחה 💖'
+const defaultText = 'מזל טוב! מאחלים לכם המון אהבה ושמחה'
 
 export async function GET() {
     try {

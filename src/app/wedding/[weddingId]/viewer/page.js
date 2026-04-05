@@ -105,12 +105,22 @@ export default function BookViewer() {
     }, [calculateBookSize])
 
     // ── Debounced Firestore save ─────────────────────────────────────────────
+    // Remove undefined values recursively so Firestore won't reject nested entities
+    const sanitize = (obj) => {
+        if (obj === null || typeof obj !== 'object') return obj
+        return Object.fromEntries(
+            Object.entries(obj)
+                .filter(([, v]) => v !== undefined)
+                .map(([k, v]) => [k, typeof v === 'object' && v !== null && !Array.isArray(v) ? sanitize(v) : v])
+        )
+    }
+
     const saveCoverDesign = useCallback((newSettings) => {
         setSaveStatus('saving')
         clearTimeout(saveTimerRef.current)
         saveTimerRef.current = setTimeout(async () => {
             try {
-                await setDoc(doc(db, 'weddings', weddingId), { coverDesign: newSettings }, { merge: true })
+                await setDoc(doc(db, 'weddings', weddingId), { coverDesign: sanitize(newSettings) }, { merge: true })
                 setSaveStatus('saved')
                 setTimeout(() => setSaveStatus('idle'), 2500)
             } catch (err) {
@@ -196,10 +206,15 @@ export default function BookViewer() {
     }
 
     if (loading || designLoading) return (
-        <div className='flex h-[calc(100vh-64px)] items-center justify-center bg-gradient-to-br from-purple-50 via-white to-pink-50'>
-            <div className='flex flex-col items-center gap-4'>
-                <div className='animate-spin rounded-full h-10 w-10 border-[3px] border-purple-200 border-t-purple-600' />
-                <p className='text-sm text-gray-400 font-medium'>טוען את עיצוב הכריכה...</p>
+        <div className='flex h-[calc(100vh-64px)] items-center justify-center bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da]'>
+            <div className='flex flex-col items-center gap-6'>
+                <div className='flex items-center justify-center'>
+                    <div className='animate-spin rounded-full h-12 w-12 border-[3px] border-[#AA8840]/20 border-t-[#c9a44e] shadow-lg shadow-[#AA8840]/10' />
+                </div>
+                <div className='text-center'>
+                    <p className='text-sm text-gray-600 font-bold tracking-wide'>טוען את עיצוב הכריכה...</p>
+                    <p className='text-xs text-gray-400 mt-2'>רגע אחד בלבד</p>
+                </div>
             </div>
         </div>
     )
@@ -231,7 +246,7 @@ export default function BookViewer() {
         <AdminPageWrapper>
             <div
                 dir='rtl'
-                className='relative flex flex-col-reverse lg:flex-row h-[calc(100vh-64px)] overflow-hidden bg-gradient-to-br from-purple-50 font-sans'
+                className='relative flex flex-col-reverse lg:flex-row h-[calc(100vh-64px)] overflow-hidden bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] font-sans'
             >
                 <aside
                     className={`relative z-20 flex flex-col shrink-0 bg-white/80 backdrop-blur-md border-l border-white/50 transition-all ${
@@ -250,17 +265,14 @@ export default function BookViewer() {
                 </aside>
 
                 <main
-                    className={`relative z-10 flex-1 flex flex-col p-6 overflow-hidden transition-all duration-500 ease-in-out ${
-                        isMobile
-                            ? 'items-center justify-center'
-                            : mode === 'book'
-                            ? 'items-start justify-start pt-12 px-10'
-                            : 'items-center justify-center'
-                    }`}
+                    className='relative z-10 flex-1 flex flex-col items-center justify-center p-4 min-h-0 overflow-hidden'
                 >
                     <div
-                        className='relative transition-all duration-700 ease-out rounded-sm shrink-0'
-                        style={{ width: viewerSize, height: viewerSize }}
+                        className='relative shrink-0'
+                        style={{
+                            width: mode === 'book' && !isMobile ? viewerSize * 2 : viewerSize,
+                            height: viewerSize,
+                        }}
                     >
                         {mode === 'cover' ? (
                             <HTMLFlipBook
@@ -297,7 +309,7 @@ export default function BookViewer() {
                                     <BookBackCoverTemplate scaledWidth={viewerSize} scaledHeight={viewerSize} />
                                 </div>
                                 {pages.map(entry => (
-                                    <div key={entry.id} className='demo-page border-l border-purple-50/30'>
+                                    <div key={entry.id} className='demo-page border-l border-[#AA8840]/10'>
                                         <BookPageTemplate
                                             entry={entry}
                                             styleSettings={styleSettings}
@@ -318,15 +330,11 @@ export default function BookViewer() {
                     </div>
 
                     {!isMobile && (
-                        <div className='absolute bottom-8 left-1/2 -translate-x-1/2 z-30'>
+                        <div className='mt-6 z-30'>
                             <button
                                 onClick={handleSendToEmail}
                                 disabled={isGenerating}
-                                className={`group flex items-center gap-3 bg-gradient-to-r from-purple-600 to-pink-500 text-white px-8 py-3 rounded-xl shadow-lg shadow-purple-500/20 transition-all duration-300 transform ${
-                                    isGenerating
-                                        ? 'opacity-80 cursor-not-allowed scale-95'
-                                        : 'hover:scale-105 hover:shadow-purple-500/40 cursor-pointer'
-                                }`}
+                                className='group flex items-center justify-center gap-3 px-8 py-3.5 rounded-2xl gold-shimmer text-white font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed'
                             >
                                 {isGenerating ? (
                                     <>
@@ -336,9 +344,7 @@ export default function BookViewer() {
                                 ) : (
                                     <>
                                         <span className='text-sm font-bold tracking-wide'>שליחה להדפסה</span>
-                                        <span className='text-xl group-hover:rotate-12 transition-transform duration-300'>
-                                            🖨️
-                                        </span>
+                                        <svg className='w-5 h-5 group-hover:scale-110 transition-transform duration-300' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}><path strokeLinecap='round' strokeLinejoin='round' d='M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z' /></svg>
                                     </>
                                 )}
                             </button>

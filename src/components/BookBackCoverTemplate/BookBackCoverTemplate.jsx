@@ -12,7 +12,6 @@ export default function BookBackCoverTemplate({ scaledWidth, scaledHeight }) {
 
         const ctx = canvas.getContext('2d')
 
-        // --- הגדרות רזולוציה (High-DPI) לחדות מקסימלית ---
         const dpr = window.devicePixelRatio || 1
         canvas.width = scaledWidth * dpr
         canvas.height = scaledHeight * dpr
@@ -22,7 +21,6 @@ export default function BookBackCoverTemplate({ scaledWidth, scaledHeight }) {
         const h = scaledHeight
 
         const drawCanvas = async () => {
-            // המתנה לטעינת פונטים
             try {
                 await document.fonts.ready
             } catch (e) {
@@ -31,64 +29,67 @@ export default function BookBackCoverTemplate({ scaledWidth, scaledHeight }) {
 
             ctx.clearRect(0, 0, w, h)
 
-            // 1. רקע לבן עם מעבר עדין
+            // 1. Rich cream/ivory background
             const bg = ctx.createLinearGradient(0, 0, w, h)
-            bg.addColorStop(0, '#ffffff')
-            bg.addColorStop(1, '#f8f5ff')
+            bg.addColorStop(0, '#faf8f4')
+            bg.addColorStop(0.5, '#f5f0e8')
+            bg.addColorStop(1, '#f0ebe3')
             ctx.fillStyle = bg
             ctx.fillRect(0, 0, w, h)
 
-            // 2. לב שקוף ברקע
-            const heartGradient = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.35)
-            heartGradient.addColorStop(0, 'rgba(139,92,246,0.08)')
-            heartGradient.addColorStop(1, 'transparent')
+            // 2. Minimal thin border from margins
             ctx.save()
-            ctx.translate(w / 2, h / 2)
-            ctx.rotate(-Math.PI / 12)
-            ctx.fillStyle = heartGradient
-            ctx.beginPath()
-            const size = w * 0.25
-            ctx.moveTo(0, size)
-            ctx.bezierCurveTo(size, size * 0.5, size, -size * 0.4, 0, -size)
-            ctx.bezierCurveTo(-size, -size * 0.4, -size, size * 0.5, 0, size)
-            ctx.closePath()
-            ctx.fill()
+            ctx.strokeStyle = 'rgba(170,136,64,0.12)'
+            ctx.lineWidth = 0.5
+            const margin = w * 0.04
+            ctx.strokeRect(margin, margin, w - margin * 2, h - margin * 2)
             ctx.restore()
 
-            // --- אזור מרכזי: לוגו וסלוגן ---
-            const logoY = h * 0.42
-            const subtitleY = logoY + w * 0.1
-
+            // 3. WT Logo image — centered
+            const logoY = h * 0.46
             ctx.textAlign = 'center'
             ctx.textBaseline = 'middle'
 
-            // לוגו Wedding Tales
-            const textGradient = ctx.createLinearGradient(w * 0.2, 0, w * 0.8, 0)
-            textGradient.addColorStop(0, '#ec4899')
-            textGradient.addColorStop(1, '#9333ea')
-            ctx.fillStyle = textGradient
-            ctx.font = `${w * 0.13}px "Great Vibes", cursive`
-            ctx.fillText('Wedding Tales', w / 2, logoY)
+            try {
+                const logoImg = new Image()
+                logoImg.crossOrigin = 'anonymous'
+                await new Promise((resolve, reject) => {
+                    logoImg.onload = resolve
+                    logoImg.onerror = reject
+                    logoImg.src = '/logo-wt.png'
+                })
+                const logoSize = w * 0.28
+                ctx.drawImage(logoImg, w / 2 - logoSize / 2, logoY - logoSize / 2, logoSize, logoSize)
+            } catch (e) {
+                // Fallback: draw text if image fails
+                const logoGrad = ctx.createLinearGradient(w * 0.3, logoY - w * 0.06, w * 0.7, logoY + w * 0.06)
+                logoGrad.addColorStop(0, '#AA8840')
+                logoGrad.addColorStop(0.4, '#c9a44e')
+                logoGrad.addColorStop(0.6, '#d4b867')
+                logoGrad.addColorStop(1, '#AA8840')
+                ctx.fillStyle = logoGrad
+                ctx.font = `${w * 0.16}px "Great Vibes", cursive`
+                ctx.fillText('WT', w / 2, logoY)
+            }
 
-            // תת־כותרת
-            ctx.font = `300 ${w * 0.035}px "Heebo", sans-serif`
-            ctx.fillStyle = '#3a3a3a'
+            // 4. Tagline
+            const subtitleY = h * 0.60
+            ctx.font = `300 ${w * 0.032}px "Assistant", sans-serif`
+            ctx.fillStyle = '#6b5e4f'
             ctx.fillText('זכרונות שנשארים לנצח', w / 2, subtitleY)
 
-            // --- אזור תחתון: כתובת וזכויות יוצרים (נקי ומרווח) ---
-            const bottomY = h * 0.93 // הכתובת יושבת מעט גבוה יותר כדי לתת אוויר
-            const copyrightY = h * 0.965 // הזכויות שמורות ממש בתחתית, כמו חותמת
+            // 5. Bottom section
+            const bottomY = h * 0.88
+            const copyrightY = h * 0.92
 
-            // כתובת האתר - הצבע כהה ('קצת יותר שחור') ובולט בדיוק במידה
-            ctx.font = `400 ${w * 0.026}px "Heebo", sans-serif`
-            ctx.fillStyle = '#111111'
+            ctx.font = `400 ${w * 0.024}px "Assistant", sans-serif`
+            ctx.fillStyle = '#AA8840'
             ctx.fillText('weddingtales.co.il', w / 2, bottomY)
 
-            // זכויות שמורות - פונט קטן ועדין יותר, לא מתחרה בכתובת האתר
             const currentYear = new Date().getFullYear()
-            ctx.font = `300 ${w * 0.016}px "Heebo", sans-serif`
-            ctx.fillStyle = '#333333'
-            ctx.fillText(`© כל הזכויות שמורות ${currentYear} `, w / 2, copyrightY)
+            ctx.font = `300 ${w * 0.015}px "Assistant", sans-serif`
+            ctx.fillStyle = '#9a9080'
+            ctx.fillText(`\u00A9 כל הזכויות שמורות ${currentYear}`, w / 2, copyrightY)
 
             setIsReady(true)
         }
@@ -104,10 +105,10 @@ export default function BookBackCoverTemplate({ scaledWidth, scaledHeight }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: '#fff',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                background: '#f5f0e8',
+                boxShadow: '0 4px 20px rgba(170,136,64,0.08)',
                 opacity: isReady ? 1 : 0,
-                transition: 'opacity 0.4s ease-in-out',
+                transition: 'opacity 0.5s ease-in-out',
             }}
         >
             <canvas

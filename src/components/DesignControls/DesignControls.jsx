@@ -174,19 +174,19 @@ const PositionPad = ({ x, y, onChange }) => {
                     setIsDragging(true)
                     handleMove(e.touches[0].clientX, e.touches[0].clientY)
                 }}
-                className={`relative w-full h-24 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 overflow-hidden cursor-crosshair touch-none transition-colors ${
-                    isDragging ? 'border-pink-400 bg-pink-50' : ''
+                className={`relative w-full h-24 bg-gray-100 rounded-lg border-2 border-dashed border-[#AA8840]/30 overflow-hidden cursor-crosshair touch-none transition-colors ${
+                    isDragging ? 'border-[#c9a44e] bg-[#F5F5F5]' : ''
                 }`}
             >
                 <div className='absolute top-1/2 left-0 w-full h-px bg-gray-200 pointer-events-none' />
                 <div className='absolute left-1/2 top-0 w-px h-full bg-gray-200 pointer-events-none' />
 
                 <div
-                    className='absolute w-6 h-6 bg-white border-2 border-pink-500 rounded-full shadow-lg transform -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-transform duration-75'
+                    className='absolute w-6 h-6 bg-white border-2 border-[#c9a44e] rounded-full shadow-lg transform -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-transform duration-75'
                     style={{ left: `${x}%`, top: `${y}%`, scale: isDragging ? '1.2' : '1' }}
                 >
                     <div className='w-full h-full flex items-center justify-center'>
-                        <div className='w-1 h-1 bg-pink-500 rounded-full' />
+                        <div className='w-1 h-1 bg-[#c9a44e] rounded-full' />
                     </div>
                 </div>
             </div>
@@ -195,9 +195,9 @@ const PositionPad = ({ x, y, onChange }) => {
 }
 
 const Card = ({ title, children, className = '' }) => (
-    <div className={`bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden ${className}`}>
-        <div className='bg-gray-50/50 px-4 py-2 border-b border-gray-100'>
-            <h4 className='text-xs font-bold text-gray-500 uppercase tracking-wider'>{title}</h4>
+    <div className={`bg-white border border-[#AA8840]/10 rounded-xl shadow-sm overflow-hidden ${className}`}>
+        <div className='bg-gradient-to-r from-[#AA8840]/5 to-transparent px-4 py-2.5 border-b border-[#AA8840]/10'>
+            <h4 className='text-[11px] font-bold text-[#AA8840] uppercase tracking-wider'>{title}</h4>
         </div>
         <div className='p-4 space-y-3'>{children}</div>
     </div>
@@ -226,7 +226,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
     }
 
     return (
-        <div dir='rtl' className='flex flex-col gap-3 h-full bg-gray-50/50 p-2'>
+        <div dir='rtl' className='flex flex-col gap-3 h-full bg-[#faf8f5] p-3'>
 
             {/* ── Save Status Indicator ── */}
             <div className='flex items-center justify-end h-5 px-1 shrink-0'>
@@ -246,27 +246,27 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                 )}
             </div>
             {/* ── טאבים ראשיים ── */}
-            <div className='bg-gray-200 p-1 rounded-xl flex gap-1 shadow-inner shrink-0'>
+            <div className='bg-[#ebe5da]/60 p-1 rounded-xl flex gap-1 shadow-inner shrink-0'>
                 <button
                     onClick={() => onModeChange('book')}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
-                        mode === 'book' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${
+                        mode === 'book' ? 'bg-white text-[#AA8840] shadow-sm' : 'text-gray-500 hover:text-gray-700'
                     }`}
                 >
-                    📖 פנים הספר
+                    פנים הספר
                 </button>
                 <button
                     onClick={() => onModeChange('cover')}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
-                        mode === 'cover' ? 'bg-white text-pink-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${
+                        mode === 'cover' ? 'bg-white text-[#c9a44e] shadow-sm' : 'text-gray-500 hover:text-gray-700'
                     }`}
                 >
-                    🎨 עיצוב כריכה
+                    עיצוב כריכה
                 </button>
             </div>
 
             {/* Controls area */}
-            <div className='flex-1 overflow-y-auto pr-1 pl-1 space-y-4 pb-10 scrollbar-hide'>
+            <div className='flex-1 overflow-y-auto pr-0.5 pl-0.5 space-y-4 pb-10 scrollbar-hide'>
                 {/* === מצב ספר === */}
                 {mode === 'book' && (
                     <div className='space-y-4 animate-fadeIn'>
@@ -278,7 +278,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                         onClick={() => applyPreset(preset)}
                                         className={`relative h-16 rounded-lg border transition-all overflow-hidden ${
                                             activePreset === preset.name
-                                                ? 'ring-2 ring-purple-500 border-transparent'
+                                                ? 'ring-2 ring-[#AA8840] border-transparent'
                                                 : 'border-gray-200 hover:scale-[1.02]'
                                         }`}
                                         style={{ background: preset.preview }}
@@ -305,7 +305,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                         onClick={() => onChange({ ...settings, fontClass: f.font.className })}
                                         className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-all ${
                                             settings.fontClass === f.font.className
-                                                ? 'bg-purple-50 border-purple-400 text-purple-700'
+                                                ? 'bg-[#F5F5F5] border-[#AA8840] text-[#AA8840]'
                                                 : 'bg-white hover:border-gray-300'
                                         }`}
                                     >
@@ -327,13 +327,13 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                     value={settings.coverTitle}
                                     onChange={val => onChange({ ...settings, coverTitle: val })}
                                     placeholder='כותרת (למשל: החתונה של...)'
-                                    className='w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pink-300 outline-none'
+                                    className='w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#c9a44e]/30 outline-none'
                                 />
                                 <BufferedInput
                                     value={settings.coverSubtitle}
                                     onChange={val => onChange({ ...settings, coverSubtitle: val })}
                                     placeholder='תת כותרת'
-                                    className='w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pink-300 outline-none'
+                                    className='w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#c9a44e]/30 outline-none'
                                 />
                             </div>
                             <div className='mt-3 flex items-center justify-between'>
@@ -346,7 +346,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                         })
                                     }
                                     className={`relative w-10 h-5 rounded-full transition-colors ${
-                                        settings.coverTextBg ? 'bg-pink-500' : 'bg-gray-300'
+                                        settings.coverTextBg ? 'bg-[#c9a44e]' : 'bg-gray-300'
                                     }`}
                                 >
                                     <span
@@ -360,9 +360,9 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
 
                         <Card title='תמונת כריכה'>
                             {!settings.coverImage ? (
-                                <label className='flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-pink-50 hover:border-pink-300 transition-all'>
-                                    <span className='text-2xl mb-1'>📷</span>
-                                    <span className='text-xs text-gray-500'>העלאת תמונה</span>
+                                <label className='flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-[#AA8840]/30 rounded-xl cursor-pointer hover:bg-[#AA8840]/5 hover:border-[#c9a44e] transition-all duration-200'>
+                                    <svg className='w-8 h-8 text-[#AA8840]/40 mb-1.5' fill='none' viewBox='0 0 24 24' strokeWidth={1.5} stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' d='M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z' /><path strokeLinecap='round' strokeLinejoin='round' d='M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z' /></svg>
+                                    <span className='text-xs text-[#AA8840]/60 font-medium'>העלאת תמונה</span>
                                     {/* 🔥 שימוש בפונקציה החדשה להעלאה */}
                                     <input
                                         type='file'
@@ -419,7 +419,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                             onChange={e =>
                                                 onChange({ ...settings, coverImageScale: parseFloat(e.target.value) })
                                             }
-                                            className='w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-pink-500'
+                                            className='w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#c9a44e]'
                                         />
                                     </div>
                                 </div>
@@ -433,7 +433,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                     onClick={() => onChange({ coverTexture: null, coverFrame: null })}
                                     className={`aspect-square rounded-lg flex flex-col items-center justify-center text-[10px] border transition-all ${
                                         settings.coverTexture === null && settings.coverFrame === null
-                                            ? 'bg-pink-50 border-pink-400 text-pink-700'
+                                            ? 'bg-[#F5F5F5] border-[#c9a44e] text-[#AA8840]'
                                             : 'bg-white hover:bg-gray-50'
                                     }`}
                                 >
@@ -445,7 +445,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                     onClick={() => onChange({ coverTexture: 'none', coverFrame: 'none' })}
                                     className={`aspect-square rounded-lg flex flex-col items-center justify-center text-[10px] border transition-all ${
                                         settings.coverTexture === 'none'
-                                            ? 'bg-pink-50 border-pink-400 text-pink-700'
+                                            ? 'bg-[#F5F5F5] border-[#c9a44e] text-[#AA8840]'
                                             : 'bg-white hover:bg-gray-50'
                                     }`}
                                 >
@@ -459,7 +459,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                         onClick={() => onChange({ coverTexture: tex.src, coverFrame: 'none' })} // בחרתי שזה יבטל מסגרת אוטומטית כשבוחרים רקע
                                         className={`aspect-square rounded-lg border overflow-hidden transition-all ${
                                             settings.coverTexture === tex.src
-                                                ? 'ring-2 ring-pink-400 border-transparent'
+                                                ? 'ring-2 ring-[#c9a44e] border-transparent'
                                                 : 'hover:opacity-80'
                                         }`}
                                     >

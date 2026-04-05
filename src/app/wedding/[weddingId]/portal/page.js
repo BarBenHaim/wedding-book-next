@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation'
 import { useMemo, useState, useEffect } from 'react'
-import { doc, getDoc, setDoc } from 'firebase/firestore' 
+import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '../../../../lib/firebaseClient'
 
 // ייבוא רכיב לוח השנה המקצועי
@@ -16,7 +16,11 @@ registerLocale('he', he);
 const PdfIcon = () => (<svg className='w-6 h-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' /></svg>)
 const LinkIcon = () => (<svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1' /></svg>)
 const CheckIcon = () => (<svg className='w-5 h-5 text-green-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M5 13l4 4L19 7' /></svg>)
-const WhatsAppIcon = () => (<svg className='w-5 h-5' fill='currentColor' viewBox='0 0 24 24'><path d='M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z' /></svg>)
+
+const BG_OPTIONS = [
+    { id: 'wedding-bg', file: 'wedding-bg.png', label: 'קלאסי' },
+    { id: 'wedding-bg2', file: 'wedding-bg2.png', label: 'זהב שיש' },
+]
 
 export default function WeddingPortal() {
     const { weddingId } = useParams()
@@ -24,6 +28,7 @@ export default function WeddingPortal() {
     const [brideName, setBrideName] = useState('')
     const [groomName, setGroomName] = useState('')
     const [weddingDate, setWeddingDate] = useState(null)
+    const [selectedBg, setSelectedBg] = useState('wedding-bg')
 
     const [downloading, setDownloading] = useState(false)
     const [copied, setCopied] = useState(false)
@@ -64,9 +69,21 @@ export default function WeddingPortal() {
         return `${baseUrl}/wedding/${weddingId}`
     }, [weddingId])
 
+    // Display-friendly link
+    const displayLink = useMemo(() => {
+        if (brideName && groomName) {
+            return `weddingtales.co.il/${brideName}-${groomName}`
+        }
+        const baseHost = process.env.NEXT_PUBLIC_BASE_URL
+            ? new URL(process.env.NEXT_PUBLIC_BASE_URL).host
+            : (typeof window !== 'undefined' ? window.location.host : '')
+        const shortId = weddingId?.slice(0, 8) || ''
+        return `${baseHost}/wedding/${shortId}...`
+    }, [weddingId, brideName, groomName])
+
     return (
-        <div className='min-h-[calc(100vh-4rem)] bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex flex-col items-center justify-center p-4 font-sans' dir='rtl'>
-            
+        <div className='min-h-[calc(100vh-4rem)] bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da] flex flex-col items-center justify-center px-4 py-6 font-sans' dir='rtl'>
+
             {/* CSS מותאם אישית ללוח השנה */}
             <style jsx global>{`
                 .react-datepicker {
@@ -77,48 +94,46 @@ export default function WeddingPortal() {
                     overflow: hidden;
                 }
                 .react-datepicker__header {
-                    background-color: #f3e8ff;
+                    background-color: #f0ebe3;
                     border-bottom: none;
                     padding-top: 1rem;
                 }
                 .react-datepicker__day--selected {
-                    background-color: #9333ea !important;
+                    background-color: #AA8840 !important;
                     border-radius: 0.5rem;
                 }
             `}</style>
 
-            <div className='w-full max-w-lg bg-white/80 backdrop-blur-xl rounded-[2.5rem] shadow-2xl border border-white/50 p-8 md:p-12 relative overflow-hidden'>
-                
+            <div className='w-full max-w-lg bg-white/80 backdrop-blur-xl rounded-[2rem] shadow-2xl border border-white/50 p-6 md:p-8 relative overflow-hidden animate-scaleIn'>
+
                 {/* לוגו */}
-                <div className='text-center mb-8 relative z-10'>
-                    <h1 className='text-4xl mb-2' style={{ fontFamily: "'Great Vibes', cursive", backgroundImage: 'linear-gradient(to right, #ec4899, #8b5cf6)', WebkitBackgroundClip: 'text', color: 'transparent' }}>
-                        Wedding Tales
-                    </h1>
+                <div className='text-center mb-5 relative z-10'>
+                    <img src='/logo-wt.png' alt='Wedding Tales' className='h-12 w-auto mx-auto drop-shadow-[0_2px_8px_rgba(170,136,64,0.3)]' />
                 </div>
 
                 {/* שמות הזוג */}
-                <div className='relative z-10 flex items-center justify-center gap-4 mb-8'>
+                <div className='relative z-10 flex items-center justify-center gap-4 mb-6'>
                     <input
                         type='text'
                         value={brideName}
                         onChange={e => setBrideName(e.target.value)}
                         onBlur={() => saveToDB()}
                         placeholder='שם הכלה'
-                        className='w-1/2 bg-transparent border-b-2 border-purple-100 focus:border-purple-500 outline-none text-center text-xl md:text-2xl font-bold text-gray-800 transition-colors'
+                        className='w-1/2 bg-transparent border-b-2 border-[#AA8840]/20 focus:border-[#AA8840] outline-none text-center text-xl md:text-2xl font-bold text-gray-800 transition-all duration-300 focus:text-[#AA8840]'
                     />
-                    <span className='text-3xl text-purple-400 font-[Great Vibes]'>&</span>
+                    <span className='text-3xl text-[#AA8840] font-[Great Vibes]'>&</span>
                     <input
                         type='text'
                         value={groomName}
                         onChange={e => setGroomName(e.target.value)}
                         onBlur={() => saveToDB()}
                         placeholder='שם החתן'
-                        className='w-1/2 bg-transparent border-b-2 border-purple-100 focus:border-purple-500 outline-none text-center text-xl md:text-2xl font-bold text-gray-800 transition-colors'
+                        className='w-1/2 bg-transparent border-b-2 border-[#AA8840]/20 focus:border-[#AA8840] outline-none text-center text-xl md:text-2xl font-bold text-gray-800 transition-all duration-300 focus:text-[#AA8840]'
                     />
                 </div>
 
                 {/* לוח שנה מעוצב */}
-                <div className='relative z-20 flex flex-col items-center mb-12'>
+                <div className='relative z-20 flex flex-col items-center mb-8'>
                     <label className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-widest">תאריך החתונה שלכם</label>
                     <DatePicker
                         selected={weddingDate}
@@ -126,17 +141,69 @@ export default function WeddingPortal() {
                         dateFormat="dd/MM/yyyy"
                         locale="he"
                         placeholderText="לחצו לבחירת תאריך"
-                        className="bg-purple-50 text-purple-700 px-8 py-3 rounded-2xl border border-purple-100 outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-300 transition-all font-bold text-center cursor-pointer shadow-sm hover:bg-purple-100/50 w-full"
+                        className="bg-[#AA8840]/5 text-[#AA8840] px-8 py-3 rounded-2xl border border-[#AA8840]/20 outline-none focus:ring-4 focus:ring-[#AA8840]/10 focus:border-[#AA8840] transition-all font-bold text-center cursor-pointer shadow-sm hover:bg-[#AA8840]/10 w-full"
                     />
                 </div>
 
                 {/* כפתורי פעולה */}
-                <div className='space-y-8 relative z-10'>
+                <div className='space-y-6 relative z-10'>
+
+                    {/* בחירת רקע לשלט */}
+                    <div>
+                        <label className='block text-sm font-bold text-gray-600 mb-3'>בחרו עיצוב לשלט</label>
+                        <div className='grid grid-cols-2 gap-3'>
+                            {BG_OPTIONS.map((bg) => {
+                                const isSelected = selectedBg === bg.id
+                                return (
+                                    <button
+                                        key={bg.id}
+                                        onClick={() => setSelectedBg(bg.id)}
+                                        className='group relative rounded-xl overflow-hidden transition-all duration-300'
+                                        style={{
+                                            border: isSelected ? '2.5px solid #AA8840' : '2.5px solid transparent',
+                                            boxShadow: isSelected ? '0 4px 20px rgba(170,136,64,0.2)' : '0 2px 8px rgba(0,0,0,0.06)',
+                                            transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+                                        }}
+                                    >
+                                        <div className='aspect-[3/4] relative'>
+                                            <img
+                                                src={`/backgrounds/${bg.file}`}
+                                                alt={bg.label}
+                                                className='w-full h-full object-cover'
+                                            />
+                                            {/* Selected overlay */}
+                                            {isSelected && (
+                                                <div className='absolute inset-0 bg-[#AA8840]/[0.08] flex items-start justify-end p-2'>
+                                                    <div className='w-6 h-6 rounded-full bg-[#AA8840] flex items-center justify-center shadow-md'>
+                                                        <svg className='w-3.5 h-3.5 text-white' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={3}>
+                                                            <path strokeLinecap='round' strokeLinejoin='round' d='M5 13l4 4L19 7' />
+                                                        </svg>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {/* Hover overlay */}
+                                            {!isSelected && (
+                                                <div className='absolute inset-0 bg-black/0 group-hover:bg-black/[0.04] transition-colors duration-200' />
+                                            )}
+                                        </div>
+                                        <div className='py-2 px-1 text-center' style={{ background: isSelected ? 'rgba(170,136,64,0.05)' : 'white' }}>
+                                            <span className='text-xs font-bold' style={{ color: isSelected ? '#AA8840' : '#666' }}>
+                                                {bg.label}
+                                            </span>
+                                        </div>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    {/* כפתור הורדה */}
                     <button
                         onClick={async () => {
                             try {
                                 setDownloading(true)
-                                const url = `/api/generate-qr-pdf?weddingId=${weddingId}`
+                                const bgFile = BG_OPTIONS.find(b => b.id === selectedBg)?.file || 'wedding-bg.png'
+                                const url = `/api/generate-qr-pdf?weddingId=${weddingId}&bg=${encodeURIComponent(bgFile)}`
                                 const res = await fetch(url)
                                 if (!res.ok) throw new Error('PDF generation failed')
                                 const blob = await res.blob()
@@ -153,7 +220,7 @@ export default function WeddingPortal() {
                             }
                         }}
                         disabled={downloading}
-                        className='w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-pink-500 to-violet-600 text-white font-bold text-lg shadow-lg hover:scale-[1.02] transition-all flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100'
+                        className='w-full py-4 px-6 rounded-2xl gold-shimmer text-white font-bold text-lg shadow-lg hover:scale-[1.02] hover:shadow-xl active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100'
                     >
                         {downloading ? (
                             <>
@@ -173,31 +240,27 @@ export default function WeddingPortal() {
                     <div className='w-full h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent'></div>
 
                     <div className='text-center'>
-                        <h2 className='text-lg font-bold text-gray-800 mb-4'>שיתוף קישור ישיר 💌</h2>
-                        <div className='flex items-center gap-2 bg-white/50 border border-gray-200 rounded-xl p-2 mb-4'>
-                            <div className='flex-1 text-left text-sm text-gray-400 truncate px-2 font-mono dir-ltr italic opacity-60'>{guestLink}</div>
-                            <button
-                                onClick={() => { navigator.clipboard.writeText(guestLink); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-                                className='bg-white text-gray-600 p-2.5 rounded-lg shadow-sm border border-gray-100 hover:text-purple-600 transition'
-                            >
-                                {copied ? <CheckIcon /> : <LinkIcon />}
-                            </button>
-                        </div>
+                        <h2 className='text-lg font-bold text-gray-800 mb-1'>שיתוף קישור ישיר</h2>
+                        <p className='text-xs text-gray-400 mb-4'>שלחו את הקישור לאורחים כדי שיוכלו להעלות ברכות ותמונות</p>
                         <button
-                            onClick={() => {
-                                const names = brideName && groomName ? `של ${brideName} ו${groomName}` : ''
-                                const text = `היי! נשמח שתעלו תמונות וברכות לאלבום החתונה ${names} כאן: ✨\n${guestLink}`
-                                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
-                            }}
-                            className='w-full py-3.5 rounded-xl bg-[#25D366] text-white font-bold shadow-md hover:scale-[1.02] transition flex items-center justify-center gap-2'
+                            onClick={() => { navigator.clipboard.writeText(guestLink); setCopied(true); setTimeout(() => setCopied(false), 2500); }}
+                            className={`w-full flex items-center gap-3 border rounded-2xl p-4 active:scale-[0.99] transition-all duration-200 ${copied ? 'border-emerald-300 bg-emerald-50/30' : 'bg-white/60 border-gray-200 hover:border-[#AA8840]/30 hover:bg-white/80'}`}
                         >
-                            <WhatsAppIcon />
-                            <span>שליחה בוואטסאפ</span>
+                            <div className={`flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${copied ? 'bg-emerald-100 text-emerald-600' : 'bg-[#AA8840]/10 text-[#AA8840]'}`}>
+                                {copied ? <CheckIcon /> : <LinkIcon />}
+                            </div>
+                            <div className='flex-1 text-right min-w-0'>
+                                <p className='text-sm font-semibold text-gray-700 truncate'>{displayLink}</p>
+                                <p className='text-[11px] text-gray-400 mt-0.5'>לחצו להעתקת הקישור המלא</p>
+                            </div>
+                            <span className={`text-sm font-bold flex-shrink-0 px-3 py-1.5 rounded-lg transition-all ${copied ? 'text-emerald-600 bg-emerald-50' : 'text-[#AA8840] bg-[#AA8840]/5'}`}>
+                                {copied ? 'הועתק!' : 'העתק'}
+                            </span>
                         </button>
                     </div>
                 </div>
             </div>
-            <p className='mt-8 text-gray-400 text-xs font-medium opacity-60'>נוצר באהבה עבור היום המיוחד שלכם ❤️</p>
+            <p className='mt-8 text-gray-400 text-xs font-medium opacity-60'>נוצר באהבה עבור היום המיוחד שלכם</p>
         </div>
     )
 }

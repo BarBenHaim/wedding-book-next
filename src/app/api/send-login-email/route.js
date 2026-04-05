@@ -16,19 +16,19 @@ export async function POST(req) {
 
     const html = `
     <div style="font-family:Heebo,sans-serif;direction:rtl;text-align:right;padding:20px">
-      <h2>🎉 מזל טוב וברוכים הבאים ל-Wedding Tales</h2>
+      <h2>מזל טוב וברוכים הבאים ל-Wedding Tales</h2>
       <p>החתונה שלכם נוצרה בהצלחה! הנה כל מה שאתם צריכים:</p>
       <ul>
         <li><b>קישור לעמוד האישי שלכם:</b> <a href="${portalUrl}">${portalUrl}</a></li>
       </ul>
       <hr style="margin:20px 0;border:none;border-top:1px solid #eee" />
-      <h3>📱 בעמוד תמצאו:</h3>
+      <h3>בעמוד תמצאו:</h3>
       <ul>
         <li>ברקוד דיגיטלי להקרנה באירוע</li>
         <li>כפתור שיתוף מיידי בוואטסאפ</li>
         <li>PDF מוכן להדפסה עם QR</li>
       </ul>
-      <p style="margin-top:30px">באהבה,<br>צוות Wedding Tales 💜</p>
+      <p style="margin-top:30px">באהבה,<br>צוות Wedding Tales</p>
     </div>
   `
 

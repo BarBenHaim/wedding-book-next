@@ -9,6 +9,7 @@ import {
     secular,
     davidLibre,
     heebo,
+    assistant,
     greatVibes,
     cinzel,
     parisienne,
@@ -27,12 +28,14 @@ export default function RootLayout({ children }) {
           ${geistSans.variable} ${geistMono.variable}
           ${notoHebrew.variable} ${frankRuhl.variable}
           ${secular.variable} ${davidLibre.variable} ${heebo.variable}
+          ${assistant.variable}
           ${greatVibes.variable} ${cinzel.variable} ${parisienne.variable}
           ${cormorant.variable} ${playfairSC.variable}
           `}
             >
                 <Header />
                 {children}
+                <Footer />
             </body>
         </html>
     )

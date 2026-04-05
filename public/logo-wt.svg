@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#c9a44e;stop-opacity:1" />
+      <stop offset="30%" style="stop-color:#AA8840;stop-opacity:1" />
+      <stop offset="60%" style="stop-color:#d4b867;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#AA8840;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="goldShine" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#AA8840;stop-opacity:1" />
+      <stop offset="40%" style="stop-color:#d4b867;stop-opacity:1" />
+      <stop offset="60%" style="stop-color:#c9a44e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#AA8840;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- W letter - elegant cursive -->
+  <text x="100" y="130" text-anchor="middle" font-family="'Great Vibes', 'Segoe Script', 'Brush Script MT', cursive" font-size="140" fill="url(#goldGrad)" font-weight="400" letter-spacing="-5">WT</text>
+</svg>

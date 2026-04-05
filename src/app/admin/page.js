@@ -78,8 +78,8 @@ function LoadingState() {
     return (
         <div className='flex flex-col items-center justify-center py-40 gap-5'>
             <div className='relative'>
-                <div className='w-16 h-16 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 opacity-20 animate-ping absolute inset-0' />
-                <div className='w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center relative'>
+                <div className='w-16 h-16 rounded-full bg-gradient-to-br from-[#AA8840] to-[#c9a44e] opacity-20 animate-ping absolute inset-0' />
+                <div className='w-16 h-16 rounded-full bg-gradient-to-br from-[#AA8840] to-[#c9a44e] flex items-center justify-center relative'>
                     <Loader2 size={28} className='text-white animate-spin' />
                 </div>
             </div>
@@ -107,8 +107,8 @@ function ErrorState({ message }) {
 function EmptyState() {
     return (
         <div className='flex flex-col items-center justify-center py-40 gap-4'>
-            <div className='w-14 h-14 rounded-2xl bg-purple-100 flex items-center justify-center'>
-                <Heart size={28} className='text-pink-400' />
+            <div className='w-14 h-14 rounded-2xl bg-[#AA8840]/10 flex items-center justify-center'>
+                <Heart size={28} className='text-[#AA8840]' />
             </div>
             <p className='text-gray-400 text-sm'>אין חתונות בטבלה עדיין.</p>
         </div>
@@ -121,7 +121,7 @@ function StatCard({ icon: Icon, label, value, iconBg, iconColor, pulse = false }
         <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            className='relative overflow-hidden rounded-2xl p-5 bg-white/90 backdrop-blur-md border border-purple-100 shadow-md'
+            className='relative overflow-hidden rounded-2xl p-5 bg-white/90 backdrop-blur-md border border-[#AA8840]/15 shadow-md'
             whileHover={{ y: -2, transition: { duration: 0.2 } }}
         >
             <div className='flex items-start justify-between'>
@@ -210,19 +210,19 @@ function SortableHeader({ children, sortKey, currentSort, onSort, justify = 'end
     return (
         <th
             onClick={handleClick}
-            className={`px-6 py-4 font-semibold cursor-pointer select-none transition-colors duration-150 hover:text-gray-700 ${isActive ? 'text-purple-600' : 'text-gray-400'}`}
+            className={`px-6 py-4 font-semibold cursor-pointer select-none transition-colors duration-150 hover:text-gray-700 ${isActive ? 'text-[#AA8840]' : 'text-gray-400'}`}
         >
             <span className={`flex items-center gap-1.5 ${justify === 'center' ? 'justify-center' : justify === 'start' ? 'justify-start' : 'justify-end'}`}>
                 {children}
                 <AnimatePresence mode='wait' initial={false}>
                     {isActive && dir === 'asc' && (
                         <motion.span key='up' initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }}>
-                            <ChevronUp size={13} className='text-purple-500' />
+                            <ChevronUp size={13} className='text-[#AA8840]' />
                         </motion.span>
                     )}
                     {isActive && dir === 'desc' && (
                         <motion.span key='down' initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} transition={{ duration: 0.15 }}>
-                            <ChevronDown size={13} className='text-purple-500' />
+                            <ChevronDown size={13} className='text-[#AA8840]' />
                         </motion.span>
                     )}
                     {!isActive && (
@@ -246,7 +246,7 @@ function SearchBar({ value, onChange }) {
                 value={value}
                 onChange={e => onChange(e.target.value)}
                 placeholder='חיפוש לפי שם זוג או אימייל...'
-                className='w-full pr-10 pl-4 py-2.5 rounded-xl text-sm text-gray-700 placeholder:text-gray-400 outline-none transition-all duration-200 border border-purple-200 bg-purple-50 focus:border-purple-400 focus:ring-2 focus:ring-purple-100'
+                className='w-full pr-10 pl-4 py-2.5 rounded-xl text-sm text-gray-700 placeholder:text-gray-400 outline-none transition-all duration-200 border border-[#AA8840]/20 bg-[#AA8840]/5 focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10'
             />
             {value && (
                 <button
@@ -264,7 +264,7 @@ function SearchBar({ value, onChange }) {
 function ActionIconBtn({ href, icon: Icon, tooltip, variant = 'primary' }) {
     const base = 'w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 border'
     const styles = {
-        primary: 'bg-purple-50 border-purple-200 text-purple-600 hover:bg-purple-100 hover:border-purple-300',
+        primary: 'bg-[#AA8840]/10 border-[#AA8840]/20 text-[#AA8840] hover:bg-[#AA8840]/20 hover:border-[#AA8840]/30',
         secondary: 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-700',
     }
     return (
@@ -283,7 +283,7 @@ function WeddingsTable({ weddings, sort, onSort }) {
             <table className='w-full text-sm text-right' style={{ minWidth: '720px' }}>
                 {/* ── thead ── */}
                 <thead>
-                    <tr className='border-b border-purple-100 text-[11px] uppercase tracking-widest bg-purple-50/60'>
+                    <tr className='border-b border-[#AA8840]/15 text-[11px] uppercase tracking-widest bg-[#AA8840]/5'>
                         <th className='px-6 py-4 text-gray-300 font-semibold w-12'>#</th>
 
                         <SortableHeader sortKey='couple' currentSort={sort} onSort={onSort}>
@@ -321,11 +321,11 @@ function WeddingsTable({ weddings, sort, onSort }) {
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
                                 transition={{ duration: 0.18 }}
-                                className='group hover:bg-purple-50/60 transition-colors duration-150'
+                                className='group hover:bg-[#AA8840]/5 transition-colors duration-150'
                             >
                                 {/* Index */}
                                 <td className='px-6 py-4'>
-                                    <div className='w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-400 text-xs font-bold group-hover:bg-purple-200 transition-colors'>
+                                    <div className='w-7 h-7 rounded-full bg-[#AA8840]/10 flex items-center justify-center text-[#AA8840]/60 text-xs font-bold group-hover:bg-[#AA8840]/20 transition-colors'>
                                         {i + 1}
                                     </div>
                                 </td>
@@ -459,15 +459,15 @@ function AdminDashboardContent() {
             icon: Heart,
             label: 'סך חתונות',
             value: weddings.length,
-            iconBg: 'bg-purple-100',
-            iconColor: 'text-purple-600',
+            iconBg: 'bg-[#AA8840]/10',
+            iconColor: 'text-[#AA8840]',
         },
         {
             icon: MessageCircle,
             label: 'סך ברכות',
             value: totalGreetings,
-            iconBg: 'bg-pink-100',
-            iconColor: 'text-pink-600',
+            iconBg: 'bg-[#c9a44e]/10',
+            iconColor: 'text-[#c9a44e]',
         },
         {
             icon: Zap,
@@ -488,12 +488,12 @@ function AdminDashboardContent() {
 
     return (
         <div
-            className='min-h-screen py-10 px-4 sm:px-10 bg-gradient-to-br from-purple-50 via-white to-purple-100'
+            className='min-h-screen py-10 px-4 sm:px-10 bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da]'
             dir='rtl'
         >
             {/* Ambient orbs */}
-            <div className='fixed -top-24 left-10 h-72 w-72 rounded-full bg-purple-300/30 blur-3xl pointer-events-none' />
-            <div className='fixed bottom-10 right-10 h-80 w-80 rounded-full bg-pink-300/30 blur-3xl pointer-events-none' />
+            <div className='fixed -top-24 left-10 h-72 w-72 rounded-full bg-[#AA8840]/8 blur-3xl pointer-events-none' />
+            <div className='fixed bottom-10 right-10 h-80 w-80 rounded-full bg-[#AA8840]/6 blur-3xl pointer-events-none' />
 
             <div className='max-w-7xl mx-auto relative'>
 
@@ -506,7 +506,7 @@ function AdminDashboardContent() {
                 >
                     <div className='flex items-center gap-4'>
                         <div className='relative'>
-                            <div className='w-13 h-13 rounded-2xl bg-gradient-to-br from-purple-600 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-200 p-3'>
+                            <div className='w-13 h-13 rounded-2xl bg-gradient-to-br from-[#AA8840] to-[#c9a44e] flex items-center justify-center shadow-lg shadow-[#AA8840]/20 p-3'>
                                 <Crown size={22} className='text-white' />
                             </div>
                             <div className='absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-white animate-pulse' />
@@ -516,14 +516,14 @@ function AdminDashboardContent() {
                                 Command Center
                             </h1>
                             <p className='text-sm text-gray-400 mt-0.5 flex items-center gap-1.5'>
-                                <Sparkles size={12} className='text-purple-400' />
+                                <Sparkles size={12} className='text-[#AA8840]' />
                                 Wedding Tales — Super Admin
                             </p>
                         </div>
                     </div>
 
                     {/* Live indicator */}
-                    <div className='hidden sm:flex items-center gap-2 bg-white/80 border border-purple-100 rounded-full px-4 py-2 backdrop-blur-sm shadow-sm'>
+                    <div className='hidden sm:flex items-center gap-2 bg-white/80 border border-[#AA8840]/15 rounded-full px-4 py-2 backdrop-blur-sm shadow-sm'>
                         <span className='w-2 h-2 rounded-full bg-emerald-400 animate-pulse' />
                         <span className='text-gray-500 text-xs font-medium'>Live</span>
                     </div>
@@ -545,15 +545,15 @@ function AdminDashboardContent() {
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.15 }}
-                    className='rounded-2xl border border-purple-100 overflow-hidden bg-white/90 backdrop-blur-md shadow-lg'
+                    className='rounded-2xl border border-[#AA8840]/15 overflow-hidden bg-white/90 backdrop-blur-md shadow-lg'
                 >
                     {/* Card header */}
-                    <div className='px-6 py-4 border-b border-purple-100 bg-white/70 flex flex-col sm:flex-row sm:items-center gap-3'>
+                    <div className='px-6 py-4 border-b border-[#AA8840]/15 bg-white/70 flex flex-col sm:flex-row sm:items-center gap-3'>
                         <div className='flex items-center gap-3 flex-1'>
-                            <div className='w-2 h-2 rounded-full bg-gradient-to-r from-pink-400 to-purple-500' />
+                            <div className='w-2 h-2 rounded-full bg-gradient-to-r from-[#AA8840] to-[#c9a44e]' />
                             <h2 className='font-bold text-gray-700 text-sm tracking-wide'>כל החתונות</h2>
                             {status === 'ok' && (
-                                <span className='text-xs bg-purple-50 text-purple-600 border border-purple-200 rounded-full px-3 py-0.5 font-semibold'>
+                                <span className='text-xs bg-[#AA8840]/10 text-[#AA8840] border border-[#AA8840]/20 rounded-full px-3 py-0.5 font-semibold'>
                                     {sorted.length} רשומות
                                 </span>
                             )}
@@ -571,10 +571,10 @@ function AdminDashboardContent() {
                         <motion.div
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
-                            className='px-6 py-2 border-b border-purple-50 bg-purple-50/50 flex items-center gap-2'
+                            className='px-6 py-2 border-b border-[#AA8840]/10 bg-[#AA8840]/5 flex items-center gap-2'
                         >
-                            <ArrowUpDown size={11} className='text-purple-400' />
-                            <span className='text-xs text-purple-500'>
+                            <ArrowUpDown size={11} className='text-[#AA8840]/60' />
+                            <span className='text-xs text-[#AA8840]'>
                                 מיון לפי {sort.key === 'date' ? 'תאריך' : sort.key === 'couple' ? 'שם זוג' : 'ברכות'}
                                 {' '}({sort.dir === 'asc' ? 'עולה' : 'יורד'})
                             </span>

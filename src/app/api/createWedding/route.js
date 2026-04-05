@@ -119,7 +119,7 @@ export async function POST(req) {
         const html = `
         <div style="font-family:Heebo,sans-serif;direction:rtl;text-align:right;padding:20px">
           <h2>מזל טוב ${name || ''}!</h2>
-          <p>החתונה שלך נוצרה בהצלחה ב-Wedding Tales 🎊</p>
+          <p>החתונה שלך נוצרה בהצלחה ב-Wedding Tales</p>
 
           <h3>פרטי הגישה שלך:</h3>
           <ul>
@@ -131,12 +131,12 @@ export async function POST(req) {
             }
           </ul>
 
-          <p>להתחברות למערכת: 
+          <p>להתחברות למערכת:
             <a href="https://app.weddingtales.co.il/login">לחצו כאן</a>
           </p>
 
           <hr style="margin:25px 0;border:none;border-top:1px solid #eee"/>
-          <p style="margin-top:25px;">באהבה,<br>צוות Wedding Tales 💜</p>
+          <p style="margin-top:25px;">באהבה,<br>צוות Wedding Tales</p>
         </div>
         `
 

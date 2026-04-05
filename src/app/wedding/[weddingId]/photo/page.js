@@ -162,29 +162,29 @@ export default function TextPage() {
     const isPhotoDone = !!photoUrl
 
     return (
-        <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-purple-100 px-4 font-sans'>
+        <div className='min-h-[calc(100vh-4rem)] flex items-center justify-center bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da] px-4 py-6 font-sans'>
             {/* רקע Glow מקורי */}
-            <div className='absolute -top-24 left-10 h-72 w-72 rounded-full bg-purple-300/40 blur-3xl'></div>
-            <div className='absolute bottom-10 right-10 h-80 w-80 rounded-full bg-pink-300/40 blur-3xl'></div>
+            <div className='absolute -top-24 left-10 h-72 w-72 rounded-full bg-[#AA8840]/10 blur-3xl'></div>
+            <div className='absolute bottom-10 right-10 h-80 w-80 rounded-full bg-[#AA8840]/8 blur-3xl'></div>
 
-            <div className='relative z-10 w-full max-w-2xl bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-6 md:p-8 border border-white'>
-                {/* --- מחוון שלבים (Stepper) מעוצב --- */}
-                <div className='flex justify-center items-center mb-8 gap-4'>
-                    {/* שלב 1 */}
+            <div className='relative z-10 w-full max-w-2xl bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-6 md:p-8 border border-white/50 animate-scaleIn'>
+                {/* Stepper — 44px+ touch targets */}
+                <div className='flex justify-center items-center mb-6 gap-3'>
+                    {/* Step 1 */}
                     <button
                         onClick={() => setStep(1)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 ${
+                        className={`flex items-center gap-2 px-5 py-3 rounded-full transition-all duration-300 ${
                             step === 1
-                                ? 'bg-purple-100 text-purple-700 ring-2 ring-purple-500'
+                                ? 'bg-[#AA8840]/10 text-[#AA8840] ring-2 ring-[#AA8840]'
                                 : 'text-gray-500 hover:bg-gray-50'
                         }`}
                     >
                         <div
-                            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                            className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
                                 isTextDone
                                     ? 'bg-green-500 text-white'
                                     : step === 1
-                                    ? 'bg-purple-600 text-white'
+                                    ? 'bg-[#AA8840] text-white'
                                     : 'bg-gray-300 text-white'
                             }`}
                         >
@@ -193,23 +193,23 @@ export default function TextPage() {
                         <span className='font-semibold text-sm'>ברכה</span>
                     </button>
 
-                    {/* קו מחבר */}
-                    <div className='w-8 h-[2px] bg-gray-200'></div>
+                    {/* Connecting line */}
+                    <div className={`w-10 h-0.5 rounded-full transition-colors duration-300 ${isTextDone ? 'bg-gradient-to-l from-[#AA8840]/40 to-[#AA8840]/20' : 'bg-gray-200'}`}></div>
 
-                    {/* שלב 2 */}
+                    {/* Step 2 */}
                     <button
                         onClick={() => isTextDone && setStep(2)}
                         disabled={!isTextDone}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 ${
-                            step === 2 ? 'bg-purple-100 text-purple-700 ring-2 ring-purple-500' : 'text-gray-500'
+                        className={`flex items-center gap-2 px-5 py-3 rounded-full transition-all duration-300 ${
+                            step === 2 ? 'bg-[#AA8840]/10 text-[#AA8840] ring-2 ring-[#AA8840]' : 'text-gray-500'
                         } ${!isTextDone ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
                     >
                         <div
-                            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                            className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
                                 isPhotoDone
                                     ? 'bg-green-500 text-white'
                                     : step === 2
-                                    ? 'bg-purple-600 text-white'
+                                    ? 'bg-[#AA8840] text-white'
                                     : 'bg-gray-300 text-white'
                             }`}
                         >
@@ -230,7 +230,7 @@ export default function TextPage() {
                                 value={name}
                                 onChange={e => setName(e.target.value)}
                                 placeholder='מי כותב/ת?'
-                                className='w-full rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 text-gray-800 placeholder-purple-300 focus:border-purple-400 focus:ring-2 focus:ring-purple-200 outline-none transition'
+                                className='w-full rounded-xl border border-[#AA8840]/20 bg-[#AA8840]/5 px-4 py-3 text-gray-800 placeholder-[#AA8840]/30 focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/20 outline-none transition'
                             />
                         </div>
                         <div>
@@ -241,7 +241,7 @@ export default function TextPage() {
                                 value={text}
                                 onChange={e => setText(e.target.value)}
                                 placeholder='כתבו משהו מהלב...'
-                                className='w-full h-36 rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 text-gray-800 placeholder-purple-300 focus:border-purple-400 focus:ring-2 focus:ring-purple-200 outline-none resize-none transition'
+                                className='w-full h-36 rounded-xl border border-[#AA8840]/20 bg-[#AA8840]/5 px-4 py-3 text-gray-800 placeholder-[#AA8840]/30 focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/20 outline-none resize-none transition'
                                 maxLength={210}
                             />
                             <div className='text-left text-xs text-gray-400 mt-1 ml-1'>{text.length}/210</div>
@@ -250,7 +250,7 @@ export default function TextPage() {
                         <button
                             onClick={() => setStep(2)}
                             disabled={!text.trim()}
-                            className='w-full mt-4 py-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold shadow-lg hover:shadow-purple-500/30 hover:scale-[1.02] active:scale-95 transition disabled:opacity-50 disabled:cursor-not-allowed'
+                            className='w-full mt-4 py-3.5 rounded-xl gold-shimmer text-white font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed'
                         >
                             המשך לתמונה
                         </button>
@@ -261,12 +261,12 @@ export default function TextPage() {
                 {step === 2 && (
                     <div className='space-y-6 animate-fadeIn'>
                         {/* קונטיינר תמונה (יחס 4:3) */}
-                        <div className='relative w-full aspect-[4/3] bg-gray-50 rounded-xl overflow-hidden border-2 border-dashed border-purple-200 shadow-inner group'>
+                        <div className='relative w-full aspect-[4/3] bg-gray-50 rounded-xl overflow-hidden border-2 border-dashed border-[#AA8840]/20 shadow-inner group'>
                             {/* 1. מצב בחירה (ריק) */}
                             {!photoUrl && !cameraOpen && (
                                 <div className='absolute inset-0 flex flex-col items-center justify-center gap-6'>
                                     {/* אייקון מצלמה SVG נקי */}
-                                    <div className='text-purple-300 bg-purple-50 p-4 rounded-full'>
+                                    <div className='text-[#AA8840]/40 bg-[#AA8840]/5 p-4 rounded-full'>
                                         <svg
                                             xmlns='http://www.w3.org/2000/svg'
                                             fill='none'
@@ -291,11 +291,11 @@ export default function TextPage() {
                                     <div className='flex gap-4'>
                                         <button
                                             onClick={() => setCameraOpen(true)}
-                                            className='px-6 py-2.5 bg-purple-600 text-white rounded-full text-sm font-bold shadow hover:bg-purple-700 transition flex items-center gap-2'
+                                            className='px-6 py-2.5 bg-[#AA8840] text-white rounded-full text-sm font-bold shadow hover:bg-[#AA8840]/90 transition flex items-center gap-2'
                                         >
                                             מצלמה
                                         </button>
-                                        <label className='px-6 py-2.5 bg-white text-purple-700 border border-purple-200 rounded-full text-sm font-bold shadow hover:bg-purple-50 cursor-pointer transition flex items-center gap-2'>
+                                        <label className='px-6 py-2.5 bg-white text-[#AA8840] border border-[#AA8840]/20 rounded-full text-sm font-bold shadow hover:bg-[#AA8840]/5 cursor-pointer transition flex items-center gap-2'>
                                             גלריה
                                             <input
                                                 type='file'
@@ -331,7 +331,7 @@ export default function TextPage() {
                                     <div className='absolute bottom-6 left-0 w-full flex justify-center items-center gap-10'>
                                         <button
                                             onClick={() => setCameraOpen(false)}
-                                            className='w-12 h-12 rounded-full bg-white/20 backdrop-blur text-white flex items-center justify-center hover:bg-white/30 transition'
+                                            className='w-12 h-12 rounded-full bg-white/20 backdrop-blur text-white flex items-center justify-center hover:bg-white/30 active:scale-[0.98] transition'
                                         >
                                             <svg
                                                 xmlns='http://www.w3.org/2000/svg'
@@ -351,7 +351,7 @@ export default function TextPage() {
 
                                         <button
                                             onClick={takePhoto}
-                                            className='w-20 h-20 rounded-full border-4 border-white/80 flex items-center justify-center active:scale-95 transition'
+                                            className='w-20 h-20 rounded-full border-4 border-white/80 flex items-center justify-center active:scale-[0.98] transition'
                                         >
                                             <div className='w-16 h-16 bg-white rounded-full' />
                                         </button>
@@ -360,7 +360,7 @@ export default function TextPage() {
                                             onClick={() =>
                                                 setCameraFacing(prev => (prev === 'user' ? 'environment' : 'user'))
                                             }
-                                            className='w-12 h-12 rounded-full bg-white/20 backdrop-blur text-white flex items-center justify-center hover:bg-white/30 transition'
+                                            className='w-12 h-12 rounded-full bg-white/20 backdrop-blur text-white flex items-center justify-center hover:bg-white/30 active:scale-[0.98] transition'
                                         >
                                             <svg
                                                 xmlns='http://www.w3.org/2000/svg'
@@ -418,7 +418,7 @@ export default function TextPage() {
                                 <button
                                     onClick={onSubmit}
                                     disabled={submitting}
-                                    className='flex-[2] py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold shadow-lg hover:shadow-purple-500/30 hover:scale-[1.02] active:scale-95 transition disabled:opacity-50'
+                                    className='flex-[2] py-3.5 rounded-xl gold-shimmer text-white font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50'
                                 >
                                     {submitting ? 'שולח...' : 'שליחת ברכה'}
                                 </button>
@@ -428,7 +428,7 @@ export default function TextPage() {
                         {!photoUrl && !cameraOpen && (
                             <button
                                 onClick={() => setStep(1)}
-                                className='w-full py-2 text-gray-400 text-sm hover:text-purple-600 transition flex items-center justify-center gap-1'
+                                className='w-full py-2 text-gray-400 text-sm hover:text-[#AA8840] transition flex items-center justify-center gap-1'
                             >
                                 חזרה לעריכה
                             </button>

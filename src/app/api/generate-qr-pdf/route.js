@@ -11,6 +11,7 @@ export async function GET(req) {
     try {
         const { searchParams } = new URL(req.url)
         const weddingId = searchParams.get('weddingId') || 'demo'
+        const bgFile = searchParams.get('bg') || 'wedding-bg.png'
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://weddingtales.co.il'
         const guestLink = `${baseUrl}/wedding/${weddingId}`
 
@@ -34,7 +35,9 @@ export async function GET(req) {
         // ==========================================
         // 1. רקע (תמונה מלאה)
         // ==========================================
-        const bgPath = path.join(process.cwd(), 'public', 'backgrounds', 'wedding-bg.png')
+        // Sanitize bgFile to prevent path traversal
+        const safeBgFile = path.basename(bgFile)
+        const bgPath = path.join(process.cwd(), 'public', 'backgrounds', safeBgFile)
         if (fs.existsSync(bgPath)) {
             doc.image(bgPath, 0, 0, { width: width, height: height })
         }

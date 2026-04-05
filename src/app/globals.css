@@ -1,8 +1,18 @@
 @import 'tailwindcss';
 
 :root {
-    --background: #ffffff;
-    --foreground: #171717;
+    --background: #F5F5F5;
+    --foreground: #18140F;
+    --gold: #AA8840;
+    --gold-light: #c9a44e;
+    --gold-dark: #8a6d30;
+    --cream: #f0ebe3;
+    --cream-dark: #ebe5da;
+    --dark: #18140F;
+    --dark-light: #2a2318;
+    --text-muted: #5a5040;
+    --text-light: #7a7060;
+    --border-gold: rgba(170, 136, 64, 0.15);
 }
 
 body {
@@ -11,7 +21,7 @@ body {
 }
 
 * {
-    font-family: Heebo;
+    font-family: 'Assistant', 'Heebo', sans-serif;
 }
 
 html,
@@ -21,4 +31,112 @@ body {
 
 img {
     display: inline-block;
+}
+
+/* All interactive elements get pointer cursor */
+button,
+[role="button"],
+label[class*="cursor"],
+a,
+select,
+summary {
+    cursor: pointer;
+}
+
+button:disabled {
+    cursor: not-allowed;
+}
+
+/* Premium micro-interactions */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+}
+
+@keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+    animation: fadeIn 0.5s ease-out forwards;
+}
+
+.animate-scaleIn {
+    animation: scaleIn 0.4s ease-out forwards;
+}
+
+.animate-slideUp {
+    animation: slideUp 0.5s ease-out forwards;
+}
+
+/* Staggered children animations */
+.stagger-children > * {
+    opacity: 0;
+    animation: slideUp 0.4s ease-out forwards;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0.05s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.1s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.15s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.2s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.25s; }
+
+/* Premium gold shimmer on hover */
+.gold-shimmer {
+    background: linear-gradient(90deg, #AA8840 0%, #d4b867 25%, #c9a44e 50%, #d4b867 75%, #AA8840 100%) !important;
+    background-size: 200% auto !important;
+    transition: background-position 0.6s ease;
+}
+.gold-shimmer:hover {
+    background-position: right center !important;
+}
+
+/* Smooth card hover */
+.card-hover {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(170,136,64,0.12);
+}
+
+/* Accessibility: respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    .animate-fadeIn,
+    .animate-scaleIn,
+    .animate-slideUp,
+    .animate-float,
+    .stagger-children > * {
+        animation: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+    }
+
+    .gold-shimmer:hover {
+        background-position: initial !important;
+    }
 }
