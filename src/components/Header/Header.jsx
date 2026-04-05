@@ -11,19 +11,55 @@ const SUPER_ADMIN_EMAIL = 'barbenbh@gmail.com'
 
 // Drawer menu item icons
 const ViewerIcon = () => (
-    <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.8}><path strokeLinecap='round' strokeLinejoin='round' d='M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25' /></svg>
+    <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.8}>
+        <path
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            d='M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25'
+        />
+    </svg>
 )
 const AdminIcon = () => (
-    <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.8}><path strokeLinecap='round' strokeLinejoin='round' d='M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z' /></svg>
+    <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.8}>
+        <path
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            d='M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z'
+        />
+    </svg>
 )
 const PortalIcon = () => (
-    <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.8}><path strokeLinecap='round' strokeLinejoin='round' d='M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5Z' /><path strokeLinecap='round' strokeLinejoin='round' d='M13.5 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5Z' /></svg>
+    <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.8}>
+        <path
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            d='M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5Z'
+        />
+        <path
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            d='M13.5 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5Z'
+        />
+    </svg>
 )
 const LogoutIcon = () => (
-    <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.8}><path strokeLinecap='round' strokeLinejoin='round' d='M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9' /></svg>
+    <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.8}>
+        <path
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            d='M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9'
+        />
+    </svg>
 )
 const SuperAdminIcon = () => (
-    <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.8}><path strokeLinecap='round' strokeLinejoin='round' d='M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281Z' /><path strokeLinecap='round' strokeLinejoin='round' d='M15 12a3 3 0 11-6 0 3 3 0 016 0Z' /></svg>
+    <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.8}>
+        <path
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            d='M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281Z'
+        />
+        <path strokeLinecap='round' strokeLinejoin='round' d='M15 12a3 3 0 11-6 0 3 3 0 016 0Z' />
+    </svg>
 )
 
 export default function Header() {
@@ -43,11 +79,7 @@ export default function Header() {
                 if (!id) {
                     // חיפוש חתונה לפי ownerId ב-Firestore
                     try {
-                        const q = query(
-                            collection(db, 'weddings'),
-                            where('ownerId', '==', currentUser.uid),
-                            limit(1)
-                        )
+                        const q = query(collection(db, 'weddings'), where('ownerId', '==', currentUser.uid), limit(1))
                         const snap = await getDocs(q)
                         if (!snap.empty) {
                             id = snap.docs[0].id
@@ -100,9 +132,15 @@ export default function Header() {
                                 className='relative w-11 h-11 flex flex-col justify-center items-center rounded-xl border border-[#AA8840]/20 bg-white/60 backdrop-blur-sm shadow-sm hover:shadow-md hover:border-[#AA8840]/40 active:scale-95 transition-all duration-200'
                                 aria-label='תפריט'
                             >
-                                <span className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out ${menuOpen ? 'w-[18px] bg-[#AA8840] rotate-45 translate-y-[5px]' : 'w-[18px] bg-[#AA8840]/70'}`} />
-                                <span className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out mt-[4px] ${menuOpen ? 'w-0 opacity-0' : 'w-[12px] bg-[#AA8840]/50'}`} />
-                                <span className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out mt-[4px] ${menuOpen ? 'w-[18px] bg-[#AA8840] -rotate-45 -translate-y-[5px]' : 'w-[18px] bg-[#AA8840]/70'}`} />
+                                <span
+                                    className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out ${menuOpen ? 'w-[18px] bg-[#AA8840] rotate-45 translate-y-[5px]' : 'w-[18px] bg-[#AA8840]/70'}`}
+                                />
+                                <span
+                                    className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out mt-[4px] ${menuOpen ? 'w-0 opacity-0' : 'w-[12px] bg-[#AA8840]/50'}`}
+                                />
+                                <span
+                                    className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out mt-[4px] ${menuOpen ? 'w-[18px] bg-[#AA8840] -rotate-45 -translate-y-[5px]' : 'w-[18px] bg-[#AA8840]/70'}`}
+                                />
                             </button>
                         </div>
                     )}
@@ -163,14 +201,11 @@ export default function Header() {
                     </div>
 
                     {/* Logo */}
-                    <button
-                        className='cursor-pointer group'
-                        onClick={handleLogoClick}
-                    >
+                    <button className='cursor-pointer group' onClick={handleLogoClick}>
                         <img
                             src='/logo-wt.png'
                             alt='Wedding Tales'
-                            className='h-12 md:h-14 w-auto transition-all duration-300 group-hover:scale-105 group-hover:drop-shadow-[0_0_8px_rgba(170,136,64,0.4)]'
+                            className='h-16 md:h-16 w-auto transition-all duration-300 group-hover:scale-105 group-hover:drop-shadow-[0_0_8px_rgba(170,136,64,0.4)]'
                         />
                     </button>
                 </nav>
@@ -178,7 +213,10 @@ export default function Header() {
 
             {/* Overlay */}
             {menuOpen && (
-                <div className='fixed inset-0 bg-black/40 backdrop-blur-sm z-40 md:hidden' onClick={() => setMenuOpen(false)} />
+                <div
+                    className='fixed inset-0 bg-black/40 backdrop-blur-sm z-40 md:hidden'
+                    onClick={() => setMenuOpen(false)}
+                />
             )}
 
             {/* Premium mobile drawer */}
@@ -195,7 +233,15 @@ export default function Header() {
                             className='w-11 h-11 flex items-center justify-center rounded-xl bg-white/80 shadow-sm hover:bg-white active:scale-95 transition-all'
                             aria-label='סגור תפריט'
                         >
-                            <svg className='w-5 h-5 text-gray-500' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}><path strokeLinecap='round' strokeLinejoin='round' d='M6 18L18 6M6 6l12 12' /></svg>
+                            <svg
+                                className='w-5 h-5 text-gray-500'
+                                fill='none'
+                                viewBox='0 0 24 24'
+                                stroke='currentColor'
+                                strokeWidth={2}
+                            >
+                                <path strokeLinecap='round' strokeLinejoin='round' d='M6 18L18 6M6 6l12 12' />
+                            </svg>
                         </button>
                         <img src='/logo-wt.png' alt='WT' className='h-9 w-auto' />
                     </div>
@@ -250,12 +296,7 @@ export default function Header() {
                     {/* Bottom logout */}
                     {user && (
                         <div className='pt-4 border-t border-[#AA8840]/10'>
-                            <DrawerItem
-                                icon={<LogoutIcon />}
-                                label='התנתקות'
-                                onClick={handleLogout}
-                                muted
-                            />
+                            <DrawerItem icon={<LogoutIcon />} label='התנתקות' onClick={handleLogout} muted />
                         </div>
                     )}
                 </div>
@@ -273,13 +314,15 @@ function DrawerItem({ icon, label, onClick, active, gold, muted }) {
                 active
                     ? 'bg-[#AA8840]/10 text-[#AA8840] font-bold'
                     : gold
-                    ? 'text-[#AA8840] font-semibold hover:bg-[#AA8840]/5'
-                    : muted
-                    ? 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                    : 'text-gray-700 font-medium hover:bg-white/80 hover:text-[#AA8840]'
+                      ? 'text-[#AA8840] font-semibold hover:bg-[#AA8840]/5'
+                      : muted
+                        ? 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                        : 'text-gray-700 font-medium hover:bg-white/80 hover:text-[#AA8840]'
             }`}
         >
-            <span className={`flex-shrink-0 ${active ? 'text-[#AA8840]' : gold ? 'text-[#AA8840]' : muted ? 'text-gray-400' : 'text-gray-500'}`}>
+            <span
+                className={`flex-shrink-0 ${active ? 'text-[#AA8840]' : gold ? 'text-[#AA8840]' : muted ? 'text-gray-400' : 'text-gray-500'}`}
+            >
                 {icon}
             </span>
             <span className='text-base'>{label}</span>
