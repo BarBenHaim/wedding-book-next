@@ -11,7 +11,7 @@ import {
     ChevronUp, ChevronDown, ChevronsUpDown, Zap, ArrowUpDown,
     CheckCircle2, Trash2, KeyRound, Download, Database, X,
     ChevronRight, Eye, Link2, Mail, Shield, HardDrive, RefreshCw,
-    AlertTriangle, Copy, Clock, Printer, Package, Truck,
+    AlertTriangle, Copy, Clock, Printer, Package, Truck, UserPlus,
 } from 'lucide-react'
 
 // ─── Data Fetching ────────────────────────────────────────────────────────────
@@ -82,6 +82,17 @@ async function downloadBackup() {
     URL.revokeObjectURL(a.href)
 }
 
+async function createUser(data) {
+    const token = await getToken()
+    const res = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Create failed')
+    return res.json()
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDate(isoString) {
     if (!isoString) return '—'
@@ -118,6 +129,90 @@ function Toast({ message, type = 'success', onClose }) {
 }
 
 // ─── Confirm Modal ───────────────────────────────────────────────────────────
+function CreateUserModal({ onClose, onSubmit }) {
+    const [form, setForm] = useState({ email: '', displayName: '', brideName: '', groomName: '', weddingDate: '' })
+    const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
+
+    const canSubmit = form.email.trim().length > 0
+
+    return (
+        <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className='fixed inset-0 z-[90] bg-black/40 backdrop-blur-sm' onClick={onClose} />
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className='fixed inset-0 z-[91] flex items-center justify-center pointer-events-none'
+            >
+                <div className='bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl pointer-events-auto' dir='rtl' onClick={e => e.stopPropagation()}>
+                    <div className='flex items-center gap-3 mb-5'>
+                        <div className='w-10 h-10 rounded-xl bg-gradient-to-br from-[#AA8840] to-[#c9a44e] flex items-center justify-center'>
+                            <UserPlus size={20} className='text-white' />
+                        </div>
+                        <div>
+                            <h3 className='font-bold text-gray-800'>יצירת משתמש חדש</h3>
+                            <p className='text-xs text-gray-400'>המשתמש יקבל מייל עם פרטי גישה</p>
+                        </div>
+                        <button onClick={onClose} className='mr-auto text-gray-300 hover:text-gray-500 transition-colors'>
+                            <X size={18} />
+                        </button>
+                    </div>
+
+                    <div className='space-y-3'>
+                        <div>
+                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>אימייל *</label>
+                            <input type='email' value={form.email} onChange={e => set('email', e.target.value)}
+                                placeholder='email@example.com' dir='ltr'
+                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all' />
+                        </div>
+                        <div>
+                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם מלא (אופציונלי)</label>
+                            <input type='text' value={form.displayName} onChange={e => set('displayName', e.target.value)}
+                                placeholder='ישראל ישראלי'
+                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all' />
+                        </div>
+                        <div className='grid grid-cols-2 gap-3'>
+                            <div>
+                                <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם כלה</label>
+                                <input type='text' value={form.brideName} onChange={e => set('brideName', e.target.value)}
+                                    placeholder='נועה'
+                                    className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all' />
+                            </div>
+                            <div>
+                                <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם חתן</label>
+                                <input type='text' value={form.groomName} onChange={e => set('groomName', e.target.value)}
+                                    placeholder='אלון'
+                                    className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all' />
+                            </div>
+                        </div>
+                        <div>
+                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>תאריך חתונה</label>
+                            <input type='date' value={form.weddingDate} onChange={e => set('weddingDate', e.target.value)}
+                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all' />
+                        </div>
+                    </div>
+
+                    <div className='mt-5 p-3 rounded-xl bg-amber-50 border border-amber-200/60'>
+                        <p className='text-xs text-amber-700 leading-relaxed'>
+                            <b>שים לב:</b> אם המשתמש כבר קיים במערכת, תיווצר לו חתונה חדשה עם הסיסמה הקיימת שלו. אם זה משתמש חדש — תיווצר סיסמה אוטומטית ותישלח למייל.
+                        </p>
+                    </div>
+
+                    <div className='flex gap-2 justify-end mt-5'>
+                        <button onClick={onClose} className='px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-50 rounded-xl transition-colors'>ביטול</button>
+                        <button
+                            onClick={() => canSubmit && onSubmit(form)}
+                            disabled={!canSubmit}
+                            className='px-5 py-2.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-[#AA8840] to-[#c9a44e] hover:brightness-110 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed'
+                        >
+                            צור משתמש ושלח מייל
+                        </button>
+                    </div>
+                </div>
+            </motion.div>
+        </>
+    )
+}
+
 function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCancel }) {
     return (
         <div className='fixed inset-0 z-[90] flex items-center justify-center bg-black/40 backdrop-blur-sm' onClick={onCancel}>
@@ -453,6 +548,7 @@ function AdminDashboardContent() {
     const [modal, setModal] = useState(null)
     const [toast, setToast] = useState(null)
     const [actionLoading, setActionLoading] = useState(false)
+    const [showCreateUser, setShowCreateUser] = useState(false)
 
     const loadWeddings = useCallback(() => {
         setStatus('loading')
@@ -564,6 +660,25 @@ function AdminDashboardContent() {
         }
     }
 
+    async function handleCreateUser(formData) {
+        setShowCreateUser(false)
+        setActionLoading(true)
+        try {
+            const result = await createUser(formData)
+            setToast({
+                message: result.isNewUser
+                    ? `משתמש חדש נוצר ומייל נשלח ל-${result.email}`
+                    : `חתונה חדשה נוצרה למשתמש קיים ${result.email}`,
+                type: 'success',
+            })
+            loadWeddings()
+        } catch (err) {
+            setToast({ message: `שגיאה ביצירת משתמש: ${err.message}`, type: 'error' })
+        } finally {
+            setActionLoading(false)
+        }
+    }
+
     const stats = [
         { icon: Heart, label: 'סך חתונות', value: weddings.length, iconBg: 'bg-[#AA8840]/10', iconColor: 'text-[#AA8840]' },
         { icon: MessageCircle, label: 'סך ברכות', value: totalGreetings, iconBg: 'bg-[#c9a44e]/10', iconColor: 'text-[#c9a44e]' },
@@ -578,6 +693,11 @@ function AdminDashboardContent() {
 
             {/* Confirm Modal */}
             {modal && <ConfirmModal {...modal} onCancel={() => setModal(null)} />}
+
+            {/* Create User Modal */}
+            <AnimatePresence>
+                {showCreateUser && <CreateUserModal onClose={() => setShowCreateUser(false)} onSubmit={handleCreateUser} />}
+            </AnimatePresence>
 
             {/* Detail Panel Overlay */}
             <AnimatePresence>
@@ -628,6 +748,10 @@ function AdminDashboardContent() {
 
                     {/* Top Actions */}
                     <div className='flex items-center gap-2'>
+                        <button onClick={() => setShowCreateUser(true)} title='יצירת משתמש חדש'
+                            className='hidden sm:flex items-center gap-2 bg-gradient-to-r from-[#AA8840] to-[#c9a44e] rounded-xl px-4 py-2.5 shadow-sm hover:shadow-md hover:brightness-110 transition-all text-sm font-medium text-white'>
+                            <UserPlus size={14} /> משתמש חדש
+                        </button>
                         <button onClick={handleBackup} title='הורד גיבוי JSON'
                             className='hidden sm:flex items-center gap-2 bg-white/80 border border-[#AA8840]/15 rounded-xl px-4 py-2.5 backdrop-blur-sm shadow-sm hover:bg-white hover:border-[#AA8840]/30 transition-all text-sm font-medium text-gray-600'>
                             <HardDrive size={14} className='text-[#AA8840]' /> גיבוי
@@ -650,11 +774,15 @@ function AdminDashboardContent() {
                     </div>
                 )}
 
-                {/* Mobile backup button */}
-                <div className='sm:hidden mb-4'>
+                {/* Mobile action buttons */}
+                <div className='sm:hidden mb-4 flex gap-2'>
+                    <button onClick={() => setShowCreateUser(true)}
+                        className='flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-[#AA8840] to-[#c9a44e] rounded-xl px-4 py-3 shadow-sm text-sm font-medium text-white'>
+                        <UserPlus size={14} /> משתמש חדש
+                    </button>
                     <button onClick={handleBackup}
-                        className='w-full flex items-center justify-center gap-2 bg-white/80 border border-[#AA8840]/15 rounded-xl px-4 py-3 shadow-sm text-sm font-medium text-gray-600'>
-                        <HardDrive size={14} className='text-[#AA8840]' /> הורד גיבוי מלא
+                        className='flex-1 flex items-center justify-center gap-2 bg-white/80 border border-[#AA8840]/15 rounded-xl px-4 py-3 shadow-sm text-sm font-medium text-gray-600'>
+                        <HardDrive size={14} className='text-[#AA8840]' /> גיבוי
                     </button>
                 </div>
 
