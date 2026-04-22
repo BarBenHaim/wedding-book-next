@@ -12,7 +12,17 @@ import {
     CheckCircle2, Trash2, KeyRound, Download, Database, X,
     ChevronRight, Eye, Link2, Mail, Shield, HardDrive, RefreshCw,
     AlertTriangle, Copy, Clock, Printer, Package, Truck, UserPlus,
+    Pencil, Save, PartyPopper,
 } from 'lucide-react'
+import {
+    EVENT_TYPE_ORDER,
+    getEventConfig,
+    normalizeEventType,
+    fieldsForType,
+    THEME_COLOR_ORDER,
+    THEME_COLORS,
+    resolveThemeColorId,
+} from '@/lib/eventTypes'
 
 // ─── Data Fetching ────────────────────────────────────────────────────────────
 async function getToken() {
@@ -36,6 +46,17 @@ async function deleteWedding(weddingId) {
         body: JSON.stringify({ weddingId }),
     })
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Delete failed')
+    return res.json()
+}
+
+async function updateWedding(weddingId, patch) {
+    const token = await getToken()
+    const res = await fetch('/api/admin/weddings', {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ weddingId, patch }),
+    })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Update failed')
     return res.json()
 }
 
@@ -313,16 +334,258 @@ function SortableHeader({ children, sortKey, currentSort, onSort, justify = 'end
     )
 }
 
+// ─── Event-Type Editor (inside the detail panel) ─────────────────────────────
+function EventTypeEditor({ wedding, onSave }) {
+    // Seed the draft from the wedding doc. `themeColor` is the EXPLICIT pick
+    // (null when inheriting from the event type); `effectiveTheme` is what the
+    // picker should show as selected — either the explicit pick or the event
+    // type's default.
+    const buildDraft = w => ({
+        eventType: normalizeEventType(w.eventType),
+        themeColor: w.themeColor || null,
+        brideName: w.brideName || '',
+        groomName: w.groomName || '',
+        celebrantName: w.celebrantName || '',
+        age: w.age ?? '',
+        customTitle: w.customTitle || '',
+        customSubtitle: w.customSubtitle || '',
+    })
+
+    const [draft, setDraft] = useState(() => buildDraft(wedding))
+    const [showAdvanced, setShowAdvanced] = useState(
+        Boolean(wedding.customTitle || wedding.customSubtitle)
+    )
+    const [saving, setSaving] = useState(false)
+
+    // Reset draft whenever the panel swaps to a different wedding.
+    useEffect(() => {
+        setDraft(buildDraft(wedding))
+        setShowAdvanced(Boolean(wedding.customTitle || wedding.customSubtitle))
+    }, [wedding.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    const set = (k, v) => setDraft(prev => ({ ...prev, [k]: v }))
+
+    const typeFields = fieldsForType(draft.eventType)
+    const showBrideGroom = typeFields.includes('brideName')
+    const showCelebrant = typeFields.includes('celebrantName')
+    const showAge = typeFields.includes('age')
+
+    // Build the PATCH body: only keys relevant to the current event type,
+    // plus overrides. We always send eventType + themeColor so changes persist.
+    function buildPatch() {
+        const patch = {
+            eventType: draft.eventType,
+            themeColor: draft.themeColor, // null → server stores null = inherit
+        }
+        if (showBrideGroom) {
+            patch.brideName = draft.brideName
+            patch.groomName = draft.groomName
+        }
+        if (showCelebrant) patch.celebrantName = draft.celebrantName
+        if (showAge) patch.age = draft.age === '' ? null : draft.age
+        // Always include overrides so clearing them also persists.
+        patch.customTitle = draft.customTitle
+        patch.customSubtitle = draft.customSubtitle
+        return patch
+    }
+
+    async function handleSave() {
+        if (saving) return
+        setSaving(true)
+        try {
+            await onSave(wedding.id, buildPatch())
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <div className='px-6 py-4 border-t border-gray-100'>
+            <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3 inline-flex items-center gap-1.5'>
+                <Pencil size={10} /> עריכת פרטי אירוע
+            </p>
+
+            {/* Event type dropdown */}
+            <div className='mb-3'>
+                <label className='text-xs font-semibold text-gray-500 mb-1 block'>סוג האירוע</label>
+                <select
+                    value={draft.eventType}
+                    onChange={e => set('eventType', e.target.value)}
+                    className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                >
+                    {EVENT_TYPE_ORDER.map(t => (
+                        <option key={t} value={t}>{getEventConfig(t).hebrewLabel}</option>
+                    ))}
+                </select>
+            </div>
+
+            {/* Theme color picker — 3 swatches; independent of event type */}
+            <div className='mb-3'>
+                <div className='flex items-center justify-between mb-1'>
+                    <label className='text-xs font-semibold text-gray-500'>צבע העיצוב</label>
+                    {draft.themeColor && (
+                        <button
+                            type='button'
+                            onClick={() => set('themeColor', null)}
+                            className='text-[11px] text-gray-400 hover:text-[#AA8840] transition-colors'
+                            title='חזור לברירת מחדל לפי סוג האירוע'
+                        >
+                            ברירת מחדל
+                        </button>
+                    )}
+                </div>
+                <div className='grid grid-cols-3 gap-2'>
+                    {THEME_COLOR_ORDER.map(id => {
+                        const t = THEME_COLORS[id]
+                        const effective = resolveThemeColorId(draft) // honors draft.themeColor + eventType default
+                        const isSelected = effective === id
+                        const isExplicit = draft.themeColor === id
+                        return (
+                            <button
+                                key={id}
+                                type='button'
+                                onClick={() => set('themeColor', id)}
+                                className={`group relative rounded-xl border-2 p-2.5 flex flex-col items-center gap-1.5 transition-all ${
+                                    isSelected
+                                        ? 'border-[#AA8840] bg-[#AA8840]/5 shadow-sm'
+                                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                                }`}
+                                title={isExplicit ? `${t.label} (נבחר)` : t.label}
+                            >
+                                <div
+                                    className='w-8 h-8 rounded-full shadow-inner'
+                                    style={{ background: t.swatch, border: '1px solid rgba(0,0,0,0.08)' }}
+                                />
+                                <span className={`text-[11px] font-semibold ${isSelected ? 'text-[#AA8840]' : 'text-gray-500'}`}>
+                                    {t.label}
+                                </span>
+                                {isSelected && !isExplicit && (
+                                    <span className='absolute top-1 left-1 text-[9px] text-gray-300'>ברירת מחדל</span>
+                                )}
+                            </button>
+                        )
+                    })}
+                </div>
+            </div>
+
+            {/* Type-specific name fields */}
+            {showBrideGroom && (
+                <div className='grid grid-cols-2 gap-3 mb-3'>
+                    <div>
+                        <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם כלה</label>
+                        <input
+                            type='text' value={draft.brideName}
+                            onChange={e => set('brideName', e.target.value)}
+                            placeholder='נועה'
+                            className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                        />
+                    </div>
+                    <div>
+                        <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם חתן</label>
+                        <input
+                            type='text' value={draft.groomName}
+                            onChange={e => set('groomName', e.target.value)}
+                            placeholder='אלון'
+                            className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                        />
+                    </div>
+                </div>
+            )}
+
+            {showCelebrant && (
+                <div className={`grid gap-3 mb-3 ${showAge ? 'grid-cols-[2fr_1fr]' : 'grid-cols-1'}`}>
+                    <div>
+                        <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם החוגג/ת</label>
+                        <input
+                            type='text' value={draft.celebrantName}
+                            onChange={e => set('celebrantName', e.target.value)}
+                            placeholder='סבתא תקווה'
+                            className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                        />
+                    </div>
+                    {showAge && (
+                        <div>
+                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>גיל</label>
+                            <input
+                                type='number' min={0} max={140} value={draft.age}
+                                onChange={e => set('age', e.target.value)}
+                                placeholder='78'
+                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                            />
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Advanced overrides */}
+            <button
+                type='button'
+                onClick={() => setShowAdvanced(s => !s)}
+                className='text-xs text-[#AA8840] hover:underline mb-2'
+            >
+                {showAdvanced ? '− הסתר עקיפות כותרת' : '+ עקיפות כותרת (מתקדם)'}
+            </button>
+
+            {showAdvanced && (
+                <div className='space-y-3 mb-3 p-3 rounded-xl bg-[#AA8840]/5 border border-[#AA8840]/15'>
+                    <p className='text-[11px] text-gray-500 leading-relaxed'>
+                        במקום הכותרת שנבנית אוטומטית — הכנס טקסט חופשי. ריק = שימוש בברירת מחדל לפי סוג האירוע.
+                    </p>
+                    <div>
+                        <label className='text-xs font-semibold text-gray-500 mb-1 block'>כותרת ראשית (customTitle)</label>
+                        <input
+                            type='text' value={draft.customTitle}
+                            onChange={e => set('customTitle', e.target.value)}
+                            placeholder='למשל: יום הולדת 78 לסבתא תקווה'
+                            className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                        />
+                    </div>
+                    <div>
+                        <label className='text-xs font-semibold text-gray-500 mb-1 block'>תת-כותרת (customSubtitle)</label>
+                        <input
+                            type='text' value={draft.customSubtitle}
+                            onChange={e => set('customSubtitle', e.target.value)}
+                            placeholder='למשל: מסיבת הפתעה של המשפחה'
+                            className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                        />
+                    </div>
+                </div>
+            )}
+
+            <button
+                onClick={handleSave}
+                disabled={saving}
+                className='w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-gradient-to-r from-[#AA8840] to-[#c9a44e] text-white text-sm font-bold hover:brightness-110 transition-all shadow-sm disabled:opacity-50'
+            >
+                {saving ? <Loader2 size={14} className='animate-spin' /> : <Save size={14} />}
+                {saving ? 'שומר...' : 'שמור שינויים'}
+            </button>
+        </div>
+    )
+}
+
 // ─── Wedding Detail Panel (Database Explorer) ────────────────────────────────
-function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onCheckLuluStatus }) {
+function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onCheckLuluStatus, onSaveEdit }) {
     if (!wedding) return null
+
+    const evCfg = getEventConfig(wedding.eventType)
 
     const fields = [
         { label: 'מזהה חתונה', value: wedding.id, icon: Hash, mono: true },
         { label: 'Slug', value: wedding.slug || '—', icon: Link2, mono: true },
-        { label: 'שם כלה', value: wedding.brideName || '—', icon: Heart },
-        { label: 'שם חתן', value: wedding.groomName || '—', icon: Heart },
-        { label: 'תאריך חתונה', value: formatDate(wedding.weddingDate), icon: CalendarDays },
+        { label: 'סוג אירוע', value: evCfg.hebrewLabel, icon: PartyPopper },
+        ...(normalizeEventType(wedding.eventType) === 'wedding'
+            ? [
+                  { label: 'שם כלה', value: wedding.brideName || '—', icon: Heart },
+                  { label: 'שם חתן', value: wedding.groomName || '—', icon: Heart },
+              ]
+            : [
+                  { label: 'שם החוגג/ת', value: wedding.celebrantName || '—', icon: Heart },
+                  ...(normalizeEventType(wedding.eventType) === 'birthday'
+                      ? [{ label: 'גיל', value: wedding.age != null ? String(wedding.age) : '—', icon: Hash }]
+                      : []),
+              ]),
+        { label: 'תאריך האירוע', value: formatDate(wedding.weddingDate), icon: CalendarDays },
         { label: 'אימייל בעלים', value: wedding.ownerEmail || '—', icon: Mail },
         { label: 'מזהה בעלים (UID)', value: wedding.ownerId || '—', icon: Shield, mono: true },
         { label: 'מזהה הזמנה', value: wedding.orderId ? `#${wedding.orderId}` : '—', icon: Hash, mono: true },
@@ -384,6 +647,9 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                     </div>
                 ))}
             </div>
+
+            {/* Event-type editor */}
+            <EventTypeEditor wedding={wedding} onSave={onSaveEdit} />
 
             {/* Recommendations */}
             <div className='px-6 py-4 border-t border-gray-100'>
@@ -629,6 +895,22 @@ function AdminDashboardContent() {
         })
     }
 
+    async function handleSaveEdit(weddingId, patch) {
+        setActionLoading(true)
+        try {
+            const { updated } = await updateWedding(weddingId, patch)
+            // Merge the update into local state so the UI reflects it immediately
+            // without a full refetch.
+            setWeddings(prev => prev.map(w => (w.id === weddingId ? { ...w, ...updated } : w)))
+            setSelectedWedding(prev => (prev && prev.id === weddingId ? { ...prev, ...updated } : prev))
+            setToast({ message: 'הפרטים נשמרו בהצלחה', type: 'success' })
+        } catch (err) {
+            setToast({ message: `שגיאה בשמירה: ${err.message}`, type: 'error' })
+        } finally {
+            setActionLoading(false)
+        }
+    }
+
     async function handleCheckLuluStatus(printJobId) {
         setActionLoading(true)
         try {
@@ -711,6 +993,7 @@ function AdminDashboardContent() {
                             onDelete={handleDeleteWedding}
                             onResetPassword={handleResetPassword}
                             onCheckLuluStatus={handleCheckLuluStatus}
+                            onSaveEdit={handleSaveEdit}
                         />
                     </>
                 )}

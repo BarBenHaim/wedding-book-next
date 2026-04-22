@@ -4,13 +4,14 @@ import { useEffect, useState, use } from 'react'
 import Link from 'next/link'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../../../lib/firebaseClient'
+import { getEventConfig, getPalette, buildTitle, buildSubtitle } from '../../../lib/eventTypes'
 
 export default function WeddingHome({ params }) {
     const { weddingId } = use(params)
 
     const [exists, setExists] = useState(null)
-    const [names, setNames] = useState(null)
-    const [weddingDate, setWeddingDate] = useState(null)
+    const [data, setData] = useState(null) // the raw wedding doc (or null while loading)
+
     useEffect(() => {
         async function checkWedding() {
             if (!weddingId) return
@@ -19,11 +20,7 @@ export default function WeddingHome({ params }) {
                 const snap = await getDoc(ref)
                 if (snap.exists()) {
                     setExists(true)
-                    const data = snap.data()
-                    if (data.brideName || data.groomName) {
-                        setNames({ bride: data.brideName || '', groom: data.groomName || '' })
-                    }
-                    if (data.weddingDate) setWeddingDate(data.weddingDate)
+                    setData(snap.data())
                 } else {
                     setExists(false)
                 }
@@ -41,48 +38,62 @@ export default function WeddingHome({ params }) {
         )
     }
 
+    // Resolve copy + palette (color) independently.
+    // - copy comes from the event type (cfg)
+    // - palette comes from themeColor override, falling back to the type's default
+    // Safe when data is null — helpers return sensible defaults and {kind:'empty'}.
+    const cfg = getEventConfig(data?.eventType)
+    const palette = getPalette(data || {})
+    const title = buildTitle(data || {})
+    const subtitle = buildSubtitle(data || {})
+
     return (
         <div
             className='relative min-h-[calc(100vh-4rem)] font-sans flex flex-col items-center justify-center px-5 py-10 overflow-hidden'
-            style={{
-                background: 'linear-gradient(180deg, #ffffff 0%, #fdfcf9 30%, #f9f3e8 60%, #f2e8d3 100%)',
-            }}
+            style={{ background: palette.bgGradient }}
         >
             {/* ── Content ── */}
             <div className='relative z-10 flex flex-col items-center text-center animate-scaleIn max-w-[400px] w-full'>
                 {/* Label */}
-                <p className='text-[15px] font-semibold tracking-[1px] mb-2' style={{ color: '#96884e' }}>
-                    ספר הברכות של
+                <p className='text-[15px] font-semibold tracking-[1px] mb-2' style={{ color: palette.label }}>
+                    {subtitle}
                 </p>
 
-                {/* Couple names */}
-                {names ? (
+                {/* Title — shape depends on event type */}
+                {title.kind === 'names' ? (
                     <h1
                         className='text-[2.85rem] sm:text-[3.1rem] font-extrabold leading-[1.15] mb-1.5'
-                        style={{ color: '#3d2e1a' }}
+                        style={{ color: palette.name }}
                     >
-                        {names.bride}
+                        {title.left}
                         <span
                             className='inline-block mx-1'
                             style={{
                                 fontFamily: "'Great Vibes', cursive",
                                 fontSize: '2.3rem',
-                                color: '#D3B665',
+                                color: palette.accent,
                                 verticalAlign: 'middle',
                                 fontWeight: 400,
                             }}
                         >
                             &nbsp; &&nbsp;
                         </span>
-                        {names.groom}
+                        {title.right}
+                    </h1>
+                ) : title.kind === 'single' ? (
+                    <h1
+                        className='text-[2.4rem] sm:text-[2.7rem] font-extrabold leading-[1.15] mb-1.5'
+                        style={{ color: palette.name }}
+                    >
+                        {title.text}
                     </h1>
                 ) : (
                     <div className='h-14 mb-2' />
                 )}
 
                 {/* Description */}
-                <p className='text-[15px] leading-[1.8] mt-5 mb-8 max-w-[300px]' style={{ color: '#7a6548' }}>
-                    זהו המקום לשתף את הרגעים שלכם, לכתוב ברכות מרגשות ולהוסיף תמונות שישמרו לנצח.
+                <p className='text-[15px] leading-[1.8] mt-5 mb-8 max-w-[300px]' style={{ color: palette.description }}>
+                    {cfg.description}
                 </p>
 
                 {/* CTA Button with marble texture */}
@@ -103,12 +114,10 @@ export default function WeddingHome({ params }) {
                             backgroundPosition: 'center',
                         }}
                     />
-                    {/* Soft overlay for readability */}
+                    {/* Soft overlay for readability — tinted per event type */}
                     <div
                         className='absolute inset-0'
-                        style={{
-                            background: 'rgba(255, 213, 116, 0.6)',
-                        }}
+                        style={{ background: palette.button }}
                     />
                     {/* Shimmer on hover */}
                     <div
@@ -118,20 +127,23 @@ export default function WeddingHome({ params }) {
                                 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%, rgba(255,255,255,0.15) 100%)',
                         }}
                     />
-                    {/* Gold border */}
+                    {/* Accent border */}
                     <div
                         className='absolute inset-0 rounded-full'
-                        style={{ border: '1px solid rgba(211,182,101,0.3)' }}
+                        style={{ border: `1px solid ${palette.accent}4D` }}
                     />
 
-                    <span className='relative z-10 block px-12 py-4 text-[17px] font-bold' style={{ color: '#3d2e1a' }}>
-                        יצירת ברכה
+                    <span
+                        className='relative z-10 block px-12 py-4 text-[17px] font-bold'
+                        style={{ color: palette.name }}
+                    >
+                        {cfg.ctaLabel}
                     </span>
                 </Link>
 
                 {/* Footer */}
-                <p className='mt-10 text-[10px] tracking-[2px] uppercase' style={{ color: 'rgba(138,109,64,0.2)' }}>
-                    Wedding Tales
+                <p className='mt-10 text-[10px] tracking-[2px] uppercase' style={{ color: palette.footer }}>
+                    {cfg.footer}
                 </p>
             </div>
         </div>

@@ -4,6 +4,7 @@ export const fetchCache = 'force-no-store'
 
 import { NextResponse } from 'next/server'
 import { adminDb, adminAuth } from '@/lib/firebaseAdmin'
+import { normalizeEventType, normalizeThemeColor } from '@/lib/eventTypes'
 
 const SUPER_ADMIN_EMAIL = 'barbenbh@gmail.com'
 
@@ -75,6 +76,13 @@ export async function GET(req) {
                     greetingsCount,
                     createdAt,
                     printOrder: data.printOrder ?? null,
+                    // Event-type + theme fields (may be absent on legacy docs → normalized on read)
+                    eventType: normalizeEventType(data.eventType),
+                    themeColor: normalizeThemeColor(data.themeColor), // null = use event-type default
+                    celebrantName: data.celebrantName ?? null,
+                    age: data.age ?? null,
+                    customTitle: data.customTitle ?? null,
+                    customSubtitle: data.customSubtitle ?? null,
                 }
             })
         )
@@ -82,6 +90,80 @@ export async function GET(req) {
         return NextResponse.json(weddings)
     } catch (err) {
         console.error('[admin/weddings] Error fetching weddings:', err)
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    }
+}
+
+// ─── PATCH: Update editable fields on a wedding ──────────────────────────────
+//
+// Body: { weddingId, patch: { eventType?, celebrantName?, age?, customTitle?,
+//                             customSubtitle?, brideName?, groomName? } }
+//
+// Whitelist enforced server-side — any other keys in `patch` are dropped.
+// Strings are trimmed; empty strings become null (cleared). `age` is coerced
+// to a number; bad values become null. `eventType` is normalized.
+export async function PATCH(req) {
+    const admin = await verifySuperAdmin(req)
+    if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+    try {
+        const body = await req.json()
+        const { weddingId, patch } = body || {}
+        if (!weddingId) return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
+        if (!patch || typeof patch !== 'object') {
+            return NextResponse.json({ error: 'Missing patch' }, { status: 400 })
+        }
+
+        const ALLOWED = ['eventType', 'themeColor', 'celebrantName', 'age', 'customTitle', 'customSubtitle', 'brideName', 'groomName']
+        const clean = {}
+
+        for (const key of ALLOWED) {
+            if (!Object.prototype.hasOwnProperty.call(patch, key)) continue
+            let v = patch[key]
+
+            if (key === 'eventType') {
+                clean[key] = normalizeEventType(v)
+                continue
+            }
+
+            if (key === 'themeColor') {
+                // normalizeThemeColor returns null for unknown → persist null
+                // to mean "inherit event-type default"
+                clean[key] = normalizeThemeColor(v)
+                continue
+            }
+
+            if (key === 'age') {
+                if (v === null || v === '' || v === undefined) {
+                    clean[key] = null
+                } else {
+                    const n = Number(v)
+                    clean[key] = Number.isFinite(n) ? n : null
+                }
+                continue
+            }
+
+            // string fields: trim; '' → null
+            if (typeof v === 'string') v = v.trim()
+            clean[key] = v === '' || v == null ? null : v
+        }
+
+        if (Object.keys(clean).length === 0) {
+            return NextResponse.json({ error: 'No valid fields in patch' }, { status: 400 })
+        }
+
+        const ref = adminDb.collection('weddings').doc(weddingId)
+        const snap = await ref.get()
+        if (!snap.exists) {
+            return NextResponse.json({ error: 'Wedding not found' }, { status: 404 })
+        }
+
+        await ref.set(clean, { merge: true })
+
+        console.log(`✏️  Wedding ${weddingId} updated by super admin:`, Object.keys(clean).join(', '))
+        return NextResponse.json({ success: true, updated: clean })
+    } catch (err) {
+        console.error('[admin/weddings] PATCH error:', err)
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
     }
 }
@@ -122,7 +204,7 @@ export async function DELETE(req) {
         console.log(`🗑️ Wedding ${weddingId} deleted by super admin (${entriesSnap.size} entries removed)`)
         return NextResponse.json({ success: true, entriesDeleted: entriesSnap.size })
     } catch (err) {
-        console.error('[admin/weddings] DELETE error:', err)
-        return NextResponse.json({ error: 'Failed to delete wedding' }, { status: 500 })
+        console.error('[admin/weddings] Error deleting wedding:', err)
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
     }
 }
