@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Cropper from 'react-easy-crop'
-import { saveEntry } from '../../../../lib/classifyMedia'
+import { enqueue } from '../../../../lib/offlineQueue'
 
 export default function TextPage() {
     const [step, setStep] = useState(1) // 1: Text, 2: Photo
@@ -93,6 +93,12 @@ export default function TextPage() {
     }
 
     // --- שליחה ---
+    // The submit handler does NOT wait for Firebase. It produces a compressed
+    // JPEG blob (applying the crop if needed), saves the full blessing to
+    // IndexedDB, and hands control to the thanks page immediately. The thanks
+    // page is the component that actually ships the entry to Firebase — with
+    // retry + offline detection. Guests see "thanks!" in <1s regardless of
+    // how spotty the venue's reception is.
     async function onSubmit(e) {
         e.preventDefault()
         if (!text.trim() || !photoUrl) return
@@ -101,7 +107,7 @@ export default function TextPage() {
         try {
             let finalBlob = photoBlob
 
-            // חיתוך אם הועלה קובץ
+            // Apply crop if the user uploaded from gallery
             if (isUpload && photoUrl && croppedAreaPixels) {
                 const image = await createImage(photoUrl)
                 const canvas = document.createElement('canvas')
@@ -133,17 +139,23 @@ export default function TextPage() {
                 })
             }
 
-            await saveEntry(weddingId, {
+            // Persist locally — this is what makes the "just works offline"
+            // promise actually hold. Even if the tab crashes right now, the
+            // blessing is safe on the device. We store the blob at full
+            // quality (the original toBlob above is JPEG q=0.95, matching
+            // the pre-offline-queue behavior exactly).
+            await enqueue({
+                weddingId,
                 name: name || '',
                 text: text.trim(),
                 image: finalBlob,
             })
 
+            // Off to the thanks screen. It handles the actual upload.
             router.push(`/wedding/${weddingId}/thanks`)
         } catch (err) {
             console.error(err)
-            alert('שגיאה בשליחה')
-        } finally {
+            alert('שגיאה בשמירת הברכה — נסה שוב')
             setSubmitting(false)
         }
     }
