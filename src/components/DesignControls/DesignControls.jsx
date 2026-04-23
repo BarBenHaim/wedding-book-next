@@ -127,12 +127,18 @@ const PositionPad = ({ x, y, onChange }) => {
     const handleMove = (clientX, clientY) => {
         if (!containerRef.current) return
         const rect = containerRef.current.getBoundingClientRect()
+        // Guard against a zero-size rect during initial render — division by
+        // zero gives NaN, which Firestore then rejects ("invalid nested
+        // entity") and every subsequent autosave fails.
+        if (!rect.width || !rect.height) return
 
         let newX = ((clientX - rect.left) / rect.width) * 100
         let newY = ((clientY - rect.top) / rect.height) * 100
 
         newX = Math.max(0, Math.min(100, newX))
         newY = Math.max(0, Math.min(100, newY))
+
+        if (!Number.isFinite(newX) || !Number.isFinite(newY)) return
 
         onChange(newX, newY)
     }

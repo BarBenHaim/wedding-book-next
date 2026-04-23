@@ -108,14 +108,31 @@ export default function BookViewer() {
     }, [calculateBookSize])
 
     // ── Debounced Firestore save ─────────────────────────────────────────────
-    // Remove undefined values recursively so Firestore won't reject nested entities
-    const sanitize = (obj) => {
-        if (obj === null || typeof obj !== 'object') return obj
-        return Object.fromEntries(
-            Object.entries(obj)
-                .filter(([, v]) => v !== undefined)
-                .map(([k, v]) => [k, typeof v === 'object' && v !== null && !Array.isArray(v) ? sanitize(v) : v])
-        )
+    // Firestore rejects: undefined, NaN, Infinity, functions, class instances,
+    // DOM nodes, arrays containing any of those. Past builds only stripped
+    // undefined, which let a single bad NaN (e.g. from a joystick drag before
+    // the pad had measured itself) poison every subsequent save — each failed
+    // write was retried internally until the Firestore write queue exhausted
+    // and surfaced "resource-exhausted". Strip everything Firestore can't eat.
+    const sanitize = (v) => {
+        if (v === undefined) return undefined
+        if (v === null) return null
+        if (typeof v === 'number') return Number.isFinite(v) ? v : null
+        if (typeof v === 'function' || typeof v === 'symbol') return undefined
+        if (typeof v !== 'object') return v // string, boolean, bigint
+        if (Array.isArray(v)) {
+            return v.map(sanitize).filter(x => x !== undefined)
+        }
+        // Only serialize plain objects — skip class instances / DOM nodes /
+        // Blobs / Files / whatever else might sneak in.
+        const proto = Object.getPrototypeOf(v)
+        if (proto !== Object.prototype && proto !== null) return undefined
+        const out = {}
+        for (const [k, val] of Object.entries(v)) {
+            const s = sanitize(val)
+            if (s !== undefined) out[k] = s
+        }
+        return out
     }
 
     const saveCoverDesign = useCallback((newSettings) => {
