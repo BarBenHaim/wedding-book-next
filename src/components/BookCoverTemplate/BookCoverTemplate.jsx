@@ -1,5 +1,7 @@
 'use client'
 
+import { resolveTextureUrl } from '@/lib/resolveAsset'
+
 // ─── Cover text position presets ─────────────────────────────────────────────
 // One of 9 anchors on the cover. Falls back to the original centered layout
 // when the field is missing on legacy docs (backward-compat).
@@ -73,17 +75,22 @@ export default function BookCoverTemplate({ styleSettings, scaledWidth, scaledHe
     const alignItems = inferAlignItems(textPosition, styleSettings.coverTextAlign)
 
     // 🧩 רקע / טקסטורה
+    // Resolve legacy /_next/static/media/tex*.<hash>.png URLs to the stable
+    // /textures/*.png paths so covers saved before the stable-URL refactor
+    // still render.
+    const resolvedCoverTexture = resolveTextureUrl(styleSettings.coverTexture)
+    const resolvedTexture = resolveTextureUrl(styleSettings.texture)
     const backgroundImage =
-        styleSettings.coverTexture === 'none'
+        resolvedCoverTexture === 'none'
             ? 'none'
-            : styleSettings.coverTexture === null
-            ? styleSettings.texture
-                ? `url(${styleSettings.texture})`
+            : resolvedCoverTexture === null || resolvedCoverTexture === undefined
+            ? resolvedTexture
+                ? `url(${resolvedTexture})`
                 : 'none'
-            : styleSettings.coverTexture
-            ? `url(${styleSettings.coverTexture})`
-            : styleSettings.texture
-            ? `url(${styleSettings.texture})`
+            : resolvedCoverTexture
+            ? `url(${resolvedCoverTexture})`
+            : resolvedTexture
+            ? `url(${resolvedTexture})`
             : 'none'
 
     // 🧩 מסגרת
