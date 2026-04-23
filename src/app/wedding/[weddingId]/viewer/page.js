@@ -135,20 +135,59 @@ export default function BookViewer() {
         return out
     }
 
+    // If a cover image is still sitting in state as a base64 data URL, upload
+    // it to Firebase Storage and return the download URL. Otherwise return
+    // whatever was passed in. Firestore rejects string fields > ~1MB with an
+    // "invalid nested entity" error, and a base64 JPEG blows past that fast.
+    const migrateCoverImageIfNeeded = useCallback(async (coverImg) => {
+        if (typeof coverImg !== 'string') return coverImg
+        if (!coverImg.startsWith('data:')) return coverImg // already a URL — nothing to do
+        try {
+            const blob = await (await fetch(coverImg)).blob()
+            const mime = blob.type || 'image/jpeg'
+            const ext = mime.split('/')[1] || 'jpg'
+            const path = `weddings/${weddingId}/cover.${ext}`
+            const fileRef = ref(storage, path)
+            await uploadBytes(fileRef, blob, { contentType: mime })
+            const url = await getDownloadURL(fileRef)
+            return url
+        } catch (e) {
+            console.warn('Cover image migration to Storage failed:', e)
+            return coverImg // fall through; save will still fail but at least we tried
+        }
+    }, [weddingId])
+
     const saveCoverDesign = useCallback((newSettings) => {
         setSaveStatus('saving')
         clearTimeout(saveTimerRef.current)
         saveTimerRef.current = setTimeout(async () => {
             try {
-                await setDoc(doc(db, 'weddings', weddingId), { coverDesign: sanitize(newSettings) }, { merge: true })
+                // Migrate any oversized base64 coverImage to Storage before
+                // the Firestore write — otherwise the whole doc gets rejected.
+                const migratedUrl = await migrateCoverImageIfNeeded(newSettings.coverImage)
+                const settingsToSave =
+                    migratedUrl !== newSettings.coverImage
+                        ? { ...newSettings, coverImage: migratedUrl }
+                        : newSettings
+                // Sync the migration back into local state so subsequent saves
+                // see the URL (and the preview <img> starts loading from CDN
+                // instead of carrying the giant data URL around).
+                if (migratedUrl !== newSettings.coverImage) {
+                    setStyleSettings(prev => ({ ...prev, coverImage: migratedUrl }))
+                }
+                await setDoc(
+                    doc(db, 'weddings', weddingId),
+                    { coverDesign: sanitize(settingsToSave) },
+                    { merge: true }
+                )
                 setSaveStatus('saved')
                 setTimeout(() => setSaveStatus('idle'), 2500)
             } catch (err) {
-                console.error('Failed to save cover design:', err)
+                console.error('Failed to save cover design:', err?.message || err)
                 setSaveStatus('idle')
             }
         }, 800)
-    }, [weddingId])
+    }, [weddingId, migrateCoverImageIfNeeded])
 
     const handleStyleChange = updated => {
         const newSettings = { ...styleSettings, ...updated }
@@ -300,6 +339,7 @@ export default function BookViewer() {
                             mode={mode}
                             onModeChange={setMode}
                             saveStatus={saveStatus}
+                            weddingId={weddingId}
                         />
                     </div>
                 </aside>

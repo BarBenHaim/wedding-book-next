@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { storage } from '@/lib/firebaseClient'
 import { heebo, frankRuhl, secular, davidLibre, notoHebrew } from '@/app/fonts'
 
 /* --- נכסים --- */
@@ -210,22 +212,46 @@ const Card = ({ title, children, className = '' }) => (
 )
 
 /* --- הקומפוננטה הראשית --- */
-export default function DesignControls({ settings, onChange, mode, onModeChange, saveStatus = 'idle' }) {
+export default function DesignControls({ settings, onChange, mode, onModeChange, saveStatus = 'idle', weddingId }) {
     const [activePreset, setActivePreset] = useState(null)
+    const [uploadingCover, setUploadingCover] = useState(false)
 
     const applyPreset = preset => {
         setActivePreset(preset.name)
         onChange(preset.values)
     }
 
-    // 🔥 פונקציה חדשה לטיפול בהעלאת תמונה - המרה ל-Base64 כדי שתישמר ב-Storage
-    const handleImageUpload = e => {
+    // Upload cover image to Firebase Storage and store only the download URL
+    // in settings. We used to inline the base64 data URL into `coverImage`,
+    // which blew past Firestore's ~1MB string-field limit and caused every
+    // subsequent autosave to fail with "invalid nested entity".
+    const handleImageUpload = async (e) => {
         const file = e.target.files[0]
         if (!file) return
 
+        if (weddingId) {
+            setUploadingCover(true)
+            try {
+                const mime = file.type || 'image/jpeg'
+                const ext = mime.split('/')[1] || 'jpg'
+                const path = `weddings/${weddingId}/cover.${ext}`
+                const fileRef = storageRef(storage, path)
+                await uploadBytes(fileRef, file, { contentType: mime })
+                const url = await getDownloadURL(fileRef)
+                onChange({ ...settings, coverImage: url })
+                return
+            } catch (err) {
+                console.error('Cover upload to Storage failed, falling back to data URL:', err)
+            } finally {
+                setUploadingCover(false)
+            }
+        }
+
+        // Fallback (no weddingId — editor open in preview mode): read as a
+        // data URL. The viewer's save handler will migrate it to Storage on
+        // the next save.
         const reader = new FileReader()
         reader.onloadend = () => {
-            // התוצאה כאן היא מחרוזת Base64 ארוכה שנשמרת ב-LocalStorage
             onChange({ ...settings, coverImage: reader.result })
         }
         reader.readAsDataURL(file)
