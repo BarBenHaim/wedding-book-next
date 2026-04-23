@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useEffect, useState, useRef, useCallback } from 'react'
-import { useParams } from 'next/navigation'
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useParams, useSearchParams } from 'next/navigation'
 import HTMLFlipBook from 'react-pageflip'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage, db } from '@/lib/firebaseClient'
@@ -17,8 +17,15 @@ import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCo
 import PrintOrderModal from '@/components/PrintOrderModal/PrintOrderModal'
 import { getEntries } from '../../../../lib/classifyMedia'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defultStyle'
+import { BOOK_FORMATS, resolveFormatConfig } from '@/lib/bookFormats'
 
 // --- הגדרות דפוס (LULU COMPLIANT) ---
+//
+// These are the dimensions the live "שליחה להדפסה" flow uses (the Lulu order
+// path that's been in production). We are deliberately NOT changing them in
+// this PR — the super-admin "Download PDFs" menu uses the bookFormats presets
+// instead, so we can iterate on the print spec without risking the shipped
+// order flow.
 
 // 1. תוכן הספר (Content) - ריבוע סטנדרטי
 const CONTENT_CONFIG = {
@@ -37,6 +44,7 @@ const COVER_CONFIG = {
 
 export default function BookViewer() {
     const { weddingId } = useParams()
+    const searchParams = useSearchParams()
 
     const [pages, setPages] = useState([])
     const [loading, setLoading] = useState(true)
@@ -51,9 +59,25 @@ export default function BookViewer() {
     const [saveStatus, setSaveStatus] = useState('idle') // 'idle' | 'saving' | 'saved'
     const saveTimerRef = useRef(null)
 
+    // ── Auto-export (super-admin "Download PDFs") ─────────────────────────────
+    // If the URL has ?autoExport=<formatId>, we generate the PDFs in that
+    // Lulu-compliant format and trigger browser downloads instead of uploading
+    // to Firebase / calling the Lulu order API. The live print-order flow is
+    // untouched.
+    const autoExportFormatId = searchParams?.get('autoExport') || null
+    const autoExportFormat = autoExportFormatId ? BOOK_FORMATS[autoExportFormatId] : null
+    const [exportStatus, setExportStatus] = useState('idle') // 'idle' | 'generating' | 'done' | 'error'
+    const [exportMessage, setExportMessage] = useState('')
+    const exportTriggeredRef = useRef(false)
+
     // Refs לאזורי ההדפסה הנסתרים
     const contentRef = useRef(null)
     const fullCoverRef = useRef(null)
+    // Refs for the auto-export hidden render area (separate from the live
+    // print one so we can pick different dimensions per format without
+    // disturbing the shipped flow).
+    const exportContentRef = useRef(null)
+    const exportCoverRef = useRef(null)
 
     useEffect(() => {
         const init = async () => {
@@ -239,6 +263,61 @@ export default function BookViewer() {
         return await getDownloadURL(storageRef)
     }
 
+    // Download-only variant — produces the same PDF as generatePdfFromRef but
+    // hands it to the browser instead of uploading to Firebase Storage. Used
+    // exclusively by the super-admin "Download PDFs" flow.
+    const generatePdfBlobFromRef = async (elementRef, config) => {
+        if (!elementRef.current) return null
+
+        const pdf = new jsPDF({
+            orientation: config.widthMM > config.heightMM ? 'landscape' : 'portrait',
+            unit: 'mm',
+            format: [config.widthMM, config.heightMM],
+            compress: true,
+        })
+
+        const pageElements = elementRef.current.children
+        const pixelsWidth = (config.widthMM / 25.4) * config.dpi
+
+        for (let i = 0; i < pageElements.length; i++) {
+            const pageEl = pageElements[i]
+            const domRect = pageEl.getBoundingClientRect()
+            if (!domRect.width || !domRect.height) continue
+            const scale = pixelsWidth / domRect.width
+
+            const canvas = await html2canvas(pageEl, {
+                scale: scale,
+                useCORS: true,
+                allowTaint: true,
+                logging: false,
+                width: domRect.width,
+                height: domRect.height,
+                windowWidth: domRect.width,
+                windowHeight: domRect.height,
+                backgroundColor: '#ffffff',
+            })
+
+            const imgData = canvas.toDataURL('image/jpeg', 0.95)
+            if (i > 0) pdf.addPage([config.widthMM, config.heightMM])
+            pdf.addImage(imgData, 'JPEG', 0, 0, config.widthMM, config.heightMM)
+        }
+
+        return pdf.output('blob')
+    }
+
+    const triggerBrowserDownload = (blob, filename) => {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        setTimeout(() => {
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+        }, 0)
+    }
+
     const handlePrintOrder = async (shippingAddress) => {
         setIsGenerating(true)
         setPrintStatus('generating')
@@ -283,6 +362,57 @@ export default function BookViewer() {
             setTimeout(() => setPrintStatus('idle'), 1000)
         }
     }
+
+    // ── Auto-export (super-admin "Download PDFs") ─────────────────────────────
+    // Runs exactly once after pages + style are loaded. Generates content +
+    // cover PDFs at the selected format's dimensions and triggers browser
+    // downloads. Each PDF is standalone — the two files together are what
+    // you'd upload to Lulu's cover/interior drop zones.
+    const exportConfig = useMemo(() => {
+        if (!autoExportFormat) return null
+        return resolveFormatConfig(autoExportFormat.id, pages.length)
+    }, [autoExportFormat, pages.length])
+
+    useEffect(() => {
+        if (!autoExportFormat) return
+        if (loading || designLoading) return
+        if (exportTriggeredRef.current) return
+        if (!exportConfig) return
+        // Wait a tick so the hidden export render has committed to the DOM
+        // before html2canvas snapshots it.
+        exportTriggeredRef.current = true
+        const t = setTimeout(async () => {
+            setExportStatus('generating')
+            setExportMessage('מייצר PDF של תוכן הספר...')
+            try {
+                const contentBlob = await generatePdfBlobFromRef(exportContentRef, exportConfig.content)
+                if (contentBlob) {
+                    triggerBrowserDownload(
+                        contentBlob,
+                        `WeddingBook-${weddingId}-${autoExportFormat.id}-Content.pdf`
+                    )
+                }
+                setExportMessage('מייצר PDF של הכריכה...')
+                const coverBlob = await generatePdfBlobFromRef(exportCoverRef, exportConfig.cover)
+                if (coverBlob) {
+                    triggerBrowserDownload(
+                        coverBlob,
+                        `WeddingBook-${weddingId}-${autoExportFormat.id}-Cover.pdf`
+                    )
+                }
+                setExportStatus('done')
+                setExportMessage(
+                    `הורדת ${autoExportFormat.label} הושלמה — שני קבצי PDF ירדו למחשב.`
+                )
+            } catch (err) {
+                console.error('auto-export failed:', err)
+                setExportStatus('error')
+                setExportMessage(`שגיאה ביצירת ה-PDF: ${err?.message || err}`)
+            }
+        }, 800)
+        return () => clearTimeout(t)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoExportFormat, loading, designLoading, exportConfig])
 
     if (loading || designLoading) return (
         <div className='flex h-[calc(100vh-64px)] items-center justify-center bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da]'>
@@ -530,6 +660,133 @@ export default function BookViewer() {
                     </div>
                 </div>
             </div>
+
+            {/* --- Auto-export hidden render (super-admin "Download PDFs") --- */}
+            {/*
+                Renders at the selected BOOK_FORMATS preset's dimensions so
+                html2canvas → jsPDF produces a Lulu-compliant PDF per format.
+                Only mounted when ?autoExport=<formatId> is in the URL, so it
+                costs nothing during normal viewing.
+            */}
+            {autoExportFormat && exportConfig && (
+                <div style={{ position: 'fixed', left: '-9999px', top: 0 }}>
+                    {/* Interior content — one page per entry, at the format's
+                        content size (includes bleed). */}
+                    <div ref={exportContentRef}>
+                        {pages.map(entry => {
+                            // Scale to a comfortable 1000px render width; the
+                            // PDF generator will rescale to hit 300 DPI.
+                            const renderW = 1000
+                            const renderH = renderW * (exportConfig.content.heightMM / exportConfig.content.widthMM)
+                            return (
+                                <div
+                                    key={entry.id}
+                                    style={{
+                                        width: `${renderW}px`,
+                                        height: `${renderH}px`,
+                                        overflow: 'hidden',
+                                    }}
+                                >
+                                    <BookPageTemplate
+                                        entry={entry}
+                                        styleSettings={styleSettings}
+                                        scaledWidth={renderW}
+                                        scaledHeight={renderH}
+                                    />
+                                </div>
+                            )
+                        })}
+                    </div>
+
+                    {/* Cover spread — one page, sized to the format's computed
+                        cover dimensions. For saddle-stitch this has no spine;
+                        for hardcover it's bigger (wrap margin). */}
+                    <div ref={exportCoverRef}>
+                        {(() => {
+                            const renderW = 1400
+                            const renderH = renderW * (exportConfig.cover.heightMM / exportConfig.cover.widthMM)
+                            const spineWidthPxExport =
+                                (exportConfig.cover.spineMM / exportConfig.cover.widthMM) * renderW
+                            const panelWidthPxExport = (renderW - spineWidthPxExport) / 2
+                            return (
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        flexDirection: 'row',
+                                        width: `${renderW}px`,
+                                        height: `${renderH}px`,
+                                        overflow: 'hidden',
+                                        backgroundColor: styleSettings.coverColor || '#ffffff',
+                                    }}
+                                >
+                                    {/* Back cover */}
+                                    <div style={{ width: `${panelWidthPxExport}px`, height: '100%', position: 'relative', overflow: 'hidden' }}>
+                                        <BookBackCoverTemplate scaledWidth={panelWidthPxExport} scaledHeight={renderH} />
+                                    </div>
+                                    {/* Spine (0 for saddle-stitch, which just skips rendering it) */}
+                                    {spineWidthPxExport > 0 && (
+                                        <div
+                                            style={{
+                                                width: `${spineWidthPxExport}px`,
+                                                height: '100%',
+                                                backgroundColor: styleSettings.coverColor || '#ffffff',
+                                            }}
+                                        />
+                                    )}
+                                    {/* Front cover */}
+                                    <div style={{ width: `${panelWidthPxExport}px`, height: '100%', position: 'relative', overflow: 'hidden' }}>
+                                        <BookCoverTemplate
+                                            styleSettings={styleSettings}
+                                            scaledWidth={panelWidthPxExport}
+                                            scaledHeight={renderH}
+                                        />
+                                    </div>
+                                </div>
+                            )
+                        })()}
+                    </div>
+                </div>
+            )}
+
+            {/* --- Auto-export status overlay --- */}
+            {autoExportFormat && (
+                <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm'>
+                    <div className='bg-white rounded-2xl shadow-2xl p-8 max-w-md w-[90%] text-center' dir='rtl'>
+                        <h2 className='text-xl font-bold mb-2' style={{ color: '#AA8840' }}>
+                            הורדת PDF — {autoExportFormat.label}
+                        </h2>
+                        <p className='text-xs text-gray-500 mb-6'>{autoExportFormat.description}</p>
+
+                        {exportStatus === 'generating' && (
+                            <div className='flex flex-col items-center gap-4'>
+                                <div className='animate-spin rounded-full h-10 w-10 border-[3px] border-[#AA8840]/20 border-t-[#c9a44e]' />
+                                <p className='text-sm text-gray-700'>{exportMessage}</p>
+                            </div>
+                        )}
+                        {exportStatus === 'done' && (
+                            <div className='flex flex-col items-center gap-4'>
+                                <div className='text-3xl'>✓</div>
+                                <p className='text-sm text-gray-700'>{exportMessage}</p>
+                                <button
+                                    onClick={() => window.close()}
+                                    className='mt-2 px-6 py-2 rounded-xl bg-[#AA8840] text-white text-sm font-bold'
+                                >
+                                    סגור חלון
+                                </button>
+                            </div>
+                        )}
+                        {exportStatus === 'error' && (
+                            <div className='flex flex-col items-center gap-4'>
+                                <div className='text-3xl text-red-500'>✕</div>
+                                <p className='text-sm text-red-700'>{exportMessage}</p>
+                            </div>
+                        )}
+                        {exportStatus === 'idle' && (
+                            <p className='text-sm text-gray-500'>ממתין לטעינת הספר...</p>
+                        )}
+                    </div>
+                </div>
+            )}
         </AdminPageWrapper>
     )
 }

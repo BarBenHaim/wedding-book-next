@@ -783,6 +783,55 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                 </div>
             </div>
 
+            {/* Download PDFs (Lulu-compliant) */}
+            {/*
+                Opens the viewer in a new tab with ?autoExport=<formatId> so
+                the viewer generates the content + cover PDFs at the chosen
+                format's dimensions and downloads them to the admin's
+                computer. Does NOT touch the shipped "Send to Lulu" flow.
+            */}
+            <div className='px-6 py-4 border-t border-gray-100'>
+                <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>הורדת PDF לפי פורמט Lulu</p>
+                <div className='space-y-2'>
+                    <a
+                        href={`/wedding/${wedding.id}/viewer?autoExport=classic`}
+                        target='_blank'
+                        rel='noreferrer'
+                        className='w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-[#AA8840]/5 border border-gray-100 hover:border-[#AA8840]/20 transition-all text-sm font-medium text-gray-700'
+                    >
+                        <Download size={14} className='text-[#AA8840]' />
+                        <div className='text-right flex-1'>
+                            <div className='font-semibold'>קלאסי — כריכה רכה 8.5"</div>
+                            <div className='text-[11px] text-gray-400'>Perfect Bound · מה שנשלח כרגע ללולו</div>
+                        </div>
+                    </a>
+                    <a
+                        href={`/wedding/${wedding.id}/viewer?autoExport=hardcover`}
+                        target='_blank'
+                        rel='noreferrer'
+                        className='w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-[#AA8840]/5 border border-gray-100 hover:border-[#AA8840]/20 transition-all text-sm font-medium text-gray-700'
+                    >
+                        <Download size={14} className='text-[#AA8840]' />
+                        <div className='text-right flex-1'>
+                            <div className='font-semibold'>כריכה קשה 8.5" (Case Wrap)</div>
+                            <div className='text-[11px] text-gray-400'>Hardcover עם הדפסה מלאה + wrap margins</div>
+                        </div>
+                    </a>
+                    <a
+                        href={`/wedding/${wedding.id}/viewer?autoExport=booklet`}
+                        target='_blank'
+                        rel='noreferrer'
+                        className='w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-[#AA8840]/5 border border-gray-100 hover:border-[#AA8840]/20 transition-all text-sm font-medium text-gray-700'
+                    >
+                        <Download size={14} className='text-[#AA8840]' />
+                        <div className='text-right flex-1'>
+                            <div className='font-semibold'>ספרון (Saddle Stitch)</div>
+                            <div className='text-[11px] text-gray-400'>עד 24 עמודים · 17.25" × 8.75" · בלי שדרה</div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+
             {/* Actions */}
             <div className='px-6 py-4 border-t border-gray-100 space-y-2'>
                 <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>פעולות</p>
