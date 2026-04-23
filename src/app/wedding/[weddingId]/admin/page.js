@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../../../../lib/firebaseClient'
+import { normalizeBlessing } from '../../../../lib/normalizeText'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import { Heebo } from 'next/font/google'
@@ -79,11 +80,12 @@ export default function AdminDashboard() {
 
     async function handleUpdateEntry(id) {
         if (!weddingId) return
+        const cleanedText = normalizeBlessing(editValues.text)
         await updateDoc(doc(db, 'weddings', weddingId, 'entries', id), {
             name: editValues.name,
-            text: editValues.text,
+            text: cleanedText,
         })
-        setEntries(prev => prev.map(e => (e.id === id ? { ...e, ...editValues } : e)))
+        setEntries(prev => prev.map(e => (e.id === id ? { ...e, ...editValues, text: cleanedText } : e)))
         setEditingId(null)
     }
 

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Cropper from 'react-easy-crop'
 import { enqueue } from '../../../../lib/offlineQueue'
+import { normalizeBlessing } from '../../../../lib/normalizeText'
 
 export default function TextPage() {
     const [step, setStep] = useState(1) // 1: Text, 2: Photo
@@ -147,7 +148,7 @@ export default function TextPage() {
             await enqueue({
                 weddingId,
                 name: name || '',
-                text: text.trim(),
+                text: normalizeBlessing(text),
                 image: finalBlob,
             })
 

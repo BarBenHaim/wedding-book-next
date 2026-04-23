@@ -1,10 +1,17 @@
 'use client'
 
+import { normalizeBlessing } from '@/lib/normalizeText'
+
 const BASE_SIZE = 2362
 
 export default function BookPageTemplate({ entry, styleSettings, scaledWidth, scaledHeight }) {
+    // Auto-clean the blessing at display time so legacy entries with extra
+    // blank lines / runs of spaces don't overflow the page. Newly submitted
+    // blessings are already normalized on the way in, so this is a no-op for
+    // them.
+    const cleanText = normalizeBlessing(entry.text)
     const hasName = Boolean(entry.name)
-    const hasText = Boolean(entry.text)
+    const hasText = Boolean(cleanText)
     const hasImage = Boolean(entry.imageUrl)
 
     const elementsCount = [hasName, hasText, hasImage].filter(Boolean).length
@@ -111,7 +118,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                             wordWrap: 'break-word',
                         }}
                     >
-                        {entry.text}
+                        {cleanText}
                     </p>
                 </div>
             )}
