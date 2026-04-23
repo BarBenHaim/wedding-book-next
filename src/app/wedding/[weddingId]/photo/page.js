@@ -88,7 +88,7 @@ export default function TextPage() {
                 }
             },
             'image/jpeg',
-            0.95
+            0.95,
         )
     }
 
@@ -124,7 +124,7 @@ export default function TextPage() {
                     0,
                     0,
                     croppedAreaPixels.width,
-                    croppedAreaPixels.height
+                    croppedAreaPixels.height,
                 )
 
                 await new Promise(resolve => {
@@ -134,7 +134,7 @@ export default function TextPage() {
                             resolve()
                         },
                         'image/jpeg',
-                        0.95
+                        0.95,
                     )
                 })
             }
@@ -155,7 +155,7 @@ export default function TextPage() {
             router.push(`/wedding/${weddingId}/thanks`)
         } catch (err) {
             console.error(err)
-            alert('שגיאה בשמירת הברכה — נסה שוב')
+            alert('לא ניתן לשמור את הברכה. בדוק את חיבור ה-Wi-Fi שלך')
             setSubmitting(false)
         }
     }
@@ -196,8 +196,8 @@ export default function TextPage() {
                                 isTextDone
                                     ? 'bg-green-500 text-white'
                                     : step === 1
-                                    ? 'bg-[#AA8840] text-white'
-                                    : 'bg-gray-300 text-white'
+                                      ? 'bg-[#AA8840] text-white'
+                                      : 'bg-gray-300 text-white'
                             }`}
                         >
                             {isTextDone ? '✓' : '1'}
@@ -206,7 +206,9 @@ export default function TextPage() {
                     </button>
 
                     {/* Connecting line */}
-                    <div className={`w-10 h-0.5 rounded-full transition-colors duration-300 ${isTextDone ? 'bg-gradient-to-l from-[#AA8840]/40 to-[#AA8840]/20' : 'bg-gray-200'}`}></div>
+                    <div
+                        className={`w-10 h-0.5 rounded-full transition-colors duration-300 ${isTextDone ? 'bg-gradient-to-l from-[#AA8840]/40 to-[#AA8840]/20' : 'bg-gray-200'}`}
+                    ></div>
 
                     {/* Step 2 */}
                     <button
@@ -221,8 +223,8 @@ export default function TextPage() {
                                 isPhotoDone
                                     ? 'bg-green-500 text-white'
                                     : step === 2
-                                    ? 'bg-[#AA8840] text-white'
-                                    : 'bg-gray-300 text-white'
+                                      ? 'bg-[#AA8840] text-white'
+                                      : 'bg-gray-300 text-white'
                             }`}
                         >
                             {isPhotoDone ? '✓' : '2'}
