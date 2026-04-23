@@ -1,10 +1,76 @@
 'use client'
 
+// ─── Cover text position presets ─────────────────────────────────────────────
+// One of 9 anchors on the cover. Falls back to the original centered layout
+// when the field is missing on legacy docs (backward-compat).
+//
+//   ┌─────────┬─────────┬─────────┐
+//   │  tl     │   tc    │   tr    │
+//   ├─────────┼─────────┼─────────┤
+//   │  cl     │ center  │   cr    │
+//   ├─────────┼─────────┼─────────┤
+//   │  bl     │   bc    │   br    │
+//   └─────────┴─────────┴─────────┘
+//
+// `edge` = distance from the cover edge, expressed as a % of the cover height
+// so the spacing scales naturally with the preview/PDF render.
+const EDGE = '6%'
+
+function getTextPositionStyle(position) {
+    switch (position) {
+        case 'tl':
+            return { position: 'absolute', top: EDGE, left: EDGE }
+        case 'tc':
+            return { position: 'absolute', top: EDGE, left: '50%', transform: 'translateX(-50%)' }
+        case 'tr':
+            return { position: 'absolute', top: EDGE, right: EDGE }
+        case 'cl':
+            return { position: 'absolute', top: '50%', left: EDGE, transform: 'translateY(-50%)' }
+        case 'cr':
+            return { position: 'absolute', top: '50%', right: EDGE, transform: 'translateY(-50%)' }
+        case 'bl':
+            return { position: 'absolute', bottom: EDGE, left: EDGE }
+        case 'bc':
+            return { position: 'absolute', bottom: EDGE, left: '50%', transform: 'translateX(-50%)' }
+        case 'br':
+            return { position: 'absolute', bottom: EDGE, right: EDGE }
+        case 'center':
+        default:
+            // Keep the original centered-in-flex behavior so untouched covers
+            // render byte-identically to before this feature shipped.
+            return { position: 'relative' }
+    }
+}
+
+// When the user hasn't explicitly set a text-internal alignment, infer a
+// sensible one from the chosen position (right-side anchors → right-aligned,
+// etc.). Explicit `coverTextAlign` still wins.
+function inferAlignItems(position, explicitAlign) {
+    if (explicitAlign === 'right') return 'flex-end'
+    if (explicitAlign === 'left') return 'flex-start'
+    if (explicitAlign === 'center') return 'center'
+    switch (position) {
+        case 'tl':
+        case 'cl':
+        case 'bl':
+            return 'flex-start'
+        case 'tr':
+        case 'cr':
+        case 'br':
+            return 'flex-end'
+        default:
+            return 'center'
+    }
+}
+
 export default function BookCoverTemplate({ styleSettings, scaledWidth, scaledHeight }) {
     const coverFontSize = ((styleSettings.coverFontSizePercent || 3) / 100) * scaledWidth
     const imgX = styleSettings.coverImageX || 50
     const imgY = styleSettings.coverImageY || 50
     const imgScale = (styleSettings.coverImageScale || 100) / 100
+    const textPosition = styleSettings.coverTextPosition || 'center'
+    const textPositionStyle = getTextPositionStyle(textPosition)
+    const alignItems = inferAlignItems(textPosition, styleSettings.coverTextAlign)
 
     // 🧩 רקע / טקסטורה
     const backgroundImage =
@@ -76,16 +142,11 @@ export default function BookCoverTemplate({ styleSettings, scaledWidth, scaledHe
             {(styleSettings.coverTitle || styleSettings.coverSubtitle) && (
                 <div
                     style={{
-                        position: 'relative',
+                        ...textPositionStyle,
                         zIndex: 10,
                         display: 'flex',
                         flexDirection: 'column',
-                        alignItems:
-                            styleSettings.coverTextAlign === 'right'
-                                ? 'flex-end'
-                                : styleSettings.coverTextAlign === 'left'
-                                ? 'flex-start'
-                                : 'center',
+                        alignItems,
                         background: styleSettings.coverTextBg || 'transparent',
                         padding: styleSettings.coverTextBg ? '0.5em 1em' : 0,
                         borderRadius: styleSettings.coverTextBg ? '8px' : 0,

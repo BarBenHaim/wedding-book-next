@@ -356,6 +356,38 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                     />
                                 </button>
                             </div>
+
+                            {/* 🧭 מיקום הטקסט על הכריכה – 9 עוגנים */}
+                            <div className='mt-4 pt-3 border-t border-gray-100'>
+                                <div className='text-xs text-gray-500 mb-2'>מיקום הטקסט</div>
+                                {/* dir='ltr' כדי שהלחצנים ייראו ויזואלית כמו הכריכה (שמאל=שמאל, ימין=ימין) */}
+                                <div dir='ltr' className='grid grid-cols-3 gap-1.5 w-full max-w-[160px] mx-auto'>
+                                    {['tl', 'tc', 'tr', 'cl', 'center', 'cr', 'bl', 'bc', 'br'].map(id => {
+                                        const active = (settings.coverTextPosition || 'center') === id
+                                        return (
+                                            <button
+                                                key={id}
+                                                type='button'
+                                                onClick={() =>
+                                                    onChange({ ...settings, coverTextPosition: id })
+                                                }
+                                                className={`aspect-square rounded-md border flex items-center justify-center transition-all ${
+                                                    active
+                                                        ? 'bg-[#F5F5F5] border-[#c9a44e] ring-1 ring-[#c9a44e]'
+                                                        : 'bg-white border-gray-200 hover:border-[#AA8840]/40'
+                                                }`}
+                                                aria-label={`text position ${id}`}
+                                            >
+                                                <span
+                                                    className={`block w-2 h-2 rounded-full ${
+                                                        active ? 'bg-[#AA8840]' : 'bg-gray-300'
+                                                    }`}
+                                                />
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </div>
                         </Card>
 
                         <Card title='תמונת כריכה'>
