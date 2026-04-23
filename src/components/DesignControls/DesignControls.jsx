@@ -10,9 +10,14 @@ import frame1 from '../../media/frames/frame1.png'
 import frame2 from '../../media/frames/frame2.png'
 import frame3 from '../../media/frames/frame3.png'
 import frame4 from '../../media/frames/frame4.png'
-import tex1 from '../../media/textures/tex1.png'
-import tex2 from '../../media/textures/tex2.png'
-import tex3 from '../../media/textures/tex3.png'
+// Textures live in /public so the URL is stable across deploys. We used to
+// import them from src/media (which bundles them through next/image with a
+// content hash), but that hash changes on every build — so any cover design
+// saved with the old URL would 404 after the next deploy. Using /textures/*.png
+// from /public keeps the path byte-identical forever.
+const tex1 = { src: '/textures/tex1.png' }
+const tex2 = { src: '/textures/tex2.png' }
+const tex3 = { src: '/textures/tex3.png' }
 
 const TEXTURES = [tex1, tex2, tex3]
 const FRAMES = [frame1, frame2, frame3, frame4]

@@ -1,6 +1,7 @@
 'use client'
 
 import { normalizeBlessing } from '@/lib/normalizeText'
+import { resolveTextureUrl } from '@/lib/resolveAsset'
 
 const BASE_SIZE = 2362
 
@@ -10,6 +11,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
     // blessings are already normalized on the way in, so this is a no-op for
     // them.
     const cleanText = normalizeBlessing(entry.text)
+    const resolvedTexture = resolveTextureUrl(styleSettings.texture)
     const hasName = Boolean(entry.name)
     const hasText = Boolean(cleanText)
     const hasImage = Boolean(entry.imageUrl)
@@ -29,7 +31,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 width: '100%',
                 height: '100%',
                 backgroundColor: styleSettings.backgroundColor,
-                backgroundImage: styleSettings.texture ? `url(${styleSettings.texture})` : 'none',
+                backgroundImage: resolvedTexture ? `url(${resolvedTexture})` : 'none',
                 backgroundRepeat: 'repeat',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
