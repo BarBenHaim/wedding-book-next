@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
-import { useParams, useSearchParams } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import HTMLFlipBook from 'react-pageflip'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage, db } from '@/lib/firebaseClient'
@@ -44,7 +44,6 @@ const COVER_CONFIG = {
 
 export default function BookViewer() {
     const { weddingId } = useParams()
-    const searchParams = useSearchParams()
 
     const [pages, setPages] = useState([])
     const [loading, setLoading] = useState(true)
@@ -64,7 +63,18 @@ export default function BookViewer() {
     // Lulu-compliant format and trigger browser downloads instead of uploading
     // to Firebase / calling the Lulu order API. The live print-order flow is
     // untouched.
-    const autoExportFormatId = searchParams?.get('autoExport') || null
+    //
+    // We read the param from window.location.search in an effect instead of
+    // next/navigation's useSearchParams(). In Next.js 15 useSearchParams()
+    // requires a <Suspense> boundary at build-time; since we only need the
+    // value client-side for a side effect, reading from window is simpler
+    // and keeps the build green.
+    const [autoExportFormatId, setAutoExportFormatId] = useState(null)
+    useEffect(() => {
+        if (typeof window === 'undefined') return
+        const params = new URLSearchParams(window.location.search)
+        setAutoExportFormatId(params.get('autoExport'))
+    }, [])
     const autoExportFormat = autoExportFormatId ? BOOK_FORMATS[autoExportFormatId] : null
     const [exportStatus, setExportStatus] = useState('idle') // 'idle' | 'generating' | 'done' | 'error'
     const [exportMessage, setExportMessage] = useState('')
