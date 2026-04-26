@@ -105,16 +105,33 @@ export default function TextPage() {
         if (!text.trim() || !photoUrl) return
 
         setSubmitting(true)
-        try {
-            let finalBlob = photoBlob
 
-            // Apply crop if the user uploaded from gallery
-            if (isUpload && photoUrl && croppedAreaPixels) {
+        // Step 1 — produce the final image blob (with crop if needed).
+        // Failures here are LOCAL (canvas / decode), not network. We want
+        // to fall back gracefully to "save without image" instead of
+        // blocking the whole blessing.
+        let finalBlob = photoBlob
+        let imageProcessingError = null
+
+        if (isUpload && photoUrl && croppedAreaPixels) {
+            try {
+                // Guard against degenerate crop boxes that the cropper can
+                // briefly emit (zero width/height crashes canvas creation).
+                if (
+                    !croppedAreaPixels.width ||
+                    !croppedAreaPixels.height ||
+                    croppedAreaPixels.width < 1 ||
+                    croppedAreaPixels.height < 1
+                ) {
+                    throw new Error('crop-invalid-size')
+                }
+
                 const image = await createImage(photoUrl)
                 const canvas = document.createElement('canvas')
                 canvas.width = croppedAreaPixels.width
                 canvas.height = croppedAreaPixels.height
                 const ctx = canvas.getContext('2d')
+                if (!ctx) throw new Error('canvas-no-2d-context')
 
                 ctx.drawImage(
                     image,
@@ -128,23 +145,50 @@ export default function TextPage() {
                     croppedAreaPixels.height,
                 )
 
-                await new Promise(resolve => {
+                const cropped = await new Promise((resolve, reject) => {
                     canvas.toBlob(
                         blob => {
-                            finalBlob = blob
-                            resolve()
+                            // Some browsers (low memory / large images) call
+                            // back with null instead of throwing. Treat that
+                            // as an error so we can fall back.
+                            if (!blob) reject(new Error('toblob-null'))
+                            else resolve(blob)
                         },
                         'image/jpeg',
                         0.95,
                     )
                 })
+                finalBlob = cropped
+            } catch (err) {
+                console.error('[photo] image processing failed:', err)
+                imageProcessingError = err
+                // Fall back to the un-cropped original blob if we have one.
+                // Better to ship the full photo than nothing.
+                if (photoBlob) {
+                    finalBlob = photoBlob
+                    imageProcessingError = null // recovered
+                }
             }
+        }
 
-            // Persist locally — this is what makes the "just works offline"
-            // promise actually hold. Even if the tab crashes right now, the
-            // blessing is safe on the device. We store the blob at full
-            // quality (the original toBlob above is JPEG q=0.95, matching
-            // the pre-offline-queue behavior exactly).
+        // If image processing definitively failed AND we have no blob to
+        // ship, ask the user whether to save without a photo.
+        if (imageProcessingError && !finalBlob) {
+            const proceed = window.confirm(
+                'בעיה בעיבוד התמונה (יכול להיות שהיא גדולה מדי או בפורמט לא נתמך). ' +
+                    'האם לשלוח את הברכה בלי תמונה?',
+            )
+            if (!proceed) {
+                setSubmitting(false)
+                return
+            }
+            finalBlob = null
+        }
+
+        // Step 2 — persist to IndexedDB. This is local-only; the actual
+        // network upload happens on the thanks page. Failures here are
+        // about the browser's storage, NOT WiFi.
+        try {
             await enqueue({
                 weddingId,
                 name: name || '',
@@ -152,11 +196,28 @@ export default function TextPage() {
                 image: finalBlob,
             })
 
-            // Off to the thanks screen. It handles the actual upload.
+            // Off to the thanks screen. It handles the actual network upload
+            // with retry + offline queue.
             router.push(`/wedding/${weddingId}/thanks`)
         } catch (err) {
-            console.error(err)
-            alert('לא ניתן לשמור את הברכה. בדוק את חיבור ה-Wi-Fi שלך')
+            console.error('[photo] enqueue failed:', err)
+            const msg = err?.message || String(err)
+            // Categorize so the message matches the actual failure mode.
+            // The old "check your WiFi" message was misleading because
+            // enqueue is a local IndexedDB write — it has nothing to do
+            // with the network.
+            let userMessage
+            if (/IndexedDB|indexeddb/i.test(msg)) {
+                userMessage =
+                    'הדפדפן שלך לא תומך בשמירה מקומית (אולי גלישה פרטית?). ' +
+                    'נסה להשתמש בדפדפן רגיל (Chrome / Safari רגיל) ולא במצב פרטי.'
+            } else if (/quota|QuotaExceeded/i.test(msg)) {
+                userMessage =
+                    'הזיכרון של הדפדפן מלא. נסה לפנות מקום במכשיר או לסגור טאבים אחרים.'
+            } else {
+                userMessage = `לא ניתן לשמור את הברכה. (${msg})`
+            }
+            alert(userMessage)
             setSubmitting(false)
         }
     }
@@ -165,8 +226,13 @@ export default function TextPage() {
         return new Promise((resolve, reject) => {
             const img = new Image()
             img.addEventListener('load', () => resolve(img))
-            img.addEventListener('error', error => reject(error))
-            img.setAttribute('crossOrigin', 'anonymous')
+            img.addEventListener('error', () => reject(new Error('image-load-failed')))
+            // IMPORTANT: do NOT set crossOrigin for blob: URLs.
+            // On iOS Safari, setting crossOrigin='anonymous' on a blob URL
+            // makes the load fail silently (Safari treats it as a CORS request
+            // and rejects). Only blob URLs are passed here (from camera capture
+            // or `<input type=file>`), and they're always same-origin, so we
+            // don't need CORS at all.
             img.src = url
         })
     }
