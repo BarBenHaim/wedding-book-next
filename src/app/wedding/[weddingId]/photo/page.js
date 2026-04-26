@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Cropper from 'react-easy-crop'
-import { enqueue } from '../../../../lib/offlineQueue'
+import { enqueue, genId } from '../../../../lib/offlineQueue'
+import { uploadQueuedEntry } from '../../../../lib/uploadEntry'
 import { normalizeBlessing } from '../../../../lib/normalizeText'
 
 export default function TextPage() {
@@ -185,37 +186,80 @@ export default function TextPage() {
             finalBlob = null
         }
 
-        // Step 2 — persist to IndexedDB. This is local-only; the actual
-        // network upload happens on the thanks page. Failures here are
-        // about the browser's storage, NOT WiFi.
-        try {
-            await enqueue({
-                weddingId,
-                name: name || '',
-                text: normalizeBlessing(text),
-                image: finalBlob,
-            })
+        // Step 2 — persist + upload. Two-tier strategy:
+        //
+        // Tier 1 (preferred): IDB enqueue → optimistic redirect → upload
+        //   on the thanks page. Best UX: guest sees "thanks!" instantly,
+        //   the upload happens with retry + survives bad reception.
+        //
+        // Tier 2 (fallback): direct upload to Firebase. Used when IDB
+        //   throws — common on iOS Safari with strict cookie/storage
+        //   settings, or in private mode. Slower (we wait for the upload)
+        //   but it actually works.
+        //
+        // The old code only had tier 1, so guests with strict iOS Safari
+        // settings could never submit. The fallback ensures everyone
+        // can blesss successfully, even if they pay a few seconds for it.
 
-            // Off to the thanks screen. It handles the actual network upload
-            // with retry + offline queue.
+        const entry = {
+            id: genId(),
+            weddingId,
+            name: name || '',
+            text: normalizeBlessing(text),
+            image: finalBlob,
+        }
+
+        // Tier 1 — try IDB enqueue.
+        let enqueued = false
+        try {
+            await enqueue(entry)
+            enqueued = true
+        } catch (err) {
+            // Don't surface to user yet. Log for debugging and try direct
+            // upload instead. IDB rejections often surface with a null
+            // error object (Safari) — guard against that in logging.
+            console.warn(
+                '[photo] IDB enqueue failed, falling back to direct upload:',
+                err?.message || err?.name || 'unknown IDB error',
+                err,
+            )
+        }
+
+        if (enqueued) {
+            // Off to the thanks screen — it handles the network upload
+            // with retry + status UI.
+            router.push(`/wedding/${weddingId}/thanks`)
+            return
+        }
+
+        // Tier 2 — direct upload to Firebase. uploadQueuedEntry tries
+        // to update the IDB record as well; that update is harmless if
+        // the record never made it into IDB (it just no-ops).
+        try {
+            await uploadQueuedEntry(entry)
+            // Success — go to the thanks screen. The thanks page will
+            // not find this entry in IDB, but it'll show the standard
+            // thank-you state (no pending items).
             router.push(`/wedding/${weddingId}/thanks`)
         } catch (err) {
-            console.error('[photo] enqueue failed:', err)
-            const msg = err?.message || String(err)
-            // Categorize so the message matches the actual failure mode.
-            // The old "check your WiFi" message was misleading because
-            // enqueue is a local IndexedDB write — it has nothing to do
-            // with the network.
+            console.error('[photo] direct upload also failed:', err)
+            const rawMsg = err?.message || err?.name || ''
             let userMessage
-            if (/IndexedDB|indexeddb/i.test(msg)) {
+            if (
+                /Failed to fetch|NetworkError|network|ETIMEDOUT|ERR_INTERNET/i.test(
+                    rawMsg,
+                )
+            ) {
                 userMessage =
-                    'הדפדפן שלך לא תומך בשמירה מקומית (אולי גלישה פרטית?). ' +
-                    'נסה להשתמש בדפדפן רגיל (Chrome / Safari רגיל) ולא במצב פרטי.'
-            } else if (/quota|QuotaExceeded/i.test(msg)) {
+                    'אין חיבור לאינטרנט. הברכה לא נשלחה — בדוק את החיבור ונסה שוב.'
+            } else if (/permission|PERMISSION_DENIED|unauthor/i.test(rawMsg)) {
                 userMessage =
-                    'הזיכרון של הדפדפן מלא. נסה לפנות מקום במכשיר או לסגור טאבים אחרים.'
+                    'אין הרשאה לשליחת הברכה. צור קשר עם בעל האירוע.'
+            } else if (rawMsg) {
+                userMessage = `לא ניתן לשלוח את הברכה. (${rawMsg})`
             } else {
-                userMessage = `לא ניתן לשמור את הברכה. (${msg})`
+                userMessage =
+                    'לא ניתן לשלוח את הברכה כרגע. נסה שוב בעוד רגע, ואם זה ממשיך — נסה דפדפן אחר.'
             }
             alert(userMessage)
             setSubmitting(false)

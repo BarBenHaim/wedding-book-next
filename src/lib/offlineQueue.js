@@ -128,25 +128,39 @@ export async function listUnsent(weddingId) {
     return all.filter(e => e.status !== 'done')
 }
 
-/** Patches an entry. Silently no-ops if the record is gone. */
+/** Patches an entry. Silently no-ops if the record is gone OR if IDB
+ * is unavailable. Best-effort: callers use it to bookkeep retry state,
+ * not for anything load-bearing. We don't want a broken IDB on iOS
+ * Safari to break a successful Firebase upload. */
 export async function updateEntry(id, patch) {
-    const { store, tx } = await txStore('readwrite')
-    const existing = await reqPromise(store.get(id))
-    if (!existing) {
+    try {
+        const { store, tx } = await txStore('readwrite')
+        const existing = await reqPromise(store.get(id))
+        if (!existing) {
+            await txDone(tx)
+            return null
+        }
+        const next = { ...existing, ...patch }
+        store.put(next)
         await txDone(tx)
+        return next
+    } catch (err) {
+        // IDB unavailable / quota / private mode — log once and move on.
+        console.warn('[offlineQueue] updateEntry no-op (IDB unavailable):', err?.message || err?.name || err)
         return null
     }
-    const next = { ...existing, ...patch }
-    store.put(next)
-    await txDone(tx)
-    return next
 }
 
-/** Removes an entry entirely. */
+/** Removes an entry entirely. Silently no-ops on IDB failure (same
+ * reasoning as updateEntry). */
 export async function removeEntry(id) {
-    const { store, tx } = await txStore('readwrite')
-    store.delete(id)
-    await txDone(tx)
+    try {
+        const { store, tx } = await txStore('readwrite')
+        store.delete(id)
+        await txDone(tx)
+    } catch (err) {
+        console.warn('[offlineQueue] removeEntry no-op (IDB unavailable):', err?.message || err?.name || err)
+    }
 }
 
 /** Count pending entries for a wedding (handy for UI badges). */
