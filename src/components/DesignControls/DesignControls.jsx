@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage } from '@/lib/firebaseClient'
-import { heebo, frankRuhl, secular, davidLibre, notoHebrew } from '@/app/fonts'
+import { heebo, frankRuhl, secular, davidLibre, notoHebrew, gveretLevin } from '@/app/fonts'
 
 /* --- נכסים --- */
 import frame1 from '../../media/frames/frame1.png'
@@ -96,6 +96,7 @@ const FONTS = [
     { font: davidLibre, label: 'David Libre' },
     { font: heebo, label: 'Heebo' },
     { font: secular, label: 'Secular One' },
+    { font: gveretLevin, label: 'גברת לוין' },
 ]
 
 /* --- רכיבי UX מתקדמים --- */
