@@ -2,10 +2,30 @@
 
 import { normalizeBlessing } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
+import PolaroidPageLayout from '../PolaroidPageLayout/PolaroidPageLayout'
 
 const BASE_SIZE = 2362
 
 export default function BookPageTemplate({ entry, styleSettings, scaledWidth, scaledHeight }) {
+    // ── Layout dispatcher ────────────────────────────────────────────────
+    // Branch on `styleSettings.template` BEFORE any classic-template logic.
+    // Adding a new template? Add a branch here, build a sibling layout
+    // component, and add the matching preset in DesignControls so the
+    // user can pick it. Keep all branches mutually exclusive — they get
+    // the same (entry, styleSettings, scaledWidth, scaledHeight) props
+    // so they're swappable inside any of the three render canvases.
+    if (styleSettings?.template === 'polaroid') {
+        return (
+            <PolaroidPageLayout
+                entry={entry}
+                styleSettings={styleSettings}
+                scaledWidth={scaledWidth}
+                scaledHeight={scaledHeight}
+            />
+        )
+    }
+
+    // ── Classic layout (default) ─────────────────────────────────────────
     // Auto-clean the blessing at display time so legacy entries with extra
     // blank lines / runs of spaces don't overflow the page. Newly submitted
     // blessings are already normalized on the way in, so this is a no-op for

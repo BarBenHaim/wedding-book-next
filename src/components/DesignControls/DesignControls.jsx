@@ -22,12 +22,18 @@ const tex3 = { src: '/textures/tex3.png' }
 const TEXTURES = [tex1, tex2, tex3]
 const FRAMES = [frame1, frame2, frame3, frame4]
 
-/* --- נתונים קבועים --- */
+/* --- נתונים קבועים ---
+ *
+ * Every preset must include a `template` field so switching presets always
+ * resets the layout cleanly. Otherwise a user who picked 'פולארויד' and
+ * then clicked 'קלאסי לבן' would still see the polaroid layout (because
+ * `template: 'polaroid'` would persist from the previous preset). */
 const PRESETS = [
     {
         name: 'קלאסי לבן',
         preview: '#ffffff',
         values: {
+            template: 'classic',
             backgroundColor: '#ffffff',
             fontClass: heebo.className,
             fontColor: '#000000',
@@ -44,6 +50,7 @@ const PRESETS = [
         name: 'שמנת אלגנטי',
         preview: '#fdf6ec',
         values: {
+            template: 'classic',
             backgroundColor: '#fdf6ec',
             fontClass: heebo.className,
             fontColor: '#000000',
@@ -60,6 +67,7 @@ const PRESETS = [
         name: 'ציור',
         preview: '#c4b5ecff',
         values: {
+            template: 'classic',
             backgroundColor: '#c4b5ecff',
             fontClass: heebo.className,
             fontColor: '#000000',
@@ -76,6 +84,7 @@ const PRESETS = [
         name: 'מסגרת מרובעת',
         preview: '#ffffff',
         values: {
+            template: 'classic',
             backgroundColor: '#ffffff',
             fontClass: heebo.className,
             fontColor: '#000000',
@@ -86,6 +95,22 @@ const PRESETS = [
             nameMarginTop: 1.5,
             textMaxWidth: 70,
             imageMarginTop: 8,
+        },
+    },
+    {
+        // Polaroid template — uses the dedicated PolaroidPageLayout
+        // (not the classic renderer). The ornate-frame texture lives at
+        // /public/textures/polaroid-frame.png; the layout is sized so the
+        // photo + signature fit inside the inner clear area of that frame.
+        name: 'פולארויד',
+        preview: '#fcfaf6',
+        values: {
+            template: 'polaroid',
+            backgroundColor: '#fcfaf6',
+            fontClass: gveretLevin.className,
+            fontColor: '#3d2e1a',
+            texture: '/textures/polaroid-frame.png',
+            frame: null,
         },
     },
 ]
