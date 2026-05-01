@@ -9,10 +9,14 @@ import frame1 from '../../media/frames/frame1.png'
 import frame2 from '../../media/frames/frame2.png'
 import frame3 from '../../media/frames/frame3.png'
 import frame4 from '../../media/frames/frame4.png'
+import { frame } from 'framer-motion'
 
 const tex1 = { src: '/textures/tex1.png' }
 const tex2 = { src: '/textures/tex2.png' }
 const tex3 = { src: '/textures/tex3.png' }
+const tex4 = { src: '/textures/tex4.png' }
+const tex5 = { src: '/textures/tex5.png' }
+const tex6 = { src: '/textures/tex6.png' }
 
 const TEXTURES = [tex1, tex2, tex3]
 const FRAMES = [frame1, frame2, frame3, frame4]
@@ -42,6 +46,7 @@ const PRESETS = [
             imageMarginTop: 2,
         },
     },
+
     {
         name: 'שמנת אלגנטי',
         preview: '#fdf6ec',
@@ -100,25 +105,14 @@ const PRESETS = [
         preview: '#fcfaf6',
         values: {
             template: 'polaroid',
-            backgroundColor: '#fcfaf6',
+            backgroundColor: '#ffffff',
             fontClass: gveretLevin.className,
             fontColor: '#3d2e1a',
             texture: tex1.src,
             frame: null,
         },
     },
-    {
-        name: 'סקרפבוק',
-        preview: '#fdf9ee',
-        values: {
-            template: 'scrapbook',
-            backgroundColor: '#fdf9ee',
-            fontClass: gveretLevin.className,
-            fontColor: '#5a4836',
-            texture: tex2.src,
-            frame: null,
-        },
-    },
+
     {
         name: 'יומן ברכות',
         preview: '#f7f1e3',
@@ -133,10 +127,10 @@ const PRESETS = [
     },
     {
         name: "קולאז' חי",
-        preview: '#fbf6e9',
+        preview: '#ffffff',
         values: {
             template: 'collage',
-            backgroundColor: '#fbf6e9',
+            backgroundColor: '#ffffff',
             fontClass: gveretLevin.className,
             fontColor: '#3d2e1a',
             texture: null,
