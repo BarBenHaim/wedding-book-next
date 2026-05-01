@@ -55,10 +55,7 @@ function Heart({ color = GOLD, filled = false, size = '0.95em' }) {
 function Sparkle({ size = '1em', color = GOLD }) {
     return (
         <svg viewBox='0 0 24 24' style={{ width: size, height: size, display: 'inline-block' }}>
-            <path
-                d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z'
-                fill={color}
-            />
+            <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' fill={color} />
         </svg>
     )
 }
@@ -75,7 +72,7 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
 
     // Photo positioned absolutely so we can tilt it freely + overlap with
     // the surrounding ephemera. 4:3 always preserved.
-    const photoWidth = w(58)
+    const photoWidth = w(70)
     const photoHeight = photoWidth * 0.75
     const printBorder = w(1.2)
 
@@ -110,28 +107,13 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
                 <Sparkle size={h(2.2) + 'px'} color={GOLD_LIGHT} />
             </div>
 
-            {/* ── Tilted "ribbon" strip across the upper-left ── */}
-            <div
-                style={{
-                    position: 'absolute',
-                    top: h(8),
-                    right: -w(5),
-                    width: w(35),
-                    height: h(1.8),
-                    background: 'linear-gradient(90deg, ' + GOLD_LIGHT + ' 0%, ' + GOLD + ' 100%)',
-                    transform: 'rotate(-8deg)',
-                    opacity: 0.65,
-                    borderRadius: 1,
-                }}
-            />
-
             {/* ── Photo with washi-tape (rotated +3°) ── */}
             {hasImage && (
                 <div
                     style={{
                         position: 'absolute',
-                        top: h(18),
-                        left: w(20),
+                        top: h(10),
+                        left: w(15),
                         background: '#ffffff',
                         padding: printBorder,
                         transform: 'rotate(3deg)',
@@ -150,7 +132,7 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
                     <div
                         style={{
                             position: 'absolute',
-                            top: -h(1.2),
+                            top: -h(0.2),
                             left: -w(2),
                             width: w(11),
                             height: h(2),
@@ -174,60 +156,12 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
                 </div>
             )}
 
-            {/* ── "Date tag" — handwritten note pinned at angle ── */}
-            <div
-                style={{
-                    position: 'absolute',
-                    top: h(22),
-                    right: w(6),
-                    background: '#fefcf6',
-                    padding: h(1.2) + 'px ' + w(2.5) + 'px',
-                    transform: 'rotate(-6deg)',
-                    border: '1px solid rgba(170,136,64,0.3)',
-                    fontFamily: gveretLevin.style?.fontFamily || 'inherit',
-                    fontSize: h(1.6),
-                    color: GOLD,
-                    zIndex: 4,
-                }}
-                className={fontClass}
-            >
-                ❤︎ זיכרון
-            </div>
-
-            {/* ── "Ticket stub" graphic — bottom-left ── */}
-            <div
-                style={{
-                    position: 'absolute',
-                    bottom: h(20),
-                    left: w(8),
-                    width: w(16),
-                    height: h(7),
-                    background:
-                        'linear-gradient(135deg, #fefcf6 0%, #f7ecd5 100%)',
-                    border: '1px dashed rgba(170,136,64,0.45)',
-                    transform: 'rotate(-12deg)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: GOLD,
-                    fontSize: h(1.2),
-                    letterSpacing: '0.15em',
-                    fontWeight: 700,
-                    zIndex: 3,
-                }}
-            >
-                <div style={{ fontSize: h(1.0), opacity: 0.7 }}>WEDDING</div>
-                <div style={{ fontSize: h(2.0), margin: h(0.3) + 'px 0' }}>♥</div>
-                <div style={{ fontSize: h(1.0), opacity: 0.7 }}>TALES</div>
-            </div>
-
             {/* ── Blessing — handwritten, anchored bottom-right ── */}
             {hasText && (
                 <div
                     style={{
                         position: 'absolute',
-                        bottom: h(12),
+                        top: h(72),
                         right: w(10),
                         left: w(30),
                         textAlign: 'right',
@@ -258,14 +192,14 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
                     className={fontClass}
                     style={{
                         position: 'absolute',
-                        bottom: h(5),
-                        right: w(10),
+                        bottom: h(12),
+                        left: w(15),
                         fontSize: h(2.8),
                         color: GOLD,
                         display: 'flex',
                         alignItems: 'center',
                         gap: '0.3em',
-                        transform: 'rotate(-3deg)',
+                        transform: 'rotate(6deg)',
                         zIndex: 6,
                     }}
                 >
