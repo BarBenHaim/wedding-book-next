@@ -125,7 +125,6 @@ export default function PolaroidPageLayout({ entry, styleSettings, scaledWidth, 
                     style={{
                         background: '#ffffff',
                         padding: matSide + 'px ' + matSide + 'px ' + matBottom + 'px ' + matSide + 'px',
-                        boxShadow: '0 8px 22px rgba(0,0,0,0.15)',
                         transform: 'rotate(-2.5deg)',
                         marginBottom: h(3),
                         position: 'relative',

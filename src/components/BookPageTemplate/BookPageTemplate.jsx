@@ -3,27 +3,32 @@
 import { normalizeBlessing } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import PolaroidPageLayout from '../PolaroidPageLayout/PolaroidPageLayout'
+import ScrapbookPageLayout from '../ScrapbookPageLayout/ScrapbookPageLayout'
+import NotebookPageLayout from '../NotebookPageLayout/NotebookPageLayout'
+import CollagePageLayout from '../CollagePageLayout/CollagePageLayout'
 
 const BASE_SIZE = 2362
 
 export default function BookPageTemplate({ entry, styleSettings, scaledWidth, scaledHeight }) {
     // ── Layout dispatcher ────────────────────────────────────────────────
     // Branch on `styleSettings.template` BEFORE any classic-template logic.
-    // Adding a new template? Add a branch here, build a sibling layout
-    // component, and add the matching preset in DesignControls so the
-    // user can pick it. Keep all branches mutually exclusive — they get
-    // the same (entry, styleSettings, scaledWidth, scaledHeight) props
-    // so they're swappable inside any of the three render canvases.
-    if (styleSettings?.template === 'polaroid') {
-        return (
-            <PolaroidPageLayout
-                entry={entry}
-                styleSettings={styleSettings}
-                scaledWidth={scaledWidth}
-                scaledHeight={scaledHeight}
-            />
-        )
-    }
+    // Keep ACTIVE templates here; retired layouts stay on disk as orphan
+    // code (no import, no branch) so they can be re-enabled later if the
+    // user changes their mind.
+    //
+    // Active templates: polaroid, scrapbook, notebook, collage. Anything
+    // else (incl. legacy values that may live in older Firestore docs)
+    // falls through to the classic renderer below.
+    //
+    // Retired (orphan files, no import):
+    //   editorial, diptych, locket, story, minimal, hero, fullbleed,
+    //   ketubah, stamp, confetti, poster — pruned in the spring 2026
+    //   curation pass after side-by-side review.
+    const passThrough = { entry, styleSettings, scaledWidth, scaledHeight }
+    if (styleSettings?.template === 'polaroid') return <PolaroidPageLayout {...passThrough} />
+    if (styleSettings?.template === 'scrapbook') return <ScrapbookPageLayout {...passThrough} />
+    if (styleSettings?.template === 'notebook') return <NotebookPageLayout {...passThrough} />
+    if (styleSettings?.template === 'collage') return <CollagePageLayout {...passThrough} />
 
     // ── Classic layout (default) ─────────────────────────────────────────
     // Auto-clean the blessing at display time so legacy entries with extra
@@ -98,7 +103,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
             {/* תמונה */}
             {hasImage && (
                 <div
-                    className='rounded-xl shadow-md relative'
+                    className='rounded-xl relative'
                     style={{
                         width: w(styleSettings.imageStyle?.width ?? 90),
                         height: h(styleSettings.imageStyle?.height ?? 70),

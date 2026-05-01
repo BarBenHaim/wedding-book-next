@@ -5,16 +5,11 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { storage } from '@/lib/firebaseClient'
 import { heebo, frankRuhl, secular, davidLibre, notoHebrew, gveretLevin } from '@/app/fonts'
 
-/* --- נכסים --- */
 import frame1 from '../../media/frames/frame1.png'
 import frame2 from '../../media/frames/frame2.png'
 import frame3 from '../../media/frames/frame3.png'
 import frame4 from '../../media/frames/frame4.png'
-// Textures live in /public so the URL is stable across deploys. We used to
-// import them from src/media (which bundles them through next/image with a
-// content hash), but that hash changes on every build — so any cover design
-// saved with the old URL would 404 after the next deploy. Using /textures/*.png
-// from /public keeps the path byte-identical forever.
+
 const tex1 = { src: '/textures/tex1.png' }
 const tex2 = { src: '/textures/tex2.png' }
 const tex3 = { src: '/textures/tex3.png' }
@@ -22,13 +17,14 @@ const tex3 = { src: '/textures/tex3.png' }
 const TEXTURES = [tex1, tex2, tex3]
 const FRAMES = [frame1, frame2, frame3, frame4]
 
-/* --- נתונים קבועים ---
- *
- * Every preset must include a `template` field so switching presets always
- * resets the layout cleanly. Otherwise a user who picked 'פולארויד' and
- * then clicked 'קלאסי לבן' would still see the polaroid layout (because
- * `template: 'polaroid'` would persist from the previous preset). */
+/* PRESETS — every entry must include `template`. After the spring 2026
+ * curation pass: 4 originals + 4 vintage memory-book templates. The
+ * Modern Card and Specialty/Experimental families were trimmed; their
+ * layout files remain on disk as orphan code so they can be re-enabled
+ * without rebuilding (just re-add the import + dispatcher branch + a
+ * preset entry here). */
 const PRESETS = [
+    // ─── Original classic templates (do not edit) ───────────────────────
     {
         name: 'קלאסי לבן',
         preview: '#ffffff',
@@ -58,9 +54,9 @@ const PRESETS = [
             frame: frame1.src,
             fontSizePercent: 2.5,
             imageStyle: { width: 75, height: 65 },
-            nameMarginTop: 8,
+            nameMarginTop: 7.5,
             textMaxWidth: 70,
-            imageMarginTop: 2,
+            imageMarginTop: 0,
         },
     },
     {
@@ -97,11 +93,9 @@ const PRESETS = [
             imageMarginTop: 8,
         },
     },
+
+    // ─── Vintage memory-book ────────────────────────────────────────────
     {
-        // Polaroid template — uses the dedicated PolaroidPageLayout
-        // (not the classic renderer). The ornate-frame texture lives at
-        // /public/textures/polaroid-frame.png; the layout is sized so the
-        // photo + signature fit inside the inner clear area of that frame.
         name: 'פולארויד',
         preview: '#fcfaf6',
         values: {
@@ -109,7 +103,43 @@ const PRESETS = [
             backgroundColor: '#fcfaf6',
             fontClass: gveretLevin.className,
             fontColor: '#3d2e1a',
-            texture: '/textures/polaroid-frame.png',
+            texture: tex1.src,
+            frame: null,
+        },
+    },
+    {
+        name: 'סקרפבוק',
+        preview: '#fdf9ee',
+        values: {
+            template: 'scrapbook',
+            backgroundColor: '#fdf9ee',
+            fontClass: gveretLevin.className,
+            fontColor: '#5a4836',
+            texture: tex2.src,
+            frame: null,
+        },
+    },
+    {
+        name: 'יומן ברכות',
+        preview: '#f7f1e3',
+        values: {
+            template: 'notebook',
+            backgroundColor: '#f7f1e3',
+            fontClass: gveretLevin.className,
+            fontColor: '#3d2e1a',
+            texture: null,
+            frame: null,
+        },
+    },
+    {
+        name: "קולאז' חי",
+        preview: '#fbf6e9',
+        values: {
+            template: 'collage',
+            backgroundColor: '#fbf6e9',
+            fontClass: gveretLevin.className,
+            fontColor: '#3d2e1a',
+            texture: null,
             frame: null,
         },
     },
@@ -124,9 +154,6 @@ const FONTS = [
     { font: gveretLevin, label: 'גברת לוין' },
 ]
 
-/* --- רכיבי UX מתקדמים --- */
-
-// רכיב אינפוט חכם
 const BufferedInput = ({ value, onChange, placeholder, className }) => {
     const [localValue, setLocalValue] = useState(value || '')
 
@@ -152,7 +179,6 @@ const BufferedInput = ({ value, onChange, placeholder, className }) => {
     )
 }
 
-// 🔥 רכיב משטח שליטה (Joystick) למיקום התמונה
 const PositionPad = ({ x, y, onChange }) => {
     const containerRef = useRef(null)
     const [isDragging, setIsDragging] = useState(false)
@@ -160,9 +186,6 @@ const PositionPad = ({ x, y, onChange }) => {
     const handleMove = (clientX, clientY) => {
         if (!containerRef.current) return
         const rect = containerRef.current.getBoundingClientRect()
-        // Guard against a zero-size rect during initial render — division by
-        // zero gives NaN, which Firestore then rejects ("invalid nested
-        // entity") and every subsequent autosave fails.
         if (!rect.width || !rect.height) return
 
         let newX = ((clientX - rect.left) / rect.width) * 100
@@ -242,7 +265,6 @@ const Card = ({ title, children, className = '' }) => (
     </div>
 )
 
-/* --- הקומפוננטה הראשית --- */
 export default function DesignControls({ settings, onChange, mode, onModeChange, saveStatus = 'idle', weddingId }) {
     const [activePreset, setActivePreset] = useState(null)
     const [uploadingCover, setUploadingCover] = useState(false)
@@ -252,11 +274,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
         onChange(preset.values)
     }
 
-    // Upload cover image to Firebase Storage and store only the download URL
-    // in settings. We used to inline the base64 data URL into `coverImage`,
-    // which blew past Firestore's ~1MB string-field limit and caused every
-    // subsequent autosave to fail with "invalid nested entity".
-    const handleImageUpload = async (e) => {
+    const handleImageUpload = async e => {
         const file = e.target.files[0]
         if (!file) return
 
@@ -278,9 +296,6 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
             }
         }
 
-        // Fallback (no weddingId — editor open in preview mode): read as a
-        // data URL. The viewer's save handler will migrate it to Storage on
-        // the next save.
         const reader = new FileReader()
         reader.onloadend = () => {
             onChange({ ...settings, coverImage: reader.result })
@@ -290,8 +305,6 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
 
     return (
         <div dir='rtl' className='flex flex-col gap-3 h-full bg-[#faf8f5] p-3'>
-
-            {/* ── Save Status Indicator ── */}
             <div className='flex items-center justify-end h-5 px-1 shrink-0'>
                 {saveStatus === 'saving' && (
                     <span className='flex items-center gap-1.5 text-[11px] text-gray-400 font-medium'>
@@ -308,7 +321,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                     </span>
                 )}
             </div>
-            {/* ── טאבים ראשיים ── */}
+
             <div className='bg-[#ebe5da]/60 p-1 rounded-xl flex gap-1 shadow-inner shrink-0'>
                 <button
                     onClick={() => onModeChange('book')}
@@ -328,9 +341,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                 </button>
             </div>
 
-            {/* Controls area */}
             <div className='flex-1 overflow-y-auto pr-0.5 pl-0.5 space-y-4 pb-10 scrollbar-hide'>
-                {/* === מצב ספר === */}
                 {mode === 'book' && (
                     <div className='space-y-4 animate-fadeIn'>
                         <Card title='סגנונות מוכנים'>
@@ -381,7 +392,6 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                     </div>
                 )}
 
-                {/* === מצב כריכה === */}
                 {mode === 'cover' && (
                     <div className='animate-fadeIn space-y-4'>
                         <Card title='טקסט כריכה'>
@@ -389,7 +399,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                 <BufferedInput
                                     value={settings.coverTitle}
                                     onChange={val => onChange({ ...settings, coverTitle: val })}
-                                    placeholder='כותרת (למשל: החתונה של...)'
+                                    placeholder='כותרת'
                                     className='w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#c9a44e]/30 outline-none'
                                 />
                                 <BufferedInput
@@ -420,10 +430,8 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                 </button>
                             </div>
 
-                            {/* 🧭 מיקום הטקסט על הכריכה – 9 עוגנים */}
                             <div className='mt-4 pt-3 border-t border-gray-100'>
                                 <div className='text-xs text-gray-500 mb-2'>מיקום הטקסט</div>
-                                {/* dir='ltr' כדי שהלחצנים ייראו ויזואלית כמו הכריכה (שמאל=שמאל, ימין=ימין) */}
                                 <div dir='ltr' className='grid grid-cols-3 gap-1.5 w-full max-w-[160px] mx-auto'>
                                     {['tl', 'tc', 'tr', 'cl', 'center', 'cr', 'bl', 'bc', 'br'].map(id => {
                                         const active = (settings.coverTextPosition || 'center') === id
@@ -431,9 +439,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                             <button
                                                 key={id}
                                                 type='button'
-                                                onClick={() =>
-                                                    onChange({ ...settings, coverTextPosition: id })
-                                                }
+                                                onClick={() => onChange({ ...settings, coverTextPosition: id })}
                                                 className={`aspect-square rounded-md border flex items-center justify-center transition-all ${
                                                     active
                                                         ? 'bg-[#F5F5F5] border-[#c9a44e] ring-1 ring-[#c9a44e]'
@@ -456,9 +462,25 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                         <Card title='תמונת כריכה'>
                             {!settings.coverImage ? (
                                 <label className='flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-[#AA8840]/30 rounded-xl cursor-pointer hover:bg-[#AA8840]/5 hover:border-[#c9a44e] transition-all duration-200'>
-                                    <svg className='w-8 h-8 text-[#AA8840]/40 mb-1.5' fill='none' viewBox='0 0 24 24' strokeWidth={1.5} stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' d='M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z' /><path strokeLinecap='round' strokeLinejoin='round' d='M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z' /></svg>
+                                    <svg
+                                        className='w-8 h-8 text-[#AA8840]/40 mb-1.5'
+                                        fill='none'
+                                        viewBox='0 0 24 24'
+                                        strokeWidth={1.5}
+                                        stroke='currentColor'
+                                    >
+                                        <path
+                                            strokeLinecap='round'
+                                            strokeLinejoin='round'
+                                            d='M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z'
+                                        />
+                                        <path
+                                            strokeLinecap='round'
+                                            strokeLinejoin='round'
+                                            d='M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z'
+                                        />
+                                    </svg>
                                     <span className='text-xs text-[#AA8840]/60 font-medium'>העלאת תמונה</span>
-                                    {/* 🔥 שימוש בפונקציה החדשה להעלאה */}
                                     <input
                                         type='file'
                                         accept='image/*'
@@ -468,7 +490,6 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                 </label>
                             ) : (
                                 <div className='space-y-4'>
-                                    {/* תצוגה מקדימה קטנה */}
                                     <div className='relative rounded-lg overflow-hidden border border-gray-200'>
                                         <img src={settings.coverImage} className='w-full h-32 object-cover' />
                                         <button
@@ -491,7 +512,6 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                         </button>
                                     </div>
 
-                                    {/* 🔥 המשטח החדש */}
                                     <PositionPad
                                         x={settings.coverImageX || 50}
                                         y={settings.coverImageY || 50}
@@ -500,16 +520,15 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                         }
                                     />
 
-                                    {/* סליידר לזום */}
                                     <div>
                                         <div className='flex justify-between text-[10px] text-gray-400 mb-1'>
-                                            <span>זום (Zoom)</span>
+                                            <span>זום</span>
                                             <span>{settings.coverImageScale || 100}%</span>
                                         </div>
                                         <input
                                             type='range'
                                             min={20}
-                                            max={500} // 🔥 הוגדל ל-500 לפי בקשתך
+                                            max={500}
                                             value={settings.coverImageScale || 100}
                                             onChange={e =>
                                                 onChange({ ...settings, coverImageScale: parseFloat(e.target.value) })
@@ -523,7 +542,6 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
 
                         <Card title='עיצוב ורקע'>
                             <div className='grid grid-cols-4 gap-2'>
-                                {/* כפתור אוטומטי (ברירת מחדל של הספר) */}
                                 <button
                                     onClick={() => onChange({ coverTexture: null, coverFrame: null })}
                                     className={`aspect-square rounded-lg flex flex-col items-center justify-center text-[10px] border transition-all ${
@@ -535,7 +553,6 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                     אוטומטי
                                 </button>
 
-                                {/* 🔥 כפתור ללא (נקי) */}
                                 <button
                                     onClick={() => onChange({ coverTexture: 'none', coverFrame: 'none' })}
                                     className={`aspect-square rounded-lg flex flex-col items-center justify-center text-[10px] border transition-all ${
@@ -547,11 +564,10 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                     ללא
                                 </button>
 
-                                {/* כפתורי טקסטורות */}
                                 {TEXTURES.map((tex, i) => (
                                     <button
                                         key={i}
-                                        onClick={() => onChange({ coverTexture: tex.src, coverFrame: 'none' })} // בחרתי שזה יבטל מסגרת אוטומטית כשבוחרים רקע
+                                        onClick={() => onChange({ coverTexture: tex.src, coverFrame: 'none' })}
                                         className={`aspect-square rounded-lg border overflow-hidden transition-all ${
                                             settings.coverTexture === tex.src
                                                 ? 'ring-2 ring-[#c9a44e] border-transparent'
@@ -563,7 +579,6 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                 ))}
                             </div>
                         </Card>
-
                     </div>
                 )}
             </div>
