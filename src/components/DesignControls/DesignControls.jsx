@@ -17,8 +17,11 @@ const tex3 = { src: '/textures/tex3.png' }
 const tex4 = { src: '/textures/tex4.png' }
 const tex5 = { src: '/textures/tex5.png' }
 const tex6 = { src: '/textures/tex6.png' }
+const tex7 = { src: '/textures/tex7.png' }
+const tex8 = { src: '/textures/tex8.png' }
+const tex9 = { src: '/textures/tex9.png' }
 
-const TEXTURES = [tex1, tex2, tex3]
+const TEXTURES = [tex1, tex2, tex3, tex4, tex5, tex6, tex7, tex8, tex9]
 const FRAMES = [frame1, frame2, frame3, frame4]
 
 /* PRESETS — every entry must include `template`. After the spring 2026
@@ -65,7 +68,7 @@ const PRESETS = [
         },
     },
     {
-        name: 'ציור',
+        name: 'פרחוני',
         preview: '#c4b5ecff',
         values: {
             template: 'classic',
@@ -108,20 +111,22 @@ const PRESETS = [
             backgroundColor: '#ffffff',
             fontClass: gveretLevin.className,
             fontColor: '#3d2e1a',
-            texture: tex1.src,
+            texture: tex5.src,
+            textureOpacity: 0.9, // ← זה
+
             frame: null,
         },
     },
 
     {
-        name: 'יומן ברכות',
+        name: 'חתונה',
         preview: '#f7f1e3',
         values: {
-            template: 'notebook',
+            template: 'classic',
             backgroundColor: '#f7f1e3',
             fontClass: gveretLevin.className,
             fontColor: '#3d2e1a',
-            texture: null,
+            texture: tex9.src,
             frame: null,
         },
     },
@@ -133,7 +138,8 @@ const PRESETS = [
             backgroundColor: '#ffffff',
             fontClass: gveretLevin.className,
             fontColor: '#3d2e1a',
-            texture: null,
+            texture: tex8.src,
+            textureOpacity: 0.2, // ← זה
             frame: null,
         },
     },

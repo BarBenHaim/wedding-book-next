@@ -104,8 +104,8 @@ export default function NotebookPageLayout({ entry, styleSettings, scaledWidth, 
             {hasImage && (
                 <div
                     style={{
-                        width: photoWidth,
-                        height: photoHeight,
+                        width: '100%',
+                        height: '70%',
                         background: 'url(' + entry.imageUrl + ') center/cover no-repeat',
                         flexShrink: 0,
                         zIndex: 1,

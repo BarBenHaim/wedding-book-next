@@ -91,6 +91,12 @@ export default function PolaroidPageLayout({ entry, styleSettings, scaledWidth, 
     const textColor = styleSettings.fontColor || '#3d2e1a'
     const fontClass = styleSettings.fontClass || ''
 
+    // Texture as its OWN absolutely-positioned layer so we can fade it
+    // independently of the page color. CSS has no direct opacity on
+    // background-image, so this is the cleanest way: the page bg-color
+    // shows through wherever the texture is faded. textureOpacity in [0,1].
+    const textureOpacity = styleSettings.textureOpacity ?? 1
+
     return (
         <div
             className='relative flex flex-col items-center box-border overflow-hidden'
@@ -98,14 +104,30 @@ export default function PolaroidPageLayout({ entry, styleSettings, scaledWidth, 
                 width: '100%',
                 height: '100%',
                 backgroundColor: styleSettings.backgroundColor || '#fcfaf6',
-                backgroundImage: resolvedTexture ? 'url(' + resolvedTexture + ')' : 'none',
-                backgroundRepeat: 'no-repeat',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
                 padding: h(10) + 'px ' + w(10) + 'px',
                 color: textColor,
             }}
         >
+            {/* Texture layer — separate so its opacity is independent of
+                the content above it. zIndex 0 keeps it behind everything;
+                pointer-events:none lets clicks pass through. */}
+            {resolvedTexture && (
+                <div
+                    aria-hidden
+                    style={{
+                        position: 'absolute',
+                        inset: 0,
+                        backgroundImage: 'url(' + resolvedTexture + ')',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        opacity: textureOpacity,
+                        pointerEvents: 'none',
+                        zIndex: 0,
+                    }}
+                />
+            )}
+
             {/* Optional overlay frame (rare for polaroid since texture
                 usually does the decorative work). Kept for parity with the
                 classic template so user choices in DesignControls always
