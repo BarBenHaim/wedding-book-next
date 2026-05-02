@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage } from '@/lib/firebaseClient'
-import { heebo, frankRuhl, secular, davidLibre, notoHebrew, gveretLevin } from '@/app/fonts'
+import { heebo, frankRuhl, secular, davidLibre, notoHebrew, gveretLevin, danaYad } from '@/app/fonts'
 
 import frame1 from '../../media/frames/frame1.png'
 import frame2 from '../../media/frames/frame2.png'
@@ -146,6 +146,7 @@ const FONTS = [
     { font: heebo, label: 'Heebo' },
     { font: secular, label: 'Secular One' },
     { font: gveretLevin, label: 'גברת לוין' },
+    { font: danaYad, label: 'דנה יד' },
 ]
 
 const BufferedInput = ({ value, onChange, placeholder, className }) => {

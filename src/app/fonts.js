@@ -53,3 +53,13 @@ export const gveretLevin = localFont({
     style: 'normal',
     display: 'swap',
 })
+
+// פונט מקומי — "דנה יד" (כתב יד עברי, אחות לגברת לוין).
+// משמש בעיצוב פנים הספר דרך FONTS ב-DesignControls.
+export const danaYad = localFont({
+    src: '../../public/fonts/DanaYadAlefAlefAlef-Normal.otf',
+    variable: '--font-dana-yad',
+    weight: '400',
+    style: 'normal',
+    display: 'swap',
+})
