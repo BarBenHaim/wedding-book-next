@@ -4,25 +4,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { auth } from '../../lib/firebaseClient'
 import { useRouter, usePathname } from 'next/navigation'
-import { collection, query, where, getDocs, limit } from 'firebase/firestore'
+import { collection, query, where, getDocs, limit, doc, getDoc } from 'firebase/firestore'
 import { db } from '../../lib/firebaseClient'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
 
 const SUPER_ADMIN_EMAIL = 'barbenbh@gmail.com'
-
-// The header is global chrome — it lives outside any wedding-doc context,
-// so it can't read locale from Firestore. Fall back to the browser's
-// preferred language. SSR safe: returns 'he' on the server.
-function detectBrowserLocale() {
-    if (typeof navigator === 'undefined') return 'he'
-    const raw = (navigator.language || '').toLowerCase()
-    if (raw.startsWith('he')) return 'he'
-    if (raw.startsWith('en')) return 'en'
-    if (raw.startsWith('es')) return 'es'
-    if (raw.startsWith('it')) return 'it'
-    return 'he'
-}
 
 // Drawer menu item icons
 const ViewerIcon = () => (
@@ -83,15 +70,18 @@ export default function Header() {
     const router = useRouter()
     const pathname = usePathname()
 
-    // Locale is detected from navigator.language, which is undefined on
-    // the server. To avoid hydration mismatches we render with the SSR
-    // default ('he') on first paint, then update once mounted on the
-    // client. The brief flash from Hebrew to the user's language only
-    // affects the chrome strings — short enough not to be noticeable.
+    // Locale resolution. The Header lives in the root layout and never
+    // unmounts, so reading navigator.language once at mount caused it to
+    // stick on whatever the browser language was — even after logout +
+    // login. Now we drive it off the active wedding doc instead:
+    //
+    //   • Anonymous / no wedding → Hebrew (system default).
+    //   • Logged-in with a wedding → wedding.locale from Firestore.
+    //
+    // The effect below re-runs whenever the active wedding id flips, so
+    // logging out (id becomes null) restores Hebrew, and logging back in
+    // picks the doc's locale fresh.
     const [locale, setLocale] = useState('he')
-    useEffect(() => {
-        setLocale(normalizeLocale(detectBrowserLocale()))
-    }, [])
     const t = useMemo(() => getMessages(locale).header, [locale])
 
     const weddingIdFromUrl = pathname.startsWith('/wedding/') ? pathname.split('/')[2] : null
@@ -125,6 +115,33 @@ export default function Header() {
 
     const activeId = weddingIdFromUrl ?? personalWeddingId
     const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL
+
+    // Resolve Header locale from the active wedding's locale. Re-runs on
+    // login/logout (activeId flips) and on cross-event navigation. Falls
+    // back to Hebrew when there's no active wedding.
+    useEffect(() => {
+        if (!activeId) {
+            setLocale('he')
+            return
+        }
+        let cancelled = false
+        ;(async () => {
+            try {
+                const snap = await getDoc(doc(db, 'weddings', activeId))
+                if (cancelled) return
+                if (snap.exists()) {
+                    setLocale(normalizeLocale(snap.data().locale))
+                } else {
+                    setLocale('he')
+                }
+            } catch {
+                setLocale('he')
+            }
+        })()
+        return () => {
+            cancelled = true
+        }
+    }, [activeId])
 
     async function handleLogout() {
         await signOut(auth)

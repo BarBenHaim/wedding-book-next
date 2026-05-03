@@ -1,25 +1,17 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { signInWithEmailAndPassword, getIdToken } from 'firebase/auth'
 import { collection, query, where, getDocs, limit } from 'firebase/firestore'
 import { auth, db } from '../../lib/firebaseClient'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getMessages } from '@/i18n/getMessages'
-import { normalizeLocale } from '@/i18n/locales'
 
 // Login is anonymous chrome — no wedding context to read locale from.
-// Mirrors the home page / Header pattern: detect from navigator.language.
-function detectBrowserLocale() {
-    if (typeof navigator === 'undefined') return 'he'
-    const raw = (navigator.language || '').toLowerCase()
-    if (raw.startsWith('he')) return 'he'
-    if (raw.startsWith('en')) return 'en'
-    if (raw.startsWith('es')) return 'es'
-    if (raw.startsWith('it')) return 'it'
-    return 'he'
-}
+// We default to Hebrew (the SaaS's primary language) instead of sniffing
+// the browser, which historically caused users with English-set browsers
+// to see an English login screen even though they were Hebrew customers.
 
 export default function LoginPage() {
     const [email, setEmail] = useState('')
@@ -29,13 +21,7 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false)
     const router = useRouter()
 
-    // SSR-safe locale detection: render Hebrew on first paint to match
-    // server output, then swap to the user's browser language on mount.
-    const [locale, setLocale] = useState('he')
-    useEffect(() => {
-        setLocale(normalizeLocale(detectBrowserLocale()))
-    }, [])
-    const t = useMemo(() => getMessages(locale).login, [locale])
+    const t = useMemo(() => getMessages('he').login, [])
 
     async function handleLogin(e) {
         e.preventDefault()

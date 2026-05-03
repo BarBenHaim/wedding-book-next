@@ -1,32 +1,20 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { getMessages } from '@/i18n/getMessages'
-import { normalizeLocale } from '@/i18n/locales'
 
-// Marketing landing page — anonymous traffic, no wedding doc to read
-// locale from. Detect from browser. Same pattern as the slug page and
-// the global Header.
-function detectBrowserLocale() {
-    if (typeof navigator === 'undefined') return 'he'
-    const raw = (navigator.language || '').toLowerCase()
-    if (raw.startsWith('he')) return 'he'
-    if (raw.startsWith('en')) return 'en'
-    if (raw.startsWith('es')) return 'es'
-    if (raw.startsWith('it')) return 'it'
-    return 'he'
-}
+// Marketing landing page is anonymous chrome — no wedding doc to drive
+// locale from. We deliberately serve Hebrew here regardless of browser
+// language: this is a Hebrew-first SaaS, the bulk of organic traffic is
+// Hebrew speakers, and showing English to a Hebrew user just because
+// their browser is set to English looked broken. International couples
+// land here too, but they buy via WooCommerce in their language anyway
+// and only hit the localized portal/guest pages once provisioned.
 
 export default function Home() {
     const router = useRouter()
-    // Render Hebrew on SSR + first client paint to keep hydration stable;
-    // swap to the real browser locale after mount.
-    const [locale, setLocale] = useState('he')
-    useEffect(() => {
-        setLocale(normalizeLocale(detectBrowserLocale()))
-    }, [])
-    const t = useMemo(() => getMessages(locale).home, [locale])
+    const t = useMemo(() => getMessages('he').home, [])
 
     // Step + feature decks built from messages so adding a new step is
     // a single JSON edit per language, not a JSX change.

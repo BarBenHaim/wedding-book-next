@@ -5,23 +5,12 @@ import { useParams, useRouter } from 'next/navigation'
 import { collection, query, where, getDocs, limit } from 'firebase/firestore'
 import { db } from '../../../lib/firebaseClient'
 import { getMessages } from '@/i18n/getMessages'
-import { normalizeLocale, dirFor } from '@/i18n/locales'
+import { dirFor } from '@/i18n/locales'
 
-// Best-effort locale detection for the not-found state. We don't have a
-// wedding doc here (the slug didn't resolve), so we can't read locale
-// from Firestore. Fall back to the browser's preferred language — if the
-// user's browser advertises 'es-ES', they probably want Spanish here too.
-//
-// During SSR, navigator is undefined → returns Hebrew (default).
-function detectBrowserLocale() {
-    if (typeof navigator === 'undefined') return 'he'
-    const raw = (navigator.language || '').toLowerCase()
-    if (raw.startsWith('he')) return 'he'
-    if (raw.startsWith('en')) return 'en'
-    if (raw.startsWith('es')) return 'es'
-    if (raw.startsWith('it')) return 'it'
-    return 'he'
-}
+// The not-found state on /w/[slug] doesn't have a wedding doc to read
+// locale from (the slug failed to resolve). We default to Hebrew rather
+// than sniffing the browser — same logic as home/login: this is a
+// Hebrew-first SaaS and a Hebrew not-found screen is the safer fallback.
 
 export default function SlugRedirect() {
     const { slug } = useParams()
@@ -29,16 +18,9 @@ export default function SlugRedirect() {
     const [notFound, setNotFound] = useState(false)
 
     // The not-found copy uses messages directly (no NextIntlClientProvider
-    // here) — since we don't render any other interactive content, a
-    // single key lookup is lighter than spinning up the whole provider.
-    //
-    // SSR-safe init: render Hebrew on first paint to match server output,
-    // then swap to the real browser language after mount.
-    const [locale, setLocale] = useState('he')
-    useEffect(() => {
-        setLocale(normalizeLocale(detectBrowserLocale()))
-    }, [])
-    const messages = useMemo(() => getMessages(locale).guestPage, [locale])
+    // here) — single-key lookup is lighter than spinning up the provider.
+    const locale = 'he'
+    const messages = useMemo(() => getMessages(locale).guestPage, [])
 
     useEffect(() => {
         if (!slug) return
