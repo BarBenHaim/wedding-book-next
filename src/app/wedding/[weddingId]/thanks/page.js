@@ -66,7 +66,6 @@ function ThanksApp() {
     //   'error'   — last flush attempt failed and we're online
     const [status, setStatus] = useState('working')
     const [pendingCount, setPendingCount] = useState(0)
-    const redirectTimer = useRef(null)
 
     // ─── Flush helper ────────────────────────────────────────────────────────
     async function tryFlush() {
@@ -158,59 +157,134 @@ function ThanksApp() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status, pendingCount])
 
-    // ─── Auto-redirect only after we're fully done ───────────────────────────
-    useEffect(() => {
-        if (status !== 'done') return
-        redirectTimer.current = setTimeout(() => {
-            if (weddingId) router.push(`/wedding/${weddingId}`)
-            else router.push('/')
-        }, 4000)
-        return () => clearTimeout(redirectTimer.current)
-    }, [status, weddingId, router])
+    // The thanks page used to auto-redirect to /wedding/[id] four seconds
+    // after the upload finished, which sent the guest right back to the
+    // "write a blessing" CTA — confusing UX. We now stay on this page so
+    // the celebration + soft pitch + WhatsApp CTA can do its job. The
+    // guest leaves on their own terms (close the tab or tap the button).
 
     const offlineOpen = status === 'offline'
 
     return (
-        <div className='relative flex min-h-[calc(100vh-4rem)] items-center justify-center overflow-hidden bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da] px-6'>
-            {/* Glow רקע */}
-            <div className='absolute -top-32 left-10 h-96 w-96 rounded-full bg-[#AA8840]/8 blur-3xl animate-pulse'></div>
-            <div className='absolute bottom-0 right-0 h-[28rem] w-[28rem] rounded-full bg-[#AA8840]/6 blur-3xl animate-pulse delay-200'></div>
+        <div
+            className='min-h-[calc(100vh-4rem)] flex items-start justify-center px-4 py-8 font-sans relative overflow-hidden'
+            style={{
+                // Premium ivory wash — matches the photo / blessing pages.
+                backgroundColor: '#f8f4ec',
+                backgroundImage: [
+                    'radial-gradient(ellipse 900px 480px at 50% -10%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 55%)',
+                    'radial-gradient(ellipse 520px 520px at 92% 105%, rgba(201,164,78,0.07) 0%, rgba(201,164,78,0) 60%)',
+                    'radial-gradient(ellipse 440px 440px at 8% 105%, rgba(186,156,108,0.05) 0%, rgba(186,156,108,0) 60%)',
+                ].join(', '),
+            }}
+        >
+            <div className='relative z-10 w-full max-w-[26rem] animate-scaleIn'>
+                {/* ── Status pill — small chip at the very top showing
+                    upload progress. Visible during 'working' / 'offline' /
+                    'error' so the guest knows their submission is being
+                    saved. Hides quietly once 'done'. */}
+                {status !== 'done' && (
+                    <div className='flex justify-center mb-6'>
+                        <StatusBadge status={status} pendingCount={pendingCount} t={t} />
+                    </div>
+                )}
 
-            {/* לבבות/קונפטי */}
-            <div className='absolute inset-0 overflow-hidden pointer-events-none'>
-                {Array.from({ length: 12 }).map((_, i) => (
-                    <span
-                        key={i}
-                        className='absolute text-[#AA8840]/50 animate-float'
+                {/* ── Celebration block ── */}
+                <div className='text-center mb-7'>
+                    <svg viewBox='0 0 24 24' className='w-[22px] h-[22px] mx-auto mb-3.5' fill='#c9a44e'>
+                        <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                    </svg>
+                    <h1
+                        className='font-bold mb-2 leading-[1.15]'
+                        style={{ color: '#1a1410', fontSize: '28px', letterSpacing: '-0.01em' }}
+                    >
+                        {t('savedHeading')}
+                    </h1>
+                    <p className='leading-relaxed' style={{ color: '#7a6a52', fontSize: '14px', maxWidth: 340, margin: '0 auto' }}>
+                        {t('savedBody')}
+                    </p>
+                </div>
+
+                {/* ── Pitch card — soft sales hook for the guest who just
+                    enjoyed the experience and might want it for their own
+                    event. Pure white card, same shadow + border treatment
+                    as the form cards on the create-blessing flow. */}
+                <div
+                    className='bg-white rounded-[22px] p-6 mb-5 text-center'
+                    style={{
+                        boxShadow:
+                            '0 24px 50px -28px rgba(170,136,64,0.28), 0 4px 12px -4px rgba(170,136,64,0.10)',
+                        border: '1px solid rgba(212,184,103,0.22)',
+                    }}
+                >
+                    <h2
+                        className='font-bold mb-3'
+                        style={{ color: '#1a1410', fontSize: '17px', letterSpacing: '-0.005em' }}
+                    >
+                        {t('pitchHeading')}
+                    </h2>
+                    <p
+                        className='leading-relaxed mb-5'
+                        style={{ color: '#7a6a52', fontSize: '13.5px' }}
+                    >
+                        {t('pitchBody')}
+                    </p>
+
+                    {/* tiny gold heart divider — same ornament as the
+                        create-blessing card, ties the pages together. */}
+                    <div className='flex items-center justify-center gap-2.5 mb-5'>
+                        <span
+                            className='block h-px flex-1'
+                            style={{ background: 'linear-gradient(to left, transparent, #e1d4b4, transparent)' }}
+                        />
+                        <svg viewBox='0 0 24 24' className='w-[11px] h-[11px] shrink-0' fill='#c9a44e'>
+                            <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                        </svg>
+                        <span
+                            className='block h-px flex-1'
+                            style={{ background: 'linear-gradient(to right, transparent, #e1d4b4, transparent)' }}
+                        />
+                    </div>
+
+                    <p
+                        className='font-bold mb-4'
+                        style={{ color: '#1a1410', fontSize: '14.5px' }}
+                    >
+                        {t('pitchQuestion')}
+                    </p>
+
+                    {/* WhatsApp CTA — opens the brand's wa.link short URL
+                        which already targets the right number with a
+                        pre-filled "show me a sample" message. Uses the
+                        official WhatsApp green so the button is instantly
+                        recognisable as a chat-to-us action. */}
+                    <a
+                        href='https://wa.link/z4a85t'
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        className='w-full rounded-2xl text-white font-bold transition-all duration-300 flex items-center justify-center gap-2.5 active:scale-[0.99]'
                         style={{
-                            left: `${Math.random() * 100}%`,
-                            top: `${Math.random() * 100}%`,
-                            fontSize: `${Math.random() * 24 + 16}px`,
-                            animationDelay: `${i * 0.4}s`,
+                            background: 'linear-gradient(180deg, #25D366 0%, #128C7E 100%)',
+                            boxShadow:
+                                '0 14px 32px -10px rgba(18,140,126,0.45), 0 4px 10px -4px rgba(18,140,126,0.25), inset 0 1px 0 rgba(255,255,255,0.20)',
+                            padding: '14px 18px',
+                            fontSize: '14.5px',
+                            letterSpacing: '0.01em',
                         }}
                     >
-                        ✦
-                    </span>
-                ))}
-            </div>
+                        {/* WhatsApp glyph */}
+                        <svg viewBox='0 0 24 24' className='w-[18px] h-[18px] shrink-0' fill='currentColor'>
+                            <path d='M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z' />
+                        </svg>
+                        <span>{t('whatsappCta')}</span>
+                    </a>
+                </div>
 
-            {/* כרטיס תודה */}
-            <div className='relative z-10 w-full max-w-xl rounded-3xl bg-white/90 backdrop-blur-md p-8 md:p-10 shadow-2xl text-center animate-fadeIn border border-white/60'>
-                <img src='/logo-wt.png' alt='Wedding Tales' className='h-10 w-auto mx-auto mb-4 opacity-70' />
-                <h2 className='mb-3 text-3xl font-bold text-gray-800'>{t('title')}</h2>
-                <div className='w-16 h-0.5 bg-gradient-to-r from-transparent via-[#AA8840]/50 to-transparent mx-auto mb-3'></div>
-                <p className='text-base text-gray-600 mb-4'>
-                    {t('body1')}
-                    <br />
-                    {t('body2')}
-                </p>
-
-                {/* Status badge — small, non-scary */}
-                <StatusBadge status={status} pendingCount={pendingCount} t={t} />
-
-                {status === 'done' && (
-                    <p className='text-sm text-gray-500 mt-3'>{t('redirecting')}</p>
-                )}
+                {/* Wedding Tales mark at the very bottom — small, gentle
+                    reminder of the brand without competing with the CTA. */}
+                <div className='flex justify-center mt-2'>
+                    <img src='/logo-wt.png' alt='Wedding Tales' className='h-7 w-auto opacity-50' />
+                </div>
             </div>
 
             {/* ── Offline modal ──────────────────────────────────────────────── */}

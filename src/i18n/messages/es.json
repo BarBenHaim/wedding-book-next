@@ -92,6 +92,14 @@
   },
 
   "photo": {
+    "pageTitleWedding": "Deja una bendición a la pareja",
+    "pageTitleBirthday": "Deja una bendición",
+    "pageTitleBarMitzvah": "Deja una bendición al Bar Mitzvá",
+    "pageTitleBatMitzvah": "Deja una bendición al Bat Mitzvá",
+    "pageSubtitle": "Unas palabras del corazón que se convierten en un dulce recuerdo",
+    "pageTitleStep2": "Añade una foto",
+    "pageSubtitleStep2": "Una foto que se quedará con el recuerdo",
+    "securityNote": "Menos de un minuto",
     "step1Label": "Bendición",
     "step2Label": "Foto",
     "nameLabel": "Nombre (opcional)",
@@ -116,6 +124,12 @@
 
   "thanks": {
     "title": "¡Gracias por tu bendición!",
+    "savedHeading": "¡Qué bonito!",
+    "savedBody": "Tu bendición y tu foto están guardadas. Un pequeño momento que se convierte en un gran recuerdo.",
+    "pitchHeading": "¿Te gusta la idea?",
+    "pitchBody": "Puedes hacerlo también en tu evento. Los invitados escanean, fotografían y escriben bendiciones — y todo se convierte en un libro de recuerdos real.",
+    "pitchQuestion": "¿Quieres ver cómo queda?",
+    "whatsappCta": "Envíame un ejemplo por WhatsApp",
     "body1": "Tu mensaje se ha añadido al libro de boda",
     "body2": "La feliz pareja podrá verlo enseguida",
     "redirecting": "Te llevaremos de vuelta en un momento...",

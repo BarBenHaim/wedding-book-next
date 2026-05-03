@@ -115,6 +115,14 @@
   },
 
   "photo": {
+    "pageTitleWedding": "Leave a blessing for the couple",
+    "pageTitleBirthday": "Leave a blessing",
+    "pageTitleBarMitzvah": "Leave a blessing for the Bar Mitzvah",
+    "pageTitleBatMitzvah": "Leave a blessing for the Bat Mitzvah",
+    "pageSubtitle": "A few words from the heart that turn into a sweet memory",
+    "pageTitleStep2": "Add a photo",
+    "pageSubtitleStep2": "A small photo to keep with the memory",
+    "securityNote": "Takes less than a minute",
     "step1Label": "Blessing",
     "step2Label": "Photo",
     "nameLabel": "Name (optional)",
@@ -139,6 +147,13 @@
 
   "thanks": {
     "title": "Thank you for your blessing!",
+    "savedHeading": "How wonderful!",
+    "savedBody": "Your blessing and photo are saved. A small moment turning into a big memory.",
+    "pitchHeading": "Love the idea?",
+    "pitchBody": "You can do this at your event too. Guests scan, photograph, write blessings — and it all becomes a real keepsake book.",
+    "pitchQuestion": "Want to see what it looks like?",
+    "whatsappCta": "Send me a sample on WhatsApp",
+    "whatsappMessage": "Hi, I saw Wedding Tales at an event and it looked amazing. Can I see how it would look for my event?",
     "body1": "Your message has been added to the wedding book",
     "body2": "The happy couple will see it right away",
     "redirecting": "We'll send you back to the home page in a moment...",

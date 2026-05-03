@@ -92,6 +92,14 @@
   },
 
   "photo": {
+    "pageTitleWedding": "Lascia un augurio alla coppia",
+    "pageTitleBirthday": "Lascia un augurio",
+    "pageTitleBarMitzvah": "Lascia un augurio al Bar Mitzvah",
+    "pageTitleBatMitzvah": "Lascia un augurio al Bat Mitzvah",
+    "pageSubtitle": "Poche parole dal cuore che diventano un dolce ricordo",
+    "pageTitleStep2": "Aggiungi una foto",
+    "pageSubtitleStep2": "Una piccola foto che resterà col ricordo",
+    "securityNote": "Meno di un minuto",
     "step1Label": "Augurio",
     "step2Label": "Foto",
     "nameLabel": "Nome (opzionale)",
@@ -116,6 +124,12 @@
 
   "thanks": {
     "title": "Grazie per il tuo augurio!",
+    "savedHeading": "Che bello!",
+    "savedBody": "Il tuo augurio e la tua foto sono salvati. Un piccolo momento che diventa un grande ricordo.",
+    "pitchHeading": "Ti piace l'idea?",
+    "pitchBody": "Puoi farlo anche al tuo evento. Gli ospiti scansionano, fotografano e scrivono auguri — e tutto diventa un vero libro dei ricordi.",
+    "pitchQuestion": "Vuoi vedere come appare?",
+    "whatsappCta": "Inviami un esempio su WhatsApp",
     "body1": "Il tuo messaggio è stato aggiunto al libro di nozze",
     "body2": "La coppia felice potrà vederlo subito",
     "redirecting": "Ti riporteremo alla home tra un momento...",

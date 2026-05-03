@@ -12,13 +12,14 @@ import { NextIntlClientProvider, useTranslations } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
 
-// Outer wrapper — fetches locale from the wedding doc once, then wraps
-// the form in NextIntlClientProvider so every string speaks the language
-// the super-admin configured for the event. Same pattern used by the
-// portal and thanks page.
+// Outer wrapper — fetches locale + eventType from the wedding doc once,
+// then wraps the form in NextIntlClientProvider so every string speaks
+// the language the super-admin configured. eventType drives the page
+// title ("Leave a blessing for the couple/Bar Mitzvah/...").
 export default function TextPage() {
     const { weddingId } = useParams()
     const [locale, setLocale] = useState('he')
+    const [eventType, setEventType] = useState('wedding')
 
     useEffect(() => {
         if (!weddingId) return
@@ -27,7 +28,11 @@ export default function TextPage() {
             try {
                 const snap = await getDoc(doc(db, 'weddings', weddingId))
                 if (cancelled) return
-                if (snap.exists()) setLocale(normalizeLocale(snap.data().locale))
+                if (snap.exists()) {
+                    const data = snap.data()
+                    setLocale(normalizeLocale(data.locale))
+                    if (data.eventType) setEventType(data.eventType)
+                }
             } catch {
                 /* keep Hebrew default */
             }
@@ -39,12 +44,22 @@ export default function TextPage() {
 
     return (
         <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
-            <PhotoApp />
+            <PhotoApp eventType={eventType} />
         </NextIntlClientProvider>
     )
 }
 
-function PhotoApp() {
+// Map eventType to the i18n key that holds the corresponding page-title
+// translation. Keeps the JSX tidy and adding a new event type is a one-
+// line change here + new translations.
+const TITLE_KEY_BY_EVENT = {
+    wedding: 'pageTitleWedding',
+    birthday: 'pageTitleBirthday',
+    bar_mitzvah: 'pageTitleBarMitzvah',
+    bat_mitzvah: 'pageTitleBatMitzvah',
+}
+
+function PhotoApp({ eventType }) {
     const t = useTranslations('photo')
     const [step, setStep] = useState(1) // 1: Text, 2: Photo
     const [name, setName] = useState('')
@@ -317,122 +332,353 @@ function PhotoApp() {
     const isPhotoDone = !!photoUrl
 
     return (
-        <div className='min-h-[calc(100vh-4rem)] flex items-center justify-center bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da] px-4 py-6 font-sans'>
-            {/* רקע Glow מקורי */}
-            <div className='absolute -top-24 left-10 h-72 w-72 rounded-full bg-[#AA8840]/10 blur-3xl'></div>
-            <div className='absolute bottom-10 right-10 h-80 w-80 rounded-full bg-[#AA8840]/8 blur-3xl'></div>
+        <div
+            className='min-h-[calc(100vh-4rem)] flex items-start justify-center px-4 py-8 font-sans relative overflow-hidden'
+            style={{
+                // Premium ivory wash — base is a near-white warm neutral
+                // (#f8f4ec, "fine paper"). Two very low-opacity radial
+                // glows give the surface depth without any saturated
+                // yellow: a cool white halo at the top opens the space,
+                // a barely-there gold pool in the bottom-right corner
+                // hints at the brand colour without dominating.
+                backgroundColor: '#f8f4ec',
+                backgroundImage: [
+                    'radial-gradient(ellipse 900px 480px at 50% -10%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 55%)',
+                    'radial-gradient(ellipse 520px 520px at 92% 105%, rgba(201,164,78,0.07) 0%, rgba(201,164,78,0) 60%)',
+                    'radial-gradient(ellipse 440px 440px at 8% 105%, rgba(186,156,108,0.05) 0%, rgba(186,156,108,0) 60%)',
+                ].join(', '),
+            }}
+        >
 
-            <div className='relative z-10 w-full max-w-2xl bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-6 md:p-8 border border-white/50 animate-scaleIn'>
-                {/* Stepper — 44px+ touch targets */}
-                <div className='flex justify-center items-center mb-6 gap-3'>
-                    {/* Step 1 */}
+            {/* Layout container — narrower max-width matches the mockup's
+                phone-first composition. Each section sits directly on the
+                champagne wash. */}
+            <div className='relative z-10 w-full max-w-[26rem] animate-scaleIn'>
+                {/* Stepper — slim white pill bar. Active step is marked by
+                    a SOLID gold number badge + dark-ink label. No tinted
+                    pill background (the previous version felt boxed-in). */}
+                <div
+                    className='bg-white rounded-full mb-9 mx-auto flex items-center justify-center'
+                    style={{
+                        maxWidth: '20rem',
+                        padding: '4px',
+                        boxShadow: '0 6px 20px -6px rgba(170,136,64,0.18), 0 1px 3px rgba(170,136,64,0.10)',
+                        border: '1px solid rgba(212,184,103,0.35)',
+                    }}
+                >
+                    {/* Step 1 — pill is transparent; the gold-filled circle
+                        does the heavy lifting visually. Active label is
+                        ink-dark, inactive is muted tan. */}
                     <button
                         onClick={() => setStep(1)}
-                        className={`flex items-center gap-2 px-5 py-3 rounded-full transition-all duration-300 ${
-                            step === 1
-                                ? 'bg-[#AA8840]/10 text-[#AA8840] ring-2 ring-[#AA8840]'
-                                : 'text-gray-500 hover:bg-gray-50'
+                        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full transition-colors duration-200 ${
+                            step === 1 ? 'text-[#3d2e1a]' : 'text-[#a89378]'
                         }`}
                     >
-                        <div
-                            className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                                isTextDone
-                                    ? 'bg-green-500 text-white'
+                        <span
+                            className='inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold text-white'
+                            style={{
+                                background: isTextDone
+                                    ? '#7da76a' // soft sage green for "done"
                                     : step === 1
-                                      ? 'bg-[#AA8840] text-white'
-                                      : 'bg-gray-300 text-white'
-                            }`}
+                                        ? 'linear-gradient(180deg,#c9a44e 0%,#a8843a 100%)'
+                                        : '#d6cab2',
+                                boxShadow: step === 1 ? '0 2px 6px rgba(170,136,64,0.35)' : 'none',
+                            }}
                         >
                             {isTextDone ? '✓' : '1'}
-                        </div>
-                        <span className='font-semibold text-sm'>{t('step1Label')}</span>
+                        </span>
+                        <span className='font-bold text-[13px] tracking-wide'>{t('step1Label')}</span>
                     </button>
 
-                    {/* Connecting line */}
+                    {/* Connecting line — hairline tan that turns gold once
+                        the first step is complete. */}
                     <div
-                        className={`w-10 h-0.5 rounded-full transition-colors duration-300 ${isTextDone ? 'bg-gradient-to-l from-[#AA8840]/40 to-[#AA8840]/20' : 'bg-gray-200'}`}
-                    ></div>
+                        className='h-px w-8 mx-1 transition-colors duration-300'
+                        style={{ background: isTextDone ? '#c9a44e' : '#e1d4b4' }}
+                    />
 
                     {/* Step 2 */}
                     <button
                         onClick={() => isTextDone && setStep(2)}
                         disabled={!isTextDone}
-                        className={`flex items-center gap-2 px-5 py-3 rounded-full transition-all duration-300 ${
-                            step === 2 ? 'bg-[#AA8840]/10 text-[#AA8840] ring-2 ring-[#AA8840]' : 'text-gray-500'
-                        } ${!isTextDone ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+                        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full transition-colors duration-200 ${
+                            step === 2 ? 'text-[#3d2e1a]' : 'text-[#a89378]'
+                        } ${!isTextDone ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
-                        <div
-                            className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                                isPhotoDone
-                                    ? 'bg-green-500 text-white'
+                        <span
+                            className='inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold text-white'
+                            style={{
+                                background: isPhotoDone
+                                    ? '#7da76a'
                                     : step === 2
-                                      ? 'bg-[#AA8840] text-white'
-                                      : 'bg-gray-300 text-white'
-                            }`}
+                                        ? 'linear-gradient(180deg,#c9a44e 0%,#a8843a 100%)'
+                                        : '#d6cab2',
+                                boxShadow: step === 2 ? '0 2px 6px rgba(170,136,64,0.35)' : 'none',
+                            }}
                         >
                             {isPhotoDone ? '✓' : '2'}
-                        </div>
-                        <span className='font-semibold text-sm'>{t('step2Label')}</span>
+                        </span>
+                        <span className='font-bold text-[13px] tracking-wide'>{t('step2Label')}</span>
                     </button>
                 </div>
 
                 {/* --- תוכן שלב 1: טקסט --- */}
+                {/* Redesigned to match the cleaner mockup: a heart-and-title
+                    block above the form, the form itself in a soft white
+                    card divided by a heart separator, then a full-width
+                    gold gradient continue button, and a tiny lock-icon
+                    trust line at the bottom. The state hooks and validation
+                    below are unchanged — only the JSX shell was redrawn. */}
                 {step === 1 && (
-                    <div className='space-y-5 animate-fadeIn'>
-                        <div>
-                            <label className='block text-start text-sm font-medium text-gray-700 mb-1'>
-                                {t('nameLabel')}
-                            </label>
-                            <input
-                                value={name}
-                                onChange={e => setName(e.target.value)}
-                                placeholder={t('namePlaceholder')}
-                                className='w-full rounded-xl border border-[#AA8840]/20 bg-[#AA8840]/5 px-4 py-3 text-gray-800 placeholder-[#AA8840]/30 focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/20 outline-none transition'
-                            />
-                        </div>
-                        <div>
-                            <label className='block text-start text-sm font-medium text-gray-700 mb-1'>
-                                {t('blessingLabel')}
-                            </label>
-                            <textarea
-                                value={text}
-                                onChange={e => setText(e.target.value)}
-                                placeholder={t('blessingPlaceholder')}
-                                className='w-full h-36 rounded-xl border border-[#AA8840]/20 bg-[#AA8840]/5 px-4 py-3 text-gray-800 placeholder-[#AA8840]/30 focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/20 outline-none resize-none transition'
-                                maxLength={210}
-                            />
-                            {/* text-end keeps the counter at the trailing edge of the
-                                form in either direction (was hardcoded text-left). */}
-                            <div className='text-end text-xs text-gray-400 mt-1'>{t('charCount', { used: text.length, max: 210 })}</div>
+                    <div className='animate-fadeIn'>
+                        {/* ── Title block ──
+                            Generous breathing room above and below; the
+                            small gold heart anchors the title without
+                            competing with it. */}
+                        <div className='text-center mb-7'>
+                            <svg
+                                viewBox='0 0 24 24'
+                                className='w-[18px] h-[18px] mx-auto mb-3.5'
+                                fill='#c9a44e'
+                            >
+                                <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                            </svg>
+                            <h2
+                                className='font-bold mb-2 leading-[1.15]'
+                                style={{ color: '#1a1410', fontSize: '26px', letterSpacing: '-0.01em' }}
+                            >
+                                {t(TITLE_KEY_BY_EVENT[eventType] || 'pageTitleWedding')}
+                            </h2>
+                            <p
+                                className='leading-relaxed'
+                                style={{ color: '#9a8a72', fontSize: '13.5px' }}
+                            >
+                                {t('pageSubtitle')}
+                            </p>
                         </div>
 
+                        {/* ── Form card ──
+                            Pure white, soft warm shadow, very subtle gold
+                            border. Two sections divided by an inline-heart
+                            ornament. Section labels are dark/bold and the
+                            small gold icon hugs the trailing edge. */}
+                        <div
+                            className='bg-white rounded-[22px] px-5 pt-5 pb-5'
+                            style={{
+                                boxShadow:
+                                    '0 24px 50px -28px rgba(170,136,64,0.28), 0 4px 12px -4px rgba(170,136,64,0.10)',
+                                border: '1px solid rgba(212,184,103,0.22)',
+                            }}
+                        >
+                            {/* Name section */}
+                            <div>
+                                <div className='flex items-center justify-between mb-2.5'>
+                                    <span style={{ color: '#1a1410', fontSize: '14px', fontWeight: 700 }}>
+                                        {t('nameLabel')}
+                                    </span>
+                                    <svg
+                                        viewBox='0 0 24 24'
+                                        className='w-[18px] h-[18px]'
+                                        fill='none'
+                                        stroke='#c9a44e'
+                                        strokeWidth={1.8}
+                                    >
+                                        <path strokeLinecap='round' strokeLinejoin='round' d='M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z' />
+                                    </svg>
+                                </div>
+                                <input
+                                    value={name}
+                                    onChange={e => setName(e.target.value)}
+                                    placeholder={t('namePlaceholder')}
+                                    className='w-full rounded-xl bg-white outline-none transition'
+                                    style={{
+                                        border: '1px solid #ead9b3',
+                                        padding: '12px 16px',
+                                        color: '#1a1410',
+                                        fontSize: '14px',
+                                    }}
+                                    onFocus={e => (e.currentTarget.style.borderColor = '#c9a44e')}
+                                    onBlur={e => (e.currentTarget.style.borderColor = '#ead9b3')}
+                                />
+                            </div>
+
+                            {/* Heart divider — thin gold lines flanking a
+                                small filled heart, tighter spacing than
+                                before so it reads as one ornament. */}
+                            <div className='flex items-center justify-center gap-2.5 my-5'>
+                                <span
+                                    className='block h-px flex-1'
+                                    style={{ background: 'linear-gradient(to left, transparent, #e1d4b4, transparent)' }}
+                                />
+                                <svg viewBox='0 0 24 24' className='w-[11px] h-[11px] shrink-0' fill='#c9a44e'>
+                                    <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                                </svg>
+                                <span
+                                    className='block h-px flex-1'
+                                    style={{ background: 'linear-gradient(to right, transparent, #e1d4b4, transparent)' }}
+                                />
+                            </div>
+
+                            {/* Blessing section */}
+                            <div>
+                                <div className='flex items-center justify-between mb-2.5'>
+                                    <span style={{ color: '#1a1410', fontSize: '14px', fontWeight: 700 }}>
+                                        {t('blessingLabel')}
+                                    </span>
+                                    <svg
+                                        viewBox='0 0 24 24'
+                                        className='w-[18px] h-[18px]'
+                                        fill='none'
+                                        stroke='#c9a44e'
+                                        strokeWidth={1.8}
+                                    >
+                                        <path strokeLinecap='round' strokeLinejoin='round' d='M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13L2.25 21.75l.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.862 4.487Zm0 0L19.5 7.125' />
+                                    </svg>
+                                </div>
+                                <textarea
+                                    value={text}
+                                    onChange={e => setText(e.target.value)}
+                                    placeholder={t('blessingPlaceholder')}
+                                    className='w-full rounded-xl bg-white outline-none transition resize-none leading-relaxed'
+                                    style={{
+                                        border: '1px solid #ead9b3',
+                                        padding: '12px 16px',
+                                        color: '#1a1410',
+                                        fontSize: '14px',
+                                        height: '128px',
+                                    }}
+                                    onFocus={e => (e.currentTarget.style.borderColor = '#c9a44e')}
+                                    onBlur={e => (e.currentTarget.style.borderColor = '#ead9b3')}
+                                    maxLength={210}
+                                />
+                                <div
+                                    className='text-end mt-1.5'
+                                    style={{ color: '#b9a684', fontSize: '11px' }}
+                                >
+                                    {t('charCount', { used: text.length, max: 210 })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ── Continue button ──
+                            Solid antique-gold gradient, deep warm shadow.
+                            Sparkle leads the row, chevron follows the
+                            label and rotates per direction so it always
+                            points "forward" in the user's reading flow. */}
                         <button
                             onClick={() => setStep(2)}
                             disabled={!text.trim()}
-                            className='w-full mt-4 py-3.5 rounded-xl gold-shimmer text-white font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed'
+                            className='w-full mt-7 rounded-2xl text-white font-bold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-[0.99]'
+                            style={{
+                                background:
+                                    'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                boxShadow:
+                                    '0 14px 32px -10px rgba(170,136,64,0.55), 0 4px 10px -4px rgba(170,136,64,0.30), inset 0 1px 0 rgba(255,255,255,0.25)',
+                                padding: '15px 18px',
+                                fontSize: '15.5px',
+                                letterSpacing: '0.01em',
+                            }}
                         >
-                            {t('continueToPhoto')}
+                            {/* Sparkle on the leading side. In RTL flex
+                                row, this child sits on the right (start
+                                edge); in LTR it sits on the left. Either
+                                way it leads the label visually. */}
+                            <svg viewBox='0 0 24 24' className='w-[15px] h-[15px] opacity-95 shrink-0' fill='currentColor'>
+                                <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
+                            </svg>
+                            <span>{t('continueToPhoto')}</span>
+                            <svg
+                                viewBox='0 0 24 24'
+                                className='w-[15px] h-[15px] rtl:rotate-180 shrink-0'
+                                fill='none'
+                                stroke='currentColor'
+                                strokeWidth={2.6}
+                            >
+                                <path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
+                            </svg>
                         </button>
+
+                        {/* ── Trust line ── */}
+                        <div
+                            className='flex items-center justify-center gap-1.5 mt-4'
+                            style={{ color: '#b9a684', fontSize: '11px' }}
+                        >
+                            <svg viewBox='0 0 24 24' className='w-[12px] h-[12px]' fill='none' stroke='currentColor' strokeWidth={1.7}>
+                                <path strokeLinecap='round' strokeLinejoin='round' d='M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z' />
+                            </svg>
+                            <span>{t('securityNote')}</span>
+                        </div>
                     </div>
                 )}
 
                 {/* --- תוכן שלב 2: תמונה --- */}
+                {/* Visually mirrors step 1: title block above + premium
+                    white card. The interactive guts (camera, cropper,
+                    file upload) are intentionally untouched — only the
+                    surrounding chrome was restyled. */}
                 {step === 2 && (
-                    <div className='space-y-6 animate-fadeIn'>
-                        {/* קונטיינר תמונה (יחס 4:3) */}
-                        <div className='relative w-full aspect-[4/3] bg-gray-50 rounded-xl overflow-hidden border-2 border-dashed border-[#AA8840]/20 shadow-inner group'>
+                    <div className='animate-fadeIn'>
+                        {/* ── Title block — same composition as step 1 ── */}
+                        <div className='text-center mb-7'>
+                            <svg viewBox='0 0 24 24' className='w-[18px] h-[18px] mx-auto mb-3.5' fill='#c9a44e'>
+                                <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                            </svg>
+                            <h2
+                                className='font-bold mb-2 leading-[1.15]'
+                                style={{ color: '#1a1410', fontSize: '26px', letterSpacing: '-0.01em' }}
+                            >
+                                {t('pageTitleStep2')}
+                            </h2>
+                            <p
+                                className='leading-relaxed'
+                                style={{ color: '#9a8a72', fontSize: '13.5px' }}
+                            >
+                                {t('pageSubtitleStep2')}
+                            </p>
+                        </div>
+
+                        {/* ── Photo card ── */}
+                        <div
+                            className='bg-white rounded-[22px] p-5'
+                            style={{
+                                boxShadow:
+                                    '0 24px 50px -28px rgba(170,136,64,0.28), 0 4px 12px -4px rgba(170,136,64,0.10)',
+                                border: '1px solid rgba(212,184,103,0.22)',
+                            }}
+                        >
+                        {/* קונטיינר תמונה (יחס 4:3) — solid soft border
+                            instead of dashed gold; the dashed look read
+                            as "draft / unfinished". */}
+                        <div
+                            className='relative w-full aspect-[4/3] rounded-2xl overflow-hidden group'
+                            style={{
+                                background: '#fbf6ec',
+                                border: '1px solid #ead9b3',
+                            }}
+                        >
                             {/* 1. מצב בחירה (ריק) */}
                             {!photoUrl && !cameraOpen && (
-                                <div className='absolute inset-0 flex flex-col items-center justify-center gap-6'>
-                                    {/* אייקון מצלמה SVG נקי */}
-                                    <div className='text-[#AA8840]/40 bg-[#AA8840]/5 p-4 rounded-full'>
+                                <div className='absolute inset-0 flex flex-col items-center justify-center gap-6 px-4'>
+                                    {/* Camera icon — stronger gold,
+                                        circular cream wash, no harsh
+                                        contrast. */}
+                                    <div
+                                        className='rounded-full flex items-center justify-center'
+                                        style={{
+                                            width: 72,
+                                            height: 72,
+                                            background: '#fff8e8',
+                                            border: '1px solid #ead9b3',
+                                        }}
+                                    >
                                         <svg
                                             xmlns='http://www.w3.org/2000/svg'
                                             fill='none'
                                             viewBox='0 0 24 24'
                                             strokeWidth={1.5}
-                                            stroke='currentColor'
-                                            className='w-10 h-10'
+                                            stroke='#c9a44e'
+                                            className='w-9 h-9'
                                         >
                                             <path
                                                 strokeLinecap='round'
@@ -447,15 +693,36 @@ function PhotoApp() {
                                         </svg>
                                     </div>
 
-                                    <div className='flex gap-4'>
+                                    <div className='flex gap-3 w-full max-w-[280px]'>
                                         <button
                                             onClick={() => setCameraOpen(true)}
-                                            className='px-6 py-2.5 bg-[#AA8840] text-white rounded-full text-sm font-bold shadow hover:bg-[#AA8840]/90 transition flex items-center gap-2'
+                                            className='flex-1 rounded-full text-white font-bold text-[13px] flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]'
+                                            style={{
+                                                background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                                padding: '11px 14px',
+                                                boxShadow:
+                                                    '0 8px 18px -8px rgba(170,136,64,0.45), inset 0 1px 0 rgba(255,255,255,0.20)',
+                                            }}
                                         >
-                                            {t('camera')}
+                                            <svg viewBox='0 0 24 24' className='w-[15px] h-[15px]' fill='none' stroke='currentColor' strokeWidth={2}>
+                                                <path strokeLinecap='round' strokeLinejoin='round' d='M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z' />
+                                                <path strokeLinecap='round' strokeLinejoin='round' d='M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z' />
+                                            </svg>
+                                            <span>{t('camera')}</span>
                                         </button>
-                                        <label className='px-6 py-2.5 bg-white text-[#AA8840] border border-[#AA8840]/20 rounded-full text-sm font-bold shadow hover:bg-[#AA8840]/5 cursor-pointer transition flex items-center gap-2'>
-                                            {t('gallery')}
+                                        <label
+                                            className='flex-1 rounded-full font-bold text-[13px] cursor-pointer flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]'
+                                            style={{
+                                                background: '#ffffff',
+                                                border: '1px solid #ead9b3',
+                                                color: '#a8843a',
+                                                padding: '11px 14px',
+                                            }}
+                                        >
+                                            <svg viewBox='0 0 24 24' className='w-[15px] h-[15px]' fill='none' stroke='currentColor' strokeWidth={1.8}>
+                                                <path strokeLinecap='round' strokeLinejoin='round' d='m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z' />
+                                            </svg>
+                                            <span>{t('gallery')}</span>
                                             <input
                                                 type='file'
                                                 accept='image/*'
@@ -561,25 +828,55 @@ function PhotoApp() {
                             )}
                         </div>
 
-                        {/* כפתורים למטה */}
+                        </div>
+                        {/* ── Action buttons (close out the photo card) ── */}
                         {photoUrl && !cameraOpen && (
-                            <div className='flex gap-4'>
+                            <div className='flex gap-3 mt-6'>
                                 <button
                                     onClick={() => {
                                         setPhotoUrl('')
                                         setPhotoBlob(null)
                                         setIsUpload(false)
                                     }}
-                                    className='flex-1 py-3 rounded-xl border border-gray-200 text-gray-500 font-bold hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition'
+                                    className='flex-1 rounded-2xl font-bold text-[13.5px] transition-all active:scale-[0.99]'
+                                    style={{
+                                        background: '#ffffff',
+                                        border: '1px solid #ead9b3',
+                                        color: '#9a8a72',
+                                        padding: '13px 14px',
+                                    }}
                                 >
                                     {t('replacePhoto')}
                                 </button>
                                 <button
                                     onClick={onSubmit}
                                     disabled={submitting}
-                                    className='flex-[2] py-3.5 rounded-xl gold-shimmer text-white font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50'
+                                    className='flex-[2] rounded-2xl text-white font-bold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 active:scale-[0.99]'
+                                    style={{
+                                        background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                        boxShadow:
+                                            '0 14px 32px -10px rgba(170,136,64,0.55), 0 4px 10px -4px rgba(170,136,64,0.30), inset 0 1px 0 rgba(255,255,255,0.25)',
+                                        padding: '14px 18px',
+                                        fontSize: '15px',
+                                        letterSpacing: '0.01em',
+                                    }}
                                 >
-                                    {submitting ? t('submitting') : t('submit')}
+                                    {submitting ? (
+                                        <>
+                                            <svg className='w-4 h-4 animate-spin' fill='none' viewBox='0 0 24 24'>
+                                                <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='3' />
+                                                <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8v8z' />
+                                            </svg>
+                                            <span>{t('submitting')}</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg viewBox='0 0 24 24' className='w-[15px] h-[15px] opacity-95' fill='currentColor'>
+                                                <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
+                                            </svg>
+                                            <span>{t('submit')}</span>
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         )}
@@ -587,9 +884,17 @@ function PhotoApp() {
                         {!photoUrl && !cameraOpen && (
                             <button
                                 onClick={() => setStep(1)}
-                                className='w-full py-2 text-gray-400 text-sm hover:text-[#AA8840] transition flex items-center justify-center gap-1'
+                                className='w-full mt-5 text-[13px] flex items-center justify-center gap-1.5 transition-colors'
+                                style={{ color: '#9a8a72' }}
+                                onMouseEnter={e => (e.currentTarget.style.color = '#a8843a')}
+                                onMouseLeave={e => (e.currentTarget.style.color = '#9a8a72')}
                             >
-                                {t('backToEdit')}
+                                {/* Chevron points "back" — flips on dir so
+                                    it's correct in RTL (←) and LTR (←). */}
+                                <svg viewBox='0 0 24 24' className='w-[14px] h-[14px] rtl:rotate-180' fill='none' stroke='currentColor' strokeWidth={2}>
+                                    <path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7' />
+                                </svg>
+                                <span>{t('backToEdit')}</span>
                             </button>
                         )}
                     </div>
