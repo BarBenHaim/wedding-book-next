@@ -103,55 +103,71 @@ export const EVENT_TYPES = {
 
 export const EVENT_TYPE_ORDER = ['wedding', 'birthday', 'bar_mitzvah', 'bat_mitzvah']
 
-// Copy + default theme per event type.
-const EVENT_TYPE_CONFIG = {
-    wedding: {
-        id: 'wedding',
-        hebrewLabel: 'חתונה',
-        subtitle: 'ספר הברכות של',
-        description: 'זהו המקום לשתף את הרגעים שלכם, לכתוב ברכות מרגשות ולהוסיף תמונות שישמרו לנצח.',
-        ctaLabel: 'יצירת ברכה',
-        footer: 'Wedding Tales',
-        defaultTheme: 'gold',
-    },
-    birthday: {
-        id: 'birthday',
-        hebrewLabel: 'יום הולדת',
-        subtitle: 'ספר הברכות ליום ההולדת של',
-        description: 'הרגעים הכי יפים ראויים להיזכר. כתבו ברכה, הוסיפו תמונה, ושמרו את השמחה לנצח.',
-        ctaLabel: 'יצירת ברכה',
-        footer: 'Birthday Tales',
-        defaultTheme: 'pink',
-    },
-    bar_mitzvah: {
-        id: 'bar_mitzvah',
-        hebrewLabel: 'בר מצווה',
-        subtitle: 'ספר הברכות לבר המצווה של',
-        description: 'יום הבר מצווה זוכר לתמיד. שתפו ברכה, הוסיפו תמונה, והפכו את היום לספר מרגש.',
-        ctaLabel: 'יצירת ברכה',
-        footer: 'Bar Mitzvah Tales',
-        defaultTheme: 'blue',
-    },
-    bat_mitzvah: {
-        id: 'bat_mitzvah',
-        hebrewLabel: 'בת מצווה',
-        subtitle: 'ספר הברכות לבת המצווה של',
-        description: 'יום הבת מצווה זוכר לתמיד. שתפו ברכה, הוסיפו תמונה, והפכו את היום לספר מרגש.',
-        ctaLabel: 'יצירת ברכה',
-        footer: 'Bat Mitzvah Tales',
-        defaultTheme: 'blue',
-    },
+// Per-event-type config that's NOT locale-dependent. The user-facing
+// strings (label, subtitle, description, ctaLabel, footer) live in
+// src/i18n/messages/{locale}.json under the "eventTypes.{type}" key.
+// `defaultTheme` is the only thing that's truly type-specific and not
+// language-specific — Bar Mitzvah is blue, birthday is pink, etc.
+const EVENT_TYPE_META = {
+    wedding: { id: 'wedding', defaultTheme: 'gold' },
+    birthday: { id: 'birthday', defaultTheme: 'pink' },
+    bar_mitzvah: { id: 'bar_mitzvah', defaultTheme: 'blue' },
+    bat_mitzvah: { id: 'bat_mitzvah', defaultTheme: 'blue' },
+}
+
+// Lazy-loaded fallback message catalogue. We ALWAYS resolve via the JSON
+// files so we don't keep two parallel sources of truth. The Hebrew
+// catalogue is the legacy default for every getEventConfig() caller that
+// doesn't pass a locale.
+import heMessages from '../i18n/messages/he.json'
+import enMessages from '../i18n/messages/en.json'
+import esMessages from '../i18n/messages/es.json'
+import itMessages from '../i18n/messages/it.json'
+
+const LOCALE_MESSAGES = {
+    he: heMessages,
+    en: enMessages,
+    es: esMessages,
+    it: itMessages,
+}
+
+function messagesFor(locale) {
+    return LOCALE_MESSAGES[locale] || LOCALE_MESSAGES.he
 }
 
 // ─── Public helpers ──────────────────────────────────────────────────────────
 
 export function normalizeEventType(raw) {
-    if (raw && Object.prototype.hasOwnProperty.call(EVENT_TYPE_CONFIG, raw)) return raw
+    if (raw && Object.prototype.hasOwnProperty.call(EVENT_TYPE_META, raw)) return raw
     return 'wedding'
 }
 
-export function getEventConfig(rawType) {
-    return EVENT_TYPE_CONFIG[normalizeEventType(rawType)]
+/**
+ * Get the resolved config for an event type, in a specific locale.
+ *
+ *   getEventConfig('bar_mitzvah')       → Hebrew (legacy default)
+ *   getEventConfig('bar_mitzvah', 'en') → English
+ *
+ * Returned shape preserves the historical API (id, hebrewLabel, subtitle,
+ * description, ctaLabel, footer, defaultTheme) so existing call-sites
+ * keep working without changes. `hebrewLabel` is preserved for legacy
+ * consumers; the locale-aware key is `label` (same value in Hebrew).
+ */
+export function getEventConfig(rawType, locale = 'he') {
+    const type = normalizeEventType(rawType)
+    const meta = EVENT_TYPE_META[type]
+    const msg = messagesFor(locale)?.eventTypes?.[type] || {}
+    const fallback = LOCALE_MESSAGES.he.eventTypes[type]
+    return {
+        id: meta.id,
+        defaultTheme: meta.defaultTheme,
+        label: msg.label || fallback.label,
+        hebrewLabel: LOCALE_MESSAGES.he.eventTypes[type].label, // legacy alias
+        subtitle: msg.subtitle || fallback.subtitle,
+        description: msg.description || fallback.description,
+        ctaLabel: msg.ctaLabel || fallback.ctaLabel,
+        footer: msg.footer || fallback.footer,
+    }
 }
 
 /**
@@ -195,7 +211,7 @@ export function getTheme(data = {}) {
  *   { kind: 'single', text }        — birthday / bar / bat / customTitle
  *   { kind: 'empty' }               — nothing yet
  */
-export function buildTitle(data = {}) {
+export function buildTitle(data = {}, locale = 'he') {
     if (data.customTitle && typeof data.customTitle === 'string' && data.customTitle.trim()) {
         return { kind: 'single', text: data.customTitle.trim() }
     }
@@ -213,8 +229,22 @@ export function buildTitle(data = {}) {
         const name = (data.celebrantName || '').trim()
         const age = Number.isFinite(Number(data.age)) && data.age !== '' ? Number(data.age) : null
         if (!name && age == null) return { kind: 'empty' }
-        if (age != null && name) return { kind: 'single', text: `יום הולדת ${age} ל${name}` }
-        if (age != null) return { kind: 'single', text: `יום הולדת ${age}` }
+        // Birthday formatting differs between languages — each language has
+        // its own idiom for "Nth birthday of X". Kept inline (rather than
+        // in messages/*.json) because the order of {name}/{age} sometimes
+        // flips, and ICU plural rules for ordinals would dwarf this code.
+        if (age != null && name) {
+            if (locale === 'en') return { kind: 'single', text: `${name}'s ${age}${nthSuffix(age)} birthday` }
+            if (locale === 'es') return { kind: 'single', text: `${age}º cumpleaños de ${name}` }
+            if (locale === 'it') return { kind: 'single', text: `${age}° compleanno di ${name}` }
+            return { kind: 'single', text: `יום הולדת ${age} ל${name}` }
+        }
+        if (age != null) {
+            if (locale === 'en') return { kind: 'single', text: `${age}${nthSuffix(age)} birthday` }
+            if (locale === 'es') return { kind: 'single', text: `${age}º cumpleaños` }
+            if (locale === 'it') return { kind: 'single', text: `${age}° compleanno` }
+            return { kind: 'single', text: `יום הולדת ${age}` }
+        }
         return { kind: 'single', text: name }
     }
 
@@ -224,26 +254,33 @@ export function buildTitle(data = {}) {
     return { kind: 'single', text: name }
 }
 
+// English ordinal suffix helper (1st, 2nd, 3rd, 4th...). Internal only.
+function nthSuffix(n) {
+    const s = ['th', 'st', 'nd', 'rd']
+    const v = n % 100
+    return s[(v - 20) % 10] || s[v] || s[0]
+}
+
 /**
  * Small label ABOVE the title (e.g. "ספר הברכות של").
  * Respects customSubtitle.
  */
-export function buildSubtitle(data = {}) {
+export function buildSubtitle(data = {}, locale = 'he') {
     if (data.customSubtitle && typeof data.customSubtitle === 'string' && data.customSubtitle.trim()) {
         return data.customSubtitle.trim()
     }
-    return getEventConfig(data.eventType).subtitle
+    return getEventConfig(data.eventType, locale).subtitle
 }
 
 /**
  * Description paragraph below the title (e.g. "יום הבר מצווה זוכר לתמיד...").
  * Respects customDescription.
  */
-export function buildDescription(data = {}) {
+export function buildDescription(data = {}, locale = 'he') {
     if (data.customDescription && typeof data.customDescription === 'string' && data.customDescription.trim()) {
         return data.customDescription.trim()
     }
-    return getEventConfig(data.eventType).description
+    return getEventConfig(data.eventType, locale).description
 }
 
 /**

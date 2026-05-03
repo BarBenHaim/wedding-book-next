@@ -79,9 +79,15 @@ export default function NotebookPageLayout({ entry, styleSettings, scaledWidth, 
     // user explicitly overrides via DesignControls.
     const fontClass = styleSettings.fontClass || gveretLevin.className
 
+    // Direction support: the gold margin rule sits on the START side of
+    // the reading direction (right for Hebrew, left for English). Setting
+    // dir on the card lets CSS logical properties below resolve correctly.
+    const dir = styleSettings.locale === 'en' || styleSettings.locale === 'es' || styleSettings.locale === 'it' ? 'ltr' : 'rtl'
+
     return (
         <div
             className='relative box-border overflow-hidden'
+            dir={dir}
             style={{
                 width: '100%',
                 height: '100%',
@@ -144,13 +150,16 @@ export default function NotebookPageLayout({ entry, styleSettings, scaledWidth, 
                     overflow: 'hidden',
                 }}
             >
-                {/* Gold left-margin rule */}
+                {/* Gold left-margin rule — sits on the START edge of the
+                    reading direction. insetInlineStart resolves to the
+                    right side in Hebrew, the left side in English/Spanish/
+                    Italian, so the same code renders correctly in either. */}
                 <div
                     style={{
                         position: 'absolute',
                         top: 0,
                         bottom: 0,
-                        right: w(5.5), // RTL: "left" margin appears visually on the right
+                        insetInlineStart: w(5.5),
                         width: 1.5,
                         background: 'rgba(170,136,64,0.5)',
                     }}
@@ -166,9 +175,20 @@ export default function NotebookPageLayout({ entry, styleSettings, scaledWidth, 
                         style={{
                             fontSize: h(3.0),
                             lineHeight: ruleHeight + 'px',
-                            textAlign: 'right',
+                            // Text aligns to the START of the line in the
+                            // current reading direction — same side as the
+                            // gold margin rule, mimicking real notebook
+                            // pages where you write from the margin in.
+                            textAlign: 'start',
                             color: textColor,
-                            margin: '-10px 18px 0 0',
+                            // Logical margins: 18px gap on the start side
+                            // (so text doesn't slam the gold margin rule),
+                            // -10px top to nudge the first line up onto
+                            // the first ruled row.
+                            marginTop: -10,
+                            marginInlineStart: 18,
+                            marginInlineEnd: 0,
+                            marginBottom: 0,
                             whiteSpace: 'pre-line',
                             wordWrap: 'break-word',
                             position: 'relative',

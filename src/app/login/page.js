@@ -1,11 +1,25 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { signInWithEmailAndPassword, getIdToken } from 'firebase/auth'
 import { collection, query, where, getDocs, limit } from 'firebase/firestore'
 import { auth, db } from '../../lib/firebaseClient'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { getMessages } from '@/i18n/getMessages'
+import { normalizeLocale } from '@/i18n/locales'
+
+// Login is anonymous chrome — no wedding context to read locale from.
+// Mirrors the home page / Header pattern: detect from navigator.language.
+function detectBrowserLocale() {
+    if (typeof navigator === 'undefined') return 'he'
+    const raw = (navigator.language || '').toLowerCase()
+    if (raw.startsWith('he')) return 'he'
+    if (raw.startsWith('en')) return 'en'
+    if (raw.startsWith('es')) return 'es'
+    if (raw.startsWith('it')) return 'it'
+    return 'he'
+}
 
 export default function LoginPage() {
     const [email, setEmail] = useState('')
@@ -14,6 +28,14 @@ export default function LoginPage() {
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
     const router = useRouter()
+
+    // SSR-safe locale detection: render Hebrew on first paint to match
+    // server output, then swap to the user's browser language on mount.
+    const [locale, setLocale] = useState('he')
+    useEffect(() => {
+        setLocale(normalizeLocale(detectBrowserLocale()))
+    }, [])
+    const t = useMemo(() => getMessages(locale).login, [locale])
 
     async function handleLogin(e) {
         e.preventDefault()
@@ -46,7 +68,7 @@ export default function LoginPage() {
 
             router.push(`/wedding/${weddingId}/portal`)
         } catch (err) {
-            setError('שגיאה בהתחברות: ' + err.message)
+            setError(t.errorPrefix + err.message)
         } finally {
             setLoading(false)
         }
@@ -71,13 +93,13 @@ export default function LoginPage() {
                     </div>
                 </div>
 
-                <h1 className='mb-1.5 text-center text-2xl font-bold text-[#18140F]'>התחברות לחתן ולכלה</h1>
-                <p className='text-center text-sm text-[#5a5040] mb-6'>כניסה ללוח הניהול האישי שלכם</p>
+                <h1 className='mb-1.5 text-center text-2xl font-bold text-[#18140F]'>{t.title}</h1>
+                <p className='text-center text-sm text-[#5a5040] mb-6'>{t.subtitle}</p>
 
                 {/* טופס */}
                 <form onSubmit={handleLogin} className='space-y-4'>
-                    <div className='text-right'>
-                        <label className='block text-sm font-medium text-gray-700 mb-1'>אימייל</label>
+                    <div className='text-start'>
+                        <label className='block text-sm font-medium text-gray-700 mb-1'>{t.emailLabel}</label>
                         <input
                             type='email'
                             placeholder='name@example.com'
@@ -88,8 +110,8 @@ export default function LoginPage() {
                         />
                     </div>
 
-                    <div className='text-right'>
-                        <label className='block text-sm font-medium text-gray-700 mb-1'>סיסמה</label>
+                    <div className='text-start'>
+                        <label className='block text-sm font-medium text-gray-700 mb-1'>{t.passwordLabel}</label>
                         <div className='relative'>
                             <input
                                 type={showPassword ? 'text' : 'password'}
@@ -125,9 +147,9 @@ export default function LoginPage() {
                                     <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4'/>
                                     <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8v8z'/>
                                 </svg>
-                                מתחבר...
+                                {t.submitting}
                             </span>
-                        ) : 'התחבר'}
+                        ) : t.submit}
                     </button>
                 </form>
 
@@ -136,7 +158,7 @@ export default function LoginPage() {
                 {/* Help text */}
                 <div className='mt-6 pt-5 border-t border-gray-100 text-center'>
                     <p className='text-sm text-gray-400'>
-                        פרטי ההתחברות נשלחו למייל שלכם לאחר הרכישה
+                        {t.helpText}
                     </p>
                 </div>
             </div>

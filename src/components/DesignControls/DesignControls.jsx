@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage } from '@/lib/firebaseClient'
 import { heebo, frankRuhl, secular, davidLibre, notoHebrew, gveretLevin, danaYad } from '@/app/fonts'
+import { getMessages } from '@/i18n/getMessages'
+import { dirFor, normalizeLocale } from '@/i18n/locales'
 
 import frame1 from '../../media/frames/frame1.png'
 import frame2 from '../../media/frames/frame2.png'
@@ -180,7 +182,7 @@ const BufferedInput = ({ value, onChange, placeholder, className }) => {
     )
 }
 
-const PositionPad = ({ x, y, onChange }) => {
+const PositionPad = ({ x, y, onChange, t }) => {
     const containerRef = useRef(null)
     const [isDragging, setIsDragging] = useState(false)
 
@@ -227,8 +229,8 @@ const PositionPad = ({ x, y, onChange }) => {
     return (
         <div className='space-y-1'>
             <div className='flex justify-between text-[10px] text-gray-400'>
-                <span>מיקום</span>
-                <span>לחצי וגררי</span>
+                <span>{t.position}</span>
+                <span>{t.dragHint}</span>
             </div>
             <div
                 ref={containerRef}
@@ -266,9 +268,16 @@ const Card = ({ title, children, className = '' }) => (
     </div>
 )
 
-export default function DesignControls({ settings, onChange, mode, onModeChange, saveStatus = 'idle', weddingId }) {
+export default function DesignControls({ settings, onChange, mode, onModeChange, saveStatus = 'idle', weddingId, locale }) {
     const [activePreset, setActivePreset] = useState(null)
     const [uploadingCover, setUploadingCover] = useState(false)
+
+    // i18n — `locale` is passed in by the parent (viewer page) so the
+    // panel speaks the same language the couple sees on their guest
+    // page. Fall back to Hebrew so old call-sites still work.
+    const resolvedLocale = normalizeLocale(locale)
+    const t = useMemo(() => getMessages(resolvedLocale).designControls, [resolvedLocale])
+    const dir = dirFor(resolvedLocale)
 
     const applyPreset = preset => {
         setActivePreset(preset.name)
@@ -305,12 +314,12 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
     }
 
     return (
-        <div dir='rtl' className='flex flex-col gap-3 h-full bg-[#faf8f5] p-3'>
+        <div dir={dir} className='flex flex-col gap-3 h-full bg-[#faf8f5] p-3'>
             <div className='flex items-center justify-end h-5 px-1 shrink-0'>
                 {saveStatus === 'saving' && (
                     <span className='flex items-center gap-1.5 text-[11px] text-gray-400 font-medium'>
                         <span className='w-2.5 h-2.5 rounded-full border-2 border-gray-300 border-t-gray-500 animate-spin' />
-                        שומר...
+                        {t.saving}
                     </span>
                 )}
                 {saveStatus === 'saved' && (
@@ -318,7 +327,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                         <svg className='w-3 h-3' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={3}>
                             <path strokeLinecap='round' strokeLinejoin='round' d='M5 13l4 4L19 7' />
                         </svg>
-                        נשמר
+                        {t.saved}
                     </span>
                 )}
             </div>
@@ -330,7 +339,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                         mode === 'book' ? 'bg-white text-[#AA8840] shadow-sm' : 'text-gray-500 hover:text-gray-700'
                     }`}
                 >
-                    פנים הספר
+                    {t.modeBook}
                 </button>
                 <button
                     onClick={() => onModeChange('cover')}
@@ -338,14 +347,14 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                         mode === 'cover' ? 'bg-white text-[#c9a44e] shadow-sm' : 'text-gray-500 hover:text-gray-700'
                     }`}
                 >
-                    עיצוב כריכה
+                    {t.modeCover}
                 </button>
             </div>
 
             <div className='flex-1 overflow-y-auto pr-0.5 pl-0.5 space-y-4 pb-10 scrollbar-hide'>
                 {mode === 'book' && (
                     <div className='space-y-4 animate-fadeIn'>
-                        <Card title='סגנונות מוכנים'>
+                        <Card title={t.presetsTitle}>
                             <div className='grid grid-cols-2 gap-3'>
                                 {PRESETS.map(preset => (
                                     <button
@@ -358,12 +367,12 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                         }`}
                                         style={{ background: preset.preview }}
                                     >
+                                        {/* Label sits in the trailing-bottom corner of the
+                                            swatch. bg-white/90 reads against any preview color
+                                            we've shipped — was previously branched on the Hebrew
+                                            substring 'לבן' which would no-op in i18n. */}
                                         <span
-                                            className={`absolute bottom-1 right-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                                preset.name.includes('לבן')
-                                                    ? 'bg-gray-100 text-black'
-                                                    : 'bg-white/90 text-black'
-                                            }`}
+                                            className='absolute bottom-1 end-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/90 text-black'
                                         >
                                             {preset.name}
                                         </span>
@@ -372,7 +381,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                             </div>
                         </Card>
 
-                        <Card title='פונטים'>
+                        <Card title={t.fontsTitle}>
                             <div className='space-y-2'>
                                 {FONTS.map(f => (
                                     <button
@@ -385,7 +394,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                         }`}
                                     >
                                         <span className='text-[10px] text-gray-400'>{f.label}</span>
-                                        <span className={`${f.font.className} text-base`}>אני אוהב אותך</span>
+                                        <span className={`${f.font.className} text-base`}>{t.fontSample}</span>
                                     </button>
                                 ))}
                             </div>
@@ -395,23 +404,23 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
 
                 {mode === 'cover' && (
                     <div className='animate-fadeIn space-y-4'>
-                        <Card title='טקסט כריכה'>
+                        <Card title={t.coverTextTitle}>
                             <div className='space-y-3'>
                                 <BufferedInput
                                     value={settings.coverTitle}
                                     onChange={val => onChange({ ...settings, coverTitle: val })}
-                                    placeholder='כותרת'
+                                    placeholder={t.coverTitlePlaceholder}
                                     className='w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#c9a44e]/30 outline-none'
                                 />
                                 <BufferedInput
                                     value={settings.coverSubtitle}
                                     onChange={val => onChange({ ...settings, coverSubtitle: val })}
-                                    placeholder='תת כותרת'
+                                    placeholder={t.coverSubtitlePlaceholder}
                                     className='w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#c9a44e]/30 outline-none'
                                 />
                             </div>
                             <div className='mt-3 flex items-center justify-between'>
-                                <span className='text-xs text-gray-500'>רקע לטקסט</span>
+                                <span className='text-xs text-gray-500'>{t.coverTextBg}</span>
                                 <button
                                     onClick={() =>
                                         onChange({
@@ -432,7 +441,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                             </div>
 
                             <div className='mt-4 pt-3 border-t border-gray-100'>
-                                <div className='text-xs text-gray-500 mb-2'>מיקום הטקסט</div>
+                                <div className='text-xs text-gray-500 mb-2'>{t.coverTextPosition}</div>
                                 <div dir='ltr' className='grid grid-cols-3 gap-1.5 w-full max-w-[160px] mx-auto'>
                                     {['tl', 'tc', 'tr', 'cl', 'center', 'cr', 'bl', 'bc', 'br'].map(id => {
                                         const active = (settings.coverTextPosition || 'center') === id
@@ -460,7 +469,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                             </div>
                         </Card>
 
-                        <Card title='תמונת כריכה'>
+                        <Card title={t.coverImageTitle}>
                             {!settings.coverImage ? (
                                 <label className='flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-[#AA8840]/30 rounded-xl cursor-pointer hover:bg-[#AA8840]/5 hover:border-[#c9a44e] transition-all duration-200'>
                                     <svg
@@ -481,7 +490,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                             d='M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z'
                                         />
                                     </svg>
-                                    <span className='text-xs text-[#AA8840]/60 font-medium'>העלאת תמונה</span>
+                                    <span className='text-xs text-[#AA8840]/60 font-medium'>{t.uploadImage}</span>
                                     <input
                                         type='file'
                                         accept='image/*'
@@ -516,6 +525,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                     <PositionPad
                                         x={settings.coverImageX || 50}
                                         y={settings.coverImageY || 50}
+                                        t={t}
                                         onChange={(newX, newY) =>
                                             onChange({ ...settings, coverImageX: newX, coverImageY: newY })
                                         }
@@ -523,7 +533,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
 
                                     <div>
                                         <div className='flex justify-between text-[10px] text-gray-400 mb-1'>
-                                            <span>זום</span>
+                                            <span>{t.zoom}</span>
                                             <span>{settings.coverImageScale || 100}%</span>
                                         </div>
                                         <input
@@ -541,7 +551,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                             )}
                         </Card>
 
-                        <Card title='עיצוב ורקע'>
+                        <Card title={t.designAndBg}>
                             <div className='grid grid-cols-4 gap-2'>
                                 <button
                                     onClick={() => onChange({ coverTexture: null, coverFrame: null })}
@@ -551,7 +561,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                             : 'bg-white hover:bg-gray-50'
                                     }`}
                                 >
-                                    אוטומטי
+                                    {t.auto}
                                 </button>
 
                                 <button
@@ -562,7 +572,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                             : 'bg-white hover:bg-gray-50'
                                     }`}
                                 >
-                                    ללא
+                                    {t.none}
                                 </button>
 
                                 {TEXTURES.map((tex, i) => (

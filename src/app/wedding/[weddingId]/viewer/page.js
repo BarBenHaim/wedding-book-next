@@ -18,6 +18,9 @@ import PrintOrderModal from '@/components/PrintOrderModal/PrintOrderModal'
 import { getEntries } from '../../../../lib/classifyMedia'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defultStyle'
 import { BOOK_FORMATS, resolveFormatConfig } from '@/lib/bookFormats'
+import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
+import { getMessages } from '@/i18n/getMessages'
+import { normalizeLocale } from '@/i18n/locales'
 
 // --- הגדרות דפוס (LULU COMPLIANT) ---
 //
@@ -42,8 +45,27 @@ const COVER_CONFIG = {
     dpi: 300,
 }
 
+// Outer wrapper — owns the runtime locale and wraps the viewer in
+// NextIntlClientProvider so descendants (BookViewerInner + DesignControls
+// when needed) can use the i18n hooks. The inner component bubbles the
+// doc's locale up via onLocaleDiscovered() once Firestore answers.
 export default function BookViewer() {
+    const [locale, setLocale] = useState('he')
+    const onLocaleDiscovered = useCallback(
+        next => setLocale(prev => (prev === next ? prev : next)),
+        []
+    )
+    return (
+        <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
+            <BookViewerInner onLocaleDiscovered={onLocaleDiscovered} />
+        </NextIntlClientProvider>
+    )
+}
+
+function BookViewerInner({ onLocaleDiscovered }) {
     const { weddingId } = useParams()
+    const t = useTranslations('viewer')
+    const locale = useLocale()
 
     const [pages, setPages] = useState([])
     const [loading, setLoading] = useState(true)
@@ -52,6 +74,13 @@ export default function BookViewer() {
     const [viewerSize, setViewerSize] = useState(500)
     const [isMobile, setIsMobile] = useState(false)
     const [styleSettings, setStyleSettings] = useState(defaultStyle)
+    // Inject the wedding's locale into styleSettings so BookPageTemplate
+    // and the page layouts (Notebook, Collage) can read it and set their
+    // own dir + use the right logical CSS resolution. MUST be declared
+    // here, alongside other top-level hooks — placing it after any early
+    // return below would violate the rules of hooks (different render
+    // paths returned different hook counts on first vs. second render).
+    const styleWithLocale = useMemo(() => ({ ...styleSettings, locale }), [styleSettings, locale])
     const [isGenerating, setIsGenerating] = useState(false)
     const [showPrintModal, setShowPrintModal] = useState(false)
     const [printStatus, setPrintStatus] = useState('idle') // 'idle' | 'generating' | 'uploading' | 'ordering' | 'done' | 'error'
@@ -102,6 +131,10 @@ export default function BookViewer() {
                     const snap = await getDoc(doc(db, 'weddings', weddingId))
                     if (snap.exists()) {
                         const firestoreData = snap.data()
+                        // Bubble the doc's locale up to the outer provider so
+                        // every chrome string (DesignControls, viewer status
+                        // messages) speaks the wedding's configured language.
+                        onLocaleDiscovered(normalizeLocale(firestoreData.locale))
                         if (firestoreData.coverDesign) {
                             setStyleSettings({ ...defaultStyle, ...firestoreData.coverDesign })
                         } else if (typeof window !== 'undefined') {
@@ -362,11 +395,11 @@ export default function BookViewer() {
 
             setPrintStatus('done')
             setShowPrintModal(false)
-            alert(`ההזמנה נוצרה בהצלחה! 🎉\nמספר הזמנה: ${data.printJobId}\nהספר בדרך אליכם.`)
+            alert(t('orderSuccess', { orderId: data.printJobId }))
         } catch (error) {
             console.error('Print order error:', error)
             setPrintStatus('error')
-            alert(`אירעה שגיאה: ${error.message}\nנסו שוב מאוחר יותר.`)
+            alert(t('orderError', { error: error.message }))
         } finally {
             setIsGenerating(false)
             setTimeout(() => setPrintStatus('idle'), 1000)
@@ -393,7 +426,7 @@ export default function BookViewer() {
         exportTriggeredRef.current = true
         const t = setTimeout(async () => {
             setExportStatus('generating')
-            setExportMessage('מייצר PDF של תוכן הספר...')
+            setExportMessage(t('exportingContent'))
             try {
                 const contentBlob = await generatePdfBlobFromRef(exportContentRef, exportConfig.content)
                 if (contentBlob) {
@@ -402,7 +435,7 @@ export default function BookViewer() {
                         `WeddingBook-${weddingId}-${autoExportFormat.id}-Content.pdf`
                     )
                 }
-                setExportMessage('מייצר PDF של הכריכה...')
+                setExportMessage(t('exportingCover'))
                 const coverBlob = await generatePdfBlobFromRef(exportCoverRef, exportConfig.cover)
                 if (coverBlob) {
                     triggerBrowserDownload(
@@ -412,12 +445,12 @@ export default function BookViewer() {
                 }
                 setExportStatus('done')
                 setExportMessage(
-                    `הורדת ${autoExportFormat.label} הושלמה — שני קבצי PDF ירדו למחשב.`
+                    t('exportDone', { format: autoExportFormat.label })
                 )
             } catch (err) {
                 console.error('auto-export failed:', err)
                 setExportStatus('error')
-                setExportMessage(`שגיאה ביצירת ה-PDF: ${err?.message || err}`)
+                setExportMessage(t('exportError', { error: err?.message || err }))
             }
         }, 800)
         return () => clearTimeout(t)
@@ -431,8 +464,8 @@ export default function BookViewer() {
                     <div className='animate-spin rounded-full h-12 w-12 border-[3px] border-[#AA8840]/20 border-t-[#c9a44e] shadow-lg shadow-[#AA8840]/10' />
                 </div>
                 <div className='text-center'>
-                    <p className='text-sm text-gray-600 font-bold tracking-wide'>טוען את עיצוב הכריכה...</p>
-                    <p className='text-xs text-gray-400 mt-2'>רגע אחד בלבד</p>
+                    <p className='text-sm text-gray-600 font-bold tracking-wide'>{t('loadingCover')}</p>
+                    <p className='text-xs text-gray-400 mt-2'>{t('oneMoment')}</p>
                 </div>
             </div>
         </div>
@@ -464,7 +497,7 @@ export default function BookViewer() {
     return (
         <AdminPageWrapper>
             <div
-                dir='rtl'
+                dir={locale === 'he' ? 'rtl' : 'ltr'}
                 className='relative flex flex-col-reverse lg:flex-row h-[calc(100vh-64px)] overflow-hidden bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] font-sans'
             >
                 <aside
@@ -480,6 +513,7 @@ export default function BookViewer() {
                             onModeChange={setMode}
                             saveStatus={saveStatus}
                             weddingId={weddingId}
+                            locale={locale}
                         />
                     </div>
                 </aside>
@@ -506,7 +540,7 @@ export default function BookViewer() {
                             >
                                 <div className='demo-page'>
                                     <BookCoverTemplate
-                                        styleSettings={styleSettings}
+                                        styleSettings={styleWithLocale}
                                         scaledWidth={viewerSize}
                                         scaledHeight={viewerSize}
                                     />
@@ -532,7 +566,7 @@ export default function BookViewer() {
                                     <div key={entry.id} className='demo-page border-l border-[#AA8840]/10'>
                                         <BookPageTemplate
                                             entry={entry}
-                                            styleSettings={styleSettings}
+                                            styleSettings={styleWithLocale}
                                             scaledWidth={viewerSize}
                                             scaledHeight={viewerSize}
                                         />
@@ -540,7 +574,7 @@ export default function BookViewer() {
                                 ))}
                                 <div className='demo-page shadow-inner'>
                                     <BookCoverTemplate
-                                        styleSettings={styleSettings}
+                                        styleSettings={styleWithLocale}
                                         scaledWidth={viewerSize}
                                         scaledHeight={viewerSize}
                                     />
@@ -560,17 +594,17 @@ export default function BookViewer() {
                                     <>
                                         <div className='w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin'></div>
                                         <span className='text-sm font-bold tracking-wide'>
-                                            {printStatus === 'generating' && 'מייצר קבצי PDF...'}
-                                            {printStatus === 'uploading' && 'מעלה קבצים...'}
-                                            {printStatus === 'ordering' && 'שולח להדפסה...'}
-                                            {printStatus === 'done' && 'ההזמנה נוצרה!'}
-                                            {printStatus === 'error' && 'שגיאה'}
-                                            {printStatus === 'idle' && 'מעבד...'}
+                                            {printStatus === 'generating' && t('printStatusGenerating')}
+                                            {printStatus === 'uploading' && t('printStatusUploading')}
+                                            {printStatus === 'ordering' && t('printStatusOrdering')}
+                                            {printStatus === 'done' && t('printStatusDone')}
+                                            {printStatus === 'error' && t('printStatusError')}
+                                            {printStatus === 'idle' && t('printStatusIdle')}
                                         </span>
                                     </>
                                 ) : (
                                     <>
-                                        <span className='text-sm font-bold tracking-wide'>שליחה להדפסה</span>
+                                        <span className='text-sm font-bold tracking-wide'>{t('sendToPrint')}</span>
                                         <svg className='w-5 h-5 group-hover:scale-110 transition-transform duration-300' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}><path strokeLinecap='round' strokeLinejoin='round' d='M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z' /></svg>
                                     </>
                                 )}
@@ -605,7 +639,7 @@ export default function BookViewer() {
                         >
                             <BookPageTemplate
                                 entry={entry}
-                                styleSettings={styleSettings}
+                                styleSettings={styleWithLocale}
                                 scaledWidth={contentDisplayWidth}
                                 scaledHeight={contentDisplayWidth / contentAspectRatio}
                             />
@@ -662,7 +696,7 @@ export default function BookViewer() {
                             }}
                         >
                             <BookCoverTemplate
-                                styleSettings={styleSettings}
+                                styleSettings={styleWithLocale}
                                 scaledWidth={panelWidthPx}
                                 scaledHeight={spreadDisplayHeight}
                             />
@@ -699,7 +733,7 @@ export default function BookViewer() {
                                 >
                                     <BookPageTemplate
                                         entry={entry}
-                                        styleSettings={styleSettings}
+                                        styleSettings={styleWithLocale}
                                         scaledWidth={renderW}
                                         scaledHeight={renderH}
                                     />
@@ -746,7 +780,7 @@ export default function BookViewer() {
                                     {/* Front cover */}
                                     <div style={{ width: `${panelWidthPxExport}px`, height: '100%', position: 'relative', overflow: 'hidden' }}>
                                         <BookCoverTemplate
-                                            styleSettings={styleSettings}
+                                            styleSettings={styleWithLocale}
                                             scaledWidth={panelWidthPxExport}
                                             scaledHeight={renderH}
                                         />
@@ -761,9 +795,9 @@ export default function BookViewer() {
             {/* --- Auto-export status overlay --- */}
             {autoExportFormat && (
                 <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm'>
-                    <div className='bg-white rounded-2xl shadow-2xl p-8 max-w-md w-[90%] text-center' dir='rtl'>
+                    <div className='bg-white rounded-2xl shadow-2xl p-8 max-w-md w-[90%] text-center' dir={locale === 'he' ? 'rtl' : 'ltr'}>
                         <h2 className='text-xl font-bold mb-2' style={{ color: '#AA8840' }}>
-                            הורדת PDF — {autoExportFormat.label}
+                            {t('downloadPdf', { format: autoExportFormat.label })}
                         </h2>
                         <p className='text-xs text-gray-500 mb-6'>{autoExportFormat.description}</p>
 
@@ -781,7 +815,7 @@ export default function BookViewer() {
                                     onClick={() => window.close()}
                                     className='mt-2 px-6 py-2 rounded-xl bg-[#AA8840] text-white text-sm font-bold'
                                 >
-                                    סגור חלון
+                                    {t('closeWindow')}
                                 </button>
                             </div>
                         )}
@@ -792,7 +826,7 @@ export default function BookViewer() {
                             </div>
                         )}
                         {exportStatus === 'idle' && (
-                            <p className='text-sm text-gray-500'>ממתין לטעינת הספר...</p>
+                            <p className='text-sm text-gray-500'>{t('waitingBook')}</p>
                         )}
                     </div>
                 </div>

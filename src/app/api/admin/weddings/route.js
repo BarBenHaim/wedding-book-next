@@ -5,6 +5,7 @@ export const fetchCache = 'force-no-store'
 import { NextResponse } from 'next/server'
 import { adminDb, adminAuth } from '@/lib/firebaseAdmin'
 import { normalizeEventType, normalizeThemeColor } from '@/lib/eventTypes'
+import { normalizeLocale } from '@/i18n/locales'
 
 const SUPER_ADMIN_EMAIL = 'barbenbh@gmail.com'
 
@@ -115,7 +116,7 @@ export async function PATCH(req) {
             return NextResponse.json({ error: 'Missing patch' }, { status: 400 })
         }
 
-        const ALLOWED = ['eventType', 'themeColor', 'celebrantName', 'age', 'customTitle', 'customSubtitle', 'customDescription', 'brideName', 'groomName']
+        const ALLOWED = ['eventType', 'locale', 'themeColor', 'celebrantName', 'age', 'customTitle', 'customSubtitle', 'customDescription', 'brideName', 'groomName']
         const clean = {}
 
         for (const key of ALLOWED) {
@@ -124,6 +125,12 @@ export async function PATCH(req) {
 
             if (key === 'eventType') {
                 clean[key] = normalizeEventType(v)
+                continue
+            }
+
+            if (key === 'locale') {
+                // Coerce to a known locale; unknown/empty falls back to 'he'.
+                clean[key] = normalizeLocale(v)
                 continue
             }
 

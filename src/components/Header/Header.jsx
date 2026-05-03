@@ -1,13 +1,28 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { auth } from '../../lib/firebaseClient'
 import { useRouter, usePathname } from 'next/navigation'
 import { collection, query, where, getDocs, limit } from 'firebase/firestore'
 import { db } from '../../lib/firebaseClient'
+import { getMessages } from '@/i18n/getMessages'
+import { normalizeLocale } from '@/i18n/locales'
 
 const SUPER_ADMIN_EMAIL = 'barbenbh@gmail.com'
+
+// The header is global chrome — it lives outside any wedding-doc context,
+// so it can't read locale from Firestore. Fall back to the browser's
+// preferred language. SSR safe: returns 'he' on the server.
+function detectBrowserLocale() {
+    if (typeof navigator === 'undefined') return 'he'
+    const raw = (navigator.language || '').toLowerCase()
+    if (raw.startsWith('he')) return 'he'
+    if (raw.startsWith('en')) return 'en'
+    if (raw.startsWith('es')) return 'es'
+    if (raw.startsWith('it')) return 'it'
+    return 'he'
+}
 
 // Drawer menu item icons
 const ViewerIcon = () => (
@@ -67,6 +82,17 @@ export default function Header() {
     const [menuOpen, setMenuOpen] = useState(false)
     const router = useRouter()
     const pathname = usePathname()
+
+    // Locale is detected from navigator.language, which is undefined on
+    // the server. To avoid hydration mismatches we render with the SSR
+    // default ('he') on first paint, then update once mounted on the
+    // client. The brief flash from Hebrew to the user's language only
+    // affects the chrome strings — short enough not to be noticeable.
+    const [locale, setLocale] = useState('he')
+    useEffect(() => {
+        setLocale(normalizeLocale(detectBrowserLocale()))
+    }, [])
+    const t = useMemo(() => getMessages(locale).header, [locale])
 
     const weddingIdFromUrl = pathname.startsWith('/wedding/') ? pathname.split('/')[2] : null
     const [personalWeddingId, setPersonalWeddingId] = useState(null)
@@ -130,7 +156,7 @@ export default function Header() {
                             <button
                                 onClick={() => setMenuOpen(prev => !prev)}
                                 className='relative w-11 h-11 flex flex-col justify-center items-center rounded-xl border border-[#AA8840]/20 bg-white/60 backdrop-blur-sm shadow-sm hover:shadow-md hover:border-[#AA8840]/40 active:scale-95 transition-all duration-200'
-                                aria-label='תפריט'
+                                aria-label={t.menuOpen}
                             >
                                 <span
                                     className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out ${menuOpen ? 'w-[18px] bg-[#AA8840] rotate-45 translate-y-[5px]' : 'w-[18px] bg-[#AA8840]/70'}`}
@@ -152,7 +178,7 @@ export default function Header() {
                                 onClick={() => router.push('/login')}
                                 className='rounded-full bg-gradient-to-r from-[#AA8840] to-[#c9a44e] px-5 py-2 text-sm font-medium text-white shadow-md cursor-pointer'
                             >
-                                התחברות
+                                {t.login}
                             </button>
                         )}
 
@@ -162,21 +188,21 @@ export default function Header() {
                                     onClick={() => router.push(`/wedding/${activeId}/viewer`)}
                                     className='rounded-full bg-[#AA8840]/10 px-4 py-2 text-sm font-medium text-[#AA8840] hover:bg-[#AA8840]/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer'
                                 >
-                                    עיצוב הספר
+                                    {t.designBook}
                                 </button>
 
                                 <button
                                     onClick={() => router.push(`/wedding/${activeId}/admin`)}
                                     className='rounded-full bg-[#f0ebe3] px-4 py-2 text-sm font-medium text-[#18140F] hover:bg-[#ebe5da] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer'
                                 >
-                                    ניהול הברכות
+                                    {t.manageBlessings}
                                 </button>
 
                                 <button
                                     onClick={() => router.push(`/wedding/${activeId}/portal`)}
                                     className='rounded-full bg-gradient-to-r from-[#AA8840] to-[#c9a44e] px-4 py-2 text-sm font-medium text-white shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer'
                                 >
-                                    QR ושיתוף
+                                    {t.qrShare}
                                 </button>
                             </>
                         )}
@@ -195,7 +221,7 @@ export default function Header() {
                                 onClick={handleLogout}
                                 className='rounded-full bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition cursor-pointer'
                             >
-                                התנתקות
+                                {t.logout}
                             </button>
                         )}
                     </div>
@@ -231,7 +257,7 @@ export default function Header() {
                         <button
                             onClick={() => setMenuOpen(false)}
                             className='w-11 h-11 flex items-center justify-center rounded-xl bg-white/80 shadow-sm hover:bg-white active:scale-95 transition-all'
-                            aria-label='סגור תפריט'
+                            aria-label={t.menuClose}
                         >
                             <svg
                                 className='w-5 h-5 text-gray-500'
@@ -254,7 +280,7 @@ export default function Header() {
                         {!user && !weddingIdFromUrl && (
                             <DrawerItem
                                 icon={<LogoutIcon />}
-                                label='התחברות'
+                                label={t.login}
                                 onClick={() => router.push('/login')}
                                 gold
                             />
@@ -264,19 +290,19 @@ export default function Header() {
                             <>
                                 <DrawerItem
                                     icon={<ViewerIcon />}
-                                    label='עיצוב הספר'
+                                    label={t.designBook}
                                     onClick={() => router.push(`/wedding/${activeId}/viewer`)}
                                     active={pathname?.includes('/viewer')}
                                 />
                                 <DrawerItem
                                     icon={<AdminIcon />}
-                                    label='ניהול הברכות'
+                                    label={t.manageBlessings}
                                     onClick={() => router.push(`/wedding/${activeId}/admin`)}
                                     active={pathname?.includes('/admin')}
                                 />
                                 <DrawerItem
                                     icon={<PortalIcon />}
-                                    label='QR ושיתוף'
+                                    label={t.qrShare}
                                     onClick={() => router.push(`/wedding/${activeId}/portal`)}
                                     active={pathname?.includes('/portal')}
                                     gold
@@ -296,7 +322,7 @@ export default function Header() {
                     {/* Bottom logout */}
                     {user && (
                         <div className='pt-4 border-t border-[#AA8840]/10'>
-                            <DrawerItem icon={<LogoutIcon />} label='התנתקות' onClick={handleLogout} muted />
+                            <DrawerItem icon={<LogoutIcon />} label={t.logout} onClick={handleLogout} muted />
                         </div>
                     )}
                 </div>
@@ -310,7 +336,7 @@ function DrawerItem({ icon, label, onClick, active, gold, muted }) {
     return (
         <button
             onClick={onClick}
-            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-right transition-all duration-200 ${
+            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-start transition-all duration-200 ${
                 active
                     ? 'bg-[#AA8840]/10 text-[#AA8840] font-bold'
                     : gold
@@ -326,7 +352,7 @@ function DrawerItem({ icon, label, onClick, active, gold, muted }) {
                 {icon}
             </span>
             <span className='text-base'>{label}</span>
-            {active && <span className='mr-auto w-1.5 h-1.5 rounded-full bg-[#AA8840]'></span>}
+            {active && <span className='ms-auto w-1.5 h-1.5 rounded-full bg-[#AA8840]'></span>}
         </button>
     )
 }

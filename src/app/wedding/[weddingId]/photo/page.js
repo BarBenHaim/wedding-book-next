@@ -2,12 +2,50 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../../../../lib/firebaseClient'
 import Cropper from 'react-easy-crop'
 import { enqueue, genId } from '../../../../lib/offlineQueue'
 import { uploadQueuedEntry } from '../../../../lib/uploadEntry'
 import { normalizeBlessing } from '../../../../lib/normalizeText'
+import { NextIntlClientProvider, useTranslations } from 'next-intl'
+import { getMessages } from '@/i18n/getMessages'
+import { normalizeLocale } from '@/i18n/locales'
 
+// Outer wrapper — fetches locale from the wedding doc once, then wraps
+// the form in NextIntlClientProvider so every string speaks the language
+// the super-admin configured for the event. Same pattern used by the
+// portal and thanks page.
 export default function TextPage() {
+    const { weddingId } = useParams()
+    const [locale, setLocale] = useState('he')
+
+    useEffect(() => {
+        if (!weddingId) return
+        let cancelled = false
+        ;(async () => {
+            try {
+                const snap = await getDoc(doc(db, 'weddings', weddingId))
+                if (cancelled) return
+                if (snap.exists()) setLocale(normalizeLocale(snap.data().locale))
+            } catch {
+                /* keep Hebrew default */
+            }
+        })()
+        return () => {
+            cancelled = true
+        }
+    }, [weddingId])
+
+    return (
+        <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
+            <PhotoApp />
+        </NextIntlClientProvider>
+    )
+}
+
+function PhotoApp() {
+    const t = useTranslations('photo')
     const [step, setStep] = useState(1) // 1: Text, 2: Photo
     const [name, setName] = useState('')
     const [text, setText] = useState('')
@@ -50,7 +88,7 @@ export default function TextPage() {
             if (liveVideoRef.current) liveVideoRef.current.srcObject = s
         } catch (err) {
             console.error('Camera Error:', err)
-            alert('לא ניתן לגשת למצלמה')
+            alert(t('cameraError'))
             setCameraOpen(false)
         }
     }
@@ -175,10 +213,7 @@ export default function TextPage() {
         // If image processing definitively failed AND we have no blob to
         // ship, ask the user whether to save without a photo.
         if (imageProcessingError && !finalBlob) {
-            const proceed = window.confirm(
-                'בעיה בעיבוד התמונה (יכול להיות שהיא גדולה מדי או בפורמט לא נתמך). ' +
-                    'האם לשלוח את הברכה בלי תמונה?',
-            )
+            const proceed = window.confirm(t('imageProcessFail'))
             if (!proceed) {
                 setSubmitting(false)
                 return
@@ -250,16 +285,13 @@ export default function TextPage() {
                     rawMsg,
                 )
             ) {
-                userMessage =
-                    'אין חיבור לאינטרנט. הברכה לא נשלחה — בדוק את החיבור ונסה שוב.'
+                userMessage = t('errNetwork')
             } else if (/permission|PERMISSION_DENIED|unauthor/i.test(rawMsg)) {
-                userMessage =
-                    'אין הרשאה לשליחת הברכה. צור קשר עם בעל האירוע.'
+                userMessage = t('errPermission')
             } else if (rawMsg) {
-                userMessage = `לא ניתן לשלוח את הברכה. (${rawMsg})`
+                userMessage = t('errSpecific', { reason: rawMsg })
             } else {
-                userMessage =
-                    'לא ניתן לשלוח את הברכה כרגע. נסה שוב בעוד רגע, ואם זה ממשיך — נסה דפדפן אחר.'
+                userMessage = t('errGeneric')
             }
             alert(userMessage)
             setSubmitting(false)
@@ -313,7 +345,7 @@ export default function TextPage() {
                         >
                             {isTextDone ? '✓' : '1'}
                         </div>
-                        <span className='font-semibold text-sm'>ברכה</span>
+                        <span className='font-semibold text-sm'>{t('step1Label')}</span>
                     </button>
 
                     {/* Connecting line */}
@@ -340,7 +372,7 @@ export default function TextPage() {
                         >
                             {isPhotoDone ? '✓' : '2'}
                         </div>
-                        <span className='font-semibold text-sm'>תמונה</span>
+                        <span className='font-semibold text-sm'>{t('step2Label')}</span>
                     </button>
                 </div>
 
@@ -348,28 +380,30 @@ export default function TextPage() {
                 {step === 1 && (
                     <div className='space-y-5 animate-fadeIn'>
                         <div>
-                            <label className='block text-right text-sm font-medium text-gray-700 mb-1'>
-                                שם (אופציונלי)
+                            <label className='block text-start text-sm font-medium text-gray-700 mb-1'>
+                                {t('nameLabel')}
                             </label>
                             <input
                                 value={name}
                                 onChange={e => setName(e.target.value)}
-                                placeholder='מי כותב/ת?'
+                                placeholder={t('namePlaceholder')}
                                 className='w-full rounded-xl border border-[#AA8840]/20 bg-[#AA8840]/5 px-4 py-3 text-gray-800 placeholder-[#AA8840]/30 focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/20 outline-none transition'
                             />
                         </div>
                         <div>
-                            <label className='block text-right text-sm font-medium text-gray-700 mb-1'>
-                                הברכה שלכם
+                            <label className='block text-start text-sm font-medium text-gray-700 mb-1'>
+                                {t('blessingLabel')}
                             </label>
                             <textarea
                                 value={text}
                                 onChange={e => setText(e.target.value)}
-                                placeholder='כתבו משהו מהלב...'
+                                placeholder={t('blessingPlaceholder')}
                                 className='w-full h-36 rounded-xl border border-[#AA8840]/20 bg-[#AA8840]/5 px-4 py-3 text-gray-800 placeholder-[#AA8840]/30 focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/20 outline-none resize-none transition'
                                 maxLength={210}
                             />
-                            <div className='text-left text-xs text-gray-400 mt-1 ml-1'>{text.length}/210</div>
+                            {/* text-end keeps the counter at the trailing edge of the
+                                form in either direction (was hardcoded text-left). */}
+                            <div className='text-end text-xs text-gray-400 mt-1'>{t('charCount', { used: text.length, max: 210 })}</div>
                         </div>
 
                         <button
@@ -377,7 +411,7 @@ export default function TextPage() {
                             disabled={!text.trim()}
                             className='w-full mt-4 py-3.5 rounded-xl gold-shimmer text-white font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed'
                         >
-                            המשך לתמונה
+                            {t('continueToPhoto')}
                         </button>
                     </div>
                 )}
@@ -418,10 +452,10 @@ export default function TextPage() {
                                             onClick={() => setCameraOpen(true)}
                                             className='px-6 py-2.5 bg-[#AA8840] text-white rounded-full text-sm font-bold shadow hover:bg-[#AA8840]/90 transition flex items-center gap-2'
                                         >
-                                            מצלמה
+                                            {t('camera')}
                                         </button>
                                         <label className='px-6 py-2.5 bg-white text-[#AA8840] border border-[#AA8840]/20 rounded-full text-sm font-bold shadow hover:bg-[#AA8840]/5 cursor-pointer transition flex items-center gap-2'>
-                                            גלריה
+                                            {t('gallery')}
                                             <input
                                                 type='file'
                                                 accept='image/*'
@@ -538,14 +572,14 @@ export default function TextPage() {
                                     }}
                                     className='flex-1 py-3 rounded-xl border border-gray-200 text-gray-500 font-bold hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition'
                                 >
-                                    החלף תמונה
+                                    {t('replacePhoto')}
                                 </button>
                                 <button
                                     onClick={onSubmit}
                                     disabled={submitting}
                                     className='flex-[2] py-3.5 rounded-xl gold-shimmer text-white font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50'
                                 >
-                                    {submitting ? 'שולח...' : 'שליחת ברכה'}
+                                    {submitting ? t('submitting') : t('submit')}
                                 </button>
                             </div>
                         )}
@@ -555,7 +589,7 @@ export default function TextPage() {
                                 onClick={() => setStep(1)}
                                 className='w-full py-2 text-gray-400 text-sm hover:text-[#AA8840] transition flex items-center justify-center gap-1'
                             >
-                                חזרה לעריכה
+                                {t('backToEdit')}
                             </button>
                         )}
                     </div>

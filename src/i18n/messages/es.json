@@ -1,0 +1,222 @@
+{
+  "$comment": "Spanish translation. Source: en.json. Keep keys in sync with he.json.",
+
+  "common": {
+    "save": "Guardar",
+    "saving": "Guardando...",
+    "saved": "Guardado",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "loading": "Cargando...",
+    "error": "Error",
+    "tryAgain": "Reintentar"
+  },
+
+  "eventTypes": {
+    "wedding": {
+      "label": "Boda",
+      "subtitle": "Un libro de bendiciones para",
+      "description": "Este es el lugar para compartir vuestros momentos, escribir bendiciones emotivas y añadir fotos que se conservarán para siempre.",
+      "ctaLabel": "Escribir una bendición",
+      "footer": "Wedding Tales"
+    },
+    "birthday": {
+      "label": "Cumpleaños",
+      "subtitle": "Un libro de bendiciones para el cumpleaños de",
+      "description": "Los momentos más bonitos merecen ser recordados. Escribe una bendición, añade una foto y guarda la alegría para siempre.",
+      "ctaLabel": "Escribir una bendición",
+      "footer": "Birthday Tales"
+    },
+    "bar_mitzvah": {
+      "label": "Bar Mitzvá",
+      "subtitle": "Un libro de bendiciones para el Bar Mitzvá de",
+      "description": "Un día de Bar Mitzvá para recordar siempre. Comparte una bendición, añade una foto y convierte el día en un recuerdo emotivo.",
+      "ctaLabel": "Escribir una bendición",
+      "footer": "Bar Mitzvah Tales"
+    },
+    "bat_mitzvah": {
+      "label": "Bat Mitzvá",
+      "subtitle": "Un libro de bendiciones para el Bat Mitzvá de",
+      "description": "Un día de Bat Mitzvá para recordar siempre. Comparte una bendición, añade una foto y convierte el día en un recuerdo emotivo.",
+      "ctaLabel": "Escribir una bendición",
+      "footer": "Bat Mitzvah Tales"
+    }
+  },
+
+  "home": {
+    "heroLine1": "Todos vuestros momentos,",
+    "heroLine2": "en un libro de boda de lujo",
+    "heroDescription": "Vuestros invitados suben bendiciones y fotos, y nosotros lo diseñamos todo en un libro impreso que perdura para siempre.",
+    "ctaPrimary": "Empezar ahora — gratis",
+    "ctaSecondary": "Iniciar sesión",
+    "howTitle": "Cómo funciona",
+    "howSubtitle": "Tres pasos sencillos para tu libro perfecto",
+    "step1Title": "Comparte un enlace",
+    "step1Desc": "Envía a los invitados un enlace o QR — por WhatsApp, en la invitación o en un cartel.",
+    "step2Title": "Recoge bendiciones y fotos",
+    "step2Desc": "Los invitados fotografían y escriben bendiciones desde el móvil, sin app.",
+    "step3Title": "Libro impreso con elegancia",
+    "step3Desc": "Diseña el libro en una interfaz cómoda y recíbelo impreso en casa.",
+    "whyTitle": "¿Por qué Wedding Tales?",
+    "whySubtitle": "Todo para que los recuerdos queden bonitos, ordenados y para siempre",
+    "feat1Title": "Sin app",
+    "feat1Desc": "Los invitados entran desde un enlace en el móvil — sin descargas ni registro.",
+    "feat2Title": "Diseño personalizado",
+    "feat2Desc": "Elige portada, colores, fuentes y marcos — todo bajo tu control.",
+    "feat3Title": "Impresión premium",
+    "feat3Desc": "Tapa dura, papel de calidad — como un estudio profesional.",
+    "feat4Title": "Control total",
+    "feat4Desc": "Edita, reordena y elimina bendiciones antes de imprimir.",
+    "trustTitle": "Confianza de las parejas",
+    "stat1Label": "bodas",
+    "stat1Desc": "libros bonitos creados",
+    "stat2Label": "satisfacción",
+    "stat2Desc": "de las parejas nos recomiendan",
+    "stat3Label": "bendiciones",
+    "stat3Desc": "de invitados, escuchadas y guardadas",
+    "bottomCtaTitle": "Vuestro libro os espera",
+    "bottomCtaSubtitle": "Empieza gratis y deja que vuestros invitados creen un recuerdo para siempre.",
+    "bottomCtaBtn": "Empezar ahora"
+  },
+
+  "login": {
+    "title": "Iniciar sesión",
+    "subtitle": "Accede a tu panel personal",
+    "emailLabel": "Correo electrónico",
+    "passwordLabel": "Contraseña",
+    "submitting": "Iniciando sesión...",
+    "submit": "Entrar",
+    "errorPrefix": "Error de inicio de sesión: ",
+    "helpText": "Tus credenciales se enviaron a tu correo después de la compra"
+  },
+
+  "photo": {
+    "step1Label": "Bendición",
+    "step2Label": "Foto",
+    "nameLabel": "Nombre (opcional)",
+    "namePlaceholder": "¿Quién escribe?",
+    "blessingLabel": "Vuestra bendición",
+    "blessingPlaceholder": "Escribe algo desde el corazón...",
+    "charCount": "{used}/{max}",
+    "continueToPhoto": "Continuar a la foto",
+    "camera": "Cámara",
+    "gallery": "Galería",
+    "replacePhoto": "Cambiar foto",
+    "submitting": "Enviando...",
+    "submit": "Enviar bendición",
+    "backToEdit": "Volver a editar",
+    "cameraError": "No se puede acceder a la cámara",
+    "imageProcessFail": "Error al procesar la imagen (puede ser demasiado grande o estar en un formato no compatible). ¿Enviar la bendición sin foto?",
+    "errNetwork": "Sin conexión a internet. La bendición no se envió — comprueba la conexión e inténtalo de nuevo.",
+    "errPermission": "Sin permiso para enviar. Contacta con el organizador del evento.",
+    "errSpecific": "No se pudo enviar la bendición. ({reason})",
+    "errGeneric": "No se pudo enviar ahora. Inténtalo en un momento — si sigue fallando, prueba con otro navegador."
+  },
+
+  "thanks": {
+    "title": "¡Gracias por tu bendición!",
+    "body1": "Tu mensaje se ha añadido al libro de boda",
+    "body2": "La feliz pareja podrá verlo enseguida",
+    "redirecting": "Te llevaremos de vuelta en un momento...",
+    "statusSent": "Enviado ✓",
+    "statusOffline": "Esperando conexión a internet",
+    "statusError": "Conexión inestable, reintentando…",
+    "statusWorking": "Enviando tu bendición…",
+    "offlineTitle": "Sin conexión a internet",
+    "offlineSavedSingular": "Tu bendición está guardada en este dispositivo ✨",
+    "offlineSavedPlural": "Hemos guardado {count} bendiciones en tu dispositivo ✨",
+    "offlineHintLine1Prefix": "Activa",
+    "offlineHintLine1Mid": "Wi-Fi",
+    "offlineHintLine1Suffix": "o",
+    "offlineHintLine1Suffix2": "datos móviles",
+    "offlineHintLine2": "y todo se enviará automáticamente cuando vuelvas a estar en línea.",
+    "iosHintLabel": "iPhone:",
+    "iosHintText": "Desliza desde la esquina superior derecha → toca Wi-Fi",
+    "androidHintLabel": "Android:",
+    "androidHintText": "Desliza desde arriba → toca Wi-Fi",
+    "checking": "Comprobando conexión…",
+    "checkAgain": "Lo intenté, comprobar otra vez",
+    "tabClosable": "Puedes cerrar la página — la bendición se enviará cuando vuelvas"
+  },
+
+  "guestPage": {
+    "notFound": "No se encontró este evento",
+    "linkNotFound": "Enlace no encontrado",
+    "linkExpired": "El enlace puede ser inválido o haber expirado"
+  },
+
+  "designControls": {
+    "saving": "Guardando...",
+    "saved": "Guardado",
+    "modeBook": "Interior del libro",
+    "modeCover": "Diseño de portada",
+    "presetsTitle": "Estilos predefinidos",
+    "fontsTitle": "Fuentes",
+    "fontSample": "Te amo",
+    "coverTextTitle": "Texto de portada",
+    "coverTitlePlaceholder": "Título",
+    "coverSubtitlePlaceholder": "Subtítulo",
+    "coverTextBg": "Fondo del texto",
+    "coverTextPosition": "Posición del texto",
+    "coverImageTitle": "Imagen de portada",
+    "uploadImage": "Subir imagen",
+    "zoom": "Zoom",
+    "designAndBg": "Diseño y fondo",
+    "auto": "Auto",
+    "none": "Ninguno",
+    "position": "Posición",
+    "dragHint": "Haz clic y arrastra"
+  },
+
+  "viewer": {
+    "loadingCover": "Cargando diseño de portada...",
+    "oneMoment": "Un momento",
+    "waitingBook": "Esperando el libro...",
+    "exportingContent": "Generando PDF del libro...",
+    "exportingCover": "Generando PDF de la portada...",
+    "exportDone": "Descarga de {format} completada — dos PDFs guardados en tu equipo.",
+    "exportError": "Error generando PDF: {error}",
+    "downloadPdf": "Descargar PDF — {format}",
+    "closeWindow": "Cerrar ventana",
+    "sendToPrint": "Enviar a imprimir",
+    "printStatusGenerating": "Generando PDFs...",
+    "printStatusUploading": "Subiendo archivos...",
+    "printStatusOrdering": "Enviando a imprimir...",
+    "printStatusDone": "¡Pedido realizado!",
+    "printStatusError": "Error",
+    "printStatusIdle": "Procesando...",
+    "orderSuccess": "¡Pedido realizado con éxito! 🎉\nNúmero de pedido: {orderId}\nEl libro va de camino.",
+    "orderError": "Ha ocurrido un error: {error}\nInténtalo más tarde."
+  },
+
+  "header": {
+    "menuOpen": "Menú",
+    "menuClose": "Cerrar menú",
+    "login": "Iniciar sesión",
+    "logout": "Cerrar sesión",
+    "designBook": "Diseñar libro",
+    "manageBlessings": "Gestionar bendiciones",
+    "qrShare": "QR y compartir"
+  },
+
+  "admin": {
+    "weddingDetails": "Detalles del evento",
+    "editEvent": "Editar detalles del evento",
+    "eventType": "Tipo de evento",
+    "themeColor": "Color del tema",
+    "language": "Idioma de la interfaz",
+    "languageHint": "El idioma que verá el usuario en su panel y los invitados que visiten el enlace",
+    "themeDefault": "Por defecto",
+    "brideName": "Nombre de la novia",
+    "groomName": "Nombre del novio",
+    "celebrantName": "Nombre del celebrante",
+    "age": "Edad",
+    "guestPageTexts": "Textos en la página de invitados",
+    "guestPageTextsHint": "Lo que aparece encima de los nombres, como título principal y descripción en la página de invitados. Deja en blanco para usar el valor predeterminado por tipo de evento.",
+    "subtitleLabel": "Subtítulo (la línea pequeña encima de los nombres)",
+    "titleLabel": "Título principal (en lugar de los nombres)",
+    "descriptionLabel": "Descripción (párrafo debajo del título)",
+    "saveChanges": "Guardar cambios"
+  }
+}

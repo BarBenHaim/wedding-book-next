@@ -1,0 +1,222 @@
+{
+  "$comment": "Italian translation. Source: en.json. Keep keys in sync with he.json.",
+
+  "common": {
+    "save": "Salva",
+    "saving": "Salvataggio...",
+    "saved": "Salvato",
+    "cancel": "Annulla",
+    "delete": "Elimina",
+    "edit": "Modifica",
+    "loading": "Caricamento...",
+    "error": "Errore",
+    "tryAgain": "Riprova"
+  },
+
+  "eventTypes": {
+    "wedding": {
+      "label": "Matrimonio",
+      "subtitle": "Un libro di auguri per",
+      "description": "Questo è il posto per condividere i vostri momenti, scrivere auguri sentiti e aggiungere foto che resteranno per sempre.",
+      "ctaLabel": "Scrivi un augurio",
+      "footer": "Wedding Tales"
+    },
+    "birthday": {
+      "label": "Compleanno",
+      "subtitle": "Un libro di auguri per il compleanno di",
+      "description": "I momenti più belli meritano di essere ricordati. Scrivi un augurio, aggiungi una foto e custodisci la gioia per sempre.",
+      "ctaLabel": "Scrivi un augurio",
+      "footer": "Birthday Tales"
+    },
+    "bar_mitzvah": {
+      "label": "Bar Mitzvah",
+      "subtitle": "Un libro di auguri per il Bar Mitzvah di",
+      "description": "Un giorno di Bar Mitzvah da ricordare per sempre. Condividi un augurio, aggiungi una foto e trasforma la giornata in un ricordo emozionante.",
+      "ctaLabel": "Scrivi un augurio",
+      "footer": "Bar Mitzvah Tales"
+    },
+    "bat_mitzvah": {
+      "label": "Bat Mitzvah",
+      "subtitle": "Un libro di auguri per il Bat Mitzvah di",
+      "description": "Un giorno di Bat Mitzvah da ricordare per sempre. Condividi un augurio, aggiungi una foto e trasforma la giornata in un ricordo emozionante.",
+      "ctaLabel": "Scrivi un augurio",
+      "footer": "Bat Mitzvah Tales"
+    }
+  },
+
+  "home": {
+    "heroLine1": "Tutti i vostri momenti,",
+    "heroLine2": "in un libro di nozze di lusso",
+    "heroDescription": "Gli ospiti caricano auguri e foto, e noi li trasformiamo in un libro stampato che dura per sempre.",
+    "ctaPrimary": "Inizia ora — gratis",
+    "ctaSecondary": "Accedi",
+    "howTitle": "Come funziona",
+    "howSubtitle": "Tre passaggi semplici per il libro perfetto",
+    "step1Title": "Condividi un link",
+    "step1Desc": "Manda agli ospiti un link o un QR — su WhatsApp, sull'invito o su un cartello.",
+    "step2Title": "Raccogli auguri e foto",
+    "step2Desc": "Gli ospiti fotografano e scrivono auguri direttamente dal cellulare — senza app.",
+    "step3Title": "Libro stampato con eleganza",
+    "step3Desc": "Progetta il libro in un'interfaccia comoda e ricevilo stampato a casa.",
+    "whyTitle": "Perché Wedding Tales?",
+    "whySubtitle": "Tutto perché i ricordi restino belli, ordinati e per sempre",
+    "feat1Title": "Senza app",
+    "feat1Desc": "Gli ospiti aprono un link sul cellulare — niente download, niente registrazione.",
+    "feat2Title": "Design personalizzato",
+    "feat2Desc": "Scegli copertina, colori, font e cornici — tutto sotto il tuo controllo.",
+    "feat3Title": "Stampa premium",
+    "feat3Desc": "Copertina rigida, carta di qualità — come uno studio professionale.",
+    "feat4Title": "Controllo totale",
+    "feat4Desc": "Modifica, riordina ed elimina gli auguri prima della stampa.",
+    "trustTitle": "Coppie che si fidano di noi",
+    "stat1Label": "matrimoni",
+    "stat1Desc": "libri belli creati",
+    "stat2Label": "soddisfazione",
+    "stat2Desc": "delle coppie ci raccomandano",
+    "stat3Label": "auguri",
+    "stat3Desc": "dagli ospiti, ascoltati e custoditi",
+    "bottomCtaTitle": "Il vostro libro vi aspetta",
+    "bottomCtaSubtitle": "Inizia gratis e lascia che gli ospiti costruiscano con voi un ricordo che dura.",
+    "bottomCtaBtn": "Inizia ora"
+  },
+
+  "login": {
+    "title": "Accedi",
+    "subtitle": "Accedi al tuo pannello personale",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "submitting": "Accesso in corso...",
+    "submit": "Accedi",
+    "errorPrefix": "Errore di accesso: ",
+    "helpText": "Le credenziali sono state inviate alla tua email dopo l'acquisto"
+  },
+
+  "photo": {
+    "step1Label": "Augurio",
+    "step2Label": "Foto",
+    "nameLabel": "Nome (opzionale)",
+    "namePlaceholder": "Chi sta scrivendo?",
+    "blessingLabel": "Il vostro augurio",
+    "blessingPlaceholder": "Scrivi qualcosa dal cuore...",
+    "charCount": "{used}/{max}",
+    "continueToPhoto": "Continua alla foto",
+    "camera": "Fotocamera",
+    "gallery": "Galleria",
+    "replacePhoto": "Cambia foto",
+    "submitting": "Invio in corso...",
+    "submit": "Invia augurio",
+    "backToEdit": "Torna a modificare",
+    "cameraError": "Impossibile accedere alla fotocamera",
+    "imageProcessFail": "Errore nell'elaborazione dell'immagine (potrebbe essere troppo grande o in un formato non supportato). Inviare l'augurio senza foto?",
+    "errNetwork": "Nessuna connessione internet. L'augurio non è stato inviato — controlla la connessione e riprova.",
+    "errPermission": "Nessuna autorizzazione per inviare. Contatta l'organizzatore dell'evento.",
+    "errSpecific": "Impossibile inviare l'augurio. ({reason})",
+    "errGeneric": "Impossibile inviare ora. Riprova tra un momento — se continua a non funzionare, prova un altro browser."
+  },
+
+  "thanks": {
+    "title": "Grazie per il tuo augurio!",
+    "body1": "Il tuo messaggio è stato aggiunto al libro di nozze",
+    "body2": "La coppia felice potrà vederlo subito",
+    "redirecting": "Ti riporteremo alla home tra un momento...",
+    "statusSent": "Inviato ✓",
+    "statusOffline": "In attesa di connessione internet",
+    "statusError": "Connessione instabile, nuovo tentativo…",
+    "statusWorking": "Sto inviando il tuo augurio…",
+    "offlineTitle": "Nessuna connessione internet",
+    "offlineSavedSingular": "Il tuo augurio è salvato sul dispositivo ✨",
+    "offlineSavedPlural": "Abbiamo salvato {count} auguri sul tuo dispositivo ✨",
+    "offlineHintLine1Prefix": "Attiva",
+    "offlineHintLine1Mid": "Wi-Fi",
+    "offlineHintLine1Suffix": "o",
+    "offlineHintLine1Suffix2": "dati mobili",
+    "offlineHintLine2": "e tutto verrà inviato automaticamente quando torni online.",
+    "iosHintLabel": "iPhone:",
+    "iosHintText": "Scorri dall'angolo in alto a destra → tocca Wi-Fi",
+    "androidHintLabel": "Android:",
+    "androidHintText": "Scorri dall'alto → tocca Wi-Fi",
+    "checking": "Controllo connessione…",
+    "checkAgain": "Ho provato, controlla di nuovo",
+    "tabClosable": "Puoi chiudere la pagina — l'augurio verrà inviato al tuo ritorno"
+  },
+
+  "guestPage": {
+    "notFound": "Evento non trovato",
+    "linkNotFound": "Link non trovato",
+    "linkExpired": "Il link potrebbe non essere valido o essere scaduto"
+  },
+
+  "designControls": {
+    "saving": "Salvataggio...",
+    "saved": "Salvato",
+    "modeBook": "Interno del libro",
+    "modeCover": "Design della copertina",
+    "presetsTitle": "Stili pronti",
+    "fontsTitle": "Font",
+    "fontSample": "Ti amo",
+    "coverTextTitle": "Testo di copertina",
+    "coverTitlePlaceholder": "Titolo",
+    "coverSubtitlePlaceholder": "Sottotitolo",
+    "coverTextBg": "Sfondo del testo",
+    "coverTextPosition": "Posizione del testo",
+    "coverImageTitle": "Immagine di copertina",
+    "uploadImage": "Carica immagine",
+    "zoom": "Zoom",
+    "designAndBg": "Design e sfondo",
+    "auto": "Auto",
+    "none": "Nessuno",
+    "position": "Posizione",
+    "dragHint": "Clicca e trascina"
+  },
+
+  "viewer": {
+    "loadingCover": "Caricamento del design della copertina...",
+    "oneMoment": "Un momento",
+    "waitingBook": "In attesa del libro...",
+    "exportingContent": "Generazione PDF del libro...",
+    "exportingCover": "Generazione PDF della copertina...",
+    "exportDone": "Download di {format} completato — due PDF salvati sul computer.",
+    "exportError": "Errore nella generazione del PDF: {error}",
+    "downloadPdf": "Scarica PDF — {format}",
+    "closeWindow": "Chiudi finestra",
+    "sendToPrint": "Invia in stampa",
+    "printStatusGenerating": "Generazione PDF...",
+    "printStatusUploading": "Caricamento file...",
+    "printStatusOrdering": "Invio in stampa...",
+    "printStatusDone": "Ordine effettuato!",
+    "printStatusError": "Errore",
+    "printStatusIdle": "Elaborazione...",
+    "orderSuccess": "Ordine effettuato con successo! 🎉\nNumero ordine: {orderId}\nIl libro è in viaggio.",
+    "orderError": "Si è verificato un errore: {error}\nRiprova più tardi."
+  },
+
+  "header": {
+    "menuOpen": "Menu",
+    "menuClose": "Chiudi menu",
+    "login": "Accedi",
+    "logout": "Esci",
+    "designBook": "Progetta libro",
+    "manageBlessings": "Gestisci auguri",
+    "qrShare": "QR e condivisione"
+  },
+
+  "admin": {
+    "weddingDetails": "Dettagli evento",
+    "editEvent": "Modifica dettagli evento",
+    "eventType": "Tipo di evento",
+    "themeColor": "Colore del tema",
+    "language": "Lingua dell'interfaccia",
+    "languageHint": "La lingua mostrata all'utente nel pannello e agli ospiti che visitano il link",
+    "themeDefault": "Predefinito",
+    "brideName": "Nome della sposa",
+    "groomName": "Nome dello sposo",
+    "celebrantName": "Nome del festeggiato",
+    "age": "Età",
+    "guestPageTexts": "Testi nella pagina degli ospiti",
+    "guestPageTextsHint": "Quello che appare sopra i nomi, come titolo principale e descrizione nella pagina degli ospiti. Lascia vuoto per usare il valore predefinito per tipo di evento.",
+    "subtitleLabel": "Sottotitolo (la riga piccola sopra i nomi)",
+    "titleLabel": "Titolo principale (al posto dei nomi)",
+    "descriptionLabel": "Descrizione (paragrafo sotto il titolo)",
+    "saveChanges": "Salva modifiche"
+  }
+}

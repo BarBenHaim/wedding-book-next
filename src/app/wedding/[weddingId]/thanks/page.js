@@ -11,14 +11,53 @@
 // We deliberately don't auto-redirect while uploads are pending — the guest
 // might close the tab and we want the online listener to keep trying.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../../../../lib/firebaseClient'
 import { listUnsent } from '../../../../lib/offlineQueue'
 import { flushQueue } from '../../../../lib/uploadEntry'
+import { NextIntlClientProvider, useTranslations } from 'next-intl'
+import { getMessages } from '@/i18n/getMessages'
+import { normalizeLocale } from '@/i18n/locales'
 
+// Outer wrapper: load the wedding doc's locale, wrap in i18n provider so
+// every string in the inner component (status badges, offline modal,
+// device hints) speaks the language the super-admin configured.
 export default function ThanksPage() {
+    const { weddingId } = useParams()
+    const [locale, setLocale] = useState('he')
+
+    useEffect(() => {
+        if (!weddingId) return
+        let cancelled = false
+        ;(async () => {
+            try {
+                const snap = await getDoc(doc(db, 'weddings', weddingId))
+                if (cancelled) return
+                if (snap.exists()) {
+                    setLocale(normalizeLocale(snap.data().locale))
+                }
+            } catch {
+                /* keep Hebrew default */
+            }
+        })()
+        return () => {
+            cancelled = true
+        }
+    }, [weddingId])
+
+    return (
+        <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
+            <ThanksApp />
+        </NextIntlClientProvider>
+    )
+}
+
+function ThanksApp() {
     const router = useRouter()
     const { weddingId } = useParams()
+    const t = useTranslations('thanks')
 
     // UI status machine:
     //   'working' — trying to upload
@@ -158,19 +197,19 @@ export default function ThanksPage() {
             {/* כרטיס תודה */}
             <div className='relative z-10 w-full max-w-xl rounded-3xl bg-white/90 backdrop-blur-md p-8 md:p-10 shadow-2xl text-center animate-fadeIn border border-white/60'>
                 <img src='/logo-wt.png' alt='Wedding Tales' className='h-10 w-auto mx-auto mb-4 opacity-70' />
-                <h2 className='mb-3 text-3xl font-bold text-gray-800'>תודה על הברכה!</h2>
+                <h2 className='mb-3 text-3xl font-bold text-gray-800'>{t('title')}</h2>
                 <div className='w-16 h-0.5 bg-gradient-to-r from-transparent via-[#AA8840]/50 to-transparent mx-auto mb-3'></div>
                 <p className='text-base text-gray-600 mb-4'>
-                    ההודעה שלך נוספה בהצלחה לספר החתונה
+                    {t('body1')}
                     <br />
-                    הזוג המאושר יוכל לראות אותה מיד
+                    {t('body2')}
                 </p>
 
                 {/* Status badge — small, non-scary */}
-                <StatusBadge status={status} pendingCount={pendingCount} />
+                <StatusBadge status={status} pendingCount={pendingCount} t={t} />
 
                 {status === 'done' && (
-                    <p className='text-sm text-gray-500 mt-3'>נחזיר אותך לעמוד הראשי בעוד רגע...</p>
+                    <p className='text-sm text-gray-500 mt-3'>{t('redirecting')}</p>
                 )}
             </div>
 
@@ -179,6 +218,7 @@ export default function ThanksPage() {
                 <OfflineModal
                     pendingCount={pendingCount}
                     onCheck={tryFlush}
+                    t={t}
                 />
             )}
 
@@ -219,12 +259,12 @@ export default function ThanksPage() {
     )
 }
 
-function StatusBadge({ status, pendingCount }) {
+function StatusBadge({ status, pendingCount, t }) {
     if (status === 'done') {
         return (
             <div className='inline-flex items-center gap-2 rounded-full bg-green-50 border border-green-200 px-4 py-1.5 text-green-700 text-sm font-semibold'>
                 <span className='w-2 h-2 rounded-full bg-green-500'></span>
-                נשלח ✓
+                {t('statusSent')}
             </div>
         )
     }
@@ -232,7 +272,7 @@ function StatusBadge({ status, pendingCount }) {
         return (
             <div className='inline-flex items-center gap-2 rounded-full bg-amber-50 border border-amber-200 px-4 py-1.5 text-amber-700 text-sm font-semibold'>
                 <span className='w-2 h-2 rounded-full bg-amber-500'></span>
-                ממתין לחיבור לאינטרנט
+                {t('statusOffline')}
             </div>
         )
     }
@@ -240,7 +280,7 @@ function StatusBadge({ status, pendingCount }) {
         return (
             <div className='inline-flex items-center gap-2 rounded-full bg-red-50 border border-red-200 px-4 py-1.5 text-red-700 text-sm font-semibold'>
                 <span className='w-2 h-2 rounded-full bg-red-500'></span>
-                החיבור לא יציב, מנסה שוב…
+                {t('statusError')}
             </div>
         )
     }
@@ -248,13 +288,13 @@ function StatusBadge({ status, pendingCount }) {
     return (
         <div className='inline-flex items-center gap-2 rounded-full bg-[#AA8840]/10 border border-[#AA8840]/25 px-4 py-1.5 text-[#AA8840] text-sm font-semibold'>
             <span className='w-2 h-2 rounded-full bg-[#AA8840] animate-pulse'></span>
-            שולח את הברכה…
+            {t('statusWorking')}
             {pendingCount > 1 && <span className='ms-1 opacity-70'>({pendingCount})</span>}
         </div>
     )
 }
 
-function OfflineModal({ pendingCount, onCheck }) {
+function OfflineModal({ pendingCount, onCheck, t }) {
     const [checking, setChecking] = useState(false)
     async function handleCheck() {
         setChecking(true)
@@ -294,28 +334,30 @@ function OfflineModal({ pendingCount, onCheck }) {
                         </svg>
                     </div>
 
-                    <h3 className='text-xl font-bold text-gray-800 mb-2'>אין חיבור לאינטרנט</h3>
+                    <h3 className='text-xl font-bold text-gray-800 mb-2'>{t('offlineTitle')}</h3>
                     <p className='text-sm text-gray-600 leading-relaxed mb-1'>
                         {pendingCount > 1
-                            ? `שמרנו ${pendingCount} ברכות על המכשיר שלך ✨`
-                            : 'הברכה שלך נשמרה על המכשיר ✨'}
+                            ? t('offlineSavedPlural', { count: pendingCount })
+                            : t('offlineSavedSingular')}
                     </p>
                     <p className='text-sm text-gray-600 leading-relaxed mb-6'>
-                        הפעל/י <span className='font-bold text-[#AA8840]'>Wi-Fi</span> או
-                        <span className='font-bold text-[#AA8840]'> חבילת גלישה</span>,
+                        {t('offlineHintLine1Prefix')}{' '}
+                        <span className='font-bold text-[#AA8840]'>{t('offlineHintLine1Mid')}</span>{' '}
+                        {t('offlineHintLine1Suffix')}{' '}
+                        <span className='font-bold text-[#AA8840]'>{t('offlineHintLine1Suffix2')}</span>
                         <br />
-                        והכל יישלח אוטומטית ברגע שהחיבור יחזור.
+                        {t('offlineHintLine2')}
                     </p>
 
                     {/* Tiny OS hints */}
                     <div className='bg-gray-50 rounded-xl p-3 text-xs text-gray-500 mb-6 leading-relaxed'>
                         <span className='block mb-1'>
-                            <span className='font-semibold text-gray-600'>איפון:</span> החלקה מהפינה הימנית-עליונה →
-                            לחיצה על Wi-Fi
+                            <span className='font-semibold text-gray-600'>{t('iosHintLabel')}</span>{' '}
+                            {t('iosHintText')}
                         </span>
                         <span className='block'>
-                            <span className='font-semibold text-gray-600'>אנדרואיד:</span> החלקה מלמעלה →
-                            לחיצה על Wi-Fi
+                            <span className='font-semibold text-gray-600'>{t('androidHintLabel')}</span>{' '}
+                            {t('androidHintText')}
                         </span>
                     </div>
 
@@ -324,10 +366,10 @@ function OfflineModal({ pendingCount, onCheck }) {
                         disabled={checking}
                         className='w-full py-3.5 rounded-xl bg-[#AA8840] text-white font-bold shadow-lg hover:shadow-xl hover:bg-[#AA8840]/90 active:scale-[0.98] transition-all duration-300 disabled:opacity-50'
                     >
-                        {checking ? 'בודק חיבור…' : 'ניסיתי, בדוק שוב'}
+                        {checking ? t('checking') : t('checkAgain')}
                     </button>
                     <p className='text-[11px] text-gray-400 mt-3'>
-                        אפשר לסגור את הדף — הברכה תישלח כשתחזור לאפליקציה
+                        {t('tabClosable')}
                     </p>
                 </div>
             </div>

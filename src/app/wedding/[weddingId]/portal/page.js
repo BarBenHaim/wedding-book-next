@@ -1,18 +1,32 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '../../../../lib/firebaseClient'
 import { generateSlug } from '../../../../lib/generateSlug'
 import { normalizeEventType, getEventConfig } from '../../../../lib/eventTypes'
+import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
+import { getMessages } from '@/i18n/getMessages'
+import { normalizeLocale, dirFor } from '@/i18n/locales'
 
 // ייבוא רכיב לוח השנה המקצועי
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { registerLocale } from 'react-datepicker'
 import { he } from 'date-fns/locale/he'
+import { enUS } from 'date-fns/locale/en-US'
+import { es as esLocale } from 'date-fns/locale/es'
+import { it as itLocale } from 'date-fns/locale/it'
 registerLocale('he', he)
+registerLocale('en', enUS)
+registerLocale('es', esLocale)
+registerLocale('it', itLocale)
+
+// Map our locale ids to the date-picker registration code. Kept as a
+// separate map so we can swap (e.g. Spanish → es-419 for Latin America)
+// without touching call sites.
+const DATEPICKER_LOCALE = { he: 'he', en: 'en', es: 'es', it: 'it' }
 
 // --- אייקונים מעוצבים ---
 const PdfIcon = () => (
@@ -41,20 +55,36 @@ const CheckIcon = () => (
     </svg>
 )
 
+// Background options reference messages keys instead of hardcoded labels,
+// so each option's name lives in messages/{locale}.json and translates
+// automatically.
 const BG_OPTIONS = [
-    { id: 'wedding-bg', file: 'wedding-bg.png', label: 'קלאסי' },
-    { id: 'wedding-bg2', file: 'wedding-bg2.png', label: 'זהב שיש' },
+    { id: 'wedding-bg', file: 'wedding-bg.png', labelKey: 'bgClassic' },
+    { id: 'wedding-bg2', file: 'wedding-bg2.png', labelKey: 'bgGoldMarble' },
 ]
 
-// All non-wedding events share a single, neutral placeholder per the
-// product decision to keep the portal header clean — the event-type chip
-// at the top already tells the user what kind of event they're editing,
-// so there's no need to repeat "שם הבר מצווה" / "שם הבת מצווה" inside
-// the input itself.
-const NEUTRAL_NAME_PLACEHOLDER = 'שם החוגג'
-
+// ── Outer: owns the runtime locale state and wraps everything in
+// NextIntlClientProvider so descendants can call useTranslations() /
+// useLocale(). Starts with Hebrew so the page is sensible during the
+// initial Firestore fetch; the inner component bubbles the doc's
+// locale up via onLocaleDiscovered() once it loads, and the provider
+// re-renders with the right messages.
 export default function WeddingPortal() {
+    const [locale, setLocale] = useState('he')
+    // Stable callback identity so the inner's useEffect dep array doesn't
+    // re-fire the fetch on every render.
+    const onLocaleDiscovered = useCallback(next => setLocale(prev => (prev === next ? prev : next)), [])
+    return (
+        <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
+            <PortalApp onLocaleDiscovered={onLocaleDiscovered} />
+        </NextIntlClientProvider>
+    )
+}
+
+function PortalApp({ onLocaleDiscovered }) {
     const { weddingId } = useParams()
+    const t = useTranslations('portal')
+    const locale = useLocale()
 
     // ── Event identity (admin-controlled — portal only READS this; the
     //    UI swaps name fields based on it). Defaults to 'wedding' so the
@@ -66,9 +96,9 @@ export default function WeddingPortal() {
     const [brideName, setBrideName] = useState('')
     const [groomName, setGroomName] = useState('')
     const [celebrantName, setCelebrantName] = useState('')
-    // Birthday-only — drives "יום הולדת 78" style title via buildTitle().
-    // Stored as a string in state so the input never fights with the user
-    // (empty string is a valid "not set"); converted to number on save.
+    // Birthday-only — drives "יום הולדת 78 / 78th birthday" style title
+    // via buildTitle(). Stored as string in state so the input never
+    // fights the user; converted to number on save.
     const [age, setAge] = useState('')
 
     const [weddingDate, setWeddingDate] = useState(null)
@@ -85,7 +115,8 @@ export default function WeddingPortal() {
     const [copied, setCopied] = useState(false)
 
     // Resolved event-type config — drives field labels + placeholders.
-    const cfg = useMemo(() => getEventConfig(eventType), [eventType])
+    // Now locale-aware: in English, cfg.label === 'Bar Mitzvah'.
+    const cfg = useMemo(() => getEventConfig(eventType, locale), [eventType, locale])
     const isWedding = eventType === 'wedding'
     const isBirthday = eventType === 'birthday'
 
@@ -98,6 +129,7 @@ export default function WeddingPortal() {
                 const docSnap = await getDoc(docRef)
                 if (docSnap.exists()) {
                     const data = docSnap.data()
+                    onLocaleDiscovered(normalizeLocale(data.locale))
                     setEventType(normalizeEventType(data.eventType))
                     if (data.brideName) setBrideName(data.brideName)
                     if (data.groomName) setGroomName(data.groomName)
@@ -119,13 +151,11 @@ export default function WeddingPortal() {
             }
         }
         fetchWeddingData()
-    }, [weddingId])
+    }, [weddingId, onLocaleDiscovered])
 
     // שמירה ל-DB. We send only the fields visible in the UI for the
     // current event type — that way switching the type from the admin
     // doesn't get the portal to wipe the OTHER set of name fields.
-    // Empty custom* strings persist as null so the guest page falls back
-    // to the per-event-type defaults.
     async function saveToDB(updatedDate = weddingDate) {
         if (!weddingId) return
         try {
@@ -175,7 +205,7 @@ export default function WeddingPortal() {
     return (
         <div
             className='min-h-[calc(100vh-4rem)] bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da] flex flex-col items-center justify-center px-4 py-6 font-sans'
-            dir='rtl'
+            dir={dirFor(locale)}
         >
             {/* CSS מותאם אישית ללוח השנה */}
             <style jsx global>{`
@@ -202,7 +232,7 @@ export default function WeddingPortal() {
                 <div className='text-center mb-3 relative z-10'>
                     <img
                         src='/logo-wt.png'
-                        alt='Wedding Tales'
+                        alt={t('logoAlt')}
                         className='h-12 w-auto mx-auto drop-shadow-[0_2px_8px_rgba(170,136,64,0.3)]'
                     />
                 </div>
@@ -211,7 +241,7 @@ export default function WeddingPortal() {
                     מבהירה לזוג/לחוגג/ת איזה סוג אירוע הוא עורך כרגע. */}
                 <div className='text-center mb-5 relative z-10'>
                     <span className='inline-block bg-[#AA8840]/10 text-[#AA8840] text-[11px] font-bold tracking-wider uppercase px-3 py-1 rounded-full'>
-                        {cfg.hebrewLabel}
+                        {cfg.label}
                     </span>
                 </div>
 
@@ -223,7 +253,7 @@ export default function WeddingPortal() {
                             value={brideName}
                             onChange={e => setBrideName(e.target.value)}
                             onBlur={() => saveToDB()}
-                            placeholder='שם הכלה'
+                            placeholder={t('namePlaceholderBride')}
                             className='w-1/2 bg-transparent border-b-2 border-[#AA8840]/20 focus:border-[#AA8840] outline-none text-center text-xl md:text-2xl font-bold text-gray-800 transition-all duration-300 focus:text-[#AA8840]'
                         />
                         <span className='text-3xl text-[#AA8840] font-[Great Vibes]'>&</span>
@@ -232,7 +262,7 @@ export default function WeddingPortal() {
                             value={groomName}
                             onChange={e => setGroomName(e.target.value)}
                             onBlur={() => saveToDB()}
-                            placeholder='שם החתן'
+                            placeholder={t('namePlaceholderGroom')}
                             className='w-1/2 bg-transparent border-b-2 border-[#AA8840]/20 focus:border-[#AA8840] outline-none text-center text-xl md:text-2xl font-bold text-gray-800 transition-all duration-300 focus:text-[#AA8840]'
                         />
                     </div>
@@ -244,7 +274,7 @@ export default function WeddingPortal() {
                                 value={celebrantName}
                                 onChange={e => setCelebrantName(e.target.value)}
                                 onBlur={() => saveToDB()}
-                                placeholder={NEUTRAL_NAME_PLACEHOLDER}
+                                placeholder={t('namePlaceholderCelebrant')}
                                 className='flex-1 min-w-0 bg-transparent border-b-2 border-[#AA8840]/20 focus:border-[#AA8840] outline-none text-center text-xl md:text-2xl font-bold text-gray-800 transition-all duration-300 focus:text-[#AA8840]'
                             />
                             {isBirthday && (
@@ -255,7 +285,7 @@ export default function WeddingPortal() {
                                     value={age}
                                     onChange={e => setAge(e.target.value)}
                                     onBlur={() => saveToDB()}
-                                    placeholder='גיל'
+                                    placeholder={t('agePlaceholder')}
                                     className='w-20 bg-transparent border-b-2 border-[#AA8840]/20 focus:border-[#AA8840] outline-none text-center text-xl md:text-2xl font-bold text-gray-800 transition-all duration-300 focus:text-[#AA8840]'
                                 />
                             )}
@@ -266,7 +296,7 @@ export default function WeddingPortal() {
                 {/* לוח שנה מעוצב */}
                 <div className='relative z-20 flex flex-col items-center mb-8'>
                     <label className='text-xs font-bold text-gray-400 mb-3 uppercase tracking-widest'>
-                        {isWedding ? 'תאריך החתונה שלכם' : `תאריך ה${cfg.hebrewLabel}`}
+                        {isWedding ? t('dateLabelWedding') : t('dateLabelOther', { eventLabel: cfg.label })}
                     </label>
                     <DatePicker
                         selected={weddingDate}
@@ -275,8 +305,8 @@ export default function WeddingPortal() {
                             saveToDB(date)
                         }}
                         dateFormat='dd/MM/yyyy'
-                        locale='he'
-                        placeholderText='לחצו לבחירת תאריך'
+                        locale={DATEPICKER_LOCALE[locale] || 'en'}
+                        placeholderText={t('datePickerPlaceholder')}
                         className='bg-[#AA8840]/5 text-[#AA8840] px-8 py-3 rounded-2xl border border-[#AA8840]/20 outline-none focus:ring-4 focus:ring-[#AA8840]/10 focus:border-[#AA8840] transition-all font-bold text-center cursor-pointer shadow-sm hover:bg-[#AA8840]/10 w-full'
                     />
                 </div>
@@ -285,10 +315,11 @@ export default function WeddingPortal() {
                 <div className='space-y-6 relative z-10'>
                     {/* בחירת רקע לשלט */}
                     <div>
-                        <label className='block text-sm font-bold text-gray-600 mb-3'>בחרו עיצוב לשלט</label>
+                        <label className='block text-sm font-bold text-gray-600 mb-3'>{t('designPickerLabel')}</label>
                         <div className='grid grid-cols-2 gap-3'>
                             {BG_OPTIONS.map(bg => {
                                 const isSelected = selectedBg === bg.id
+                                const bgLabel = t(bg.labelKey)
                                 return (
                                     <button
                                         key={bg.id}
@@ -305,7 +336,7 @@ export default function WeddingPortal() {
                                         <div className='aspect-[3/4] relative'>
                                             <img
                                                 src={`/backgrounds/${bg.file}`}
-                                                alt={bg.label}
+                                                alt={bgLabel}
                                                 className='w-full h-full object-cover'
                                             />
                                             {/* Selected overlay */}
@@ -341,7 +372,7 @@ export default function WeddingPortal() {
                                                 className='text-xs font-bold'
                                                 style={{ color: isSelected ? '#AA8840' : '#666' }}
                                             >
-                                                {bg.label}
+                                                {bgLabel}
                                             </span>
                                         </div>
                                     </button>
@@ -364,7 +395,7 @@ export default function WeddingPortal() {
                                 a.href = URL.createObjectURL(blob)
                                 // Filename mirrors the event identity. For weddings keep
                                 // the historical "bride-groom" pattern; otherwise use the
-                                // celebrant name (or fall back to the event-type label).
+                                // celebrant name (or fall back to the event-type id).
                                 const filenameStem = isWedding
                                     ? [brideName, groomName].filter(Boolean).join('-') || 'wedding'
                                     : celebrantName || cfg.id
@@ -373,7 +404,7 @@ export default function WeddingPortal() {
                                 URL.revokeObjectURL(a.href)
                             } catch (err) {
                                 console.error('PDF download error:', err)
-                                alert('שגיאה ביצירת ה-PDF. נסו שוב.')
+                                alert(t('pdfError'))
                             } finally {
                                 setDownloading(false)
                             }
@@ -394,11 +425,11 @@ export default function WeddingPortal() {
                                     />
                                     <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8v8z' />
                                 </svg>
-                                <span>יוצר PDF...</span>
+                                <span>{t('generatingPdf')}</span>
                             </>
                         ) : (
                             <>
-                                <PdfIcon /> <span>הורדת שלט מוכן (PDF)</span>
+                                <PdfIcon /> <span>{t('downloadPdf')}</span>
                             </>
                         )}
                     </button>
@@ -406,10 +437,8 @@ export default function WeddingPortal() {
                     <div className='w-full h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent'></div>
 
                     <div className='text-center'>
-                        <h2 className='text-lg font-bold text-gray-800 mb-1'>שיתוף קישור ישיר</h2>
-                        <p className='text-xs text-gray-400 mb-4'>
-                            שלחו את הקישור לאורחים כדי שיוכלו להעלות ברכות ותמונות
-                        </p>
+                        <h2 className='text-lg font-bold text-gray-800 mb-1'>{t('shareTitle')}</h2>
+                        <p className='text-xs text-gray-400 mb-4'>{t('shareSubtitle')}</p>
                         <button
                             onClick={() => {
                                 navigator.clipboard.writeText(guestLink)
@@ -423,20 +452,23 @@ export default function WeddingPortal() {
                             >
                                 {copied ? <CheckIcon /> : <LinkIcon />}
                             </div>
-                            <div className='flex-1 text-right min-w-0'>
+                            {/* text-start = aligns to the reading-direction's start.
+                                In RTL → right edge (Hebrew); in LTR → left edge.
+                                Was hardcoded to text-right which broke in LTR. */}
+                            <div className='flex-1 text-start min-w-0'>
                                 <p className='text-sm font-semibold text-gray-700 truncate'>{displayLink}</p>
-                                <p className='text-[11px] text-gray-400 mt-0.5'>לחצו להעתקת הקישור המלא</p>
+                                <p className='text-[11px] text-gray-400 mt-0.5'>{t('copyHint')}</p>
                             </div>
                             <span
                                 className={`text-sm font-bold flex-shrink-0 px-3 py-1.5 rounded-lg transition-all ${copied ? 'text-emerald-600 bg-emerald-50' : 'text-[#AA8840] bg-[#AA8840]/5'}`}
                             >
-                                {copied ? 'הועתק!' : 'העתק'}
+                                {copied ? t('copied') : t('copy')}
                             </span>
                         </button>
                     </div>
                 </div>
             </div>
-            <p className='mt-8 text-gray-400 text-xs font-medium opacity-60'>נוצר באהבה עבור היום המיוחד שלכם</p>
+            <p className='mt-8 text-gray-400 text-xs font-medium opacity-60'>{t('footerTagline')}</p>
         </div>
     )
 }

@@ -1,13 +1,36 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState, use, useCallback } from 'react'
 import Link from 'next/link'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../../../lib/firebaseClient'
 import { getEventConfig, getPalette, buildTitle, buildSubtitle, buildDescription } from '../../../lib/eventTypes'
+import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
+import { getMessages } from '@/i18n/getMessages'
+import { normalizeLocale, dirFor } from '@/i18n/locales'
 
+// ── Outer: owns the runtime locale and wires the i18n provider so the
+// guest sees the page in the language the super-admin configured for the
+// event. Initial render is Hebrew (legacy default); the inner component
+// bubbles the doc's locale up via onLocaleDiscovered() once Firestore
+// answers, and the provider re-renders with the right messages.
 export default function WeddingHome({ params }) {
     const { weddingId } = use(params)
+    const [locale, setLocale] = useState('he')
+    const onLocaleDiscovered = useCallback(
+        next => setLocale(prev => (prev === next ? prev : next)),
+        []
+    )
+    return (
+        <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
+            <GuestLanding weddingId={weddingId} onLocaleDiscovered={onLocaleDiscovered} />
+        </NextIntlClientProvider>
+    )
+}
+
+function GuestLanding({ weddingId, onLocaleDiscovered }) {
+    const t = useTranslations('guestPage')
+    const locale = useLocale()
 
     const [exists, setExists] = useState(null)
     const [data, setData] = useState(null) // the raw wedding doc (or null while loading)
@@ -19,8 +42,10 @@ export default function WeddingHome({ params }) {
                 const ref = doc(db, 'weddings', weddingId)
                 const snap = await getDoc(ref)
                 if (snap.exists()) {
+                    const d = snap.data()
+                    onLocaleDiscovered(normalizeLocale(d.locale))
                     setExists(true)
-                    setData(snap.data())
+                    setData(d)
                 } else {
                     setExists(false)
                 }
@@ -30,28 +55,34 @@ export default function WeddingHome({ params }) {
             }
         }
         checkWedding()
-    }, [weddingId])
+    }, [weddingId, onLocaleDiscovered])
 
     if (exists === false) {
         return (
-            <div className='flex h-screen items-center justify-center text-gray-700 text-lg'>לא נמצאה החתונה הזו</div>
+            <div
+                className='flex h-screen items-center justify-center text-gray-700 text-lg'
+                dir={dirFor(locale)}
+            >
+                {t('notFound')}
+            </div>
         )
     }
 
     // Resolve copy + palette (color) independently.
-    // - copy comes from the event type (cfg)
+    // - copy comes from the event type (cfg) IN THE CHOSEN LOCALE
     // - palette comes from themeColor override, falling back to the type's default
     // Safe when data is null — helpers return sensible defaults and {kind:'empty'}.
-    const cfg = getEventConfig(data?.eventType)
+    const cfg = getEventConfig(data?.eventType, locale)
     const palette = getPalette(data || {})
-    const title = buildTitle(data || {})
-    const subtitle = buildSubtitle(data || {})
-    const description = buildDescription(data || {})
+    const title = buildTitle(data || {}, locale)
+    const subtitle = buildSubtitle(data || {}, locale)
+    const description = buildDescription(data || {}, locale)
 
     return (
         <div
             className='relative min-h-[calc(100vh-4rem)] font-sans flex flex-col items-center justify-center px-5 py-10 overflow-hidden'
             style={{ background: palette.bgGradient }}
+            dir={dirFor(locale)}
         >
             {/* ── Content ── */}
             <div className='relative z-10 flex flex-col items-center text-center animate-scaleIn max-w-[400px] w-full'>

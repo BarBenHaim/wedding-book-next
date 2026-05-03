@@ -23,6 +23,7 @@ import {
     THEME_COLORS,
     resolveThemeColorId,
 } from '@/lib/eventTypes'
+import { LOCALE_ORDER, LOCALES } from '@/i18n/locales'
 
 // ─── Data Fetching ────────────────────────────────────────────────────────────
 async function getToken() {
@@ -342,6 +343,10 @@ function EventTypeEditor({ wedding, onSave }) {
     // type's default.
     const buildDraft = w => ({
         eventType: normalizeEventType(w.eventType),
+        // Interface language for the couple's portal + their guest page.
+        // null/undefined falls back to Hebrew on the read side, matching
+        // the legacy behavior for every wedding doc that predates i18n.
+        locale: w.locale || 'he',
         themeColor: w.themeColor || null,
         brideName: w.brideName || '',
         groomName: w.groomName || '',
@@ -372,6 +377,7 @@ function EventTypeEditor({ wedding, onSave }) {
     function buildPatch() {
         const patch = {
             eventType: draft.eventType,
+            locale: draft.locale,
             themeColor: draft.themeColor, // null → server stores null = inherit
         }
         if (showBrideGroom) {
@@ -415,6 +421,25 @@ function EventTypeEditor({ wedding, onSave }) {
                         <option key={t} value={t}>{getEventConfig(t).hebrewLabel}</option>
                     ))}
                 </select>
+            </div>
+
+            {/* Interface language — drives the language shown to the
+                couple/celebrant in their portal AND to guests on the
+                shared link. Defaults to Hebrew for legacy events. */}
+            <div className='mb-3'>
+                <label className='text-xs font-semibold text-gray-500 mb-1 block'>שפת ממשק</label>
+                <select
+                    value={draft.locale}
+                    onChange={e => set('locale', e.target.value)}
+                    className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                >
+                    {LOCALE_ORDER.map(id => (
+                        <option key={id} value={id}>{LOCALES[id].label}</option>
+                    ))}
+                </select>
+                <p className='text-[10px] text-gray-400 mt-1 leading-relaxed'>
+                    השפה שתוצג למשתמש בעמוד הפורטל ולאורחים בעמוד השיתוף.
+                </p>
             </div>
 
             {/* Theme color picker — 3 swatches; independent of event type */}

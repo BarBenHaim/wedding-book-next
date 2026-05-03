@@ -79,9 +79,15 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
     const textColor = styleSettings.fontColor || INK
     const fontClass = styleSettings.fontClass || gveretLevin.className
 
+    // Direction support — the blessing block's anchor flips per locale so
+    // the handwritten text reads naturally in either direction.
+    const isRtl = !(styleSettings.locale === 'en' || styleSettings.locale === 'es' || styleSettings.locale === 'it')
+    const dir = isRtl ? 'rtl' : 'ltr'
+
     return (
         <div
             className='relative box-border overflow-hidden'
+            dir={dir}
             style={{
                 width: '100%',
                 height: '100%',
@@ -156,15 +162,19 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
                 </div>
             )}
 
-            {/* ── Blessing — handwritten, anchored bottom-right ── */}
+            {/* ── Blessing — handwritten, anchored to the start side of
+                the reading direction. insetInline* + textAlign:start
+                resolve via the dir on the page wrapper above, so the
+                blessing reads naturally in Hebrew (right-anchored) or
+                English/Spanish/Italian (left-anchored). */}
             {hasText && (
                 <div
                     style={{
                         position: 'absolute',
                         top: h(72),
-                        right: w(10),
-                        left: w(30),
-                        textAlign: 'right',
+                        insetInlineStart: w(10),
+                        insetInlineEnd: w(30),
+                        textAlign: 'start',
                         zIndex: 6,
                     }}
                 >
@@ -178,7 +188,10 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
                             whiteSpace: 'pre-line',
                             wordWrap: 'break-word',
                             transform: 'rotate(-1deg)',
-                            transformOrigin: 'right center',
+                            // No logical transform-origin in CSS — flip the
+                            // keyword by direction so the tilt pivots from
+                            // the same visual anchor (the line-start edge).
+                            transformOrigin: isRtl ? 'right center' : 'left center',
                         }}
                     >
                         {cleanText}
