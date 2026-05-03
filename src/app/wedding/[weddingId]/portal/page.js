@@ -5,6 +5,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '../../../../lib/firebaseClient'
 import { generateSlug } from '../../../../lib/generateSlug'
+import { normalizeEventType, getEventConfig } from '../../../../lib/eventTypes'
 
 // ייבוא רכיב לוח השנה המקצועי
 import DatePicker from 'react-datepicker'
@@ -23,17 +24,57 @@ const BG_OPTIONS = [
     { id: 'wedding-bg2', file: 'wedding-bg2.png', label: 'זהב שיש' },
 ]
 
+// Per-event-type microcopy used by the celebrant name input. Each entry
+// covers: the input placeholder, and the small heading shown above it.
+//
+// `wedding` isn't here — wedding takes a different path with bride+groom
+// inputs side by side.
+const NAME_COPY_BY_TYPE = {
+    birthday: { placeholder: 'שם החוגג/ת', heading: 'שם החוגג/ת' },
+    bar_mitzvah: { placeholder: 'שם הבר מצווה', heading: 'שם הבר מצווה' },
+    bat_mitzvah: { placeholder: 'שם הבת מצווה', heading: 'שם הבת מצווה' },
+}
+
+function nameCopyFor(eventType) {
+    return NAME_COPY_BY_TYPE[eventType] || NAME_COPY_BY_TYPE.birthday
+}
+
 export default function WeddingPortal() {
     const { weddingId } = useParams()
 
+    // ── Event identity (admin-controlled — portal only READS this; the
+    //    UI swaps name fields based on it). Defaults to 'wedding' so the
+    //    page is sensible even before Firestore loads.
+    const [eventType, setEventType] = useState('wedding')
+
+    // ── Names. Wedding events use bride+groom; everything else (birthday /
+    //    bar mitzvah / bat mitzvah) uses a single celebrant name.
     const [brideName, setBrideName] = useState('')
     const [groomName, setGroomName] = useState('')
+    const [celebrantName, setCelebrantName] = useState('')
+    // Birthday-only — drives "יום הולדת 78" style title via buildTitle().
+    // Stored as a string in state so the input never fights with the user
+    // (empty string is a valid "not set"); converted to number on save.
+    const [age, setAge] = useState('')
+
     const [weddingDate, setWeddingDate] = useState(null)
     const [selectedBg, setSelectedBg] = useState('wedding-bg')
     const [slug, setSlug] = useState('')
 
+    // Editable copy (customTitle/customSubtitle/customDescription) is
+    // intentionally NOT loaded or edited here. It's owned by the
+    // super-admin so couples + celebrants don't get overwhelmed by
+    // marketing-copy choices. Firestore merge:true means our save
+    // payloads preserve the admin's overrides untouched.
+
     const [downloading, setDownloading] = useState(false)
     const [copied, setCopied] = useState(false)
+
+    // Resolved event-type config — drives field labels + placeholders.
+    const cfg = useMemo(() => getEventConfig(eventType), [eventType])
+    const isWedding = eventType === 'wedding'
+    const isBirthday = eventType === 'birthday'
+    const nameCopy = useMemo(() => nameCopyFor(eventType), [eventType])
 
     // טעינת נתונים
     useEffect(() => {
@@ -44,8 +85,11 @@ export default function WeddingPortal() {
                 const docSnap = await getDoc(docRef)
                 if (docSnap.exists()) {
                     const data = docSnap.data()
+                    setEventType(normalizeEventType(data.eventType))
                     if (data.brideName) setBrideName(data.brideName)
                     if (data.groomName) setGroomName(data.groomName)
+                    if (data.celebrantName) setCelebrantName(data.celebrantName)
+                    if (data.age != null && data.age !== '') setAge(String(data.age))
                     if (data.weddingDate) setWeddingDate(new Date(data.weddingDate))
 
                     // טעינת slug — אם אין, ניצור אחד אוטומטית
@@ -62,16 +106,33 @@ export default function WeddingPortal() {
         fetchWeddingData()
     }, [weddingId])
 
-    // שמירה ל-DB
+    // שמירה ל-DB. We send only the fields visible in the UI for the
+    // current event type — that way switching the type from the admin
+    // doesn't get the portal to wipe the OTHER set of name fields.
+    // Empty custom* strings persist as null so the guest page falls back
+    // to the per-event-type defaults.
     async function saveToDB(updatedDate = weddingDate) {
         if (!weddingId) return
         try {
             const docRef = doc(db, 'weddings', weddingId)
-            await setDoc(docRef, {
-                brideName,
-                groomName,
+            // Only fields owned by the portal. customTitle / customSubtitle /
+            // customDescription are super-admin-only — leaving them out of the
+            // payload + merge:true preserves whatever the admin set.
+            const payload = {
                 weddingDate: updatedDate ? updatedDate.toISOString().split('T')[0] : null,
-            }, { merge: true })
+            }
+            if (isWedding) {
+                payload.brideName = brideName
+                payload.groomName = groomName
+            } else {
+                payload.celebrantName = celebrantName
+                if (isBirthday) {
+                    // Empty input → null (not 0). Only persist a real number.
+                    const ageNum = Number(age)
+                    payload.age = age !== '' && Number.isFinite(ageNum) ? ageNum : null
+                }
+            }
+            await setDoc(docRef, payload, { merge: true })
         } catch (error) { console.error('Error saving:', error) }
     }
 
@@ -117,34 +178,74 @@ export default function WeddingPortal() {
             <div className='w-full max-w-lg bg-white/80 backdrop-blur-xl rounded-[2rem] shadow-2xl border border-white/50 p-6 md:p-8 relative overflow-hidden animate-scaleIn'>
 
                 {/* לוגו */}
-                <div className='text-center mb-5 relative z-10'>
+                <div className='text-center mb-3 relative z-10'>
                     <img src='/logo-wt.png' alt='Wedding Tales' className='h-12 w-auto mx-auto drop-shadow-[0_2px_8px_rgba(170,136,64,0.3)]' />
                 </div>
 
-                {/* שמות הזוג */}
-                <div className='relative z-10 flex items-center justify-center gap-4 mb-6'>
-                    <input
-                        type='text'
-                        value={brideName}
-                        onChange={e => setBrideName(e.target.value)}
-                        onBlur={() => saveToDB()}
-                        placeholder='שם הכלה'
-                        className='w-1/2 bg-transparent border-b-2 border-[#AA8840]/20 focus:border-[#AA8840] outline-none text-center text-xl md:text-2xl font-bold text-gray-800 transition-all duration-300 focus:text-[#AA8840]'
-                    />
-                    <span className='text-3xl text-[#AA8840] font-[Great Vibes]'>&</span>
-                    <input
-                        type='text'
-                        value={groomName}
-                        onChange={e => setGroomName(e.target.value)}
-                        onBlur={() => saveToDB()}
-                        placeholder='שם החתן'
-                        className='w-1/2 bg-transparent border-b-2 border-[#AA8840]/20 focus:border-[#AA8840] outline-none text-center text-xl md:text-2xl font-bold text-gray-800 transition-all duration-300 focus:text-[#AA8840]'
-                    />
+                {/* תג סוג האירוע — קבוע על-ידי הסופר-אדמין. הצגתו כאן
+                    מבהירה לזוג/לחוגג/ת איזה סוג אירוע הוא עורך כרגע. */}
+                <div className='text-center mb-5 relative z-10'>
+                    <span className='inline-block bg-[#AA8840]/10 text-[#AA8840] text-[11px] font-bold tracking-wider uppercase px-3 py-1 rounded-full'>
+                        {cfg.hebrewLabel}
+                    </span>
                 </div>
+
+                {/* שמות — מבנה משתנה לפי סוג האירוע */}
+                {isWedding ? (
+                    <div className='relative z-10 flex items-center justify-center gap-4 mb-6'>
+                        <input
+                            type='text'
+                            value={brideName}
+                            onChange={e => setBrideName(e.target.value)}
+                            onBlur={() => saveToDB()}
+                            placeholder='שם הכלה'
+                            className='w-1/2 bg-transparent border-b-2 border-[#AA8840]/20 focus:border-[#AA8840] outline-none text-center text-xl md:text-2xl font-bold text-gray-800 transition-all duration-300 focus:text-[#AA8840]'
+                        />
+                        <span className='text-3xl text-[#AA8840] font-[Great Vibes]'>&</span>
+                        <input
+                            type='text'
+                            value={groomName}
+                            onChange={e => setGroomName(e.target.value)}
+                            onBlur={() => saveToDB()}
+                            placeholder='שם החתן'
+                            className='w-1/2 bg-transparent border-b-2 border-[#AA8840]/20 focus:border-[#AA8840] outline-none text-center text-xl md:text-2xl font-bold text-gray-800 transition-all duration-300 focus:text-[#AA8840]'
+                        />
+                    </div>
+                ) : (
+                    <div className='relative z-10 mb-6'>
+                        <label className='block text-[11px] font-bold text-gray-400 mb-2 text-center uppercase tracking-widest'>
+                            {nameCopy.heading}
+                        </label>
+                        <div className={`flex items-center justify-center ${isBirthday ? 'gap-3' : ''}`}>
+                            <input
+                                type='text'
+                                value={celebrantName}
+                                onChange={e => setCelebrantName(e.target.value)}
+                                onBlur={() => saveToDB()}
+                                placeholder={nameCopy.placeholder}
+                                className='flex-1 min-w-0 bg-transparent border-b-2 border-[#AA8840]/20 focus:border-[#AA8840] outline-none text-center text-xl md:text-2xl font-bold text-gray-800 transition-all duration-300 focus:text-[#AA8840]'
+                            />
+                            {isBirthday && (
+                                <input
+                                    type='number'
+                                    min={1}
+                                    max={120}
+                                    value={age}
+                                    onChange={e => setAge(e.target.value)}
+                                    onBlur={() => saveToDB()}
+                                    placeholder='גיל'
+                                    className='w-20 bg-transparent border-b-2 border-[#AA8840]/20 focus:border-[#AA8840] outline-none text-center text-xl md:text-2xl font-bold text-gray-800 transition-all duration-300 focus:text-[#AA8840]'
+                                />
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* לוח שנה מעוצב */}
                 <div className='relative z-20 flex flex-col items-center mb-8'>
-                    <label className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-widest">תאריך החתונה שלכם</label>
+                    <label className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-widest">
+                        {isWedding ? 'תאריך החתונה שלכם' : `תאריך ה${cfg.hebrewLabel}`}
+                    </label>
                     <DatePicker
                         selected={weddingDate}
                         onChange={(date) => { setWeddingDate(date); saveToDB(date); }}
@@ -219,7 +320,13 @@ export default function WeddingPortal() {
                                 const blob = await res.blob()
                                 const a = document.createElement('a')
                                 a.href = URL.createObjectURL(blob)
-                                a.download = `WeddingTales-${brideName || 'wedding'}-${groomName || ''}.pdf`
+                                // Filename mirrors the event identity. For weddings keep
+                                // the historical "bride-groom" pattern; otherwise use the
+                                // celebrant name (or fall back to the event-type label).
+                                const filenameStem = isWedding
+                                    ? [brideName, groomName].filter(Boolean).join('-') || 'wedding'
+                                    : celebrantName || cfg.id
+                                a.download = `WeddingTales-${filenameStem}.pdf`
                                 a.click()
                                 URL.revokeObjectURL(a.href)
                             } catch (err) {

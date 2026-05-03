@@ -20,8 +20,9 @@
 //                   — missing/unknown → defaults from the event type.
 //   celebrantName:  string  — used by birthday / bar_mitzvah / bat_mitzvah
 //   age:            number  — used by birthday (e.g. "יום הולדת 78")
-//   customTitle:    string  — optional full override of the main title
-//   customSubtitle: string  — optional override of the small label above title
+//   customTitle:       string  — optional full override of the main title
+//   customSubtitle:    string  — optional override of the small label above title
+//   customDescription: string  — optional override of the description paragraph
 //
 // Existing fields still in use for 'wedding':
 //   brideName, groomName, weddingDate
@@ -232,6 +233,17 @@ export function buildSubtitle(data = {}) {
         return data.customSubtitle.trim()
     }
     return getEventConfig(data.eventType).subtitle
+}
+
+/**
+ * Description paragraph below the title (e.g. "יום הבר מצווה זוכר לתמיד...").
+ * Respects customDescription.
+ */
+export function buildDescription(data = {}) {
+    if (data.customDescription && typeof data.customDescription === 'string' && data.customDescription.trim()) {
+        return data.customDescription.trim()
+    }
+    return getEventConfig(data.eventType).description
 }
 
 /**

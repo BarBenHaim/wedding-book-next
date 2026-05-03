@@ -4,7 +4,7 @@ import { useEffect, useState, use } from 'react'
 import Link from 'next/link'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../../../lib/firebaseClient'
-import { getEventConfig, getPalette, buildTitle, buildSubtitle } from '../../../lib/eventTypes'
+import { getEventConfig, getPalette, buildTitle, buildSubtitle, buildDescription } from '../../../lib/eventTypes'
 
 export default function WeddingHome({ params }) {
     const { weddingId } = use(params)
@@ -46,6 +46,7 @@ export default function WeddingHome({ params }) {
     const palette = getPalette(data || {})
     const title = buildTitle(data || {})
     const subtitle = buildSubtitle(data || {})
+    const description = buildDescription(data || {})
 
     return (
         <div
@@ -92,8 +93,8 @@ export default function WeddingHome({ params }) {
                 )}
 
                 {/* Description */}
-                <p className='text-[15px] leading-[1.8] mt-5 mb-8 max-w-[300px]' style={{ color: palette.description }}>
-                    {cfg.description}
+                <p className='text-[15px] leading-[1.8] mt-5 mb-8 max-w-[300px] whitespace-pre-line' style={{ color: palette.description }}>
+                    {description}
                 </p>
 
                 {/* CTA Button with marble texture */}

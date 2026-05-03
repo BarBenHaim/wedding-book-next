@@ -349,18 +349,15 @@ function EventTypeEditor({ wedding, onSave }) {
         age: w.age ?? '',
         customTitle: w.customTitle || '',
         customSubtitle: w.customSubtitle || '',
+        customDescription: w.customDescription || '',
     })
 
     const [draft, setDraft] = useState(() => buildDraft(wedding))
-    const [showAdvanced, setShowAdvanced] = useState(
-        Boolean(wedding.customTitle || wedding.customSubtitle)
-    )
     const [saving, setSaving] = useState(false)
 
     // Reset draft whenever the panel swaps to a different wedding.
     useEffect(() => {
         setDraft(buildDraft(wedding))
-        setShowAdvanced(Boolean(wedding.customTitle || wedding.customSubtitle))
     }, [wedding.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
     const set = (k, v) => setDraft(prev => ({ ...prev, [k]: v }))
@@ -386,6 +383,7 @@ function EventTypeEditor({ wedding, onSave }) {
         // Always include overrides so clearing them also persists.
         patch.customTitle = draft.customTitle
         patch.customSubtitle = draft.customSubtitle
+        patch.customDescription = draft.customDescription
         return patch
     }
 
@@ -517,40 +515,44 @@ function EventTypeEditor({ wedding, onSave }) {
                 </div>
             )}
 
-            {/* Advanced overrides */}
-            <button
-                type='button'
-                onClick={() => setShowAdvanced(s => !s)}
-                className='text-xs text-[#AA8840] hover:underline mb-2'
-            >
-                {showAdvanced ? '− הסתר עקיפות כותרת' : '+ עקיפות כותרת (מתקדם)'}
-            </button>
-
-            {showAdvanced && (
-                <div className='space-y-3 mb-3 p-3 rounded-xl bg-[#AA8840]/5 border border-[#AA8840]/15'>
-                    <p className='text-[11px] text-gray-500 leading-relaxed'>
-                        במקום הכותרת שנבנית אוטומטית — הכנס טקסט חופשי. ריק = שימוש בברירת מחדל לפי סוג האירוע.
-                    </p>
-                    <div>
-                        <label className='text-xs font-semibold text-gray-500 mb-1 block'>כותרת ראשית (customTitle)</label>
-                        <input
-                            type='text' value={draft.customTitle}
-                            onChange={e => set('customTitle', e.target.value)}
-                            placeholder='למשל: יום הולדת 78 לסבתא תקווה'
-                            className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
-                        />
-                    </div>
-                    <div>
-                        <label className='text-xs font-semibold text-gray-500 mb-1 block'>תת-כותרת (customSubtitle)</label>
-                        <input
-                            type='text' value={draft.customSubtitle}
-                            onChange={e => set('customSubtitle', e.target.value)}
-                            placeholder='למשל: מסיבת הפתעה של המשפחה'
-                            className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
-                        />
-                    </div>
+            {/* טקסטים בעמוד האורחים — מנוהל אך ורק על-ידי הסופר-אדמין.
+                המשתמש בעמוד הפורטל לא רואה את השדות האלה כדי לא להציף
+                אותו בבחירות. ריק בכל שדה => עמוד האורחים יחזור לברירת
+                המחדל לפי סוג האירוע ב-eventTypes.js. */}
+            <div className='space-y-3 mb-3 p-3 rounded-xl bg-[#AA8840]/5 border border-[#AA8840]/15'>
+                <p className='text-[11px] font-bold text-[#AA8840] uppercase tracking-widest'>טקסטים בעמוד האורחים</p>
+                <p className='text-[11px] text-gray-500 leading-relaxed'>
+                    מה שיופיע מעל השמות, ככותרת ראשית, וכפסקת תיאור בעמוד האורחים. השאר ריק = ברירת מחדל לפי סוג האירוע.
+                </p>
+                <div>
+                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>תת-כותרת (השורה הקטנה מעל השמות)</label>
+                    <input
+                        type='text' value={draft.customSubtitle}
+                        onChange={e => set('customSubtitle', e.target.value)}
+                        placeholder={getEventConfig(draft.eventType).subtitle}
+                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                    />
                 </div>
-            )}
+                <div>
+                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>כותרת ראשית (במקום השמות)</label>
+                    <input
+                        type='text' value={draft.customTitle}
+                        onChange={e => set('customTitle', e.target.value)}
+                        placeholder='למשל: יום הולדת 78 לסבתא תקווה'
+                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                    />
+                </div>
+                <div>
+                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>תיאור (פסקה מתחת לכותרת)</label>
+                    <textarea
+                        value={draft.customDescription}
+                        onChange={e => set('customDescription', e.target.value)}
+                        placeholder={getEventConfig(draft.eventType).description}
+                        rows={3}
+                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white resize-y'
+                    />
+                </div>
+            </div>
 
             <button
                 onClick={handleSave}

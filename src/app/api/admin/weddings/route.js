@@ -83,6 +83,7 @@ export async function GET(req) {
                     age: data.age ?? null,
                     customTitle: data.customTitle ?? null,
                     customSubtitle: data.customSubtitle ?? null,
+                    customDescription: data.customDescription ?? null,
                 }
             })
         )
@@ -97,7 +98,7 @@ export async function GET(req) {
 // ─── PATCH: Update editable fields on a wedding ──────────────────────────────
 //
 // Body: { weddingId, patch: { eventType?, celebrantName?, age?, customTitle?,
-//                             customSubtitle?, brideName?, groomName? } }
+//                             customSubtitle?, customDescription?, brideName?, groomName? } }
 //
 // Whitelist enforced server-side — any other keys in `patch` are dropped.
 // Strings are trimmed; empty strings become null (cleared). `age` is coerced
@@ -114,7 +115,7 @@ export async function PATCH(req) {
             return NextResponse.json({ error: 'Missing patch' }, { status: 400 })
         }
 
-        const ALLOWED = ['eventType', 'themeColor', 'celebrantName', 'age', 'customTitle', 'customSubtitle', 'brideName', 'groomName']
+        const ALLOWED = ['eventType', 'themeColor', 'celebrantName', 'age', 'customTitle', 'customSubtitle', 'customDescription', 'brideName', 'groomName']
         const clean = {}
 
         for (const key of ALLOWED) {
