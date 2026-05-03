@@ -46,20 +46,12 @@ const BG_OPTIONS = [
     { id: 'wedding-bg2', file: 'wedding-bg2.png', label: 'זהב שיש' },
 ]
 
-// Per-event-type microcopy used by the celebrant name input. Each entry
-// covers: the input placeholder, and the small heading shown above it.
-//
-// `wedding` isn't here — wedding takes a different path with bride+groom
-// inputs side by side.
-const NAME_COPY_BY_TYPE = {
-    birthday: { placeholder: 'שם החוגג/ת', heading: 'שם החוגג/ת' },
-    bar_mitzvah: { placeholder: 'שם הבר מצווה', heading: 'שם הבר מצווה' },
-    bat_mitzvah: { placeholder: 'שם הבת מצווה', heading: 'שם הבת מצווה' },
-}
-
-function nameCopyFor(eventType) {
-    return NAME_COPY_BY_TYPE[eventType] || NAME_COPY_BY_TYPE.birthday
-}
+// All non-wedding events share a single, neutral placeholder per the
+// product decision to keep the portal header clean — the event-type chip
+// at the top already tells the user what kind of event they're editing,
+// so there's no need to repeat "שם הבר מצווה" / "שם הבת מצווה" inside
+// the input itself.
+const NEUTRAL_NAME_PLACEHOLDER = 'שם החוגג'
 
 export default function WeddingPortal() {
     const { weddingId } = useParams()
@@ -96,7 +88,6 @@ export default function WeddingPortal() {
     const cfg = useMemo(() => getEventConfig(eventType), [eventType])
     const isWedding = eventType === 'wedding'
     const isBirthday = eventType === 'birthday'
-    const nameCopy = useMemo(() => nameCopyFor(eventType), [eventType])
 
     // טעינת נתונים
     useEffect(() => {
@@ -247,16 +238,13 @@ export default function WeddingPortal() {
                     </div>
                 ) : (
                     <div className='relative z-10 mb-6'>
-                        <label className='block text-[11px] font-bold text-gray-400 mb-2 text-center uppercase tracking-widest'>
-                            {nameCopy.heading}
-                        </label>
                         <div className={`flex items-center justify-center ${isBirthday ? 'gap-3' : ''}`}>
                             <input
                                 type='text'
                                 value={celebrantName}
                                 onChange={e => setCelebrantName(e.target.value)}
                                 onBlur={() => saveToDB()}
-                                placeholder={nameCopy.placeholder}
+                                placeholder={NEUTRAL_NAME_PLACEHOLDER}
                                 className='flex-1 min-w-0 bg-transparent border-b-2 border-[#AA8840]/20 focus:border-[#AA8840] outline-none text-center text-xl md:text-2xl font-bold text-gray-800 transition-all duration-300 focus:text-[#AA8840]'
                             />
                             {isBirthday && (
