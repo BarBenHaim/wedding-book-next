@@ -12,14 +12,16 @@ import { NextIntlClientProvider, useTranslations } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
 
-// Outer wrapper — fetches locale + eventType from the wedding doc once,
-// then wraps the form in NextIntlClientProvider so every string speaks
-// the language the super-admin configured. eventType drives the page
-// title ("Leave a blessing for the couple/Bar Mitzvah/...").
+// Outer wrapper — fetches locale, eventType, AND the recipient names
+// from the wedding doc once, then wraps the form in
+// NextIntlClientProvider so every string speaks the language the
+// super-admin configured. The names are used to personalise the page
+// title ("Leave a blessing for {name}" or "for {bride} & {groom}").
 export default function TextPage() {
     const { weddingId } = useParams()
     const [locale, setLocale] = useState('he')
     const [eventType, setEventType] = useState('wedding')
+    const [recipients, setRecipients] = useState({ bride: '', groom: '', celebrant: '' })
 
     useEffect(() => {
         if (!weddingId) return
@@ -32,6 +34,11 @@ export default function TextPage() {
                     const data = snap.data()
                     setLocale(normalizeLocale(data.locale))
                     if (data.eventType) setEventType(data.eventType)
+                    setRecipients({
+                        bride: (data.brideName || '').trim(),
+                        groom: (data.groomName || '').trim(),
+                        celebrant: (data.celebrantName || '').trim(),
+                    })
                 }
             } catch {
                 /* keep Hebrew default */
@@ -44,23 +51,39 @@ export default function TextPage() {
 
     return (
         <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
-            <PhotoApp eventType={eventType} />
+            <PhotoApp eventType={eventType} recipients={recipients} />
         </NextIntlClientProvider>
     )
 }
 
-// Map eventType to the i18n key that holds the corresponding page-title
-// translation. Keeps the JSX tidy and adding a new event type is a one-
-// line change here + new translations.
-const TITLE_KEY_BY_EVENT = {
-    wedding: 'pageTitleWedding',
-    birthday: 'pageTitleBirthday',
-    bar_mitzvah: 'pageTitleBarMitzvah',
-    bat_mitzvah: 'pageTitleBatMitzvah',
-}
-
-function PhotoApp({ eventType }) {
+function PhotoApp({ eventType, recipients }) {
     const t = useTranslations('photo')
+
+    // ── Page title (personalised) ───────────────────────────────────────
+    // Build the "Leave a blessing for X" headline from the doc's names:
+    //   wedding + both names    → "for {bride} & {groom}"
+    //   wedding + one name      → "for {name}"   (whichever is filled)
+    //   wedding + no names      → "for the couple"   (legacy default)
+    //   bar/bat/birthday + name → "for {name}"
+    //   bar/bat/birthday + ∅    → "Leave a blessing"   (no recipient)
+    //
+    // We compute it in a memoless helper since both inputs (eventType +
+    // recipients) come from props that only change when the doc reload
+    // bubbles up — re-running this on every render is cheap.
+    function buildPageTitle() {
+        const bride = recipients?.bride || ''
+        const groom = recipients?.groom || ''
+        const celebrant = recipients?.celebrant || ''
+        if (eventType === 'wedding') {
+            if (bride && groom) return t('pageTitleWithCouple', { first: bride, second: groom })
+            if (bride) return t('pageTitleWithName', { name: bride })
+            if (groom) return t('pageTitleWithName', { name: groom })
+            return t('pageTitleWedding')
+        }
+        if (celebrant) return t('pageTitleWithName', { name: celebrant })
+        return t('pageTitleGeneric')
+    }
+    const pageTitle = buildPageTitle()
     const [step, setStep] = useState(1) // 1: Text, 2: Photo
     const [name, setName] = useState('')
     const [text, setText] = useState('')
@@ -275,21 +298,65 @@ function PhotoApp({ eventType }) {
             )
         }
 
+        // ── Confirmed-send strategy ─────────────────────────────────────
+        // We used to redirect to /thanks the moment IDB accepted the
+        // entry, leaving the actual upload to fire-and-forget on that
+        // page. That felt instant but masked real failures (Firebase
+        // permission denied, malformed payload, etc) — by the time the
+        // guest noticed, the tab was already on the thanks screen and
+        // the entry was stuck.
+        //
+        // New flow: ALWAYS wait for the upload to complete (or hit a
+        // 5-second budget). Common path takes 1–2s on a decent venue
+        // network, which feels like a real "send" instead of a magic
+        // skip. Network errors and timeouts are silently deferred to
+        // the thanks page (IDB still has the entry, retries kick in).
+        // The only thing that surfaces back to the form is a permanent
+        // server-side rejection — those won't recover by retrying, so
+        // the guest needs to see them immediately.
+        const UPLOAD_BUDGET_MS = 5000
+
+        async function uploadWithBudget() {
+            return Promise.race([
+                uploadQueuedEntry(entry),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('upload-budget-exceeded')), UPLOAD_BUDGET_MS),
+                ),
+            ])
+        }
+
         if (enqueued) {
-            // Off to the thanks screen — it handles the network upload
-            // with retry + status UI.
+            // We're safe regardless — the entry is persisted locally.
+            // Try to confirm the server received it. If we time out or
+            // the network errors, redirect anyway and let the thanks
+            // page's retry loop finish the job.
+            try {
+                await uploadWithBudget()
+            } catch (err) {
+                const rawMsg = err?.message || err?.name || ''
+                if (/permission|PERMISSION_DENIED|unauthor/i.test(rawMsg)) {
+                    // Permanent — show it now, don't pretend it worked.
+                    alert(t('errPermission'))
+                    setSubmitting(false)
+                    return
+                }
+                // Network / timeout / unknown — keep going. Thanks page
+                // will retry on `online` / `visibilitychange` / `pageshow`.
+                console.warn(
+                    '[photo] upload not confirmed in time, deferring to thanks page:',
+                    rawMsg,
+                )
+            }
             router.push(`/wedding/${weddingId}/thanks`)
             return
         }
 
-        // Tier 2 — direct upload to Firebase. uploadQueuedEntry tries
-        // to update the IDB record as well; that update is harmless if
-        // the record never made it into IDB (it just no-ops).
+        // Tier 2 — IDB rejected our enqueue, so we have NO local safety
+        // net. Wait fully for the direct upload (no budget timeout —
+        // we'd rather make the guest wait an extra few seconds than
+        // silently lose their blessing).
         try {
             await uploadQueuedEntry(entry)
-            // Success — go to the thanks screen. The thanks page will
-            // not find this entry in IDB, but it'll show the standard
-            // thank-you state (no pending items).
             router.push(`/wedding/${weddingId}/thanks`)
         } catch (err) {
             console.error('[photo] direct upload also failed:', err)
@@ -448,7 +515,7 @@ function PhotoApp({ eventType }) {
                                 className='font-bold mb-2 leading-[1.15]'
                                 style={{ color: '#1a1410', fontSize: '26px', letterSpacing: '-0.01em' }}
                             >
-                                {t(TITLE_KEY_BY_EVENT[eventType] || 'pageTitleWedding')}
+                                {pageTitle}
                             </h2>
                             <p
                                 className='leading-relaxed'
@@ -496,7 +563,10 @@ function PhotoApp({ eventType }) {
                                         border: '1px solid #ead9b3',
                                         padding: '12px 16px',
                                         color: '#1a1410',
-                                        fontSize: '14px',
+                                        // 16px+ on inputs is the iOS Safari rule —
+                                        // anything smaller triggers the auto-zoom
+                                        // that warps the page when a guest taps in.
+                                        fontSize: '16px',
                                     }}
                                     onFocus={e => (e.currentTarget.style.borderColor = '#c9a44e')}
                                     onBlur={e => (e.currentTarget.style.borderColor = '#ead9b3')}
@@ -545,7 +615,10 @@ function PhotoApp({ eventType }) {
                                         border: '1px solid #ead9b3',
                                         padding: '12px 16px',
                                         color: '#1a1410',
-                                        fontSize: '14px',
+                                        // Same 16px rule as the name input — see
+                                        // comment above. iOS Safari otherwise
+                                        // zooms in on focus and breaks the layout.
+                                        fontSize: '16px',
                                         height: '128px',
                                     }}
                                     onFocus={e => (e.currentTarget.style.borderColor = '#c9a44e')}
