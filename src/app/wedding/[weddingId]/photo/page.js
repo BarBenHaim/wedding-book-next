@@ -34,10 +34,15 @@ export default function TextPage() {
                     const data = snap.data()
                     setLocale(normalizeLocale(data.locale))
                     if (data.eventType) setEventType(data.eventType)
+                    // Prefer the Hebrew-script names for the headline
+                    // ("השאירו ברכה ל..."). Fall back to the original
+                    // names when the super-admin didn't fill the Hebrew
+                    // version — that way old wedding docs (no Hebrew
+                    // field) keep working unchanged.
                     setRecipients({
-                        bride: (data.brideName || '').trim(),
-                        groom: (data.groomName || '').trim(),
-                        celebrant: (data.celebrantName || '').trim(),
+                        bride: (data.brideNameHe || data.brideName || '').trim(),
+                        groom: (data.groomNameHe || data.groomName || '').trim(),
+                        celebrant: (data.celebrantNameHe || data.celebrantName || '').trim(),
                     })
                 }
             } catch {

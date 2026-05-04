@@ -349,8 +349,11 @@ function EventTypeEditor({ wedding, onSave }) {
         locale: w.locale || 'he',
         themeColor: w.themeColor || null,
         brideName: w.brideName || '',
+        brideNameHe: w.brideNameHe || '',
         groomName: w.groomName || '',
+        groomNameHe: w.groomNameHe || '',
         celebrantName: w.celebrantName || '',
+        celebrantNameHe: w.celebrantNameHe || '',
         age: w.age ?? '',
         customTitle: w.customTitle || '',
         customSubtitle: w.customSubtitle || '',
@@ -382,9 +385,14 @@ function EventTypeEditor({ wedding, onSave }) {
         }
         if (showBrideGroom) {
             patch.brideName = draft.brideName
+            patch.brideNameHe = draft.brideNameHe
             patch.groomName = draft.groomName
+            patch.groomNameHe = draft.groomNameHe
         }
-        if (showCelebrant) patch.celebrantName = draft.celebrantName
+        if (showCelebrant) {
+            patch.celebrantName = draft.celebrantName
+            patch.celebrantNameHe = draft.celebrantNameHe
+        }
         if (showAge) patch.age = draft.age === '' ? null : draft.age
         // Always include overrides so clearing them also persists.
         patch.customTitle = draft.customTitle
@@ -491,28 +499,60 @@ function EventTypeEditor({ wedding, onSave }) {
                 </div>
             </div>
 
-            {/* Type-specific name fields */}
+            {/* Type-specific name fields. Each name has TWO inputs:
+                the original (script-as-typed, used on the guest landing
+                page where "Daniel & Amit" reads beautifully in Latin) and
+                a Hebrew version (used inside the photo page's "השאירו
+                ברכה ל..." headline so it reads as "השאירו ברכה לדניאל
+                ועמית" without code-switching). The Hebrew field is
+                optional — if blank, the photo page falls back to the
+                original name. */}
             {showBrideGroom && (
-                <div className='grid grid-cols-2 gap-3 mb-3'>
-                    <div>
-                        <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם כלה</label>
-                        <input
-                            type='text' value={draft.brideName}
-                            onChange={e => set('brideName', e.target.value)}
-                            placeholder='נועה'
-                            className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
-                        />
+                <>
+                    <div className='grid grid-cols-2 gap-3 mb-3'>
+                        <div>
+                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם כלה</label>
+                            <input
+                                type='text' value={draft.brideName}
+                                onChange={e => set('brideName', e.target.value)}
+                                placeholder='Noa'
+                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                            />
+                        </div>
+                        <div>
+                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם חתן</label>
+                            <input
+                                type='text' value={draft.groomName}
+                                onChange={e => set('groomName', e.target.value)}
+                                placeholder='Alon'
+                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                            />
+                        </div>
                     </div>
-                    <div>
-                        <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם חתן</label>
-                        <input
-                            type='text' value={draft.groomName}
-                            onChange={e => set('groomName', e.target.value)}
-                            placeholder='אלון'
-                            className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
-                        />
+                    <div className='grid grid-cols-2 gap-3 mb-3'>
+                        <div>
+                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם כלה בעברית</label>
+                            <input
+                                type='text' value={draft.brideNameHe}
+                                onChange={e => set('brideNameHe', e.target.value)}
+                                placeholder='נועה'
+                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                            />
+                        </div>
+                        <div>
+                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם חתן בעברית</label>
+                            <input
+                                type='text' value={draft.groomNameHe}
+                                onChange={e => set('groomNameHe', e.target.value)}
+                                placeholder='אלון'
+                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                            />
+                        </div>
                     </div>
-                </div>
+                    <p className='text-[11px] text-gray-400 mb-3 leading-relaxed'>
+                        השם הראשון מופיע בעמוד הראשי של האורחים ("ספר הברכות של Noa & Alon"). הגרסה בעברית מופיעה בעמוד יצירת הברכה ("השאירו ברכה לנועה ולאלון"). אם תשאיר ריק — נשתמש בשם הראשון.
+                    </p>
+                </>
             )}
 
             {showCelebrant && (
@@ -522,7 +562,7 @@ function EventTypeEditor({ wedding, onSave }) {
                         <input
                             type='text' value={draft.celebrantName}
                             onChange={e => set('celebrantName', e.target.value)}
-                            placeholder='סבתא תקווה'
+                            placeholder='Tikva'
                             className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
                         />
                     </div>
@@ -537,6 +577,21 @@ function EventTypeEditor({ wedding, onSave }) {
                             />
                         </div>
                     )}
+                </div>
+            )}
+
+            {showCelebrant && (
+                <div className='mb-3'>
+                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם החוגג/ת בעברית</label>
+                    <input
+                        type='text' value={draft.celebrantNameHe}
+                        onChange={e => set('celebrantNameHe', e.target.value)}
+                        placeholder='תקווה'
+                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                    />
+                    <p className='text-[11px] text-gray-400 mt-1.5 leading-relaxed'>
+                        השם הראשון מופיע בעמוד הראשי של האורחים. הגרסה בעברית מופיעה בעמוד יצירת הברכה. ריק = נשתמש בשם הראשון.
+                    </p>
                 </div>
             )}
 

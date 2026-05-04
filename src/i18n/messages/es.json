@@ -91,6 +91,29 @@
     "helpText": "Tus credenciales se enviaron a tu correo después de la compra"
   },
 
+  "portal": {
+    "logoAlt": "Wedding Tales",
+    "namePlaceholderBride": "Nombre de la novia",
+    "namePlaceholderGroom": "Nombre del novio",
+    "namePlaceholderCelebrant": "Nombre del festejado",
+    "agePlaceholder": "Edad",
+    "dateLabelWedding": "La fecha de vuestra boda",
+    "dateLabelOther": "Fecha del {eventLabel}",
+    "datePickerPlaceholder": "Toca para elegir una fecha",
+    "designPickerLabel": "Elige un diseño para el cartel",
+    "downloadPdf": "Descargar cartel (PDF)",
+    "generatingPdf": "Generando PDF...",
+    "pdfError": "No se pudo generar el PDF. Inténtalo de nuevo.",
+    "shareTitle": "Comparte tu enlace de invitados",
+    "shareSubtitle": "Envía este enlace a los invitados para que puedan dejar bendiciones y fotos",
+    "copy": "Copiar",
+    "copied": "¡Copiado!",
+    "copyHint": "Toca para copiar el enlace completo",
+    "footerTagline": "Hecho con amor para vuestro día especial",
+    "bgClassic": "Clásico",
+    "bgGoldMarble": "Mármol dorado"
+  },
+
   "photo": {
     "pageTitleWedding": "Deja una bendición a la pareja",
     "pageTitleBirthday": "Deja una bendición",

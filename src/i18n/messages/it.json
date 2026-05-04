@@ -91,6 +91,29 @@
     "helpText": "Le credenziali sono state inviate alla tua email dopo l'acquisto"
   },
 
+  "portal": {
+    "logoAlt": "Wedding Tales",
+    "namePlaceholderBride": "Nome della sposa",
+    "namePlaceholderGroom": "Nome dello sposo",
+    "namePlaceholderCelebrant": "Nome del festeggiato",
+    "agePlaceholder": "Età",
+    "dateLabelWedding": "La data del vostro matrimonio",
+    "dateLabelOther": "Data del {eventLabel}",
+    "datePickerPlaceholder": "Tocca per scegliere una data",
+    "designPickerLabel": "Scegli un design per il poster",
+    "downloadPdf": "Scarica poster (PDF)",
+    "generatingPdf": "Generazione PDF...",
+    "pdfError": "Impossibile generare il PDF. Riprova.",
+    "shareTitle": "Condividi il link per gli ospiti",
+    "shareSubtitle": "Invia questo link agli ospiti per ricevere auguri e foto",
+    "copy": "Copia",
+    "copied": "Copiato!",
+    "copyHint": "Tocca per copiare il link completo",
+    "footerTagline": "Fatto con amore per il vostro giorno speciale",
+    "bgClassic": "Classico",
+    "bgGoldMarble": "Marmo dorato"
+  },
+
   "photo": {
     "pageTitleWedding": "Lascia un augurio alla coppia",
     "pageTitleBirthday": "Lascia un augurio",
