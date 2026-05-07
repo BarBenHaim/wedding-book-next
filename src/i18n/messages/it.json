@@ -41,6 +41,20 @@
       "description": "Un giorno di Bat Mitzvah da ricordare per sempre. Condividi un augurio, aggiungi una foto e trasforma la giornata in un ricordo emozionante.",
       "ctaLabel": "Scrivi un augurio",
       "footer": "Bat Mitzvah Tales"
+    },
+    "poker": {
+      "label": "Poker",
+      "subtitle": "L'album del gioco di",
+      "description": "Mani importanti, eliminazioni leggendarie e momenti dietro al tavolo.",
+      "ctaLabel": "Carica una foto",
+      "footer": "Poker Tales"
+    },
+    "travel": {
+      "label": "Viaggio",
+      "subtitle": "Il viaggio di",
+      "description": "Tappe, paesaggi e persone che hai incontrato in viaggio — tutto in un unico libro.",
+      "ctaLabel": "Aggiungi un momento",
+      "footer": "Travel Tales"
     }
   },
 
@@ -122,6 +136,10 @@
     "pageTitleWithCouple": "Lascia un augurio a {first} e {second}",
     "pageTitleWithName": "Lascia un augurio a {name}",
     "pageTitleGeneric": "Lascia un augurio",
+    "pageTitlePoker": "Foto del gioco",
+    "pageTitlePokerWithVenue": "Il gioco a {name}",
+    "pageTitleTravel": "Libro di viaggio",
+    "pageTitleTravelWithName": "Il viaggio di {name}",
     "pageSubtitle": "Poche parole dal cuore che diventano un dolce ricordo",
     "pageTitleStep2": "Aggiungi una foto",
     "pageSubtitleStep2": "Una piccola foto che resterà col ricordo",

@@ -41,6 +41,20 @@
       "description": "Un día de Bat Mitzvá para recordar siempre. Comparte una bendición, añade una foto y convierte el día en un recuerdo emotivo.",
       "ctaLabel": "Escribir una bendición",
       "footer": "Bat Mitzvah Tales"
+    },
+    "poker": {
+      "label": "Póker",
+      "subtitle": "El álbum del juego de",
+      "description": "Grandes manos, eliminaciones legendarias y momentos detrás de la mesa.",
+      "ctaLabel": "Subir una foto",
+      "footer": "Poker Tales"
+    },
+    "travel": {
+      "label": "Viaje",
+      "subtitle": "El viaje de",
+      "description": "Paradas, paisajes y personas que conociste en el camino — todo en un solo libro.",
+      "ctaLabel": "Añadir un momento",
+      "footer": "Travel Tales"
     }
   },
 
@@ -122,6 +136,10 @@
     "pageTitleWithCouple": "Deja una bendición a {first} y {second}",
     "pageTitleWithName": "Deja una bendición a {name}",
     "pageTitleGeneric": "Deja una bendición",
+    "pageTitlePoker": "Fotos del juego",
+    "pageTitlePokerWithVenue": "El juego en {name}",
+    "pageTitleTravel": "Libro de viaje",
+    "pageTitleTravelWithName": "El viaje de {name}",
     "pageSubtitle": "Unas palabras del corazón que se convierten en un dulce recuerdo",
     "pageTitleStep2": "Añade una foto",
     "pageSubtitleStep2": "Una foto que se quedará con el recuerdo",

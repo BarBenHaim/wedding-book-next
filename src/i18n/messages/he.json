@@ -41,6 +41,20 @@
       "description": "יום הבת מצווה זוכר לתמיד. שתפו ברכה, הוסיפו תמונה, והפכו את היום לספר מרגש.",
       "ctaLabel": "יצירת ברכה",
       "footer": "Bat Mitzvah Tales"
+    },
+    "poker": {
+      "label": "פוקר",
+      "subtitle": "אלבום המשחק של",
+      "description": "תמונות של ידיים גדולות, שבירות אגדיות ורגעים מאחורי השולחן.",
+      "ctaLabel": "העלאת תמונה",
+      "footer": "Poker Tales"
+    },
+    "travel": {
+      "label": "טיול",
+      "subtitle": "ספר המסע של",
+      "description": "תחנות, נופים ואנשים שפגשת בדרך — כולם בספר אחד.",
+      "ctaLabel": "הוספת רגע",
+      "footer": "Travel Tales"
     }
   },
 
@@ -122,6 +136,10 @@
     "pageTitleWithCouple": "השאירו ברכה ל{first} ול{second}",
     "pageTitleWithName": "השאירו ברכה ל{name}",
     "pageTitleGeneric": "השאירו ברכה",
+    "pageTitlePoker": "תמונות מהמשחק",
+    "pageTitlePokerWithVenue": "המשחק ב{name}",
+    "pageTitleTravel": "ספר המסע",
+    "pageTitleTravelWithName": "המסע של {name}",
     "pageSubtitle": "כמה מילים מהלב שיהפכו לזיכרון מתוק",
     "pageTitleStep2": "הוסיפו תמונה",
     "pageSubtitleStep2": "תמונה קטנה שתישאר לזיכרון",

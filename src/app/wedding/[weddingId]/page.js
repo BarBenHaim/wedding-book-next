@@ -8,6 +8,7 @@ import { getEventConfig, getPalette, buildTitle, buildSubtitle, buildDescription
 import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale, dirFor } from '@/i18n/locales'
+import { logEvent } from '@/lib/logEvent'
 
 // ── Outer: owns the runtime locale and wires the i18n provider so the
 // guest sees the page in the language the super-admin configured for the
@@ -34,6 +35,14 @@ function GuestLanding({ weddingId, onLocaleDiscovered }) {
 
     const [exists, setExists] = useState(null)
     const [data, setData] = useState(null) // the raw wedding doc (or null while loading)
+
+    // Fire-and-forget scan analytics — guest just landed on the
+    // wedding's public page, which counts as "the QR was scanned"
+    // for funnel purposes. Wrapped helper swallows any error so a
+    // failing tracking call can never delay or break the page.
+    useEffect(() => {
+        logEvent(weddingId, 'scan')
+    }, [weddingId])
 
     useEffect(() => {
         async function checkWedding() {

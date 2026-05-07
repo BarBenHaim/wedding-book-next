@@ -269,14 +269,35 @@ function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCance
 // ─── Stat Card ───────────────────────────────────────────────────────────────
 function StatCard({ icon: Icon, label, value, iconBg, iconColor, pulse = false }) {
     return (
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-            className='relative overflow-hidden rounded-2xl p-5 bg-white/90 backdrop-blur-md border border-[#AA8840]/15 shadow-md'
-            whileHover={{ y: -2, transition: { duration: 0.2 } }}
+        <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileHover={{ y: -3, transition: { duration: 0.2 } }}
+            className='relative overflow-hidden rounded-2xl p-5'
+            style={{
+                background: '#ffffff',
+                border: '1px solid rgba(212,184,103,0.22)',
+                boxShadow:
+                    '0 16px 32px -20px rgba(170,136,64,0.22), 0 2px 6px -2px rgba(170,136,64,0.08)',
+            }}
         >
+            {/* Soft gold accent line at the top edge — gives the card a
+                subtle "premium card" stripe without dominating it. */}
+            <div
+                className='absolute top-0 left-0 right-0 h-[2px]'
+                style={{ background: 'linear-gradient(90deg, transparent, rgba(201,164,78,0.45), transparent)' }}
+            />
             <div className='flex items-start justify-between'>
                 <div>
-                    <p className='text-gray-400 text-xs font-medium tracking-widest uppercase mb-2'>{label}</p>
-                    <p className='text-3xl font-black text-gray-800 leading-none'>{value}</p>
+                    <p
+                        className='mb-2'
+                        style={{ color: '#a89378', fontSize: '10.5px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase' }}
+                    >
+                        {label}
+                    </p>
+                    <p className='leading-none' style={{ color: '#1a1410', fontSize: '30px', fontWeight: 800, letterSpacing: '-0.02em' }}>
+                        {value}
+                    </p>
                 </div>
                 <div className={`relative w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
                     {pulse && <div className={`absolute inset-0 rounded-xl animate-ping opacity-30 ${iconBg}`} />}
@@ -555,14 +576,26 @@ function EventTypeEditor({ wedding, onSave }) {
                 </>
             )}
 
-            {showCelebrant && (
+            {showCelebrant && (() => {
+                // Same celebrantName field, different label/placeholder
+                // per event type. Keeps the Firestore column count flat
+                // and lets us add more event types later as data only.
+                const celebrantLabel =
+                    draft.eventType === 'poker' ? 'מיקום האירוע'
+                    : draft.eventType === 'travel' ? 'שם המטייל'
+                    : 'שם החוגג/ת'
+                const celebrantPlaceholder =
+                    draft.eventType === 'poker' ? 'הממלכה'
+                    : draft.eventType === 'travel' ? 'דניאל'
+                    : 'Tikva'
+                return (
                 <div className={`grid gap-3 mb-3 ${showAge ? 'grid-cols-[2fr_1fr]' : 'grid-cols-1'}`}>
                     <div>
-                        <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם החוגג/ת</label>
+                        <label className='text-xs font-semibold text-gray-500 mb-1 block'>{celebrantLabel}</label>
                         <input
                             type='text' value={draft.celebrantName}
                             onChange={e => set('celebrantName', e.target.value)}
-                            placeholder='Tikva'
+                            placeholder={celebrantPlaceholder}
                             className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
                         />
                     </div>
@@ -578,9 +611,10 @@ function EventTypeEditor({ wedding, onSave }) {
                         </div>
                     )}
                 </div>
-            )}
+                )
+            })()}
 
-            {showCelebrant && (
+            {showCelebrant && draft.eventType !== 'poker' && draft.eventType !== 'travel' && (
                 <div className='mb-3'>
                     <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם החוגג/ת בעברית</label>
                     <input
@@ -647,7 +681,122 @@ function EventTypeEditor({ wedding, onSave }) {
 }
 
 // ─── Wedding Detail Panel (Database Explorer) ────────────────────────────────
+// ─── Funnel view ─────────────────────────────────────────────────────────────
+// Renders the scan → start → submit funnel for a single wedding using the
+// stats payload returned by /api/admin/wedding-stats. Receives the stats
+// + loading flag from its parent so the caller controls when to refetch.
+function FunnelView({ stats, loading }) {
+    if (loading && !stats) {
+        return (
+            <div className='flex items-center gap-2 text-xs text-gray-400'>
+                <Loader2 size={12} className='animate-spin' />
+                טוען נתונים…
+            </div>
+        )
+    }
+    if (!stats) {
+        return <p className='text-xs text-gray-400'>אין נתונים זמינים.</p>
+    }
+
+    const { scans = 0, uniqueScans = 0, startedBlessing = 0, submitted = 0, recentScans = [] } = stats
+
+    // Percentages relative to scans (the top of the funnel). When scans
+    // is 0 we show "—" instead of NaN%.
+    const pct = n => (scans > 0 ? Math.round((n / scans) * 100) + '%' : '—')
+
+    const rows = [
+        { label: 'סריקות סך הכל', value: scans, percent: '100%', barPercent: 100, color: '#AA8840' },
+        { label: 'סריקות ייחודיות (IP)', value: uniqueScans, percent: pct(uniqueScans), barPercent: scans ? (uniqueScans / scans) * 100 : 0, color: '#c9a44e' },
+        { label: 'התחילו לכתוב ברכה', value: startedBlessing, percent: pct(startedBlessing), barPercent: scans ? (startedBlessing / scans) * 100 : 0, color: '#d4b867' },
+        { label: 'שלחו ברכה בפועל', value: submitted, percent: pct(submitted), barPercent: scans ? (submitted / scans) * 100 : 0, color: '#7da76a' },
+    ]
+
+    return (
+        <div className='space-y-3'>
+            {rows.map(r => (
+                <div key={r.label}>
+                    <div className='flex items-center justify-between mb-1'>
+                        <span className='text-[11px] font-semibold text-gray-600'>{r.label}</span>
+                        <span className='text-xs font-bold text-gray-800'>
+                            {r.value} <span className='text-[10px] text-gray-400 font-medium'>({r.percent})</span>
+                        </span>
+                    </div>
+                    <div className='h-1.5 rounded-full bg-gray-100 overflow-hidden'>
+                        <div
+                            className='h-full rounded-full transition-all duration-500'
+                            style={{ width: Math.min(100, r.barPercent) + '%', background: r.color }}
+                        />
+                    </div>
+                </div>
+            ))}
+
+            {/* Recent activity */}
+            {recentScans.length > 0 && (
+                <div className='mt-5 pt-4 border-t border-gray-100'>
+                    <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-2'>פעילות אחרונה</p>
+                    <div className='max-h-48 overflow-y-auto space-y-1.5 -mr-2 pr-2'>
+                        {recentScans.slice(0, 20).map((s, i) => {
+                            const ua = s.userAgent || ''
+                            const device = /iPhone|iPad/i.test(ua)
+                                ? 'iPhone'
+                                : /Android/i.test(ua)
+                                  ? 'Android'
+                                  : /Windows|Mac/i.test(ua)
+                                    ? 'Desktop'
+                                    : '—'
+                            const when = s.createdAt ? new Date(s.createdAt).toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : ''
+                            return (
+                                <div key={i} className='flex items-center gap-2 text-[11px] text-gray-500 py-1'>
+                                    <span
+                                        className='w-1.5 h-1.5 rounded-full flex-shrink-0'
+                                        style={{ background: s.event === 'scan' ? '#AA8840' : '#7da76a' }}
+                                    />
+                                    <span className='font-mono text-[10px] text-gray-400 flex-shrink-0'>{when}</span>
+                                    <span className='truncate'>{s.event === 'scan' ? 'סריקה' : 'התחיל ברכה'} · {device}</span>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
 function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onCheckLuluStatus, onSaveEdit }) {
+    // ── Analytics state — funnel + recent scans pulled from
+    //    /api/admin/wedding-stats. Loads fresh whenever the panel
+    //    swaps to a different wedding. Hooks must be declared BEFORE
+    //    the early-return below to keep React's hook order stable.
+    const [stats, setStats] = useState(null)
+    const [statsLoading, setStatsLoading] = useState(false)
+
+    useEffect(() => {
+        if (!wedding?.id) return
+        let cancelled = false
+        async function load() {
+            setStatsLoading(true)
+            try {
+                const token = await getToken()
+                const res = await fetch(`/api/admin/wedding-stats?weddingId=${wedding.id}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                })
+                if (!res.ok) throw new Error('stats fetch failed')
+                const data = await res.json()
+                if (!cancelled) setStats(data)
+            } catch (err) {
+                console.warn('[admin] stats load failed:', err)
+                if (!cancelled) setStats(null)
+            } finally {
+                if (!cancelled) setStatsLoading(false)
+            }
+        }
+        load()
+        return () => {
+            cancelled = true
+        }
+    }, [wedding?.id])
+
     if (!wedding) return null
 
     const evCfg = getEventConfig(wedding.eventType)
@@ -703,6 +852,12 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
             {/* Status */}
             <div className='px-6 py-4 border-b border-gray-100'>
                 <StatusBadge weddingDate={wedding.weddingDate} />
+            </div>
+
+            {/* ── Funnel analytics ── */}
+            <div className='px-6 py-5 border-b border-gray-100'>
+                <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>Funnel</p>
+                <FunnelView stats={stats} loading={statsLoading} />
             </div>
 
             {/* Fields (visual DB) */}
@@ -1100,7 +1255,20 @@ function AdminDashboardContent() {
     ]
 
     return (
-        <div className='min-h-screen py-10 px-4 sm:px-10 bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da]' dir='rtl'>
+        <div
+            className='min-h-screen py-10 px-4 sm:px-10 relative'
+            dir='rtl'
+            style={{
+                // Ivory premium wash — same palette as the public-facing
+                // pages so the admin doesn't feel like a different app.
+                backgroundColor: '#f8f4ec',
+                backgroundImage: [
+                    'radial-gradient(ellipse 1100px 560px at 50% -10%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 55%)',
+                    'radial-gradient(ellipse 600px 600px at 92% 105%, rgba(201,164,78,0.07) 0%, rgba(201,164,78,0) 60%)',
+                    'radial-gradient(ellipse 520px 520px at 8% 105%, rgba(186,156,108,0.05) 0%, rgba(186,156,108,0) 60%)',
+                ].join(', '),
+            }}
+        >
             {/* Toast */}
             <AnimatePresence>{toast && <Toast {...toast} onClose={() => setToast(null)} />}</AnimatePresence>
 
@@ -1137,46 +1305,88 @@ function AdminDashboardContent() {
                 </div>
             )}
 
-            {/* Ambient orbs */}
-            <div className='fixed -top-24 left-10 h-72 w-72 rounded-full bg-[#AA8840]/8 blur-3xl pointer-events-none' />
-            <div className='fixed bottom-10 right-10 h-80 w-80 rounded-full bg-[#AA8840]/6 blur-3xl pointer-events-none' />
+            {/* Ambient orbs — quieter than before, just enough to give
+                depth without competing with the content. */}
+            <div className='fixed -top-32 -left-20 h-[28rem] w-[28rem] rounded-full pointer-events-none' style={{ background: 'rgba(211,182,103,0.08)', filter: 'blur(80px)' }} />
+            <div className='fixed -bottom-24 -right-20 h-[26rem] w-[26rem] rounded-full pointer-events-none' style={{ background: 'rgba(170,136,64,0.06)', filter: 'blur(80px)' }} />
 
             <div className='max-w-7xl mx-auto relative'>
 
                 {/* Page Header */}
-                <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className='flex items-center justify-between mb-8'>
+                <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className='flex items-center justify-between mb-9'>
                     <div className='flex items-center gap-4'>
                         <div className='relative'>
-                            <div className='w-13 h-13 rounded-2xl bg-gradient-to-br from-[#AA8840] to-[#c9a44e] flex items-center justify-center shadow-lg shadow-[#AA8840]/20 p-3'>
-                                <Crown size={22} className='text-white' />
+                            <div
+                                className='w-12 h-12 rounded-2xl flex items-center justify-center shrink-0'
+                                style={{
+                                    background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                    boxShadow:
+                                        '0 12px 24px -10px rgba(170,136,64,0.45), inset 0 1px 0 rgba(255,255,255,0.30)',
+                                }}
+                            >
+                                <Crown size={20} className='text-white' />
                             </div>
-                            <div className='absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-white animate-pulse' />
+                            <div className='absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white animate-pulse' />
                         </div>
                         <div>
-                            <h1 className='text-2xl font-black text-gray-900 leading-tight tracking-tight'>Command Center</h1>
-                            <p className='text-sm text-gray-400 mt-0.5 flex items-center gap-1.5'>
-                                <Sparkles size={12} className='text-[#AA8840]' /> Wedding Tales — Super Admin
+                            <h1 className='leading-tight tracking-tight font-bold' style={{ color: '#1a1410', fontSize: '24px', letterSpacing: '-0.015em' }}>
+                                Command Center
+                            </h1>
+                            <p className='mt-1 flex items-center gap-1.5' style={{ color: '#9a8a72', fontSize: '12.5px' }}>
+                                <Sparkles size={11} style={{ color: '#c9a44e' }} /> Wedding Tales — Super Admin
                             </p>
                         </div>
                     </div>
 
                     {/* Top Actions */}
                     <div className='flex items-center gap-2'>
-                        <button onClick={() => setShowCreateUser(true)} title='יצירת משתמש חדש'
-                            className='hidden sm:flex items-center gap-2 bg-gradient-to-r from-[#AA8840] to-[#c9a44e] rounded-xl px-4 py-2.5 shadow-sm hover:shadow-md hover:brightness-110 transition-all text-sm font-medium text-white'>
+                        <button
+                            onClick={() => setShowCreateUser(true)}
+                            title='יצירת משתמש חדש'
+                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold text-white active:scale-[0.98]'
+                            style={{
+                                background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                boxShadow: '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
+                            }}
+                        >
                             <UserPlus size={14} /> משתמש חדש
                         </button>
-                        <button onClick={handleBackup} title='הורד גיבוי JSON'
-                            className='hidden sm:flex items-center gap-2 bg-white/80 border border-[#AA8840]/15 rounded-xl px-4 py-2.5 backdrop-blur-sm shadow-sm hover:bg-white hover:border-[#AA8840]/30 transition-all text-sm font-medium text-gray-600'>
-                            <HardDrive size={14} className='text-[#AA8840]' /> גיבוי
+                        <button
+                            onClick={handleBackup}
+                            title='הורד גיבוי JSON'
+                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
+                            style={{
+                                background: '#ffffff',
+                                border: '1px solid rgba(212,184,103,0.30)',
+                                color: '#7a6a52',
+                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
+                            }}
+                        >
+                            <HardDrive size={14} style={{ color: '#c9a44e' }} /> גיבוי
                         </button>
-                        <button onClick={loadWeddings} title='רענן נתונים'
-                            className='w-10 h-10 rounded-xl bg-white/80 border border-[#AA8840]/15 flex items-center justify-center backdrop-blur-sm shadow-sm hover:bg-white transition-all'>
-                            <RefreshCw size={15} className='text-gray-500' />
+                        <button
+                            onClick={loadWeddings}
+                            title='רענן נתונים'
+                            className='w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:rotate-180'
+                            style={{
+                                background: '#ffffff',
+                                border: '1px solid rgba(212,184,103,0.30)',
+                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
+                                transitionDuration: '500ms',
+                            }}
+                        >
+                            <RefreshCw size={15} style={{ color: '#7a6a52' }} />
                         </button>
-                        <div className='hidden sm:flex items-center gap-2 bg-white/80 border border-[#AA8840]/15 rounded-full px-4 py-2 backdrop-blur-sm shadow-sm'>
+                        <div
+                            className='hidden sm:flex items-center gap-2 rounded-full px-4 py-2'
+                            style={{
+                                background: '#ffffff',
+                                border: '1px solid rgba(212,184,103,0.25)',
+                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.08)',
+                            }}
+                        >
                             <span className='w-2 h-2 rounded-full bg-emerald-400 animate-pulse' />
-                            <span className='text-gray-500 text-xs font-medium'>Live</span>
+                            <span style={{ color: '#7a6a52', fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em' }}>Live</span>
                         </div>
                     </div>
                 </motion.div>
@@ -1201,29 +1411,74 @@ function AdminDashboardContent() {
                 </div>
 
                 {/* Main Table Card */}
-                <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-                    className='rounded-2xl border border-[#AA8840]/15 overflow-hidden bg-white/90 backdrop-blur-md shadow-lg'>
+                <motion.div
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 }}
+                    className='rounded-3xl overflow-hidden'
+                    style={{
+                        background: '#ffffff',
+                        border: '1px solid rgba(212,184,103,0.22)',
+                        boxShadow:
+                            '0 24px 50px -28px rgba(170,136,64,0.28), 0 4px 12px -4px rgba(170,136,64,0.10)',
+                    }}
+                >
 
                     {/* Card header */}
-                    <div className='px-6 py-4 border-b border-[#AA8840]/15 bg-white/70 flex flex-col sm:flex-row sm:items-center gap-3'>
+                    <div
+                        className='px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-3'
+                        style={{
+                            borderBottom: '1px solid rgba(212,184,103,0.15)',
+                            background: 'linear-gradient(180deg, #fdfaf3 0%, #ffffff 100%)',
+                        }}
+                    >
                         <div className='flex items-center gap-3 flex-1'>
-                            <div className='w-2 h-2 rounded-full bg-gradient-to-r from-[#AA8840] to-[#c9a44e]' />
-                            <h2 className='font-bold text-gray-700 text-sm tracking-wide'>כל החתונות</h2>
+                            <div
+                                className='w-1.5 h-6 rounded-full'
+                                style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}
+                            />
+                            <h2 style={{ color: '#1a1410', fontSize: '15px', fontWeight: 700, letterSpacing: '-0.005em' }}>כל החתונות</h2>
                             {status === 'ok' && (
-                                <span className='text-xs bg-[#AA8840]/10 text-[#AA8840] border border-[#AA8840]/20 rounded-full px-3 py-0.5 font-semibold'>
+                                <span
+                                    className='rounded-full px-3 py-0.5'
+                                    style={{
+                                        background: 'rgba(201,164,78,0.10)',
+                                        color: '#a8843a',
+                                        border: '1px solid rgba(212,184,103,0.30)',
+                                        fontSize: '11px',
+                                        fontWeight: 600,
+                                    }}
+                                >
                                     {sorted.length} רשומות
                                 </span>
                             )}
                         </div>
                         {status === 'ok' && (
-                            <div className='w-full sm:w-72 relative' dir='rtl'>
-                                <Search size={15} className='absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none' />
-                                <input type='text' value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                            <div className='w-full sm:w-80 relative' dir='rtl'>
+                                <Search size={15} className='absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none' style={{ color: '#b9a684' }} />
+                                <input
+                                    type='text'
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
                                     placeholder='חיפוש לפי שם, אימייל, מזהה...'
-                                    className='w-full pr-10 pl-4 py-2.5 rounded-xl text-sm text-gray-700 placeholder:text-gray-400 outline-none transition-all border border-[#AA8840]/20 bg-[#AA8840]/5 focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10' />
+                                    className='w-full pr-10 pl-4 py-2.5 rounded-xl outline-none transition-all'
+                                    style={{
+                                        background: '#fdfaf3',
+                                        border: '1px solid #ead9b3',
+                                        color: '#1a1410',
+                                        fontSize: '13.5px',
+                                    }}
+                                    onFocus={e => (e.currentTarget.style.borderColor = '#c9a44e')}
+                                    onBlur={e => (e.currentTarget.style.borderColor = '#ead9b3')}
+                                />
                                 {searchQuery && (
-                                    <button onClick={() => setSearchQuery('')}
-                                        className='absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 text-xs'>✕</button>
+                                    <button
+                                        onClick={() => setSearchQuery('')}
+                                        className='absolute left-3 top-1/2 -translate-y-1/2 text-xs'
+                                        style={{ color: '#b9a684' }}
+                                    >
+                                        ✕
+                                    </button>
                                 )}
                             </div>
                         )}

@@ -11,6 +11,7 @@ import { normalizeBlessing } from '../../../../lib/normalizeText'
 import { NextIntlClientProvider, useTranslations } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
+import { logEvent } from '@/lib/logEvent'
 
 // Outer wrapper — fetches locale, eventType, AND the recipient names
 // from the wedding doc once, then wraps the form in
@@ -85,6 +86,16 @@ function PhotoApp({ eventType, recipients }) {
             if (groom) return t('pageTitleWithName', { name: groom })
             return t('pageTitleWedding')
         }
+        // Poker — celebrantName slot holds the venue (e.g. "הממלכה").
+        // We say "המשחק ב{name}" when set, "תמונות מהמשחק" otherwise.
+        if (eventType === 'poker') {
+            return celebrant ? t('pageTitlePokerWithVenue', { name: celebrant }) : t('pageTitlePoker')
+        }
+        // Travel — celebrantName slot holds the traveler's name.
+        if (eventType === 'travel') {
+            return celebrant ? t('pageTitleTravelWithName', { name: celebrant }) : t('pageTitleTravel')
+        }
+        // birthday / bar mitzvah / bat mitzvah and everything else.
         if (celebrant) return t('pageTitleWithName', { name: celebrant })
         return t('pageTitleGeneric')
     }
@@ -110,6 +121,23 @@ function PhotoApp({ eventType, recipients }) {
     const liveVideoRef = useRef(null)
     const router = useRouter()
     const { weddingId } = useParams()
+
+    // Prefetch /thanks on mount so an offline router.push at submit time
+    // doesn't fall through to Chrome's "no internet" error page —
+    // Next.js stores the route's chunk + RSC payload in the local
+    // cache while we still have network.
+    useEffect(() => {
+        if (!weddingId) return
+        router.prefetch(`/wedding/${weddingId}/thanks`)
+    }, [weddingId, router])
+
+    // Funnel analytics — guest opened the blessing form. Pairs with the
+    // 'scan' event logged on the guest landing page; together they let
+    // the super-admin see "X scanned, Y started the form, Z submitted"
+    // for any given wedding.
+    useEffect(() => {
+        logEvent(weddingId, 'start_blessing')
+    }, [weddingId])
 
     // --- לוגיקת מצלמה ---
     useEffect(() => {

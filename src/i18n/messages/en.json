@@ -41,6 +41,20 @@
       "description": "A Bat Mitzvah day to remember forever. Share a blessing, add a photo, and turn the day into a moving keepsake.",
       "ctaLabel": "Write a blessing",
       "footer": "Bat Mitzvah Tales"
+    },
+    "poker": {
+      "label": "Poker",
+      "subtitle": "The game album of",
+      "description": "Big hands, legendary bust-outs and moments from behind the table.",
+      "ctaLabel": "Upload a photo",
+      "footer": "Poker Tales"
+    },
+    "travel": {
+      "label": "Travel",
+      "subtitle": "The journey of",
+      "description": "Stops, landscapes and people you met on the road — all in one book.",
+      "ctaLabel": "Add a moment",
+      "footer": "Travel Tales"
     }
   },
 
@@ -122,6 +136,10 @@
     "pageTitleWithCouple": "Leave a blessing for {first} & {second}",
     "pageTitleWithName": "Leave a blessing for {name}",
     "pageTitleGeneric": "Leave a blessing",
+    "pageTitlePoker": "Photos from the game",
+    "pageTitlePokerWithVenue": "The game at {name}",
+    "pageTitleTravel": "Travel book",
+    "pageTitleTravelWithName": "{name}'s journey",
     "pageSubtitle": "A few words from the heart that turn into a sweet memory",
     "pageTitleStep2": "Add a photo",
     "pageSubtitleStep2": "A small photo to keep with the memory",

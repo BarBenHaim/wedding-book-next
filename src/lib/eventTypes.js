@@ -99,9 +99,11 @@ export const EVENT_TYPES = {
     birthday: 'birthday',
     bar_mitzvah: 'bar_mitzvah',
     bat_mitzvah: 'bat_mitzvah',
+    poker: 'poker',
+    travel: 'travel',
 }
 
-export const EVENT_TYPE_ORDER = ['wedding', 'birthday', 'bar_mitzvah', 'bat_mitzvah']
+export const EVENT_TYPE_ORDER = ['wedding', 'birthday', 'bar_mitzvah', 'bat_mitzvah', 'poker', 'travel']
 
 // Per-event-type config that's NOT locale-dependent. The user-facing
 // strings (label, subtitle, description, ctaLabel, footer) live in
@@ -113,6 +115,11 @@ const EVENT_TYPE_META = {
     birthday: { id: 'birthday', defaultTheme: 'pink' },
     bar_mitzvah: { id: 'bar_mitzvah', defaultTheme: 'blue' },
     bat_mitzvah: { id: 'bat_mitzvah', defaultTheme: 'blue' },
+    // Poker = warm gold like wedding (casino/felt vibe).
+    // Travel = blue (sky / horizon). Both reuse existing themes; we
+    // can spin up dedicated palettes later if needed.
+    poker: { id: 'poker', defaultTheme: 'gold' },
+    travel: { id: 'travel', defaultTheme: 'blue' },
 }
 
 // Lazy-loaded fallback message catalogue. We ALWAYS resolve via the JSON
@@ -248,6 +255,22 @@ export function buildTitle(data = {}, locale = 'he') {
         return { kind: 'single', text: name }
     }
 
+    // poker — celebrantName holds the venue (e.g. "הממלכה"). The title
+    // on the guest landing reads as that venue's name; description picks
+    // up the poker-specific copy from messages.{locale}.eventTypes.poker.
+    if (type === 'poker') {
+        const venue = (data.celebrantName || '').trim()
+        if (!venue) return { kind: 'empty' }
+        return { kind: 'single', text: venue }
+    }
+
+    // travel — celebrantName holds the traveler's name.
+    if (type === 'travel') {
+        const traveler = (data.celebrantName || '').trim()
+        if (!traveler) return { kind: 'empty' }
+        return { kind: 'single', text: traveler }
+    }
+
     // bar_mitzvah / bat_mitzvah
     const name = (data.celebrantName || '').trim()
     if (!name) return { kind: 'empty' }
@@ -290,5 +313,11 @@ export function fieldsForType(rawType) {
     const type = normalizeEventType(rawType)
     if (type === 'wedding') return ['brideName', 'groomName', 'weddingDate']
     if (type === 'birthday') return ['celebrantName', 'age', 'weddingDate']
+    // Poker reuses the celebrantName slot for the venue/location
+    // (placeholder "הממלכה"). Travel reuses it for the traveler's name.
+    // The admin UI changes the label per event type — the underlying
+    // field is the same so we don't proliferate Firestore columns.
+    if (type === 'poker') return ['celebrantName', 'weddingDate']
+    if (type === 'travel') return ['celebrantName', 'weddingDate']
     return ['celebrantName', 'weddingDate']
 }

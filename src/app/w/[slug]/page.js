@@ -37,6 +37,9 @@ export default function SlugRedirect() {
                     return
                 }
                 const weddingId = snap.docs[0].id
+                // Don't log a scan event here — the /wedding/{id} page
+                // we're about to redirect to logs one itself. Logging
+                // both would double-count every short-link visit.
                 router.replace(`/wedding/${weddingId}`)
             } catch (err) {
                 console.error('Error resolving slug:', err)
