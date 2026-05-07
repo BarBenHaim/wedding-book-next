@@ -364,6 +364,11 @@ function EventTypeEditor({ wedding, onSave }) {
     // type's default.
     const buildDraft = w => ({
         eventType: normalizeEventType(w.eventType),
+        // Visual design variant within an event type — wedding has
+        // 'classic' (ivory premium, default) and 'romantic' (botanical
+        // floral arch). Poker has 'kingdom' (felt + chips). Empty/null
+        // falls back to the event type's default variant.
+        designVariant: w.designVariant || '',
         // Interface language for the couple's portal + their guest page.
         // null/undefined falls back to Hebrew on the read side, matching
         // the legacy behavior for every wedding doc that predates i18n.
@@ -409,6 +414,9 @@ function EventTypeEditor({ wedding, onSave }) {
     function buildPatch() {
         const patch = {
             eventType: draft.eventType,
+            // Variant within an event type (e.g. wedding/classic vs
+            // wedding/romantic). Empty string = use the type default.
+            designVariant: draft.designVariant,
             locale: draft.locale,
             themeColor: draft.themeColor, // null → server stores null = inherit
         }
@@ -463,6 +471,28 @@ function EventTypeEditor({ wedding, onSave }) {
                     ))}
                 </select>
             </div>
+
+            {/* Design variant — visual style within an event type. Wedding
+                has two looks (classic ivory premium + romantic botanical
+                arch); other types only have one for now so the dropdown
+                is hidden until we add more. Empty value = use the type's
+                default variant on the guest side. */}
+            {draft.eventType === 'wedding' && (
+                <div className='mb-3'>
+                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>סגנון העיצוב</label>
+                    <select
+                        value={draft.designVariant || 'classic'}
+                        onChange={e => set('designVariant', e.target.value === 'classic' ? '' : e.target.value)}
+                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                    >
+                        <option value='classic'>קלאסי — שמנת ושמפניה (ברירת מחדל)</option>
+                        <option value='romantic'>רומנטי — עיצוב פרחוני</option>
+                    </select>
+                    <p className='text-[10px] text-gray-400 mt-1 leading-relaxed'>
+                        הסגנון משפיע רק על עמוד יצירת הברכה לאורחים — לא על הספר עצמו.
+                    </p>
+                </div>
+            )}
 
             {/* Interface language — drives the language shown to the
                 couple/celebrant in their portal AND to guests on the
@@ -742,6 +772,39 @@ function EventTypeEditor({ wedding, onSave }) {
 }
 
 // ─── Wedding Detail Panel (Database Explorer) ────────────────────────────────
+// ─── Quick link row ──────────────────────────────────────────────────────────
+// Single-line shortcut to a guest/couple-facing page for the currently
+// selected wedding. target=_blank so the admin can flip back to the
+// panel after previewing.
+function QuickLink({ href, label, icon: Icon }) {
+    return (
+        <a
+            href={href}
+            target='_blank'
+            rel='noopener noreferrer'
+            className='flex items-center gap-2.5 px-3 py-2 rounded-lg group transition-all'
+            style={{
+                background: 'rgba(212,184,103,0.08)',
+                border: '1px solid rgba(212,184,103,0.18)',
+            }}
+            onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(212,184,103,0.16)'
+                e.currentTarget.style.borderColor = 'rgba(212,184,103,0.40)'
+            }}
+            onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(212,184,103,0.08)'
+                e.currentTarget.style.borderColor = 'rgba(212,184,103,0.18)'
+            }}
+        >
+            <Icon size={13} style={{ color: '#a8843a' }} className='shrink-0' />
+            <span className='flex-1 text-[12.5px] font-semibold' style={{ color: '#3d2e1a' }}>
+                {label}
+            </span>
+            <ExternalLink size={11} style={{ color: '#a8843a', opacity: 0.6 }} className='shrink-0' />
+        </a>
+    )
+}
+
 // ─── Funnel view ─────────────────────────────────────────────────────────────
 // Renders the scan → start → submit funnel for a single wedding using the
 // stats payload returned by /api/admin/wedding-stats. Receives the stats
@@ -913,6 +976,27 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
             {/* Status */}
             <div className='px-6 py-4 border-b border-gray-100'>
                 <StatusBadge weddingDate={wedding.weddingDate} />
+            </div>
+
+            {/* ── Quick Links ──
+                Direct shortcuts to every guest- and couple-facing page
+                for this wedding. Each opens in a new tab so the admin
+                can preview without losing the panel. Especially useful
+                for previewing event-specific themes (poker dark felt,
+                wedding ivory premium, etc) — just open the photo page
+                and the design will reflect the doc's current eventType. */}
+            <div className='px-6 py-5 border-b border-gray-100'>
+                <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>קישורים מהירים</p>
+                <div className='space-y-1.5'>
+                    <QuickLink href={`/wedding/${wedding.id}`} label='עמוד נחיתה (אורחים)' icon={Heart} />
+                    <QuickLink href={`/wedding/${wedding.id}/photo`} label='עמוד יצירת ברכה' icon={Pencil} />
+                    <QuickLink href={`/wedding/${wedding.id}/thanks`} label='עמוד תודה' icon={CheckCircle2} />
+                    <QuickLink href={`/wedding/${wedding.id}/portal`} label='פורטל זוג / קוד QR' icon={Link2} />
+                    <QuickLink href={`/wedding/${wedding.id}/viewer`} label='צפייה בספר' icon={Eye} />
+                    {wedding.slug && (
+                        <QuickLink href={`/w/${wedding.slug}`} label={`קישור קצר (/${wedding.slug})`} icon={ExternalLink} />
+                    )}
+                </div>
             </div>
 
             {/* ── Funnel analytics ── */}

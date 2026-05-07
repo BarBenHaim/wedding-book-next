@@ -116,7 +116,7 @@ export async function PATCH(req) {
             return NextResponse.json({ error: 'Missing patch' }, { status: 400 })
         }
 
-        const ALLOWED = ['eventType', 'locale', 'themeColor', 'celebrantName', 'celebrantNameHe', 'age', 'customTitle', 'customSubtitle', 'customDescription', 'customNameLabel', 'customNamePlaceholder', 'customBlessingLabel', 'customBlessingPlaceholder', 'brideName', 'brideNameHe', 'groomName', 'groomNameHe']
+        const ALLOWED = ['eventType', 'designVariant', 'locale', 'themeColor', 'celebrantName', 'celebrantNameHe', 'age', 'customTitle', 'customSubtitle', 'customDescription', 'customNameLabel', 'customNamePlaceholder', 'customBlessingLabel', 'customBlessingPlaceholder', 'brideName', 'brideNameHe', 'groomName', 'groomNameHe']
         const clean = {}
 
         for (const key of ALLOWED) {
