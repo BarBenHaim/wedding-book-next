@@ -41,10 +41,16 @@ export default function GalleryPage() {
             }
 
             try {
+                // Order by `timestamp` — that's the field every write
+                // path actually sets (uploadEntry, classifyMedia, the
+                // /api/entries POST). orderBy in Firestore implicitly
+                // filters out docs that lack the field, so ordering
+                // by the wrong name returns zero rows even when the
+                // collection is full.
                 const entriesSnap = await getDocs(
                     query(
                         collection(db, 'weddings', weddingId, 'entries'),
-                        orderBy('createdAt', 'desc'),
+                        orderBy('timestamp', 'desc'),
                     ),
                 )
                 if (cancelled) return
@@ -56,7 +62,10 @@ export default function GalleryPage() {
                             name: e.name || '',
                             blessing: e.blessing || e.text || '',
                             photoUrl: e.photoUrl || e.imageUrl || '',
-                            createdAt: e.createdAt?.toDate?.()?.toISOString?.() || null,
+                            createdAt:
+                                e.timestamp?.toDate?.()?.toISOString?.() ||
+                                e.createdAt?.toDate?.()?.toISOString?.() ||
+                                null,
                         }
                     }),
                 )
