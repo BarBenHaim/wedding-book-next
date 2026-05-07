@@ -36,6 +36,11 @@ export default function TextPage() {
         blessingLabel: '',
         blessingPlaceholder: '',
     })
+    // Gate the first paint on the wedding doc fetch. Without this the
+    // initial render uses the wedding/classic defaults and the user
+    // sees a brief flash of the ivory premium look before the
+    // poker/romantic theme swaps in.
+    const [loaded, setLoaded] = useState(false)
 
     useEffect(() => {
         if (!weddingId) return
@@ -68,12 +73,31 @@ export default function TextPage() {
                 }
             } catch {
                 /* keep Hebrew default */
+            } finally {
+                if (!cancelled) setLoaded(true)
             }
         })()
         return () => {
             cancelled = true
         }
     }, [weddingId])
+
+    if (!loaded) {
+        // Neutral centered spinner — no theme yet, so we render on
+        // a plain white page until the doc tells us which design to
+        // use. Typical fetch is well under a second, so no fake delay.
+        return (
+            <div className='min-h-screen flex items-center justify-center bg-white'>
+                <div
+                    className='w-8 h-8 rounded-full animate-spin'
+                    style={{
+                        border: '2.5px solid #ead9b3',
+                        borderTopColor: '#c9a44e',
+                    }}
+                />
+            </div>
+        )
+    }
 
     return (
         <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
@@ -657,6 +681,22 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
     const isTextDone = text.trim().length > 0
     const isPhotoDone = !!photoUrl
 
+    // Poker reverses the user's path: snap the table first, then write
+    // the roast. Everything else keeps the original blessing → photo
+    // order. `textStep` / `photoStep` are the ordinal step number
+    // (1 = first, 2 = last) each panel sits on for the active variant.
+    const textStep = isPoker ? 2 : 1
+    const photoStep = isPoker ? 1 : 2
+    const firstStepDone = isPoker ? isPhotoDone : isTextDone
+    const lastStepDone = isPoker ? isTextDone : isPhotoDone
+    // Chip labels — non-poker reads the keys straight, poker swaps so
+    // chip 1 says "Photo" (תמונה) and chip 2 says "Blessing" (ברכה).
+    const firstChipLabel = t(isPoker ? 'step2Label' : 'step1Label')
+    const secondChipLabel = t(isPoker ? 'step1Label' : 'step2Label')
+    // Continue label for the photo→text transition (poker only).
+    // Falls back gracefully if a translator hasn't added the key yet.
+    const continueToTextLabel = isPoker ? t('continueToTextPoker') : ''
+
     // The previous PokerCornerDecor (SVG chips + cards) was retired —
     // the new pokerbg.png asset already bakes those decorations into
     // the felt at higher fidelity than we could draw inline.
@@ -750,8 +790,8 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                     : 'text-[#a89378]'
                         }`}
                     >
-                        <ChipBadge number={1} active={step === 1} done={isTextDone} isPoker={isPoker} />
-                        <span className='font-bold text-[13px] tracking-wide'>{t('step1Label')}</span>
+                        <ChipBadge number={1} active={step === 1} done={firstStepDone} isPoker={isPoker} />
+                        <span className='font-bold text-[13px] tracking-wide'>{firstChipLabel}</span>
                     </button>
 
                     {/* Connecting line — hairline tan that turns gold once
@@ -759,7 +799,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                     <div
                         className='h-px w-8 mx-1 transition-colors duration-300'
                         style={{
-                            background: isTextDone
+                            background: firstStepDone
                                 ? '#c9a44e'
                                 : isPoker
                                   ? 'rgba(212,175,55,0.30)'
@@ -771,8 +811,8 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
 
                     {/* Step 2 */}
                     <button
-                        onClick={() => isTextDone && setStep(2)}
-                        disabled={!isTextDone}
+                        onClick={() => firstStepDone && setStep(2)}
+                        disabled={!firstStepDone}
                         className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full transition-colors duration-200 ${
                             step === 2
                                 ? isPoker || isRomantic
@@ -783,21 +823,23 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                   : isRomantic
                                     ? 'text-[#c9b598]'
                                     : 'text-[#a89378]'
-                        } ${!isTextDone ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        } ${!firstStepDone ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
-                        <ChipBadge number={2} active={step === 2} done={isPhotoDone} isPoker={isPoker} />
-                        <span className='font-bold text-[13px] tracking-wide'>{t('step2Label')}</span>
+                        <ChipBadge number={2} active={step === 2} done={lastStepDone} isPoker={isPoker} />
+                        <span className='font-bold text-[13px] tracking-wide'>{secondChipLabel}</span>
                     </button>
                 </div>
 
-                {/* --- תוכן שלב 1: טקסט --- */}
+                {/* --- תוכן שלב הטקסט --- */}
                 {/* Redesigned to match the cleaner mockup: a heart-and-title
                     block above the form, the form itself in a soft white
                     card divided by a heart separator, then a full-width
                     gold gradient continue button, and a tiny lock-icon
                     trust line at the bottom. The state hooks and validation
-                    below are unchanged — only the JSX shell was redrawn. */}
-                {step === 1 && (
+                    below are unchanged — only the JSX shell was redrawn.
+                    For non-poker variants this panel is step 1; for poker
+                    it's step 2 (the user took the photo first). */}
+                {step === textStep && (
                     <div className='animate-fadeIn'>
                         {/* ── Title block ──
                             Generous breathing room above and below; the
@@ -1165,49 +1207,124 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                         </div>
 
                         {/* ── Continue button ──
-                            Solid antique-gold gradient, deep warm shadow.
+                            Only when this panel is the FIRST step
+                            (non-poker variants — text → photo). Solid
+                            antique-gold gradient, deep warm shadow.
                             Sparkle leads the row, chevron follows the
                             label and rotates per direction so it always
                             points "forward" in the user's reading flow. */}
-                        <button
-                            onClick={() => setStep(2)}
-                            disabled={!text.trim()}
-                            className='w-full mt-7 rounded-2xl text-white font-bold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-[0.99]'
-                            style={{
-                                background: theme.buttonGradient,
-                                boxShadow: theme.buttonShadow,
-                                padding: '15px 18px',
-                                fontSize: isRomantic ? '16px' : '15.5px',
-                                letterSpacing: '0.01em',
-                            }}
-                        >
-                            {/* Leading icon — sparkle on default/poker,
-                                small heart on romantic so the floral
-                                page doesn't carry a stray gold star. In
-                                RTL the icon sits on the right (start
-                                edge); in LTR on the left. */}
-                            <svg
-                                viewBox='0 0 24 24'
-                                className='w-[15px] h-[15px] opacity-95 shrink-0'
-                                fill='currentColor'
+                        {step === 1 && (
+                            <button
+                                onClick={() => setStep(2)}
+                                disabled={!text.trim()}
+                                className='w-full mt-7 rounded-2xl text-white font-bold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-[0.99]'
+                                style={{
+                                    background: theme.buttonGradient,
+                                    boxShadow: theme.buttonShadow,
+                                    padding: '15px 18px',
+                                    fontSize: isRomantic ? '16px' : '15.5px',
+                                    letterSpacing: '0.01em',
+                                }}
                             >
-                                {isRomantic ? (
-                                    <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                                {/* Leading icon — sparkle on default/poker,
+                                    small heart on romantic so the floral
+                                    page doesn't carry a stray gold star. */}
+                                <svg
+                                    viewBox='0 0 24 24'
+                                    className='w-[15px] h-[15px] opacity-95 shrink-0'
+                                    fill='currentColor'
+                                >
+                                    {isRomantic ? (
+                                        <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                                    ) : (
+                                        <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
+                                    )}
+                                </svg>
+                                <span>{continueToPhotoLabel}</span>
+                                <svg
+                                    viewBox='0 0 24 24'
+                                    className='w-[15px] h-[15px] rtl:rotate-180 shrink-0'
+                                    fill='none'
+                                    stroke='currentColor'
+                                    strokeWidth={2.6}
+                                >
+                                    <path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
+                                </svg>
+                            </button>
+                        )}
+
+                        {/* ── Submit + back row ──
+                            Only when this panel is the LAST step
+                            (poker — photo first, blessing last). The
+                            submit handler is the same `onSubmit` the
+                            photo step uses; by the time the user
+                            reaches the poker text step, photoUrl is
+                            already set, so the only extra gate is the
+                            blessing text itself. */}
+                        {step === 2 && (
+                            <button
+                                onClick={onSubmit}
+                                disabled={submitting || !text.trim()}
+                                className='w-full mt-7 rounded-2xl text-white font-bold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 active:scale-[0.99]'
+                                style={{
+                                    background: theme.buttonGradient,
+                                    boxShadow: theme.buttonShadow,
+                                    padding: '15px 18px',
+                                    fontSize: '15.5px',
+                                    letterSpacing: '0.01em',
+                                }}
+                            >
+                                {submitting ? (
+                                    <>
+                                        <svg className='w-4 h-4 animate-spin' fill='none' viewBox='0 0 24 24'>
+                                            <circle
+                                                className='opacity-25'
+                                                cx='12'
+                                                cy='12'
+                                                r='10'
+                                                stroke='currentColor'
+                                                strokeWidth='3'
+                                            />
+                                            <path
+                                                className='opacity-75'
+                                                fill='currentColor'
+                                                d='M4 12a8 8 0 018-8v8z'
+                                            />
+                                        </svg>
+                                        <span>{t('submitting')}</span>
+                                    </>
                                 ) : (
-                                    <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
+                                    <>
+                                        <svg
+                                            viewBox='0 0 24 24'
+                                            className='w-[15px] h-[15px] opacity-95'
+                                            fill='currentColor'
+                                        >
+                                            <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
+                                        </svg>
+                                        <span>{t('submit')}</span>
+                                    </>
                                 )}
-                            </svg>
-                            <span>{continueToPhotoLabel}</span>
-                            <svg
-                                viewBox='0 0 24 24'
-                                className='w-[15px] h-[15px] rtl:rotate-180 shrink-0'
-                                fill='none'
-                                stroke='currentColor'
-                                strokeWidth={2.6}
+                            </button>
+                        )}
+                        {step === 2 && (
+                            <button
+                                onClick={() => setStep(1)}
+                                className='w-full mt-3 text-[13px] flex items-center justify-center gap-1.5 transition-colors'
+                                style={{ color: theme.subtitleColor }}
                             >
-                                <path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
-                            </svg>
-                        </button>
+                                <svg
+                                    viewBox='0 0 24 24'
+                                    className='w-[14px] h-[14px] rtl:rotate-180'
+                                    fill='none'
+                                    stroke='currentColor'
+                                    strokeWidth={2}
+                                >
+                                    <path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7' />
+                                </svg>
+                                <span>{t('backToEdit')}</span>
+                            </button>
+                        )}
 
                         {/* ── Trust line ──
                             Default/poker carries a small lock to signal
@@ -1246,12 +1363,14 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                     </div>
                 )}
 
-                {/* --- תוכן שלב 2: תמונה --- */}
-                {/* Visually mirrors step 1: title block above + premium
-                    white card. The interactive guts (camera, cropper,
-                    file upload) are intentionally untouched — only the
-                    surrounding chrome was restyled. */}
-                {step === 2 && (
+                {/* --- תוכן שלב התמונה --- */}
+                {/* Visually mirrors the text step: title block above +
+                    premium white card. The interactive guts (camera,
+                    cropper, file upload) are intentionally untouched
+                    — only the surrounding chrome was restyled. For
+                    non-poker variants this panel is step 2; for poker
+                    it's step 1 (snap the table first). */}
+                {step === photoStep && (
                     <div className='animate-fadeIn'>
                         {/* ── Title block — same composition as step 1 ── */}
                         <div className='text-center mb-7'>
@@ -1512,54 +1631,98 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                 >
                                     {t('replacePhoto')}
                                 </button>
-                                <button
-                                    onClick={onSubmit}
-                                    disabled={submitting}
-                                    className='flex-[2] rounded-2xl text-white font-bold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 active:scale-[0.99]'
-                                    style={{
-                                        background: theme.buttonGradient,
-                                        boxShadow: theme.buttonShadow,
-                                        padding: '14px 18px',
-                                        fontSize: '15px',
-                                        letterSpacing: '0.01em',
-                                    }}
-                                >
-                                    {submitting ? (
-                                        <>
-                                            <svg className='w-4 h-4 animate-spin' fill='none' viewBox='0 0 24 24'>
-                                                <circle
-                                                    className='opacity-25'
-                                                    cx='12'
-                                                    cy='12'
-                                                    r='10'
-                                                    stroke='currentColor'
-                                                    strokeWidth='3'
-                                                />
-                                                <path
-                                                    className='opacity-75'
+                                {/* Final/forward action — submit when this
+                                    panel is the LAST step (non-poker:
+                                    photo → submit), or continue when
+                                    this panel is the FIRST step (poker:
+                                    photo → blessing). Same gold gradient
+                                    + dimensions in either mode; only the
+                                    label, icon trail, and click handler
+                                    differ. */}
+                                {step === 2 ? (
+                                    <button
+                                        onClick={onSubmit}
+                                        disabled={submitting}
+                                        className='flex-[2] rounded-2xl text-white font-bold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 active:scale-[0.99]'
+                                        style={{
+                                            background: theme.buttonGradient,
+                                            boxShadow: theme.buttonShadow,
+                                            padding: '14px 18px',
+                                            fontSize: '15px',
+                                            letterSpacing: '0.01em',
+                                        }}
+                                    >
+                                        {submitting ? (
+                                            <>
+                                                <svg className='w-4 h-4 animate-spin' fill='none' viewBox='0 0 24 24'>
+                                                    <circle
+                                                        className='opacity-25'
+                                                        cx='12'
+                                                        cy='12'
+                                                        r='10'
+                                                        stroke='currentColor'
+                                                        strokeWidth='3'
+                                                    />
+                                                    <path
+                                                        className='opacity-75'
+                                                        fill='currentColor'
+                                                        d='M4 12a8 8 0 018-8v8z'
+                                                    />
+                                                </svg>
+                                                <span>{t('submitting')}</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg
+                                                    viewBox='0 0 24 24'
+                                                    className='w-[15px] h-[15px] opacity-95'
                                                     fill='currentColor'
-                                                    d='M4 12a8 8 0 018-8v8z'
-                                                />
-                                            </svg>
-                                            <span>{t('submitting')}</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <svg
-                                                viewBox='0 0 24 24'
-                                                className='w-[15px] h-[15px] opacity-95'
-                                                fill='currentColor'
-                                            >
-                                                <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
-                                            </svg>
-                                            <span>{t('submit')}</span>
-                                        </>
-                                    )}
-                                </button>
+                                                >
+                                                    <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
+                                                </svg>
+                                                <span>{t('submit')}</span>
+                                            </>
+                                        )}
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => setStep(2)}
+                                        className='flex-[2] rounded-2xl text-white font-bold transition-all duration-300 flex items-center justify-center gap-2.5 active:scale-[0.99]'
+                                        style={{
+                                            background: theme.buttonGradient,
+                                            boxShadow: theme.buttonShadow,
+                                            padding: '14px 18px',
+                                            fontSize: '15px',
+                                            letterSpacing: '0.01em',
+                                        }}
+                                    >
+                                        <svg
+                                            viewBox='0 0 24 24'
+                                            className='w-[15px] h-[15px] opacity-95 shrink-0'
+                                            fill='currentColor'
+                                        >
+                                            <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
+                                        </svg>
+                                        <span>{continueToTextLabel}</span>
+                                        <svg
+                                            viewBox='0 0 24 24'
+                                            className='w-[15px] h-[15px] rtl:rotate-180 shrink-0'
+                                            fill='none'
+                                            stroke='currentColor'
+                                            strokeWidth={2.6}
+                                        >
+                                            <path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
+                                        </svg>
+                                    </button>
+                                )}
                             </div>
                         )}
 
-                        {!photoUrl && !cameraOpen && (
+                        {/* Back to the previous step. Only when photo
+                            is the LAST step (non-poker), no photo has
+                            been taken, and the camera isn't open —
+                            otherwise there's nowhere to go back to. */}
+                        {step === 2 && !photoUrl && !cameraOpen && (
                             <button
                                 onClick={() => setStep(1)}
                                 className='w-full mt-5 text-[13px] flex items-center justify-center gap-1.5 transition-colors'
