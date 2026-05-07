@@ -379,6 +379,14 @@ function EventTypeEditor({ wedding, onSave }) {
         customTitle: w.customTitle || '',
         customSubtitle: w.customSubtitle || '',
         customDescription: w.customDescription || '',
+        // Form-field overrides — let the super-admin retitle the
+        // blessing form fields per event ("Your blessing" → "Your story"
+        // for travel; "Name" → "Player" for poker, etc). Empty → i18n
+        // default for the event's locale.
+        customNameLabel: w.customNameLabel || '',
+        customNamePlaceholder: w.customNamePlaceholder || '',
+        customBlessingLabel: w.customBlessingLabel || '',
+        customBlessingPlaceholder: w.customBlessingPlaceholder || '',
     })
 
     const [draft, setDraft] = useState(() => buildDraft(wedding))
@@ -419,6 +427,10 @@ function EventTypeEditor({ wedding, onSave }) {
         patch.customTitle = draft.customTitle
         patch.customSubtitle = draft.customSubtitle
         patch.customDescription = draft.customDescription
+        patch.customNameLabel = draft.customNameLabel
+        patch.customNamePlaceholder = draft.customNamePlaceholder
+        patch.customBlessingLabel = draft.customBlessingLabel
+        patch.customBlessingPlaceholder = draft.customBlessingPlaceholder
         return patch
     }
 
@@ -663,6 +675,55 @@ function EventTypeEditor({ wedding, onSave }) {
                         onChange={e => set('customDescription', e.target.value)}
                         placeholder={getEventConfig(draft.eventType).description}
                         rows={3}
+                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white resize-y'
+                    />
+                </div>
+            </div>
+
+            {/* Form-field overrides — separate block so it's clear these
+                control the BLESSING FORM (where guests type), not the
+                landing/cover. Useful for poker ("פירוט היד") or travel
+                ("סיפור הרגע") where the default "הברכה שלכם" doesn't
+                fit. Empty = i18n default in the event's locale. */}
+            <div className='space-y-3 mb-3 p-3 rounded-xl bg-[#c9a44e]/5 border border-[#c9a44e]/15'>
+                <p className='text-[11px] font-bold text-[#aa8840] uppercase tracking-widest'>טקסטים בטופס הברכה</p>
+                <p className='text-[11px] text-gray-500 leading-relaxed'>
+                    שולט בטקסטים שהאורח רואה בטופס יצירת הברכה (השדות והרמזים). השאר ריק = ברירת מחדל לפי שפת האירוע.
+                </p>
+                <div>
+                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>תווית שדה השם</label>
+                    <input
+                        type='text' value={draft.customNameLabel}
+                        onChange={e => set('customNameLabel', e.target.value)}
+                        placeholder='שם (אופציונלי)'
+                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                    />
+                </div>
+                <div>
+                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>Placeholder לשדה השם</label>
+                    <input
+                        type='text' value={draft.customNamePlaceholder}
+                        onChange={e => set('customNamePlaceholder', e.target.value)}
+                        placeholder='מי כותב/ת?'
+                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                    />
+                </div>
+                <div>
+                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>תווית שדה הברכה</label>
+                    <input
+                        type='text' value={draft.customBlessingLabel}
+                        onChange={e => set('customBlessingLabel', e.target.value)}
+                        placeholder='הברכה שלכם'
+                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                    />
+                </div>
+                <div>
+                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>Placeholder לשדה הברכה</label>
+                    <textarea
+                        value={draft.customBlessingPlaceholder}
+                        onChange={e => set('customBlessingPlaceholder', e.target.value)}
+                        placeholder='כתבו משהו מרגש, מצחיק או מכל הלב...'
+                        rows={2}
                         className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white resize-y'
                     />
                 </div>

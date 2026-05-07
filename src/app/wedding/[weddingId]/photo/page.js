@@ -23,6 +23,14 @@ export default function TextPage() {
     const [locale, setLocale] = useState('he')
     const [eventType, setEventType] = useState('wedding')
     const [recipients, setRecipients] = useState({ bride: '', groom: '', celebrant: '' })
+    // Per-event admin overrides for the form-field labels + placeholders.
+    // Empty strings → fall back to the i18n default in PhotoApp.
+    const [formCopy, setFormCopy] = useState({
+        nameLabel: '',
+        namePlaceholder: '',
+        blessingLabel: '',
+        blessingPlaceholder: '',
+    })
 
     useEffect(() => {
         if (!weddingId) return
@@ -45,6 +53,12 @@ export default function TextPage() {
                         groom: (data.groomNameHe || data.groomName || '').trim(),
                         celebrant: (data.celebrantNameHe || data.celebrantName || '').trim(),
                     })
+                    setFormCopy({
+                        nameLabel: (data.customNameLabel || '').trim(),
+                        namePlaceholder: (data.customNamePlaceholder || '').trim(),
+                        blessingLabel: (data.customBlessingLabel || '').trim(),
+                        blessingPlaceholder: (data.customBlessingPlaceholder || '').trim(),
+                    })
                 }
             } catch {
                 /* keep Hebrew default */
@@ -57,13 +71,22 @@ export default function TextPage() {
 
     return (
         <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
-            <PhotoApp eventType={eventType} recipients={recipients} />
+            <PhotoApp eventType={eventType} recipients={recipients} formCopy={formCopy} />
         </NextIntlClientProvider>
     )
 }
 
-function PhotoApp({ eventType, recipients }) {
+function PhotoApp({ eventType, recipients, formCopy }) {
     const t = useTranslations('photo')
+
+    // Resolve every form string to either the per-event admin override
+    // (if non-empty) or the i18n default. Defining these once at the
+    // top keeps the JSX below tidy + keeps the override-checking logic
+    // in one obvious spot.
+    const nameLabel = formCopy?.nameLabel || t('nameLabel')
+    const namePlaceholder = formCopy?.namePlaceholder || t('namePlaceholder')
+    const blessingLabel = formCopy?.blessingLabel || t('blessingLabel')
+    const blessingPlaceholder = formCopy?.blessingPlaceholder || t('blessingPlaceholder')
 
     // ── Page title (personalised) ───────────────────────────────────────
     // Build the "Leave a blessing for X" headline from the doc's names:
@@ -575,7 +598,7 @@ function PhotoApp({ eventType, recipients }) {
                             <div>
                                 <div className='flex items-center justify-between mb-2.5'>
                                     <span style={{ color: '#1a1410', fontSize: '14px', fontWeight: 700 }}>
-                                        {t('nameLabel')}
+                                        {nameLabel}
                                     </span>
                                     <svg
                                         viewBox='0 0 24 24'
@@ -590,7 +613,7 @@ function PhotoApp({ eventType, recipients }) {
                                 <input
                                     value={name}
                                     onChange={e => setName(e.target.value)}
-                                    placeholder={t('namePlaceholder')}
+                                    placeholder={namePlaceholder}
                                     className='w-full rounded-xl bg-white outline-none transition'
                                     style={{
                                         border: '1px solid #ead9b3',
@@ -627,7 +650,7 @@ function PhotoApp({ eventType, recipients }) {
                             <div>
                                 <div className='flex items-center justify-between mb-2.5'>
                                     <span style={{ color: '#1a1410', fontSize: '14px', fontWeight: 700 }}>
-                                        {t('blessingLabel')}
+                                        {blessingLabel}
                                     </span>
                                     <svg
                                         viewBox='0 0 24 24'
@@ -642,7 +665,7 @@ function PhotoApp({ eventType, recipients }) {
                                 <textarea
                                     value={text}
                                     onChange={e => setText(e.target.value)}
-                                    placeholder={t('blessingPlaceholder')}
+                                    placeholder={blessingPlaceholder}
                                     className='w-full rounded-xl bg-white outline-none transition resize-none leading-relaxed'
                                     style={{
                                         border: '1px solid #ead9b3',
