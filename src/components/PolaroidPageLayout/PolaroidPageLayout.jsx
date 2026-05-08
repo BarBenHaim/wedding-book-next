@@ -33,6 +33,8 @@
 
 import { normalizeBlessing } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
+import { pageScale } from '@/lib/pageGeometry'
+import EntryPhoto from '../EntryPhoto/EntryPhoto'
 
 const GOLD = '#aa8840'
 
@@ -72,8 +74,7 @@ export default function PolaroidPageLayout({ entry, styleSettings, scaledWidth, 
     // % helpers — same convention as BookPageTemplate. ANY length must go
     // through these so the layout scales correctly across the 3 render
     // canvases (interactive viewer, live PDF, auto-export PDF).
-    const w = percent => (percent / 100) * scaledWidth
-    const h = percent => (percent / 100) * scaledHeight
+    const { w, h } = pageScale(scaledWidth, scaledHeight)
 
     // Polaroid geometry. Tuned so the content sits inside the inner clear
     // area of the ornate-frame texture (~75% of page). Photo chosen to
@@ -153,12 +154,14 @@ export default function PolaroidPageLayout({ entry, styleSettings, scaledWidth, 
                         zIndex: 5,
                     }}
                 >
-                    <div
-                        style={{
-                            width: photoWidth,
-                            height: photoHeight,
-                            background: 'url(' + entry.imageUrl + ') center/cover no-repeat',
-                        }}
+                    {/* Shared natural-aspect photo. The white mat
+                        sizes to the photo's actual dimensions, so a
+                        4:3 lands a classic landscape polaroid and a
+                        portrait shot lands a portrait polaroid. */}
+                    <EntryPhoto
+                        src={entry.imageUrl}
+                        maxWidth={photoWidth}
+                        maxHeight={photoHeight}
                     />
                 </div>
             )}

@@ -12,7 +12,7 @@
 // might close the tab and we want the online listener to keep trying.
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../../../../lib/firebaseClient'
 import { listUnsent } from '../../../../lib/offlineQueue'
@@ -58,6 +58,12 @@ function ThanksApp() {
     const router = useRouter()
     const { weddingId } = useParams()
     const t = useTranslations('thanks')
+    const searchParams = useSearchParams()
+    // Entry id passed from /photo as ?eid=... — lets us VERIFY the
+    // blessing actually exists in Firestore (not just "the local
+    // queue thinks we shipped it"). Optional: legacy bookmarks of
+    // the thanks URL won't have it, and the page still works.
+    const entryId = searchParams?.get('eid') || ''
 
     // UI status machine:
     //   'working' — trying to upload
@@ -66,6 +72,11 @@ function ThanksApp() {
     //   'error'   — last flush attempt failed and we're online
     const [status, setStatus] = useState('working')
     const [pendingCount, setPendingCount] = useState(0)
+    // Independent confirmation: did we actually SEE the entry doc in
+    // Firestore? This is the strongest signal we can give the guest
+    // ("verified") because it confirms the write reached the server,
+    // not just that our local queue thinks it shipped.
+    const [verified, setVerified] = useState(false)
 
     // ─── Flush helper ────────────────────────────────────────────────────────
     async function tryFlush() {
@@ -131,6 +142,38 @@ function ThanksApp() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [weddingId])
 
+    // ─── Firestore verification poll ─────────────────────────────────────────
+    // Independent of the IDB queue. Reads the entry doc directly; if
+    // we can see it on the server, we KNOW the write reached Firestore
+    // (not just that our local queue marked it done). Polls every 4s
+    // until we either confirm or the user navigates away.
+    useEffect(() => {
+        if (!weddingId || !entryId || verified) return
+        let cancelled = false
+
+        async function check() {
+            if (cancelled) return
+            try {
+                const snap = await getDoc(doc(db, 'weddings', weddingId, 'entries', entryId))
+                if (cancelled) return
+                if (snap.exists()) {
+                    setVerified(true)
+                    return
+                }
+            } catch {
+                // Network error or perms — silently retry. The guest's
+                // own queue still drives the upload retries; this poll
+                // is purely a confirmation read.
+            }
+            if (!cancelled) setTimeout(check, 4000)
+        }
+        check()
+
+        return () => {
+            cancelled = true
+        }
+    }, [weddingId, entryId, verified])
+
     // ─── Retry ticker ────────────────────────────────────────────────────────
     // Only while we have pending entries + think we're online. Backs off
     // gently — starts at 5s, doubles up to 30s. Stops the moment we're done.
@@ -180,12 +223,48 @@ function ThanksApp() {
         >
             <div className='relative z-10 w-full max-w-[26rem] animate-scaleIn'>
                 {/* ── Status pill — small chip at the very top showing
-                    upload progress. Visible during 'working' / 'offline' /
-                    'error' so the guest knows their submission is being
-                    saved. Hides quietly once 'done'. */}
-                {status !== 'done' && (
+                    upload progress. Three visibility tiers:
+                      • verified ✓        — Firestore confirmed the write
+                                            (strongest signal)
+                      • status !== done    — still working / offline / error
+                      • status === done    — IDB queue empty but no
+                                            Firestore confirmation
+                                            (legacy entries without
+                                            ?eid in URL fall here)
+                    Always visible if we have any signal to give the
+                    guest, so they leave with confidence (or know to
+                    keep the page open). */}
+                {(verified || status !== 'done') && (
                     <div className='flex justify-center mb-6'>
-                        <StatusBadge status={status} pendingCount={pendingCount} t={t} />
+                        <StatusBadge
+                            status={status}
+                            pendingCount={pendingCount}
+                            verified={verified}
+                            t={t}
+                        />
+                    </div>
+                )}
+
+                {/* Manual "check" button — when we're in working/error
+                    mode and have an entryId, give the guest a way to
+                    actively re-poll Firestore. Cheap reassurance. */}
+                {entryId && !verified && status !== 'offline' && (
+                    <div className='flex justify-center mb-6'>
+                        <button
+                            onClick={async () => {
+                                try {
+                                    const snap = await getDoc(doc(db, 'weddings', weddingId, 'entries', entryId))
+                                    if (snap.exists()) setVerified(true)
+                                    else await tryFlush()
+                                } catch {
+                                    await tryFlush()
+                                }
+                            }}
+                            className='text-[12px] underline'
+                            style={{ color: '#9a8a72' }}
+                        >
+                            {t('checkAgain')}
+                        </button>
                     </div>
                 )}
 
@@ -333,7 +412,21 @@ function ThanksApp() {
     )
 }
 
-function StatusBadge({ status, pendingCount, t }) {
+function StatusBadge({ status, pendingCount, verified, t }) {
+    // Strongest signal — we read the entry doc back from Firestore
+    // ourselves, so we KNOW it landed. Use a richer "verified ✓" copy
+    // and a check icon (instead of a generic dot) so the guest sees a
+    // tangible confirmation.
+    if (verified) {
+        return (
+            <div className='inline-flex items-center gap-2 rounded-full bg-green-50 border border-green-200 px-4 py-1.5 text-green-700 text-sm font-semibold'>
+                <svg viewBox='0 0 20 20' className='w-[14px] h-[14px]' fill='currentColor' aria-hidden='true'>
+                    <path fillRule='evenodd' clipRule='evenodd' d='M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z' />
+                </svg>
+                {t('statusVerified')}
+            </div>
+        )
+    }
     if (status === 'done') {
         return (
             <div className='inline-flex items-center gap-2 rounded-full bg-green-50 border border-green-200 px-4 py-1.5 text-green-700 text-sm font-semibold'>

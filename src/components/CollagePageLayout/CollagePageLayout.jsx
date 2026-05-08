@@ -20,6 +20,8 @@
 import { normalizeBlessing } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { gveretLevin } from '@/app/fonts'
+import { pageScale } from '@/lib/pageGeometry'
+import EntryPhoto from '../EntryPhoto/EntryPhoto'
 
 const GOLD = '#aa8840'
 const GOLD_LIGHT = '#d4b867'
@@ -67,8 +69,7 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
     const hasText = Boolean(cleanText)
     const hasImage = Boolean(entry.imageUrl)
 
-    const w = percent => (percent / 100) * scaledWidth
-    const h = percent => (percent / 100) * scaledHeight
+    const { w, h } = pageScale(scaledWidth, scaledHeight)
 
     // Photo positioned absolutely so we can tilt it freely + overlap with
     // the surrounding ephemera. 4:3 always preserved.
@@ -127,12 +128,11 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
                         border: '1px solid rgba(170,136,64,0.25)',
                     }}
                 >
-                    <div
-                        style={{
-                            width: photoWidth,
-                            height: photoHeight,
-                            background: 'url(' + entry.imageUrl + ') center/cover no-repeat',
-                        }}
+                    {/* Shared natural-aspect photo. */}
+                    <EntryPhoto
+                        src={entry.imageUrl}
+                        maxWidth={photoWidth}
+                        maxHeight={photoHeight}
                     />
                     {/* Washi tape — top-left corner */}
                     <div

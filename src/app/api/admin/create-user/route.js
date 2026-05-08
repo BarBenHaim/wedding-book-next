@@ -6,8 +6,7 @@ import nodemailer from 'nodemailer'
 import { adminDb, adminAuth } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { generateSlug } from '@/lib/generateSlug'
-
-const SUPER_ADMIN = process.env.SUPER_ADMIN_EMAIL || 'barbenbh@gmail.com'
+import { isSuperAdmin } from '@/lib/superAdmin'
 
 export async function POST(req) {
     try {
@@ -18,7 +17,7 @@ export async function POST(req) {
         }
         const token = authHeader.split('Bearer ')[1]
         const decoded = await adminAuth.verifyIdToken(token)
-        if (decoded.email !== SUPER_ADMIN) {
+        if (!isSuperAdmin(decoded.email)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
 

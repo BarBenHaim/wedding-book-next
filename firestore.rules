@@ -1,0 +1,110 @@
+rules_version = '2';
+
+// Firestore security rules for the wedding-book app.
+//
+// The admin SDK (used by every /api/admin/* and /api/lulu/* route)
+// bypasses these rules — so the rules here only gate CLIENT-SIDE
+// access (the guest blessing flow, the couple's portal, the public
+// gallery). Anything that should be admin-only is simply not
+// reachable from the client.
+//
+// Collections in use:
+//   /weddings/{wid}                       — wedding root doc
+//   /weddings/{wid}/entries/{eid}         — guest blessings
+//   /weddings/{wid}/scans/{sid}           — analytics events
+//   /ordersLocks/{wid}                    — Lulu order idempotency lock
+//   /ordersRaw/{wid}                      — raw order webhook payloads
+//
+// Anonymous guests need to:
+//   - read /weddings/{wid} (locale, names, eventType for the form)
+//   - read /weddings/{wid}/entries (gallery)
+//   - create /weddings/{wid}/entries/{eid} (submit a blessing)
+//   - create /weddings/{wid}/scans/{sid} (scan / start_blessing analytics)
+//
+// Authenticated wedding owners (the couple) need to:
+//   - update /weddings/{wid} (their own portal edits)
+//   - read /weddings/{wid}/scans (funnel for their event)
+//
+// Nobody (besides the admin SDK) needs to write ordersLocks/ordersRaw
+// or to update/delete entries — payment flow + entry edits go through
+// the admin API only.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helpers ────────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    // Looks up the wedding's ownerId — used for /scans access.
+    function weddingOwnerId(wid) {
+      return get(/databases/$(database)/documents/weddings/$(wid)).data.ownerId;
+    }
+
+    // ─── /weddings/{wid} ────────────────────────────────────────────
+    match /weddings/{wid} {
+      // Anyone (including anonymous guests) can read a wedding's basic
+      // metadata. The fields stored here are non-sensitive (names,
+      // dates, locale, eventType, designVariant). No PII beyond names.
+      allow read: if true;
+
+      // Only the owning couple can update their own wedding doc.
+      // Creation/deletion happens via the admin API only.
+      allow update: if isOwner(resource.data.ownerId)
+                    && request.resource.data.ownerId == resource.data.ownerId; // can't reassign ownership
+      allow create, delete: if false;
+
+      // ─── /weddings/{wid}/entries/{eid} ──────────────────────────
+      // Guest blessings. Anyone can read (for the public gallery) and
+      // create. Updates and deletes are admin-only (super-admin can
+      // moderate via the admin API which uses adminDb, bypassing rules).
+      match /entries/{eid} {
+        allow read: if true;
+
+        allow create: if isValidEntry(request.resource.data);
+        allow update, delete: if false;
+      }
+
+      // ─── /weddings/{wid}/scans/{sid} ────────────────────────────
+      // Funnel analytics events ('scan', 'start_blessing'). Created
+      // by the /api/log-event server route, NOT directly by guests;
+      // we lock writes to admin-SDK only so a malicious user can't
+      // pump fake metrics into the wedding's funnel.
+      match /scans/{sid} {
+        // Only the owning couple (and admin SDK) can read their own
+        // event funnel. Guests don't need to see this.
+        allow read: if isOwner(weddingOwnerId(wid));
+        allow write: if false;
+      }
+    }
+
+    // ─── /ordersLocks, /ordersRaw — admin-only ─────────────────────
+    // No client should ever touch these. Writes happen exclusively via
+    // /api/lulu/* + /api/admin/* using the admin SDK.
+    match /ordersLocks/{wid} {
+      allow read, write: if false;
+    }
+    match /ordersRaw/{wid} {
+      allow read, write: if false;
+    }
+
+    // ─── Validation ─────────────────────────────────────────────────
+    function isValidEntry(data) {
+      // Required + size caps + type checks. Keeps malformed entries
+      // out of the book layout (which assumes string fields).
+      return data.size() <= 12
+        && (!('name' in data) || (data.name is string && data.name.size() < 100))
+        && (!('text' in data) || (data.text is string && data.text.size() < 500))
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 2000))
+        && (!('orderIndex' in data) || data.orderIndex == null || data.orderIndex is int);
+    }
+
+    // ─── Default deny ───────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import { PRIMARY_ADMIN_EMAIL } from '@/lib/superAdmin'
 
 export async function POST(req) {
     try {
@@ -15,7 +16,7 @@ export async function POST(req) {
 
         await transporter.sendMail({
             from: process.env.MAIL_USER,
-            to: 'barbenbh@gmail.com', // המייל שלך
+            to: PRIMARY_ADMIN_EMAIL, // notification → primary admin from env
             subject: `ספר החתונה מוכן להדפסה!`,
             html: `
         <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right;">

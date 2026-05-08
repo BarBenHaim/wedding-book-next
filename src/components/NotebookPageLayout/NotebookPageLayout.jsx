@@ -25,6 +25,8 @@
 import { normalizeBlessing } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { gveretLevin } from '@/app/fonts'
+import { pageScale } from '@/lib/pageGeometry'
+import EntryPhoto from '../EntryPhoto/EntryPhoto'
 
 const GOLD = '#aa8941'
 const INK = '#1a1410'
@@ -59,8 +61,7 @@ export default function NotebookPageLayout({ entry, styleSettings, scaledWidth, 
     const hasText = Boolean(cleanText)
     const hasImage = Boolean(entry.imageUrl)
 
-    const w = percent => (percent / 100) * scaledWidth
-    const h = percent => (percent / 100) * scaledHeight
+    const { w, h } = pageScale(scaledWidth, scaledHeight)
 
     // Photo is flush with the top + side edges of the page (no padding
     // around it) and has no rounded corners — full-bleed across the top.
@@ -105,17 +106,14 @@ export default function NotebookPageLayout({ entry, styleSettings, scaledWidth, 
                 // own horizontal margin to stay readable.
             }}
         >
-            {/* Photo — full-bleed top + sides, no rounded corners,
-                no border (deliberate flush look per design request). */}
+            {/* Photo — full-bleed top + sides, natural aspect via
+                shared <EntryPhoto>. */}
             {hasImage && (
-                <div
-                    style={{
-                        width: '100%',
-                        height: '70%',
-                        background: 'url(' + entry.imageUrl + ') center/cover no-repeat',
-                        flexShrink: 0,
-                        zIndex: 1,
-                    }}
+                <EntryPhoto
+                    src={entry.imageUrl}
+                    maxWidth={photoWidth}
+                    maxHeight={photoHeight}
+                    style={{ flexShrink: 0, zIndex: 1 }}
                 />
             )}
 

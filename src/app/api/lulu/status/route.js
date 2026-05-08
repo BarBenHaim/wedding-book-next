@@ -3,12 +3,12 @@ export const runtime = 'nodejs'
 
 import { NextResponse } from 'next/server'
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin'
+import { isSuperAdmin } from '@/lib/superAdmin'
 
 const LULU_API_KEY = process.env.LULU_API_KEY
 const LULU_API_SECRET = process.env.LULU_API_SECRET
 const LULU_API_BASE = process.env.LULU_API_BASE || 'https://api.lulu.com'
 const LULU_AUTH_URL = process.env.LULU_AUTH_URL || 'https://api.lulu.com/auth/realms/glasstree/protocol/openid-connect/token'
-const SUPER_ADMIN_EMAIL = 'barbenbh@gmail.com'
 
 async function getLuluToken() {
     const res = await fetch(LULU_AUTH_URL, {
@@ -36,7 +36,7 @@ export async function GET(req) {
     }
     try {
         const decoded = await adminAuth.verifyIdToken(authHeader.split('Bearer ')[1])
-        if (decoded.email !== SUPER_ADMIN_EMAIL) {
+        if (!isSuperAdmin(decoded.email)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
     } catch {

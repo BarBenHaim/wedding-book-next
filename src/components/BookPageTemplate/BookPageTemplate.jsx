@@ -2,12 +2,12 @@
 
 import { normalizeBlessing } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
+import { pageScale } from '@/lib/pageGeometry'
+import EntryPhoto from '../EntryPhoto/EntryPhoto'
 import PolaroidPageLayout from '../PolaroidPageLayout/PolaroidPageLayout'
 import ScrapbookPageLayout from '../ScrapbookPageLayout/ScrapbookPageLayout'
 import NotebookPageLayout from '../NotebookPageLayout/NotebookPageLayout'
 import CollagePageLayout from '../CollagePageLayout/CollagePageLayout'
-
-const BASE_SIZE = 2362
 
 export default function BookPageTemplate({ entry, styleSettings, scaledWidth, scaledHeight }) {
     // ── Layout dispatcher ────────────────────────────────────────────────
@@ -44,8 +44,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
     const elementsCount = [hasName, hasText, hasImage].filter(Boolean).length
     const onlyOne = elementsCount === 1
 
-    const w = percent => (percent / 100) * scaledWidth
-    const h = percent => (percent / 100) * scaledHeight
+    const { w, h } = pageScale(scaledWidth, scaledHeight)
 
     return (
         <div
@@ -100,16 +99,18 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 </div>
             )}
 
-            {/* תמונה */}
+            {/* תמונה — natural-aspect render via the shared
+                <EntryPhoto> helper. Capped by the page's
+                imageStyle.width / imageStyle.height (in % of page).
+                Layout-specific concerns (margin, align, radius, z) are
+                merged into the style prop. */}
             {hasImage && (
-                <div
-                    className='rounded-xl relative'
+                <EntryPhoto
+                    src={entry.imageUrl}
+                    maxWidth={w(styleSettings.imageStyle?.width ?? 90)}
+                    maxHeight={h(styleSettings.imageStyle?.height ?? 70)}
+                    className='relative'
                     style={{
-                        width: w(styleSettings.imageStyle?.width ?? 90),
-                        height: h(styleSettings.imageStyle?.height ?? 70),
-                        backgroundImage: `url(${entry.imageUrl})`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
                         borderRadius: styleSettings.imageStyle?.borderRadius ?? '12px',
                         marginTop: onlyOne ? 0 : h(styleSettings.imageMarginTop ?? 2),
                         marginBottom: onlyOne ? 0 : h(styleSettings.imageMarginBottom ?? 2),

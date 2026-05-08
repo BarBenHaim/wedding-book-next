@@ -11,7 +11,6 @@ import frame1 from '../../media/frames/frame1.png'
 import frame2 from '../../media/frames/frame2.png'
 import frame3 from '../../media/frames/frame3.png'
 import frame4 from '../../media/frames/frame4.png'
-import { frame } from 'framer-motion'
 
 const tex1 = { src: '/textures/tex1.png' }
 const tex2 = { src: '/textures/tex2.png' }
@@ -35,7 +34,7 @@ const FRAMES = [frame1, frame2, frame3, frame4]
 const PRESETS = [
     // ─── Original classic templates (do not edit) ───────────────────────
     {
-        name: 'קלאסי לבן',
+        name: 'קלאסי',
         preview: '#ffffff',
         values: {
             template: 'classic',
@@ -51,9 +50,26 @@ const PRESETS = [
             imageMarginTop: 2,
         },
     },
+    {
+        name: 'פסטורלי',
+        preview: '#ffffff',
+        values: {
+            template: 'classic',
+            backgroundColor: '#ffffff',
+            fontClass: heebo.className,
+            fontColor: '#000000',
+            frame: null,
+            texture: tex6.src,
+            fontSizePercent: 2.5,
+            imageStyle: { width: 80, height: 70, borderRadius: 0 },
+            nameMarginTop: 4,
+            textMaxWidth: 70,
+            imageMarginTop: 2,
+        },
+    },
 
     {
-        name: 'שמנת אלגנטי',
+        name: 'שמפניה',
         preview: '#fdf6ec',
         values: {
             template: 'classic',
@@ -70,7 +86,7 @@ const PRESETS = [
         },
     },
     {
-        name: 'פרחוני',
+        name: 'פרחי גן',
         preview: '#c4b5ecff',
         values: {
             template: 'classic',
@@ -87,7 +103,7 @@ const PRESETS = [
         },
     },
     {
-        name: 'מסגרת מרובעת',
+        name: 'מינימלי',
         preview: '#ffffff',
         values: {
             template: 'classic',
@@ -106,7 +122,7 @@ const PRESETS = [
 
     // ─── Vintage memory-book ────────────────────────────────────────────
     {
-        name: 'פולארויד',
+        name: 'פולארויד וינטג׳',
         preview: '#fcfaf6',
         values: {
             template: 'polaroid',
@@ -121,7 +137,7 @@ const PRESETS = [
     },
 
     {
-        name: 'חתונה',
+        name: 'זהב עתיק',
         preview: '#f7f1e3',
         values: {
             template: 'classic',
@@ -133,7 +149,7 @@ const PRESETS = [
         },
     },
     {
-        name: "קולאז' חי",
+        name: 'אלבום זיכרונות',
         preview: '#ffffff',
         values: {
             template: 'collage',
@@ -268,7 +284,15 @@ const Card = ({ title, children, className = '' }) => (
     </div>
 )
 
-export default function DesignControls({ settings, onChange, mode, onModeChange, saveStatus = 'idle', weddingId, locale }) {
+export default function DesignControls({
+    settings,
+    onChange,
+    mode,
+    onModeChange,
+    saveStatus = 'idle',
+    weddingId,
+    locale,
+}) {
     const [activePreset, setActivePreset] = useState(null)
     const [uploadingCover, setUploadingCover] = useState(false)
 
@@ -371,9 +395,7 @@ export default function DesignControls({ settings, onChange, mode, onModeChange,
                                             swatch. bg-white/90 reads against any preview color
                                             we've shipped — was previously branched on the Hebrew
                                             substring 'לבן' which would no-op in i18n. */}
-                                        <span
-                                            className='absolute bottom-1 end-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/90 text-black'
-                                        >
+                                        <span className='absolute bottom-1 end-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/90 text-black'>
                                             {preset.name}
                                         </span>
                                     </button>

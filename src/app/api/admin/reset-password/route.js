@@ -4,8 +4,7 @@ export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { adminAuth } from '@/lib/firebaseAdmin'
 import nodemailer from 'nodemailer'
-
-const SUPER_ADMIN_EMAIL = 'barbenbh@gmail.com'
+import { isSuperAdmin } from '@/lib/superAdmin'
 
 export async function POST(req) {
     // Auth check
@@ -15,7 +14,7 @@ export async function POST(req) {
     }
     try {
         const decoded = await adminAuth.verifyIdToken(authHeader.split('Bearer ')[1])
-        if (decoded.email !== SUPER_ADMIN_EMAIL) {
+        if (!isSuperAdmin(decoded.email)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
     } catch {

@@ -634,7 +634,10 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                 // will retry on `online` / `visibilitychange` / `pageshow`.
                 console.warn('[photo] upload not confirmed in time, deferring to thanks page:', rawMsg)
             }
-            router.push(`/wedding/${weddingId}/thanks`)
+            // Pass the entry ID so the thanks page can poll Firestore
+            // and show the guest a real "received ✓" confirmation
+            // instead of an optimistic "thanks!" that masks failures.
+            router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}`)
             return
         }
 
@@ -644,7 +647,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
         // silently lose their blessing).
         try {
             await uploadQueuedEntry(entry)
-            router.push(`/wedding/${weddingId}/thanks`)
+            router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}`)
         } catch (err) {
             console.error('[photo] direct upload also failed:', err)
             const rawMsg = err?.message || err?.name || ''
@@ -701,15 +704,22 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
     // the new pokerbg.png asset already bakes those decorations into
     // the felt at higher fidelity than we could draw inline.
 
-    // Poker only — hide the global Header + Footer so the felt page
-    // takes the FULL viewport height. The Header/Footer live in the
-    // ROOT layout, which we can't touch from a per-page component
-    // without prop drilling, so we toggle their visibility via DOM
-    // manipulation in an effect. Cleanup restores the original
-    // display value when the user navigates away (or the variant
-    // changes).
+    // Hide the global Header + Footer on the photo form so it
+    // takes the FULL viewport height. Applies to poker AND the
+    // default "moment" layout (i.e., everything except romantic,
+    // which deliberately renders inside the standard 100vh-4rem
+    // shell). The Header/Footer live in the ROOT layout, which we
+    // can't touch from a per-page component without prop drilling,
+    // so we toggle their visibility via DOM manipulation in an
+    // effect. Cleanup restores the original display value when the
+    // user navigates away (or the variant changes).
+    const isMomentLayout = !isPoker && !isRomantic
+    // Both poker AND moment layout take the full viewport (100vh).
+    // The global Header + Footer are hidden via DOM toggle so the
+    // backdrop reaches every edge of the screen.
+    const hideChrome = isPoker || isMomentLayout
     useEffect(() => {
-        if (!isPoker || typeof document === 'undefined') return
+        if (!hideChrome || typeof document === 'undefined') return
         const header = document.querySelector('body > header')
         const footer = document.querySelector('body > footer')
         const prevHeader = header?.style.display
@@ -720,7 +730,749 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
             if (header) header.style.display = prevHeader || ''
             if (footer) footer.style.display = prevFooter || ''
         }
-    }, [isPoker])
+    }, [hideChrome])
+
+    // (Transparent-header effect removed — moment layout now hides
+    // the Header entirely via the same DOM toggle poker uses, so
+    // there's nothing left to make transparent.)
+
+    // ─── New "Moment" layout ─────────────────────────────────────────────
+    // Single-card design used when the variant isn't poker or romantic —
+    // i.e. the standard wedding/birthday/bar/bat/travel flow. Designed
+    // 1:1 against the May 2026 mockup: cream wash with botanical
+    // corners, monogram cap, big serif title, gold pill badge under
+    // the subtitle, one card holding name + blessing + photo, then a
+    // wide gold submit button. Poker and romantic keep their bespoke
+    // renderers below. `isMomentLayout` was declared earlier alongside
+    // the chrome-hiding effect so both branches reference the same flag.
+    if (isMomentLayout) {
+        const brideInitial = (recipients?.bride || '').trim().charAt(0)
+        const groomInitial = (recipients?.groom || '').trim().charAt(0)
+        const celebrantInitial = (recipients?.celebrant || '').trim().charAt(0)
+        // Monogram letters — wedding shows bride+groom initials, every
+        // other event shows the celebrant initial alone. Falls back to
+        // a heart if no name has been set yet.
+        const monogramLeft = eventType === 'wedding' ? brideInitial : celebrantInitial
+        const monogramRight = eventType === 'wedding' ? groomInitial : ''
+
+        // Title copy — uses the new "moment_*" keys when names are set,
+        // falls back to the existing locale-default if nothing is.
+        let momentTitle
+        if (eventType === 'wedding') {
+            const b = recipients?.bride || ''
+            const g = recipients?.groom || ''
+            if (b && g) momentTitle = t('momentTitleWithCouple', { first: b, second: g })
+            else if (b || g) momentTitle = t('momentTitleWithName', { name: b || g })
+            else momentTitle = t('momentTitleGeneric')
+        } else {
+            const c = recipients?.celebrant || ''
+            momentTitle = c ? t('momentTitleWithName', { name: c }) : t('momentTitleGeneric')
+        }
+
+        return (
+            <div
+                // Lock to EXACT 100vh — header is hidden, no
+                // scroll. The 80px top padding pushes the
+                // "רגע אחד" title down from the very top edge so
+                // the form sits in the lower 2/3 of the screen and
+                // the floral arch backdrop has room to breathe
+                // above it.
+                className='flex items-start justify-center px-4 pb-2 font-sans relative h-screen overflow-hidden'
+                style={{
+                    // 80px top padding pushes "רגע אחד" down from the
+                    // top edge of the viewport — the floral arch
+                    // backdrop fills the space above the title.
+                    paddingTop: 80,
+                    // User-supplied romantic-garden photograph as the
+                    // page backdrop. cover keeps it crisp at any
+                    // device width; center-top anchors the floral
+                    // arch behind the form. The cream fallback
+                    // colour shows if the asset fails to load.
+                    backgroundColor: '#fbf6ec',
+                    backgroundImage: 'url(/backgrounds/romanticgarden.png)',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center top',
+                    backgroundRepeat: 'no-repeat',
+                    backgroundAttachment: 'fixed',
+                }}
+            >
+                <div className='relative z-10 w-full max-w-[24rem] animate-scaleIn'>
+                    {/* Monogram block removed — replaced by the
+                        small gold heart in the title block below.
+                        Keeping the SVG dead-stripped via the `false`
+                        gate makes the rollback a one-character edit
+                        if the design pivots back to the monogram. */}
+                    {false && (
+                        <div className='flex justify-center mb-2'>
+                            <svg viewBox='0 0 200 80' className='w-[112px] h-[44px]' aria-hidden='true'>
+                                {/* Left leaf flourish */}
+                                <g stroke='#c9a44e' strokeWidth='1' fill='none' opacity='0.7'>
+                                    <path d='M 8 50 Q 26 38, 44 50' />
+                                    <path d='M 16 44 Q 22 38, 30 42' />
+                                    <path d='M 26 56 Q 32 50, 40 54' />
+                                </g>
+                                {/* Right leaf flourish (mirrored) */}
+                                <g stroke='#c9a44e' strokeWidth='1' fill='none' opacity='0.7'>
+                                    <path d='M 192 50 Q 174 38, 156 50' />
+                                    <path d='M 184 44 Q 178 38, 170 42' />
+                                    <path d='M 174 56 Q 168 50, 160 54' />
+                                </g>
+                                {/* Monogram letters / heart */}
+                                {monogramLeft || monogramRight ? (
+                                    <>
+                                        {monogramLeft && (
+                                            <text
+                                                x={monogramRight ? 80 : 100}
+                                                y='54'
+                                                textAnchor='middle'
+                                                fontSize='34'
+                                                fontWeight='400'
+                                                fill='#3d2e1a'
+                                                fontFamily="'David Libre', 'Frank Ruhl Libre', 'Times New Roman', serif"
+                                            >
+                                                {monogramLeft}
+                                            </text>
+                                        )}
+                                        {monogramRight && (
+                                            <text
+                                                x='100'
+                                                y='52'
+                                                textAnchor='middle'
+                                                fontSize='28'
+                                                fill='#c9a44e'
+                                                fontFamily="'David Libre', 'Times New Roman', serif"
+                                            >
+                                                &amp;
+                                            </text>
+                                        )}
+                                        {monogramRight && (
+                                            <text
+                                                x='120'
+                                                y='54'
+                                                textAnchor='middle'
+                                                fontSize='34'
+                                                fontWeight='400'
+                                                fill='#3d2e1a'
+                                                fontFamily="'David Libre', 'Frank Ruhl Libre', 'Times New Roman', serif"
+                                            >
+                                                {monogramRight}
+                                            </text>
+                                        )}
+                                    </>
+                                ) : (
+                                    <path
+                                        d='M 100 60 L 88 48 C 76 36, 88 22, 100 32 C 112 22, 124 36, 112 48 Z'
+                                        fill='#c9a44e'
+                                    />
+                                )}
+                            </svg>
+                        </div>
+                    )}
+
+                    {/* ── Title block — small gold heart, then
+                        two lines of title separated by an ornamental
+                        flourish line, then the subtitle. ── */}
+                    {/* Small gold heart cap */}
+                    <div className='flex justify-center mb-1'>
+                        <svg viewBox='0 0 24 24' className='w-[12px] h-[12px]' fill='#c9a44e'>
+                            <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                        </svg>
+                    </div>
+                    {/* Two-line title — "רגע אחד" / flourish /
+                        "בשביל [names]". Falls back to single line
+                        when no names are set. */}
+                    {(() => {
+                        const namesPart = (() => {
+                            if (eventType === 'wedding') {
+                                const b = recipients?.bride || ''
+                                const g = recipients?.groom || ''
+                                if (b && g) return `בשביל ${b} ו${g}`
+                                if (b || g) return `בשביל ${b || g}`
+                                return ''
+                            }
+                            const c = recipients?.celebrant || ''
+                            return c ? `בשביל ${c}` : ''
+                        })()
+                        return (
+                            <div className='text-center'>
+                                <h1
+                                    className='font-bold leading-[1.15]'
+                                    style={{ color: '#1a1410', fontSize: '26px', letterSpacing: '-0.005em' }}
+                                >
+                                    רגע אחד
+                                </h1>
+                                {namesPart && (
+                                    <>
+                                        {/* Flourish line — gold hairline
+                                            with a small diamond at the
+                                            centre. Repeats below the
+                                            second line for symmetry. */}
+                                        <div className='flex items-center justify-center gap-2 my-1.5'>
+                                            <span
+                                                className='block h-px w-12'
+                                                style={{
+                                                    background:
+                                                        'linear-gradient(to left, transparent, #c9a44e, transparent)',
+                                                }}
+                                            />
+                                            <span
+                                                className='inline-block w-1.5 h-1.5 rotate-45'
+                                                style={{ background: '#c9a44e' }}
+                                            />
+                                            <span
+                                                className='block h-px w-12'
+                                                style={{
+                                                    background:
+                                                        'linear-gradient(to right, transparent, #c9a44e, transparent)',
+                                                }}
+                                            />
+                                        </div>
+                                        <h1
+                                            className='font-bold leading-[1.15]'
+                                            style={{ color: '#1a1410', fontSize: '26px', letterSpacing: '-0.005em' }}
+                                        >
+                                            {namesPart}
+                                        </h1>
+                                    </>
+                                )}
+                            </div>
+                        )
+                    })()}
+                    <p
+                        className='text-center leading-snug'
+                        style={{ color: '#7a6a52', fontSize: '12px', maxWidth: 270, margin: '4px auto 0' }}
+                    >
+                        {t('momentSubtitle')}
+                    </p>
+
+                    {/* ── Form card ──
+                        Holds the entire form + the floral overflow
+                        ornament. `relative` is the anchor for the
+                        pill sitting on the top edge AND for the
+                        bottom-left flowers.png that spills outside
+                        the card.
+                        Frame treatment: subtle cream gradient
+                        background, a single hairline gold outer
+                        border, and a layered shadow that creates an
+                        "inner cream gap + dusty-pink hairline" double
+                        line. The OUTER drop shadow has a faint rose
+                        tint so the card melts into the floral arch
+                        backdrop instead of looking like a hard
+                        white tile pasted on top. */}
+                    <div
+                        className='rounded-[20px] px-4 pt-7 pb-4 relative mt-9'
+                        style={{
+                            background: 'linear-gradient(180deg, #ffffff 0%, #fdf9ef 100%)',
+                            border: '1px solid rgba(201,164,78,0.45)',
+                            overflow: 'visible',
+                            boxShadow: [
+                                // Inner double-line: 5px cream gap +
+                                // 1px dusty-pink hairline. Stationery feel.
+                                'inset 0 0 0 5px rgba(255,255,255,0.85)',
+                                'inset 0 0 0 6px rgba(216,164,164,0.35)',
+                                // Outer rose halo + warm gold drop —
+                                // blends the card edge into the
+                                // floral background.
+                                '0 0 0 1px rgba(216,164,164,0.18)',
+                                '0 24px 48px -22px rgba(170,90,90,0.18)',
+                                '0 12px 28px -16px rgba(170,136,64,0.30)',
+                                '0 3px 10px -4px rgba(170,136,64,0.10)',
+                            ].join(', '),
+                        }}
+                    >
+                        {/* Pill badge — anchored to the top edge of
+                            the card, half-overlapping it like a tab. */}
+                        <div
+                            className='absolute -top-3.5 left-1/2 -translate-x-1/2 inline-flex items-center gap-1.5 rounded-full whitespace-nowrap'
+                            style={{
+                                background: '#fdf8ec',
+                                border: '1px solid rgba(201,164,78,0.40)',
+                                color: '#8a6d40',
+                                padding: '5px 14px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                letterSpacing: '0.01em',
+                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.20)',
+                            }}
+                        >
+                            <svg viewBox='0 0 24 24' className='w-[10px] h-[10px]' fill='#d8a4a4'>
+                                <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                            </svg>
+                            <span>{t('momentPill')}</span>
+                            <svg viewBox='0 0 24 24' className='w-[10px] h-[10px]' fill='#d8a4a4'>
+                                <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                            </svg>
+                        </div>
+                        {/* — Name field —
+                            Label on the right (start in RTL), icon
+                            trailing at the end (left in RTL), no
+                            circle background. */}
+                        <div className='mb-3'>
+                            <div className='flex items-center justify-between gap-2 mb-1.5'>
+                                <span style={{ color: '#1a1410', fontSize: '14.5px', fontWeight: 700 }}>
+                                    {t('momentNameLabel')}
+                                </span>
+                                <svg
+                                    viewBox='0 0 24 24'
+                                    className='w-[18px] h-[18px] shrink-0'
+                                    fill='none'
+                                    stroke='#9a8665'
+                                    strokeWidth={1.8}
+                                >
+                                    <path
+                                        strokeLinecap='round'
+                                        strokeLinejoin='round'
+                                        d='M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z'
+                                    />
+                                </svg>
+                            </div>
+                            <input
+                                type='text'
+                                value={name}
+                                onChange={e => setName(e.target.value)}
+                                placeholder={t('momentNamePlaceholder')}
+                                className='w-full rounded-xl outline-none transition'
+                                style={{
+                                    background: '#fbf6ec',
+                                    border: '1px solid #ead9b3',
+                                    padding: '10px 14px',
+                                    color: '#1a1410',
+                                    fontSize: '16px',
+                                }}
+                                onFocus={e => (e.currentTarget.style.borderColor = '#c9a44e')}
+                                onBlur={e => (e.currentTarget.style.borderColor = '#ead9b3')}
+                            />
+                        </div>
+
+                        {/* — Blessing field — label first (start
+                            in RTL = right), pencil icon trailing
+                            (end = left). No background circle. */}
+                        <div className='mb-2'>
+                            <div className='flex items-center justify-between gap-2 mb-1.5'>
+                                <span style={{ color: '#1a1410', fontSize: '14.5px', fontWeight: 700 }}>
+                                    {t('momentBlessingLabel')}
+                                </span>
+                                <svg
+                                    viewBox='0 0 24 24'
+                                    className='w-[18px] h-[18px] shrink-0'
+                                    fill='none'
+                                    stroke='#9a8665'
+                                    strokeWidth={1.8}
+                                >
+                                    <path
+                                        strokeLinecap='round'
+                                        strokeLinejoin='round'
+                                        d='M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13L2.25 21.75l.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.862 4.487Zm0 0L19.5 7.125'
+                                    />
+                                </svg>
+                            </div>
+                            <textarea
+                                value={text}
+                                onChange={e => setText(e.target.value)}
+                                placeholder={t('momentBlessingPlaceholder')}
+                                maxLength={210}
+                                className='w-full rounded-xl outline-none transition resize-none leading-snug'
+                                style={{
+                                    background: '#fbf6ec',
+                                    border: '1px solid #ead9b3',
+                                    padding: '10px 14px',
+                                    color: '#1a1410',
+                                    fontSize: '16px',
+                                    height: '64px',
+                                }}
+                                onFocus={e => (e.currentTarget.style.borderColor = '#c9a44e')}
+                                onBlur={e => (e.currentTarget.style.borderColor = '#ead9b3')}
+                            />
+                            <div className='text-start mt-1' style={{ color: '#b9a684', fontSize: '10.5px' }}>
+                                {text.length}/210
+                            </div>
+                        </div>
+
+                        {/* Heart divider removed — the photo section
+                            header below stands on its own as a visual
+                            separator, saves vertical space. */}
+
+                        {/* ── Photo section header — label first
+                            (start = right in RTL), camera icon
+                            trailing (end = left). No circle. */}
+                        <div className='flex items-center justify-between gap-2 mb-2 mt-3'>
+                            <span style={{ color: '#1a1410', fontSize: '14.5px', fontWeight: 700 }}>
+                                <span style={{ color: '#c14a4a' }}>*</span> {t('momentPhotoTitle')}
+                            </span>
+                            <svg
+                                viewBox='0 0 24 24'
+                                className='w-[18px] h-[18px] shrink-0'
+                                fill='none'
+                                stroke='#9a8665'
+                                strokeWidth={1.8}
+                            >
+                                <path
+                                    strokeLinecap='round'
+                                    strokeLinejoin='round'
+                                    d='M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z'
+                                />
+                                <path
+                                    strokeLinecap='round'
+                                    strokeLinejoin='round'
+                                    d='M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z'
+                                />
+                            </svg>
+                        </div>
+
+                        {/* ── Photo area — full card width, fixed
+                            short height. Soft cream wash, gentle
+                            dashed gold border, generous rounding
+                            (matches the mockup's pill-style well). ── */}
+                        <div
+                            className='relative w-full rounded-[18px] overflow-hidden'
+                            style={{
+                                height: '180px',
+                                background: '#fbf3e3',
+                                border: '1px dashed rgba(201,164,78,0.45)',
+                            }}
+                        >
+                            {/* Empty state — top: image-with-arrow
+                                icon + sparkles + bold CTA + light
+                                subtitle. Bottom: two pill buttons
+                                (camera / gallery) inside the well. */}
+                            {!photoUrl && !cameraOpen && (
+                                <div className='absolute inset-0 flex flex-col items-center justify-between px-3 py-3 text-center'>
+                                    {/* Top — sparkle-flanked icon +
+                                        bold CTA + soft subtitle. */}
+                                    <div className='flex flex-col items-center gap-1'>
+                                        <div className='relative'>
+                                            <svg
+                                                viewBox='0 0 24 24'
+                                                className='absolute -top-1 -left-4 w-[9px] h-[9px]'
+                                                fill='#c9a44e'
+                                                opacity='0.9'
+                                            >
+                                                <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
+                                            </svg>
+                                            <svg
+                                                viewBox='0 0 24 24'
+                                                className='absolute -bottom-1 -right-4 w-[8px] h-[8px]'
+                                                fill='#c9a44e'
+                                                opacity='0.7'
+                                            >
+                                                <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
+                                            </svg>
+                                            <svg
+                                                viewBox='0 0 24 24'
+                                                className='w-9 h-9'
+                                                fill='none'
+                                                stroke='#a8843a'
+                                                strokeWidth={1.4}
+                                            >
+                                                <path
+                                                    strokeLinecap='round'
+                                                    strokeLinejoin='round'
+                                                    d='M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 7.5m0 0L7.5 12M12 7.5v9'
+                                                />
+                                            </svg>
+                                        </div>
+                                        <div
+                                            style={{
+                                                color: '#1a1410',
+                                                fontSize: '13.5px',
+                                                fontWeight: 700,
+                                                marginTop: 4,
+                                            }}
+                                        >
+                                            {t('momentPhotoCta')}
+                                        </div>
+                                        <div style={{ color: '#9a8665', fontSize: '11px', marginTop: 1 }}>
+                                            {t('momentPhotoCtaSub')}
+                                        </div>
+                                    </div>
+
+                                    {/* Bottom — two pill buttons,
+                                        full width inside the well. */}
+                                    <div className='flex gap-2 w-full'>
+                                        <button
+                                            onClick={() => setCameraOpen(true)}
+                                            className='flex-1 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]'
+                                            style={{
+                                                background: 'transparent',
+                                                border: '1px solid rgba(201,164,78,0.45)',
+                                                color: '#3d2e1a',
+                                                padding: '7px 10px',
+                                                fontSize: '11.5px',
+                                                fontWeight: 700,
+                                            }}
+                                        >
+                                            <svg
+                                                viewBox='0 0 24 24'
+                                                className='w-[14px] h-[14px]'
+                                                fill='none'
+                                                stroke='#9a8665'
+                                                strokeWidth={1.8}
+                                            >
+                                                <path
+                                                    strokeLinecap='round'
+                                                    strokeLinejoin='round'
+                                                    d='M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z'
+                                                />
+                                                <path
+                                                    strokeLinecap='round'
+                                                    strokeLinejoin='round'
+                                                    d='M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z'
+                                                />
+                                            </svg>
+                                            <span>{t('momentTakeNow')}</span>
+                                        </button>
+                                        <label
+                                            className='flex-1 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer'
+                                            style={{
+                                                background: 'transparent',
+                                                border: '1px solid rgba(201,164,78,0.45)',
+                                                color: '#3d2e1a',
+                                                padding: '7px 10px',
+                                                fontSize: '11.5px',
+                                                fontWeight: 700,
+                                            }}
+                                        >
+                                            <svg
+                                                viewBox='0 0 24 24'
+                                                className='w-[14px] h-[14px]'
+                                                fill='none'
+                                                stroke='#9a8665'
+                                                strokeWidth={1.8}
+                                            >
+                                                <path
+                                                    strokeLinecap='round'
+                                                    strokeLinejoin='round'
+                                                    d='m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Z'
+                                                />
+                                            </svg>
+                                            <span>{t('momentChooseGallery')}</span>
+                                            <input
+                                                type='file'
+                                                accept='image/*'
+                                                className='hidden'
+                                                onChange={e => {
+                                                    const file = e.target.files?.[0]
+                                                    if (file) {
+                                                        setPhotoBlob(file)
+                                                        setPhotoUrl(URL.createObjectURL(file))
+                                                        setIsUpload(true)
+                                                    }
+                                                }}
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Live camera */}
+                            {cameraOpen && (
+                                <div className='absolute inset-0 bg-black'>
+                                    <video
+                                        ref={liveVideoRef}
+                                        autoPlay
+                                        playsInline
+                                        muted
+                                        className={`w-full h-full object-cover ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
+                                    />
+                                    <div className='absolute bottom-4 left-0 w-full flex justify-center items-center gap-8'>
+                                        <button
+                                            onClick={() => setCameraOpen(false)}
+                                            className='w-10 h-10 rounded-full bg-white/20 backdrop-blur text-white flex items-center justify-center'
+                                        >
+                                            <svg
+                                                viewBox='0 0 24 24'
+                                                className='w-5 h-5'
+                                                fill='none'
+                                                stroke='currentColor'
+                                                strokeWidth={2}
+                                            >
+                                                <path
+                                                    strokeLinecap='round'
+                                                    strokeLinejoin='round'
+                                                    d='M6 18 18 6M6 6l12 12'
+                                                />
+                                            </svg>
+                                        </button>
+                                        <button
+                                            onClick={takePhoto}
+                                            className='w-16 h-16 rounded-full border-4 border-white/80 flex items-center justify-center'
+                                        >
+                                            <div className='w-12 h-12 bg-white rounded-full' />
+                                        </button>
+                                        <button
+                                            onClick={() =>
+                                                setCameraFacing(prev => (prev === 'user' ? 'environment' : 'user'))
+                                            }
+                                            className='w-10 h-10 rounded-full bg-white/20 backdrop-blur text-white flex items-center justify-center'
+                                        >
+                                            <svg
+                                                viewBox='0 0 24 24'
+                                                className='w-5 h-5'
+                                                fill='none'
+                                                stroke='currentColor'
+                                                strokeWidth={2}
+                                            >
+                                                <path
+                                                    strokeLinecap='round'
+                                                    strokeLinejoin='round'
+                                                    d='M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99'
+                                                />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Cropper */}
+                            {photoUrl && isUpload && !cameraOpen && (
+                                <div className='absolute inset-0'>
+                                    <Cropper
+                                        image={photoUrl}
+                                        crop={crop}
+                                        zoom={zoom}
+                                        aspect={4 / 3}
+                                        onCropChange={setCrop}
+                                        onZoomChange={setZoom}
+                                        onCropComplete={(_, pixels) => setCroppedAreaPixels(pixels)}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Final preview — `contain` instead of
+                                `cover` so the guest sees the full
+                                4:3 photo (no crop) inside the wider
+                                170px-tall well. Thin cream margins
+                                on the sides are fine; preview
+                                matches what lands in the book. */}
+                            {photoUrl && !isUpload && !cameraOpen && (
+                                <img src={photoUrl} className='w-full h-full object-contain' alt='Preview' />
+                            )}
+                        </div>
+
+                        {/* The two camera/gallery buttons used to
+                            live here outside the well — moved INSIDE
+                            the empty state so the upload zone is one
+                            self-contained block. */}
+
+                        {/* ── Replace photo (when one's already loaded) ── */}
+                        {photoUrl && !cameraOpen && (
+                            <button
+                                onClick={() => {
+                                    setPhotoUrl('')
+                                    setPhotoBlob(null)
+                                    setIsUpload(false)
+                                }}
+                                className='w-full mt-2 rounded-lg text-[12.5px]'
+                                style={{
+                                    background: '#ffffff',
+                                    border: '1px solid #ead9b3',
+                                    color: '#9a8665',
+                                    padding: '7px 12px',
+                                    fontWeight: 600,
+                                }}
+                            >
+                                {t('replacePhoto')}
+                            </button>
+                        )}
+
+                        {/* "Required" note removed — the red asterisk
+                            in the section header carries that meaning
+                            without an extra line. */}
+
+                        {/* ── Floral ornament — SVG version of the
+                            pink rose + eucalyptus spilling out of the
+                            bottom-left corner of the card. No
+                            rotation: the asset is already oriented
+                            correctly. */}
+                        <img
+                            src='/backgrounds/flowers.svg'
+                            alt=''
+                            aria-hidden='true'
+                            className='absolute pointer-events-none'
+                            style={{
+                                width: '130px',
+                                height: 'auto',
+                                left: '-32px',
+                                bottom: '-26px',
+                                objectFit: 'contain',
+                                zIndex: 5,
+                            }}
+                        />
+                    </div>
+
+                    {/* ── Submit button — uses the user-supplied
+                        gardenbtnbg.png as the FULL artwork. We let
+                        the asset dictate the shape: no CSS rounded
+                        corners (the painted edge already has its
+                        own treatment, CSS rounding was clipping it
+                        and creating a mismatched silhouette), no
+                        box-shadow on the button rectangle (was
+                        showing AROUND the image as a hard glow
+                        that didn't follow the painted edge). The
+                        button stays clickable always — no
+                        disabled-opacity dimming, ever — only
+                        cursor + active-scale change when it can't
+                        be submitted yet. ── */}
+                    <button
+                        onClick={onSubmit}
+                        disabled={submitting || !text.trim() || !photoUrl}
+                        className='w-full mt-3 font-bold transition-transform duration-200 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-[0.99] relative'
+                        style={{
+                            backgroundImage: 'url(/backgrounds/gardenbtnbg.svg)',
+                            backgroundSize: '100% 100%',
+                            backgroundPosition: 'center',
+                            backgroundRepeat: 'no-repeat',
+                            backgroundColor: 'transparent',
+                            border: 'none',
+                            // Lock height to the asset's 185:40
+                            // canvas ratio so the painted artwork
+                            // stretches without cropping at any
+                            // viewport width.
+                            aspectRatio: '185 / 40',
+                            fontSize: '17px',
+                            letterSpacing: '0.01em',
+                            color: '#f5ead2',
+                            textShadow: '0 1px 3px rgba(0,0,0,0.45)',
+                            // Crisper rendering when the browser
+                            // has to upscale the small (185px)
+                            // PNG to fit a wide card.
+                            imageRendering: 'auto',
+                        }}
+                    >
+                        <svg viewBox='0 0 24 24' className='w-[12px] h-[12px] shrink-0' fill='#e8c878'>
+                            <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                        </svg>
+                        <span>{submitting ? t('submitting') : t('momentSubmit')}</span>
+                        <svg viewBox='0 0 24 24' className='w-[12px] h-[12px] shrink-0' fill='#e8c878'>
+                            <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                        </svg>
+                    </button>
+
+                    {/* Trust line — clock icon to emphasise "less
+                        than a minute" rather than security. */}
+                    <div
+                        className='flex items-center justify-center gap-1.5 mt-2'
+                        style={{ color: '#b9a684', fontSize: '10.5px' }}
+                    >
+                        <svg
+                            viewBox='0 0 24 24'
+                            className='w-[11px] h-[11px]'
+                            fill='none'
+                            stroke='currentColor'
+                            strokeWidth={1.7}
+                        >
+                            <path
+                                strokeLinecap='round'
+                                strokeLinejoin='round'
+                                d='M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'
+                            />
+                        </svg>
+                        <span>{t('securityNote')}</span>
+                    </div>
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div
@@ -746,100 +1498,18 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                 phone-first composition. Each section sits directly on the
                 champagne wash. */}
             <div className='relative z-10 w-full max-w-[26rem] animate-scaleIn'>
-                {/* Stepper — slim pill bar. Wedding/etc: white pill with
-                    gold number badges. Poker: dark pill with red+gold
-                    chip-style badges. Romantic: dark wood-tone brown pill
-                    with cream-on-brown text + gold active badge — picks
-                    up the warmth of the floral arch background. */}
-                <div
-                    className='rounded-full mb-7 mx-auto flex items-center justify-center'
-                    style={{
-                        maxWidth: '20rem',
-                        padding: '4px',
-                        background: isPoker
-                            ? 'linear-gradient(180deg, #1c2820, #131d17)'
-                            : isRomantic
-                              ? 'linear-gradient(180deg, #4a3528 0%, #2d2018 100%)'
-                              : '#ffffff',
-                        boxShadow: isPoker
-                            ? '0 8px 22px -8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(212,175,55,0.18)'
-                            : isRomantic
-                              ? '0 10px 28px -10px rgba(0,0,0,0.55), inset 0 1px 0 rgba(245,234,210,0.16)'
-                              : '0 6px 20px -6px rgba(170,136,64,0.18), 0 1px 3px rgba(170,136,64,0.10)',
-                        border: isPoker
-                            ? '1px solid rgba(212,175,55,0.30)'
-                            : isRomantic
-                              ? '1px solid rgba(245,234,210,0.30)'
-                              : '1px solid rgba(212,184,103,0.35)',
-                    }}
-                >
-                    {/* Step 1 button. The number badge swaps between
-                        the standard gold gradient and a poker-chip look
-                        (radial red/gold fill + dashed cream rim). */}
-                    <button
-                        onClick={() => setStep(1)}
-                        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full transition-colors duration-200 ${
-                            step === 1
-                                ? isPoker || isRomantic
-                                    ? 'text-[#fde9b3]'
-                                    : 'text-[#3d2e1a]'
-                                : isPoker
-                                  ? 'text-[#7a8c80]'
-                                  : isRomantic
-                                    ? 'text-[#c9b598]'
-                                    : 'text-[#a89378]'
-                        }`}
-                    >
-                        <ChipBadge number={1} active={step === 1} done={firstStepDone} isPoker={isPoker} />
-                        <span className='font-bold text-[13px] tracking-wide'>{firstChipLabel}</span>
-                    </button>
+                {/* Stepper removed — both sections (blessing + photo)
+                    now render together on a single page. Guests fill
+                    in everything in one flow, then hit a single
+                    submit button at the bottom. */}
 
-                    {/* Connecting line — hairline tan that turns gold once
-                        the first step is complete. */}
-                    <div
-                        className='h-px w-8 mx-1 transition-colors duration-300'
-                        style={{
-                            background: firstStepDone
-                                ? '#c9a44e'
-                                : isPoker
-                                  ? 'rgba(212,175,55,0.30)'
-                                  : isRomantic
-                                    ? 'rgba(245,234,210,0.30)'
-                                    : '#e1d4b4',
-                        }}
-                    />
-
-                    {/* Step 2 */}
-                    <button
-                        onClick={() => firstStepDone && setStep(2)}
-                        disabled={!firstStepDone}
-                        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full transition-colors duration-200 ${
-                            step === 2
-                                ? isPoker || isRomantic
-                                    ? 'text-[#fde9b3]'
-                                    : 'text-[#3d2e1a]'
-                                : isPoker
-                                  ? 'text-[#7a8c80]'
-                                  : isRomantic
-                                    ? 'text-[#c9b598]'
-                                    : 'text-[#a89378]'
-                        } ${!firstStepDone ? 'opacity-60 cursor-not-allowed' : ''}`}
-                    >
-                        <ChipBadge number={2} active={step === 2} done={lastStepDone} isPoker={isPoker} />
-                        <span className='font-bold text-[13px] tracking-wide'>{secondChipLabel}</span>
-                    </button>
-                </div>
-
-                {/* --- תוכן שלב הטקסט --- */}
-                {/* Redesigned to match the cleaner mockup: a heart-and-title
-                    block above the form, the form itself in a soft white
-                    card divided by a heart separator, then a full-width
-                    gold gradient continue button, and a tiny lock-icon
-                    trust line at the bottom. The state hooks and validation
-                    below are unchanged — only the JSX shell was redrawn.
-                    For non-poker variants this panel is step 1; for poker
-                    it's step 2 (the user took the photo first). */}
-                {step === textStep && (
+                {/* --- Blessing section (always visible) --- */}
+                {/* Single-page mode: this block renders unconditionally
+                    alongside the photo section below. The legacy step
+                    machine is preserved for the inner navigation UI
+                    (which has been hidden), so reverting to the
+                    multi-step flow is a one-line change. */}
+                {true && (
                     <div className='animate-fadeIn'>
                         {/* ── Title block ──
                             Generous breathing room above and below; the
@@ -1213,7 +1883,8 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                             Sparkle leads the row, chevron follows the
                             label and rotates per direction so it always
                             points "forward" in the user's reading flow. */}
-                        {step === 1 && (
+                        {/* Single-page: continue-to-next-step button hidden */}
+                        {false && (
                             <button
                                 onClick={() => setStep(2)}
                                 disabled={!text.trim()}
@@ -1253,15 +1924,11 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                             </button>
                         )}
 
-                        {/* ── Submit + back row ──
-                            Only when this panel is the LAST step
-                            (poker — photo first, blessing last). The
-                            submit handler is the same `onSubmit` the
-                            photo step uses; by the time the user
-                            reaches the poker text step, photoUrl is
-                            already set, so the only extra gate is the
-                            blessing text itself. */}
-                        {step === 2 && (
+                        {/* Single-page: this poker-only "submit from text
+                            block" path is hidden. The unified submit
+                            button at the bottom of the page handles
+                            both variants. */}
+                        {false && (
                             <button
                                 onClick={onSubmit}
                                 disabled={submitting || !text.trim()}
@@ -1285,11 +1952,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                                 stroke='currentColor'
                                                 strokeWidth='3'
                                             />
-                                            <path
-                                                className='opacity-75'
-                                                fill='currentColor'
-                                                d='M4 12a8 8 0 018-8v8z'
-                                            />
+                                            <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8v8z' />
                                         </svg>
                                         <span>{t('submitting')}</span>
                                     </>
@@ -1307,7 +1970,8 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                 )}
                             </button>
                         )}
-                        {step === 2 && (
+                        {/* Single-page: back-to-step-1 link hidden */}
+                        {false && (
                             <button
                                 onClick={() => setStep(1)}
                                 className='w-full mt-3 text-[13px] flex items-center justify-center gap-1.5 transition-colors'
@@ -1370,22 +2034,38 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                     — only the surrounding chrome was restyled. For
                     non-poker variants this panel is step 2; for poker
                     it's step 1 (snap the table first). */}
-                {step === photoStep && (
+                {/* --- Photo section (always visible) --- */}
+                {true && (
                     <div className='animate-fadeIn'>
-                        {/* ── Title block — same composition as step 1 ── */}
-                        <div className='text-center mb-7'>
-                            <svg viewBox='0 0 24 24' className='w-[18px] h-[18px] mx-auto mb-3.5' fill='#c9a44e'>
-                                <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
-                            </svg>
-                            <h2
-                                className='font-bold mb-2 leading-[1.15]'
-                                style={{ color: '#1a1410', fontSize: '26px', letterSpacing: '-0.01em' }}
+                        {/* ── Section divider — small section label
+                            (since the page already has a hero title at
+                            the top from the blessing block). The
+                            "step 2 title" became a section heading
+                            once we collapsed to a single page. */}
+                        <div className='flex items-center justify-center gap-2.5 mb-4 mt-2'>
+                            <span
+                                className='block h-px flex-1 max-w-[60px]'
+                                style={{
+                                    background: `linear-gradient(to left, transparent, ${theme.dividerLine}, transparent)`,
+                                }}
+                            />
+                            <span
+                                style={{
+                                    color: theme.subtitleColor,
+                                    fontSize: '12px',
+                                    letterSpacing: '0.08em',
+                                    fontWeight: 700,
+                                    textTransform: 'uppercase',
+                                }}
                             >
                                 {t('pageTitleStep2')}
-                            </h2>
-                            <p className='leading-relaxed' style={{ color: '#9a8a72', fontSize: '13.5px' }}>
-                                {t('pageSubtitleStep2')}
-                            </p>
+                            </span>
+                            <span
+                                className='block h-px flex-1 max-w-[60px]'
+                                style={{
+                                    background: `linear-gradient(to right, transparent, ${theme.dividerLine}, transparent)`,
+                                }}
+                            />
                         </div>
 
                         {/* ── Photo card ── */}
@@ -1423,9 +2103,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                             style={{
                                                 width: 72,
                                                 height: 72,
-                                                background: isPoker
-                                                    ? 'rgba(212,175,55,0.10)'
-                                                    : '#fff8e8',
+                                                background: isPoker ? 'rgba(212,175,55,0.10)' : '#fff8e8',
                                                 border: `1px solid ${theme.inputBorder}`,
                                             }}
                                         >
@@ -1483,9 +2161,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                             <label
                                                 className='flex-1 rounded-full font-bold text-[13px] cursor-pointer flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]'
                                                 style={{
-                                                    background: isPoker
-                                                        ? 'rgba(212,175,55,0.08)'
-                                                        : '#ffffff',
+                                                    background: isPoker ? 'rgba(212,175,55,0.08)' : '#ffffff',
                                                     border: `1px solid ${theme.inputBorder}`,
                                                     color: isPoker ? theme.accentColor : '#a8843a',
                                                     padding: '11px 14px',
@@ -1621,9 +2297,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                     }}
                                     className='flex-1 rounded-2xl font-bold text-[13.5px] transition-all active:scale-[0.99]'
                                     style={{
-                                        background: isPoker
-                                            ? 'rgba(212,175,55,0.08)'
-                                            : '#ffffff',
+                                        background: isPoker ? 'rgba(212,175,55,0.08)' : '#ffffff',
                                         border: `1px solid ${theme.inputBorder}`,
                                         color: isPoker ? theme.cardLabelColor : '#9a8a72',
                                         padding: '13px 14px',
@@ -1631,18 +2305,15 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                 >
                                     {t('replacePhoto')}
                                 </button>
-                                {/* Final/forward action — submit when this
-                                    panel is the LAST step (non-poker:
-                                    photo → submit), or continue when
-                                    this panel is the FIRST step (poker:
-                                    photo → blessing). Same gold gradient
-                                    + dimensions in either mode; only the
-                                    label, icon trail, and click handler
-                                    differ. */}
-                                {step === 2 ? (
+                                {/* Single-page: always show the submit
+                                    button (replaces the variant-specific
+                                    forward navigation). The unified
+                                    submit gates on BOTH text + photo
+                                    being present. */}
+                                {true ? (
                                     <button
                                         onClick={onSubmit}
-                                        disabled={submitting}
+                                        disabled={submitting || !text.trim()}
                                         className='flex-[2] rounded-2xl text-white font-bold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 active:scale-[0.99]'
                                         style={{
                                             background: theme.buttonGradient,
@@ -1718,11 +2389,8 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                             </div>
                         )}
 
-                        {/* Back to the previous step. Only when photo
-                            is the LAST step (non-poker), no photo has
-                            been taken, and the camera isn't open —
-                            otherwise there's nowhere to go back to. */}
-                        {step === 2 && !photoUrl && !cameraOpen && (
+                        {/* Single-page: back-to-blessing link hidden */}
+                        {false && (
                             <button
                                 onClick={() => setStep(1)}
                                 className='w-full mt-5 text-[13px] flex items-center justify-center gap-1.5 transition-colors'
@@ -1766,8 +2434,16 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                     stroke='currentColor'
                                     strokeWidth={1.8}
                                 >
-                                    <path strokeLinecap='round' strokeLinejoin='round' d='M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z' />
-                                    <path strokeLinecap='round' strokeLinejoin='round' d='M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z' />
+                                    <path
+                                        strokeLinecap='round'
+                                        strokeLinejoin='round'
+                                        d='M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z'
+                                    />
+                                    <path
+                                        strokeLinecap='round'
+                                        strokeLinejoin='round'
+                                        d='M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z'
+                                    />
                                 </svg>
                                 <span>כל הברכות</span>
                             </button>

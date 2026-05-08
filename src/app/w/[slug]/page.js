@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { collection, query, where, getDocs, limit } from 'firebase/firestore'
 import { db } from '../../../lib/firebaseClient'
 import { getMessages } from '@/i18n/getMessages'
@@ -15,6 +15,12 @@ import { dirFor } from '@/i18n/locales'
 export default function SlugRedirect() {
     const { slug } = useParams()
     const router = useRouter()
+    const searchParams = useSearchParams()
+    // ?go=photo — set by the QR code so a scanned phone lands directly
+    // on the blessing form. Other entry points (WhatsApp share, manual
+    // typing) omit this param and get the standard /wedding/[id]
+    // welcome page.
+    const goTarget = searchParams?.get('go') || ''
     const [notFound, setNotFound] = useState(false)
 
     // The not-found copy uses messages directly (no NextIntlClientProvider
@@ -40,14 +46,17 @@ export default function SlugRedirect() {
                 // Don't log a scan event here — the /wedding/{id} page
                 // we're about to redirect to logs one itself. Logging
                 // both would double-count every short-link visit.
-                router.replace(`/wedding/${weddingId}`)
+                // Honor ?go=photo from the QR code: skip the welcome
+                // landing and drop the guest straight onto the form.
+                const dest = goTarget === 'photo' ? `/wedding/${weddingId}/photo` : `/wedding/${weddingId}`
+                router.replace(dest)
             } catch (err) {
                 console.error('Error resolving slug:', err)
                 setNotFound(true)
             }
         }
         resolve()
-    }, [slug, router])
+    }, [slug, router, goTarget])
 
     if (notFound) {
         return (

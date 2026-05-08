@@ -6,8 +6,7 @@ import { NextResponse } from 'next/server'
 import { adminDb, adminAuth } from '@/lib/firebaseAdmin'
 import { normalizeEventType, normalizeThemeColor } from '@/lib/eventTypes'
 import { normalizeLocale } from '@/i18n/locales'
-
-const SUPER_ADMIN_EMAIL = 'barbenbh@gmail.com'
+import { isSuperAdmin } from '@/lib/superAdmin'
 
 // ─── Auth helper ─────────────────────────────────────────────────────────────
 async function verifySuperAdmin(req) {
@@ -17,7 +16,7 @@ async function verifySuperAdmin(req) {
     const token = authHeader.split('Bearer ')[1]
     try {
         const decoded = await adminAuth.verifyIdToken(token)
-        if (decoded.email !== SUPER_ADMIN_EMAIL) return null
+        if (!isSuperAdmin(decoded.email)) return null
         return decoded
     } catch {
         return null

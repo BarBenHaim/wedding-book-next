@@ -21,6 +21,8 @@
 
 import { normalizeBlessing } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
+import { pageScale } from '@/lib/pageGeometry'
+import EntryPhoto from '../EntryPhoto/EntryPhoto'
 
 const GOLD = '#aa8840'
 const TAPE_GOLD = 'rgba(170,136,64,0.30)'
@@ -55,8 +57,7 @@ export default function ScrapbookPageLayout({ entry, styleSettings, scaledWidth,
     const hasText = Boolean(cleanText)
     const hasImage = Boolean(entry.imageUrl)
 
-    const w = percent => (percent / 100) * scaledWidth
-    const h = percent => (percent / 100) * scaledHeight
+    const { w, h } = pageScale(scaledWidth, scaledHeight)
 
     // Photo geometry — 4:3 with a thin white print border. The white
     // padding makes it look like a real printed photograph. Slight tilt
@@ -109,12 +110,11 @@ export default function ScrapbookPageLayout({ entry, styleSettings, scaledWidth,
                         zIndex: 5,
                     }}
                 >
-                    <div
-                        style={{
-                            width: photoWidth,
-                            height: photoHeight,
-                            background: 'url(' + entry.imageUrl + ') center/cover no-repeat',
-                        }}
+                    {/* Shared natural-aspect photo. */}
+                    <EntryPhoto
+                        src={entry.imageUrl}
+                        maxWidth={photoWidth}
+                        maxHeight={photoHeight}
                     />
 
                     {/* Washi tape — top-left, tilted clockwise */}

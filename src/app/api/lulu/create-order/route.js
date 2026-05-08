@@ -4,6 +4,7 @@ export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { adminDb } from '@/lib/firebaseAdmin'
 import nodemailer from 'nodemailer'
+import { PRIMARY_ADMIN_EMAIL } from '@/lib/superAdmin'
 
 const LULU_API_KEY = process.env.LULU_API_KEY
 const LULU_API_SECRET = process.env.LULU_API_SECRET
@@ -86,7 +87,7 @@ async function sendAdminEmail({ weddingId, printJobId, shippingAddress, contentU
 
     await transporter.sendMail({
         from: process.env.MAIL_USER,
-        to: 'barbenbh@gmail.com',
+        to: PRIMARY_ADMIN_EMAIL,
         subject: `🖨️ הזמנת הדפסה חדשה! Wedding #${weddingId}`,
         html: `
         <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; max-width: 600px; margin: 0 auto;">

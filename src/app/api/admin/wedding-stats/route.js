@@ -20,18 +20,17 @@
 
 import { NextResponse } from 'next/server'
 import { adminDb, adminAuth } from '@/lib/firebaseAdmin'
+import { isSuperAdmin } from '@/lib/superAdmin'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-const SUPER_ADMIN_EMAIL = 'barbenbh@gmail.com'
 
 async function verifySuperAdmin(req) {
     const authHeader = req.headers.get('authorization')
     if (!authHeader?.startsWith('Bearer ')) return null
     try {
         const decoded = await adminAuth.verifyIdToken(authHeader.split('Bearer ')[1])
-        if (decoded.email !== SUPER_ADMIN_EMAIL) return null
+        if (!isSuperAdmin(decoded.email)) return null
         return decoded
     } catch {
         return null

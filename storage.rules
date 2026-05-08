@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// Storage security rules — currently the only client-side storage use
+// is uploading guest photos to weddings/{weddingId}/{entryId}.jpg.
+// Reads are public (the gallery + book pages need to render them).
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Guest photos under each wedding folder.
+    match /weddings/{weddingId}/{filename} {
+      // Anyone can view a wedding's photos (gallery + viewer book).
+      allow read: if true;
+
+      // Anyone can upload — the photo flow doesn't authenticate
+      // guests. Cap size at 8 MB and only accept images so the
+      // bucket can't become a malware host.
+      allow create: if request.resource.size < 8 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+
+      // No client-side mutation or deletion. Admin SDK handles those.
+      allow update, delete: if false;
+    }
+
+    // Anything else — admin SDK only.
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

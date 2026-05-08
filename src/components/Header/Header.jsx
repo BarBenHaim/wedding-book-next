@@ -8,8 +8,7 @@ import { collection, query, where, getDocs, limit, doc, getDoc } from 'firebase/
 import { db } from '../../lib/firebaseClient'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
-
-const SUPER_ADMIN_EMAIL = 'barbenbh@gmail.com'
+import { isSuperAdmin } from '@/lib/superAdmin'
 
 // Drawer menu item icons
 const ViewerIcon = () => (
@@ -114,7 +113,8 @@ export default function Header() {
     }, [])
 
     const activeId = weddingIdFromUrl ?? personalWeddingId
-    const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL
+    // Renamed local var so it doesn't shadow the imported helper.
+    const userIsSuperAdmin = isSuperAdmin(user?.email)
 
     // Resolve Header locale from the active wedding's locale. Re-runs on
     // login/logout (activeId flips) and on cross-event navigation. Falls
@@ -224,7 +224,7 @@ export default function Header() {
                             </>
                         )}
 
-                        {isSuperAdmin && (
+                        {userIsSuperAdmin && (
                             <button
                                 onClick={() => router.push('/admin')}
                                 className='rounded-full bg-[#18140F]/10 px-4 py-2 text-sm font-medium text-[#18140F] hover:bg-[#18140F]/20 transition cursor-pointer'
@@ -327,7 +327,7 @@ export default function Header() {
                             </>
                         )}
 
-                        {isSuperAdmin && (
+                        {userIsSuperAdmin && (
                             <DrawerItem
                                 icon={<SuperAdminIcon />}
                                 label='Super Admin'

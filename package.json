@@ -6,7 +6,10 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "i18n:check": "node scripts/i18n-check.mjs"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^16.6.0",
@@ -41,6 +44,7 @@
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "15.5.3",
-    "tailwindcss": "^4"
+    "tailwindcss": "^4",
+    "vitest": "^2.1.8"
   }
 }

@@ -14,7 +14,17 @@ export async function GET(req) {
         const bgFile = searchParams.get('bg') || 'wedding-bg.png'
         const slug = searchParams.get('slug') || ''
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://weddingtales.co.il'
-        const guestLink = slug ? `${baseUrl}/w/${slug}` : `${baseUrl}/wedding/${weddingId}`
+        // QR scanning is a one-tap action — guest holds up a phone, expects
+        // to land on the form. We skip the /w/[slug] welcome page (still
+        // used for WhatsApp / shared links where the branded landing has
+        // value) and go straight to /photo. The slug-based link is kept
+        // as the source of truth for analytics: when slug is set we route
+        // through /w/[slug]?go=photo so the scan still logs as a "scan"
+        // event, then redirects on landing. When no slug exists we drop
+        // straight to /wedding/[id]/photo.
+        const guestLink = slug
+            ? `${baseUrl}/w/${slug}?go=photo`
+            : `${baseUrl}/wedding/${weddingId}/photo`
 
         // נתיבי קבצים
         const fontPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansHebrew-Regular.ttf')
