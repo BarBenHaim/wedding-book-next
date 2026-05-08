@@ -171,45 +171,45 @@ function CreateUserModal({ onClose, onSubmit }) {
                             <UserPlus size={20} className='text-white' />
                         </div>
                         <div>
-                            <h3 className='font-bold text-gray-800'>יצירת משתמש חדש</h3>
-                            <p className='text-xs text-gray-400'>המשתמש יקבל מייל עם פרטי גישה</p>
+                            <h3 className='font-bold text-[#1a1410]'>יצירת משתמש חדש</h3>
+                            <p className='text-xs text-[#a89378]'>המשתמש יקבל מייל עם פרטי גישה</p>
                         </div>
-                        <button onClick={onClose} className='mr-auto text-gray-300 hover:text-gray-500 transition-colors'>
+                        <button onClick={onClose} className='mr-auto text-[#c4b9a4] hover:text-[#7a6a52] transition-colors'>
                             <X size={18} />
                         </button>
                     </div>
 
                     <div className='space-y-3'>
                         <div>
-                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>אימייל *</label>
+                            <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>אימייל *</label>
                             <input type='email' value={form.email} onChange={e => set('email', e.target.value)}
                                 placeholder='email@example.com' dir='ltr'
-                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all' />
+                                className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all' />
                         </div>
                         <div>
-                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם מלא (אופציונלי)</label>
+                            <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>שם מלא (אופציונלי)</label>
                             <input type='text' value={form.displayName} onChange={e => set('displayName', e.target.value)}
                                 placeholder='ישראל ישראלי'
-                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all' />
+                                className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all' />
                         </div>
                         <div className='grid grid-cols-2 gap-3'>
                             <div>
-                                <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם כלה</label>
+                                <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>שם כלה</label>
                                 <input type='text' value={form.brideName} onChange={e => set('brideName', e.target.value)}
                                     placeholder='נועה'
-                                    className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all' />
+                                    className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all' />
                             </div>
                             <div>
-                                <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם חתן</label>
+                                <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>שם חתן</label>
                                 <input type='text' value={form.groomName} onChange={e => set('groomName', e.target.value)}
                                     placeholder='אלון'
-                                    className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all' />
+                                    className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all' />
                             </div>
                         </div>
                         <div>
-                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>תאריך חתונה</label>
+                            <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>תאריך חתונה</label>
                             <input type='date' value={form.weddingDate} onChange={e => set('weddingDate', e.target.value)}
-                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all' />
+                                className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all' />
                         </div>
                     </div>
 
@@ -220,7 +220,7 @@ function CreateUserModal({ onClose, onSubmit }) {
                     </div>
 
                     <div className='flex gap-2 justify-end mt-5'>
-                        <button onClick={onClose} className='px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-50 rounded-xl transition-colors'>ביטול</button>
+                        <button onClick={onClose} className='px-4 py-2.5 text-sm text-[#7a6a52] hover:bg-[#fbf6ec] rounded-xl transition-colors'>ביטול</button>
                         <button
                             onClick={() => canSubmit && onSubmit(form)}
                             disabled={!canSubmit}
@@ -248,12 +248,12 @@ function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCance
                         {danger ? <AlertTriangle size={20} className='text-red-500' /> : <KeyRound size={20} className='text-[#AA8840]' />}
                     </div>
                     <div>
-                        <h3 className='font-bold text-gray-800'>{title}</h3>
-                        <p className='text-sm text-gray-500 mt-1'>{message}</p>
+                        <h3 className='font-bold text-[#1a1410]'>{title}</h3>
+                        <p className='text-sm text-[#7a6a52] mt-1'>{message}</p>
                     </div>
                 </div>
                 <div className='flex gap-2 justify-end'>
-                    <button onClick={onCancel} className='px-4 py-2 text-sm text-gray-500 hover:bg-gray-50 rounded-lg'>ביטול</button>
+                    <button onClick={onCancel} className='px-4 py-2 text-sm text-[#7a6a52] hover:bg-[#fbf6ec] rounded-lg'>ביטול</button>
                     <button
                         onClick={onConfirm}
                         className={`px-4 py-2 text-sm font-bold text-white rounded-lg ${danger ? 'bg-red-500 hover:bg-red-600' : 'bg-[#AA8840] hover:bg-[#96773a]'}`}
@@ -314,20 +314,20 @@ function StatusBadge({ weddingDate }) {
     if (s === 'today') return <span className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200'><span className='w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse' />היום</span>
     if (s === 'upcoming') return <span className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200'><span className='w-1.5 h-1.5 rounded-full bg-indigo-400' />עתידית</span>
     if (s === 'past') return <span className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-slate-500 bg-slate-100 border border-slate-200'><CheckCircle2 size={10} />עברה</span>
-    return <span className='inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold text-gray-400 bg-gray-100 border border-gray-200'>—</span>
+    return <span className='inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold text-[#a89378] bg-[#f4ecd9] border border-[#ead9b3]'>—</span>
 }
 
 // ─── Greetings Badge ─────────────────────────────────────────────────────────
 function GreetingsBadge({ count }) {
     const n = count ?? 0
-    if (n === 0) return <span className='inline-flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold bg-gray-100 text-gray-400 border border-gray-200'>{n}</span>
+    if (n === 0) return <span className='inline-flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold bg-[#f4ecd9] text-[#a89378] border border-[#ead9b3]'>{n}</span>
     if (n < 10) return <span className='inline-flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold bg-blue-50 text-blue-600 border border-blue-200'>{n}</span>
     return <span className='inline-flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold bg-emerald-50 text-emerald-700 border border-emerald-200'>{n}</span>
 }
 
 // ─── Print Status Badge ─────────────────────────────────────────────────────
 function PrintBadge({ printOrder }) {
-    if (!printOrder) return <span className='text-gray-300 text-xs'>—</span>
+    if (!printOrder) return <span className='text-[#c4b9a4] text-xs'>—</span>
     return (
         <span className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200'>
             <Printer size={10} /> הוזמן
@@ -345,12 +345,12 @@ function SortableHeader({ children, sortKey, currentSort, onSort, justify = 'end
     }
     return (
         <th onClick={handleClick}
-            className={`px-6 py-4 font-semibold cursor-pointer select-none transition-colors hover:text-gray-700 ${isActive ? 'text-[#AA8840]' : 'text-gray-400'}`}>
+            className={`px-6 py-4 font-semibold cursor-pointer select-none transition-colors hover:text-[#3d3225] ${isActive ? 'text-[#AA8840]' : 'text-[#a89378]'}`}>
             <span className={`flex items-center gap-1.5 ${justify === 'center' ? 'justify-center' : justify === 'start' ? 'justify-start' : 'justify-end'}`}>
                 {children}
                 {isActive && currentSort.dir === 'asc' && <ChevronUp size={13} className='text-[#AA8840]' />}
                 {isActive && currentSort.dir === 'desc' && <ChevronDown size={13} className='text-[#AA8840]' />}
-                {!isActive && <ChevronsUpDown size={12} className='text-gray-300' />}
+                {!isActive && <ChevronsUpDown size={12} className='text-[#c4b9a4]' />}
             </span>
         </th>
     )
@@ -453,18 +453,18 @@ function EventTypeEditor({ wedding, onSave }) {
     }
 
     return (
-        <div className='px-6 py-4 border-t border-gray-100'>
-            <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3 inline-flex items-center gap-1.5'>
+        <div className='px-6 py-4 border-t border-[#f0e8d4]'>
+            <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3 inline-flex items-center gap-1.5'>
                 <Pencil size={10} /> עריכת פרטי אירוע
             </p>
 
             {/* Event type dropdown */}
             <div className='mb-3'>
-                <label className='text-xs font-semibold text-gray-500 mb-1 block'>סוג האירוע</label>
+                <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>סוג האירוע</label>
                 <select
                     value={draft.eventType}
                     onChange={e => set('eventType', e.target.value)}
-                    className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                    className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
                 >
                     {EVENT_TYPE_ORDER.map(t => (
                         <option key={t} value={t}>{getEventConfig(t).hebrewLabel}</option>
@@ -479,16 +479,16 @@ function EventTypeEditor({ wedding, onSave }) {
                 default variant on the guest side. */}
             {draft.eventType === 'wedding' && (
                 <div className='mb-3'>
-                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>סגנון העיצוב</label>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>סגנון העיצוב</label>
                     <select
                         value={draft.designVariant || 'classic'}
                         onChange={e => set('designVariant', e.target.value === 'classic' ? '' : e.target.value)}
-                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
                     >
                         <option value='classic'>קלאסי — שמנת ושמפניה (ברירת מחדל)</option>
                         <option value='romantic'>רומנטי — עיצוב פרחוני</option>
                     </select>
-                    <p className='text-[10px] text-gray-400 mt-1 leading-relaxed'>
+                    <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>
                         הסגנון משפיע רק על עמוד יצירת הברכה לאורחים — לא על הספר עצמו.
                     </p>
                 </div>
@@ -498,17 +498,17 @@ function EventTypeEditor({ wedding, onSave }) {
                 couple/celebrant in their portal AND to guests on the
                 shared link. Defaults to Hebrew for legacy events. */}
             <div className='mb-3'>
-                <label className='text-xs font-semibold text-gray-500 mb-1 block'>שפת ממשק</label>
+                <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>שפת ממשק</label>
                 <select
                     value={draft.locale}
                     onChange={e => set('locale', e.target.value)}
-                    className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                    className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
                 >
                     {LOCALE_ORDER.map(id => (
                         <option key={id} value={id}>{LOCALES[id].label}</option>
                     ))}
                 </select>
-                <p className='text-[10px] text-gray-400 mt-1 leading-relaxed'>
+                <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>
                     השפה שתוצג למשתמש בעמוד הפורטל ולאורחים בעמוד השיתוף.
                 </p>
             </div>
@@ -516,12 +516,12 @@ function EventTypeEditor({ wedding, onSave }) {
             {/* Theme color picker — 3 swatches; independent of event type */}
             <div className='mb-3'>
                 <div className='flex items-center justify-between mb-1'>
-                    <label className='text-xs font-semibold text-gray-500'>צבע העיצוב</label>
+                    <label className='text-xs font-semibold text-[#7a6a52]'>צבע העיצוב</label>
                     {draft.themeColor && (
                         <button
                             type='button'
                             onClick={() => set('themeColor', null)}
-                            className='text-[11px] text-gray-400 hover:text-[#AA8840] transition-colors'
+                            className='text-[11px] text-[#a89378] hover:text-[#AA8840] transition-colors'
                             title='חזור לברירת מחדל לפי סוג האירוע'
                         >
                             ברירת מחדל
@@ -542,7 +542,7 @@ function EventTypeEditor({ wedding, onSave }) {
                                 className={`group relative rounded-xl border-2 p-2.5 flex flex-col items-center gap-1.5 transition-all ${
                                     isSelected
                                         ? 'border-[#AA8840] bg-[#AA8840]/5 shadow-sm'
-                                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                                        : 'border-[#ead9b3] hover:border-[#c9a44e]/60 bg-white'
                                 }`}
                                 title={isExplicit ? `${t.label} (נבחר)` : t.label}
                             >
@@ -550,11 +550,11 @@ function EventTypeEditor({ wedding, onSave }) {
                                     className='w-8 h-8 rounded-full shadow-inner'
                                     style={{ background: t.swatch, border: '1px solid rgba(0,0,0,0.08)' }}
                                 />
-                                <span className={`text-[11px] font-semibold ${isSelected ? 'text-[#AA8840]' : 'text-gray-500'}`}>
+                                <span className={`text-[11px] font-semibold ${isSelected ? 'text-[#AA8840]' : 'text-[#7a6a52]'}`}>
                                     {t.label}
                                 </span>
                                 {isSelected && !isExplicit && (
-                                    <span className='absolute top-1 left-1 text-[9px] text-gray-300'>ברירת מחדל</span>
+                                    <span className='absolute top-1 left-1 text-[9px] text-[#c4b9a4]'>ברירת מחדל</span>
                                 )}
                             </button>
                         )
@@ -574,45 +574,45 @@ function EventTypeEditor({ wedding, onSave }) {
                 <>
                     <div className='grid grid-cols-2 gap-3 mb-3'>
                         <div>
-                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם כלה</label>
+                            <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>שם כלה</label>
                             <input
                                 type='text' value={draft.brideName}
                                 onChange={e => set('brideName', e.target.value)}
                                 placeholder='Noa'
-                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                                className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
                             />
                         </div>
                         <div>
-                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם חתן</label>
+                            <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>שם חתן</label>
                             <input
                                 type='text' value={draft.groomName}
                                 onChange={e => set('groomName', e.target.value)}
                                 placeholder='Alon'
-                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                                className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
                             />
                         </div>
                     </div>
                     <div className='grid grid-cols-2 gap-3 mb-3'>
                         <div>
-                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם כלה בעברית</label>
+                            <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>שם כלה בעברית</label>
                             <input
                                 type='text' value={draft.brideNameHe}
                                 onChange={e => set('brideNameHe', e.target.value)}
                                 placeholder='נועה'
-                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                                className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
                             />
                         </div>
                         <div>
-                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם חתן בעברית</label>
+                            <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>שם חתן בעברית</label>
                             <input
                                 type='text' value={draft.groomNameHe}
                                 onChange={e => set('groomNameHe', e.target.value)}
                                 placeholder='אלון'
-                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                                className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
                             />
                         </div>
                     </div>
-                    <p className='text-[11px] text-gray-400 mb-3 leading-relaxed'>
+                    <p className='text-[11px] text-[#a89378] mb-3 leading-relaxed'>
                         השם הראשון מופיע בעמוד הראשי של האורחים ("ספר הברכות של Noa & Alon"). הגרסה בעברית מופיעה בעמוד יצירת הברכה ("השאירו ברכה לנועה ולאלון"). אם תשאיר ריק — נשתמש בשם הראשון.
                     </p>
                 </>
@@ -633,22 +633,22 @@ function EventTypeEditor({ wedding, onSave }) {
                 return (
                 <div className={`grid gap-3 mb-3 ${showAge ? 'grid-cols-[2fr_1fr]' : 'grid-cols-1'}`}>
                     <div>
-                        <label className='text-xs font-semibold text-gray-500 mb-1 block'>{celebrantLabel}</label>
+                        <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>{celebrantLabel}</label>
                         <input
                             type='text' value={draft.celebrantName}
                             onChange={e => set('celebrantName', e.target.value)}
                             placeholder={celebrantPlaceholder}
-                            className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                            className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
                         />
                     </div>
                     {showAge && (
                         <div>
-                            <label className='text-xs font-semibold text-gray-500 mb-1 block'>גיל</label>
+                            <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>גיל</label>
                             <input
                                 type='number' min={0} max={140} value={draft.age}
                                 onChange={e => set('age', e.target.value)}
                                 placeholder='78'
-                                className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                                className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
                             />
                         </div>
                     )}
@@ -658,14 +658,14 @@ function EventTypeEditor({ wedding, onSave }) {
 
             {showCelebrant && draft.eventType !== 'poker' && draft.eventType !== 'travel' && (
                 <div className='mb-3'>
-                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>שם החוגג/ת בעברית</label>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>שם החוגג/ת בעברית</label>
                     <input
                         type='text' value={draft.celebrantNameHe}
                         onChange={e => set('celebrantNameHe', e.target.value)}
                         placeholder='תקווה'
-                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
                     />
-                    <p className='text-[11px] text-gray-400 mt-1.5 leading-relaxed'>
+                    <p className='text-[11px] text-[#a89378] mt-1.5 leading-relaxed'>
                         השם הראשון מופיע בעמוד הראשי של האורחים. הגרסה בעברית מופיעה בעמוד יצירת הברכה. ריק = נשתמש בשם הראשון.
                     </p>
                 </div>
@@ -677,35 +677,35 @@ function EventTypeEditor({ wedding, onSave }) {
                 המחדל לפי סוג האירוע ב-eventTypes.js. */}
             <div className='space-y-3 mb-3 p-3 rounded-xl bg-[#AA8840]/5 border border-[#AA8840]/15'>
                 <p className='text-[11px] font-bold text-[#AA8840] uppercase tracking-widest'>טקסטים בעמוד האורחים</p>
-                <p className='text-[11px] text-gray-500 leading-relaxed'>
+                <p className='text-[11px] text-[#7a6a52] leading-relaxed'>
                     מה שיופיע מעל השמות, ככותרת ראשית, וכפסקת תיאור בעמוד האורחים. השאר ריק = ברירת מחדל לפי סוג האירוע.
                 </p>
                 <div>
-                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>תת-כותרת (השורה הקטנה מעל השמות)</label>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>תת-כותרת (השורה הקטנה מעל השמות)</label>
                     <input
                         type='text' value={draft.customSubtitle}
                         onChange={e => set('customSubtitle', e.target.value)}
                         placeholder={getEventConfig(draft.eventType).subtitle}
-                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
                     />
                 </div>
                 <div>
-                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>כותרת ראשית (במקום השמות)</label>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>כותרת ראשית (במקום השמות)</label>
                     <input
                         type='text' value={draft.customTitle}
                         onChange={e => set('customTitle', e.target.value)}
                         placeholder='למשל: יום הולדת 78 לסבתא תקווה'
-                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
                     />
                 </div>
                 <div>
-                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>תיאור (פסקה מתחת לכותרת)</label>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>תיאור (פסקה מתחת לכותרת)</label>
                     <textarea
                         value={draft.customDescription}
                         onChange={e => set('customDescription', e.target.value)}
                         placeholder={getEventConfig(draft.eventType).description}
                         rows={3}
-                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white resize-y'
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white resize-y'
                     />
                 </div>
             </div>
@@ -717,44 +717,44 @@ function EventTypeEditor({ wedding, onSave }) {
                 fit. Empty = i18n default in the event's locale. */}
             <div className='space-y-3 mb-3 p-3 rounded-xl bg-[#c9a44e]/5 border border-[#c9a44e]/15'>
                 <p className='text-[11px] font-bold text-[#aa8840] uppercase tracking-widest'>טקסטים בטופס הברכה</p>
-                <p className='text-[11px] text-gray-500 leading-relaxed'>
+                <p className='text-[11px] text-[#7a6a52] leading-relaxed'>
                     שולט בטקסטים שהאורח רואה בטופס יצירת הברכה (השדות והרמזים). השאר ריק = ברירת מחדל לפי שפת האירוע.
                 </p>
                 <div>
-                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>תווית שדה השם</label>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>תווית שדה השם</label>
                     <input
                         type='text' value={draft.customNameLabel}
                         onChange={e => set('customNameLabel', e.target.value)}
                         placeholder='שם (אופציונלי)'
-                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
                     />
                 </div>
                 <div>
-                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>Placeholder לשדה השם</label>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>Placeholder לשדה השם</label>
                     <input
                         type='text' value={draft.customNamePlaceholder}
                         onChange={e => set('customNamePlaceholder', e.target.value)}
                         placeholder='מי כותב/ת?'
-                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
                     />
                 </div>
                 <div>
-                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>תווית שדה הברכה</label>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>תווית שדה הברכה</label>
                     <input
                         type='text' value={draft.customBlessingLabel}
                         onChange={e => set('customBlessingLabel', e.target.value)}
                         placeholder='הברכה שלכם'
-                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
                     />
                 </div>
                 <div>
-                    <label className='text-xs font-semibold text-gray-500 mb-1 block'>Placeholder לשדה הברכה</label>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>Placeholder לשדה הברכה</label>
                     <textarea
                         value={draft.customBlessingPlaceholder}
                         onChange={e => set('customBlessingPlaceholder', e.target.value)}
                         placeholder='כתבו משהו מרגש, מצחיק או מכל הלב...'
                         rows={2}
-                        className='w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white resize-y'
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white resize-y'
                     />
                 </div>
             </div>
@@ -812,14 +812,14 @@ function QuickLink({ href, label, icon: Icon }) {
 function FunnelView({ stats, loading }) {
     if (loading && !stats) {
         return (
-            <div className='flex items-center gap-2 text-xs text-gray-400'>
+            <div className='flex items-center gap-2 text-xs text-[#a89378]'>
                 <Loader2 size={12} className='animate-spin' />
                 טוען נתונים…
             </div>
         )
     }
     if (!stats) {
-        return <p className='text-xs text-gray-400'>אין נתונים זמינים.</p>
+        return <p className='text-xs text-[#a89378]'>אין נתונים זמינים.</p>
     }
 
     const { scans = 0, uniqueScans = 0, startedBlessing = 0, submitted = 0, recentScans = [] } = stats
@@ -840,12 +840,12 @@ function FunnelView({ stats, loading }) {
             {rows.map(r => (
                 <div key={r.label}>
                     <div className='flex items-center justify-between mb-1'>
-                        <span className='text-[11px] font-semibold text-gray-600'>{r.label}</span>
-                        <span className='text-xs font-bold text-gray-800'>
-                            {r.value} <span className='text-[10px] text-gray-400 font-medium'>({r.percent})</span>
+                        <span className='text-[11px] font-semibold text-[#5a4d3a]'>{r.label}</span>
+                        <span className='text-xs font-bold text-[#1a1410]'>
+                            {r.value} <span className='text-[10px] text-[#a89378] font-medium'>({r.percent})</span>
                         </span>
                     </div>
-                    <div className='h-1.5 rounded-full bg-gray-100 overflow-hidden'>
+                    <div className='h-1.5 rounded-full bg-[#f4ecd9] overflow-hidden'>
                         <div
                             className='h-full rounded-full transition-all duration-500'
                             style={{ width: Math.min(100, r.barPercent) + '%', background: r.color }}
@@ -856,8 +856,8 @@ function FunnelView({ stats, loading }) {
 
             {/* Recent activity */}
             {recentScans.length > 0 && (
-                <div className='mt-5 pt-4 border-t border-gray-100'>
-                    <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-2'>פעילות אחרונה</p>
+                <div className='mt-5 pt-4 border-t border-[#f0e8d4]'>
+                    <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-2'>פעילות אחרונה</p>
                     <div className='max-h-48 overflow-y-auto space-y-1.5 -mr-2 pr-2'>
                         {recentScans.slice(0, 20).map((s, i) => {
                             const ua = s.userAgent || ''
@@ -870,12 +870,12 @@ function FunnelView({ stats, loading }) {
                                     : '—'
                             const when = s.createdAt ? new Date(s.createdAt).toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : ''
                             return (
-                                <div key={i} className='flex items-center gap-2 text-[11px] text-gray-500 py-1'>
+                                <div key={i} className='flex items-center gap-2 text-[11px] text-[#7a6a52] py-1'>
                                     <span
                                         className='w-1.5 h-1.5 rounded-full flex-shrink-0'
                                         style={{ background: s.event === 'scan' ? '#AA8840' : '#7da76a' }}
                                     />
-                                    <span className='font-mono text-[10px] text-gray-400 flex-shrink-0'>{when}</span>
+                                    <span className='font-mono text-[10px] text-[#a89378] flex-shrink-0'>{when}</span>
                                     <span className='truncate'>{s.event === 'scan' ? 'סריקה' : 'התחיל ברכה'} · {device}</span>
                                 </div>
                             )
@@ -964,17 +964,17 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                         <Database size={16} className='text-white' />
                     </div>
                     <div>
-                        <h3 className='font-bold text-gray-800 text-sm'>פרטי חתונה</h3>
-                        <p className='text-xs text-gray-400'>{coupleLabel(wedding)}</p>
+                        <h3 className='font-bold text-[#1a1410] text-sm'>פרטי חתונה</h3>
+                        <p className='text-xs text-[#a89378]'>{coupleLabel(wedding)}</p>
                     </div>
                 </div>
-                <button onClick={onClose} className='w-9 h-9 rounded-xl bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-colors'>
-                    <X size={16} className='text-gray-500' />
+                <button onClick={onClose} className='w-9 h-9 rounded-xl bg-[#fbf6ec] hover:bg-[#f4ecd9] flex items-center justify-center transition-colors'>
+                    <X size={16} className='text-[#7a6a52]' />
                 </button>
             </div>
 
             {/* Status */}
-            <div className='px-6 py-4 border-b border-gray-100'>
+            <div className='px-6 py-4 border-b border-[#f0e8d4]'>
                 <StatusBadge weddingDate={wedding.weddingDate} />
             </div>
 
@@ -985,14 +985,15 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                 for previewing event-specific themes (poker dark felt,
                 wedding ivory premium, etc) — just open the photo page
                 and the design will reflect the doc's current eventType. */}
-            <div className='px-6 py-5 border-b border-gray-100'>
-                <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>קישורים מהירים</p>
+            <div className='px-6 py-6'>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>קישורים מהירים</p>
                 <div className='space-y-1.5'>
                     <QuickLink href={`/wedding/${wedding.id}`} label='עמוד נחיתה (אורחים)' icon={Heart} />
                     <QuickLink href={`/wedding/${wedding.id}/photo`} label='עמוד יצירת ברכה' icon={Pencil} />
                     <QuickLink href={`/wedding/${wedding.id}/thanks`} label='עמוד תודה' icon={CheckCircle2} />
                     <QuickLink href={`/wedding/${wedding.id}/portal`} label='פורטל זוג / קוד QR' icon={Link2} />
                     <QuickLink href={`/wedding/${wedding.id}/viewer`} label='צפייה בספר' icon={Eye} />
+                    <QuickLink href={`/wedding/${wedding.id}/admin`} label='ניהול ברכות (לזוג)' icon={Settings2} />
                     {wedding.slug && (
                         <QuickLink href={`/w/${wedding.slug}`} label={`קישור קצר (/${wedding.slug})`} icon={ExternalLink} />
                     )}
@@ -1000,30 +1001,30 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
             </div>
 
             {/* ── Funnel analytics ── */}
-            <div className='px-6 py-5 border-b border-gray-100'>
-                <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>Funnel</p>
+            <div className='px-6 py-5 border-b border-[#f0e8d4]'>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>פאנל המרה</p>
                 <FunnelView stats={stats} loading={statsLoading} />
             </div>
 
             {/* Fields (visual DB) */}
             <div className='px-6 py-4 space-y-1'>
-                <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>Firestore Document</p>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>מסמך Firestore</p>
                 {fields.map(f => (
-                    <div key={f.label} className='flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0 group'>
-                        <f.icon size={14} className='text-gray-300 flex-shrink-0' />
+                    <div key={f.label} className='flex items-center gap-3 py-2.5 border-b border-[#f4ecd9] last:border-0 group'>
+                        <f.icon size={14} className='text-[#c9a44e] flex-shrink-0' />
                         <div className='flex-1 min-w-0'>
-                            <p className='text-[10px] text-gray-400 uppercase tracking-wider'>{f.label}</p>
-                            <p className={`text-sm text-gray-800 truncate ${f.mono ? 'font-mono text-xs' : 'font-medium'}`}>
+                            <p className='text-[11px] text-[#a89378] uppercase tracking-wider font-medium'>{f.label}</p>
+                            <p className={`text-sm text-[#1a1410] truncate ${f.mono ? 'font-mono text-xs' : 'font-medium'}`}>
                                 {f.value}
                             </p>
                         </div>
                         {f.value !== '—' && (
                             <button
                                 onClick={() => navigator.clipboard.writeText(f.value)}
-                                className='opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-all'
+                                className='opacity-50 group-hover:opacity-100 w-7 h-7 rounded-lg bg-[#fbf6ec] hover:bg-[#f4ecd9] border border-[#ead9b3] flex items-center justify-center transition-all'
                                 title='העתק'
                             >
-                                <Copy size={11} className='text-gray-400' />
+                                <Copy size={11} className='text-[#a8843a]' />
                             </button>
                         )}
                     </div>
@@ -1034,8 +1035,8 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
             <EventTypeEditor wedding={wedding} onSave={onSaveEdit} />
 
             {/* Recommendations */}
-            <div className='px-6 py-4 border-t border-gray-100'>
-                <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>המלצות</p>
+            <div className='px-6 py-4 border-t border-[#f0e8d4]'>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>המלצות</p>
                 <div className='space-y-2'>
                     {!wedding.brideName && !wedding.groomName && (
                         <div className='flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl'>
@@ -1078,38 +1079,38 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
 
             {/* Print Order Details */}
             {po && (
-                <div className='px-6 py-4 border-t border-gray-100'>
-                    <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>
+                <div className='px-6 py-4 border-t border-[#f0e8d4]'>
+                    <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>
                         <span className='inline-flex items-center gap-1.5'><Package size={10} /> הזמנת הדפסה</span>
                     </p>
                     <div className='bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2'>
                         <div className='flex items-center justify-between'>
-                            <span className='text-xs text-gray-500'>מזהה Lulu</span>
+                            <span className='text-xs text-[#7a6a52]'>מזהה Lulu</span>
                             <span className='text-xs font-mono bg-white px-2 py-0.5 rounded border border-emerald-200'>{po.printJobId}</span>
                         </div>
                         <div className='flex items-center justify-between'>
-                            <span className='text-xs text-gray-500'>סטטוס</span>
+                            <span className='text-xs text-[#7a6a52]'>סטטוס</span>
                             <span className='text-xs font-bold text-emerald-700'>{po.luluStatus}</span>
                         </div>
                         <div className='flex items-center justify-between'>
-                            <span className='text-xs text-gray-500'>תאריך הזמנה</span>
-                            <span className='text-xs text-gray-700'>{po.orderedAt ? new Date(po.orderedAt).toLocaleString('he-IL') : '—'}</span>
+                            <span className='text-xs text-[#7a6a52]'>תאריך הזמנה</span>
+                            <span className='text-xs text-[#3d3225]'>{po.orderedAt ? new Date(po.orderedAt).toLocaleString('he-IL') : '—'}</span>
                         </div>
                         <div className='flex items-center justify-between'>
-                            <span className='text-xs text-gray-500'>עמודים</span>
-                            <span className='text-xs text-gray-700'>{po.pageCount}</span>
+                            <span className='text-xs text-[#7a6a52]'>עמודים</span>
+                            <span className='text-xs text-[#3d3225]'>{po.pageCount}</span>
                         </div>
                         {po.estimatedCost && (
                             <div className='flex items-center justify-between'>
-                                <span className='text-xs text-gray-500'>עלות משוערת</span>
+                                <span className='text-xs text-[#7a6a52]'>עלות משוערת</span>
                                 <span className='text-xs font-bold text-[#AA8840]'>{po.estimatedCost} {po.currency}</span>
                             </div>
                         )}
                         <hr className='border-emerald-200' />
-                        <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold pt-1'>
+                        <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold pt-1'>
                             <span className='inline-flex items-center gap-1'><Truck size={9} /> משלוח אל</span>
                         </p>
-                        <div className='text-xs text-gray-700 space-y-0.5'>
+                        <div className='text-xs text-[#3d3225] space-y-0.5'>
                             <p>{po.shippingAddress?.name}</p>
                             <p>{po.shippingAddress?.street1}{po.shippingAddress?.street2 ? `, ${po.shippingAddress.street2}` : ''}</p>
                             <p>{po.shippingAddress?.city} {po.shippingAddress?.postcode}</p>
@@ -1142,29 +1143,6 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                 </div>
             )}
 
-            {/* Quick Links */}
-            <div className='px-6 py-4 border-t border-gray-100'>
-                <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>קישורים מהירים</p>
-                <div className='grid grid-cols-2 gap-2'>
-                    <a href={`/wedding/${wedding.id}/admin`} target='_blank' rel='noreferrer'
-                        className='flex items-center gap-2 p-3 rounded-xl bg-gray-50 hover:bg-[#AA8840]/5 border border-gray-100 hover:border-[#AA8840]/20 transition-all text-sm font-medium text-gray-600'>
-                        <Settings2 size={14} className='text-[#AA8840]' /> ניהול ברכות
-                    </a>
-                    <a href={`/wedding/${wedding.id}/portal`} target='_blank' rel='noreferrer'
-                        className='flex items-center gap-2 p-3 rounded-xl bg-gray-50 hover:bg-[#AA8840]/5 border border-gray-100 hover:border-[#AA8840]/20 transition-all text-sm font-medium text-gray-600'>
-                        <Link2 size={14} className='text-[#AA8840]' /> פורטל
-                    </a>
-                    <a href={`/wedding/${wedding.id}/viewer`} target='_blank' rel='noreferrer'
-                        className='flex items-center gap-2 p-3 rounded-xl bg-gray-50 hover:bg-[#AA8840]/5 border border-gray-100 hover:border-[#AA8840]/20 transition-all text-sm font-medium text-gray-600'>
-                        <Eye size={14} className='text-[#AA8840]' /> עיצוב הספר
-                    </a>
-                    <a href={`/wedding/${wedding.id}`} target='_blank' rel='noreferrer'
-                        className='flex items-center gap-2 p-3 rounded-xl bg-gray-50 hover:bg-[#AA8840]/5 border border-gray-100 hover:border-[#AA8840]/20 transition-all text-sm font-medium text-gray-600'>
-                        <ExternalLink size={14} className='text-[#AA8840]' /> דף האורחים
-                    </a>
-                </div>
-            </div>
-
             {/* Download PDFs (Lulu-compliant) */}
             {/*
                 Opens the viewer in a new tab with ?autoExport=<formatId> so
@@ -1172,51 +1150,51 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                 format's dimensions and downloads them to the admin's
                 computer. Does NOT touch the shipped "Send to Lulu" flow.
             */}
-            <div className='px-6 py-4 border-t border-gray-100'>
-                <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>הורדת PDF לפי פורמט Lulu</p>
+            <div className='px-6 py-4 border-t border-[#f0e8d4]'>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>הורדת PDF לפי פורמט Lulu</p>
                 <div className='space-y-2'>
                     <a
                         href={`/wedding/${wedding.id}/viewer?autoExport=classic`}
                         target='_blank'
                         rel='noreferrer'
-                        className='w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-[#AA8840]/5 border border-gray-100 hover:border-[#AA8840]/20 transition-all text-sm font-medium text-gray-700'
+                        className='w-full flex items-center gap-3 p-3 rounded-xl bg-[#fbf6ec] hover:bg-[#AA8840]/5 border border-[#f0e8d4] hover:border-[#AA8840]/20 transition-all text-sm font-medium text-[#3d3225]'
                     >
                         <Download size={14} className='text-[#AA8840]' />
                         <div className='text-right flex-1'>
                             <div className='font-semibold'>קלאסי — כריכה רכה 8.5"</div>
-                            <div className='text-[11px] text-gray-400'>Perfect Bound · מה שנשלח כרגע ללולו</div>
+                            <div className='text-[11px] text-[#a89378]'>Perfect Bound · מה שנשלח כרגע ללולו</div>
                         </div>
                     </a>
                     <a
                         href={`/wedding/${wedding.id}/viewer?autoExport=hardcover`}
                         target='_blank'
                         rel='noreferrer'
-                        className='w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-[#AA8840]/5 border border-gray-100 hover:border-[#AA8840]/20 transition-all text-sm font-medium text-gray-700'
+                        className='w-full flex items-center gap-3 p-3 rounded-xl bg-[#fbf6ec] hover:bg-[#AA8840]/5 border border-[#f0e8d4] hover:border-[#AA8840]/20 transition-all text-sm font-medium text-[#3d3225]'
                     >
                         <Download size={14} className='text-[#AA8840]' />
                         <div className='text-right flex-1'>
                             <div className='font-semibold'>כריכה קשה 8.5" (Case Wrap)</div>
-                            <div className='text-[11px] text-gray-400'>Hardcover עם הדפסה מלאה + wrap margins</div>
+                            <div className='text-[11px] text-[#a89378]'>Hardcover עם הדפסה מלאה + wrap margins</div>
                         </div>
                     </a>
                     <a
                         href={`/wedding/${wedding.id}/viewer?autoExport=booklet`}
                         target='_blank'
                         rel='noreferrer'
-                        className='w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-[#AA8840]/5 border border-gray-100 hover:border-[#AA8840]/20 transition-all text-sm font-medium text-gray-700'
+                        className='w-full flex items-center gap-3 p-3 rounded-xl bg-[#fbf6ec] hover:bg-[#AA8840]/5 border border-[#f0e8d4] hover:border-[#AA8840]/20 transition-all text-sm font-medium text-[#3d3225]'
                     >
                         <Download size={14} className='text-[#AA8840]' />
                         <div className='text-right flex-1'>
                             <div className='font-semibold'>ספרון (Saddle Stitch)</div>
-                            <div className='text-[11px] text-gray-400'>עד 24 עמודים · 17.25" × 8.75" · בלי שדרה</div>
+                            <div className='text-[11px] text-[#a89378]'>עד 24 עמודים · 17.25" × 8.75" · בלי שדרה</div>
                         </div>
                     </a>
                 </div>
             </div>
 
             {/* Actions */}
-            <div className='px-6 py-4 border-t border-gray-100 space-y-2'>
-                <p className='text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-3'>פעולות</p>
+            <div className='px-6 py-4 border-t border-[#f0e8d4] space-y-2'>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>פעולות</p>
                 {wedding.ownerEmail && (
                     <button onClick={() => onResetPassword(wedding.ownerEmail)}
                         className='w-full flex items-center gap-3 p-3 rounded-xl bg-[#AA8840]/5 border border-[#AA8840]/15 hover:bg-[#AA8840]/10 transition-all text-sm font-semibold text-[#AA8840]'>
@@ -1394,9 +1372,13 @@ function AdminDashboardContent() {
 
     const stats = [
         { icon: Heart, label: 'סך חתונות', value: weddings.length, iconBg: 'bg-[#AA8840]/10', iconColor: 'text-[#AA8840]' },
-        { icon: MessageCircle, label: 'סך ברכות', value: totalGreetings, iconBg: 'bg-[#c9a44e]/10', iconColor: 'text-[#c9a44e]' },
+        { icon: MessageCircle, label: 'סך ברכות', value: totalGreetings, iconBg: 'bg-[#AA8840]/10', iconColor: 'text-[#AA8840]' },
+        // Today's events break the warm-gold rhythm with a small emerald
+        // burst — kept different on purpose so the eye flicks straight to
+        // "anything happening right now?". The pulse ring makes it
+        // unambiguous when the count is non-zero.
         { icon: Zap, label: 'חתונות היום', value: todayCount, iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600', pulse: todayCount > 0 },
-        { icon: CalendarDays, label: 'חתונות קרובות', value: upcomingCount, iconBg: 'bg-indigo-100', iconColor: 'text-indigo-600' },
+        { icon: CalendarDays, label: 'חתונות קרובות', value: upcomingCount, iconBg: 'bg-[#AA8840]/10', iconColor: 'text-[#AA8840]' },
     ]
 
     return (
@@ -1474,11 +1456,11 @@ function AdminDashboardContent() {
                             <div className='absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white animate-pulse' />
                         </div>
                         <div>
-                            <h1 className='leading-tight tracking-tight font-bold' style={{ color: '#1a1410', fontSize: '24px', letterSpacing: '-0.015em' }}>
-                                Command Center
+                            <h1 className='leading-tight tracking-tight font-bold' style={{ color: '#1a1410', fontSize: '22px', letterSpacing: '-0.015em' }}>
+                                מרכז הניהול
                             </h1>
-                            <p className='mt-1 flex items-center gap-1.5' style={{ color: '#9a8a72', fontSize: '12.5px' }}>
-                                <Sparkles size={11} style={{ color: '#c9a44e' }} /> Wedding Tales — Super Admin
+                            <p className='mt-1 flex items-center gap-1.5' style={{ color: '#a89378', fontSize: '12px' }}>
+                                <Sparkles size={11} style={{ color: '#c9a44e' }} /> Wedding Tales · אדמין־על
                             </p>
                         </div>
                     </div>
@@ -1531,7 +1513,7 @@ function AdminDashboardContent() {
                             }}
                         >
                             <span className='w-2 h-2 rounded-full bg-emerald-400 animate-pulse' />
-                            <span style={{ color: '#7a6a52', fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em' }}>Live</span>
+                            <span style={{ color: '#7a6a52', fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em' }}>מחובר</span>
                         </div>
                     </div>
                 </motion.div>
@@ -1543,15 +1525,31 @@ function AdminDashboardContent() {
                     </div>
                 )}
 
-                {/* Mobile action buttons */}
+                {/* Mobile action buttons — same gold-gradient + outlined
+                    pair as the desktop header so the brand language stays
+                    consistent across breakpoints. */}
                 <div className='sm:hidden mb-4 flex gap-2'>
-                    <button onClick={() => setShowCreateUser(true)}
-                        className='flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-[#AA8840] to-[#c9a44e] rounded-xl px-4 py-3 shadow-sm text-sm font-medium text-white'>
+                    <button
+                        onClick={() => setShowCreateUser(true)}
+                        className='flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white active:scale-[0.98] transition-all'
+                        style={{
+                            background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                            boxShadow: '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
+                        }}
+                    >
                         <UserPlus size={14} /> משתמש חדש
                     </button>
-                    <button onClick={handleBackup}
-                        className='flex-1 flex items-center justify-center gap-2 bg-white/80 border border-[#AA8840]/15 rounded-xl px-4 py-3 shadow-sm text-sm font-medium text-gray-600'>
-                        <HardDrive size={14} className='text-[#AA8840]' /> גיבוי
+                    <button
+                        onClick={handleBackup}
+                        className='flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-all'
+                        style={{
+                            background: '#ffffff',
+                            border: '1px solid rgba(212,184,103,0.30)',
+                            color: '#7a6a52',
+                            boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
+                        }}
+                    >
+                        <HardDrive size={14} style={{ color: '#c9a44e' }} /> גיבוי
                     </button>
                 </div>
 
@@ -1629,15 +1627,25 @@ function AdminDashboardContent() {
                         )}
                     </div>
 
-                    {/* Sort ribbon */}
+                    {/* Sort ribbon — bumped opacity + 3px gold edge marker
+                        on the right (RTL = inline-start) so the active
+                        sort reads as a real chip-state, not a faint wash. */}
                     {sort.key && status === 'ok' && (
-                        <div className='px-6 py-2 border-b border-[#AA8840]/10 bg-[#AA8840]/5 flex items-center gap-2'>
-                            <ArrowUpDown size={11} className='text-[#AA8840]/60' />
-                            <span className='text-xs text-[#AA8840]'>
+                        <div
+                            className='px-6 py-2.5 border-b border-[#AA8840]/15 bg-[#AA8840]/[0.10] flex items-center gap-2 relative'
+                            style={{ boxShadow: 'inset 3px 0 0 0 #c9a44e' }}
+                        >
+                            <ArrowUpDown size={12} className='text-[#a8843a]' />
+                            <span className='text-xs font-semibold text-[#a8843a]'>
                                 מיון לפי {sort.key === 'date' ? 'תאריך' : sort.key === 'couple' ? 'שם זוג' : 'ברכות'}
                                 {' '}({sort.dir === 'asc' ? 'עולה' : 'יורד'})
                             </span>
-                            <button onClick={() => setSort({ key: null, dir: null })} className='mr-auto text-xs text-gray-400 hover:text-gray-600'>נקה ✕</button>
+                            <button
+                                onClick={() => setSort({ key: null, dir: null })}
+                                className='mr-auto text-xs font-semibold text-[#a89378] hover:text-[#a8843a] transition-colors'
+                            >
+                                נקה ✕
+                            </button>
                         </div>
                     )}
 
@@ -1650,7 +1658,10 @@ function AdminDashboardContent() {
                                     <Loader2 size={28} className='text-white animate-spin' />
                                 </div>
                             </div>
-                            <p className='text-gray-400 text-sm'>טוען חתונות...</p>
+                            <div className='text-center'>
+                                <p className='text-[#5a4d3a] text-sm font-semibold'>טוען חתונות...</p>
+                                <p className='text-[#a89378] text-xs mt-1'>שולף את כל הרשומות מ-Firestore</p>
+                            </div>
                         </div>
                     )}
                     {status === 'error' && (
@@ -1658,16 +1669,52 @@ function AdminDashboardContent() {
                             <div className='w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center'>
                                 <AlertCircle size={28} className='text-red-500' />
                             </div>
-                            <p className='text-gray-800 font-semibold'>שגיאה בטעינת הנתונים</p>
-                            <p className='text-sm text-red-600 bg-red-50 border border-red-200 px-4 py-2 rounded-xl'>{error}</p>
+                            <p className='text-[#1a1410] font-semibold'>שגיאה בטעינת הנתונים</p>
+                            <p className='text-sm text-red-600 bg-red-50 border border-red-200 px-4 py-2 rounded-xl max-w-md text-center'>{error}</p>
+                            <button
+                                onClick={loadWeddings}
+                                className='mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98]'
+                                style={{
+                                    background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                    boxShadow: '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
+                                }}
+                            >
+                                <RefreshCw size={14} /> נסה שוב
+                            </button>
                         </div>
                     )}
                     {status === 'ok' && sorted.length === 0 && (
-                        <div className='flex flex-col items-center justify-center py-40 gap-4'>
+                        <div className='flex flex-col items-center justify-center py-40 gap-4 px-6 text-center'>
                             <div className='w-14 h-14 rounded-2xl bg-[#AA8840]/10 flex items-center justify-center'>
                                 <Heart size={28} className='text-[#AA8840]' />
                             </div>
-                            <p className='text-gray-400 text-sm'>אין חתונות בטבלה עדיין.</p>
+                            <div>
+                                <p className='text-[#1a1410] font-semibold text-sm'>
+                                    {searchQuery ? 'אין תוצאות לחיפוש שלך' : 'עוד אין חתונות במערכת'}
+                                </p>
+                                <p className='text-[#a89378] text-xs mt-1.5'>
+                                    {searchQuery ? 'נסה מילות חיפוש אחרות, או נקה את החיפוש' : 'צור משתמש ראשון ובו תיווצר אוטומטית גם החתונה שלו'}
+                                </p>
+                            </div>
+                            {searchQuery ? (
+                                <button
+                                    onClick={() => setSearchQuery('')}
+                                    className='mt-1 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-[#7a6a52] bg-white border border-[#ead9b3] hover:bg-[#fbf6ec] transition-all'
+                                >
+                                    <X size={14} /> נקה חיפוש
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => setShowCreateUser(true)}
+                                    className='mt-1 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98]'
+                                    style={{
+                                        background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                        boxShadow: '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
+                                    }}
+                                >
+                                    <UserPlus size={14} /> צור משתמש ראשון
+                                </button>
+                            )}
                         </div>
                     )}
                     {status === 'ok' && sorted.length > 0 && (
@@ -1675,21 +1722,21 @@ function AdminDashboardContent() {
                             <table className='w-full text-sm text-right' style={{ minWidth: '880px' }}>
                                 <thead>
                                     <tr className='border-b border-[#AA8840]/15 text-[11px] uppercase tracking-widest bg-[#AA8840]/5'>
-                                        <th className='px-6 py-4 text-gray-300 font-semibold w-12'>#</th>
+                                        <th className='px-6 py-4 text-[#a89378] font-semibold w-12'>#</th>
                                         <SortableHeader sortKey='couple' currentSort={sort} onSort={setSort}><Users size={11} /> זוג</SortableHeader>
                                         <SortableHeader sortKey='date' currentSort={sort} onSort={setSort}><CalendarDays size={11} /> תאריך</SortableHeader>
-                                        <th className='px-6 py-4 font-semibold text-gray-400 text-center'>סטטוס</th>
+                                        <th className='px-6 py-4 font-semibold text-[#a89378] text-center'>סטטוס</th>
                                         <SortableHeader sortKey='greetings' currentSort={sort} onSort={setSort} justify='center'><MessageCircle size={11} /> ברכות</SortableHeader>
-                                        <th className='px-6 py-4 font-semibold text-gray-400 text-center'><span className='flex items-center gap-1.5 justify-center'><Printer size={11} /> הדפסה</span></th>
-                                        <th className='px-6 py-4 font-semibold text-gray-400'><span className='flex items-center gap-1.5 justify-end'><Hash size={11} /> הזמנה</span></th>
-                                        <th className='px-6 py-4 font-semibold text-gray-400 text-center'>פעולות</th>
+                                        <th className='px-6 py-4 font-semibold text-[#a89378] text-center'><span className='flex items-center gap-1.5 justify-center'><Printer size={11} /> הדפסה</span></th>
+                                        <th className='px-6 py-4 font-semibold text-[#a89378]'><span className='flex items-center gap-1.5 justify-end'><Hash size={11} /> הזמנה</span></th>
+                                        <th className='px-6 py-4 font-semibold text-[#a89378] text-center'>פעולות</th>
                                     </tr>
                                 </thead>
-                                <tbody className='divide-y divide-gray-100'>
+                                <tbody className='divide-y divide-[#f0e8d4]'>
                                     {sorted.map((w, i) => (
                                         <tr key={w.id}
                                             onClick={() => setSelectedWedding(w)}
-                                            className='group hover:bg-[#AA8840]/5 transition-colors cursor-pointer'>
+                                            className='group hover:bg-[#AA8840]/[0.07] transition-colors cursor-pointer'>
                                             <td className='px-6 py-4'>
                                                 <div className='w-7 h-7 rounded-full bg-[#AA8840]/10 flex items-center justify-center text-[#AA8840]/60 text-xs font-bold group-hover:bg-[#AA8840]/20 transition-colors'>
                                                     {i + 1}
@@ -1697,34 +1744,34 @@ function AdminDashboardContent() {
                                             </td>
                                             <td className='px-6 py-4'>
                                                 <div className='text-right'>
-                                                    <div className='font-semibold text-gray-800'>{coupleLabel(w)}</div>
-                                                    {w.ownerEmail && (w.brideName || w.groomName) && <div className='text-xs text-gray-400 mt-0.5'>{w.ownerEmail}</div>}
+                                                    <div className='font-semibold text-[#1a1410]'>{coupleLabel(w)}</div>
+                                                    {w.ownerEmail && (w.brideName || w.groomName) && <div className='text-xs text-[#a89378] mt-0.5'>{w.ownerEmail}</div>}
                                                 </div>
                                             </td>
-                                            <td className='px-6 py-4 text-gray-500 whitespace-nowrap text-sm tabular-nums'>{formatDate(w.weddingDate)}</td>
+                                            <td className='px-6 py-4 text-[#7a6a52] whitespace-nowrap text-sm tabular-nums'>{formatDate(w.weddingDate)}</td>
                                             <td className='px-6 py-4 text-center'><StatusBadge weddingDate={w.weddingDate} /></td>
                                             <td className='px-6 py-4 text-center'><GreetingsBadge count={w.greetingsCount} /></td>
                                             <td className='px-6 py-4 text-center'><PrintBadge printOrder={w.printOrder} /></td>
                                             <td className='px-6 py-4 text-right'>
                                                 {w.orderId
-                                                    ? <span className='font-mono text-xs bg-gray-100 text-gray-500 px-2.5 py-1 rounded-lg border border-gray-200'>#{w.orderId}</span>
-                                                    : <span className='text-gray-300 italic text-xs'>Manual</span>}
+                                                    ? <span className='font-mono text-xs bg-[#fbf6ec] text-[#7a6a52] px-2.5 py-1 rounded-lg border border-[#ead9b3]'>#{w.orderId}</span>
+                                                    : <span className='text-[#c4b9a4] text-xs'>ידני</span>}
                                             </td>
                                             <td className='px-6 py-4'>
-                                                <div className='flex items-center justify-center gap-1' onClick={e => e.stopPropagation()}>
+                                                <div className='flex items-center justify-center gap-1.5' onClick={e => e.stopPropagation()}>
                                                     <button onClick={() => setSelectedWedding(w)} title='פתח פרטים'
-                                                        className='w-8 h-8 rounded-lg bg-[#AA8840]/10 border border-[#AA8840]/20 text-[#AA8840] hover:bg-[#AA8840]/20 flex items-center justify-center transition-all'>
-                                                        <Database size={13} />
+                                                        className='w-9 h-9 rounded-lg bg-[#AA8840]/10 border border-[#AA8840]/30 text-[#AA8840] hover:bg-[#AA8840]/20 hover:border-[#AA8840]/50 flex items-center justify-center transition-all active:scale-95'>
+                                                        <Database size={14} />
                                                     </button>
                                                     {w.ownerEmail && (
                                                         <button onClick={() => handleResetPassword(w.ownerEmail)} title='איפוס סיסמה'
-                                                            className='w-8 h-8 rounded-lg bg-gray-50 border border-gray-200 text-gray-500 hover:text-[#AA8840] hover:bg-[#AA8840]/5 flex items-center justify-center transition-all'>
-                                                            <KeyRound size={13} />
+                                                            className='w-9 h-9 rounded-lg bg-white border border-[#ead9b3] text-[#7a6a52] hover:text-[#AA8840] hover:bg-[#AA8840]/5 hover:border-[#AA8840]/30 flex items-center justify-center transition-all active:scale-95'>
+                                                            <KeyRound size={14} />
                                                         </button>
                                                     )}
                                                     <button onClick={() => handleDeleteWedding(w)} title='מחק חתונה'
-                                                        className='w-8 h-8 rounded-lg bg-gray-50 border border-gray-200 text-gray-400 hover:text-red-500 hover:bg-red-50 hover:border-red-200 flex items-center justify-center transition-all'>
-                                                        <Trash2 size={13} />
+                                                        className='w-9 h-9 rounded-lg bg-white border border-[#ead9b3] text-[#a89378] hover:text-red-500 hover:bg-red-50 hover:border-red-200 flex items-center justify-center transition-all active:scale-95'>
+                                                        <Trash2 size={14} />
                                                     </button>
                                                 </div>
                                             </td>
@@ -1736,7 +1783,9 @@ function AdminDashboardContent() {
                     )}
                 </motion.div>
 
-                <p className='text-center text-xs text-gray-300 mt-8'>גישה מוגבלת לאדמין בלבד • Wedding Tales Command Center</p>
+                <p className='text-center text-[11px] text-[#a89378] mt-8 font-medium'>
+                    גישה מוגבלת לאדמין־על בלבד · Wedding Tales
+                </p>
             </div>
         </div>
     )
