@@ -12,7 +12,7 @@ import {
     CheckCircle2, Trash2, KeyRound, Download, Database, X,
     ChevronRight, Eye, Link2, Mail, Shield, HardDrive, RefreshCw,
     AlertTriangle, Copy, Clock, Printer, Package, Truck, UserPlus,
-    Pencil, Save, PartyPopper,
+    Pencil, Save, PartyPopper, Wand2,
 } from 'lucide-react'
 import {
     EVENT_TYPE_ORDER,
@@ -1478,6 +1478,17 @@ function AdminDashboardContent() {
                         >
                             <UserPlus size={14} /> משתמש חדש
                         </button>
+                        <a
+                            href='/admin/studio'
+                            title='סטודיו עיצוב לתבניות ספר'
+                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold text-white active:scale-[0.98]'
+                            style={{
+                                background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                boxShadow: '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
+                            }}
+                        >
+                            <Wand2 size={14} /> סטודיו עיצוב
+                        </a>
                         <button
                             onClick={handleBackup}
                             title='הורד גיבוי JSON'
