@@ -800,13 +800,17 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
 
         return (
             <div
-                // Lock to EXACT 100vh — header is hidden, no
-                // scroll. The 80px top padding pushes the
-                // "רגע אחד" title down from the very top edge so
-                // the form sits in the lower 2/3 of the screen and
-                // the floral arch backdrop has room to breathe
-                // above it.
-                className='flex items-start justify-center px-4 pb-2 font-sans relative h-screen overflow-hidden'
+                // Targets 100vh on phones tall enough to fit the form
+                // — header is hidden, the floral arch fills the top
+                // 80px of breathing room, and the user can submit
+                // without scrolling. On shorter phones (older iPhones
+                // / accessibility-zoomed) the page falls back to
+                // scrolling so the submit button is always reachable.
+                // The arch background uses backgroundAttachment:fixed
+                // (set inline below), so scrolling doesn't break the
+                // visual anchoring of the floral arch above the
+                // title.
+                className='flex items-start justify-center px-4 pb-2 font-sans relative min-h-screen'
                 style={{
                     // 80px top padding pushes "רגע אחד" down from the
                     // top edge of the viewport — the floral arch
@@ -1157,11 +1161,20 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                             against one rectangle and gets a different
                             one in the book. Soft cream wash + dashed
                             gold border (matches the mockup's pill-
-                            style well). ── */}
+                            style well).
+                            Height is capped at 26vh (or 220px,
+                            whichever is smaller) so the submit button
+                            below stays within the viewport on short
+                            phones. The paired max-width keeps the
+                            4:3 aspect when the height cap kicks in —
+                            without it, w-full would force the box
+                            wider than 4:3. ── */}
                         <div
-                            className='relative w-full rounded-[18px] overflow-hidden'
+                            className='relative w-full rounded-[18px] overflow-hidden mx-auto'
                             style={{
                                 aspectRatio: '4 / 3',
+                                maxHeight: 'min(220px, 26vh)',
+                                maxWidth: 'min(100%, calc(min(220px, 26vh) * 4 / 3))',
                                 background: '#fbf3e3',
                                 border: '1px dashed rgba(201,164,78,0.45)',
                             }}
