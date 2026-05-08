@@ -2,48 +2,124 @@
 
 // /admin/studio — super-admin Book Template Studio.
 //
-// This commit ships the route shell and the one-shot Firestore seeder.
-// Subsequent commits add the three-column editor (presets list / live
-// preview / properties), preset CRUD, and background upload. Until
-// then the page renders a status panel confirming the seeder worked
-// and lists the presets currently in Firestore — useful as a sanity
-// check that DesignControls (the viewer's preset picker) is reading
-// from the same data the studio will edit.
+// Three-column layout (read-only in this commit; editing arrives in
+// the next):
+//   • Left rail  — presets list (system + studio), pick one to load.
+//   • Center     — live page preview at 1:1, with a length toggle
+//                  (30 / 100 / 210 chars) so the user can sanity-check
+//                  typography and image-slot sizing across content.
+//   • Right rail — properties panel for the loaded preset (disabled).
+//
+// The preview mounts the actual <BookPageTemplate /> the viewer + PDF
+// pipeline both render — guarantees what the user sees here is what
+// will print, modulo DPI scaling.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Wand2, ChevronRight, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react'
+import {
+    Wand2, ChevronRight, CheckCircle2, AlertTriangle, Loader2,
+    Palette, Image as ImageIcon, Type, Frame, Layers, RotateCw,
+    Lock, Crown,
+} from 'lucide-react'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
-import { listPresets, seedBuiltinPresetsIfMissing, BUILTIN_PRESETS } from '@/lib/studioPresets'
+import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
+import {
+    listPresets, seedBuiltinPresetsIfMissing,
+    resolvePreset, FRAMES_REGISTRY, FONTS_REGISTRY, TEXTURES_REGISTRY, FONT_IDS,
+} from '@/lib/studioPresets'
+
+// ── Mock blessings at the three lengths the photo form supports ──
+// Calibrated to read naturally in Hebrew at each length, not just hit
+// the char count. The 210 figure matches the textarea maxLength on
+// the guest photo form.
+const MOCK_BLESSINGS = {
+    30: 'מזל טוב, באהבה רבה לזוג הצעיר!',
+    100:
+        'איזה רגע מרגש — שתחיו חיים מלאים בצחוק, באהבה ובהרפתקאות. כל יום יהיה חגיגה אמיתית.',
+    210:
+        'איזו שמחה לראות אתכם מתחתנים. מי שזכה להכיר אתכם יודע שזה לא רק חיבור של זוג — זה שילוב של שני עולמות שחיים לתת זה לזה. שתחיו חיים שמלאים באהבה, בצחוק, בעוצמות, ובהמון רגעים מרגשים.',
+}
+const MOCK_BLESSING_LENGTHS = [30, 100, 210]
+
+const MOCK_NAME = 'גיא ולירז'
+
+// 4:3 placeholder photo — inline SVG data-URI so the preview never
+// depends on a network asset and always renders at the canonical
+// camera-capture aspect ratio. Three-tone wash + a subtle landscape
+// silhouette so it reads as "photo" rather than "blank rectangle".
+const MOCK_PHOTO = `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+        <defs>
+            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#f5d39e"/>
+                <stop offset="100%" stop-color="#d8b986"/>
+            </linearGradient>
+        </defs>
+        <rect width="400" height="300" fill="url(#sky)"/>
+        <ellipse cx="320" cy="80" rx="38" ry="38" fill="#fff8e0" opacity="0.9"/>
+        <path d="M0 220 Q100 170 200 200 T 400 210 V 300 H 0 Z" fill="#a87f4b"/>
+        <path d="M0 250 Q120 220 240 240 T 400 250 V 300 H 0 Z" fill="#7a5a2f"/>
+    </svg>`
+)}`
+
+// Page render size in the preview pane. 800px square is large enough
+// to read every layout's typography clearly without scrolling on a
+// 1280-wide screen, while still leaving room for the right rail.
+const PREVIEW_SIZE = 800
 
 function StudioContent() {
     const [seedStatus, setSeedStatus] = useState({ state: 'pending' })
     const [presets, setPresets] = useState([])
+    const [activeId, setActiveId] = useState(null)
+    const [blessingLength, setBlessingLength] = useState(100)
 
+    // Seed + load. Same flow as the shell from the previous commit —
+    // the rendering changes, the data does not.
     useEffect(() => {
         let cancelled = false
         ;(async () => {
-            // Seed first (idempotent — does nothing if the docs are
-            // already there) so the list call below is guaranteed to
-            // see at least the 8 system presets.
             const result = await seedBuiltinPresetsIfMissing()
             if (cancelled) return
             setSeedStatus({ state: 'done', ...result })
-
             const list = await listPresets()
-            if (!cancelled) setPresets(list)
+            if (cancelled) return
+            setPresets(list)
+            if (list.length > 0 && !activeId) setActiveId(list[0].id)
         })()
         return () => {
             cancelled = true
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    const systemCount = presets.filter(p => p.ownerType === 'system').length
-    const studioCount = presets.filter(p => p.ownerType === 'studio').length
+    const activePreset = useMemo(
+        () => presets.find(p => p.id === activeId) || null,
+        [presets, activeId]
+    )
+
+    // Resolve the preset's storage-shape values to the runtime shape
+    // BookPageTemplate expects. resolvePreset is the same function the
+    // viewer uses when applying a preset to a wedding's design doc.
+    const resolvedStyle = useMemo(() => {
+        if (!activePreset) return null
+        return resolvePreset(activePreset).values
+    }, [activePreset])
+
+    // Mock entry passed to the renderer. `text` swaps with the length
+    // toggle; everything else stays fixed.
+    const mockEntry = useMemo(
+        () => ({
+            id: 'studio-mock',
+            name: MOCK_NAME,
+            text: MOCK_BLESSINGS[blessingLength],
+            imageUrl: MOCK_PHOTO,
+        }),
+        [blessingLength]
+    )
 
     return (
         <div
-            className='min-h-screen px-4 sm:px-10 py-10 relative'
+            className='min-h-screen px-4 sm:px-6 lg:px-10 py-8 relative'
             dir='rtl'
             style={{
                 backgroundColor: '#f8f4ec',
@@ -53,8 +129,8 @@ function StudioContent() {
                 ].join(', '),
             }}
         >
-            <div className='max-w-5xl mx-auto'>
-                {/* ── Breadcrumb ── */}
+            <div className='max-w-[1400px] mx-auto'>
+                {/* Breadcrumb */}
                 <div className='flex items-center gap-1.5 text-[12px] text-[#a89378] mb-4'>
                     <Link href='/admin' className='hover:text-[#7a6a52] transition-colors'>
                         מרכז הניהול
@@ -63,224 +139,587 @@ function StudioContent() {
                     <span className='text-[#5a4d3a] font-semibold'>סטודיו עיצוב</span>
                 </div>
 
-                {/* ── Header ── */}
-                <div className='flex items-center gap-4 mb-8'>
-                    <div
-                        className='w-12 h-12 rounded-2xl flex items-center justify-center shrink-0'
-                        style={{
-                            background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
-                            boxShadow:
-                                '0 12px 24px -10px rgba(170,136,64,0.45), inset 0 1px 0 rgba(255,255,255,0.30)',
-                        }}
-                    >
-                        <Wand2 size={20} className='text-white' />
-                    </div>
-                    <div>
-                        <h1
-                            className='leading-tight tracking-tight font-bold'
-                            style={{ color: '#1a1410', fontSize: '22px', letterSpacing: '-0.015em' }}
+                {/* Header */}
+                <div className='flex items-center justify-between gap-4 mb-6'>
+                    <div className='flex items-center gap-4'>
+                        <div
+                            className='w-12 h-12 rounded-2xl flex items-center justify-center shrink-0'
+                            style={{
+                                background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                boxShadow:
+                                    '0 12px 24px -10px rgba(170,136,64,0.45), inset 0 1px 0 rgba(255,255,255,0.30)',
+                            }}
                         >
-                            סטודיו עיצוב
-                        </h1>
-                        <p
-                            className='mt-1'
-                            style={{ color: '#a89378', fontSize: '12px' }}
-                        >
-                            יצירה ועריכה של תבניות עמודי ספר. הזוגות בוחרים מהתבניות
-                            כשהם מעצבים את הספר שלהם בעמוד הצופה.
-                        </p>
-                    </div>
-                </div>
-
-                {/* ── Seed status panel ── */}
-                <div
-                    className='rounded-2xl p-5 mb-6'
-                    style={{
-                        background: '#ffffff',
-                        border: '1px solid rgba(212,184,103,0.22)',
-                        boxShadow: '0 16px 32px -20px rgba(170,136,64,0.22)',
-                    }}
-                >
-                    <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>
-                        סטטוס סנכרון
-                    </p>
-                    <SeedStatus seedStatus={seedStatus} systemCount={systemCount} studioCount={studioCount} />
-                </div>
-
-                {/* ── Presets list (read-only in this commit) ── */}
-                <div
-                    className='rounded-2xl overflow-hidden'
-                    style={{
-                        background: '#ffffff',
-                        border: '1px solid rgba(212,184,103,0.22)',
-                        boxShadow: '0 24px 50px -28px rgba(170,136,64,0.28)',
-                    }}
-                >
-                    <div
-                        className='px-6 py-5 border-b border-[#f0e8d4]'
-                        style={{ background: 'linear-gradient(180deg, #fdfaf3 0%, #ffffff 100%)' }}
-                    >
-                        <div className='flex items-center gap-3'>
-                            <div
-                                className='w-1.5 h-6 rounded-full'
-                                style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}
-                            />
-                            <h2 style={{ color: '#1a1410', fontSize: '15px', fontWeight: 700 }}>
-                                תבניות זמינות
-                            </h2>
-                            {presets.length > 0 && (
-                                <span
-                                    className='rounded-full px-3 py-0.5'
-                                    style={{
-                                        background: 'rgba(201,164,78,0.10)',
-                                        color: '#a8843a',
-                                        border: '1px solid rgba(212,184,103,0.30)',
-                                        fontSize: '11px',
-                                        fontWeight: 600,
-                                    }}
-                                >
-                                    {presets.length}
-                                </span>
-                            )}
+                            <Wand2 size={20} className='text-white' />
+                        </div>
+                        <div>
+                            <h1
+                                className='leading-tight tracking-tight font-bold'
+                                style={{ color: '#1a1410', fontSize: '22px', letterSpacing: '-0.015em' }}
+                            >
+                                סטודיו עיצוב
+                            </h1>
+                            <p className='mt-1' style={{ color: '#a89378', fontSize: '12px' }}>
+                                בחירת תבנית קיימת ותצוגת חיה. עריכה ויצירת תבניות חדשות —
+                                בעדכון הבא.
+                            </p>
                         </div>
                     </div>
 
-                    {presets.length === 0 ? (
-                        <div className='flex flex-col items-center justify-center py-16 gap-3'>
-                            <Loader2 size={20} className='animate-spin text-[#a8843a]' />
-                            <p className='text-sm text-[#a89378]'>טוען תבניות...</p>
-                        </div>
-                    ) : (
-                        <ul className='divide-y divide-[#f4ecd9]'>
-                            {presets.map(p => (
-                                <PresetRow key={p.id || p.name} preset={p} />
-                            ))}
-                        </ul>
-                    )}
+                    <SeedStatusChip seedStatus={seedStatus} />
                 </div>
 
-                {/* ── Roadmap note ── */}
-                <p className='text-center text-[11px] text-[#a89378] mt-8 font-medium leading-relaxed'>
-                    בקרוב: עורך מלא עם תצוגה חיה, החלפת רקעים, פונטים, מסגרות,
-                    והעלאת רקעים מותאמים אישית.
-                </p>
+                {/* Three-column grid. Stacks on narrower screens so
+                    the studio is at least usable on tablet — though
+                    full polish is a desktop feature. */}
+                <div className='grid grid-cols-1 lg:grid-cols-[260px_1fr_320px] gap-5'>
+                    <PresetListPanel
+                        presets={presets}
+                        activeId={activeId}
+                        onSelect={setActiveId}
+                    />
+                    <PreviewPanel
+                        preset={activePreset}
+                        styleSettings={resolvedStyle}
+                        entry={mockEntry}
+                        blessingLength={blessingLength}
+                        onBlessingLengthChange={setBlessingLength}
+                    />
+                    <PropertiesPanel preset={activePreset} />
+                </div>
             </div>
         </div>
     )
 }
 
-function SeedStatus({ seedStatus, systemCount, studioCount }) {
+// ── Seed status chip — collapsed inline summary so the giant panel
+//    from the previous shell doesn't dominate the layout. ───────────
+function SeedStatusChip({ seedStatus }) {
     if (seedStatus.state === 'pending') {
         return (
-            <div className='flex items-center gap-2.5 text-sm text-[#7a6a52]'>
-                <Loader2 size={14} className='animate-spin text-[#a8843a]' />
-                <span>בודק את ה-Firestore...</span>
+            <div className='flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[#ead9b3] text-[11.5px] text-[#7a6a52]'>
+                <Loader2 size={11} className='animate-spin' /> מסנכרן...
             </div>
         )
     }
     if (seedStatus.status === 'error') {
         return (
-            <div className='flex items-start gap-2.5'>
-                <AlertTriangle size={16} className='text-amber-600 mt-0.5 shrink-0' />
-                <div className='space-y-1'>
-                    <p className='text-sm font-semibold text-[#1a1410]'>
-                        השרת לא הגיב — התבניות הזמינות מגיעות מהקוד עצמו
-                    </p>
-                    <p className='text-[11.5px] text-[#a89378]'>
-                        תבניות מערכת ממשיכות לעבוד גם בלי Firestore. אפשר לנסות שוב
-                        על ידי רענון העמוד.
-                    </p>
-                </div>
+            <div className='flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-[11.5px] text-amber-700'>
+                <AlertTriangle size={11} /> Firestore לא זמין
             </div>
         )
     }
-    if (seedStatus.status === 'already-present') {
-        return (
-            <div className='flex items-start gap-2.5'>
-                <CheckCircle2 size={16} className='text-emerald-600 mt-0.5 shrink-0' />
-                <div className='space-y-1'>
-                    <p className='text-sm font-semibold text-[#1a1410]'>
-                        הכל מסונכרן — {systemCount} תבניות מערכת
-                        {studioCount > 0 ? `, ${studioCount} תבניות שלך` : ''}
-                    </p>
-                    <p className='text-[11.5px] text-[#a89378]'>
-                        תבניות המערכת כבר נכתבו ל-Firestore. הזוגות רואים את אותן
-                        תבניות ביצירת הספר.
-                    </p>
-                </div>
-            </div>
-        )
-    }
-    if (seedStatus.status === 'ok' && seedStatus.seeded > 0) {
-        return (
-            <div className='flex items-start gap-2.5'>
-                <CheckCircle2 size={16} className='text-emerald-600 mt-0.5 shrink-0' />
-                <div className='space-y-1'>
-                    <p className='text-sm font-semibold text-[#1a1410]'>
-                        {seedStatus.seeded} תבניות מערכת נכתבו ל-Firestore
-                    </p>
-                    <p className='text-[11.5px] text-[#a89378]'>
-                        זה היה הסנכרון הראשון. מעכשיו כל שינוי שנעשה בסטודיו ישתקף
-                        ישירות לזוגות בעמוד הצופה.
-                    </p>
-                </div>
-            </div>
-        )
-    }
-    // Fallback for any unexpected status — don't block the studio.
     return (
-        <div className='flex items-center gap-2.5 text-sm text-[#7a6a52]'>
-            <CheckCircle2 size={16} className='text-emerald-600 shrink-0' />
-            <span>תבניות נטענו ({systemCount + studioCount})</span>
+        <div className='flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-[11.5px] text-emerald-700'>
+            <CheckCircle2 size={11} />
+            {seedStatus.status === 'ok' && seedStatus.seeded > 0
+                ? `${seedStatus.seeded} תבניות סונכרנו`
+                : 'מסונכרן'}
         </div>
     )
 }
 
-function PresetRow({ preset }) {
-    const v = preset.values || {}
-    const summary = [
-        v.template ? `מבנה: ${v.template}` : null,
-        v.fontKey ? `פונט: ${v.fontKey}` : null,
-        v.frameId ? `מסגרת: ${v.frameId}` : v.frameId === null ? null : null,
-        v.texture ? 'עם מרקם' : null,
-    ]
-        .filter(Boolean)
-        .join(' · ')
+// ── Left rail: preset list, system first then studio ─────────────────
+function PresetListPanel({ presets, activeId, onSelect }) {
+    const system = presets.filter(p => p.ownerType === 'system')
+    const studio = presets.filter(p => p.ownerType === 'studio')
 
     return (
-        <li className='flex items-center gap-3 px-6 py-4'>
+        <aside
+            className='rounded-2xl overflow-hidden self-start sticky top-6'
+            style={{
+                background: '#ffffff',
+                border: '1px solid rgba(212,184,103,0.22)',
+                boxShadow: '0 16px 32px -20px rgba(170,136,64,0.20)',
+                maxHeight: 'calc(100vh - 80px)',
+            }}
+        >
             <div
-                className='w-10 h-10 rounded-lg shrink-0'
-                style={{
-                    background: preset.preview || '#ffffff',
-                    border: '1px solid rgba(212,184,103,0.30)',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.40)',
-                }}
-            />
-            <div className='flex-1 min-w-0'>
-                <div className='flex items-center gap-2'>
-                    <p className='text-sm font-semibold text-[#1a1410] truncate'>
-                        {preset.name || preset.id}
-                    </p>
-                    <span
-                        className='text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded'
-                        style={{
-                            background:
-                                preset.ownerType === 'system'
-                                    ? 'rgba(170,136,64,0.10)'
-                                    : 'rgba(125,167,106,0.12)',
-                            color:
-                                preset.ownerType === 'system' ? '#a8843a' : '#4f7a3e',
-                        }}
-                    >
-                        {preset.ownerType === 'system' ? 'מערכת' : 'סטודיו'}
-                    </span>
-                </div>
-                {summary && (
-                    <p className='text-[11.5px] text-[#a89378] mt-0.5 truncate'>{summary}</p>
+                className='px-4 py-3.5 border-b border-[#f0e8d4]'
+                style={{ background: 'linear-gradient(180deg, #fdfaf3 0%, #ffffff 100%)' }}
+            >
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold'>
+                    תבניות
+                </p>
+            </div>
+
+            <div className='overflow-y-auto' style={{ maxHeight: 'calc(100vh - 140px)' }}>
+                {presets.length === 0 ? (
+                    <div className='py-10 flex flex-col items-center gap-2'>
+                        <Loader2 size={16} className='animate-spin text-[#a8843a]' />
+                        <span className='text-[11.5px] text-[#a89378]'>טוען...</span>
+                    </div>
+                ) : (
+                    <>
+                        <PresetGroup
+                            label='מערכת'
+                            sublabel='לקריאה בלבד — יצרו עותק לעריכה'
+                            presets={system}
+                            activeId={activeId}
+                            onSelect={onSelect}
+                            badge='system'
+                        />
+                        {studio.length > 0 && (
+                            <PresetGroup
+                                label='התבניות שלי'
+                                presets={studio}
+                                activeId={activeId}
+                                onSelect={onSelect}
+                                badge='studio'
+                            />
+                        )}
+                    </>
                 )}
             </div>
-        </li>
+        </aside>
+    )
+}
+
+function PresetGroup({ label, sublabel, presets, activeId, onSelect, badge }) {
+    if (presets.length === 0) return null
+    return (
+        <div className='px-2 py-2'>
+            <div className='px-3 py-1.5'>
+                <p className='text-[10.5px] font-bold uppercase tracking-widest text-[#a89378]'>
+                    {label}
+                </p>
+                {sublabel && (
+                    <p className='text-[10px] text-[#c4b9a4] mt-0.5'>{sublabel}</p>
+                )}
+            </div>
+            <ul className='space-y-0.5'>
+                {presets.map(p => (
+                    <li key={p.id}>
+                        <button
+                            onClick={() => onSelect(p.id)}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all ${
+                                activeId === p.id
+                                    ? 'bg-[#AA8840]/10 ring-1 ring-[#AA8840]/30'
+                                    : 'hover:bg-[#fbf6ec]'
+                            }`}
+                        >
+                            <div
+                                className='w-7 h-7 rounded-md shrink-0'
+                                style={{
+                                    background: p.preview || '#ffffff',
+                                    border: '1px solid rgba(212,184,103,0.30)',
+                                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.40)',
+                                }}
+                            />
+                            <span
+                                className={`flex-1 text-right text-[12.5px] truncate ${
+                                    activeId === p.id ? 'text-[#1a1410] font-bold' : 'text-[#5a4d3a] font-semibold'
+                                }`}
+                            >
+                                {p.name || p.id}
+                            </span>
+                            {badge === 'system' && (
+                                <Crown size={10} className='text-[#a8843a] shrink-0' />
+                            )}
+                        </button>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    )
+}
+
+// ── Center: preview + length toggle ──────────────────────────────────
+function PreviewPanel({ preset, styleSettings, entry, blessingLength, onBlessingLengthChange }) {
+    return (
+        <main
+            className='rounded-2xl overflow-hidden flex flex-col'
+            style={{
+                background: '#ffffff',
+                border: '1px solid rgba(212,184,103,0.22)',
+                boxShadow: '0 16px 32px -20px rgba(170,136,64,0.20)',
+                minHeight: '600px',
+            }}
+        >
+            {/* Toolbar */}
+            <div
+                className='px-5 py-3 border-b border-[#f0e8d4] flex items-center justify-between gap-3'
+                style={{ background: 'linear-gradient(180deg, #fdfaf3 0%, #ffffff 100%)' }}
+            >
+                <div className='flex items-center gap-2.5 min-w-0'>
+                    <div
+                        className='w-1.5 h-5 rounded-full shrink-0'
+                        style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}
+                    />
+                    <h2 className='text-[14px] font-bold text-[#1a1410] truncate'>
+                        {preset?.name || 'תצוגה חיה'}
+                    </h2>
+                    <span className='text-[10.5px] text-[#a89378]'>1:1 · 8.5"×8.5"</span>
+                </div>
+
+                {/* Length toggle — 30 / 100 / 210 chars. Sets the mock
+                    blessing the preview renders so the user can see if
+                    typography + text-area-width hold up across content. */}
+                <div
+                    className='flex rounded-lg overflow-hidden shrink-0'
+                    style={{ border: '1px solid #ead9b3' }}
+                >
+                    {MOCK_BLESSING_LENGTHS.map((len, i) => (
+                        <button
+                            key={len}
+                            onClick={() => onBlessingLengthChange(len)}
+                            className={`px-3 py-1.5 text-[11.5px] font-bold transition-all ${
+                                blessingLength === len
+                                    ? 'text-white'
+                                    : 'text-[#7a6a52] hover:bg-[#fbf6ec]'
+                            } ${i > 0 ? 'border-r border-[#ead9b3]' : ''}`}
+                            style={
+                                blessingLength === len
+                                    ? {
+                                          background:
+                                              'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                      }
+                                    : { background: '#ffffff' }
+                            }
+                        >
+                            {len} תווים
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Preview canvas */}
+            <div
+                className='flex-1 flex items-center justify-center p-8 overflow-auto'
+                style={{ background: '#f4ecd9' }}
+            >
+                {!preset || !styleSettings ? (
+                    <div className='text-center text-[#a89378] text-sm'>
+                        בחר תבנית מהרשימה
+                    </div>
+                ) : (
+                    <div
+                        className='shrink-0'
+                        style={{
+                            width: PREVIEW_SIZE,
+                            height: PREVIEW_SIZE,
+                            boxShadow:
+                                '0 30px 60px -25px rgba(0,0,0,0.30), 0 8px 20px -8px rgba(0,0,0,0.18)',
+                            borderRadius: 4,
+                            overflow: 'hidden',
+                            background: '#ffffff',
+                        }}
+                    >
+                        <BookPageTemplate
+                            entry={entry}
+                            styleSettings={styleSettings}
+                            scaledWidth={PREVIEW_SIZE}
+                            scaledHeight={PREVIEW_SIZE}
+                        />
+                    </div>
+                )}
+            </div>
+        </main>
+    )
+}
+
+// ── Right rail: properties panel (read-only in this commit) ──────────
+function PropertiesPanel({ preset }) {
+    const isSystem = preset?.ownerType === 'system'
+    const v = preset?.values || {}
+
+    return (
+        <aside
+            className='rounded-2xl overflow-hidden self-start sticky top-6'
+            style={{
+                background: '#ffffff',
+                border: '1px solid rgba(212,184,103,0.22)',
+                boxShadow: '0 16px 32px -20px rgba(170,136,64,0.20)',
+                maxHeight: 'calc(100vh - 80px)',
+            }}
+        >
+            <div
+                className='px-4 py-3.5 border-b border-[#f0e8d4]'
+                style={{ background: 'linear-gradient(180deg, #fdfaf3 0%, #ffffff 100%)' }}
+            >
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold'>
+                    מאפיינים
+                </p>
+                {preset && isSystem && (
+                    <p className='text-[10.5px] text-[#a89378] mt-1 leading-relaxed'>
+                        זוהי תבנית מערכת — לא ניתן לערוך אותה ישירות. בעדכון הבא:
+                        כפתור "צור עותק לעריכה".
+                    </p>
+                )}
+                {preset && !isSystem && (
+                    <p className='text-[10.5px] text-[#a89378] mt-1 leading-relaxed'>
+                        עריכה תהיה זמינה בעדכון הבא.
+                    </p>
+                )}
+            </div>
+
+            <div
+                className='overflow-y-auto'
+                style={{ maxHeight: 'calc(100vh - 140px)' }}
+            >
+                {!preset ? (
+                    <div className='p-6 text-center text-[12px] text-[#a89378]'>
+                        בחר תבנית כדי לראות את המאפיינים שלה
+                    </div>
+                ) : (
+                    <div className='p-4 space-y-4'>
+                        <PropertyRow icon={Layers} label='מבנה' value={v.template || 'classic'} />
+                        <PropertyColor label='רקע' value={v.backgroundColor} icon={Palette} />
+                        <PropertyFont label='פונט' fontKey={v.fontKey} icon={Type} />
+
+                        {/* Font size — slider, disabled in this commit */}
+                        <PropertySlider
+                            icon={Type}
+                            label='גודל פונט'
+                            value={v.fontSizePercent ?? 2.5}
+                            min={1.5}
+                            max={6}
+                            step={0.1}
+                            unit='% מגובה העמוד'
+                            disabled
+                        />
+
+                        <PropertyColor label='צבע פונט' value={v.fontColor} icon={Palette} />
+                        <PropertyFrame label='מסגרת' frameId={v.frameId} icon={Frame} />
+                        <PropertyTexture label='מרקם' textureUrl={v.texture} icon={ImageIcon} />
+
+                        {/* Image size — width-only slider, height auto-
+                            tracks 4:3. Lock icon makes the coupling
+                            obvious. Disabled here; editable in next
+                            commit. */}
+                        <PropertyImageSize imageStyle={v.imageStyle} disabled />
+
+                        {/* Image corner radius */}
+                        <PropertySlider
+                            icon={RotateCw}
+                            label='עיגול פינות תמונה'
+                            value={Number(v.imageStyle?.borderRadius) || 0}
+                            min={0}
+                            max={48}
+                            step={1}
+                            unit='px'
+                            disabled
+                        />
+                    </div>
+                )}
+            </div>
+        </aside>
+    )
+}
+
+// ── Property field components ────────────────────────────────────────
+
+function PropertyRow({ icon: Icon, label, value }) {
+    return (
+        <div>
+            <div className='flex items-center gap-1.5 mb-1.5'>
+                {Icon && <Icon size={12} className='text-[#c9a44e]' />}
+                <span className='text-[11px] font-semibold text-[#7a6a52] uppercase tracking-wider'>
+                    {label}
+                </span>
+            </div>
+            <div
+                className='px-3 py-2 rounded-lg text-[12.5px] text-[#3d3225] font-medium'
+                style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}
+            >
+                {value}
+            </div>
+        </div>
+    )
+}
+
+function PropertyColor({ label, value, icon: Icon }) {
+    if (!value) return null
+    return (
+        <div>
+            <div className='flex items-center gap-1.5 mb-1.5'>
+                {Icon && <Icon size={12} className='text-[#c9a44e]' />}
+                <span className='text-[11px] font-semibold text-[#7a6a52] uppercase tracking-wider'>
+                    {label}
+                </span>
+            </div>
+            <div
+                className='flex items-center gap-2 px-3 py-2 rounded-lg'
+                style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}
+            >
+                <div
+                    className='w-6 h-6 rounded shrink-0'
+                    style={{
+                        background: value,
+                        border: '1px solid rgba(0,0,0,0.10)',
+                    }}
+                />
+                <code className='text-[11.5px] font-mono text-[#5a4d3a]'>{value}</code>
+            </div>
+        </div>
+    )
+}
+
+function PropertyFont({ label, fontKey, icon: Icon }) {
+    const font = fontKey ? FONTS_REGISTRY[fontKey] : null
+    return (
+        <div>
+            <div className='flex items-center gap-1.5 mb-1.5'>
+                {Icon && <Icon size={12} className='text-[#c9a44e]' />}
+                <span className='text-[11px] font-semibold text-[#7a6a52] uppercase tracking-wider'>
+                    {label}
+                </span>
+            </div>
+            <div
+                className='px-3 py-2 rounded-lg flex items-center justify-between gap-2'
+                style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}
+            >
+                <span
+                    className={`text-[14px] text-[#1a1410] truncate ${
+                        font?.font?.className || ''
+                    }`}
+                >
+                    {font?.label || fontKey || '—'}
+                </span>
+                <span className='text-[10px] text-[#a89378] shrink-0'>
+                    {FONT_IDS.length} זמינים
+                </span>
+            </div>
+        </div>
+    )
+}
+
+function PropertyFrame({ label, frameId, icon: Icon }) {
+    const frame = frameId ? FRAMES_REGISTRY[frameId] : null
+    return (
+        <div>
+            <div className='flex items-center gap-1.5 mb-1.5'>
+                {Icon && <Icon size={12} className='text-[#c9a44e]' />}
+                <span className='text-[11px] font-semibold text-[#7a6a52] uppercase tracking-wider'>
+                    {label}
+                </span>
+            </div>
+            <div
+                className='px-3 py-2 rounded-lg flex items-center gap-2'
+                style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}
+            >
+                {frame ? (
+                    <>
+                        <div
+                            className='w-8 h-8 rounded shrink-0 bg-white'
+                            style={{
+                                backgroundImage: `url(${frame.src})`,
+                                backgroundSize: 'cover',
+                                border: '1px solid #ead9b3',
+                            }}
+                        />
+                        <span className='text-[12px] text-[#3d3225]'>{frame.label}</span>
+                    </>
+                ) : (
+                    <span className='text-[12px] text-[#a89378] italic'>ללא</span>
+                )}
+            </div>
+        </div>
+    )
+}
+
+function PropertyTexture({ label, textureUrl, icon: Icon }) {
+    const tex = textureUrl
+        ? TEXTURES_REGISTRY.find(t => t.src === textureUrl)
+        : null
+    return (
+        <div>
+            <div className='flex items-center gap-1.5 mb-1.5'>
+                {Icon && <Icon size={12} className='text-[#c9a44e]' />}
+                <span className='text-[11px] font-semibold text-[#7a6a52] uppercase tracking-wider'>
+                    {label}
+                </span>
+            </div>
+            <div
+                className='px-3 py-2 rounded-lg flex items-center gap-2'
+                style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}
+            >
+                {textureUrl ? (
+                    <>
+                        <div
+                            className='w-8 h-8 rounded shrink-0'
+                            style={{
+                                backgroundImage: `url(${textureUrl})`,
+                                backgroundSize: 'cover',
+                                border: '1px solid #ead9b3',
+                            }}
+                        />
+                        <span className='text-[12px] text-[#3d3225]'>
+                            {tex?.label || textureUrl.split('/').pop()}
+                        </span>
+                    </>
+                ) : (
+                    <span className='text-[12px] text-[#a89378] italic'>ללא</span>
+                )}
+            </div>
+        </div>
+    )
+}
+
+function PropertySlider({ icon: Icon, label, value, min, max, step, unit, disabled }) {
+    return (
+        <div>
+            <div className='flex items-center justify-between gap-1.5 mb-1.5'>
+                <div className='flex items-center gap-1.5'>
+                    {Icon && <Icon size={12} className='text-[#c9a44e]' />}
+                    <span className='text-[11px] font-semibold text-[#7a6a52] uppercase tracking-wider'>
+                        {label}
+                    </span>
+                </div>
+                <span className='text-[11px] font-mono text-[#3d3225]'>
+                    {Number(value).toFixed(step < 1 ? 1 : 0)} {unit}
+                </span>
+            </div>
+            <input
+                type='range'
+                value={value}
+                min={min}
+                max={max}
+                step={step}
+                disabled={disabled}
+                readOnly
+                className='w-full accent-[#AA8840] disabled:opacity-50 disabled:cursor-not-allowed'
+            />
+        </div>
+    )
+}
+
+// Image size — width-only slider with height locked at 4:3. The lock
+// icon makes the coupling visible without offering an unlock toggle:
+// the WYSIWYG capture pipeline depends on a 4:3 image throughout, so
+// allowing arbitrary aspect here would silently break print fidelity.
+function PropertyImageSize({ imageStyle, disabled }) {
+    const width = imageStyle?.width ?? 90
+    const height = imageStyle?.height ?? width * 0.75 // 4:3
+    return (
+        <div>
+            <div className='flex items-center justify-between gap-1.5 mb-1.5'>
+                <div className='flex items-center gap-1.5'>
+                    <ImageIcon size={12} className='text-[#c9a44e]' />
+                    <span className='text-[11px] font-semibold text-[#7a6a52] uppercase tracking-wider'>
+                        גודל תמונה
+                    </span>
+                    <Lock size={9} className='text-[#a89378]' />
+                </div>
+                <span className='text-[11px] font-mono text-[#3d3225]'>
+                    {Number(width).toFixed(0)}% × {Number(height).toFixed(0)}%
+                </span>
+            </div>
+            <input
+                type='range'
+                value={width}
+                min={30}
+                max={100}
+                step={1}
+                disabled={disabled}
+                readOnly
+                className='w-full accent-[#AA8840] disabled:opacity-50 disabled:cursor-not-allowed'
+            />
+            <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>
+                גובה התמונה ננעל ליחס 4:3 — אותו יחס שהאפליקציה מחייבת בצילום
+                ובהעלאה כדי לוודא שהתצוגה והדפוס זהים.
+            </p>
+        </div>
     )
 }
 
