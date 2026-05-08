@@ -63,10 +63,15 @@ export default function NotebookPageLayout({ entry, styleSettings, scaledWidth, 
 
     const { w, h } = pageScale(scaledWidth, scaledHeight)
 
-    // Photo is flush with the top + side edges of the page (no padding
-    // around it) and has no rounded corners — full-bleed across the top.
-    // 4:3 stays enforced via height = width × 0.75.
-    const photoWidth = scaledWidth
+    // Photo sits at the top of the page in a 4:3 strip. Capped at 75%
+    // page width so a 1920-px-wide camera capture (the ceiling for
+    // getUserMedia on most phones) prints at ~300 DPI on the 8.5" trim
+    // — a full-bleed (100%) strip needed 2551 px and was always
+    // upscaling. The strip stays full-width visually via centering, just
+    // a few mm short of the side edges so the inset reads as deliberate
+    // "notebook page with a tipped-in photo" rather than "stretched
+    // bitmap". 4:3 still enforced via height = width × 0.75.
+    const photoWidth = w(75)
     const photoHeight = photoWidth * 0.75
 
     // Ruled-line spacing scales with the card's text size so the lines
