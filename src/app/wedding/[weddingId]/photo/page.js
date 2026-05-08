@@ -432,18 +432,47 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
         const video = liveVideoRef.current
         if (!video) return
 
+        // The photo well (and the in-camera viewport) is locked to 4:3
+        // landscape. The actual video stream from getUserMedia is
+        // whatever the device's camera serves — usually portrait on a
+        // mobile sensor. We center-crop the largest 4:3 landscape
+        // rectangle out of that source frame so the saved blob matches
+        // exactly what the user framed in the well.
+        const TARGET_RATIO = 4 / 3
+        const sw = video.videoWidth
+        const sh = video.videoHeight
+        if (!sw || !sh) return
+
+        let cropW
+        let cropH
+        if (sw / sh > TARGET_RATIO) {
+            // Source is wider than 4:3 — crop the sides off.
+            cropH = sh
+            cropW = sh * TARGET_RATIO
+        } else {
+            // Source is taller than (or equal to) 4:3 — crop the top
+            // and bottom off. This is the common mobile-portrait case.
+            cropW = sw
+            cropH = sw / TARGET_RATIO
+        }
+        const sx = (sw - cropW) / 2
+        const sy = (sh - cropH) / 2
+
         const canvas = document.createElement('canvas')
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
+        canvas.width = Math.round(cropW)
+        canvas.height = Math.round(cropH)
         const ctx = canvas.getContext('2d')
 
-        // תיקון מראה למצלמה קדמית
+        // Mirror the front-facing camera so what's saved matches the
+        // un-mirrored preview the user just saw (the live <video> tag
+        // is also mirrored via scale-x-[-1] in the JSX).
         if (cameraFacing === 'user') {
             ctx.translate(canvas.width, 0)
             ctx.scale(-1, 1)
         }
 
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        // Draw the 4:3 source region onto the canvas, scaled to fill.
+        ctx.drawImage(video, sx, sy, cropW, cropH, 0, 0, canvas.width, canvas.height)
 
         canvas.toBlob(
             blob => {
@@ -1119,14 +1148,20 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                             </svg>
                         </div>
 
-                        {/* ── Photo area — full card width, fixed
-                            short height. Soft cream wash, gentle
-                            dashed gold border, generous rounding
-                            (matches the mockup's pill-style well). ── */}
+                        {/* ── Photo area — full card width, locked to
+                            4:3 landscape so the live camera viewport,
+                            the captured blob, the post-capture preview,
+                            and the photo as it lands on the (square)
+                            book page all share one shape. Anything
+                            else and the user frames their selfie
+                            against one rectangle and gets a different
+                            one in the book. Soft cream wash + dashed
+                            gold border (matches the mockup's pill-
+                            style well). ── */}
                         <div
                             className='relative w-full rounded-[18px] overflow-hidden'
                             style={{
-                                height: '180px',
+                                aspectRatio: '4 / 3',
                                 background: '#fbf3e3',
                                 border: '1px dashed rgba(201,164,78,0.45)',
                             }}
@@ -2280,9 +2315,19 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                     </div>
                                 )}
 
-                                {/* 4. תצוגה סופית */}
+                                {/* 4. תצוגה סופית — `contain`, not
+                                    `cover`. The well is 4:3 and the
+                                    saved blob is 4:3 (camera path
+                                    center-crops, upload path uses the
+                                    4:3 cropper), so both fit
+                                    pixel-perfect. `contain` keeps it
+                                    that way even if the source ever
+                                    drifts off-ratio — the user always
+                                    sees the FULL captured image, which
+                                    is the same `objectFit` rule
+                                    EntryPhoto uses on the book page. */}
                                 {photoUrl && !isUpload && !cameraOpen && (
-                                    <img src={photoUrl} className='w-full h-full object-cover' alt='Preview' />
+                                    <img src={photoUrl} className='w-full h-full object-contain' alt='Preview' />
                                 )}
                             </div>
                         </div>
