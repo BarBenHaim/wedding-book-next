@@ -189,6 +189,7 @@
     "backToEdit": "Volver a editar",
     "cameraError": "No se puede acceder a la cámara",
     "imageProcessFail": "Error al procesar la imagen (puede ser demasiado grande o estar en un formato no compatible). ¿Enviar la bendición sin foto?",
+    "lowResWarning": "Esta foto tiene baja resolución y puede verse borrosa en el libro impreso.",
     "errNetwork": "Sin conexión a internet. La bendición no se envió — comprueba la conexión e inténtalo de nuevo.",
     "errPermission": "Sin permiso para enviar. Contacta con el organizador del evento.",
     "errSpecific": "No se pudo enviar la bendición. ({reason})",

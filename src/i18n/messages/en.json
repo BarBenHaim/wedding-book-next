@@ -189,6 +189,7 @@
     "backToEdit": "Back to edit",
     "cameraError": "Cannot access the camera",
     "imageProcessFail": "Image processing failed (it might be too large or in an unsupported format). Send the blessing without a photo?",
+    "lowResWarning": "This photo is low-resolution and may look blurry in the printed book.",
     "errNetwork": "No internet connection. The blessing wasn't sent — check your connection and try again.",
     "errPermission": "No permission to send. Please contact the event host.",
     "errSpecific": "Could not send the blessing. ({reason})",

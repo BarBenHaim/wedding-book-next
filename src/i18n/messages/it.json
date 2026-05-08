@@ -189,6 +189,7 @@
     "backToEdit": "Torna a modificare",
     "cameraError": "Impossibile accedere alla fotocamera",
     "imageProcessFail": "Errore nell'elaborazione dell'immagine (potrebbe essere troppo grande o in un formato non supportato). Inviare l'augurio senza foto?",
+    "lowResWarning": "Questa foto è a bassa risoluzione e potrebbe apparire sfocata nel libro stampato.",
     "errNetwork": "Nessuna connessione internet. L'augurio non è stato inviato — controlla la connessione e riprova.",
     "errPermission": "Nessuna autorizzazione per inviare. Contatta l'organizzatore dell'evento.",
     "errSpecific": "Impossibile inviare l'augurio. ({reason})",
