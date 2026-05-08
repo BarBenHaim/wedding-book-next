@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../../../../lib/firebaseClient'
 import Cropper from 'react-easy-crop'
+import imageCompression from 'browser-image-compression'
 import { enqueue, genId } from '../../../../lib/offlineQueue'
 import { uploadQueuedEntry } from '../../../../lib/uploadEntry'
 import { normalizeBlessing } from '../../../../lib/normalizeText'
@@ -12,6 +13,46 @@ import { NextIntlClientProvider, useTranslations } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
 import { logEvent } from '@/lib/logEvent'
+
+// ── Image compression settings ──
+// Targeted at the highest-resolution book layout (notebook at 75% page
+// width = 1913 px @ 300 DPI on 8.5" trim). 2560 px max longer edge
+// gives that slot a comfortable headroom while bringing huge 4K rear-
+// camera captures (typical iPhone 15+ output) down to a realistic size.
+// initialQuality 0.92 keeps print quality high — Lulu's recommendation
+// is JPEG q ≥ 0.85 for photo-heavy interiors. maxSizeMB 1.5 lets the
+// uploader cap absolute file size for slow-network venues; the
+// compressor backs off quality further only if needed to hit it.
+const COMPRESS_OPTIONS = {
+    maxSizeMB: 1.5,
+    maxWidthOrHeight: 2560,
+    initialQuality: 0.92,
+    useWebWorker: true,
+    fileType: 'image/jpeg',
+}
+
+// Best-effort compression wrapper. browser-image-compression occasionally
+// throws on iOS Safari with strict storage settings; if that happens we
+// just upload the original blob — better to ship a fat photo than to
+// fail submission outright. The function takes the wedding-page-spec
+// fileType so the cropped/captured Blob always lands as a JPEG.
+async function compressBlob(blob) {
+    if (!blob) return blob
+    try {
+        // The compressor expects a File; we synthesise one from the Blob.
+        const file = blob instanceof File
+            ? blob
+            : new File([blob], 'capture.jpg', { type: blob.type || 'image/jpeg' })
+        const compressed = await imageCompression(file, COMPRESS_OPTIONS)
+        // If the compressor produced something LARGER than the source
+        // (rare — happens on already-tiny images that re-encode bigger),
+        // keep the original.
+        return compressed.size < blob.size ? compressed : blob
+    } catch (err) {
+        console.warn('[photo] image compression failed, using original:', err?.message || err)
+        return blob
+    }
+}
 
 // Outer wrapper — fetches locale, eventType, AND the recipient names
 // from the wedding doc once, then wraps the form in
@@ -576,6 +617,20 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                 return
             }
             finalBlob = null
+        }
+
+        // Step 1.5 — compress before persistence/upload. Caps the longer
+        // edge at 2560 px (covers every layout's 300 DPI requirement on
+        // 8.5" trim with headroom) and re-encodes at JPEG q 0.92.
+        // Catches BOTH paths: camera-captured blobs (which can be 4K on
+        // recent rear cameras) and uploaded files the user picked from
+        // their gallery (which can be 12 MP+). Without this we were
+        // shipping multi-megabyte blobs to Firebase Storage that the
+        // print pipeline downscales anyway. compressBlob is best-effort
+        // — if the lib throws (rare iOS Safari quirk) the original blob
+        // ships unchanged.
+        if (finalBlob) {
+            finalBlob = await compressBlob(finalBlob)
         }
 
         // Step 2 — persist + upload. Two-tier strategy:
