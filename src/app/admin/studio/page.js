@@ -867,6 +867,7 @@ function PropertiesPanel({
                             value={v.fontColor}
                             disabled={!editable}
                             onChange={c => onValuesChange({ fontColor: c })}
+                            hint='צובע גם את שם האורח וגם את גוף הברכה'
                         />
 
                         <PropertyFrameEdit
@@ -945,9 +946,11 @@ function PropertyRow({ icon: Icon, label, value }) {
 }
 
 // Color picker — native <input type=color> wrapped in the studio's
-// soft cream surface. Showing the raw hex too so the user can paste
-// a value precisely.
-function PropertyColorEdit({ icon: Icon, label, value, disabled, onChange }) {
+// soft cream surface. Showing the raw hex as an editable text field
+// so the user can paste an exact value, plus a Copy button so they
+// can grab the current hex for use elsewhere (Figma, brand guide,
+// etc).
+function PropertyColorEdit({ icon: Icon, label, value, disabled, onChange, hint }) {
     if (value === undefined || value === null) {
         // Fall back to a sensible default the renderer accepts when
         // the preset doesn't carry an explicit value.
@@ -958,6 +961,7 @@ function PropertyColorEdit({ icon: Icon, label, value, disabled, onChange }) {
                 value={label === 'רקע' ? '#ffffff' : '#000000'}
                 disabled={disabled}
                 onChange={onChange}
+                hint={hint}
             />
         )
     }
@@ -965,7 +969,7 @@ function PropertyColorEdit({ icon: Icon, label, value, disabled, onChange }) {
         <div>
             <PropertyHeader icon={Icon} label={label} />
             <div
-                className='flex items-center gap-2 px-2.5 py-2 rounded-lg'
+                className='flex items-center gap-1.5 px-2.5 py-2 rounded-lg'
                 style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}
             >
                 <input
@@ -981,10 +985,45 @@ function PropertyColorEdit({ icon: Icon, label, value, disabled, onChange }) {
                     value={value}
                     disabled={disabled}
                     onChange={e => onChange(e.target.value)}
-                    className='flex-1 bg-transparent text-[12px] font-mono text-[#5a4d3a] outline-none disabled:opacity-60 disabled:cursor-not-allowed'
+                    className='flex-1 min-w-0 bg-transparent text-[12px] font-mono text-[#5a4d3a] outline-none disabled:opacity-60 disabled:cursor-not-allowed'
                 />
+                <CopyHexButton value={value} />
             </div>
+            {hint && (
+                <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>
+                    {hint}
+                </p>
+            )}
         </div>
+    )
+}
+
+// Tiny copy-to-clipboard button for hex values. Flips to a checkmark
+// for ~1.4s after a successful copy so the user sees confirmation.
+// Falls back silently if the clipboard API is unavailable (older
+// browsers / non-secure contexts).
+function CopyHexButton({ value }) {
+    const [copied, setCopied] = useState(false)
+    const onClick = async e => {
+        e.preventDefault()
+        try {
+            await navigator.clipboard?.writeText(value)
+            setCopied(true)
+            setTimeout(() => setCopied(false), 1400)
+        } catch {
+            /* clipboard unavailable — no-op */
+        }
+    }
+    return (
+        <button
+            type='button'
+            onClick={onClick}
+            title='העתק את הצבע'
+            className='shrink-0 w-6 h-6 rounded flex items-center justify-center transition-colors hover:bg-[#f4ecd9]'
+            style={{ color: copied ? '#4f7a3e' : '#a8843a' }}
+        >
+            {copied ? <CheckCircle2 size={12} /> : <Copy size={12} />}
+        </button>
     )
 }
 
