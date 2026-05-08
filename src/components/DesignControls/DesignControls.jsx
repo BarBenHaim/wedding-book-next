@@ -6,162 +6,32 @@ import { storage } from '@/lib/firebaseClient'
 import { heebo, frankRuhl, secular, davidLibre, notoHebrew, gveretLevin, danaYad } from '@/app/fonts'
 import { getMessages } from '@/i18n/getMessages'
 import { dirFor, normalizeLocale } from '@/i18n/locales'
+import {
+    BUILTIN_PRESETS,
+    listPresets,
+    resolvePreset,
+    FRAMES_REGISTRY,
+    TEXTURES_REGISTRY,
+} from '@/lib/studioPresets'
 
-import frame1 from '../../media/frames/frame1.png'
-import frame2 from '../../media/frames/frame2.png'
-import frame3 from '../../media/frames/frame3.png'
-import frame4 from '../../media/frames/frame4.png'
+// Frame URL list for the inline picker — read from the studio registry
+// so adding a frame doesn't need touching this file too.
+const FRAMES = Object.values(FRAMES_REGISTRY).map(f => ({ src: f.src }))
 
-const tex1 = { src: '/textures/tex1.png' }
-const tex2 = { src: '/textures/tex2.png' }
-const tex3 = { src: '/textures/tex3.png' }
-const tex4 = { src: '/textures/tex4.png' }
-const tex5 = { src: '/textures/tex5.png' }
-const tex6 = { src: '/textures/tex6.png' }
-const tex7 = { src: '/textures/tex7.png' }
-const tex8 = { src: '/textures/tex8.png' }
-const tex9 = { src: '/textures/tex9.png' }
+// Texture URL list for the inline picker — also via the registry so
+// the studio + viewer agree on the available set.
+const TEXTURES = TEXTURES_REGISTRY.map(t => ({ src: t.src }))
 
-const TEXTURES = [tex1, tex2, tex3, tex4, tex5, tex6, tex7, tex8, tex9]
-const FRAMES = [frame1, frame2, frame3, frame4]
-
-/* PRESETS — every entry must include `template`. After the spring 2026
- * curation pass: 4 originals + 4 vintage memory-book templates. The
- * Modern Card and Specialty/Experimental families were trimmed; their
- * layout files remain on disk as orphan code so they can be re-enabled
- * without rebuilding (just re-add the import + dispatcher branch + a
- * preset entry here). */
-const PRESETS = [
-    // ─── Original classic templates (do not edit) ───────────────────────
-    {
-        name: 'קלאסי',
-        preview: '#ffffff',
-        values: {
-            template: 'classic',
-            backgroundColor: '#ffffff',
-            fontClass: heebo.className,
-            fontColor: '#000000',
-            frame: frame2.src,
-            texture: null,
-            fontSizePercent: 2.5,
-            imageStyle: { width: 80, height: 70, borderRadius: 0 },
-            nameMarginTop: 4,
-            textMaxWidth: 70,
-            imageMarginTop: 2,
-        },
-    },
-    {
-        name: 'פסטורלי',
-        preview: '#ffffff',
-        values: {
-            template: 'classic',
-            backgroundColor: '#ffffff',
-            fontClass: heebo.className,
-            fontColor: '#000000',
-            frame: null,
-            texture: tex6.src,
-            fontSizePercent: 2.5,
-            imageStyle: { width: 80, height: 70, borderRadius: 0 },
-            nameMarginTop: 4,
-            textMaxWidth: 70,
-            imageMarginTop: 2,
-        },
-    },
-
-    {
-        name: 'שמפניה',
-        preview: '#fdf6ec',
-        values: {
-            template: 'classic',
-            backgroundColor: '#fdf6ec',
-            fontClass: heebo.className,
-            fontColor: '#000000',
-            texture: tex1.src,
-            frame: frame1.src,
-            fontSizePercent: 2.5,
-            imageStyle: { width: 75, height: 65 },
-            nameMarginTop: 7.5,
-            textMaxWidth: 70,
-            imageMarginTop: 0,
-        },
-    },
-    {
-        name: 'פרחי גן',
-        preview: '#c4b5ecff',
-        values: {
-            template: 'classic',
-            backgroundColor: '#c4b5ecff',
-            fontClass: heebo.className,
-            fontColor: '#000000',
-            texture: tex3.src,
-            frame: null,
-            fontSizePercent: 2.5,
-            imageStyle: { width: 75, height: 65 },
-            nameMarginTop: 4,
-            textMaxWidth: 70,
-            imageMarginTop: 2,
-        },
-    },
-    {
-        name: 'מינימלי',
-        preview: '#ffffff',
-        values: {
-            template: 'classic',
-            backgroundColor: '#ffffff',
-            fontClass: heebo.className,
-            fontColor: '#000000',
-            texture: null,
-            frame: frame4.src,
-            fontSizePercent: 2.5,
-            imageStyle: { width: 75, height: 65, borderRadius: 0 },
-            nameMarginTop: 6,
-            textMaxWidth: 70,
-            imageMarginTop: 1,
-        },
-    },
-
-    // ─── Vintage memory-book ────────────────────────────────────────────
-    {
-        name: 'פולארויד וינטג׳',
-        preview: '#fcfaf6',
-        values: {
-            template: 'polaroid',
-            backgroundColor: '#ffffff',
-            fontClass: gveretLevin.className,
-            fontColor: '#3d2e1a',
-            texture: tex5.src,
-            textureOpacity: 0.9, // ← זה
-
-            frame: null,
-        },
-    },
-
-    {
-        name: 'זהב עתיק',
-        preview: '#f7f1e3',
-        values: {
-            template: 'classic',
-            backgroundColor: '#f7f1e3',
-            fontClass: gveretLevin.className,
-            fontColor: '#3d2e1a',
-            texture: tex9.src,
-            frame: null,
-        },
-    },
-    {
-        name: 'אלבום זיכרונות',
-        preview: '#ffffff',
-        values: {
-            template: 'collage',
-            backgroundColor: '#ffffff',
-            fontClass: gveretLevin.className,
-            fontColor: '#3d2e1a',
-            texture: tex8.src,
-            textureOpacity: 0.2, // ← זה
-            frame: null,
-        },
-    },
-]
+/* The 8 built-in presets that ship with the app. Stored as the
+ * single source of truth in `src/lib/studioPresets.js` so the upcoming
+ * /admin/studio page edits the same data the viewer's preset picker
+ * reads. listPresets() loads the live list from Firestore on mount;
+ * BUILTIN_PRESETS is the offline-safe fallback (and the seed data the
+ * studio writes to Firestore on first run).
+ *
+ * Both shapes (Firestore docs and BUILTIN_PRESETS) carry STABLE keys
+ * for font/frame; the resolver expands them to runtime values
+ * (className / asset URL) right before applyPreset calls onChange. */
 
 const FONTS = [
     { font: notoHebrew, label: 'Noto Hebrew' },
@@ -303,9 +173,31 @@ export default function DesignControls({
     const t = useMemo(() => getMessages(resolvedLocale).designControls, [resolvedLocale])
     const dir = dirFor(resolvedLocale)
 
+    // Presets — start with the hardcoded builtins so the picker renders
+    // instantly even before Firestore answers, then swap in the live
+    // list (system + studio-created) once it arrives. listPresets()
+    // already falls back to BUILTIN_PRESETS on any error, so this also
+    // handles the "Firestore unreachable" case gracefully.
+    const [presets, setPresets] = useState(BUILTIN_PRESETS)
+    useEffect(() => {
+        let cancelled = false
+        listPresets().then(list => {
+            if (!cancelled && Array.isArray(list) && list.length > 0) setPresets(list)
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [])
+
+    // Apply a preset to the wedding's design doc. The picker holds
+    // storage-shape presets (with fontKey / frameId); resolvePreset
+    // expands those to runtime values (fontClass / frame URL) so the
+    // shape onChange receives is identical to what the old hardcoded
+    // PRESETS array used to pass.
     const applyPreset = preset => {
-        setActivePreset(preset.name)
-        onChange(preset.values)
+        const resolved = resolvePreset(preset)
+        setActivePreset(resolved.name || resolved.id)
+        onChange(resolved.values)
     }
 
     const handleImageUpload = async e => {
@@ -380,12 +272,12 @@ export default function DesignControls({
                     <div className='space-y-4 animate-fadeIn'>
                         <Card title={t.presetsTitle}>
                             <div className='grid grid-cols-2 gap-3'>
-                                {PRESETS.map(preset => (
+                                {presets.map(preset => (
                                     <button
-                                        key={preset.name}
+                                        key={preset.id || preset.name}
                                         onClick={() => applyPreset(preset)}
                                         className={`relative h-16 rounded-lg border transition-all overflow-hidden ${
-                                            activePreset === preset.name
+                                            activePreset === (preset.name || preset.id)
                                                 ? 'ring-2 ring-[#AA8840] border-transparent'
                                                 : 'border-gray-200 hover:scale-[1.02]'
                                         }`}
