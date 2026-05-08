@@ -14,19 +14,20 @@
 // pipeline both render — guarantees what the user sees here is what
 // will print, modulo DPI scaling.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import Link from 'next/link'
 import {
     Wand2, ChevronRight, CheckCircle2, AlertTriangle, Loader2,
     Palette, Image as ImageIcon, Type, Frame, Layers, RotateCw,
-    Lock, Crown, Save, Copy, Trash2, Undo2, X,
+    Lock, Crown, Save, Copy, Trash2, Undo2, X, Upload,
 } from 'lucide-react'
 import { auth } from '@/lib/firebaseClient'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import {
     listPresets, seedBuiltinPresetsIfMissing, savePreset, deletePreset,
-    clonePresetForEdit,
+    clonePresetForEdit, listAllBackgrounds, uploadBackground,
+    deleteStudioBackground,
     resolvePreset, FRAMES_REGISTRY, FONTS_REGISTRY, TEXTURES_REGISTRY,
     FONT_IDS, FRAME_IDS,
 } from '@/lib/studioPresets'
@@ -82,6 +83,54 @@ function StudioContent() {
     const [draft, setDraft] = useState(null)
     const [saving, setSaving] = useState(false)
     const [toast, setToast] = useState(null) // { type, message }
+
+    // Backgrounds (static + uploaded). Pulled once on mount + after
+    // every successful upload/delete so the picker reflects the
+    // latest collection.
+    const [backgrounds, setBackgrounds] = useState([])
+    const [uploadStatus, setUploadStatus] = useState({ state: 'idle' })
+
+    const refreshBackgrounds = async () => {
+        const list = await listAllBackgrounds()
+        setBackgrounds(list)
+    }
+    useEffect(() => {
+        refreshBackgrounds()
+    }, [])
+
+    const handleUploadBackground = async file => {
+        if (!file) return
+        setUploadStatus({ state: 'pending' })
+        try {
+            const saved = await uploadBackground(file, {
+                uid: auth.currentUser?.uid,
+            })
+            await refreshBackgrounds()
+            setUploadStatus({ state: 'idle' })
+            // Auto-select the freshly uploaded background.
+            updateValues({ texture: saved.url })
+            showToast('success', 'הרקע הועלה ונבחר')
+        } catch (err) {
+            setUploadStatus({ state: 'idle' })
+            showToast('error', err?.message || 'העלאה נכשלה')
+        }
+    }
+
+    const handleDeleteBackground = async bg => {
+        if (!bg || bg.origin !== 'studio') return
+        if (!window.confirm(`למחוק את הרקע "${bg.label}"?`)) return
+        try {
+            await deleteStudioBackground(bg.id, bg.storagePath)
+            await refreshBackgrounds()
+            // If the deleted background was the active texture, clear it.
+            if (draft?.values?.texture === bg.url) {
+                updateValues({ texture: null })
+            }
+            showToast('success', 'הרקע נמחק')
+        } catch (err) {
+            showToast('error', err?.message || 'מחיקה נכשלה')
+        }
+    }
 
     // Seed + load. Same flow as the shell from the previous commit —
     // the rendering changes, the data does not.
@@ -350,6 +399,10 @@ function StudioContent() {
                         editable={editable}
                         onValuesChange={updateValues}
                         onImageStyleChange={updateImageStyle}
+                        backgrounds={backgrounds}
+                        uploadStatus={uploadStatus}
+                        onUploadBackground={handleUploadBackground}
+                        onDeleteBackground={handleDeleteBackground}
                     />
                 </div>
 
@@ -728,7 +781,10 @@ function PreviewPanel({ preset, styleSettings, entry, blessingLength, onBlessing
 // stay read-only (the action bar surfaces a "Clone for editing"
 // button instead). All controls operate on draft.values via the
 // onValuesChange / onImageStyleChange callbacks.
-function PropertiesPanel({ draft, editable, onValuesChange, onImageStyleChange }) {
+function PropertiesPanel({
+    draft, editable, onValuesChange, onImageStyleChange,
+    backgrounds, uploadStatus, onUploadBackground, onDeleteBackground,
+}) {
     const isSystem = draft?.ownerType === 'system'
     const v = draft?.values || {}
 
@@ -821,12 +877,16 @@ function PropertiesPanel({ draft, editable, onValuesChange, onImageStyleChange }
                             onChange={id => onValuesChange({ frameId: id })}
                         />
 
-                        <PropertyTextureEdit
+                        <PropertyBackgroundsEdit
                             icon={ImageIcon}
-                            label='מרקם'
-                            textureUrl={v.texture}
+                            label='רקע / מרקם'
+                            currentUrl={v.texture}
+                            backgrounds={backgrounds}
+                            uploadStatus={uploadStatus}
                             disabled={!editable}
                             onChange={url => onValuesChange({ texture: url })}
+                            onUpload={onUploadBackground}
+                            onDelete={onDeleteBackground}
                         />
 
                         {/* Image size — width drives, height auto-
@@ -1030,28 +1090,200 @@ function FrameTile({ src, isNone, selected, disabled, onClick }) {
     )
 }
 
-// Texture picker — same shape as the frame picker.
-function PropertyTextureEdit({ icon: Icon, label, textureUrl, disabled, onChange }) {
+// Unified backgrounds picker — covers everything that maps to the
+// page's CSS background-image (currently the renderer's `texture`
+// field). Three sources, grouped:
+//   • textures   — 9 tiled patterns from /public/textures/
+//   • system     — curated full-page backgrounds in /public/backgrounds/
+//   • studio     — uploaded by the super admin into Firestore
+// Plus an "ללא" tile to clear the background and an upload button
+// that opens the file picker (also handles drag-and-drop).
+function PropertyBackgroundsEdit({
+    icon: Icon, label, currentUrl, backgrounds,
+    uploadStatus, disabled, onChange, onUpload, onDelete,
+}) {
+    const fileInputRef = useRef(null)
+    const [isDragging, setIsDragging] = useState(false)
+
+    const onFilePick = e => {
+        const file = e.target.files?.[0]
+        if (file) onUpload(file)
+        if (e.target) e.target.value = '' // allow re-uploading same name
+    }
+    const onDrop = e => {
+        e.preventDefault()
+        setIsDragging(false)
+        if (disabled) return
+        const file = e.dataTransfer?.files?.[0]
+        if (file) onUpload(file)
+    }
+
+    const systemBgs = backgrounds.filter(b => b.origin === 'static')
+    const studioBgs = backgrounds.filter(b => b.origin === 'studio')
+    const isUploading = uploadStatus?.state === 'pending'
+
     return (
         <div>
             <PropertyHeader icon={Icon} label={label} />
-            <div className='grid grid-cols-5 gap-1.5'>
-                <FrameTile
-                    isNone
-                    selected={!textureUrl}
-                    disabled={disabled}
-                    onClick={() => !disabled && onChange(null)}
-                />
-                {TEXTURES_REGISTRY.map(t => (
+
+            {/* Section: textures (kept inline — they're tiles, distinct
+                from full-page backgrounds visually). */}
+            <BgSection label='מרקמים' count={TEXTURES_REGISTRY.length}>
+                <div className='grid grid-cols-5 gap-1.5'>
                     <FrameTile
-                        key={t.id}
-                        src={t.src}
-                        selected={t.src === textureUrl}
+                        isNone
+                        selected={!currentUrl}
                         disabled={disabled}
-                        onClick={() => !disabled && onChange(t.src)}
+                        onClick={() => !disabled && onChange(null)}
                     />
-                ))}
+                    {TEXTURES_REGISTRY.map(t => (
+                        <FrameTile
+                            key={t.id}
+                            src={t.src}
+                            selected={t.src === currentUrl}
+                            disabled={disabled}
+                            onClick={() => !disabled && onChange(t.src)}
+                        />
+                    ))}
+                </div>
+            </BgSection>
+
+            {/* Section: curated full-page backgrounds shipping in code */}
+            {systemBgs.length > 0 && (
+                <BgSection label='רקעים מהמערכת' count={systemBgs.length}>
+                    <div className='grid grid-cols-5 gap-1.5'>
+                        {systemBgs.map(b => (
+                            <FrameTile
+                                key={b.id}
+                                src={b.src}
+                                selected={b.src === currentUrl}
+                                disabled={disabled}
+                                onClick={() => !disabled && onChange(b.src)}
+                            />
+                        ))}
+                    </div>
+                </BgSection>
+            )}
+
+            {/* Section: studio-uploaded. Each tile gets a small delete
+                "✕" button on hover so the user can prune their library. */}
+            <BgSection label='הרקעים שלי' count={studioBgs.length}>
+                {studioBgs.length === 0 ? (
+                    <p className='text-[11px] text-[#a89378] italic px-2 py-1'>
+                        עדיין לא העלית רקע — נסה את כפתור ההעלאה למטה
+                    </p>
+                ) : (
+                    <div className='grid grid-cols-5 gap-1.5'>
+                        {studioBgs.map(b => (
+                            <StudioBgTile
+                                key={b.id}
+                                bg={b}
+                                selected={b.url === currentUrl}
+                                disabled={disabled}
+                                onClick={() => !disabled && onChange(b.url)}
+                                onDelete={() => onDelete && onDelete(b)}
+                            />
+                        ))}
+                    </div>
+                )}
+            </BgSection>
+
+            {/* Upload area — drop zone OR click-to-browse. */}
+            <div
+                onDragOver={e => {
+                    if (disabled) return
+                    e.preventDefault()
+                    setIsDragging(true)
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={onDrop}
+                onClick={() => !disabled && !isUploading && fileInputRef.current?.click()}
+                className={`mt-2 rounded-lg px-3 py-3 cursor-pointer transition-colors text-center ${
+                    disabled || isUploading ? 'cursor-not-allowed opacity-60' : ''
+                }`}
+                style={{
+                    background: isDragging ? '#f4ecd9' : '#fbf6ec',
+                    border: `1px dashed ${isDragging ? '#c9a44e' : '#ead9b3'}`,
+                }}
+            >
+                <input
+                    ref={fileInputRef}
+                    type='file'
+                    accept='image/jpeg,image/png,image/webp'
+                    onChange={onFilePick}
+                    disabled={disabled || isUploading}
+                    className='hidden'
+                />
+                {isUploading ? (
+                    <div className='flex items-center justify-center gap-2 text-[12px] text-[#7a6a52]'>
+                        <Loader2 size={13} className='animate-spin' />
+                        מעלה רקע...
+                    </div>
+                ) : (
+                    <div className='flex items-center justify-center gap-2 text-[12px] font-semibold text-[#7a6a52]'>
+                        <Upload size={13} />
+                        {isDragging ? 'שחרר כדי להעלות' : 'העלה רקע (גרור או לחץ)'}
+                    </div>
+                )}
+                <p className='text-[10px] text-[#a89378] mt-1.5 leading-relaxed'>
+                    JPG / PNG / WebP · עד 5MB · לפחות 1500px בצלע הארוכה · יחס 0.7–1.5
+                </p>
             </div>
+        </div>
+    )
+}
+
+// Lightweight collapsible-section header for the backgrounds picker.
+// Kept always-expanded in v1 — v2 can add accordion behavior if the
+// list grows.
+function BgSection({ label, count, children }) {
+    return (
+        <div className='mt-2'>
+            <div className='flex items-center gap-2 mb-1.5 px-1'>
+                <span className='text-[10.5px] font-bold uppercase tracking-widest text-[#a89378]'>
+                    {label}
+                </span>
+                <span className='text-[10px] text-[#c4b9a4]'>{count}</span>
+            </div>
+            {children}
+        </div>
+    )
+}
+
+// Variant of FrameTile that also shows a delete affordance on hover
+// for studio-uploaded backgrounds. The clickable area selects, the
+// floating ✕ deletes (with confirm in the parent).
+function StudioBgTile({ bg, selected, disabled, onClick, onDelete }) {
+    return (
+        <div className='relative group aspect-square'>
+            <button
+                type='button'
+                onClick={onClick}
+                disabled={disabled}
+                className={`absolute inset-0 rounded-lg overflow-hidden transition-all disabled:cursor-not-allowed ${
+                    selected
+                        ? 'ring-2 ring-[#AA8840] ring-offset-1'
+                        : 'hover:scale-105'
+                }`}
+                style={{ background: '#ffffff', border: '1px solid #ead9b3' }}
+            >
+                <img
+                    src={bg.url}
+                    alt={bg.label || ''}
+                    className='absolute inset-0 w-full h-full object-cover'
+                />
+            </button>
+            <button
+                type='button'
+                onClick={e => {
+                    e.stopPropagation()
+                    onDelete()
+                }}
+                title='מחק רקע'
+                className='absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-white border border-red-200 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow'
+            >
+                <X size={11} />
+            </button>
         </div>
     )
 }

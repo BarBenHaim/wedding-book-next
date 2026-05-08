@@ -20,10 +20,11 @@
 // Firestore.
 
 import {
-    collection, doc, getDocs, getDoc, setDoc, deleteDoc,
+    collection, doc, getDocs, getDoc, setDoc, addDoc, deleteDoc,
     query, orderBy, serverTimestamp,
 } from 'firebase/firestore'
-import { db } from './firebaseClient'
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
+import { db, storage } from './firebaseClient'
 import { heebo, frankRuhl, secular, davidLibre, notoHebrew, gveretLevin, danaYad } from '@/app/fonts'
 
 // ── Frame URL registry ───────────────────────────────────────────────
@@ -354,6 +355,182 @@ export function clonePresetForEdit(preset, { uid } = {}) {
         createdAt: null,
         updatedAt: null,
     }
+}
+
+// ── Studio backgrounds (uploaded by super admins) ───────────────────
+// Stored in Firestore `studio_backgrounds`, files in Firebase Storage
+// under `studio/backgrounds/{uuid}.{ext}`. The Studio's background
+// picker merges these with STATIC_BACKGROUNDS via listAllBackgrounds()
+// below so users see both sources in one unified gallery.
+
+const BACKGROUNDS_COLLECTION = 'studio_backgrounds'
+
+const UPLOAD_LIMITS = {
+    maxFileMB: 5,
+    minSize: 1500, // px on the longer edge — matches the low-res guard threshold
+    minAspect: 0.7,
+    maxAspect: 1.5,
+    allowedTypes: ['image/jpeg', 'image/png', 'image/webp'],
+}
+
+// Read every uploaded background from Firestore. Sorted newest-first
+// so the most recent uploads are visible immediately after refresh.
+// Returns an empty array on error so the picker still renders the
+// static layer.
+export async function listStudioBackgrounds() {
+    try {
+        const snap = await getDocs(
+            query(collection(db, BACKGROUNDS_COLLECTION), orderBy('createdAt', 'desc'))
+        )
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    } catch (err) {
+        console.warn('[studioPresets] listStudioBackgrounds failed:', err?.message || err)
+        return []
+    }
+}
+
+// Returns the unified background list — static (curated, ships in
+// code) + uploaded (Firestore). Each entry carries an `origin` flag
+// so the picker can badge them.
+export async function listAllBackgrounds() {
+    const uploaded = await listStudioBackgrounds()
+    return [
+        ...STATIC_BACKGROUNDS.map(b => ({ ...b, origin: 'static' })),
+        ...uploaded.map(b => ({ ...b, origin: 'studio' })),
+    ]
+}
+
+// Inspect an image File and return its natural dimensions + aspect.
+// Used for client-side validation before upload — rejects undersized
+// or wildly-off-aspect images so we don't bloat Storage with
+// unusable assets. Resolves to `{ width, height, aspect }`.
+function probeImage(file) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file)
+        const img = new Image()
+        img.onload = () => {
+            URL.revokeObjectURL(url)
+            resolve({
+                width: img.naturalWidth,
+                height: img.naturalHeight,
+                aspect: img.naturalWidth / img.naturalHeight,
+            })
+        }
+        img.onerror = () => {
+            URL.revokeObjectURL(url)
+            reject(new Error('image-probe-failed'))
+        }
+        img.src = url
+    })
+}
+
+// Upload a background. Validates → compresses → writes to Storage →
+// writes the Firestore doc. Returns the stored doc on success,
+// throws a Hebrew-friendly Error on validation failure so the UI
+// can show the message verbatim.
+//
+// Compression mirrors the photo-page pipeline: 2560 px max edge,
+// JPEG q 0.92, ≤ 1.5 MB. The 'browser-image-compression' module is
+// dynamically imported so the studio bundle doesn't load it until a
+// background is actually uploaded.
+export async function uploadBackground(file, { uid, label = '', tags = [] } = {}) {
+    if (!file) throw new Error('uploadBackground: missing file')
+
+    // ── Validation ──
+    if (!UPLOAD_LIMITS.allowedTypes.includes(file.type)) {
+        throw new Error('פורמט לא נתמך — רק JPG, PNG או WebP')
+    }
+    if (file.size > UPLOAD_LIMITS.maxFileMB * 1024 * 1024) {
+        throw new Error(`הקובץ גדול מדי — מקסימום ${UPLOAD_LIMITS.maxFileMB}MB`)
+    }
+
+    let probed
+    try {
+        probed = await probeImage(file)
+    } catch {
+        throw new Error('לא ניתן לקרוא את התמונה')
+    }
+    const longerEdge = Math.max(probed.width, probed.height)
+    if (longerEdge < UPLOAD_LIMITS.minSize) {
+        throw new Error(
+            `רזולוציה נמוכה מדי (${probed.width}×${probed.height}). דרושים לפחות ${UPLOAD_LIMITS.minSize}px בצלע הארוכה`
+        )
+    }
+    if (
+        probed.aspect < UPLOAD_LIMITS.minAspect ||
+        probed.aspect > UPLOAD_LIMITS.maxAspect
+    ) {
+        throw new Error(
+            'יחס התמונה לא מתאים לעמוד ספר. אפשר רק תמונות סביב 1:1'
+        )
+    }
+
+    // ── Compression — dynamic import so the studio bundle stays
+    //    small for non-upload sessions. Best-effort: if it throws
+    //    (rare iOS Safari quirk) we ship the original file. ──
+    let compressed = file
+    try {
+        const { default: imageCompression } = await import('browser-image-compression')
+        const out = await imageCompression(file, {
+            maxSizeMB: 1.5,
+            maxWidthOrHeight: 2560,
+            initialQuality: 0.92,
+            useWebWorker: true,
+            fileType: 'image/jpeg',
+        })
+        if (out.size < file.size) compressed = out
+    } catch (err) {
+        console.warn('[studioPresets] compression skipped:', err?.message || err)
+    }
+
+    // ── Upload + write doc ──
+    const ext =
+        compressed.type === 'image/png'
+            ? 'png'
+            : compressed.type === 'image/webp'
+            ? 'webp'
+            : 'jpg'
+    const id = newPresetId().replace('studio_', 'bg_')
+    const storagePath = `studio/backgrounds/${id}.${ext}`
+    const ref = storageRef(storage, storagePath)
+    await uploadBytes(ref, compressed, { contentType: compressed.type || 'image/jpeg' })
+    const url = await getDownloadURL(ref)
+
+    const docData = {
+        url,
+        storagePath,
+        label: label || file.name?.replace(/\.[^.]+$/, '') || 'רקע מותאם',
+        originalFilename: file.name || null,
+        width: probed.width,
+        height: probed.height,
+        sizeKB: Math.round(compressed.size / 1024),
+        tags: Array.isArray(tags) ? tags.filter(Boolean) : [],
+        uploadedBy: uid || 'unknown',
+        createdAt: new Date(),
+    }
+    await setDoc(doc(db, BACKGROUNDS_COLLECTION, id), docData)
+    return { id, ...docData, origin: 'studio' }
+}
+
+// Delete an uploaded background. Removes both the Firestore doc and
+// the Storage object. The studio UI is responsible for confirming
+// before calling this. If a preset references the deleted URL, it
+// continues to point at the now-404 URL — v2 will add a referential-
+// integrity check; for v1 we just warn.
+export async function deleteStudioBackground(id, storagePath) {
+    if (!id) throw new Error('deleteStudioBackground: missing id')
+    await deleteDoc(doc(db, BACKGROUNDS_COLLECTION, id))
+    if (storagePath) {
+        try {
+            await deleteObject(storageRef(storage, storagePath))
+        } catch (err) {
+            // Storage delete is best-effort — the doc is already gone,
+            // so even if the file lingers it won't be discoverable
+            // through the studio.
+            console.warn('[studioPresets] storage delete failed:', err?.message || err)
+        }
+    }
+    return true
 }
 
 // Write the BUILTIN_PRESETS to Firestore if the collection is empty or
