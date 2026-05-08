@@ -810,7 +810,13 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                 // (set inline below), so scrolling doesn't break the
                 // visual anchoring of the floral arch above the
                 // title.
-                className='flex items-start justify-center px-4 pb-2 font-sans relative min-h-screen'
+                // overflow-x-clip prevents the absolutely-positioned
+                // floral ornament inside the form card (left:-32px,
+                // bleeds outside the card on purpose) from triggering
+                // horizontal page scroll on narrow viewports. The
+                // x-axis only is clipped — vertical scroll is still
+                // available as the safety net for short phones.
+                className='flex items-start justify-center px-4 pb-2 font-sans relative min-h-screen overflow-x-clip'
                 style={{
                     // 80px top padding pushes "רגע אחד" down from the
                     // top edge of the viewport — the floral arch
