@@ -19,13 +19,16 @@ import Link from 'next/link'
 import {
     Wand2, ChevronRight, CheckCircle2, AlertTriangle, Loader2,
     Palette, Image as ImageIcon, Type, Frame, Layers, RotateCw,
-    Lock, Crown,
+    Lock, Crown, Save, Copy, Trash2, Undo2, X,
 } from 'lucide-react'
+import { auth } from '@/lib/firebaseClient'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import {
-    listPresets, seedBuiltinPresetsIfMissing,
-    resolvePreset, FRAMES_REGISTRY, FONTS_REGISTRY, TEXTURES_REGISTRY, FONT_IDS,
+    listPresets, seedBuiltinPresetsIfMissing, savePreset, deletePreset,
+    clonePresetForEdit,
+    resolvePreset, FRAMES_REGISTRY, FONTS_REGISTRY, TEXTURES_REGISTRY,
+    FONT_IDS, FRAME_IDS,
 } from '@/lib/studioPresets'
 
 // ── Mock blessings at the three lengths the photo form supports ──
@@ -73,6 +76,13 @@ function StudioContent() {
     const [activeId, setActiveId] = useState(null)
     const [blessingLength, setBlessingLength] = useState(100)
 
+    // Draft — the editable copy of the loaded preset. Driven from
+    // activePreset on selection change, then mutated by the
+    // properties panel until the user saves or reverts.
+    const [draft, setDraft] = useState(null)
+    const [saving, setSaving] = useState(false)
+    const [toast, setToast] = useState(null) // { type, message }
+
     // Seed + load. Same flow as the shell from the previous commit —
     // the rendering changes, the data does not.
     useEffect(() => {
@@ -97,13 +107,53 @@ function StudioContent() {
         [presets, activeId]
     )
 
-    // Resolve the preset's storage-shape values to the runtime shape
-    // BookPageTemplate expects. resolvePreset is the same function the
-    // viewer uses when applying a preset to a wedding's design doc.
+    // Reset the draft whenever the active preset changes. JSON
+    // round-trip gives us a deep clone so editing draft.values doesn't
+    // mutate the shared preset object.
+    useEffect(() => {
+        setDraft(activePreset ? JSON.parse(JSON.stringify(activePreset)) : null)
+    }, [activePreset?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    const isSystem = draft?.ownerType === 'system'
+    const editable = !!draft && !isSystem
+
+    // Has the user changed anything since loading the preset? Compared
+    // by JSON serialization — fast enough for the shape we have.
+    const dirty = useMemo(() => {
+        if (!draft || !activePreset) return false
+        return JSON.stringify(draft) !== JSON.stringify(activePreset)
+    }, [draft, activePreset])
+
+    // Resolve the DRAFT (not the persisted preset) to the runtime
+    // shape so the preview reflects unsaved edits live.
     const resolvedStyle = useMemo(() => {
-        if (!activePreset) return null
-        return resolvePreset(activePreset).values
-    }, [activePreset])
+        if (!draft) return null
+        return resolvePreset(draft).values
+    }, [draft])
+
+    // Helpers for the properties panel — apply a partial values patch
+    // immutably. Panel calls onChange({ key: newValue }) and we merge.
+    const updateValues = patch => {
+        if (!draft) return
+        setDraft(prev => ({
+            ...prev,
+            values: { ...(prev.values || {}), ...patch },
+        }))
+    }
+    const updateImageStyle = patch => {
+        if (!draft) return
+        setDraft(prev => ({
+            ...prev,
+            values: {
+                ...(prev.values || {}),
+                imageStyle: { ...(prev.values?.imageStyle || {}), ...patch },
+            },
+        }))
+    }
+    const updateName = name => {
+        if (!draft) return
+        setDraft(prev => ({ ...prev, name }))
+    }
 
     // Mock entry passed to the renderer. `text` swaps with the length
     // toggle; everything else stays fixed.
@@ -116,6 +166,97 @@ function StudioContent() {
         }),
         [blessingLength]
     )
+
+    const showToast = (type, message) => {
+        setToast({ type, message })
+        setTimeout(() => setToast(null), 3500)
+    }
+
+    // Replace the current selection with a freshly cloned editable
+    // copy of the active preset. Doesn't write to Firestore — the
+    // user has to hit Save to persist.
+    const handleClone = () => {
+        if (!activePreset) return
+        const clone = clonePresetForEdit(activePreset, {
+            uid: auth.currentUser?.uid,
+        })
+        // Insert the clone into the local list at the top of the
+        // studio section + select it. It's not in Firestore yet, so
+        // refreshing the page would lose it — that's intentional.
+        // The user must save to persist.
+        setPresets(prev => [...prev, clone])
+        setActiveId(clone.id)
+        showToast('info', 'נוצר עותק לעריכה — שמור כדי לשמר')
+    }
+
+    // Save the current draft. If the draft has never been saved (no
+    // matching doc in Firestore — which is the case for a fresh
+    // clone), this is the first write. Otherwise overwrite.
+    const handleSave = async () => {
+        if (!draft || saving || !editable) return
+        setSaving(true)
+        try {
+            const saved = await savePreset(draft, {
+                uid: auth.currentUser?.uid,
+            })
+            setPresets(prev => {
+                const exists = prev.some(p => p.id === saved.id)
+                return exists
+                    ? prev.map(p => (p.id === saved.id ? saved : p))
+                    : [...prev, saved]
+            })
+            setActiveId(saved.id)
+            showToast('success', 'נשמר')
+        } catch (err) {
+            showToast('error', `שמירה נכשלה: ${err?.message || err}`)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    // Save-as-new always writes a new doc with a fresh id. Useful
+    // when the user wants to keep the original studio preset and
+    // branch off it.
+    const handleSaveAsNew = async () => {
+        if (!draft || saving) return
+        setSaving(true)
+        try {
+            const saved = await savePreset(
+                { ...draft, name: `${draft.name || 'תבנית'} — עותק` },
+                { uid: auth.currentUser?.uid, asNew: true }
+            )
+            setPresets(prev => [...prev, saved])
+            setActiveId(saved.id)
+            showToast('success', 'נשמרה תבנית חדשה')
+        } catch (err) {
+            showToast('error', `שמירה נכשלה: ${err?.message || err}`)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const handleRevert = () => {
+        if (!activePreset) return
+        setDraft(JSON.parse(JSON.stringify(activePreset)))
+        showToast('info', 'בוטלו השינויים')
+    }
+
+    const handleDelete = async () => {
+        if (!draft || !editable) return
+        if (!window.confirm(`למחוק את התבנית "${draft.name}"? פעולה זו לא ניתנת לביטול.`)) return
+        setSaving(true)
+        try {
+            await deletePreset(draft.id, draft.ownerType)
+            setPresets(prev => prev.filter(p => p.id !== draft.id))
+            const remaining = presets.filter(p => p.id !== draft.id)
+            setActiveId(remaining[0]?.id || null)
+            showToast('success', 'התבנית נמחקה')
+        } catch (err) {
+            showToast('error', `מחיקה נכשלה: ${err?.message || err}`)
+        } finally {
+            setSaving(false)
+        }
+    }
 
     return (
         <div
@@ -169,6 +310,25 @@ function StudioContent() {
                     <SeedStatusChip seedStatus={seedStatus} />
                 </div>
 
+                {/* Action bar — name input + save/clone/revert/delete.
+                    Hidden when nothing is loaded; shows different
+                    actions for system (clone-only) vs studio
+                    (save/saveAsNew/delete). */}
+                {draft && (
+                    <ActionBar
+                        draft={draft}
+                        isSystem={isSystem}
+                        dirty={dirty}
+                        saving={saving}
+                        onNameChange={updateName}
+                        onClone={handleClone}
+                        onSave={handleSave}
+                        onSaveAsNew={handleSaveAsNew}
+                        onRevert={handleRevert}
+                        onDelete={handleDelete}
+                    />
+                )}
+
                 {/* Three-column grid. Stacks on narrower screens so
                     the studio is at least usable on tablet — though
                     full polish is a desktop feature. */}
@@ -179,15 +339,160 @@ function StudioContent() {
                         onSelect={setActiveId}
                     />
                     <PreviewPanel
-                        preset={activePreset}
+                        preset={draft}
                         styleSettings={resolvedStyle}
                         entry={mockEntry}
                         blessingLength={blessingLength}
                         onBlessingLengthChange={setBlessingLength}
                     />
-                    <PropertiesPanel preset={activePreset} />
+                    <PropertiesPanel
+                        draft={draft}
+                        editable={editable}
+                        onValuesChange={updateValues}
+                        onImageStyleChange={updateImageStyle}
+                    />
                 </div>
+
+                {/* Toast — fixed-bottom notice for save/error/info. */}
+                {toast && (
+                    <div
+                        className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl text-sm font-semibold shadow-2xl flex items-center gap-2'
+                        style={{
+                            background:
+                                toast.type === 'success'
+                                    ? 'rgba(167,212,148,0.95)'
+                                    : toast.type === 'error'
+                                    ? 'rgba(239,168,168,0.95)'
+                                    : 'rgba(255,255,255,0.95)',
+                            color:
+                                toast.type === 'success'
+                                    ? '#1f4d1d'
+                                    : toast.type === 'error'
+                                    ? '#5d1a1a'
+                                    : '#3d3225',
+                            border: '1px solid rgba(212,184,103,0.30)',
+                            backdropFilter: 'blur(6px)',
+                        }}
+                    >
+                        {toast.message}
+                    </div>
+                )}
             </div>
+        </div>
+    )
+}
+
+// ── Top action bar — name input + Save / Save-as-new / Revert /
+//    Delete / Clone (for system presets). ───────────────────────────
+function ActionBar({
+    draft,
+    isSystem,
+    dirty,
+    saving,
+    onNameChange,
+    onClone,
+    onSave,
+    onSaveAsNew,
+    onRevert,
+    onDelete,
+}) {
+    return (
+        <div
+            className='rounded-2xl px-4 py-3 mb-5 flex items-center gap-2.5 flex-wrap'
+            style={{
+                background: '#ffffff',
+                border: '1px solid rgba(212,184,103,0.22)',
+                boxShadow: '0 8px 20px -16px rgba(170,136,64,0.22)',
+            }}
+        >
+            <input
+                type='text'
+                value={draft.name || ''}
+                onChange={e => onNameChange(e.target.value)}
+                disabled={isSystem}
+                placeholder='שם התבנית'
+                className='flex-1 min-w-[180px] px-3 py-2 rounded-lg text-[14px] font-bold text-[#1a1410] outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed'
+                style={{
+                    background: '#fbf6ec',
+                    border: '1px solid #ead9b3',
+                }}
+            />
+
+            {isSystem ? (
+                <>
+                    <span className='flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-semibold rounded-full bg-amber-50 border border-amber-200 text-amber-700'>
+                        <Crown size={11} /> תבנית מערכת — לקריאה בלבד
+                    </span>
+                    <button
+                        onClick={onClone}
+                        className='inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white active:scale-[0.98] transition-all'
+                        style={{
+                            background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                            boxShadow: '0 6px 14px -8px rgba(170,136,64,0.50)',
+                        }}
+                    >
+                        <Copy size={14} /> צור עותק לעריכה
+                    </button>
+                </>
+            ) : (
+                <>
+                    {dirty && (
+                        <span className='px-2.5 py-1 text-[11px] font-semibold rounded-full bg-[#AA8840]/10 text-[#a8843a] border border-[#AA8840]/30'>
+                            לא נשמר
+                        </span>
+                    )}
+                    <button
+                        onClick={onRevert}
+                        disabled={!dirty || saving}
+                        title='בטל שינויים'
+                        className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed'
+                        style={{
+                            background: '#ffffff',
+                            border: '1px solid #ead9b3',
+                            color: '#7a6a52',
+                        }}
+                    >
+                        <Undo2 size={13} /> בטל
+                    </button>
+                    <button
+                        onClick={onSaveAsNew}
+                        disabled={saving}
+                        className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed'
+                        style={{
+                            background: '#ffffff',
+                            border: '1px solid #ead9b3',
+                            color: '#7a6a52',
+                        }}
+                    >
+                        <Copy size={13} /> שמור כעותק
+                    </button>
+                    <button
+                        onClick={onDelete}
+                        disabled={saving}
+                        title='מחק את התבנית הזו'
+                        className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed'
+                        style={{
+                            background: '#fff5f5',
+                            border: '1px solid #ffcdcd',
+                            color: '#b32424',
+                        }}
+                    >
+                        <Trash2 size={13} />
+                    </button>
+                    <button
+                        onClick={onSave}
+                        disabled={!dirty || saving}
+                        className='inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed'
+                        style={{
+                            background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                            boxShadow: '0 6px 14px -8px rgba(170,136,64,0.50)',
+                        }}
+                    >
+                        {saving ? <Loader2 size={14} className='animate-spin' /> : <Save size={14} />}
+                        שמור
+                    </button>
+                </>
+            )}
         </div>
     )
 }
@@ -418,10 +723,14 @@ function PreviewPanel({ preset, styleSettings, entry, blessingLength, onBlessing
     )
 }
 
-// ── Right rail: properties panel (read-only in this commit) ──────────
-function PropertiesPanel({ preset }) {
-    const isSystem = preset?.ownerType === 'system'
-    const v = preset?.values || {}
+// ── Right rail: properties panel ─────────────────────────────────────
+// Editable when the loaded preset is a studio preset; system presets
+// stay read-only (the action bar surfaces a "Clone for editing"
+// button instead). All controls operate on draft.values via the
+// onValuesChange / onImageStyleChange callbacks.
+function PropertiesPanel({ draft, editable, onValuesChange, onImageStyleChange }) {
+    const isSystem = draft?.ownerType === 'system'
+    const v = draft?.values || {}
 
     return (
         <aside
@@ -440,15 +749,14 @@ function PropertiesPanel({ preset }) {
                 <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold'>
                     מאפיינים
                 </p>
-                {preset && isSystem && (
+                {draft && isSystem && (
                     <p className='text-[10.5px] text-[#a89378] mt-1 leading-relaxed'>
-                        זוהי תבנית מערכת — לא ניתן לערוך אותה ישירות. בעדכון הבא:
-                        כפתור "צור עותק לעריכה".
+                        תבנית מערכת — צור עותק כדי לערוך.
                     </p>
                 )}
-                {preset && !isSystem && (
+                {draft && !isSystem && (
                     <p className='text-[10.5px] text-[#a89378] mt-1 leading-relaxed'>
-                        עריכה תהיה זמינה בעדכון הבא.
+                        השינויים מתעדכנים בתצוגה החיה. לחץ "שמור" כדי לשמר.
                     </p>
                 )}
             </div>
@@ -457,17 +765,34 @@ function PropertiesPanel({ preset }) {
                 className='overflow-y-auto'
                 style={{ maxHeight: 'calc(100vh - 140px)' }}
             >
-                {!preset ? (
+                {!draft ? (
                     <div className='p-6 text-center text-[12px] text-[#a89378]'>
                         בחר תבנית כדי לראות את המאפיינים שלה
                     </div>
                 ) : (
                     <div className='p-4 space-y-4'>
+                        {/* Renderer / template — kept read-only even
+                            for studio presets. Switching renderers
+                            mid-edit invalidates many style fields and
+                            the studio v1 doesn't reconcile that. */}
                         <PropertyRow icon={Layers} label='מבנה' value={v.template || 'classic'} />
-                        <PropertyColor label='רקע' value={v.backgroundColor} icon={Palette} />
-                        <PropertyFont label='פונט' fontKey={v.fontKey} icon={Type} />
 
-                        {/* Font size — slider, disabled in this commit */}
+                        <PropertyColorEdit
+                            icon={Palette}
+                            label='רקע'
+                            value={v.backgroundColor}
+                            disabled={!editable}
+                            onChange={c => onValuesChange({ backgroundColor: c })}
+                        />
+
+                        <PropertyFontEdit
+                            icon={Type}
+                            label='פונט'
+                            fontKey={v.fontKey}
+                            disabled={!editable}
+                            onChange={k => onValuesChange({ fontKey: k })}
+                        />
+
                         <PropertySlider
                             icon={Type}
                             label='גודל פונט'
@@ -475,21 +800,49 @@ function PropertiesPanel({ preset }) {
                             min={1.5}
                             max={6}
                             step={0.1}
-                            unit='% מגובה העמוד'
-                            disabled
+                            unit='%'
+                            disabled={!editable}
+                            onChange={n => onValuesChange({ fontSizePercent: n })}
                         />
 
-                        <PropertyColor label='צבע פונט' value={v.fontColor} icon={Palette} />
-                        <PropertyFrame label='מסגרת' frameId={v.frameId} icon={Frame} />
-                        <PropertyTexture label='מרקם' textureUrl={v.texture} icon={ImageIcon} />
+                        <PropertyColorEdit
+                            icon={Palette}
+                            label='צבע פונט'
+                            value={v.fontColor}
+                            disabled={!editable}
+                            onChange={c => onValuesChange({ fontColor: c })}
+                        />
 
-                        {/* Image size — width-only slider, height auto-
-                            tracks 4:3. Lock icon makes the coupling
-                            obvious. Disabled here; editable in next
-                            commit. */}
-                        <PropertyImageSize imageStyle={v.imageStyle} disabled />
+                        <PropertyFrameEdit
+                            icon={Frame}
+                            label='מסגרת'
+                            frameId={v.frameId}
+                            disabled={!editable}
+                            onChange={id => onValuesChange({ frameId: id })}
+                        />
 
-                        {/* Image corner radius */}
+                        <PropertyTextureEdit
+                            icon={ImageIcon}
+                            label='מרקם'
+                            textureUrl={v.texture}
+                            disabled={!editable}
+                            onChange={url => onValuesChange({ texture: url })}
+                        />
+
+                        {/* Image size — width drives, height auto-
+                            tracks 4:3 (no unlock). Stored as
+                            imageStyle.{width,height} in % of page. */}
+                        <PropertyImageSize
+                            imageStyle={v.imageStyle}
+                            disabled={!editable}
+                            onChange={width =>
+                                onImageStyleChange({
+                                    width,
+                                    height: Math.round(width * 0.75),
+                                })
+                            }
+                        />
+
                         <PropertySlider
                             icon={RotateCw}
                             label='עיגול פינות תמונה'
@@ -498,7 +851,10 @@ function PropertiesPanel({ preset }) {
                             max={48}
                             step={1}
                             unit='px'
-                            disabled
+                            disabled={!editable}
+                            onChange={n =>
+                                onImageStyleChange({ borderRadius: n })
+                            }
                         />
                     </div>
                 )}
@@ -528,135 +884,182 @@ function PropertyRow({ icon: Icon, label, value }) {
     )
 }
 
-function PropertyColor({ label, value, icon: Icon }) {
-    if (!value) return null
+// Color picker — native <input type=color> wrapped in the studio's
+// soft cream surface. Showing the raw hex too so the user can paste
+// a value precisely.
+function PropertyColorEdit({ icon: Icon, label, value, disabled, onChange }) {
+    if (value === undefined || value === null) {
+        // Fall back to a sensible default the renderer accepts when
+        // the preset doesn't carry an explicit value.
+        return (
+            <PropertyColorEdit
+                icon={Icon}
+                label={label}
+                value={label === 'רקע' ? '#ffffff' : '#000000'}
+                disabled={disabled}
+                onChange={onChange}
+            />
+        )
+    }
     return (
         <div>
-            <div className='flex items-center gap-1.5 mb-1.5'>
-                {Icon && <Icon size={12} className='text-[#c9a44e]' />}
-                <span className='text-[11px] font-semibold text-[#7a6a52] uppercase tracking-wider'>
-                    {label}
-                </span>
-            </div>
+            <PropertyHeader icon={Icon} label={label} />
             <div
-                className='flex items-center gap-2 px-3 py-2 rounded-lg'
+                className='flex items-center gap-2 px-2.5 py-2 rounded-lg'
                 style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}
             >
-                <div
-                    className='w-6 h-6 rounded shrink-0'
-                    style={{
-                        background: value,
-                        border: '1px solid rgba(0,0,0,0.10)',
-                    }}
+                <input
+                    type='color'
+                    value={value}
+                    disabled={disabled}
+                    onChange={e => onChange(e.target.value)}
+                    className='w-7 h-7 rounded shrink-0 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50'
+                    style={{ border: '1px solid rgba(0,0,0,0.10)' }}
                 />
-                <code className='text-[11.5px] font-mono text-[#5a4d3a]'>{value}</code>
+                <input
+                    type='text'
+                    value={value}
+                    disabled={disabled}
+                    onChange={e => onChange(e.target.value)}
+                    className='flex-1 bg-transparent text-[12px] font-mono text-[#5a4d3a] outline-none disabled:opacity-60 disabled:cursor-not-allowed'
+                />
             </div>
         </div>
     )
 }
 
-function PropertyFont({ label, fontKey, icon: Icon }) {
-    const font = fontKey ? FONTS_REGISTRY[fontKey] : null
+// Font picker — list of every loaded face. Each row renders the
+// label IN its own font so the user can compare visually.
+function PropertyFontEdit({ icon: Icon, label, fontKey, disabled, onChange }) {
     return (
         <div>
-            <div className='flex items-center gap-1.5 mb-1.5'>
-                {Icon && <Icon size={12} className='text-[#c9a44e]' />}
-                <span className='text-[11px] font-semibold text-[#7a6a52] uppercase tracking-wider'>
-                    {label}
-                </span>
-            </div>
+            <PropertyHeader icon={Icon} label={label} />
             <div
-                className='px-3 py-2 rounded-lg flex items-center justify-between gap-2'
+                className='rounded-lg overflow-hidden'
                 style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}
             >
-                <span
-                    className={`text-[14px] text-[#1a1410] truncate ${
-                        font?.font?.className || ''
-                    }`}
-                >
-                    {font?.label || fontKey || '—'}
-                </span>
-                <span className='text-[10px] text-[#a89378] shrink-0'>
-                    {FONT_IDS.length} זמינים
-                </span>
+                <div className='max-h-44 overflow-y-auto'>
+                    {FONT_IDS.map(id => {
+                        const f = FONTS_REGISTRY[id]
+                        const active = id === fontKey
+                        return (
+                            <button
+                                key={id}
+                                type='button'
+                                onClick={() => !disabled && onChange(id)}
+                                disabled={disabled}
+                                className={`w-full text-right px-3 py-2 transition-colors disabled:cursor-not-allowed ${
+                                    active
+                                        ? 'bg-[#AA8840]/15'
+                                        : 'hover:bg-[#f4ecd9]'
+                                }`}
+                            >
+                                <span
+                                    className={`text-[14px] ${
+                                        active ? 'text-[#1a1410] font-bold' : 'text-[#3d3225]'
+                                    } ${f.font.className}`}
+                                >
+                                    {f.label}
+                                </span>
+                            </button>
+                        )
+                    })}
+                </div>
             </div>
         </div>
     )
 }
 
-function PropertyFrame({ label, frameId, icon: Icon }) {
-    const frame = frameId ? FRAMES_REGISTRY[frameId] : null
+// Frame picker — thumbnail grid + a "ללא" tile to clear the frame.
+function PropertyFrameEdit({ icon: Icon, label, frameId, disabled, onChange }) {
     return (
         <div>
-            <div className='flex items-center gap-1.5 mb-1.5'>
-                {Icon && <Icon size={12} className='text-[#c9a44e]' />}
-                <span className='text-[11px] font-semibold text-[#7a6a52] uppercase tracking-wider'>
-                    {label}
-                </span>
-            </div>
-            <div
-                className='px-3 py-2 rounded-lg flex items-center gap-2'
-                style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}
-            >
-                {frame ? (
-                    <>
-                        <div
-                            className='w-8 h-8 rounded shrink-0 bg-white'
-                            style={{
-                                backgroundImage: `url(${frame.src})`,
-                                backgroundSize: 'cover',
-                                border: '1px solid #ead9b3',
-                            }}
+            <PropertyHeader icon={Icon} label={label} />
+            <div className='grid grid-cols-3 gap-1.5'>
+                <FrameTile
+                    isNone
+                    selected={!frameId}
+                    disabled={disabled}
+                    onClick={() => !disabled && onChange(null)}
+                />
+                {FRAME_IDS.map(id => {
+                    const f = FRAMES_REGISTRY[id]
+                    return (
+                        <FrameTile
+                            key={id}
+                            src={f.src}
+                            selected={id === frameId}
+                            disabled={disabled}
+                            onClick={() => !disabled && onChange(id)}
                         />
-                        <span className='text-[12px] text-[#3d3225]'>{frame.label}</span>
-                    </>
-                ) : (
-                    <span className='text-[12px] text-[#a89378] italic'>ללא</span>
-                )}
+                    )
+                })}
             </div>
         </div>
     )
 }
 
-function PropertyTexture({ label, textureUrl, icon: Icon }) {
-    const tex = textureUrl
-        ? TEXTURES_REGISTRY.find(t => t.src === textureUrl)
-        : null
+function FrameTile({ src, isNone, selected, disabled, onClick }) {
+    return (
+        <button
+            type='button'
+            onClick={onClick}
+            disabled={disabled}
+            className={`relative aspect-square rounded-lg overflow-hidden transition-all disabled:cursor-not-allowed ${
+                selected
+                    ? 'ring-2 ring-[#AA8840] ring-offset-1'
+                    : 'hover:scale-105'
+            }`}
+            style={{
+                background: '#ffffff',
+                border: '1px solid #ead9b3',
+            }}
+        >
+            {isNone ? (
+                <span className='absolute inset-0 flex items-center justify-center text-[10px] font-bold text-[#a89378]'>
+                    <X size={14} />
+                </span>
+            ) : (
+                <img
+                    src={src}
+                    alt=''
+                    className='absolute inset-0 w-full h-full object-cover'
+                />
+            )}
+        </button>
+    )
+}
+
+// Texture picker — same shape as the frame picker.
+function PropertyTextureEdit({ icon: Icon, label, textureUrl, disabled, onChange }) {
     return (
         <div>
-            <div className='flex items-center gap-1.5 mb-1.5'>
-                {Icon && <Icon size={12} className='text-[#c9a44e]' />}
-                <span className='text-[11px] font-semibold text-[#7a6a52] uppercase tracking-wider'>
-                    {label}
-                </span>
-            </div>
-            <div
-                className='px-3 py-2 rounded-lg flex items-center gap-2'
-                style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}
-            >
-                {textureUrl ? (
-                    <>
-                        <div
-                            className='w-8 h-8 rounded shrink-0'
-                            style={{
-                                backgroundImage: `url(${textureUrl})`,
-                                backgroundSize: 'cover',
-                                border: '1px solid #ead9b3',
-                            }}
-                        />
-                        <span className='text-[12px] text-[#3d3225]'>
-                            {tex?.label || textureUrl.split('/').pop()}
-                        </span>
-                    </>
-                ) : (
-                    <span className='text-[12px] text-[#a89378] italic'>ללא</span>
-                )}
+            <PropertyHeader icon={Icon} label={label} />
+            <div className='grid grid-cols-5 gap-1.5'>
+                <FrameTile
+                    isNone
+                    selected={!textureUrl}
+                    disabled={disabled}
+                    onClick={() => !disabled && onChange(null)}
+                />
+                {TEXTURES_REGISTRY.map(t => (
+                    <FrameTile
+                        key={t.id}
+                        src={t.src}
+                        selected={t.src === textureUrl}
+                        disabled={disabled}
+                        onClick={() => !disabled && onChange(t.src)}
+                    />
+                ))}
             </div>
         </div>
     )
 }
 
-function PropertySlider({ icon: Icon, label, value, min, max, step, unit, disabled }) {
+// Generic numeric slider — used for font size + image corner radius.
+// Editable when onChange is provided + not disabled. Steps fractionally
+// for percentages, integer for px.
+function PropertySlider({ icon: Icon, label, value, min, max, step, unit, disabled, onChange }) {
     return (
         <div>
             <div className='flex items-center justify-between gap-1.5 mb-1.5'>
@@ -677,7 +1080,7 @@ function PropertySlider({ icon: Icon, label, value, min, max, step, unit, disabl
                 max={max}
                 step={step}
                 disabled={disabled}
-                readOnly
+                onChange={e => onChange && onChange(Number(e.target.value))}
                 className='w-full accent-[#AA8840] disabled:opacity-50 disabled:cursor-not-allowed'
             />
         </div>
@@ -688,9 +1091,9 @@ function PropertySlider({ icon: Icon, label, value, min, max, step, unit, disabl
 // icon makes the coupling visible without offering an unlock toggle:
 // the WYSIWYG capture pipeline depends on a 4:3 image throughout, so
 // allowing arbitrary aspect here would silently break print fidelity.
-function PropertyImageSize({ imageStyle, disabled }) {
+function PropertyImageSize({ imageStyle, disabled, onChange }) {
     const width = imageStyle?.width ?? 90
-    const height = imageStyle?.height ?? width * 0.75 // 4:3
+    const height = imageStyle?.height ?? Math.round(width * 0.75) // 4:3
     return (
         <div>
             <div className='flex items-center justify-between gap-1.5 mb-1.5'>
@@ -712,13 +1115,26 @@ function PropertyImageSize({ imageStyle, disabled }) {
                 max={100}
                 step={1}
                 disabled={disabled}
-                readOnly
+                onChange={e => onChange && onChange(Number(e.target.value))}
                 className='w-full accent-[#AA8840] disabled:opacity-50 disabled:cursor-not-allowed'
             />
             <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>
-                גובה התמונה ננעל ליחס 4:3 — אותו יחס שהאפליקציה מחייבת בצילום
-                ובהעלאה כדי לוודא שהתצוגה והדפוס זהים.
+                גובה ננעל ליחס 4:3 — אותו יחס שהמצלמה והקרופר מחייבים, כדי
+                שהתצוגה תתאים לדפוס.
             </p>
+        </div>
+    )
+}
+
+// Tiny header used by every editable property row so the layout stays
+// consistent without repeating four lines of markup per field.
+function PropertyHeader({ icon: Icon, label }) {
+    return (
+        <div className='flex items-center gap-1.5 mb-1.5'>
+            {Icon && <Icon size={12} className='text-[#c9a44e]' />}
+            <span className='text-[11px] font-semibold text-[#7a6a52] uppercase tracking-wider'>
+                {label}
+            </span>
         </div>
     )
 }

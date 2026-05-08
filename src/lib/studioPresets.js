@@ -19,7 +19,10 @@
 // preset picker always renders, even with an empty / unreachable
 // Firestore.
 
-import { collection, doc, getDocs, getDoc, setDoc, query, orderBy } from 'firebase/firestore'
+import {
+    collection, doc, getDocs, getDoc, setDoc, deleteDoc,
+    query, orderBy, serverTimestamp,
+} from 'firebase/firestore'
 import { db } from './firebaseClient'
 import { heebo, frankRuhl, secular, davidLibre, notoHebrew, gveretLevin, danaYad } from '@/app/fonts'
 
@@ -290,6 +293,66 @@ export async function listPresets() {
     } catch (err) {
         console.warn('[studioPresets] listPresets failed, using hardcoded fallback:', err?.message || err)
         return BUILTIN_PRESETS
+    }
+}
+
+// Random-ish id for newly created studio presets. Six base36 chars is
+// plenty given the few-dozen-presets-per-account scale we're at.
+function newPresetId() {
+    return 'studio_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)
+}
+
+// Save a single preset doc to Firestore. Used by the studio's "Save"
+// (overwrite an existing studio preset) and "Save as new" (create a
+// new studio preset cloned from the active one) actions. Refuses to
+// touch system presets — those are seeded data and edits are
+// disallowed at the lib level so a careless caller can't corrupt
+// them. Returns the saved doc.
+export async function savePreset(preset, { uid, asNew = false } = {}) {
+    if (!preset) throw new Error('savePreset: missing preset')
+    if (!asNew && preset.ownerType === 'system') {
+        throw new Error('savePreset: system presets are read-only — clone first')
+    }
+
+    const now = new Date()
+    const id = asNew || !preset.id ? newPresetId() : preset.id
+    const merged = {
+        ...preset,
+        id,
+        ownerType: 'studio',                     // any save lands as studio
+        createdBy: preset.createdBy || uid || 'unknown',
+        createdAt: asNew || !preset.createdAt ? now : preset.createdAt,
+        updatedAt: now,
+    }
+    await setDoc(doc(db, COLLECTION, id), merged, { merge: false })
+    return merged
+}
+
+// Delete a studio preset. System presets are protected at the lib
+// level — same rationale as savePreset. Returns true on success.
+export async function deletePreset(presetId, ownerType) {
+    if (!presetId) throw new Error('deletePreset: missing id')
+    if (ownerType === 'system') {
+        throw new Error('deletePreset: system presets cannot be deleted')
+    }
+    await deleteDoc(doc(db, COLLECTION, presetId))
+    return true
+}
+
+// Build a draft from a system preset that the studio can edit. Strips
+// the system metadata, gives the clone a fresh id, and tags it as a
+// studio preset. The clone is NOT persisted yet — the caller (studio
+// UI) saves it through savePreset() when the user clicks save.
+export function clonePresetForEdit(preset, { uid } = {}) {
+    if (!preset) return null
+    return {
+        ...preset,
+        id: newPresetId(),
+        name: `${preset.name || 'תבנית'} — עותק`,
+        ownerType: 'studio',
+        createdBy: uid || 'unknown',
+        createdAt: null,
+        updatedAt: null,
     }
 }
 
