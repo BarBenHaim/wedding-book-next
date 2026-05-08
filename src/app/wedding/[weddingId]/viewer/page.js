@@ -24,35 +24,20 @@ import { normalizeLocale } from '@/i18n/locales'
 
 // --- הגדרות דפוס (LULU COMPLIANT) ---
 //
-// These are the dimensions the live "שליחה להדפסה" flow uses (the Lulu order
-// path that's been in production). We are deliberately NOT changing them in
-// this PR — the super-admin "Download PDFs" menu uses the bookFormats presets
-// instead, so we can iterate on the print spec without risking the shipped
-// order flow.
-
-// 1. תוכן הספר (Content) - ריבוע סטנדרטי
+// The live "שליחה להדפסה" flow ships every order under POD package
+// 0850X0850FCPREPB060UW444GXX (Lulu PB 8.5×8.5" Premium) — see
+// /api/lulu/create-order. So both the content and cover dimensions
+// here must match THAT specific format's spec from bookFormats.js
+// (the source of truth). The content config is static (every page is
+// the same trim + bleed); the cover config depends on page count
+// because spine width grows with the book — that's computed inside
+// BookViewerInner via useMemo.
 //
-// Lulu's PB 8.5×8.5" Premium (POD 0850X0850FCPREPB060UW444GXX) requires the
-// PDF page size to be the trim PLUS 0.125" bleed on every side:
-//   trim 8.5" + 2 × 0.125" = 8.75" = 222.25 mm.
-// Until 2026-05 this constant was 216 mm (just the trim, no bleed) — the
-// shipped flow was sending under-spec PDFs and Lulu was silently trimming
-// at the page edge instead of at the proper trim line. Adding the bleed
-// matches Lulu's published spec; the renderer fills the whole page with
-// the rendered DOM, so the visible content after Lulu's trim shifts by
-// less than 0.5 mm vs the old output.
+// 1. תוכן הספר (Content) - ריבוע 8.75" × 8.75" (trim + bleed each side)
 const CONTENT_CONFIG = {
-    widthMM: 222.25, // 8.5" trim + 2 × 0.125" bleed
-    heightMM: 222.25,
-    dpi: 300,
-}
-
-// 2. כריכה (Full Spread) - כולל שוליים ושדרה (19x10.25 inches)
-const COVER_CONFIG = {
-    widthMM: 482.6,
-    heightMM: 260.35,
-    spineMM: 6.35, // עובי שדרה משוער
-    dpi: 300,
+    widthMM: BOOK_FORMATS.classic.content.widthMM,   // 222.25
+    heightMM: BOOK_FORMATS.classic.content.heightMM, // 222.25
+    dpi: BOOK_FORMATS.classic.content.dpi,           // 300
 }
 
 // Outer wrapper — owns the runtime locale and wraps the viewer in
@@ -91,6 +76,24 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // return below would violate the rules of hooks (different render
     // paths returned different hook counts on first vs. second render).
     const styleWithLocale = useMemo(() => ({ ...styleSettings, locale }), [styleSettings, locale])
+
+    // Dynamic cover config — Lulu's PB cover is wider for thicker books
+    // because the spine grows with page count (0.0572 mm/page for the
+    // 60# UW paper this POD uses). The previous static COVER_CONFIG
+    // (482.6 × 260.35 mm with a fixed 6.35 mm spine) didn't match Lulu's
+    // PB spec at any page count and didn't track spine thickness, so
+    // every printed cover had its spine landing in the wrong place.
+    // We now compute the cover from the same source-of-truth used by
+    // the super-admin Download PDFs flow (BOOK_FORMATS.classic).
+    // Falls back to minPages while pages are loading so the in-viewer
+    // cover preview has a sensible spine even before data arrives.
+    const coverConfig = useMemo(
+        () =>
+            BOOK_FORMATS.classic.cover.compute(
+                pages.length || BOOK_FORMATS.classic.minPages
+            ),
+        [pages.length]
+    )
     const [isGenerating, setIsGenerating] = useState(false)
     const [showPrintModal, setShowPrintModal] = useState(false)
     const [printStatus, setPrintStatus] = useState('idle') // 'idle' | 'generating' | 'uploading' | 'ordering' | 'done' | 'error'
@@ -380,7 +383,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
 
             // 2. יצירת כריכה (Spread) - דף אחד רחב
             setPrintStatus('uploading')
-            const coversUrl = await generatePdfFromRef(fullCoverRef, 'WeddingBook-Covers', COVER_CONFIG)
+            const coversUrl = await generatePdfFromRef(fullCoverRef, 'WeddingBook-Covers', coverConfig)
 
             if (!contentUrl || !coversUrl) throw new Error('Failed to generate PDFs')
 
@@ -492,17 +495,17 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // 2. מידות כריכה (Spread)
     // נשתמש ברוחב תצוגה גדול כדי שיהיה נוח לרינדור
     const spreadDisplayWidth = 1200
-    const spreadAspectRatio = COVER_CONFIG.widthMM / COVER_CONFIG.heightMM
+    const spreadAspectRatio = coverConfig.widthMM / coverConfig.heightMM
     const spreadDisplayHeight = spreadDisplayWidth / spreadAspectRatio
 
     // חישוב יחסי רוחב בתוך ה-Spread (באחוזים או יחסים)
     // רוחב כל צד (קדמי/אחורי) במ"מ
-    const coverPanelWidthMM = (COVER_CONFIG.widthMM - COVER_CONFIG.spineMM) / 2
+    const coverPanelWidthMM = (coverConfig.widthMM - coverConfig.spineMM) / 2
 
     // המרה לפיקסלים בתוך ה-Container של ה-DOM
-    const pxPerMM = spreadDisplayWidth / COVER_CONFIG.widthMM
+    const pxPerMM = spreadDisplayWidth / coverConfig.widthMM
     const panelWidthPx = coverPanelWidthMM * pxPerMM
-    const spineWidthPx = COVER_CONFIG.spineMM * pxPerMM
+    const spineWidthPx = coverConfig.spineMM * pxPerMM
 
     return (
         <AdminPageWrapper>
