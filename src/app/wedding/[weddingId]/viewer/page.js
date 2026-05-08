@@ -31,9 +31,19 @@ import { normalizeLocale } from '@/i18n/locales'
 // order flow.
 
 // 1. תוכן הספר (Content) - ריבוע סטנדרטי
+//
+// Lulu's PB 8.5×8.5" Premium (POD 0850X0850FCPREPB060UW444GXX) requires the
+// PDF page size to be the trim PLUS 0.125" bleed on every side:
+//   trim 8.5" + 2 × 0.125" = 8.75" = 222.25 mm.
+// Until 2026-05 this constant was 216 mm (just the trim, no bleed) — the
+// shipped flow was sending under-spec PDFs and Lulu was silently trimming
+// at the page edge instead of at the proper trim line. Adding the bleed
+// matches Lulu's published spec; the renderer fills the whole page with
+// the rendered DOM, so the visible content after Lulu's trim shifts by
+// less than 0.5 mm vs the old output.
 const CONTENT_CONFIG = {
-    widthMM: 216,
-    heightMM: 216,
+    widthMM: 222.25, // 8.5" trim + 2 × 0.125" bleed
+    heightMM: 222.25,
     dpi: 300,
 }
 
