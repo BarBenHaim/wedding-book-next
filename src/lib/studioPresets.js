@@ -24,7 +24,36 @@ import {
     query, orderBy, serverTimestamp,
 } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
-import { db, storage } from './firebaseClient'
+import { getAuth } from 'firebase/auth'
+import { db, storage, app as firebaseApp } from './firebaseClient'
+
+// ── Server-routed studio writes ──────────────────────────────────────
+// The studio's mutating ops (save preset, delete preset, hide static
+// asset, delete uploaded background) go through /api/studio which
+// uses the Admin SDK and bypasses Firestore rules entirely. That way
+// the studio works after a normal Vercel deploy — no
+// `firebase deploy --only firestore:rules` step required, no CLI
+// auth lapses, no rules friction. The server still gates on a valid
+// Firebase ID token (the `Authorization: Bearer ...` header below).
+async function callStudioApi(op, payload = {}) {
+    const auth = getAuth(firebaseApp)
+    const user = auth.currentUser
+    if (!user) throw new Error('יש להתחבר כדי לערוך את הסטודיו')
+    const token = await user.getIdToken(/* forceRefresh */ false)
+    const res = await fetch('/api/studio', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ op, ...payload }),
+    })
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || `studio API ${op} failed (${res.status})`)
+    }
+    return res.json()
+}
 import { heebo, frankRuhl, notoHebrew, gveretLevin } from '@/app/fonts'
 // Note: `secular`, `davidLibre`, `danaYad` exports still exist in
 // '@/app/fonts' for legacy consumers (PageLayouts, app/layout.js) but
@@ -346,23 +375,11 @@ function newPresetId() {
 // seedBuiltinPresetsIfMissing will re-create it.
 export async function savePreset(preset, { uid, asNew = false } = {}) {
     if (!preset) throw new Error('savePreset: missing preset')
-
-    const now = new Date()
-    const id = asNew || !preset.id ? newPresetId() : preset.id
-    // Preserve ownerType on in-place edits so a system preset stays
-    // flagged 'system' (and thus survives the seed-skip check). Only
-    // a fresh "save as new" lands as 'studio'.
-    const ownerType = asNew ? 'studio' : preset.ownerType || 'studio'
-    const merged = {
-        ...preset,
-        id,
-        ownerType,
-        createdBy: preset.createdBy || uid || 'unknown',
-        createdAt: asNew || !preset.createdAt ? now : preset.createdAt,
-        updatedAt: now,
-    }
-    await setDoc(doc(db, COLLECTION, id), merged, { merge: false })
-    return merged
+    // Server-routed (Admin SDK) — see callStudioApi above for
+    // rationale. The server fills in createdBy / timestamps and
+    // returns the merged doc.
+    const { preset: saved } = await callStudioApi('savePreset', { preset, asNew })
+    return saved
 }
 
 // Delete any preset — system or studio. System presets are not
@@ -372,9 +389,15 @@ export async function savePreset(preset, { uid, asNew = false } = {}) {
 // BUILTIN_PRESETS[0].id and re-seeds when missing. To prevent the
 // reseed, callers can additionally write a sentinel into
 // studio_config/visibility.hiddenPresetIds. Returns true on success.
-export async function deletePreset(presetId /* , ownerType */) {
+export async function deletePreset(presetId, ownerType) {
     if (!presetId) throw new Error('deletePreset: missing id')
-    await deleteDoc(doc(db, COLLECTION, presetId))
+    // For system presets we also write to hiddenPresetIds so the
+    // seeder doesn't recreate them on the next mount — the server
+    // does both in one call when `alsoHide` is true.
+    await callStudioApi('deletePreset', {
+        id: presetId,
+        alsoHide: ownerType === 'system',
+    })
     return true
 }
 
@@ -562,17 +585,7 @@ export async function uploadBackground(file, { uid, label = '', tags = [] } = {}
 // integrity check; for v1 we just warn.
 export async function deleteStudioBackground(id, storagePath) {
     if (!id) throw new Error('deleteStudioBackground: missing id')
-    await deleteDoc(doc(db, BACKGROUNDS_COLLECTION, id))
-    if (storagePath) {
-        try {
-            await deleteObject(storageRef(storage, storagePath))
-        } catch (err) {
-            // Storage delete is best-effort — the doc is already gone,
-            // so even if the file lingers it won't be discoverable
-            // through the studio.
-            console.warn('[studioPresets] storage delete failed:', err?.message || err)
-        }
-    }
+    await callStudioApi('deleteUploadedBackground', { id, storagePath })
     return true
 }
 
@@ -619,11 +632,9 @@ async function writeVisibility(patch) {
 // a no-op. Returns the new hidden array.
 export async function hideStaticBackground(id) {
     if (!id) throw new Error('hideStaticBackground: missing id')
-    const cur = await readVisibility()
-    if (cur.hiddenBackgroundIds.includes(id)) return cur.hiddenBackgroundIds
-    const next = [...cur.hiddenBackgroundIds, id]
-    await writeVisibility({ hiddenBackgroundIds: next })
-    return next
+    await callStudioApi('hideBackground', { id })
+    // Re-read so callers get the updated list.
+    return (await readVisibility()).hiddenBackgroundIds
 }
 
 // Mirror for system presets — `deletePreset` removes the doc but the
@@ -631,17 +642,14 @@ export async function hideStaticBackground(id) {
 // the seeder + listPresets to skip it.
 export async function hidePreset(id) {
     if (!id) throw new Error('hidePreset: missing id')
-    const cur = await readVisibility()
-    if (cur.hiddenPresetIds.includes(id)) return cur.hiddenPresetIds
-    const next = [...cur.hiddenPresetIds, id]
-    await writeVisibility({ hiddenPresetIds: next })
-    return next
+    await callStudioApi('hidePreset', { id })
+    return (await readVisibility()).hiddenPresetIds
 }
 
 // "Restore everything" escape hatch — handy if the user nukes
 // everything and wants the gallery back to defaults.
 export async function clearVisibilityHidden() {
-    await writeVisibility({ hiddenBackgroundIds: [], hiddenPresetIds: [] })
+    await callStudioApi('clearVisibility')
     return true
 }
 
