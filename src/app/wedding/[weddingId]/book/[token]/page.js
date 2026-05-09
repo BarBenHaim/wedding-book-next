@@ -290,14 +290,26 @@ function BookViewer({ wedding, entries, weddingId }) {
 
     // styleSettings is local state (NOT useMemo) so the preset picker
     // at the bottom can swap designs live. Initial value mirrors the
-    // /viewer's render path: wedding.book.designSettings merged with
-    // defaultStyle's baseline so undefined fields don't fall through
-    // to BookPageTemplate's `??` fallbacks (which would visually
-    // diverge from the viewer — the same bug we already fixed in the
-    // /admin/studio preview).
+    // /viewer's render path: read `wedding.coverDesign` (the field the
+    // viewer reads + writes) merged with defaultStyle's baseline so
+    // undefined fields don't fall through to BookPageTemplate's `??`
+    // fallbacks (which would visually diverge from the viewer — the
+    // same bug we already fixed in the /admin/studio preview).
+    //
+    // Field order:
+    //   1. wedding.coverDesign         — what /viewer writes to
+    //   2. wedding.book?.designSettings — legacy field (some old docs
+    //                                     still store the design here)
+    //   3. defaultStyle                 — first-time fallback
+    //
+    // This is the fix for the bug the user hit: "the design I chose in
+    // the viewer doesn't show up in the digital book." The viewer
+    // writes to coverDesign; the digital book was reading from
+    // book.designSettings — different fields, so the design never
+    // propagated.
     const [styleSettings, setStyleSettings] = useState(() => ({
         ...defaultStyle,
-        ...(wedding.book?.designSettings || {}),
+        ...(wedding.coverDesign || wedding.book?.designSettings || {}),
     }))
 
     // Live preset list for the bottom picker. listPresets falls back
@@ -686,21 +698,22 @@ function BookViewer({ wedding, entries, weddingId }) {
                             useMouseEvents={true}
                             onFlip={e => setPage(e.data)}
                         >
-                            {/* Page order matches /viewer's RTL
-                                convention: BookBackCoverTemplate
-                                appears FIRST (it's the page the
-                                Hebrew reader sees when they "open"
-                                the book — react-pageflip flips
-                                LTR, so the first child sits on the
-                                right side which is the start of
-                                Hebrew reading direction).
-                                BookCoverTemplate (the branded
-                                front, with the couple's names) sits
-                                at the END as the closing piece.
-                                Single wrapping div per page mirrors
-                                viewer's `demo-page` pattern. */}
+                            {/* Page order — front cover FIRST (the
+                                branded page with the couple's names),
+                                then entries, then back cover. The user
+                                explicitly asked for this: starting on
+                                the back cover felt strange, even though
+                                Hebrew books traditionally open right-to-
+                                left. react-pageflip's flip direction
+                                still works either way; this just changes
+                                the resting first/last page. */}
                             <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
-                                <BookBackCoverTemplate scaledWidth={pageSize.w} scaledHeight={pageSize.h} />
+                                <BookCoverTemplate
+                                    wedding={wedding}
+                                    styleSettings={styleSettings}
+                                    scaledWidth={pageSize.w}
+                                    scaledHeight={pageSize.h}
+                                />
                             </div>
                             {entries.map(entry => (
                                 <div key={entry.id} style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
@@ -713,12 +726,7 @@ function BookViewer({ wedding, entries, weddingId }) {
                                 </div>
                             ))}
                             <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
-                                <BookCoverTemplate
-                                    wedding={wedding}
-                                    styleSettings={styleSettings}
-                                    scaledWidth={pageSize.w}
-                                    scaledHeight={pageSize.h}
-                                />
+                                <BookBackCoverTemplate scaledWidth={pageSize.w} scaledHeight={pageSize.h} />
                             </div>
                         </HTMLFlipBook>
 
@@ -862,73 +870,122 @@ function BookViewer({ wedding, entries, weddingId }) {
 // updates the live styleSettings in the parent.
 function PresetStrip({ presets, activeStyle, onApply }) {
     if (!presets?.length) return null
+    // Render size — internal page is 240x240, displayed thumbnail
+    // is 96x96 → scale = 0.4. Big enough that the user can SEE the
+    // typography, the photo placement and the background, not just
+    // a colour swatch.
+    const TILE = 96
+    const RENDER = 240
+    const SCALE = TILE / RENDER
     return (
         <div
-            className='relative z-10 pb-4 pt-1 px-3'
+            className='relative z-10 pb-5 pt-2'
             style={{
                 background:
-                    'linear-gradient(180deg, transparent 0%, rgba(245,234,210,0.55) 100%)',
+                    'linear-gradient(180deg, transparent 0%, rgba(245,234,210,0.55) 30%, rgba(245,234,210,0.85) 100%)',
             }}
         >
+            {/* Section caption — quiet, centered, makes the row's
+                purpose obvious without screaming at the reader. */}
+            <p
+                className='text-center mb-2 px-4'
+                style={{
+                    color: '#7a6a52',
+                    fontSize: '11px',
+                    letterSpacing: '0.18em',
+                    textTransform: 'uppercase',
+                    fontWeight: 600,
+                }}
+            >
+                סגנון עיצוב
+            </p>
+
+            {/* Horizontal scroll-snap row. justify-center on small
+                lists, scrolls horizontally on phones if there are
+                many. Snap so each thumbnail lands cleanly under the
+                user's thumb on a swipe-and-release. */}
             <div
-                className='flex items-center gap-2.5 overflow-x-auto pb-1 px-2 scroll-smooth justify-center'
-                style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
+                className='flex items-start gap-3 overflow-x-auto pb-2 px-4 scroll-smooth'
+                style={{
+                    scrollbarWidth: 'none',
+                    WebkitOverflowScrolling: 'touch',
+                    scrollSnapType: 'x mandatory',
+                    justifyContent: 'safe center',
+                }}
             >
                 {presets.map(preset => {
                     const presetKey = preset.id || preset.name
                     const resolved = resolvePreset(preset).values || {}
                     const previewStyle = { ...defaultStyle, ...resolved }
-                    // Compare a stable signature instead of object
-                    // identity — the active style was MERGED from the
-                    // preset, so the references differ. Match on a
-                    // few tell-tale fields.
+                    // Stable signature compare — the active styleSettings
+                    // is merged from the preset's values + defaults, so
+                    // object identity won't match. A handful of tell-tale
+                    // fields is enough to identify which preset is live.
                     const isActive =
                         previewStyle.backgroundColor === activeStyle.backgroundColor &&
                         previewStyle.fontClass === activeStyle.fontClass &&
                         previewStyle.backgroundUrl === activeStyle.backgroundUrl &&
-                        previewStyle.texture === activeStyle.texture
+                        previewStyle.texture === activeStyle.texture &&
+                        previewStyle.template === activeStyle.template
                     return (
                         <button
                             key={presetKey}
                             onClick={() => onApply(preset)}
                             title={preset.name}
                             aria-label={preset.name}
-                            className='shrink-0 transition-all hover:scale-[1.05] active:scale-95'
-                            style={{
-                                width: 56,
-                                height: 56,
-                                borderRadius: 10,
-                                overflow: 'hidden',
-                                background: '#fff',
-                                border: isActive
-                                    ? '2px solid #aa8840'
-                                    : '1px solid rgba(201,164,78,0.30)',
-                                boxShadow: isActive
-                                    ? '0 6px 14px -6px rgba(170,136,64,0.45)'
-                                    : '0 3px 8px -4px rgba(45,30,16,0.18)',
-                                position: 'relative',
-                            }}
+                            className='shrink-0 flex flex-col items-center gap-1.5 transition-all hover:scale-[1.04] active:scale-95'
+                            style={{ scrollSnapAlign: 'center' }}
                         >
-                            {/* Render a 200x200 page then visually
-                                shrink it via CSS transform so the
-                                thumbnail keeps its proportions
-                                without us measuring DOM widths. */}
+                            {/* The preview tile — clipped to the
+                                tile size, hosts a real BookPageTemplate
+                                rendered at RENDER and CSS-scaled to
+                                fit. pointer-events:none on the inner
+                                div so the whole tile remains a single
+                                clickable target. */}
                             <div
                                 style={{
-                                    width: 200,
-                                    height: 200,
-                                    transform: 'scale(0.28)',
-                                    transformOrigin: 'top left',
-                                    pointerEvents: 'none',
+                                    width: TILE,
+                                    height: TILE,
+                                    borderRadius: 12,
+                                    overflow: 'hidden',
+                                    background: '#fff',
+                                    border: isActive
+                                        ? '2px solid #aa8840'
+                                        : '1px solid rgba(201,164,78,0.30)',
+                                    boxShadow: isActive
+                                        ? '0 8px 18px -6px rgba(170,136,64,0.50), 0 0 0 4px rgba(170,136,64,0.10)'
+                                        : '0 4px 10px -5px rgba(45,30,16,0.20)',
                                 }}
                             >
-                                <BookPageTemplate
-                                    entry={PRESET_PREVIEW_ENTRY}
-                                    styleSettings={previewStyle}
-                                    scaledWidth={200}
-                                    scaledHeight={200}
-                                />
+                                <div
+                                    style={{
+                                        width: RENDER,
+                                        height: RENDER,
+                                        transform: `scale(${SCALE})`,
+                                        transformOrigin: 'top left',
+                                        pointerEvents: 'none',
+                                    }}
+                                >
+                                    <BookPageTemplate
+                                        entry={PRESET_PREVIEW_ENTRY}
+                                        styleSettings={previewStyle}
+                                        scaledWidth={RENDER}
+                                        scaledHeight={RENDER}
+                                    />
+                                </div>
                             </div>
+                            {/* Label — preset's name, small + serif,
+                                gold when active so the choice is
+                                visually obvious without reading. */}
+                            <span
+                                className='text-[10.5px] font-semibold whitespace-nowrap max-w-[110px] truncate'
+                                style={{
+                                    color: isActive ? '#aa8840' : '#7a6a52',
+                                    letterSpacing: '0.02em',
+                                }}
+                            >
+                                {preset.name || ''}
+                            </span>
                         </button>
                     )
                 })}

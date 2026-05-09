@@ -130,6 +130,9 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // disturbing the shipped flow).
     const exportContentRef = useRef(null)
     const exportCoverRef = useRef(null)
+    // Ref into the book mode HTMLFlipBook so the prev/next buttons
+    // below the book can call flipNext / flipPrev programmatically.
+    const flipRef = useRef(null)
 
     useEffect(() => {
         const init = async () => {
@@ -561,6 +564,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                             </HTMLFlipBook>
                         ) : (
                             <HTMLFlipBook
+                                ref={flipRef}
                                 key={`${viewerSize}-${isMobile}`}
                                 width={viewerSize}
                                 height={viewerSize}
@@ -595,6 +599,53 @@ function BookViewerInner({ onLocaleDiscovered }) {
                             </HTMLFlipBook>
                         )}
                     </div>
+
+                    {/* Prev/next arrows below the book — useful on
+                        mobile (no keyboard) and a nice extra on
+                        desktop too. Hidden in cover mode (single
+                        page, nothing to flip). */}
+                    {mode === 'book' && (
+                        <div className='flex items-center gap-3 mt-4 z-30'>
+                            <button
+                                onClick={() => flipRef.current?.pageFlip().flipPrev()}
+                                aria-label='הקודם'
+                                className='inline-flex items-center justify-center transition-all hover:scale-105 active:scale-95'
+                                style={{
+                                    width: 44,
+                                    height: 44,
+                                    borderRadius: '50%',
+                                    background: 'rgba(255,255,255,0.92)',
+                                    border: '1px solid rgba(170,136,64,0.35)',
+                                    color: '#aa8840',
+                                    boxShadow: '0 4px 12px -4px rgba(45,30,16,0.18)',
+                                    backdropFilter: 'blur(8px)',
+                                }}
+                            >
+                                <svg viewBox='0 0 24 24' className='w-[18px] h-[18px]' fill='none' stroke='currentColor' strokeWidth={1.8}>
+                                    <path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7' />
+                                </svg>
+                            </button>
+                            <button
+                                onClick={() => flipRef.current?.pageFlip().flipNext()}
+                                aria-label='הבא'
+                                className='inline-flex items-center justify-center transition-all hover:scale-105 active:scale-95'
+                                style={{
+                                    width: 44,
+                                    height: 44,
+                                    borderRadius: '50%',
+                                    background: 'rgba(255,255,255,0.92)',
+                                    border: '1px solid rgba(170,136,64,0.35)',
+                                    color: '#aa8840',
+                                    boxShadow: '0 4px 12px -4px rgba(45,30,16,0.18)',
+                                    backdropFilter: 'blur(8px)',
+                                }}
+                            >
+                                <svg viewBox='0 0 24 24' className='w-[18px] h-[18px]' fill='none' stroke='currentColor' strokeWidth={1.8}>
+                                    <path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
+                                </svg>
+                            </button>
+                        </div>
+                    )}
 
                     {!isMobile && (
                         <div className='mt-6 z-30'>

@@ -1,6 +1,50 @@
 'use client'
 
 import { resolveTextureUrl } from '@/lib/resolveAsset'
+import { buildTitle, normalizeEventType } from '@/lib/eventTypes'
+
+// Default cover content when the user hasn't uploaded an image and
+// hasn't typed coverTitle/coverSubtitle. Prevents the "blank cream
+// page" first impression on a fresh book — pulls the couple's (or
+// celebrant's) name from the wedding doc plus a per-event-type
+// "ספר הברכות של" / "אלבום המשחק של" prefix from the same source
+// of truth as the public guest page.
+function buildDefaultCoverContent(wedding) {
+    if (!wedding) return null
+    const type = normalizeEventType(wedding.eventType) || 'wedding'
+    const title = buildTitle(wedding, 'he')
+    if (!title || title.kind === 'empty') return null
+
+    // Format the names label per event type. buildTitle returns
+    // { kind: 'names', left, right } for weddings (so we join with
+    // " ו" idiomatically) and { kind: 'single', text } otherwise.
+    const namesLabel =
+        title.kind === 'names'
+            ? [title.left, title.right].filter(Boolean).join(' ו')
+            : title.text
+
+    let prefix
+    switch (type) {
+        case 'wedding':
+            prefix = 'ספר הברכות של'
+            break
+        case 'birthday':
+        case 'bar_mitzvah':
+        case 'bat_mitzvah':
+            prefix = 'ספר הברכות של'
+            break
+        case 'poker':
+            prefix = 'אלבום המשחק'
+            break
+        case 'travel':
+            prefix = 'ספר המסע של'
+            break
+        default:
+            prefix = 'ספר הברכות של'
+    }
+
+    return { coverTitle: prefix, coverSubtitle: namesLabel }
+}
 
 // ─── Cover text position presets ─────────────────────────────────────────────
 // One of 9 anchors on the cover. Falls back to the original centered layout
@@ -65,7 +109,19 @@ function inferAlignItems(position, explicitAlign) {
     }
 }
 
-export default function BookCoverTemplate({ styleSettings, scaledWidth, scaledHeight }) {
+export default function BookCoverTemplate({ wedding, styleSettings, scaledWidth, scaledHeight }) {
+    // Default content fallback — only kicks in when the user has put
+    // NOTHING on the cover yet (no image, no title, no subtitle). Once
+    // they add any of the three, the fallback disappears entirely so
+    // the user's own content owns the cover.
+    const hasUserContent =
+        styleSettings.coverImage ||
+        styleSettings.coverTitle ||
+        styleSettings.coverSubtitle
+    const defaults = hasUserContent ? null : buildDefaultCoverContent(wedding)
+    const effectiveTitle = styleSettings.coverTitle || defaults?.coverTitle || ''
+    const effectiveSubtitle = styleSettings.coverSubtitle || defaults?.coverSubtitle || ''
+
     const coverFontSize = ((styleSettings.coverFontSizePercent || 3) / 100) * scaledWidth
     const imgX = styleSettings.coverImageX || 50
     const imgY = styleSettings.coverImageY || 50
@@ -145,8 +201,9 @@ export default function BookCoverTemplate({ styleSettings, scaledWidth, scaledHe
                 />
             )}
 
-            {/* טקסטים */}
-            {(styleSettings.coverTitle || styleSettings.coverSubtitle) && (
+            {/* טקסטים — מציג טקסטים שהמשתמש הזין, או ברירת מחדל
+                ("ספר הברכות של {names}") אם לא הזין כלום */}
+            {(effectiveTitle || effectiveSubtitle) && (
                 <div
                     style={{
                         ...textPositionStyle,
@@ -160,7 +217,7 @@ export default function BookCoverTemplate({ styleSettings, scaledWidth, scaledHe
                         maxWidth: ((styleSettings.textMaxWidth || 80) / 100) * scaledWidth,
                     }}
                 >
-                    {styleSettings.coverTitle && (
+                    {effectiveTitle && (
                         <h1
                             className={styleSettings.fontClass}
                             style={{
@@ -173,10 +230,10 @@ export default function BookCoverTemplate({ styleSettings, scaledWidth, scaledHe
                                         : '0 0 8px rgba(0,0,0,0.3)',
                             }}
                         >
-                            {styleSettings.coverTitle}
+                            {effectiveTitle}
                         </h1>
                     )}
-                    {styleSettings.coverSubtitle && (
+                    {effectiveSubtitle && (
                         <h2
                             className={styleSettings.fontClass}
                             style={{
@@ -190,7 +247,7 @@ export default function BookCoverTemplate({ styleSettings, scaledWidth, scaledHe
                                         : '0 0 6px rgba(0,0,0,0.3)',
                             }}
                         >
-                            {styleSettings.coverSubtitle}
+                            {effectiveSubtitle}
                         </h2>
                     )}
                 </div>

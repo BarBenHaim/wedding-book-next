@@ -455,12 +455,15 @@ export default function DesignControls({
                                 explicitly asked for this layout: no
                                 names, square previews, one above the
                                 other. */}
-                            <div ref={presetsContainerRef} className='space-y-3'>
+                            <div ref={presetsContainerRef} className='grid grid-cols-2 gap-3'>
                                 {presets.map(preset => {
                                     const presetKey = preset.id || preset.name
                                     const isActive = activePreset === presetKey
                                     const resolved = resolvePreset(preset).values || {}
                                     const previewStyle = { ...defaultStyle, ...resolved }
+                                    // Two-column grid → each tile is ~(half container - half gap).
+                                    // Subtracting 12 for the gap (gap-3 = 12px).
+                                    const tileSize = presetsTileWidth > 0 ? Math.floor((presetsTileWidth - 12) / 2) : 0
                                     return (
                                         <div key={presetKey} className='relative group'>
                                             <button
@@ -469,16 +472,16 @@ export default function DesignControls({
                                                 className={`relative w-full rounded-lg border overflow-hidden transition-all ${
                                                     isActive
                                                         ? 'ring-2 ring-[#AA8840] border-transparent'
-                                                        : 'border-gray-200 hover:scale-[1.01]'
+                                                        : 'border-gray-200 hover:scale-[1.02]'
                                                 }`}
                                                 style={{ aspectRatio: '1 / 1' }}
                                             >
-                                                {presetsTileWidth > 0 && (
+                                                {tileSize > 0 && (
                                                     <BookPageTemplate
                                                         entry={MINI_PREVIEW_ENTRY}
                                                         styleSettings={previewStyle}
-                                                        scaledWidth={presetsTileWidth}
-                                                        scaledHeight={presetsTileWidth}
+                                                        scaledWidth={tileSize}
+                                                        scaledHeight={tileSize}
                                                     />
                                                 )}
                                             </button>
