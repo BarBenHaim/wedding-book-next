@@ -440,134 +440,21 @@ export default function DesignControls({
             <div className='flex-1 overflow-y-auto pr-0.5 pl-0.5 space-y-4 pb-10 scrollbar-hide'>
                 {mode === 'book' && (
                     <div className='space-y-4 animate-fadeIn'>
-                        {/* PRESETS — quick-apply gallery. Tweaks below
-                            are saved to the wedding doc, not back to
-                            the preset (system presets stay read-only
-                            via savePreset's lib-level guard). */}
-                        <Card title={t.presetsTitle}>
-                            {/* Vertical stack of mini live previews.
-                                Each tile renders a real <BookPageTemplate />
-                                with a placeholder name + blessing + photo,
-                                using the preset's resolved values merged
-                                with defaultStyle (same merge as the
-                                viewer's render path so what's previewed
-                                matches what gets applied). The user
-                                explicitly asked for this layout: no
-                                names, square previews, one above the
-                                other. */}
-                            <div ref={presetsContainerRef} className='grid grid-cols-2 gap-3'>
-                                {presets.map(preset => {
-                                    const presetKey = preset.id || preset.name
-                                    const isActive = activePreset === presetKey
-                                    const resolved = resolvePreset(preset).values || {}
-                                    const previewStyle = { ...defaultStyle, ...resolved }
-                                    // Two-column grid → each tile is ~(half container - half gap).
-                                    // Subtracting 12 for the gap (gap-3 = 12px).
-                                    const tileSize = presetsTileWidth > 0 ? Math.floor((presetsTileWidth - 12) / 2) : 0
-                                    return (
-                                        <div key={presetKey} className='relative group'>
-                                            <button
-                                                onClick={() => applyPreset(preset)}
-                                                title={preset.name}
-                                                className={`relative w-full rounded-lg border overflow-hidden transition-all ${
-                                                    isActive
-                                                        ? 'ring-2 ring-[#AA8840] border-transparent'
-                                                        : 'border-gray-200 hover:scale-[1.02]'
-                                                }`}
-                                                style={{ aspectRatio: '1 / 1' }}
-                                            >
-                                                {tileSize > 0 ? (
-                                                    <BookPageTemplate
-                                                        entry={MINI_PREVIEW_ENTRY}
-                                                        styleSettings={previewStyle}
-                                                        scaledWidth={tileSize}
-                                                        scaledHeight={tileSize}
-                                                    />
-                                                ) : (
-                                                    // Skeleton fill so the
-                                                    // tile is never a blank
-                                                    // white box on first
-                                                    // paint, before the
-                                                    // ResizeObserver settles.
-                                                    <div
-                                                        className='w-full h-full animate-pulse'
-                                                        style={{
-                                                            background:
-                                                                'linear-gradient(135deg, #f4ecd9 0%, #e8d9b3 100%)',
-                                                        }}
-                                                    />
-                                                )}
-                                                {/* Active-state corner badge.
-                                                    Mirrors what the studio's
-                                                    list panel shows. */}
-                                                {isActive && (
-                                                    <span
-                                                        className='absolute top-1.5 start-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider'
-                                                        style={{
-                                                            background:
-                                                                'rgba(170,136,64,0.95)',
-                                                            color: '#fff',
-                                                        }}
-                                                    >
-                                                        ✓
-                                                    </span>
-                                                )}
-                                            </button>
-                                            {/* Visible name under each
-                                                tile. The mini live preview
-                                                renders the actual page at
-                                                ~110 px square — visually
-                                                informative for backgrounds
-                                                / frames / textures, but
-                                                hard to use as the only ID
-                                                cue when several presets
-                                                share a similar palette.
-                                                The label fixes that. */}
-                                            <p
-                                                className={`mt-1.5 text-center text-[11px] font-semibold leading-tight truncate ${
-                                                    isActive
-                                                        ? 'text-[#AA8840]'
-                                                        : 'text-[#5a4d3a]'
-                                                }`}
-                                                title={preset.name}
-                                            >
-                                                {preset.name}
-                                            </p>
-                                            {/* Trash — admin only, hovers in
-                                                from the corner so the preview
-                                                stays clean. */}
-                                            {isAdmin && (
-                                                <button
-                                                    onClick={e => {
-                                                        e.stopPropagation()
-                                                        handleDeletePreset(preset)
-                                                    }}
-                                                    className='absolute -top-1.5 -end-1.5 w-5 h-5 rounded-full bg-white border border-gray-300 text-red-500 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity shadow flex items-center justify-center hover:bg-red-50'
-                                                    title={t.deletePreset}
-                                                    aria-label={t.deletePreset}
-                                                >
-                                                    ×
-                                                </button>
-                                            )}
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                            <p className='text-[10px] text-gray-400 mt-3 leading-relaxed'>
-                                {t.presetsHint}
-                            </p>
-                            {/* Save current settings to the active
-                                preset. Super-admin-only; couples
-                                shouldn't overwrite shared presets. */}
-                            {isAdmin && activePreset && (
-                                <button
-                                    onClick={handleSaveActivePreset}
-                                    className='mt-3 w-full py-2 rounded-lg bg-[#AA8840]/10 hover:bg-[#AA8840]/20 text-[#AA8840] text-[11px] font-bold transition-colors border border-[#AA8840]/30'
-                                >
-                                    {t.savePresetCta}
-                                </button>
-                            )}
-                        </Card>
+                        {/* The preset picker that used to sit here was
+                            removed in the spring 2026 redesign — the
+                            Studio (/admin/studio) is now the single
+                            source of truth for which preset ships on
+                            each wedding's design doc, and exposing a
+                            second copy on the viewer was confusing
+                            couples ("which one is the real one?"). The
+                            book renders whatever styleSettings the
+                            wedding doc carries; couples customize via
+                            the per-control panels below (admin-gated
+                            today; opening up on a per-control basis in
+                            future commits).
+                            See the original implementation in the
+                            git history at 250f141 if you need to
+                            resurrect it. */}
 
                         {isAdmin && (
                         <>
