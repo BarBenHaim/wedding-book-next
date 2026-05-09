@@ -22,6 +22,9 @@ import {
     Lock, Crown, Save, Copy, Trash2, Undo2, X, Upload,
 } from 'lucide-react'
 import { auth } from '@/lib/firebaseClient'
+import { onAuthStateChanged } from 'firebase/auth'
+import { isSuperAdmin } from '@/lib/superAdmin'
+import { useRouter } from 'next/navigation'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import {
@@ -220,7 +223,13 @@ function StudioContent() {
     }, [activePreset?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
     const isSystem = draft?.ownerType === 'system'
-    const editable = !!draft && !isSystem
+    // Spring 2026 user request: super-admin can edit/delete system
+    // presets too — the AdminGate below ensures only the super-admin
+    // reaches this page, so there's no need for a UI-level read-only
+    // shield. The `isSystem` flag is still used for the small "מערכת"
+    // badge so the user sees what they're touching, but not for
+    // gating actions.
+    const editable = !!draft
 
     // Has the user changed anything since loading the preset? Compared
     // by JSON serialization — fast enough for the shape we have.
@@ -582,81 +591,82 @@ function ActionBar({
                 }}
             />
 
-            {isSystem ? (
-                <>
-                    <span className='flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-semibold rounded-full bg-amber-50 border border-amber-200 text-amber-700'>
-                        <Crown size={11} /> תבנית מערכת — לקריאה בלבד
-                    </span>
-                    <button
-                        onClick={onClone}
-                        className='inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white active:scale-[0.98] transition-all'
-                        style={{
-                            background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
-                            boxShadow: '0 6px 14px -8px rgba(170,136,64,0.50)',
-                        }}
-                    >
-                        <Copy size={14} /> צור עותק לעריכה
-                    </button>
-                </>
-            ) : (
-                <>
-                    {dirty && (
-                        <span className='px-2.5 py-1 text-[11px] font-semibold rounded-full bg-[#AA8840]/10 text-[#a8843a] border border-[#AA8840]/30'>
-                            לא נשמר
-                        </span>
-                    )}
-                    <button
-                        onClick={onRevert}
-                        disabled={!dirty || saving}
-                        title='בטל שינויים'
-                        className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed'
-                        style={{
-                            background: '#ffffff',
-                            border: '1px solid #ead9b3',
-                            color: '#7a6a52',
-                        }}
-                    >
-                        <Undo2 size={13} /> בטל
-                    </button>
-                    <button
-                        onClick={onSaveAsNew}
-                        disabled={saving}
-                        className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed'
-                        style={{
-                            background: '#ffffff',
-                            border: '1px solid #ead9b3',
-                            color: '#7a6a52',
-                        }}
-                    >
-                        <Copy size={13} /> שמור כעותק
-                    </button>
-                    <button
-                        onClick={onDelete}
-                        disabled={saving}
-                        title='מחק את התבנית הזו'
-                        className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed'
-                        style={{
-                            background: '#fff5f5',
-                            border: '1px solid #ffcdcd',
-                            color: '#b32424',
-                        }}
-                    >
-                        <Trash2 size={13} />
-                    </button>
-                    <button
-                        onClick={onSave}
-                        disabled={!dirty || saving}
-                        className='inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed'
-                        style={{
-                            background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
-                            boxShadow: '0 6px 14px -8px rgba(170,136,64,0.50)',
-                        }}
-                    >
-                        {saving ? <Loader2 size={14} className='animate-spin' /> : <Save size={14} />}
-                        שמור
-                    </button>
-                </>
+            {/* "Source" badge — purely informational. System
+                presets stay flagged so the user knows which ones
+                ship with the app and which they created. Editing
+                is allowed for both. */}
+            {isSystem && (
+                <span className='flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-semibold rounded-full bg-amber-50 border border-amber-200 text-amber-700'>
+                    <Crown size={11} /> תבנית מערכת
+                </span>
             )}
+            {dirty && (
+                <span className='px-2.5 py-1 text-[11px] font-semibold rounded-full bg-[#AA8840]/10 text-[#a8843a] border border-[#AA8840]/30'>
+                    לא נשמר
+                </span>
+            )}
+            <button
+                onClick={onClone}
+                title='שכפל את התבנית כתבנית חדשה'
+                className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed'
+                style={{
+                    background: '#ffffff',
+                    border: '1px solid #ead9b3',
+                    color: '#7a6a52',
+                }}
+            >
+                <Copy size={13} /> שכפל
+            </button>
+            <button
+                onClick={onRevert}
+                disabled={!dirty || saving}
+                title='בטל שינויים'
+                className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed'
+                style={{
+                    background: '#ffffff',
+                    border: '1px solid #ead9b3',
+                    color: '#7a6a52',
+                }}
+            >
+                <Undo2 size={13} /> בטל
+            </button>
+            <button
+                onClick={onSaveAsNew}
+                disabled={saving}
+                className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed'
+                style={{
+                    background: '#ffffff',
+                    border: '1px solid #ead9b3',
+                    color: '#7a6a52',
+                }}
+            >
+                <Copy size={13} /> שמור כעותק
+            </button>
+            <button
+                onClick={onDelete}
+                disabled={saving}
+                title='מחק את התבנית הזו'
+                className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed'
+                style={{
+                    background: '#fff5f5',
+                    border: '1px solid #ffcdcd',
+                    color: '#b32424',
+                }}
+            >
+                <Trash2 size={13} />
+            </button>
+            <button
+                onClick={onSave}
+                disabled={!dirty || saving}
+                className='inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed'
+                style={{
+                    background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                    boxShadow: '0 6px 14px -8px rgba(170,136,64,0.50)',
+                }}
+            >
+                {saving ? <Loader2 size={14} className='animate-spin' /> : <Save size={14} />}
+                שמור
+            </button>
         </div>
     )
 }
@@ -921,14 +931,10 @@ function PropertiesPanel({
                 <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold'>
                     מאפיינים
                 </p>
-                {draft && isSystem && (
-                    <p className='text-[10.5px] text-[#a89378] mt-1 leading-relaxed'>
-                        תבנית מערכת — צור עותק כדי לערוך.
-                    </p>
-                )}
-                {draft && !isSystem && (
+                {draft && (
                     <p className='text-[10.5px] text-[#a89378] mt-1 leading-relaxed'>
                         השינויים מתעדכנים בתצוגה החיה. לחץ "שמור" כדי לשמר.
+                        {isSystem && ' עריכת תבנית מערכת — מומלץ "שמור כעותק" כדי לשמור את המקור.'}
                     </p>
                 )}
             </div>
@@ -1523,10 +1529,57 @@ function PropertyHeader({ icon: Icon, label }) {
     )
 }
 
+// Super-admin gate. AdminPageWrapper handles signed-in; this gate
+// adds the SUPER_ADMIN_EMAILS check on top so the studio is truly
+// "for me only" per the user's spring 2026 request.
+function SuperAdminGate({ children }) {
+    const router = useRouter()
+    const [state, setState] = useState('checking')
+    useEffect(() => {
+        const unsub = onAuthStateChanged(auth, user => {
+            if (!user) {
+                router.replace('/login')
+                return
+            }
+            setState(isSuperAdmin(user.email) ? 'allowed' : 'denied')
+        })
+        return unsub
+    }, [router])
+
+    if (state === 'checking') {
+        return <div className='flex h-screen items-center justify-center text-[#7a6a52]'>טוען...</div>
+    }
+    if (state === 'denied') {
+        return (
+            <div
+                className='flex h-screen flex-col items-center justify-center text-center px-6'
+                style={{ background: '#f8f4ec' }}
+            >
+                <div
+                    className='w-12 h-12 rounded-2xl flex items-center justify-center mb-4'
+                    style={{
+                        background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                        boxShadow: '0 12px 24px -10px rgba(170,136,64,0.45)',
+                    }}
+                >
+                    <Lock size={20} className='text-white' />
+                </div>
+                <h2 className='text-[18px] font-bold text-[#1a1410] mb-1'>הגישה מוגבלת</h2>
+                <p className='text-[13px] text-[#a89378] max-w-xs leading-relaxed'>
+                    סטודיו העיצוב פתוח רק למנהל הראשי. אם זו טעות, ודאו שהאימייל שלכם מופיע ב-SUPER_ADMIN_EMAILS.
+                </p>
+            </div>
+        )
+    }
+    return children
+}
+
 export default function StudioPage() {
     return (
         <AdminPageWrapper>
-            <StudioContent />
+            <SuperAdminGate>
+                <StudioContent />
+            </SuperAdminGate>
         </AdminPageWrapper>
     )
 }

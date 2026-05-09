@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { storage } from '@/lib/firebaseClient'
+import { getAuth, onAuthStateChanged } from 'firebase/auth'
+import { storage, app as firebaseApp } from '@/lib/firebaseClient'
+import { isSuperAdmin } from '@/lib/superAdmin'
 import { heebo, frankRuhl, notoHebrew, gveretLevin } from '@/app/fonts'
 import { getMessages } from '@/i18n/getMessages'
 import { dirFor, normalizeLocale } from '@/i18n/locales'
@@ -169,6 +171,23 @@ export default function DesignControls({
 }) {
     const [activePreset, setActivePreset] = useState(null)
     const [uploadingCover, setUploadingCover] = useState(false)
+
+    // ── Super-admin gate ────────────────────────────────────────────
+    // The viewer is the couple's design panel. By product decision,
+    // wedding owners (the couple) get a CURATED experience: pick a
+    // preset and you're done. Free-form editing — fonts, sizes,
+    // colors, backgrounds, deleting/saving presets — stays super-
+    // admin-only so couples don't accidentally break the look or
+    // wipe shared studio assets. Detection runs on every auth-state
+    // change so the UI reflects sign-in/sign-out without a refresh.
+    const [isAdmin, setIsAdmin] = useState(false)
+    useEffect(() => {
+        const auth = getAuth(firebaseApp)
+        const unsub = onAuthStateChanged(auth, user => {
+            setIsAdmin(isSuperAdmin(user?.email))
+        })
+        return unsub
+    }, [])
 
     // i18n — `locale` is passed in by the parent (viewer page) so the
     // panel speaks the same language the couple sees on their guest
@@ -398,17 +417,19 @@ export default function DesignControls({
                                                 system + studio presets alike (the
                                                 lib-level guard was lifted at the
                                                 user's "no restrictions" request). */}
-                                            <button
-                                                onClick={e => {
-                                                    e.stopPropagation()
-                                                    handleDeletePreset(preset)
-                                                }}
-                                                className='absolute -top-1.5 -end-1.5 w-5 h-5 rounded-full bg-white border border-gray-300 text-red-500 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity shadow flex items-center justify-center hover:bg-red-50'
-                                                title={t.deletePreset}
-                                                aria-label={t.deletePreset}
-                                            >
-                                                ×
-                                            </button>
+                                            {isAdmin && (
+                                                <button
+                                                    onClick={e => {
+                                                        e.stopPropagation()
+                                                        handleDeletePreset(preset)
+                                                    }}
+                                                    className='absolute -top-1.5 -end-1.5 w-5 h-5 rounded-full bg-white border border-gray-300 text-red-500 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity shadow flex items-center justify-center hover:bg-red-50'
+                                                    title={t.deletePreset}
+                                                    aria-label={t.deletePreset}
+                                                >
+                                                    ×
+                                                </button>
+                                            )}
                                         </div>
                                     )
                                 })}
@@ -417,10 +438,9 @@ export default function DesignControls({
                                 {t.presetsHint}
                             </p>
                             {/* Save current settings to the active
-                                preset. Visible only when a preset is
-                                applied — otherwise there's nothing to
-                                "save into". */}
-                            {activePreset && (
+                                preset. Super-admin-only; couples
+                                shouldn't overwrite shared presets. */}
+                            {isAdmin && activePreset && (
                                 <button
                                     onClick={handleSaveActivePreset}
                                     className='mt-3 w-full py-2 rounded-lg bg-[#AA8840]/10 hover:bg-[#AA8840]/20 text-[#AA8840] text-[11px] font-bold transition-colors border border-[#AA8840]/30'
@@ -430,6 +450,8 @@ export default function DesignControls({
                             )}
                         </Card>
 
+                        {isAdmin && (
+                        <>
                         {/* BODY (TEXT) FONT — the blessing copy. */}
                         <Card title={t.fontsTitle}>
                             <div className='space-y-2'>
@@ -639,6 +661,8 @@ export default function DesignControls({
                                 />
                             </div>
                         </Card>
+                        </>
+                        )}
                     </div>
                 )}
 
