@@ -5,7 +5,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { getAuth, onAuthStateChanged } from 'firebase/auth'
 import { storage, app as firebaseApp } from '@/lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
-import { heebo, frankRuhl, notoHebrew, gveretLevin } from '@/app/fonts'
+import { heebo, frankRuhl, notoHebrew, gveretLevin, playpenSansHebrew } from '@/app/fonts'
 import { getMessages } from '@/i18n/getMessages'
 import { dirFor, normalizeLocale } from '@/i18n/locales'
 import {
@@ -47,6 +47,7 @@ const FONTS = [
     { font: frankRuhl, label: 'Frank Ruhl' },
     { font: heebo, label: 'Heebo' },
     { font: gveretLevin, label: 'גברת לוין' },
+    { font: playpenSansHebrew, label: 'Playpen Sans Hebrew' },
 ]
 
 const BufferedInput = ({ value, onChange, placeholder, className }) => {

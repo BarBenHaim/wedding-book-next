@@ -63,3 +63,17 @@ export const danaYad = localFont({
     style: 'normal',
     display: 'swap',
 })
+
+// פונט מקומי — "Playpen Sans Hebrew" (כתב יד-קז'ואלי בעברית, מבית
+// Google Fonts). שלושה משקלים מסונכרנים בקובץ אחד כך ש-CSS
+// font-weight: 400/500/600 בוחר את הקובץ הנכון אוטומטית. ב-FONTS_REGISTRY
+// של הסטודיו הוא חשוף כברירת מחדל במשקל Regular (400).
+export const playpenSansHebrew = localFont({
+    src: [
+        { path: '../../public/fonts/PlaypenSansHebrew-Regular.ttf', weight: '400', style: 'normal' },
+        { path: '../../public/fonts/PlaypenSansHebrew-Medium.ttf', weight: '500', style: 'normal' },
+        { path: '../../public/fonts/PlaypenSansHebrew-SemiBold.ttf', weight: '600', style: 'normal' },
+    ],
+    variable: '--font-playpen-hebrew',
+    display: 'swap',
+})

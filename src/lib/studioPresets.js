@@ -54,7 +54,7 @@ async function callStudioApi(op, payload = {}) {
     }
     return res.json()
 }
-import { heebo, frankRuhl, notoHebrew, gveretLevin } from '@/app/fonts'
+import { heebo, frankRuhl, notoHebrew, gveretLevin, playpenSansHebrew } from '@/app/fonts'
 // Note: `secular`, `davidLibre`, `danaYad` exports still exist in
 // '@/app/fonts' for legacy consumers (PageLayouts, app/layout.js) but
 // are deliberately NOT registered here — the design studio's font
@@ -136,6 +136,7 @@ export const FONTS_REGISTRY = {
     frankRuhl: { id: 'frankRuhl', label: 'Frank Ruhl', font: frankRuhl },
     heebo: { id: 'heebo', label: 'Heebo', font: heebo },
     gveretLevin: { id: 'gveretLevin', label: 'גברת לוין', font: gveretLevin },
+    playpenSansHebrew: { id: 'playpenSansHebrew', label: 'Playpen Sans Hebrew', font: playpenSansHebrew },
 }
 
 export const FONT_IDS = Object.keys(FONTS_REGISTRY)
