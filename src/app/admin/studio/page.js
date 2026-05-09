@@ -1093,6 +1093,23 @@ function PropertiesPanel({
                                 onImageStyleChange({ borderRadius: n })
                             }
                         />
+
+                        {/* Gap between image and blessing text. % of
+                            page height. textMarginTop is honored by
+                            BookPageTemplate (line ~141) and was the
+                            last spacing field still hidden from the
+                            studio. */}
+                        <PropertySlider
+                            icon={Type}
+                            label='ריווח ברכה מלמעלה'
+                            value={v.textMarginTop ?? 0}
+                            min={0}
+                            max={20}
+                            step={0.5}
+                            unit='%'
+                            disabled={!editable}
+                            onChange={n => onValuesChange({ textMarginTop: n })}
+                        />
                     </div>
                 )}
             </div>
