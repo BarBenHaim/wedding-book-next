@@ -99,31 +99,39 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 </div>
             )}
 
-            {/* תמונה — natural-aspect render via the shared
-                <EntryPhoto> helper. Capped by the page's
-                imageStyle.width / imageStyle.height (in % of page).
-                Layout-specific concerns (margin, align, radius, z) are
-                merged into the style prop. */}
-            {hasImage && (
-                <EntryPhoto
-                    src={entry.imageUrl}
-                    maxWidth={w(styleSettings.imageStyle?.width ?? 90)}
-                    maxHeight={h(styleSettings.imageStyle?.height ?? 70)}
-                    className='relative'
-                    style={{
-                        borderRadius: styleSettings.imageStyle?.borderRadius ?? '12px',
-                        marginTop: onlyOne ? 0 : h(styleSettings.imageMarginTop ?? 2),
-                        marginBottom: onlyOne ? 0 : h(styleSettings.imageMarginBottom ?? 2),
-                        alignSelf:
-                            styleSettings.imageAlign === 'left'
-                                ? 'flex-start'
-                                : styleSettings.imageAlign === 'right'
-                                ? 'flex-end'
-                                : 'center',
-                        zIndex: 5,
-                    }}
-                />
-            )}
+            {/* תמונה — locked to 4:3 (the cropper's output aspect
+                AND every other layout's slot aspect). Width comes
+                from the user's preset (imageStyle.width % of page);
+                height is computed so the slot is exactly 4:3. The
+                photo fills the slot via objectFit: cover so EVERY
+                page in the book reads as a uniform landscape entry.
+                Legacy portrait uploads (pre-cropper) get a small
+                centre-crop — uniformity > preserving every pixel
+                of a single edge case. */}
+            {hasImage && (() => {
+                const slotW = w(styleSettings.imageStyle?.width ?? 80)
+                const slotH = slotW * 0.75 // 4:3 lock
+                return (
+                    <EntryPhoto
+                        src={entry.imageUrl}
+                        maxWidth={slotW}
+                        maxHeight={slotH}
+                        className='relative'
+                        style={{
+                            borderRadius: styleSettings.imageStyle?.borderRadius ?? '12px',
+                            marginTop: onlyOne ? 0 : h(styleSettings.imageMarginTop ?? 2),
+                            marginBottom: onlyOne ? 0 : h(styleSettings.imageMarginBottom ?? 2),
+                            alignSelf:
+                                styleSettings.imageAlign === 'left'
+                                    ? 'flex-start'
+                                    : styleSettings.imageAlign === 'right'
+                                    ? 'flex-end'
+                                    : 'center',
+                            zIndex: 5,
+                        }}
+                    />
+                )
+            })()}
 
             {/* טקסט */}
             {hasText && (

@@ -1,23 +1,26 @@
 // src/components/EntryPhoto/EntryPhoto.jsx
 //
-// Shared natural-aspect photo renderer for book layouts.
+// Shared photo renderer for book layouts (Polaroid, Scrapbook,
+// Notebook, Collage, classic BookPageTemplate).
 //
-// Every layout (Polaroid, Scrapbook, Notebook, Collage, classic
-// BookPageTemplate) used to inline the same <img> with maxWidth/
-// maxHeight + objectFit:contain. When the cropping behaviour
-// changed (e.g. switching from background-image:cover to a real
-// <img> at natural aspect), we had to edit five files in parallel.
+// Behaviour:
+//   • Fills the slot exactly (width: maxWidth, height: maxHeight)
+//   • objectFit: cover  — crops the photo to the container's
+//     aspect ratio so EVERY page in the book shows photos at
+//     consistent 4:3 (or whatever the layout's slot defines).
 //
-// This component is the single place that owns "how a guest photo
-// is shown on a printed page." The behaviour locked in here:
+// Why cover, not contain?
+//   The book is a uniform product. A reader flipping through 30
+//   pages where some are landscape and others are portrait with
+//   cream margins reads as inconsistent / amateur. The cropper in
+//   /photo already enforces 4:3 for every NEW upload, so the only
+//   photos that get cropped here are LEGACY uploads that never
+//   went through the cropper. For those, a small crop is the
+//   lesser evil vs. a "shrunken portrait floating in cream space".
 //
-//   • objectFit: contain   — never crops a photo, never distorts
-//   • width: auto, height: auto inside max{Width,Height} — natural aspect
-//   • display: block       — no inline whitespace artefacts under the image
-//
-// Layouts pass their slot's reserved dimensions via maxWidth/maxHeight;
-// the photo renders at whatever native ratio it has, capped to those.
-// Decoration around it (white mat, tape, ornaments) is the layout's job.
+// The cropper itself stays 4:3 — guests still get a cropping UX
+// before submitting, so what they see in the book is exactly what
+// they framed.
 
 export default function EntryPhoto({
     src,
@@ -33,11 +36,10 @@ export default function EntryPhoto({
             alt={alt}
             className={className}
             style={{
-                maxWidth,
-                maxHeight,
-                width: 'auto',
-                height: 'auto',
-                objectFit: 'contain',
+                width: maxWidth,
+                height: maxHeight,
+                objectFit: 'cover',
+                objectPosition: 'center',
                 display: 'block',
                 ...style,
             }}

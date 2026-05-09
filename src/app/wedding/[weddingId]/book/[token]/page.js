@@ -574,7 +574,7 @@ function BookViewer({ wedding, entries, weddingId }) {
             <div className='flex-1 flex items-center justify-center relative z-10 px-2'>
                 {entries.length > 0 ? (
                     <div
-                        className='relative animate-[bookOpen_900ms_cubic-bezier(0.2,0.8,0.2,1)_both]'
+                        className='relative animate-[bookOpen_500ms_cubic-bezier(0.2,0.8,0.2,1)_both]'
                         style={{
                             // Soft golden halo behind the book on
                             // the cream backdrop. drop-shadow
@@ -638,7 +638,11 @@ function BookViewer({ wedding, entries, weddingId }) {
                             height={pageSize.h}
                             size='fixed'
                             showCover={true}
-                            flippingTime={900}
+                            // 450ms ≈ Apple Photos / Kindle book turn —
+                            // long enough to see the page curl, short
+                            // enough to feel responsive. 900ms felt
+                            // sluggish per user feedback.
+                            flippingTime={450}
                             usePortrait={pageSize.isPortrait}
                             mobileScrollSupport={true}
                             useMouseEvents={true}
