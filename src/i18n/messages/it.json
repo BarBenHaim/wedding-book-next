@@ -255,7 +255,15 @@
     "auto": "Auto",
     "none": "Nessuno",
     "position": "Posizione",
-    "dragHint": "Clicca e trascina"
+    "dragHint": "Clicca e trascina",
+    "deleteBg": "Elimina sfondo",
+    "deleteBgConfirm": "Eliminare questo sfondo dalla galleria?",
+    "deleteBgError": "Impossibile eliminare lo sfondo.",
+    "deletePreset": "Elimina stile",
+    "deletePresetConfirm": "Eliminare questo stile?",
+    "deletePresetError": "Impossibile eliminare lo stile.",
+    "savePresetCta": "Salva le modifiche nello stile attivo",
+    "savePresetError": "Impossibile salvare lo stile."
   },
   "viewer": {
     "loadingCover": "Caricamento del design della copertina...",

@@ -9,15 +9,21 @@ import { dirFor, normalizeLocale } from '@/i18n/locales'
 import {
     BUILTIN_PRESETS,
     listPresets,
+    listAllBackgrounds,
     resolvePreset,
     UNIFIED_BACKGROUNDS,
+    savePreset,
+    deletePreset,
+    deleteStudioBackground,
+    hideStaticBackground,
+    hidePreset,
+    FONTS_REGISTRY,
 } from '@/lib/studioPresets'
 
-// Unified backgrounds list — collapses page bgs + textures + frames
-// into one gallery (per spring 2026 redesign). All three concepts
-// just paint the page surface; the user explicitly asked for one
-// picker, not three.
-const BG_ITEMS = UNIFIED_BACKGROUNDS
+// Default backgrounds list for instant render before the live list
+// (which includes uploaded backgrounds and honors hidden ids) loads
+// from Firestore. The component swaps in the live list on mount.
+const DEFAULT_BG_ITEMS = UNIFIED_BACKGROUNDS
 
 /* The 8 built-in presets that ship with the app. Stored as the
  * single source of truth in `src/lib/studioPresets.js` so the upcoming
@@ -194,8 +200,104 @@ export default function DesignControls({
     // PRESETS array used to pass.
     const applyPreset = preset => {
         const resolved = resolvePreset(preset)
-        setActivePreset(resolved.name || resolved.id)
+        setActivePreset(resolved.id || resolved.name)
         onChange(resolved.values)
+    }
+
+    // Live backgrounds list — pulled on mount, includes uploaded
+    // backgrounds and respects the hidden-ids list. Until it loads we
+    // render the static slice immediately so the picker isn't blank.
+    const [bgItems, setBgItems] = useState(DEFAULT_BG_ITEMS)
+    const [refreshTick, setRefreshTick] = useState(0)
+    useEffect(() => {
+        let cancelled = false
+        listAllBackgrounds()
+            .then(list => {
+                if (!cancelled && Array.isArray(list)) setBgItems(list)
+            })
+            .catch(() => {})
+        return () => {
+            cancelled = true
+        }
+    }, [refreshTick])
+    const visibleBgItems = bgItems
+
+    // ── Background delete ────────────────────────────────────────────
+    // Static (curated) → soft-hide via hiddenBackgroundIds (Firestore
+    // config doc). Uploaded → hard-delete (Firestore doc + Storage).
+    // Either way the picker refreshes after.
+    const handleDeleteBackground = async item => {
+        if (!item) return
+        if (!confirm(`${t.deleteBgConfirm}\n${item.label || item.id}`)) return
+        try {
+            if (item.origin === 'studio') {
+                await deleteStudioBackground(item.id, item.storagePath)
+            } else {
+                await hideStaticBackground(item.id)
+            }
+            // If the active book/cover bg was the one we just deleted,
+            // null it out so the renderer doesn't show a 404 / hidden
+            // image.
+            const patch = {}
+            if (settings.backgroundUrl === item.src) patch.backgroundUrl = null
+            if (settings.coverTexture === item.src) patch.coverTexture = null
+            if (Object.keys(patch).length) onChange({ ...settings, ...patch })
+            setRefreshTick(n => n + 1)
+        } catch (err) {
+            console.error('[design] delete background failed', err)
+            alert(t.deleteBgError + '\n' + (err?.message || err))
+        }
+    }
+
+    // ── Preset save (overwrite the active preset with current
+    //    settings) ───────────────────────────────────────────────────
+    // Spring 2026 user request: "I want to be able to edit the
+    // existing presets too." Writes the live `settings` (plus the
+    // computed stable keys for font/frame) back into the preset's
+    // `values` field. System presets stay flagged ownerType:'system'
+    // so the seeder doesn't double-create them.
+    const handleSaveActivePreset = async () => {
+        const target = presets.find(p => (p.id || p.name) === activePreset)
+        if (!target) return
+        // Reverse-resolve fontClass back to a stable fontKey so the
+        // saved doc stays portable across builds.
+        const fontKey =
+            Object.values(FONTS_REGISTRY).find(f => f.font.className === settings.fontClass)?.id ||
+            null
+        const merged = {
+            ...target,
+            values: {
+                ...(target.values || {}),
+                ...settings,
+                ...(fontKey ? { fontKey } : {}),
+            },
+        }
+        try {
+            const saved = await savePreset(merged)
+            setPresets(prev => prev.map(p => (p.id === saved.id ? saved : p)))
+        } catch (err) {
+            console.error('[design] save preset failed', err)
+            alert(t.savePresetError + '\n' + (err?.message || err))
+        }
+    }
+
+    // Delete a preset entirely. Hard-deletes the Firestore doc; for
+    // ownerType:'system' we also write the id into hiddenPresetIds so
+    // the seeder doesn't recreate it on next mount.
+    const handleDeletePreset = async preset => {
+        if (!preset) return
+        if (!confirm(`${t.deletePresetConfirm}\n${preset.name || preset.id}`)) return
+        try {
+            await deletePreset(preset.id)
+            if (preset.ownerType === 'system') {
+                await hidePreset(preset.id)
+            }
+            setPresets(prev => prev.filter(p => p.id !== preset.id))
+            if (activePreset === (preset.id || preset.name)) setActivePreset(null)
+        } catch (err) {
+            console.error('[design] delete preset failed', err)
+            alert(t.deletePresetError + '\n' + (err?.message || err))
+        }
     }
 
     const handleImageUpload = async e => {
@@ -274,26 +376,58 @@ export default function DesignControls({
                             via savePreset's lib-level guard). */}
                         <Card title={t.presetsTitle}>
                             <div className='grid grid-cols-2 gap-3'>
-                                {presets.map(preset => (
-                                    <button
-                                        key={preset.id || preset.name}
-                                        onClick={() => applyPreset(preset)}
-                                        className={`relative h-16 rounded-lg border transition-all overflow-hidden ${
-                                            activePreset === (preset.name || preset.id)
-                                                ? 'ring-2 ring-[#AA8840] border-transparent'
-                                                : 'border-gray-200 hover:scale-[1.02]'
-                                        }`}
-                                        style={{ background: preset.preview }}
-                                    >
-                                        <span className='absolute bottom-1 end-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/90 text-black'>
-                                            {preset.name}
-                                        </span>
-                                    </button>
-                                ))}
+                                {presets.map(preset => {
+                                    const presetKey = preset.id || preset.name
+                                    const isActive = activePreset === presetKey
+                                    return (
+                                        <div key={presetKey} className='relative group'>
+                                            <button
+                                                onClick={() => applyPreset(preset)}
+                                                className={`relative h-16 w-full rounded-lg border transition-all overflow-hidden ${
+                                                    isActive
+                                                        ? 'ring-2 ring-[#AA8840] border-transparent'
+                                                        : 'border-gray-200 hover:scale-[1.02]'
+                                                }`}
+                                                style={{ background: preset.preview }}
+                                            >
+                                                <span className='absolute bottom-1 end-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/90 text-black'>
+                                                    {preset.name}
+                                                </span>
+                                            </button>
+                                            {/* Trash — hides on hover; works on
+                                                system + studio presets alike (the
+                                                lib-level guard was lifted at the
+                                                user's "no restrictions" request). */}
+                                            <button
+                                                onClick={e => {
+                                                    e.stopPropagation()
+                                                    handleDeletePreset(preset)
+                                                }}
+                                                className='absolute -top-1.5 -end-1.5 w-5 h-5 rounded-full bg-white border border-gray-300 text-red-500 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity shadow flex items-center justify-center hover:bg-red-50'
+                                                title={t.deletePreset}
+                                                aria-label={t.deletePreset}
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                    )
+                                })}
                             </div>
                             <p className='text-[10px] text-gray-400 mt-3 leading-relaxed'>
                                 {t.presetsHint}
                             </p>
+                            {/* Save current settings to the active
+                                preset. Visible only when a preset is
+                                applied — otherwise there's nothing to
+                                "save into". */}
+                            {activePreset && (
+                                <button
+                                    onClick={handleSaveActivePreset}
+                                    className='mt-3 w-full py-2 rounded-lg bg-[#AA8840]/10 hover:bg-[#AA8840]/20 text-[#AA8840] text-[11px] font-bold transition-colors border border-[#AA8840]/30'
+                                >
+                                    {t.savePresetCta}
+                                </button>
+                            )}
                         </Card>
 
                         {/* BODY (TEXT) FONT — the blessing copy. */}
@@ -433,45 +567,61 @@ export default function DesignControls({
                                     {t.none}
                                 </button>
 
-                                {BG_ITEMS.map(item => {
-                                    // Active = the wedding doc field
-                                    // matching this item's kind points
-                                    // at this src.
-                                    const active =
-                                        settings.texture === item.src ||
-                                        settings.frame === item.src ||
-                                        settings.backgroundUrl === item.src
+                                {visibleBgItems.map(item => {
+                                    // Active = backgroundUrl matches.
+                                    // Per spring 2026: textures are
+                                    // routed to backgroundUrl too so
+                                    // they render as full-cover page
+                                    // backgrounds, not repeating-tile
+                                    // overlays. The legacy texture /
+                                    // frame fields are cleared on any
+                                    // selection so there's exactly one
+                                    // source of truth for the page
+                                    // surface.
+                                    const active = settings.backgroundUrl === item.src
                                     return (
-                                        <button
-                                            key={item.id}
-                                            onClick={() =>
-                                                onChange({
-                                                    ...settings,
-                                                    // Route to the right field by kind so the renderer
-                                                    // (which still reads texture/frame/backgroundUrl
-                                                    // separately) keeps working with old presets.
-                                                    texture: item.kind === 'texture' ? item.src : null,
-                                                    frame: item.kind === 'frame' ? item.src : null,
-                                                    backgroundUrl:
-                                                        item.kind === 'background' ? item.src : null,
-                                                })
-                                            }
-                                            className={`aspect-square rounded-lg border overflow-hidden transition-all relative group ${
-                                                active
-                                                    ? 'ring-2 ring-[#c9a44e] border-transparent'
-                                                    : 'border-gray-200 hover:opacity-90'
-                                            }`}
-                                            title={item.label}
-                                        >
-                                            <img
-                                                src={item.src}
-                                                alt={item.label}
-                                                className='w-full h-full object-cover'
-                                            />
-                                            <span className='absolute bottom-0.5 inset-x-0 text-[9px] font-medium text-white text-center bg-black/40 backdrop-blur-sm py-0.5 opacity-0 group-hover:opacity-100 transition-opacity truncate px-1'>
-                                                {item.label}
-                                            </span>
-                                        </button>
+                                        <div key={item.id} className='relative group'>
+                                            <button
+                                                onClick={() =>
+                                                    onChange({
+                                                        ...settings,
+                                                        backgroundUrl: item.src,
+                                                        texture: null,
+                                                        frame: null,
+                                                    })
+                                                }
+                                                className={`aspect-square w-full rounded-lg border overflow-hidden transition-all ${
+                                                    active
+                                                        ? 'ring-2 ring-[#c9a44e] border-transparent'
+                                                        : 'border-gray-200 hover:opacity-90'
+                                                }`}
+                                                title={item.label}
+                                            >
+                                                <img
+                                                    src={item.src}
+                                                    alt={item.label}
+                                                    className='w-full h-full object-cover'
+                                                />
+                                                <span className='absolute bottom-0.5 inset-x-0 text-[9px] font-medium text-white text-center bg-black/40 backdrop-blur-sm py-0.5 opacity-0 group-hover:opacity-100 transition-opacity truncate px-1'>
+                                                    {item.label}
+                                                </span>
+                                            </button>
+                                            {/* Per-tile delete — works for both
+                                                static (soft-hide via
+                                                hiddenBackgroundIds) and uploaded
+                                                (Firestore doc deletion). */}
+                                            <button
+                                                onClick={e => {
+                                                    e.stopPropagation()
+                                                    handleDeleteBackground(item)
+                                                }}
+                                                className='absolute -top-1.5 -end-1.5 w-5 h-5 rounded-full bg-white border border-gray-300 text-red-500 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity shadow flex items-center justify-center hover:bg-red-50'
+                                                title={t.deleteBg}
+                                                aria-label={t.deleteBg}
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
                                     )
                                 })}
                             </div>
@@ -670,7 +820,7 @@ export default function DesignControls({
                                     {t.none}
                                 </button>
 
-                                {BG_ITEMS.map(item => (
+                                {visibleBgItems.map(item => (
                                     <button
                                         key={item.id}
                                         onClick={() => onChange({ coverTexture: item.src, coverFrame: 'none' })}

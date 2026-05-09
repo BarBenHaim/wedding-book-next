@@ -296,14 +296,22 @@ export function resolvePreset(preset) {
 const COLLECTION = 'studio_presets'
 
 // Read every preset from Firestore. System presets sort first (by
-// creation time), then user presets (most-recently-edited first). On
-// any error or empty collection we fall back to BUILTIN_PRESETS so
-// the viewer's picker is never blank.
+// creation time), then user presets (most-recently-edited first).
+// Filters out any preset whose id appears in studio_config/visibility's
+// hiddenPresetIds — that's how we honor "delete a system preset"
+// without fighting the seeder. On any error or empty collection we
+// fall back to BUILTIN_PRESETS so the viewer's picker is never blank.
 export async function listPresets() {
     try {
-        const snap = await getDocs(query(collection(db, COLLECTION), orderBy('createdAt', 'asc')))
-        if (snap.empty) return BUILTIN_PRESETS
-        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        const [snap, vis] = await Promise.all([
+            getDocs(query(collection(db, COLLECTION), orderBy('createdAt', 'asc'))),
+            readVisibility(),
+        ])
+        const hidden = new Set(vis.hiddenPresetIds)
+        if (snap.empty) return BUILTIN_PRESETS.filter(p => !hidden.has(p.id))
+        const docs = snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter(d => !hidden.has(d.id))
         // Sort: system first, then studio (most-recent updatedAt first).
         const system = docs.filter(d => d.ownerType === 'system')
         const studio = docs
@@ -326,23 +334,29 @@ function newPresetId() {
 }
 
 // Save a single preset doc to Firestore. Used by the studio's "Save"
-// (overwrite an existing studio preset) and "Save as new" (create a
-// new studio preset cloned from the active one) actions. Refuses to
-// touch system presets — those are seeded data and edits are
-// disallowed at the lib level so a careless caller can't corrupt
-// them. Returns the saved doc.
+// (overwrite an existing preset with the live settings) and "Save as
+// new" (create a new preset cloned from the active one). Returns the
+// saved doc.
+//
+// Spring 2026: the system-preset read-only guard was REMOVED at the
+// user's explicit request ("no restrictions"). System presets remain
+// flagged ownerType:'system' so the seeder won't double-seed them
+// after edits, but in-place mutation is allowed. If the user wants
+// the original back they can wipe `studio_presets/{id}` and
+// seedBuiltinPresetsIfMissing will re-create it.
 export async function savePreset(preset, { uid, asNew = false } = {}) {
     if (!preset) throw new Error('savePreset: missing preset')
-    if (!asNew && preset.ownerType === 'system') {
-        throw new Error('savePreset: system presets are read-only — clone first')
-    }
 
     const now = new Date()
     const id = asNew || !preset.id ? newPresetId() : preset.id
+    // Preserve ownerType on in-place edits so a system preset stays
+    // flagged 'system' (and thus survives the seed-skip check). Only
+    // a fresh "save as new" lands as 'studio'.
+    const ownerType = asNew ? 'studio' : preset.ownerType || 'studio'
     const merged = {
         ...preset,
         id,
-        ownerType: 'studio',                     // any save lands as studio
+        ownerType,
         createdBy: preset.createdBy || uid || 'unknown',
         createdAt: asNew || !preset.createdAt ? now : preset.createdAt,
         updatedAt: now,
@@ -351,13 +365,15 @@ export async function savePreset(preset, { uid, asNew = false } = {}) {
     return merged
 }
 
-// Delete a studio preset. System presets are protected at the lib
-// level — same rationale as savePreset. Returns true on success.
-export async function deletePreset(presetId, ownerType) {
+// Delete any preset — system or studio. System presets are not
+// protected at the lib level anymore (spring 2026 user request); if
+// deleted, they will reappear on the next call to
+// seedBuiltinPresetsIfMissing because that seeder probes
+// BUILTIN_PRESETS[0].id and re-seeds when missing. To prevent the
+// reseed, callers can additionally write a sentinel into
+// studio_config/visibility.hiddenPresetIds. Returns true on success.
+export async function deletePreset(presetId /* , ownerType */) {
     if (!presetId) throw new Error('deletePreset: missing id')
-    if (ownerType === 'system') {
-        throw new Error('deletePreset: system presets cannot be deleted')
-    }
     await deleteDoc(doc(db, COLLECTION, presetId))
     return true
 }
@@ -414,15 +430,17 @@ export async function listStudioBackgrounds() {
 // Returns the unified background list — UNIFIED_BACKGROUNDS (curated
 // page bgs + textures + frames, all collapsed into one "book
 // background" gallery per the spring 2026 redesign) + uploaded
-// (Firestore). Each entry carries an `origin` flag so the picker can
-// badge them, and `kind` so legacy code that still cares about the
-// old taxonomy can branch on it.
+// (Firestore). Filters out anything in the studio_config visibility
+// doc's `hiddenBackgroundIds` so the user can soft-delete static
+// items they don't want to see again.
 export async function listAllBackgrounds() {
-    const uploaded = await listStudioBackgrounds()
-    return [
+    const [uploaded, vis] = await Promise.all([listStudioBackgrounds(), readVisibility()])
+    const hidden = new Set(vis.hiddenBackgroundIds)
+    const all = [
         ...UNIFIED_BACKGROUNDS.map(b => ({ ...b, origin: 'static' })),
         ...uploaded.map(b => ({ ...b, kind: 'background', origin: 'studio' })),
     ]
+    return all.filter(b => !hidden.has(b.id))
 }
 
 // Inspect an image File and return its natural dimensions + aspect.
@@ -558,19 +576,93 @@ export async function deleteStudioBackground(id, storagePath) {
     return true
 }
 
+// ── Visibility / soft-hide ───────────────────────────────────────────
+// Static backgrounds (curated, ship in code) and seeded system
+// presets can't be "hard-deleted" the way uploaded ones can — they're
+// either source files in public/ or doc IDs the seeder will re-create
+// on the next mount. To honor the user's "delete anything freely"
+// request we instead track hidden IDs in a single config doc and
+// filter them out of the picker / list APIs.
+//
+// One global doc (`studio_config/visibility`) keeps the model simple
+// — visibility is a super-admin / studio-owner concern, not a
+// per-couple choice. If we ever need per-account hiding we'll move
+// the array onto the wedding doc.
+const VISIBILITY_DOC = 'studio_config/visibility'
+
+async function readVisibility() {
+    try {
+        const [coll, id] = VISIBILITY_DOC.split('/')
+        const snap = await getDoc(doc(db, coll, id))
+        if (!snap.exists()) return { hiddenBackgroundIds: [], hiddenPresetIds: [] }
+        const v = snap.data() || {}
+        return {
+            hiddenBackgroundIds: Array.isArray(v.hiddenBackgroundIds) ? v.hiddenBackgroundIds : [],
+            hiddenPresetIds: Array.isArray(v.hiddenPresetIds) ? v.hiddenPresetIds : [],
+        }
+    } catch (err) {
+        console.warn('[studioPresets] readVisibility failed:', err?.message || err)
+        return { hiddenBackgroundIds: [], hiddenPresetIds: [] }
+    }
+}
+
+async function writeVisibility(patch) {
+    const [coll, id] = VISIBILITY_DOC.split('/')
+    const current = await readVisibility()
+    const next = { ...current, ...patch }
+    await setDoc(doc(db, coll, id), next, { merge: true })
+    return next
+}
+
+// Hide a static background. Caller passes the static id (e.g.
+// 'tex3', 'romanticgarden', 'frame2'). Idempotent — adding twice is
+// a no-op. Returns the new hidden array.
+export async function hideStaticBackground(id) {
+    if (!id) throw new Error('hideStaticBackground: missing id')
+    const cur = await readVisibility()
+    if (cur.hiddenBackgroundIds.includes(id)) return cur.hiddenBackgroundIds
+    const next = [...cur.hiddenBackgroundIds, id]
+    await writeVisibility({ hiddenBackgroundIds: next })
+    return next
+}
+
+// Mirror for system presets — `deletePreset` removes the doc but the
+// seeder might re-create it on next mount. Adding to this list tells
+// the seeder + listPresets to skip it.
+export async function hidePreset(id) {
+    if (!id) throw new Error('hidePreset: missing id')
+    const cur = await readVisibility()
+    if (cur.hiddenPresetIds.includes(id)) return cur.hiddenPresetIds
+    const next = [...cur.hiddenPresetIds, id]
+    await writeVisibility({ hiddenPresetIds: next })
+    return next
+}
+
+// "Restore everything" escape hatch — handy if the user nukes
+// everything and wants the gallery back to defaults.
+export async function clearVisibilityHidden() {
+    await writeVisibility({ hiddenBackgroundIds: [], hiddenPresetIds: [] })
+    return true
+}
+
 // Write the BUILTIN_PRESETS to Firestore if the collection is empty or
 // the system presets are missing. Idempotent — safe to call on every
 // studio mount. Uses setDoc with the preset's literal id so the
-// Firestore docId is stable across re-seeds (no duplicates).
+// Firestore docId is stable across re-seeds (no duplicates). Honors
+// hiddenPresetIds so a system preset the user deleted doesn't keep
+// reappearing.
 export async function seedBuiltinPresetsIfMissing() {
     try {
         // Fast path: if the first system preset is already there, skip.
         const probe = await getDoc(doc(db, COLLECTION, BUILTIN_PRESETS[0].id))
         if (probe.exists()) return { seeded: 0, status: 'already-present' }
 
+        const vis = await readVisibility()
+        const hidden = new Set(vis.hiddenPresetIds)
         const now = new Date()
         let seeded = 0
         for (const preset of BUILTIN_PRESETS) {
+            if (hidden.has(preset.id)) continue
             await setDoc(
                 doc(db, COLLECTION, preset.id),
                 {

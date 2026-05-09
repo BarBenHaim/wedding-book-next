@@ -256,7 +256,15 @@
     "auto": "Auto",
     "none": "None",
     "position": "Position",
-    "dragHint": "Click & drag"
+    "dragHint": "Click & drag",
+    "deleteBg": "Delete background",
+    "deleteBgConfirm": "Delete this background from the gallery?",
+    "deleteBgError": "Failed to delete the background.",
+    "deletePreset": "Delete style",
+    "deletePresetConfirm": "Delete this style?",
+    "deletePresetError": "Failed to delete the style.",
+    "savePresetCta": "Save changes to the active style",
+    "savePresetError": "Failed to save the style."
   },
   "viewer": {
     "loadingCover": "Loading cover design...",

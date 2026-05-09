@@ -256,7 +256,15 @@
     "auto": "אוטומטי",
     "none": "ללא",
     "position": "מיקום",
-    "dragHint": "לחצי וגררי"
+    "dragHint": "לחצי וגררי",
+    "deleteBg": "מחיקת רקע",
+    "deleteBgConfirm": "למחוק את הרקע הזה מהגלריה?",
+    "deleteBgError": "מחיקת הרקע נכשלה.",
+    "deletePreset": "מחיקת סגנון",
+    "deletePresetConfirm": "למחוק את הסגנון הזה?",
+    "deletePresetError": "מחיקת הסגנון נכשלה.",
+    "savePresetCta": "שמירת השינויים בסגנון הנבחר",
+    "savePresetError": "שמירת הסגנון נכשלה."
   },
   "viewer": {
     "loadingCover": "טוען את עיצוב הכריכה...",

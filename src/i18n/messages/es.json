@@ -255,7 +255,15 @@
     "auto": "Auto",
     "none": "Ninguno",
     "position": "Posición",
-    "dragHint": "Haz clic y arrastra"
+    "dragHint": "Haz clic y arrastra",
+    "deleteBg": "Eliminar fondo",
+    "deleteBgConfirm": "¿Eliminar este fondo de la galería?",
+    "deleteBgError": "No se pudo eliminar el fondo.",
+    "deletePreset": "Eliminar estilo",
+    "deletePresetConfirm": "¿Eliminar este estilo?",
+    "deletePresetError": "No se pudo eliminar el estilo.",
+    "savePresetCta": "Guardar cambios en el estilo activo",
+    "savePresetError": "No se pudo guardar el estilo."
   },
   "viewer": {
     "loadingCover": "Cargando diseño de portada...",
