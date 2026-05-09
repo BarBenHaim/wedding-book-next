@@ -69,6 +69,11 @@ function BookViewerInner({ onLocaleDiscovered }) {
     const [viewerSize, setViewerSize] = useState(500)
     const [isMobile, setIsMobile] = useState(false)
     const [styleSettings, setStyleSettings] = useState(defaultStyle)
+    // Hold the raw wedding doc so the cover template can derive the
+    // default "ספר הברכות של {names}" content from eventType +
+    // brideName/groomName/celebrantName when no custom cover content
+    // is set. Mirrors the pattern in /book/[token]/page.js.
+    const [weddingDoc, setWeddingDoc] = useState(null)
     // Inject the wedding's locale into styleSettings so BookPageTemplate
     // and the page layouts (Notebook, Collage) can read it and set their
     // own dir + use the right logical CSS resolution. MUST be declared
@@ -151,6 +156,9 @@ function BookViewerInner({ onLocaleDiscovered }) {
                         // every chrome string (DesignControls, viewer status
                         // messages) speaks the wedding's configured language.
                         onLocaleDiscovered(normalizeLocale(firestoreData.locale))
+                        // Stash the doc so BookCoverTemplate can pull
+                        // eventType + names for its default content.
+                        setWeddingDoc(firestoreData)
                         if (firestoreData.coverDesign) {
                             setStyleSettings({ ...defaultStyle, ...firestoreData.coverDesign })
                         } else if (typeof window !== 'undefined') {
@@ -556,6 +564,14 @@ function BookViewerInner({ onLocaleDiscovered }) {
                             >
                                 <div className='demo-page'>
                                     <BookCoverTemplate
+                                        wedding={{
+                                            eventType: weddingDoc?.eventType,
+                                            brideName: weddingDoc?.brideName,
+                                            groomName: weddingDoc?.groomName,
+                                            celebrantName: weddingDoc?.celebrantName,
+                                            customTitle: weddingDoc?.customTitle,
+                                            age: weddingDoc?.age,
+                                        }}
                                         styleSettings={styleWithLocale}
                                         scaledWidth={viewerSize}
                                         scaledHeight={viewerSize}
@@ -576,8 +592,30 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                 drawShadow={false}
                                 flippable={true}
                             >
+                                {/* Page order: front cover first, then
+                                    entries, then back cover. With
+                                    showCover=true the front cover
+                                    renders standalone as the right-
+                                    side opening page (Hebrew RTL
+                                    convention — book opens right-to-
+                                    left, so the right page is "first").
+                                    Entries flow as spreads. Same order
+                                    as /book/[token] so the two views
+                                    feel like the same book. */}
                                 <div className='demo-page shadow-inner'>
-                                    <BookBackCoverTemplate scaledWidth={viewerSize} scaledHeight={viewerSize} />
+                                    <BookCoverTemplate
+                                        wedding={{
+                                            eventType: weddingDoc?.eventType,
+                                            brideName: weddingDoc?.brideName,
+                                            groomName: weddingDoc?.groomName,
+                                            celebrantName: weddingDoc?.celebrantName,
+                                            customTitle: weddingDoc?.customTitle,
+                                            age: weddingDoc?.age,
+                                        }}
+                                        styleSettings={styleWithLocale}
+                                        scaledWidth={viewerSize}
+                                        scaledHeight={viewerSize}
+                                    />
                                 </div>
                                 {pages.map(entry => (
                                     <div key={entry.id} className='demo-page border-l border-[#AA8840]/10'>
@@ -590,11 +628,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                     </div>
                                 ))}
                                 <div className='demo-page shadow-inner'>
-                                    <BookCoverTemplate
-                                        styleSettings={styleWithLocale}
-                                        scaledWidth={viewerSize}
-                                        scaledHeight={viewerSize}
-                                    />
+                                    <BookBackCoverTemplate scaledWidth={viewerSize} scaledHeight={viewerSize} />
                                 </div>
                             </HTMLFlipBook>
                         )}
