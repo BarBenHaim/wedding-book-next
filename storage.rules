@@ -22,6 +22,18 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    // Studio backgrounds uploaded via the design studio (super-admin /
+    // signed-in user uploads through the picker). Reads are public so
+    // every wedding's book can render them. Writes require auth.
+    match /studio/backgrounds/{filename} {
+      allow read: if true;
+      allow create, update, delete:
+        if request.auth != null
+        && (request.resource == null
+            || (request.resource.size < 8 * 1024 * 1024
+                && request.resource.contentType.matches('image/.*')));
+    }
+
     // Anything else — admin SDK only.
     match /{path=**} {
       allow read, write: if false;

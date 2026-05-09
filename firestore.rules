@@ -102,6 +102,32 @@ service cloud.firestore {
         && (!('orderIndex' in data) || data.orderIndex == null || data.orderIndex is int);
     }
 
+    // ─── Design studio collections — signed-in writes ──────────────
+    // These collections power the in-product design studio (preset
+    // gallery, uploaded backgrounds, the visibility/hidden-ids doc).
+    // Per the spring 2026 product decision, any signed-in user (the
+    // couple authenticated through the portal) can edit and delete
+    // freely — including system-seeded presets and curated static
+    // backgrounds. The seeder is idempotent and the visibility doc
+    // tracks soft-hides, so accidental damage is recoverable through
+    // clearVisibilityHidden() / a re-seed.
+    //
+    // If we ever want to scope this to super-admin only, add an
+    // isSuperAdmin() helper that reads request.auth.token.email and
+    // gate write here.
+    match /studio_presets/{id} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /studio_backgrounds/{id} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /studio_config/{id} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
     // ─── Default deny ───────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
