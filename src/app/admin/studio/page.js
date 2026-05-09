@@ -1536,7 +1536,7 @@ function PropertyBackgroundsEdit({
                 <input
                     ref={fileInputRef}
                     type='file'
-                    accept='image/jpeg,image/png,image/webp'
+                    accept='image/jpeg,image/png,image/webp,image/svg+xml'
                     onChange={onFilePick}
                     disabled={disabled || isUploading}
                     className='hidden'
@@ -1553,7 +1553,7 @@ function PropertyBackgroundsEdit({
                     </div>
                 )}
                 <p className='text-[10px] text-[#a89378] mt-1.5 leading-relaxed'>
-                    JPG / PNG / WebP · עד 5MB · לפחות 1500px בצלע הארוכה · יחס 0.7–1.5
+                    JPG / PNG / WebP / SVG · עד 5MB · יחס סביב 1:1 (SVG פטור מבדיקת ממדים)
                 </p>
             </div>
         </div>

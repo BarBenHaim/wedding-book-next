@@ -432,7 +432,7 @@ const UPLOAD_LIMITS = {
     minSize: 1500, // px on the longer edge — matches the low-res guard threshold
     minAspect: 0.7,
     maxAspect: 1.5,
-    allowedTypes: ['image/jpeg', 'image/png', 'image/webp'],
+    allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'],
 }
 
 // Read every uploaded background from Firestore. Sorted newest-first
@@ -505,58 +505,77 @@ export async function uploadBackground(file, { uid, label = '', tags = [] } = {}
 
     // ── Validation ──
     if (!UPLOAD_LIMITS.allowedTypes.includes(file.type)) {
-        throw new Error('פורמט לא נתמך — רק JPG, PNG או WebP')
+        throw new Error('פורמט לא נתמך — רק JPG, PNG, WebP או SVG')
     }
     if (file.size > UPLOAD_LIMITS.maxFileMB * 1024 * 1024) {
         throw new Error(`הקובץ גדול מדי — מקסימום ${UPLOAD_LIMITS.maxFileMB}MB`)
     }
 
-    let probed
-    try {
-        probed = await probeImage(file)
-    } catch {
-        throw new Error('לא ניתן לקרוא את התמונה')
-    }
-    const longerEdge = Math.max(probed.width, probed.height)
-    if (longerEdge < UPLOAD_LIMITS.minSize) {
-        throw new Error(
-            `רזולוציה נמוכה מדי (${probed.width}×${probed.height}). דרושים לפחות ${UPLOAD_LIMITS.minSize}px בצלע הארוכה`
-        )
-    }
-    if (
-        probed.aspect < UPLOAD_LIMITS.minAspect ||
-        probed.aspect > UPLOAD_LIMITS.maxAspect
-    ) {
-        throw new Error(
-            'יחס התמונה לא מתאים לעמוד ספר. אפשר רק תמונות סביב 1:1'
-        )
+    // ── SVG fast path ─────────────────────────────────────────────
+    // Vector SVGs have no natural pixel dimensions, so probeImage()
+    // and the minSize / aspect-ratio checks don't apply. We also
+    // skip raster compression (browser-image-compression rasterizes
+    // input — it would actually DEGRADE the SVG, defeating the whole
+    // "I want better print quality" reason for choosing SVG). The
+    // file ships as-is.
+    //
+    // Security note: a scripted SVG (`<script>` tags / inline event
+    // handlers) is harmless when rendered via <img src> or CSS
+    // background-image — browsers disable script execution in image
+    // contexts. The renderer in BookPageTemplate uses both, so we
+    // don't need DOMPurify-style sanitization here.
+    const isSvg = file.type === 'image/svg+xml'
+    let probed = null
+    if (!isSvg) {
+        try {
+            probed = await probeImage(file)
+        } catch {
+            throw new Error('לא ניתן לקרוא את התמונה')
+        }
+        const longerEdge = Math.max(probed.width, probed.height)
+        if (longerEdge < UPLOAD_LIMITS.minSize) {
+            throw new Error(
+                `רזולוציה נמוכה מדי (${probed.width}×${probed.height}). דרושים לפחות ${UPLOAD_LIMITS.minSize}px בצלע הארוכה`
+            )
+        }
+        if (
+            probed.aspect < UPLOAD_LIMITS.minAspect ||
+            probed.aspect > UPLOAD_LIMITS.maxAspect
+        ) {
+            throw new Error(
+                'יחס התמונה לא מתאים לעמוד ספר. אפשר רק תמונות סביב 1:1'
+            )
+        }
     }
 
-    // ── Compression — dynamic import so the studio bundle stays
-    //    small for non-upload sessions. Best-effort: if it throws
-    //    (rare iOS Safari quirk) we ship the original file. ──
+    // ── Compression — only for raster. Dynamic import so the studio
+    //    bundle stays small for non-upload sessions. Best-effort: if
+    //    it throws (rare iOS Safari quirk) we ship the original file. ──
     let compressed = file
-    try {
-        const { default: imageCompression } = await import('browser-image-compression')
-        const out = await imageCompression(file, {
-            maxSizeMB: 1.5,
-            maxWidthOrHeight: 2560,
-            initialQuality: 0.92,
-            useWebWorker: true,
-            fileType: 'image/jpeg',
-        })
-        if (out.size < file.size) compressed = out
-    } catch (err) {
-        console.warn('[studioPresets] compression skipped:', err?.message || err)
+    if (!isSvg) {
+        try {
+            const { default: imageCompression } = await import('browser-image-compression')
+            const out = await imageCompression(file, {
+                maxSizeMB: 1.5,
+                maxWidthOrHeight: 2560,
+                initialQuality: 0.92,
+                useWebWorker: true,
+                fileType: 'image/jpeg',
+            })
+            if (out.size < file.size) compressed = out
+        } catch (err) {
+            console.warn('[studioPresets] compression skipped:', err?.message || err)
+        }
     }
 
     // ── Upload + write doc ──
-    const ext =
-        compressed.type === 'image/png'
-            ? 'png'
-            : compressed.type === 'image/webp'
-            ? 'webp'
-            : 'jpg'
+    const ext = isSvg
+        ? 'svg'
+        : compressed.type === 'image/png'
+        ? 'png'
+        : compressed.type === 'image/webp'
+        ? 'webp'
+        : 'jpg'
     const id = newPresetId().replace('studio_', 'bg_')
     const storagePath = `studio/backgrounds/${id}.${ext}`
     const ref = storageRef(storage, storagePath)
@@ -568,8 +587,8 @@ export async function uploadBackground(file, { uid, label = '', tags = [] } = {}
         storagePath,
         label: label || file.name?.replace(/\.[^.]+$/, '') || 'רקע מותאם',
         originalFilename: file.name || null,
-        width: probed.width,
-        height: probed.height,
+        width: probed?.width ?? null,
+        height: probed?.height ?? null,
         sizeKB: Math.round(compressed.size / 1024),
         tags: Array.isArray(tags) ? tags.filter(Boolean) : [],
         uploadedBy: uid || 'unknown',
