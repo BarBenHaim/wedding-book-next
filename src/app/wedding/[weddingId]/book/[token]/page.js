@@ -31,13 +31,14 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import HTMLFlipBook from 'react-pageflip'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebaseClient'
 import { getEntries } from '@/lib/classifyMedia'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import { listPresets, resolvePreset, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
@@ -287,9 +288,54 @@ function BookViewer({ wedding, entries, weddingId }) {
         return () => window.removeEventListener('keydown', onKey)
     }, [opened])
 
-    const styleSettings = useMemo(() => {
-        return wedding.book?.designSettings || defaultStyle
-    }, [wedding])
+    // styleSettings is local state (NOT useMemo) so the preset picker
+    // at the bottom can swap designs live. Initial value mirrors the
+    // /viewer's render path: wedding.book.designSettings merged with
+    // defaultStyle's baseline so undefined fields don't fall through
+    // to BookPageTemplate's `??` fallbacks (which would visually
+    // diverge from the viewer — the same bug we already fixed in the
+    // /admin/studio preview).
+    const [styleSettings, setStyleSettings] = useState(() => ({
+        ...defaultStyle,
+        ...(wedding.book?.designSettings || {}),
+    }))
+
+    // Live preset list for the bottom picker. listPresets falls back
+    // to BUILTIN_PRESETS on any Firestore error, so the strip is
+    // never empty.
+    const [presets, setPresets] = useState(BUILTIN_PRESETS)
+    useEffect(() => {
+        let cancelled = false
+        listPresets().then(list => {
+            if (!cancelled && Array.isArray(list) && list.length > 0) setPresets(list)
+        })
+        return () => { cancelled = true }
+    }, [])
+
+    // Apply a preset: update local state immediately so the flipbook
+    // re-renders with the new design, then persist to the wedding doc
+    // so the change survives reload + propagates to /viewer + /book
+    // for everyone with the link. Best-effort save — UI doesn't wait
+    // for the network round-trip; if it fails the local state still
+    // reflects the user's choice for this session.
+    const applyPreset = preset => {
+        const resolved = resolvePreset(preset).values || {}
+        const merged = { ...defaultStyle, ...resolved }
+        setStyleSettings(merged)
+        // Sanitize: drop runtime-resolved keys that shouldn't persist
+        // back as duplicates. coverDesign is the field /viewer uses
+        // (we've kept that name for back-compat — the wedding doc
+        // already has it).
+        try {
+            setDoc(
+                doc(db, 'weddings', weddingId),
+                { coverDesign: merged },
+                { merge: true }
+            )
+        } catch (err) {
+            console.warn('[digital book] preset save failed:', err?.message || err)
+        }
+    }
 
     const totalPages = entries.length + 2
 
@@ -612,55 +658,6 @@ function BookViewer({ wedding, entries, weddingId }) {
                             boxShadow: '0 30px 60px -10px rgba(45,30,16,0.30), 0 0 40px rgba(201,164,78,0.20)',
                         }}
                     >
-                        {/* Side arrow — RIGHT side. Per the user's
-                            preferred direction, the right arrow now
-                            calls next() (was prev()). */}
-                        <button
-                            onClick={next}
-                            aria-label='הבא'
-                            className='absolute top-1/2 -translate-y-1/2 transition-all hover:scale-105 active:scale-95'
-                            style={{
-                                right: pageSize.isPortrait ? -56 : -68,
-                                width: 48,
-                                height: 48,
-                                borderRadius: '50%',
-                                background: 'rgba(253,249,239,0.92)',
-                                border: '1px solid rgba(201,164,78,0.35)',
-                                color: '#aa8840',
-                                boxShadow: '0 6px 18px -6px rgba(45,30,16,0.20)',
-                                backdropFilter: 'blur(8px)',
-                                zIndex: 5,
-                            }}
-                        >
-                            <svg viewBox='0 0 24 24' className='w-5 h-5 mx-auto' fill='none' stroke='currentColor' strokeWidth={1.8}>
-                                <path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
-                            </svg>
-                        </button>
-
-                        {/* Side arrow — LEFT side. Per the user's
-                            preferred direction, the left arrow now
-                            calls prev() (was next()). */}
-                        <button
-                            onClick={prev}
-                            aria-label='הקודם'
-                            className='absolute top-1/2 -translate-y-1/2 transition-all hover:scale-105 active:scale-95'
-                            style={{
-                                left: pageSize.isPortrait ? -56 : -68,
-                                width: 48,
-                                height: 48,
-                                borderRadius: '50%',
-                                background: 'rgba(253,249,239,0.92)',
-                                border: '1px solid rgba(201,164,78,0.35)',
-                                color: '#aa8840',
-                                boxShadow: '0 6px 18px -6px rgba(45,30,16,0.20)',
-                                backdropFilter: 'blur(8px)',
-                                zIndex: 5,
-                            }}
-                        >
-                            <svg viewBox='0 0 24 24' className='w-5 h-5 mx-auto' fill='none' stroke='currentColor' strokeWidth={1.8}>
-                                <path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7' />
-                            </svg>
-                        </button>
                         <HTMLFlipBook
                             ref={flipRef}
                             width={pageSize.w}
@@ -676,6 +673,17 @@ function BookViewer({ wedding, entries, weddingId }) {
                             // a visible loss (the wrapper's static
                             // box-shadow handles depth instead).
                             drawShadow={false}
+                            // Mobile flip tuning: slightly snappier
+                            // than the default 1000ms feels more
+                            // responsive on a phone, where users are
+                            // used to instant transitions. Lower swipe
+                            // distance makes a small thumb gesture
+                            // enough to flip a page — the default 30px
+                            // requires a deliberate drag.
+                            flippingTime={pageSize.isPortrait ? 650 : 800}
+                            swipeDistance={pageSize.isPortrait ? 18 : 30}
+                            maxShadowOpacity={0.4}
+                            useMouseEvents={true}
                             onFlip={e => setPage(e.data)}
                         >
                             {/* Page order matches /viewer's RTL
@@ -732,10 +740,32 @@ function BookViewer({ wedding, entries, weddingId }) {
                 )}
             </div>
 
-            {/* Bottom — centered page counter chip in elegant
-                serif. Side arrows handle navigation now, so this is
-                pure information. */}
-            <div className='flex items-center justify-center pb-6 relative z-10'>
+            {/* Bottom controls — arrow row + page counter chip,
+                stacked above the preset strip. The arrows used to
+                hug the spine on either side of the book; the user
+                asked for them moved here so the book reads cleaner
+                on mobile (no thumbs blocking page edges). */}
+            <div className='flex items-center justify-center gap-3 pt-2 pb-3 relative z-10'>
+                <button
+                    onClick={prev}
+                    aria-label='הקודם'
+                    className='inline-flex items-center justify-center transition-all hover:scale-105 active:scale-95'
+                    style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: '50%',
+                        background: 'rgba(253,249,239,0.92)',
+                        border: '1px solid rgba(201,164,78,0.35)',
+                        color: '#aa8840',
+                        boxShadow: '0 4px 12px -4px rgba(45,30,16,0.18)',
+                        backdropFilter: 'blur(8px)',
+                    }}
+                >
+                    <svg viewBox='0 0 24 24' className='w-[18px] h-[18px]' fill='none' stroke='currentColor' strokeWidth={1.8}>
+                        <path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7' />
+                    </svg>
+                </button>
+
                 <div
                     className='inline-flex items-center gap-3 rounded-full'
                     style={{
@@ -762,7 +792,41 @@ function BookViewer({ wedding, entries, weddingId }) {
                         <span style={{ opacity: 0.7 }}>{totalPages}</span>
                     </span>
                 </div>
+
+                <button
+                    onClick={next}
+                    aria-label='הבא'
+                    className='inline-flex items-center justify-center transition-all hover:scale-105 active:scale-95'
+                    style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: '50%',
+                        background: 'rgba(253,249,239,0.92)',
+                        border: '1px solid rgba(201,164,78,0.35)',
+                        color: '#aa8840',
+                        boxShadow: '0 4px 12px -4px rgba(45,30,16,0.18)',
+                        backdropFilter: 'blur(8px)',
+                    }}
+                >
+                    <svg viewBox='0 0 24 24' className='w-[18px] h-[18px]' fill='none' stroke='currentColor' strokeWidth={1.8}>
+                        <path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
+                    </svg>
+                </button>
             </div>
+
+            {/* Preset strip — horizontal row of mini live previews,
+                each rendered with the actual <BookPageTemplate /> at
+                a small scale so the user sees the design, not a name.
+                Click to apply: updates local styleSettings instantly
+                (the flipbook re-renders with the new design) AND
+                writes the wedding doc so the change persists. The
+                strip scrolls horizontally on mobile to fit any number
+                of presets without crowding the book area. */}
+            <PresetStrip
+                presets={presets}
+                activeStyle={styleSettings}
+                onApply={applyPreset}
+            />
 
             {shareToast && (
                 <div
@@ -789,6 +853,100 @@ function BookViewer({ wedding, entries, weddingId }) {
             `}</style>
         </div>
     )
+}
+
+// ── Preset strip — horizontal mini-preview gallery ──────────────
+// Renders each preset as a 56×56 thumbnail using the real
+// <BookPageTemplate /> at scaledWidth/Height = 200 then CSS-scaled
+// down via transform: scale(). Picking one calls onApply which
+// updates the live styleSettings in the parent.
+function PresetStrip({ presets, activeStyle, onApply }) {
+    if (!presets?.length) return null
+    return (
+        <div
+            className='relative z-10 pb-4 pt-1 px-3'
+            style={{
+                background:
+                    'linear-gradient(180deg, transparent 0%, rgba(245,234,210,0.55) 100%)',
+            }}
+        >
+            <div
+                className='flex items-center gap-2.5 overflow-x-auto pb-1 px-2 scroll-smooth justify-center'
+                style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
+            >
+                {presets.map(preset => {
+                    const presetKey = preset.id || preset.name
+                    const resolved = resolvePreset(preset).values || {}
+                    const previewStyle = { ...defaultStyle, ...resolved }
+                    // Compare a stable signature instead of object
+                    // identity — the active style was MERGED from the
+                    // preset, so the references differ. Match on a
+                    // few tell-tale fields.
+                    const isActive =
+                        previewStyle.backgroundColor === activeStyle.backgroundColor &&
+                        previewStyle.fontClass === activeStyle.fontClass &&
+                        previewStyle.backgroundUrl === activeStyle.backgroundUrl &&
+                        previewStyle.texture === activeStyle.texture
+                    return (
+                        <button
+                            key={presetKey}
+                            onClick={() => onApply(preset)}
+                            title={preset.name}
+                            aria-label={preset.name}
+                            className='shrink-0 transition-all hover:scale-[1.05] active:scale-95'
+                            style={{
+                                width: 56,
+                                height: 56,
+                                borderRadius: 10,
+                                overflow: 'hidden',
+                                background: '#fff',
+                                border: isActive
+                                    ? '2px solid #aa8840'
+                                    : '1px solid rgba(201,164,78,0.30)',
+                                boxShadow: isActive
+                                    ? '0 6px 14px -6px rgba(170,136,64,0.45)'
+                                    : '0 3px 8px -4px rgba(45,30,16,0.18)',
+                                position: 'relative',
+                            }}
+                        >
+                            {/* Render a 200x200 page then visually
+                                shrink it via CSS transform so the
+                                thumbnail keeps its proportions
+                                without us measuring DOM widths. */}
+                            <div
+                                style={{
+                                    width: 200,
+                                    height: 200,
+                                    transform: 'scale(0.28)',
+                                    transformOrigin: 'top left',
+                                    pointerEvents: 'none',
+                                }}
+                            >
+                                <BookPageTemplate
+                                    entry={PRESET_PREVIEW_ENTRY}
+                                    styleSettings={previewStyle}
+                                    scaledWidth={200}
+                                    scaledHeight={200}
+                                />
+                            </div>
+                        </button>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
+// Tiny placeholder entry for the preset strip — same SVG photo + a
+// short blessing so each thumbnail reads as a real page rather than
+// a color swatch.
+const PRESET_PREVIEW_ENTRY = {
+    id: 'digital-book-preset-preview',
+    name: 'יעל ויואב',
+    text: 'מזל טוב',
+    imageUrl: `data:image/svg+xml;utf8,${encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f5d39e"/><stop offset="100%" stop-color="#d8b986"/></linearGradient></defs><rect width="400" height="300" fill="url(#s)"/><ellipse cx="320" cy="80" rx="38" ry="38" fill="#fff8e0" opacity="0.9"/><path d="M0 220 Q100 170 200 200 T 400 210 V 300 H 0 Z" fill="#a87f4b"/></svg>'
+    )}`,
 }
 
 // Top-nav icon button — cream tile with label below for premium
