@@ -326,12 +326,18 @@ function BookViewer({ wedding, entries, weddingId }) {
                 className='min-h-screen flex items-center justify-center px-6 text-center relative overflow-hidden'
                 style={{ background: 'radial-gradient(ellipse at 50% 30%, #2a1f17 0%, #14100c 100%)' }}
             >
-                {/* Background romantic image — heavy blur for atmosphere */}
+                {/* Background romantic image — heavy blur for atmosphere.
+                    Mobile uses ebookmobilebg.png (portrait-tuned); desktop
+                    uses the wider garden composition. */}
                 <div
                     aria-hidden
                     className='absolute inset-0 pointer-events-none'
                     style={{
-                        backgroundImage: 'url(/backgrounds/romanticgarden.png)',
+                        backgroundImage: `url(${
+                            pageSize.isPortrait
+                                ? '/backgrounds/ebookmobilebg.png'
+                                : '/backgrounds/romanticgarden.png'
+                        })`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
                         opacity: 0.18,
@@ -473,6 +479,12 @@ function BookViewer({ wedding, entries, weddingId }) {
     }
 
     // ─── Flipbook view ─────────────────────────────────────────────
+    // Mobile gets a dedicated portrait-tuned backdrop
+    // (ebookmobilebg.png) — the desktop garden image is composed
+    // for landscape framing and crops awkwardly on tall viewports.
+    const bgImage = pageSize.isPortrait
+        ? '/backgrounds/ebookmobilebg.png'
+        : '/backgrounds/romanticgarden.png'
     return (
         <div
             className='h-screen flex flex-col relative overflow-hidden'
@@ -485,7 +497,7 @@ function BookViewer({ wedding, entries, weddingId }) {
                 // jitter during page flip (the flip animation
                 // briefly pushes layout past viewport otherwise).
                 background: 'linear-gradient(180deg, #f5ead2 0%, #ebd9b3 100%)',
-                backgroundImage: 'url(/backgrounds/romanticgarden.png)',
+                backgroundImage: `url(${bgImage})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 backgroundBlendMode: 'soft-light',
