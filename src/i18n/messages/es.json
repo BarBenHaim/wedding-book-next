@@ -101,6 +101,7 @@
     "passwordLabel": "Contraseña",
     "submitting": "Iniciando sesión...",
     "submit": "Entrar",
+    "rememberMe": "Recordarme en este dispositivo (1 semana)",
     "errorPrefix": "Error de inicio de sesión: ",
     "helpText": "Tus credenciales se enviaron a tu correo después de la compra"
   },

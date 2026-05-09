@@ -1,12 +1,19 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { signInWithEmailAndPassword, getIdToken } from 'firebase/auth'
+import {
+    signInWithEmailAndPassword,
+    getIdToken,
+    setPersistence,
+    browserLocalPersistence,
+    browserSessionPersistence,
+} from 'firebase/auth'
 import { collection, query, where, getDocs, limit } from 'firebase/firestore'
 import { auth, db } from '../../lib/firebaseClient'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getMessages } from '@/i18n/getMessages'
+import { setExpiryWeek, clearExpiry } from '@/lib/sessionExpiry'
 
 // Login is anonymous chrome — no wedding context to read locale from.
 // We default to Hebrew (the SaaS's primary language) instead of sniffing
@@ -19,6 +26,11 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
+    // "Remember me — 7 days per device" toggle. Default checked
+    // because most users hit this from their personal device; the
+    // box exists primarily so a user on a shared/public computer
+    // can opt out into a tab-lifetime session instead.
+    const [rememberMe, setRememberMe] = useState(true)
     const router = useRouter()
 
     const t = useMemo(() => getMessages('he').login, [])
@@ -28,6 +40,19 @@ export default function LoginPage() {
         setError('')
         setLoading(true)
         try {
+            // Match Firebase's persistence strategy to the checkbox
+            // BEFORE the signIn call — that way the session is
+            // stamped with the right persistence from the start.
+            //   • Remember me ON  → browserLocalPersistence (survives
+            //     restarts; we expire after 7 days via the helper).
+            //   • Remember me OFF → browserSessionPersistence (auth
+            //     dies when the tab/window closes). The 7-day key
+            //     isn't needed in that case.
+            await setPersistence(
+                auth,
+                rememberMe ? browserLocalPersistence : browserSessionPersistence
+            )
+
             const userCredential = await signInWithEmailAndPassword(auth, email, password)
             const user = userCredential.user
 
@@ -38,6 +63,15 @@ export default function LoginPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token }),
             })
+
+            // Stamp / clear the 7-day expiry. AdminPageWrapper reads
+            // this on subsequent loads and signs the user out if the
+            // window has lapsed.
+            if (rememberMe) {
+                setExpiryWeek()
+            } else {
+                clearExpiry()
+            }
 
             // חיפוש החתונה של המשתמש ב-Firestore לפי ownerId
             let weddingId = user.uid // fallback לתאימות אחורה
@@ -121,6 +155,22 @@ export default function LoginPage() {
                             </button>
                         </div>
                     </div>
+
+                    {/* Remember me — 7 days per device. Default
+                        checked. Sits right above the submit button
+                        so the user reads the choice before clicking
+                        submit. */}
+                    <label className='flex items-center gap-2.5 cursor-pointer select-none text-start py-1'>
+                        <input
+                            type='checkbox'
+                            checked={rememberMe}
+                            onChange={e => setRememberMe(e.target.checked)}
+                            className='w-4 h-4 rounded border-[#AA8840]/30 text-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/30 cursor-pointer accent-[#AA8840]'
+                        />
+                        <span className='text-sm text-gray-700'>
+                            {t.rememberMe}
+                        </span>
+                    </label>
 
                     <button
                         type='submit'

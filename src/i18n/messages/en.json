@@ -124,6 +124,7 @@
     "passwordLabel": "Password",
     "submitting": "Signing in...",
     "submit": "Sign in",
+    "rememberMe": "Remember me on this device (1 week)",
     "errorPrefix": "Sign-in error: ",
     "helpText": "Your sign-in credentials were sent to your email after purchase"
   },

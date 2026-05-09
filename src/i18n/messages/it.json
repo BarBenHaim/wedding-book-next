@@ -101,6 +101,7 @@
     "passwordLabel": "Password",
     "submitting": "Accesso in corso...",
     "submit": "Accedi",
+    "rememberMe": "Ricordami su questo dispositivo (1 settimana)",
     "errorPrefix": "Errore di accesso: ",
     "helpText": "Le credenziali sono state inviate alla tua email dopo l'acquisto"
   },
