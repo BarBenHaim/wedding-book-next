@@ -1110,6 +1110,23 @@ function PropertiesPanel({
                             disabled={!editable}
                             onChange={n => onValuesChange({ textMarginTop: n })}
                         />
+
+                        {/* Max width of the blessing block. % of
+                            page width. Lower values force tighter
+                            line-wrapping (more lines, narrower
+                            column) — useful for long blessings on
+                            narrow page layouts. */}
+                        <PropertySlider
+                            icon={Type}
+                            label='רוחב מקסימלי לברכה'
+                            value={v.textMaxWidth ?? 85}
+                            min={30}
+                            max={100}
+                            step={1}
+                            unit='%'
+                            disabled={!editable}
+                            onChange={n => onValuesChange({ textMaxWidth: n })}
+                        />
                     </div>
                 )}
             </div>
