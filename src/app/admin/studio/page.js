@@ -989,6 +989,37 @@ function PropertiesPanel({
                             hint='צובע גם את שם האורח וגם את גוף הברכה'
                         />
 
+                        {/* Guest-name typography. Independent from
+                            body — `nameFontSizePercent` controls the
+                            line height of the name label, and
+                            `nameMarginTop` is the gap between the top
+                            of the page and the name. Both are stored
+                            on the preset's values and honored by
+                            BookPageTemplate. */}
+                        <PropertySlider
+                            icon={Type}
+                            label='גודל שם האורח'
+                            value={v.nameFontSizePercent ?? 2.1}
+                            min={1}
+                            max={5}
+                            step={0.1}
+                            unit='%'
+                            disabled={!editable}
+                            onChange={n => onValuesChange({ nameFontSizePercent: n })}
+                        />
+
+                        <PropertySlider
+                            icon={Type}
+                            label='ריווח שם מלמעלה'
+                            value={v.nameMarginTop ?? 2}
+                            min={0}
+                            max={20}
+                            step={0.5}
+                            unit='%'
+                            disabled={!editable}
+                            onChange={n => onValuesChange({ nameMarginTop: n })}
+                        />
+
                         <PropertyFrameEdit
                             icon={Frame}
                             label='מסגרת'
@@ -1021,6 +1052,20 @@ function PropertiesPanel({
                                     height: Math.round(width * 0.75),
                                 })
                             }
+                        />
+
+                        {/* "From where the image starts" — gap above
+                            the photo. % of page height. */}
+                        <PropertySlider
+                            icon={ImageIcon}
+                            label='ריווח תמונה מלמעלה'
+                            value={v.imageMarginTop ?? 2}
+                            min={0}
+                            max={20}
+                            step={0.5}
+                            unit='%'
+                            disabled={!editable}
+                            onChange={n => onValuesChange({ imageMarginTop: n })}
                         />
 
                         <PropertySlider
