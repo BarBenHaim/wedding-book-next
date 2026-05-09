@@ -84,6 +84,10 @@ export default function NotebookPageLayout({ entry, styleSettings, scaledWidth, 
     // the journal feel. Falls back to whatever the preset chose if the
     // user explicitly overrides via DesignControls.
     const fontClass = styleSettings.fontClass || gveretLevin.className
+    // Independent name font, falls back to the body fontClass
+    // (matches the classic renderer). Set via the studio's
+    // guest-name-font picker.
+    const nameFontClass = styleSettings.nameFontClass || fontClass
 
     // Direction support: the gold margin rule sits on the START side of
     // the reading direction (right for Hebrew, left for English). Setting
@@ -176,7 +180,10 @@ export default function NotebookPageLayout({ entry, styleSettings, scaledWidth, 
                     <p
                         className={fontClass}
                         style={{
-                            fontSize: h(3.0),
+                            fontSize: h(styleSettings.fontSizePercent ?? 3.0),
+                        // Layout honors fontWeight from the preset;
+                        // falls back to the font file natural weight.
+                        fontWeight: styleSettings.fontWeight,
                             lineHeight: ruleHeight + 'px',
                             // Text aligns to the START of the line in the
                             // current reading direction — same side as the
@@ -204,14 +211,15 @@ export default function NotebookPageLayout({ entry, styleSettings, scaledWidth, 
 
                 {hasName && (
                     <div
-                        className={fontClass}
+                        className={nameFontClass}
                         style={{
                             marginTop: h(0),
                             display: 'flex',
                             alignItems: 'center',
                             gap: '0.4em',
-                            fontSize: h(2.6),
-                            color: GOLD,
+                            fontSize: h(styleSettings.nameFontSizePercent ?? 2.6),
+                        fontWeight: styleSettings.nameFontWeight ?? styleSettings.fontWeight,
+                            color: styleSettings.fontColor ?? GOLD,
                             justifyContent: 'flex-end',
                             position: 'relative',
                             zIndex: 1,

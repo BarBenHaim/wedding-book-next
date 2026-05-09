@@ -79,6 +79,10 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
 
     const textColor = styleSettings.fontColor || INK
     const fontClass = styleSettings.fontClass || gveretLevin.className
+    // Independent name font, falls back to the body fontClass
+    // (matches the classic renderer). Set via the studio's
+    // guest-name-font picker.
+    const nameFontClass = styleSettings.nameFontClass || fontClass
 
     // Direction support — the blessing block's anchor flips per locale so
     // the handwritten text reads naturally in either direction.
@@ -181,7 +185,10 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
                     <p
                         className={fontClass}
                         style={{
-                            fontSize: h(2.6),
+                            fontSize: h(styleSettings.fontSizePercent ?? 2.6),
+                        // Layout honors fontWeight from the preset;
+                        // falls back to the font file natural weight.
+                        fontWeight: styleSettings.fontWeight,
                             lineHeight: 1.45,
                             color: textColor,
                             margin: 0,
@@ -202,13 +209,14 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
             {/* ── Signature — name + heart, bottom-right corner, tilted ── */}
             {hasName && (
                 <div
-                    className={fontClass}
+                    className={nameFontClass}
                     style={{
                         position: 'absolute',
                         bottom: h(12),
                         left: w(15),
-                        fontSize: h(2.8),
-                        color: GOLD,
+                        fontSize: h(styleSettings.nameFontSizePercent ?? 2.8),
+                        fontWeight: styleSettings.nameFontWeight ?? styleSettings.fontWeight,
+                        color: styleSettings.fontColor ?? GOLD,
                         display: 'flex',
                         alignItems: 'center',
                         gap: '0.3em',

@@ -91,6 +91,10 @@ export default function PolaroidPageLayout({ entry, styleSettings, scaledWidth, 
     // didn't override. Heart stays gold regardless — it's the brand mark.
     const textColor = styleSettings.fontColor || '#3d2e1a'
     const fontClass = styleSettings.fontClass || ''
+    // Independent name font, falls back to the body fontClass
+    // (matches the classic renderer). Set via the studio's
+    // guest-name-font picker.
+    const nameFontClass = styleSettings.nameFontClass || fontClass
 
     // Texture as its OWN absolutely-positioned layer so we can fade it
     // independently of the page color. CSS has no direct opacity on
@@ -171,7 +175,10 @@ export default function PolaroidPageLayout({ entry, styleSettings, scaledWidth, 
                 <p
                     className={fontClass}
                     style={{
-                        fontSize: h(3.0),
+                        fontSize: h(styleSettings.fontSizePercent ?? 3.0),
+                        // Layout honors fontWeight from the preset;
+                        // falls back to the font file natural weight.
+                        fontWeight: styleSettings.fontWeight,
                         lineHeight: 1.5,
                         textAlign: 'center',
                         maxWidth: w(75),
@@ -195,10 +202,11 @@ export default function PolaroidPageLayout({ entry, styleSettings, scaledWidth, 
                 the page, in the page's font. */}
             {hasName && (
                 <div
-                    className={fontClass}
+                    className={nameFontClass}
                     style={{
-                        fontSize: h(2.6),
-                        color: GOLD,
+                        fontSize: h(styleSettings.nameFontSizePercent ?? 2.6),
+                        fontWeight: styleSettings.nameFontWeight ?? styleSettings.fontWeight,
+                        color: styleSettings.fontColor ?? GOLD,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',

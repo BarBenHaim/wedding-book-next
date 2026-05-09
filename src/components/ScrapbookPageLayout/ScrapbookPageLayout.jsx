@@ -68,6 +68,10 @@ export default function ScrapbookPageLayout({ entry, styleSettings, scaledWidth,
 
     const textColor = styleSettings.fontColor || '#3d2e1a'
     const fontClass = styleSettings.fontClass || ''
+    // Independent name font, falls back to the body fontClass
+    // (matches the classic renderer). Set via the studio's
+    // guest-name-font picker.
+    const nameFontClass = styleSettings.nameFontClass || fontClass
 
     return (
         <div
@@ -149,7 +153,10 @@ export default function ScrapbookPageLayout({ entry, styleSettings, scaledWidth,
                 <p
                     className={fontClass}
                     style={{
-                        fontSize: h(2.9),
+                        fontSize: h(styleSettings.fontSizePercent ?? 2.9),
+                        // Layout honors fontWeight from the preset;
+                        // falls back to the font file natural weight.
+                        fontWeight: styleSettings.fontWeight,
                         lineHeight: 1.55,
                         textAlign: 'center',
                         maxWidth: w(78),
@@ -173,13 +180,14 @@ export default function ScrapbookPageLayout({ entry, styleSettings, scaledWidth,
                 page padding. */}
             {hasName && (
                 <div
-                    className={fontClass}
+                    className={nameFontClass}
                     style={{
                         position: 'absolute',
                         bottom: h(7),
                         left: w(8),
-                        fontSize: h(2.6),
-                        color: GOLD,
+                        fontSize: h(styleSettings.nameFontSizePercent ?? 2.6),
+                        fontWeight: styleSettings.nameFontWeight ?? styleSettings.fontWeight,
+                        color: styleSettings.fontColor ?? GOLD,
                         transform: 'rotate(-3deg)',
                         display: 'flex',
                         alignItems: 'center',
