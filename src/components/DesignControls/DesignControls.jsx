@@ -476,15 +476,63 @@ export default function DesignControls({
                                                 }`}
                                                 style={{ aspectRatio: '1 / 1' }}
                                             >
-                                                {tileSize > 0 && (
+                                                {tileSize > 0 ? (
                                                     <BookPageTemplate
                                                         entry={MINI_PREVIEW_ENTRY}
                                                         styleSettings={previewStyle}
                                                         scaledWidth={tileSize}
                                                         scaledHeight={tileSize}
                                                     />
+                                                ) : (
+                                                    // Skeleton fill so the
+                                                    // tile is never a blank
+                                                    // white box on first
+                                                    // paint, before the
+                                                    // ResizeObserver settles.
+                                                    <div
+                                                        className='w-full h-full animate-pulse'
+                                                        style={{
+                                                            background:
+                                                                'linear-gradient(135deg, #f4ecd9 0%, #e8d9b3 100%)',
+                                                        }}
+                                                    />
+                                                )}
+                                                {/* Active-state corner badge.
+                                                    Mirrors what the studio's
+                                                    list panel shows. */}
+                                                {isActive && (
+                                                    <span
+                                                        className='absolute top-1.5 start-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider'
+                                                        style={{
+                                                            background:
+                                                                'rgba(170,136,64,0.95)',
+                                                            color: '#fff',
+                                                        }}
+                                                    >
+                                                        ✓
+                                                    </span>
                                                 )}
                                             </button>
+                                            {/* Visible name under each
+                                                tile. The mini live preview
+                                                renders the actual page at
+                                                ~110 px square — visually
+                                                informative for backgrounds
+                                                / frames / textures, but
+                                                hard to use as the only ID
+                                                cue when several presets
+                                                share a similar palette.
+                                                The label fixes that. */}
+                                            <p
+                                                className={`mt-1.5 text-center text-[11px] font-semibold leading-tight truncate ${
+                                                    isActive
+                                                        ? 'text-[#AA8840]'
+                                                        : 'text-[#5a4d3a]'
+                                                }`}
+                                                title={preset.name}
+                                            >
+                                                {preset.name}
+                                            </p>
                                             {/* Trash — admin only, hovers in
                                                 from the corner so the preview
                                                 stays clean. */}

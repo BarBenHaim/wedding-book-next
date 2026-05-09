@@ -543,7 +543,18 @@ function BookViewerInner({ onLocaleDiscovered }) {
                 </aside>
 
                 <main
-                    className='relative z-10 flex-1 flex flex-col items-center justify-center p-4 min-h-0 overflow-hidden'
+                    // On mobile (flex-col-reverse parent → main sits
+                    // at the top of the viewport, design panel at the
+                    // bottom), `justify-center` was bunching the book
+                    // up near the page header. `justify-end` anchors
+                    // the book + arrows to the BOTTOM of the main
+                    // column (just above the design panel divider) so
+                    // there's natural breathing room from the header
+                    // — closer to where a thumb naturally rests.
+                    // pb-4 keeps the controls from crashing into the
+                    // panel border. Desktop keeps the original
+                    // centered layout.
+                    className='relative z-10 flex-1 flex flex-col items-center justify-end pb-4 lg:justify-center lg:pb-0 p-4 min-h-0 overflow-hidden'
                 >
                     <div
                         className='relative shrink-0'
@@ -640,6 +651,19 @@ function BookViewerInner({ onLocaleDiscovered }) {
                         page, nothing to flip). */}
                     {mode === 'book' && (
                         <div className='flex items-center gap-3 mt-4 z-30'>
+                            {/* Hebrew RTL convention — book opens
+                                right-to-left, so PREVIOUS page is to
+                                the right (where you came from) and
+                                NEXT page is to the left (where you're
+                                going). The flex container is in an
+                                RTL context, so the first child renders
+                                on the visual RIGHT (= "previous"
+                                position) and the second on the LEFT
+                                (= "next" position). The arrow on the
+                                right button points RIGHT (→) so the
+                                visual cue matches the action; the
+                                left button's arrow points LEFT (←).
+                                Was reversed before this fix. */}
                             <button
                                 onClick={() => flipRef.current?.pageFlip().flipPrev()}
                                 aria-label='הקודם'
@@ -656,7 +680,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                 }}
                             >
                                 <svg viewBox='0 0 24 24' className='w-[18px] h-[18px]' fill='none' stroke='currentColor' strokeWidth={1.8}>
-                                    <path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7' />
+                                    <path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
                                 </svg>
                             </button>
                             <button
@@ -675,7 +699,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                 }}
                             >
                                 <svg viewBox='0 0 24 24' className='w-[18px] h-[18px]' fill='none' stroke='currentColor' strokeWidth={1.8}>
-                                    <path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
+                                    <path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7' />
                                 </svg>
                             </button>
                         </div>
