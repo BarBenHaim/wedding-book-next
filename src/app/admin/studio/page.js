@@ -66,16 +66,72 @@ const MOCK_PHOTO = `data:image/svg+xml;utf8,${encodeURIComponent(
     </svg>`
 )}`
 
-// Page render size in the preview pane. 800px square is large enough
-// to read every layout's typography clearly without scrolling on a
-// 1280-wide screen, while still leaving room for the right rail.
-const PREVIEW_SIZE = 800
+// Page render size in the preview pane. Desktop renders at 800px
+// square — large enough to read typography clearly while leaving
+// room for the side rails. On mobile we clamp to viewport width
+// minus padding (set in usePreviewSize below) so the 1:1 page never
+// overflows on a 375-wide phone. BookPageTemplate uses scaledWidth/
+// Height to compute its own font + image sizes, so passing the
+// clamped value keeps everything proportional — no transforms.
+const PREVIEW_SIZE_DESKTOP = 800
+const PREVIEW_PADDING_MOBILE = 48 // page px-4 (16) + canvas p-4 (16) on each side, roughly
+const PREVIEW_BREAKPOINT = 1024 // matches Tailwind's `lg:` cutoff used in the column grid
+
+// Hook — returns the live preview-canvas size. Tracks viewport width
+// so the 1:1 page renders crisply on both desktop and a 375-wide
+// phone. Re-runs on window resize so the preview reflows when the
+// user rotates their device or pops out a sidebar in dev tools.
+function usePreviewSize() {
+    const [size, setSize] = useState(PREVIEW_SIZE_DESKTOP)
+    useEffect(() => {
+        if (typeof window === 'undefined') return
+        const update = () => {
+            const w = window.innerWidth
+            if (w >= PREVIEW_BREAKPOINT) {
+                setSize(PREVIEW_SIZE_DESKTOP)
+            } else {
+                // On mobile / tablet the canvas owns the full main
+                // column. Cap at desktop size so big tablets don't
+                // grow it past where typography stays comfortable.
+                setSize(Math.min(PREVIEW_SIZE_DESKTOP, w - PREVIEW_PADDING_MOBILE))
+            }
+        }
+        update()
+        window.addEventListener('resize', update)
+        return () => window.removeEventListener('resize', update)
+    }, [])
+    return size
+}
+
+// Mobile-only tab IDs. On lg+ the three panels render in parallel
+// columns; below that the user picks one tab at a time and the
+// other two collapse off-screen.
+const MOBILE_TABS = [
+    { id: 'presets', label: 'תבניות' },
+    { id: 'preview', label: 'תצוגה' },
+    { id: 'properties', label: 'מאפיינים' },
+]
+
+// Visibility wrapper for the three panels. On mobile, only the
+// active-tab panel renders; on lg+ all three render regardless.
+// Centralising the toggle keeps the panel components themselves
+// unaware of the mobile tab state.
+function tabClass(active) {
+    return active ? 'block' : 'hidden lg:block'
+}
 
 function StudioContent() {
     const [seedStatus, setSeedStatus] = useState({ state: 'pending' })
     const [presets, setPresets] = useState([])
     const [activeId, setActiveId] = useState(null)
     const [blessingLength, setBlessingLength] = useState(100)
+
+    // Mobile-only tab state. Defaults to "preview" — the panel the
+    // user looks at most. lg+ ignores this entirely (all three panels
+    // render side by side regardless).
+    const [mobileTab, setMobileTab] = useState('preview')
+
+    const previewSize = usePreviewSize()
 
     // Draft — the editable copy of the loaded preset. Driven from
     // activePreset on selection change, then mutated by the
@@ -330,7 +386,7 @@ function StudioContent() {
                 </div>
 
                 {/* Header */}
-                <div className='flex items-center justify-between gap-4 mb-6'>
+                <div className='flex items-start sm:items-center justify-between gap-3 mb-6 flex-wrap'>
                     <div className='flex items-center gap-4'>
                         <div
                             className='w-12 h-12 rounded-2xl flex items-center justify-center shrink-0'
@@ -378,32 +434,87 @@ function StudioContent() {
                     />
                 )}
 
-                {/* Three-column grid. Stacks on narrower screens so
-                    the studio is at least usable on tablet — though
-                    full polish is a desktop feature. */}
+                {/* Mobile tab bar — only on viewports below lg. On
+                    desktop the three panels show side-by-side and
+                    this segmented control is hidden. Each tab maps
+                    to a panel below, which is shown/hidden via the
+                    same activeTab key. */}
+                <div className='lg:hidden mb-4'>
+                    <div
+                        className='flex rounded-xl overflow-hidden p-0.5'
+                        style={{
+                            background: '#ffffff',
+                            border: '1px solid rgba(212,184,103,0.22)',
+                            boxShadow: '0 4px 10px -6px rgba(170,136,64,0.20)',
+                        }}
+                    >
+                        {MOBILE_TABS.map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setMobileTab(tab.id)}
+                                className={`flex-1 py-2 text-[12.5px] font-bold rounded-lg transition-all ${
+                                    mobileTab === tab.id
+                                        ? 'text-white'
+                                        : 'text-[#7a6a52] hover:bg-[#fbf6ec]'
+                                }`}
+                                style={
+                                    mobileTab === tab.id
+                                        ? {
+                                              background:
+                                                  'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                          }
+                                        : { background: 'transparent' }
+                                }
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Three-column grid on lg+. Below lg, columns stack
+                    vertically and the mobile tab above hides all but
+                    the active panel. tabClass() encodes that — the
+                    panel either renders normally on mobile (active
+                    tab) or hides; on lg it always renders. */}
                 <div className='grid grid-cols-1 lg:grid-cols-[260px_1fr_320px] gap-5'>
-                    <PresetListPanel
-                        presets={presets}
-                        activeId={activeId}
-                        onSelect={setActiveId}
-                    />
-                    <PreviewPanel
-                        preset={draft}
-                        styleSettings={resolvedStyle}
-                        entry={mockEntry}
-                        blessingLength={blessingLength}
-                        onBlessingLengthChange={setBlessingLength}
-                    />
-                    <PropertiesPanel
-                        draft={draft}
-                        editable={editable}
-                        onValuesChange={updateValues}
-                        onImageStyleChange={updateImageStyle}
-                        backgrounds={backgrounds}
-                        uploadStatus={uploadStatus}
-                        onUploadBackground={handleUploadBackground}
-                        onDeleteBackground={handleDeleteBackground}
-                    />
+                    <div className={tabClass(mobileTab === 'presets')}>
+                        <PresetListPanel
+                            presets={presets}
+                            activeId={activeId}
+                            onSelect={id => {
+                                setActiveId(id)
+                                // Auto-switch to preview after a pick
+                                // on mobile — most users want to see
+                                // the result, not stay on the list.
+                                if (typeof window !== 'undefined' && window.innerWidth < PREVIEW_BREAKPOINT) {
+                                    setMobileTab('preview')
+                                }
+                            }}
+                        />
+                    </div>
+                    <div className={tabClass(mobileTab === 'preview')}>
+                        <PreviewPanel
+                            preset={draft}
+                            styleSettings={resolvedStyle}
+                            entry={mockEntry}
+                            blessingLength={blessingLength}
+                            onBlessingLengthChange={setBlessingLength}
+                            previewSize={previewSize}
+                        />
+                    </div>
+                    <div className={tabClass(mobileTab === 'properties')}>
+                        <PropertiesPanel
+                            draft={draft}
+                            editable={editable}
+                            onValuesChange={updateValues}
+                            onImageStyleChange={updateImageStyle}
+                            backgrounds={backgrounds}
+                            uploadStatus={uploadStatus}
+                            onUploadBackground={handleUploadBackground}
+                            onDeleteBackground={handleDeleteBackground}
+                        />
+                    </div>
                 </div>
 
                 {/* Toast — fixed-bottom notice for save/error/info. */}
@@ -584,12 +695,11 @@ function PresetListPanel({ presets, activeId, onSelect }) {
 
     return (
         <aside
-            className='rounded-2xl overflow-hidden self-start sticky top-6'
+            className='rounded-2xl overflow-hidden self-start lg:sticky lg:top-6 lg:max-h-[calc(100vh_-_80px)]'
             style={{
                 background: '#ffffff',
                 border: '1px solid rgba(212,184,103,0.22)',
                 boxShadow: '0 16px 32px -20px rgba(170,136,64,0.20)',
-                maxHeight: 'calc(100vh - 80px)',
             }}
         >
             <div
@@ -601,7 +711,7 @@ function PresetListPanel({ presets, activeId, onSelect }) {
                 </p>
             </div>
 
-            <div className='overflow-y-auto' style={{ maxHeight: 'calc(100vh - 140px)' }}>
+            <div className='lg:overflow-y-auto lg:max-h-[calc(100vh_-_140px)]'>
                 {presets.length === 0 ? (
                     <div className='py-10 flex flex-col items-center gap-2'>
                         <Loader2 size={16} className='animate-spin text-[#a8843a]' />
@@ -683,7 +793,10 @@ function PresetGroup({ label, sublabel, presets, activeId, onSelect, badge }) {
 }
 
 // ── Center: preview + length toggle ──────────────────────────────────
-function PreviewPanel({ preset, styleSettings, entry, blessingLength, onBlessingLengthChange }) {
+// previewSize comes from the usePreviewSize hook in StudioContent —
+// 800 on lg+, viewport-clamped on mobile so the 1:1 page never
+// overflows on a 375-wide phone.
+function PreviewPanel({ preset, styleSettings, entry, blessingLength, onBlessingLengthChange, previewSize }) {
     return (
         <main
             className='rounded-2xl overflow-hidden flex flex-col'
@@ -691,12 +804,14 @@ function PreviewPanel({ preset, styleSettings, entry, blessingLength, onBlessing
                 background: '#ffffff',
                 border: '1px solid rgba(212,184,103,0.22)',
                 boxShadow: '0 16px 32px -20px rgba(170,136,64,0.20)',
-                minHeight: '600px',
+                minHeight: '480px',
             }}
         >
-            {/* Toolbar */}
+            {/* Toolbar — wraps on mobile so the title and length
+                toggle don't crash into each other when the canvas
+                shrinks. */}
             <div
-                className='px-5 py-3 border-b border-[#f0e8d4] flex items-center justify-between gap-3'
+                className='px-4 sm:px-5 py-3 border-b border-[#f0e8d4] flex flex-wrap items-center justify-between gap-2'
                 style={{ background: 'linear-gradient(180deg, #fdfaf3 0%, #ffffff 100%)' }}
             >
                 <div className='flex items-center gap-2.5 min-w-0'>
@@ -707,7 +822,7 @@ function PreviewPanel({ preset, styleSettings, entry, blessingLength, onBlessing
                     <h2 className='text-[14px] font-bold text-[#1a1410] truncate'>
                         {preset?.name || 'תצוגה חיה'}
                     </h2>
-                    <span className='text-[10.5px] text-[#a89378]'>1:1 · 8.5"×8.5"</span>
+                    <span className='hidden sm:inline text-[10.5px] text-[#a89378]'>1:1 · 8.5"×8.5"</span>
                 </div>
 
                 {/* Length toggle — 30 / 100 / 210 chars. Sets the mock
@@ -721,7 +836,7 @@ function PreviewPanel({ preset, styleSettings, entry, blessingLength, onBlessing
                         <button
                             key={len}
                             onClick={() => onBlessingLengthChange(len)}
-                            className={`px-3 py-1.5 text-[11.5px] font-bold transition-all ${
+                            className={`px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-[11.5px] font-bold transition-all ${
                                 blessingLength === len
                                     ? 'text-white'
                                     : 'text-[#7a6a52] hover:bg-[#fbf6ec]'
@@ -735,27 +850,29 @@ function PreviewPanel({ preset, styleSettings, entry, blessingLength, onBlessing
                                     : { background: '#ffffff' }
                             }
                         >
-                            {len} תווים
+                            {len}
+                            <span className='hidden sm:inline'> תווים</span>
                         </button>
                     ))}
                 </div>
             </div>
 
-            {/* Preview canvas */}
+            {/* Preview canvas — padding shrinks on mobile so the page
+                rectangle gets every pixel of available width. */}
             <div
-                className='flex-1 flex items-center justify-center p-8 overflow-auto'
+                className='flex-1 flex items-center justify-center p-3 sm:p-6 lg:p-8 overflow-auto'
                 style={{ background: '#f4ecd9' }}
             >
                 {!preset || !styleSettings ? (
-                    <div className='text-center text-[#a89378] text-sm'>
+                    <div className='text-center text-[#a89378] text-sm py-8'>
                         בחר תבנית מהרשימה
                     </div>
                 ) : (
                     <div
                         className='shrink-0'
                         style={{
-                            width: PREVIEW_SIZE,
-                            height: PREVIEW_SIZE,
+                            width: previewSize,
+                            height: previewSize,
                             boxShadow:
                                 '0 30px 60px -25px rgba(0,0,0,0.30), 0 8px 20px -8px rgba(0,0,0,0.18)',
                             borderRadius: 4,
@@ -766,8 +883,8 @@ function PreviewPanel({ preset, styleSettings, entry, blessingLength, onBlessing
                         <BookPageTemplate
                             entry={entry}
                             styleSettings={styleSettings}
-                            scaledWidth={PREVIEW_SIZE}
-                            scaledHeight={PREVIEW_SIZE}
+                            scaledWidth={previewSize}
+                            scaledHeight={previewSize}
                         />
                     </div>
                 )}
@@ -790,12 +907,11 @@ function PropertiesPanel({
 
     return (
         <aside
-            className='rounded-2xl overflow-hidden self-start sticky top-6'
+            className='rounded-2xl overflow-hidden self-start lg:sticky lg:top-6 lg:max-h-[calc(100vh_-_80px)]'
             style={{
                 background: '#ffffff',
                 border: '1px solid rgba(212,184,103,0.22)',
                 boxShadow: '0 16px 32px -20px rgba(170,136,64,0.20)',
-                maxHeight: 'calc(100vh - 80px)',
             }}
         >
             <div
@@ -817,10 +933,7 @@ function PropertiesPanel({
                 )}
             </div>
 
-            <div
-                className='overflow-y-auto'
-                style={{ maxHeight: 'calc(100vh - 140px)' }}
-            >
+            <div className='lg:overflow-y-auto lg:max-h-[calc(100vh_-_140px)]'>
                 {!draft ? (
                     <div className='p-6 text-center text-[12px] text-[#a89378]'>
                         בחר תבנית כדי לראות את המאפיינים שלה
@@ -1074,7 +1187,7 @@ function PropertyFrameEdit({ icon: Icon, label, frameId, disabled, onChange }) {
     return (
         <div>
             <PropertyHeader icon={Icon} label={label} />
-            <div className='grid grid-cols-3 gap-1.5'>
+            <div className='grid grid-cols-3 sm:grid-cols-4 gap-1.5'>
                 <FrameTile
                     isNone
                     selected={!frameId}
@@ -1168,7 +1281,7 @@ function PropertyBackgroundsEdit({
             {/* Section: textures (kept inline — they're tiles, distinct
                 from full-page backgrounds visually). */}
             <BgSection label='מרקמים' count={TEXTURES_REGISTRY.length}>
-                <div className='grid grid-cols-5 gap-1.5'>
+                <div className='grid grid-cols-4 sm:grid-cols-5 gap-1.5'>
                     <FrameTile
                         isNone
                         selected={!currentUrl}
@@ -1190,7 +1303,7 @@ function PropertyBackgroundsEdit({
             {/* Section: curated full-page backgrounds shipping in code */}
             {systemBgs.length > 0 && (
                 <BgSection label='רקעים מהמערכת' count={systemBgs.length}>
-                    <div className='grid grid-cols-5 gap-1.5'>
+                    <div className='grid grid-cols-4 sm:grid-cols-5 gap-1.5'>
                         {systemBgs.map(b => (
                             <FrameTile
                                 key={b.id}
@@ -1212,7 +1325,7 @@ function PropertyBackgroundsEdit({
                         עדיין לא העלית רקע — נסה את כפתור ההעלאה למטה
                     </p>
                 ) : (
-                    <div className='grid grid-cols-5 gap-1.5'>
+                    <div className='grid grid-cols-4 sm:grid-cols-5 gap-1.5'>
                         {studioBgs.map(b => (
                             <StudioBgTile
                                 key={b.id}
