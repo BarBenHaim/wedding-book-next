@@ -1,6 +1,5 @@
 {
   "$comment": "English translation. Keep keys in sync with he.json — that file is the source of truth.",
-
   "common": {
     "save": "Save",
     "saving": "Saving...",
@@ -12,7 +11,6 @@
     "error": "Error",
     "tryAgain": "Try again"
   },
-
   "eventTypes": {
     "wedding": {
       "label": "Wedding",
@@ -57,7 +55,6 @@
       "footer": "Travel Tales"
     }
   },
-
   "portal": {
     "logoAlt": "Wedding Tales",
     "namePlaceholderBride": "Bride's name",
@@ -80,7 +77,6 @@
     "bgClassic": "Classic",
     "bgGoldMarble": "Gold Marble"
   },
-
   "home": {
     "heroLine1": "All your moments,",
     "heroLine2": "in a luxury wedding book",
@@ -116,7 +112,6 @@
     "bottomCtaSubtitle": "Start free and let your guests help you build a memory that lasts.",
     "bottomCtaBtn": "Start now"
   },
-
   "login": {
     "title": "Sign in",
     "subtitle": "Access your personal dashboard",
@@ -128,7 +123,6 @@
     "errorPrefix": "Sign-in error: ",
     "helpText": "Your sign-in credentials were sent to your email after purchase"
   },
-
   "photo": {
     "pageTitleWedding": "Leave a blessing for the couple",
     "pageTitleBirthday": "Leave a blessing",
@@ -196,7 +190,6 @@
     "errSpecific": "Could not send the blessing. ({reason})",
     "errGeneric": "Could not send right now. Try again in a moment — if it keeps failing, try a different browser."
   },
-
   "thanks": {
     "title": "Thank you for your blessing!",
     "savedHeading": "How wonderful!",
@@ -230,21 +223,27 @@
     "checkAgain": "I tried, check again",
     "tabClosable": "You can close this page — the blessing will send when you return"
   },
-
   "guestPage": {
     "notFound": "This event was not found",
     "linkNotFound": "Link not found",
     "linkExpired": "The link may be invalid or expired"
   },
-
   "designControls": {
     "saving": "Saving...",
     "saved": "Saved",
     "modeBook": "Book interior",
     "modeCover": "Cover design",
     "presetsTitle": "Ready-made styles",
-    "fontsTitle": "Fonts",
+    "presetsHint": "Picking a style applies all its settings. Tweak any detail below — the style stays as a starting point.",
+    "fontsTitle": "Body font",
     "fontSample": "I love you",
+    "textSize": "Text size",
+    "textColor": "Text color",
+    "guestNameTitle": "Guest name font",
+    "sameAsBody": "Same as body font",
+    "nameSize": "Guest name size",
+    "backgroundTitle": "Book background",
+    "bgColor": "Background color",
     "coverTextTitle": "Cover text",
     "coverTitlePlaceholder": "Title",
     "coverSubtitlePlaceholder": "Subtitle",
@@ -259,7 +258,6 @@
     "position": "Position",
     "dragHint": "Click & drag"
   },
-
   "viewer": {
     "loadingCover": "Loading cover design...",
     "oneMoment": "Just a moment",
@@ -280,7 +278,6 @@
     "orderSuccess": "Order placed successfully! 🎉\nOrder number: {orderId}\nThe book is on its way.",
     "orderError": "An error occurred: {error}\nPlease try again later."
   },
-
   "header": {
     "menuOpen": "Menu",
     "menuClose": "Close menu",
@@ -290,7 +287,6 @@
     "manageBlessings": "Manage blessings",
     "qrShare": "QR & share"
   },
-
   "admin": {
     "weddingDetails": "Event details",
     "editEvent": "Edit event details",

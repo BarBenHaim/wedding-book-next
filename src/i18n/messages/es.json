@@ -1,6 +1,5 @@
 {
   "$comment": "Spanish translation. Source: en.json. Keep keys in sync with he.json.",
-
   "common": {
     "save": "Guardar",
     "saving": "Guardando...",
@@ -12,7 +11,6 @@
     "error": "Error",
     "tryAgain": "Reintentar"
   },
-
   "eventTypes": {
     "wedding": {
       "label": "Boda",
@@ -57,7 +55,6 @@
       "footer": "Travel Tales"
     }
   },
-
   "home": {
     "heroLine1": "Todos vuestros momentos,",
     "heroLine2": "en un libro de boda de lujo",
@@ -93,7 +90,6 @@
     "bottomCtaSubtitle": "Empieza gratis y deja que vuestros invitados creen un recuerdo para siempre.",
     "bottomCtaBtn": "Empezar ahora"
   },
-
   "login": {
     "title": "Iniciar sesión",
     "subtitle": "Accede a tu panel personal",
@@ -105,7 +101,6 @@
     "errorPrefix": "Error de inicio de sesión: ",
     "helpText": "Tus credenciales se enviaron a tu correo después de la compra"
   },
-
   "portal": {
     "logoAlt": "Wedding Tales",
     "namePlaceholderBride": "Nombre de la novia",
@@ -128,7 +123,6 @@
     "bgClassic": "Clásico",
     "bgGoldMarble": "Mármol dorado"
   },
-
   "photo": {
     "pageTitleWedding": "Deja una bendición a la pareja",
     "pageTitleBirthday": "Deja una bendición",
@@ -196,7 +190,6 @@
     "errSpecific": "No se pudo enviar la bendición. ({reason})",
     "errGeneric": "No se pudo enviar ahora. Inténtalo en un momento — si sigue fallando, prueba con otro navegador."
   },
-
   "thanks": {
     "title": "¡Gracias por tu bendición!",
     "savedHeading": "¡Qué bonito!",
@@ -229,21 +222,27 @@
     "checkAgain": "Lo intenté, comprobar otra vez",
     "tabClosable": "Puedes cerrar la página — la bendición se enviará cuando vuelvas"
   },
-
   "guestPage": {
     "notFound": "No se encontró este evento",
     "linkNotFound": "Enlace no encontrado",
     "linkExpired": "El enlace puede ser inválido o haber expirado"
   },
-
   "designControls": {
     "saving": "Guardando...",
     "saved": "Guardado",
     "modeBook": "Interior del libro",
     "modeCover": "Diseño de portada",
     "presetsTitle": "Estilos predefinidos",
-    "fontsTitle": "Fuentes",
+    "presetsHint": "Elegir un estilo aplica todos sus ajustes. Ajusta cualquier detalle abajo — el estilo es solo un punto de partida.",
+    "fontsTitle": "Fuente del texto",
     "fontSample": "Te amo",
+    "textSize": "Tamaño del texto",
+    "textColor": "Color del texto",
+    "guestNameTitle": "Fuente del nombre",
+    "sameAsBody": "Igual que el texto",
+    "nameSize": "Tamaño del nombre",
+    "backgroundTitle": "Fondo del libro",
+    "bgColor": "Color de fondo",
     "coverTextTitle": "Texto de portada",
     "coverTitlePlaceholder": "Título",
     "coverSubtitlePlaceholder": "Subtítulo",
@@ -258,7 +257,6 @@
     "position": "Posición",
     "dragHint": "Haz clic y arrastra"
   },
-
   "viewer": {
     "loadingCover": "Cargando diseño de portada...",
     "oneMoment": "Un momento",
@@ -279,7 +277,6 @@
     "orderSuccess": "¡Pedido realizado con éxito! 🎉\nNúmero de pedido: {orderId}\nEl libro va de camino.",
     "orderError": "Ha ocurrido un error: {error}\nInténtalo más tarde."
   },
-
   "header": {
     "menuOpen": "Menú",
     "menuClose": "Cerrar menú",
@@ -289,7 +286,6 @@
     "manageBlessings": "Gestionar bendiciones",
     "qrShare": "QR y compartir"
   },
-
   "admin": {
     "weddingDetails": "Detalles del evento",
     "editEvent": "Editar detalles del evento",

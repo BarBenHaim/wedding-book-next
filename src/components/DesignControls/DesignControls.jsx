@@ -268,6 +268,10 @@ export default function DesignControls({
             <div className='flex-1 overflow-y-auto pr-0.5 pl-0.5 space-y-4 pb-10 scrollbar-hide'>
                 {mode === 'book' && (
                     <div className='space-y-4 animate-fadeIn'>
+                        {/* PRESETS — quick-apply gallery. Tweaks below
+                            are saved to the wedding doc, not back to
+                            the preset (system presets stay read-only
+                            via savePreset's lib-level guard). */}
                         <Card title={t.presetsTitle}>
                             <div className='grid grid-cols-2 gap-3'>
                                 {presets.map(preset => (
@@ -281,18 +285,18 @@ export default function DesignControls({
                                         }`}
                                         style={{ background: preset.preview }}
                                     >
-                                        {/* Label sits in the trailing-bottom corner of the
-                                            swatch. bg-white/90 reads against any preview color
-                                            we've shipped — was previously branched on the Hebrew
-                                            substring 'לבן' which would no-op in i18n. */}
                                         <span className='absolute bottom-1 end-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/90 text-black'>
                                             {preset.name}
                                         </span>
                                     </button>
                                 ))}
                             </div>
+                            <p className='text-[10px] text-gray-400 mt-3 leading-relaxed'>
+                                {t.presetsHint}
+                            </p>
                         </Card>
 
+                        {/* BODY (TEXT) FONT — the blessing copy. */}
                         <Card title={t.fontsTitle}>
                             <div className='space-y-2'>
                                 {FONTS.map(f => (
@@ -309,6 +313,180 @@ export default function DesignControls({
                                         <span className={`${f.font.className} text-base`}>{t.fontSample}</span>
                                     </button>
                                 ))}
+                            </div>
+
+                            {/* Body font size — % of page height. */}
+                            <div className='mt-4 pt-3 border-t border-gray-100'>
+                                <div className='flex justify-between text-[10px] text-gray-400 mb-1'>
+                                    <span>{t.textSize}</span>
+                                    <span>{(settings.fontSizePercent ?? 3).toFixed(1)}%</span>
+                                </div>
+                                <input
+                                    type='range'
+                                    min={1.5}
+                                    max={5}
+                                    step={0.1}
+                                    value={settings.fontSizePercent ?? 3}
+                                    onChange={e =>
+                                        onChange({ ...settings, fontSizePercent: parseFloat(e.target.value) })
+                                    }
+                                    className='w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#c9a44e]'
+                                />
+                            </div>
+
+                            {/* Text color */}
+                            <div className='mt-3 pt-3 border-t border-gray-100 flex items-center justify-between'>
+                                <span className='text-[10px] text-gray-400'>{t.textColor}</span>
+                                <input
+                                    type='color'
+                                    value={settings.fontColor || '#000000'}
+                                    onChange={e => onChange({ ...settings, fontColor: e.target.value })}
+                                    className='w-9 h-9 rounded-lg border border-gray-200 cursor-pointer'
+                                />
+                            </div>
+                        </Card>
+
+                        {/* GUEST NAME — own font + size, independent
+                            of the body. Falls back to body font when
+                            nameFontClass is unset, which is what the
+                            old behavior was — so legacy weddings stay
+                            visually unchanged. */}
+                        <Card title={t.guestNameTitle}>
+                            <div className='space-y-2'>
+                                <button
+                                    onClick={() => onChange({ ...settings, nameFontClass: null })}
+                                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-all ${
+                                        !settings.nameFontClass
+                                            ? 'bg-[#F5F5F5] border-[#AA8840] text-[#AA8840]'
+                                            : 'bg-white hover:border-gray-300'
+                                    }`}
+                                >
+                                    <span className='text-[10px] text-gray-400'>{t.sameAsBody}</span>
+                                    <span className='text-[11px]'>↺</span>
+                                </button>
+                                {FONTS.map(f => (
+                                    <button
+                                        key={f.label}
+                                        onClick={() => onChange({ ...settings, nameFontClass: f.font.className })}
+                                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-all ${
+                                            settings.nameFontClass === f.font.className
+                                                ? 'bg-[#F5F5F5] border-[#AA8840] text-[#AA8840]'
+                                                : 'bg-white hover:border-gray-300'
+                                        }`}
+                                    >
+                                        <span className='text-[10px] text-gray-400'>{f.label}</span>
+                                        <span className={`${f.font.className} text-base`}>{t.fontSample}</span>
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Name size — % of page height. Default
+                                falls back to ~70% of body size (same
+                                proportion BookPageTemplate uses when
+                                nameFontSizePercent is unset). */}
+                            <div className='mt-4 pt-3 border-t border-gray-100'>
+                                <div className='flex justify-between text-[10px] text-gray-400 mb-1'>
+                                    <span>{t.nameSize}</span>
+                                    <span>
+                                        {(
+                                            settings.nameFontSizePercent ??
+                                            (settings.fontSizePercent ?? 3) * 0.7
+                                        ).toFixed(1)}
+                                        %
+                                    </span>
+                                </div>
+                                <input
+                                    type='range'
+                                    min={1}
+                                    max={5}
+                                    step={0.1}
+                                    value={
+                                        settings.nameFontSizePercent ??
+                                        (settings.fontSizePercent ?? 3) * 0.7
+                                    }
+                                    onChange={e =>
+                                        onChange({
+                                            ...settings,
+                                            nameFontSizePercent: parseFloat(e.target.value),
+                                        })
+                                    }
+                                    className='w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#c9a44e]'
+                                />
+                            </div>
+                        </Card>
+
+                        {/* UNIFIED BACKGROUNDS — frames + textures +
+                            page bgs collapsed into one gallery. The
+                            user explicitly asked for this: "all of
+                            these are just background to me." */}
+                        <Card title={t.backgroundTitle}>
+                            <div className='grid grid-cols-3 gap-2'>
+                                {/* "None" / blank background */}
+                                <button
+                                    onClick={() => onChange({ ...settings, texture: null, frame: null, backgroundUrl: null })}
+                                    className={`aspect-square rounded-lg flex items-center justify-center text-[10px] border transition-all ${
+                                        !settings.texture && !settings.frame && !settings.backgroundUrl
+                                            ? 'bg-[#F5F5F5] border-[#c9a44e] text-[#AA8840]'
+                                            : 'bg-white hover:bg-gray-50'
+                                    }`}
+                                >
+                                    {t.none}
+                                </button>
+
+                                {BG_ITEMS.map(item => {
+                                    // Active = the wedding doc field
+                                    // matching this item's kind points
+                                    // at this src.
+                                    const active =
+                                        settings.texture === item.src ||
+                                        settings.frame === item.src ||
+                                        settings.backgroundUrl === item.src
+                                    return (
+                                        <button
+                                            key={item.id}
+                                            onClick={() =>
+                                                onChange({
+                                                    ...settings,
+                                                    // Route to the right field by kind so the renderer
+                                                    // (which still reads texture/frame/backgroundUrl
+                                                    // separately) keeps working with old presets.
+                                                    texture: item.kind === 'texture' ? item.src : null,
+                                                    frame: item.kind === 'frame' ? item.src : null,
+                                                    backgroundUrl:
+                                                        item.kind === 'background' ? item.src : null,
+                                                })
+                                            }
+                                            className={`aspect-square rounded-lg border overflow-hidden transition-all relative group ${
+                                                active
+                                                    ? 'ring-2 ring-[#c9a44e] border-transparent'
+                                                    : 'border-gray-200 hover:opacity-90'
+                                            }`}
+                                            title={item.label}
+                                        >
+                                            <img
+                                                src={item.src}
+                                                alt={item.label}
+                                                className='w-full h-full object-cover'
+                                            />
+                                            <span className='absolute bottom-0.5 inset-x-0 text-[9px] font-medium text-white text-center bg-black/40 backdrop-blur-sm py-0.5 opacity-0 group-hover:opacity-100 transition-opacity truncate px-1'>
+                                                {item.label}
+                                            </span>
+                                        </button>
+                                    )
+                                })}
+                            </div>
+
+                            {/* Background color — solid swatch picker
+                                for cases where the user wants a flat
+                                base under (or instead of) the image. */}
+                            <div className='mt-4 pt-3 border-t border-gray-100 flex items-center justify-between'>
+                                <span className='text-[10px] text-gray-400'>{t.bgColor}</span>
+                                <input
+                                    type='color'
+                                    value={settings.backgroundColor || '#ffffff'}
+                                    onChange={e => onChange({ ...settings, backgroundColor: e.target.value })}
+                                    className='w-9 h-9 rounded-lg border border-gray-200 cursor-pointer'
+                                />
                             </div>
                         </Card>
                     </div>
@@ -464,6 +642,11 @@ export default function DesignControls({
                         </Card>
 
                         <Card title={t.designAndBg}>
+                            {/* Cover backdrop — also pulls from the
+                                unified gallery (frames + textures +
+                                page bgs as one set), so the cover
+                                editor shares the same vocabulary as
+                                the book page editor. */}
                             <div className='grid grid-cols-4 gap-2'>
                                 <button
                                     onClick={() => onChange({ coverTexture: null, coverFrame: null })}
@@ -487,17 +670,18 @@ export default function DesignControls({
                                     {t.none}
                                 </button>
 
-                                {TEXTURES.map((tex, i) => (
+                                {BG_ITEMS.map(item => (
                                     <button
-                                        key={i}
-                                        onClick={() => onChange({ coverTexture: tex.src, coverFrame: 'none' })}
+                                        key={item.id}
+                                        onClick={() => onChange({ coverTexture: item.src, coverFrame: 'none' })}
                                         className={`aspect-square rounded-lg border overflow-hidden transition-all ${
-                                            settings.coverTexture === tex.src
+                                            settings.coverTexture === item.src
                                                 ? 'ring-2 ring-[#c9a44e] border-transparent'
                                                 : 'hover:opacity-80'
                                         }`}
+                                        title={item.label}
                                     >
-                                        <img src={tex.src} className='w-full h-full object-cover' />
+                                        <img src={item.src} className='w-full h-full object-cover' alt={item.label} />
                                     </button>
                                 ))}
                             </div>

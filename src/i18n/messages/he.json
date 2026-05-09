@@ -1,6 +1,5 @@
 {
   "$comment": "Hebrew strings — this is the source language. New strings start here, then propagate to en/es/it. Keys mirror the file/feature structure of the app: 'portal.*' is the WeddingPortal component, 'guestPage.*' is /w/[slug], etc.",
-
   "common": {
     "save": "שמור",
     "saving": "שומר...",
@@ -12,7 +11,6 @@
     "error": "שגיאה",
     "tryAgain": "נסו שוב"
   },
-
   "eventTypes": {
     "wedding": {
       "label": "חתונה",
@@ -57,7 +55,6 @@
       "footer": "Travel Tales"
     }
   },
-
   "portal": {
     "logoAlt": "Wedding Tales",
     "namePlaceholderBride": "שם הכלה",
@@ -80,7 +77,6 @@
     "bgClassic": "קלאסי",
     "bgGoldMarble": "זהב שיש"
   },
-
   "home": {
     "heroLine1": "כל הרגעים שלכם,",
     "heroLine2": "בספר חתונה יוקרתי",
@@ -116,7 +112,6 @@
     "bottomCtaSubtitle": "התחילו בחינם ותנו לאורחים ליצור איתכם זכרון לנצח.",
     "bottomCtaBtn": "התחילו עכשיו"
   },
-
   "login": {
     "title": "התחברות לחתן ולכלה",
     "subtitle": "כניסה ללוח הניהול האישי שלכם",
@@ -128,7 +123,6 @@
     "errorPrefix": "שגיאה בהתחברות: ",
     "helpText": "פרטי ההתחברות נשלחו למייל שלכם לאחר הרכישה"
   },
-
   "photo": {
     "pageTitleWedding": "השאירו ברכה לזוג",
     "pageTitleBirthday": "השאירו ברכה לחוגג/ת",
@@ -196,7 +190,6 @@
     "errSpecific": "לא ניתן לשלוח את הברכה. ({reason})",
     "errGeneric": "לא ניתן לשלוח את הברכה כרגע. נסה שוב בעוד רגע, ואם זה ממשיך — נסה דפדפן אחר."
   },
-
   "thanks": {
     "title": "תודה על הברכה!",
     "savedHeading": "איזה כיף!",
@@ -230,21 +223,27 @@
     "checkAgain": "ניסיתי, בדוק שוב",
     "tabClosable": "אפשר לסגור את הדף — הברכה תישלח כשתחזור לאפליקציה"
   },
-
   "guestPage": {
     "notFound": "לא נמצאה החתונה הזו",
     "linkNotFound": "הקישור לא נמצא",
     "linkExpired": "ייתכן שהקישור שגוי או שפג תוקפו"
   },
-
   "designControls": {
     "saving": "שומר...",
     "saved": "נשמר",
     "modeBook": "פנים הספר",
     "modeCover": "עיצוב כריכה",
     "presetsTitle": "סגנונות מוכנים",
-    "fontsTitle": "פונטים",
+    "presetsHint": "בחירה של סגנון מחילה את כל ההגדרות שלו. אפשר לערוך כל פרט בנפרד למטה — הסגנון נשאר כנקודת התחלה.",
+    "fontsTitle": "פונט הברכה",
     "fontSample": "אני אוהב אותך",
+    "textSize": "גודל טקסט",
+    "textColor": "צבע טקסט",
+    "guestNameTitle": "פונט שם האורח",
+    "sameAsBody": "זהה לפונט הברכה",
+    "nameSize": "גודל שם האורח",
+    "backgroundTitle": "רקע לספר",
+    "bgColor": "צבע רקע",
     "coverTextTitle": "טקסט כריכה",
     "coverTitlePlaceholder": "כותרת",
     "coverSubtitlePlaceholder": "תת כותרת",
@@ -259,7 +258,6 @@
     "position": "מיקום",
     "dragHint": "לחצי וגררי"
   },
-
   "viewer": {
     "loadingCover": "טוען את עיצוב הכריכה...",
     "oneMoment": "רגע אחד בלבד",
@@ -280,7 +278,6 @@
     "orderSuccess": "ההזמנה נוצרה בהצלחה! 🎉\nמספר הזמנה: {orderId}\nהספר בדרך אליכם.",
     "orderError": "אירעה שגיאה: {error}\nנסו שוב מאוחר יותר."
   },
-
   "header": {
     "menuOpen": "תפריט",
     "menuClose": "סגור תפריט",
@@ -290,7 +287,6 @@
     "manageBlessings": "ניהול הברכות",
     "qrShare": "QR ושיתוף"
   },
-
   "admin": {
     "weddingDetails": "פרטי חתונה",
     "editEvent": "עריכת פרטי אירוע",

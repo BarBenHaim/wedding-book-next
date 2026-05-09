@@ -37,6 +37,14 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
     // them.
     const cleanText = normalizeBlessing(entry.text)
     const resolvedTexture = resolveTextureUrl(styleSettings.texture)
+    // Spring 2026: the studio collapsed frames + textures + page bgs
+    // into one "background" gallery, written to the unified
+    // `backgroundUrl` field. We still honor texture/frame for legacy
+    // presets, but if backgroundUrl is set it takes precedence as the
+    // page surface. Frames continue to render as a separate overlay
+    // (see below) so legacy frame-as-overlay presets stay visually
+    // intact.
+    const surfaceUrl = styleSettings.backgroundUrl || resolvedTexture
     const hasName = Boolean(entry.name)
     const hasText = Boolean(cleanText)
     const hasImage = Boolean(entry.imageUrl)
@@ -55,7 +63,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 width: '100%',
                 height: '100%',
                 backgroundColor: styleSettings.backgroundColor,
-                backgroundImage: resolvedTexture ? `url(${resolvedTexture})` : 'none',
+                backgroundImage: surfaceUrl ? `url(${surfaceUrl})` : 'none',
                 backgroundRepeat: 'repeat',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
@@ -75,10 +83,12 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 />
             )}
 
-            {/* שם האורח */}
+            {/* שם האורח — honors nameFontClass (independent font for
+                the guest name) when set; falls back to the body
+                fontClass so legacy weddings render unchanged. */}
             {hasName && (
                 <div
-                    className={styleSettings.fontClass}
+                    className={styleSettings.nameFontClass || styleSettings.fontClass}
                     style={{
                         fontSize: h(
                             styleSettings.nameFontSizePercent ??
