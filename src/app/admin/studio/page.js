@@ -130,6 +130,26 @@ function StudioContent() {
     const [activeId, setActiveId] = useState(null)
     const [blessingLength, setBlessingLength] = useState(100)
 
+    // Preview photo override — defaults to MOCK_PHOTO (the inline SVG
+    // placeholder). The super-admin can upload a real wedding photo
+    // here to see how skin tones / exposure / faces sit against the
+    // chosen typography + spacing. Stored as a data URL in component
+    // state — never persisted, never sent anywhere; the upload exists
+    // purely for visual sanity-checking the template. A second click
+    // on the same button reverts to the SVG.
+    const [previewPhoto, setPreviewPhoto] = useState(null)
+    const previewPhotoInputRef = useRef(null)
+    const handlePreviewPhotoPick = e => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        const reader = new FileReader()
+        reader.onloadend = () => setPreviewPhoto(reader.result)
+        reader.readAsDataURL(file)
+        // Reset the input so picking the same file twice still fires
+        // onChange (browsers debounce identical selections otherwise).
+        if (e.target) e.target.value = ''
+    }
+
     // Mobile-only tab state. Defaults to "preview" — the panel the
     // user looks at most. lg+ ignores this entirely (all three panels
     // render side by side regardless).
@@ -288,9 +308,9 @@ function StudioContent() {
             id: 'studio-mock',
             name: MOCK_NAME,
             text: MOCK_BLESSINGS[blessingLength],
-            imageUrl: MOCK_PHOTO,
+            imageUrl: previewPhoto || MOCK_PHOTO,
         }),
-        [blessingLength]
+        [blessingLength, previewPhoto]
     )
 
     const showToast = (type, message) => {
@@ -522,6 +542,21 @@ function StudioContent() {
                             blessingLength={blessingLength}
                             onBlessingLengthChange={setBlessingLength}
                             previewSize={previewSize}
+                            hasCustomPhoto={!!previewPhoto}
+                            onPickPhoto={() => previewPhotoInputRef.current?.click()}
+                            onClearPhoto={() => setPreviewPhoto(null)}
+                        />
+                        {/* Hidden file input owned by the parent so its
+                            value survives PreviewPanel re-mounts (e.g.
+                            mobile-tab switches). The ref-click pattern
+                            keeps the click target inside the toolbar
+                            without leaking native UI. */}
+                        <input
+                            ref={previewPhotoInputRef}
+                            type='file'
+                            accept='image/*'
+                            onChange={handlePreviewPhotoPick}
+                            className='hidden'
                         />
                     </div>
                     <div className={tabClass(mobileTab === 'properties')}>
@@ -818,7 +853,10 @@ function PresetGroup({ label, sublabel, presets, activeId, onSelect, badge }) {
 // previewSize comes from the usePreviewSize hook in StudioContent —
 // 800 on lg+, viewport-clamped on mobile so the 1:1 page never
 // overflows on a 375-wide phone.
-function PreviewPanel({ preset, styleSettings, entry, blessingLength, onBlessingLengthChange, previewSize }) {
+function PreviewPanel({
+    preset, styleSettings, entry, blessingLength, onBlessingLengthChange, previewSize,
+    hasCustomPhoto, onPickPhoto, onClearPhoto,
+}) {
     return (
         <main
             className='rounded-2xl overflow-hidden flex flex-col'
@@ -846,6 +884,32 @@ function PreviewPanel({ preset, styleSettings, entry, blessingLength, onBlessing
                     </h2>
                     <span className='hidden sm:inline text-[10.5px] text-[#a89378]'>1:1 · 8.5"×8.5"</span>
                 </div>
+
+                {/* Photo controls — upload a real wedding photo
+                    OR clear it back to the SVG placeholder. Sits to
+                    the side of the length toggle so the toolbar reads
+                    as one tight cluster of preview-affecting controls. */}
+                <button
+                    type='button'
+                    onClick={hasCustomPhoto ? onClearPhoto : onPickPhoto}
+                    title={hasCustomPhoto ? 'חזור לתמונה הסטנדרטית' : 'העלה תמונה אמיתית לפריוויו'}
+                    className='inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-[11.5px] font-bold transition-all shrink-0'
+                    style={{
+                        background: hasCustomPhoto ? '#fff5f5' : '#ffffff',
+                        border: `1px solid ${hasCustomPhoto ? '#ffcdcd' : '#ead9b3'}`,
+                        color: hasCustomPhoto ? '#b32424' : '#7a6a52',
+                    }}
+                >
+                    {hasCustomPhoto ? (
+                        <>
+                            <X size={11} /> נקה תמונה
+                        </>
+                    ) : (
+                        <>
+                            <Upload size={11} /> תמונה אמיתית
+                        </>
+                    )}
+                </button>
 
                 {/* Length toggle — 30 / 100 / 210 chars. Sets the mock
                     blessing the preview renders so the user can see if
