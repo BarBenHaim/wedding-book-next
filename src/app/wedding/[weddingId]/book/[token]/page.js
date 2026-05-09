@@ -656,32 +656,39 @@ function BookViewer({ wedding, entries, weddingId }) {
                             drawShadow={false}
                             onFlip={e => setPage(e.data)}
                         >
-                            <div>
-                                <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
-                                    <BookCoverTemplate
-                                        wedding={wedding}
+                            {/* Page order matches /viewer's RTL
+                                convention: BookBackCoverTemplate
+                                appears FIRST (it's the page the
+                                Hebrew reader sees when they "open"
+                                the book — react-pageflip flips
+                                LTR, so the first child sits on the
+                                right side which is the start of
+                                Hebrew reading direction).
+                                BookCoverTemplate (the branded
+                                front, with the couple's names) sits
+                                at the END as the closing piece.
+                                Single wrapping div per page mirrors
+                                viewer's `demo-page` pattern. */}
+                            <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
+                                <BookBackCoverTemplate scaledWidth={pageSize.w} scaledHeight={pageSize.h} />
+                            </div>
+                            {entries.map(entry => (
+                                <div key={entry.id} style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
+                                    <BookPageTemplate
+                                        entry={entry}
                                         styleSettings={styleSettings}
                                         scaledWidth={pageSize.w}
                                         scaledHeight={pageSize.h}
                                     />
                                 </div>
-                            </div>
-                            {entries.map(entry => (
-                                <div key={entry.id}>
-                                    <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
-                                        <BookPageTemplate
-                                            entry={entry}
-                                            styleSettings={styleSettings}
-                                            scaledWidth={pageSize.w}
-                                            scaledHeight={pageSize.h}
-                                        />
-                                    </div>
-                                </div>
                             ))}
-                            <div>
-                                <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
-                                    <BookBackCoverTemplate scaledWidth={pageSize.w} scaledHeight={pageSize.h} />
-                                </div>
+                            <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
+                                <BookCoverTemplate
+                                    wedding={wedding}
+                                    styleSettings={styleSettings}
+                                    scaledWidth={pageSize.w}
+                                    scaledHeight={pageSize.h}
+                                />
                             </div>
                         </HTMLFlipBook>
 
