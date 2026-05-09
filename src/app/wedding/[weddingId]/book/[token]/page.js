@@ -228,7 +228,12 @@ function InvalidScreen() {
 function BookViewer({ wedding, entries, weddingId }) {
     const flipRef = useRef(null)
     const [page, setPage] = useState(0)
-    const [opened, setOpened] = useState(false)
+    // Skip the landing/welcome screen — the user opted to drop the
+    // "you've reached the digital book of…" intro and jump straight
+    // into the flipbook. The landing component is still defined below
+    // (kept around as orphan code in case we re-enable it) but never
+    // rendered: `opened` starts at true.
+    const [opened, setOpened] = useState(true)
     const [pageSize, setPageSize] = useState({ w: 480, h: 480, isPortrait: true })
     const [shareToast, setShareToast] = useState(false)
 
@@ -505,7 +510,11 @@ function BookViewer({ wedding, entries, weddingId }) {
         >
             {/* Top brand nav — WT logo on the start side, action
                 icons on the end side. Cream wash with hairline
-                bottom border to feel like a premium app chrome. */}
+                bottom border to feel like a premium app chrome.
+                Hidden on mobile (portrait viewport) per product
+                decision: the header competes with the small book
+                area on phones; full bleed reads more premium. */}
+            {!pageSize.isPortrait && (
             <div
                 className='flex items-center justify-between px-5 py-3 relative z-20'
                 style={{
@@ -562,6 +571,7 @@ function BookViewer({ wedding, entries, weddingId }) {
                     </NavIconButton>
                 </div>
             </div>
+            )}
 
             {/* Soft cream particles on the page bg */}
             <div aria-hidden className='absolute inset-0 pointer-events-none'>
