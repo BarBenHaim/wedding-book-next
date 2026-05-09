@@ -3,24 +3,21 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage } from '@/lib/firebaseClient'
-import { heebo, frankRuhl, secular, davidLibre, notoHebrew, gveretLevin, danaYad } from '@/app/fonts'
+import { heebo, frankRuhl, notoHebrew, gveretLevin } from '@/app/fonts'
 import { getMessages } from '@/i18n/getMessages'
 import { dirFor, normalizeLocale } from '@/i18n/locales'
 import {
     BUILTIN_PRESETS,
     listPresets,
     resolvePreset,
-    FRAMES_REGISTRY,
-    TEXTURES_REGISTRY,
+    UNIFIED_BACKGROUNDS,
 } from '@/lib/studioPresets'
 
-// Frame URL list for the inline picker — read from the studio registry
-// so adding a frame doesn't need touching this file too.
-const FRAMES = Object.values(FRAMES_REGISTRY).map(f => ({ src: f.src }))
-
-// Texture URL list for the inline picker — also via the registry so
-// the studio + viewer agree on the available set.
-const TEXTURES = TEXTURES_REGISTRY.map(t => ({ src: t.src }))
+// Unified backgrounds list — collapses page bgs + textures + frames
+// into one gallery (per spring 2026 redesign). All three concepts
+// just paint the page surface; the user explicitly asked for one
+// picker, not three.
+const BG_ITEMS = UNIFIED_BACKGROUNDS
 
 /* The 8 built-in presets that ship with the app. Stored as the
  * single source of truth in `src/lib/studioPresets.js` so the upcoming
@@ -33,14 +30,15 @@ const TEXTURES = TEXTURES_REGISTRY.map(t => ({ src: t.src }))
  * for font/frame; the resolver expands them to runtime values
  * (className / asset URL) right before applyPreset calls onChange. */
 
+// Curated font set — Secular One, David Libre and Dana Yad were
+// pruned in spring 2026 (couple feedback: too many "Hebrew serif
+// blends" with no clear differentiation). Active set is one
+// classic serif, one humanist sans, one modern sans, one handwriting.
 const FONTS = [
     { font: notoHebrew, label: 'Noto Hebrew' },
     { font: frankRuhl, label: 'Frank Ruhl' },
-    { font: davidLibre, label: 'David Libre' },
     { font: heebo, label: 'Heebo' },
-    { font: secular, label: 'Secular One' },
     { font: gveretLevin, label: 'גברת לוין' },
-    { font: danaYad, label: 'דנה יד' },
 ]
 
 const BufferedInput = ({ value, onChange, placeholder, className }) => {

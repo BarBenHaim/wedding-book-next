@@ -25,7 +25,11 @@ import {
 } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from './firebaseClient'
-import { heebo, frankRuhl, secular, davidLibre, notoHebrew, gveretLevin, danaYad } from '@/app/fonts'
+import { heebo, frankRuhl, notoHebrew, gveretLevin } from '@/app/fonts'
+// Note: `secular`, `davidLibre`, `danaYad` exports still exist in
+// '@/app/fonts' for legacy consumers (PageLayouts, app/layout.js) but
+// are deliberately NOT registered here — the design studio's font
+// picker was pruned to a curated set per the spring 2026 redesign.
 
 // ── Frame URL registry ───────────────────────────────────────────────
 // Frames are next/image-imported PNGs from src/media/frames. Their
@@ -72,6 +76,27 @@ export const STATIC_BACKGROUNDS = [
     { id: 'pokerbg', label: 'פוקר — לבד ירוק', src: '/backgrounds/pokerbg.png', tags: ['poker'] },
 ]
 
+// ── UNIFIED BACKGROUNDS ──────────────────────────────────────────────
+// Per the spring 2026 redesign the studio collapses three distinct
+// asset types (frames / textures / page backgrounds) into a single
+// "background for the book" gallery. Conceptually they all paint the
+// page surface; splitting them into three separate pickers produced
+// decision fatigue and a confused result.
+//
+// We keep the original registries above so legacy presets that still
+// reference `frame: '/_next/.../frame2.png'` or `texture:
+// '/textures/tex3.png'` continue to render unchanged. New work goes
+// through `backgroundUrl` (a single field on the wedding doc),
+// resolved here.
+//
+// Each entry here is normalized to the same shape `{ id, src, label,
+// kind, tags }` so the picker doesn't have to branch on origin.
+export const UNIFIED_BACKGROUNDS = [
+    ...STATIC_BACKGROUNDS.map(b => ({ id: b.id, src: b.src, label: b.label, kind: 'background', tags: b.tags || [] })),
+    ...TEXTURES_REGISTRY.map(t => ({ id: t.id, src: t.src, label: t.label, kind: 'texture', tags: ['texture'] })),
+    ...Object.values(FRAMES_REGISTRY).map(f => ({ id: f.id, src: f.src, label: f.label, kind: 'frame', tags: ['frame'] })),
+]
+
 // ── Font registry ────────────────────────────────────────────────────
 // next/font generates a hashed className per build, so we never store
 // the className itself in Firestore — we store a stable key and resolve
@@ -80,11 +105,8 @@ export const STATIC_BACKGROUNDS = [
 export const FONTS_REGISTRY = {
     notoHebrew: { id: 'notoHebrew', label: 'Noto Hebrew', font: notoHebrew },
     frankRuhl: { id: 'frankRuhl', label: 'Frank Ruhl', font: frankRuhl },
-    davidLibre: { id: 'davidLibre', label: 'David Libre', font: davidLibre },
     heebo: { id: 'heebo', label: 'Heebo', font: heebo },
-    secular: { id: 'secular', label: 'Secular One', font: secular },
     gveretLevin: { id: 'gveretLevin', label: 'גברת לוין', font: gveretLevin },
-    danaYad: { id: 'danaYad', label: 'דנה יד', font: danaYad },
 }
 
 export const FONT_IDS = Object.keys(FONTS_REGISTRY)
@@ -389,14 +411,17 @@ export async function listStudioBackgrounds() {
     }
 }
 
-// Returns the unified background list — static (curated, ships in
-// code) + uploaded (Firestore). Each entry carries an `origin` flag
-// so the picker can badge them.
+// Returns the unified background list — UNIFIED_BACKGROUNDS (curated
+// page bgs + textures + frames, all collapsed into one "book
+// background" gallery per the spring 2026 redesign) + uploaded
+// (Firestore). Each entry carries an `origin` flag so the picker can
+// badge them, and `kind` so legacy code that still cares about the
+// old taxonomy can branch on it.
 export async function listAllBackgrounds() {
     const uploaded = await listStudioBackgrounds()
     return [
-        ...STATIC_BACKGROUNDS.map(b => ({ ...b, origin: 'static' })),
-        ...uploaded.map(b => ({ ...b, origin: 'studio' })),
+        ...UNIFIED_BACKGROUNDS.map(b => ({ ...b, origin: 'static' })),
+        ...uploaded.map(b => ({ ...b, kind: 'background', origin: 'studio' })),
     ]
 }
 
