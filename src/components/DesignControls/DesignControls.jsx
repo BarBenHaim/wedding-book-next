@@ -21,6 +21,51 @@ import {
     hidePreset,
     FONTS_REGISTRY,
 } from '@/lib/studioPresets'
+import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
+import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+
+// ── Mini preview helpers ─────────────────────────────────────────────
+// Each preset tile renders an actual <BookPageTemplate /> at a small
+// scale so the user sees what the design looks like, not a color
+// swatch. The styleSettings flow matches the viewer's render path
+// (`{ ...defaultStyle, ...preset.values }`) — see the studio's
+// resolvedStyle calculation for the same merge — so what shows in
+// the picker is what shows on the page after applying.
+
+const MINI_PREVIEW_NAME = 'יעל ויואב'
+const MINI_PREVIEW_TEXT = 'הברכה שלכם תופיע כאן באותו עיצוב שתבחרו.'
+// Inline SVG photo placeholder — same trick the studio uses; ships
+// in code so the picker never blocks on a network asset.
+const MINI_PREVIEW_PHOTO = `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f5d39e"/><stop offset="100%" stop-color="#d8b986"/></linearGradient></defs><rect width="400" height="300" fill="url(#s)"/><ellipse cx="320" cy="80" rx="38" ry="38" fill="#fff8e0" opacity="0.9"/><path d="M0 220 Q100 170 200 200 T 400 210 V 300 H 0 Z" fill="#a87f4b"/></svg>`
+)}`
+const MINI_PREVIEW_ENTRY = {
+    id: 'mini-preview',
+    name: MINI_PREVIEW_NAME,
+    text: MINI_PREVIEW_TEXT,
+    imageUrl: MINI_PREVIEW_PHOTO,
+}
+
+// Hook that tracks a container's pixel width with a ResizeObserver.
+// Used so each mini preview can pass its actual on-screen size to
+// BookPageTemplate's scaledWidth/scaledHeight, keeping fontSize and
+// image-slot proportions correct regardless of the sidebar width.
+function useElementWidth() {
+    const ref = useRef(null)
+    const [w, setW] = useState(0)
+    useEffect(() => {
+        const el = ref.current
+        if (!el || typeof ResizeObserver === 'undefined') return
+        const obs = new ResizeObserver(entries => {
+            for (const e of entries) {
+                setW(Math.floor(e.contentRect.width))
+            }
+        })
+        obs.observe(el)
+        return () => obs.disconnect()
+    }, [])
+    return [ref, w]
+}
 
 // Default backgrounds list for instant render before the live list
 // (which includes uploaded backgrounds and honors hidden ids) loads
@@ -203,6 +248,11 @@ export default function DesignControls({
     // already falls back to BUILTIN_PRESETS on any error, so this also
     // handles the "Firestore unreachable" case gracefully.
     const [presets, setPresets] = useState(BUILTIN_PRESETS)
+    // Tracks the rendered tile width so each mini preview can pass
+    // matching scaledWidth/Height to BookPageTemplate (font sizes
+    // scale relative to those, so they need to match the actual
+    // pixel size on screen).
+    const [presetsContainerRef, presetsTileWidth] = useElementWidth()
     useEffect(() => {
         let cancelled = false
         listPresets().then(list => {
@@ -395,29 +445,46 @@ export default function DesignControls({
                             the preset (system presets stay read-only
                             via savePreset's lib-level guard). */}
                         <Card title={t.presetsTitle}>
-                            <div className='grid grid-cols-2 gap-3'>
+                            {/* Vertical stack of mini live previews.
+                                Each tile renders a real <BookPageTemplate />
+                                with a placeholder name + blessing + photo,
+                                using the preset's resolved values merged
+                                with defaultStyle (same merge as the
+                                viewer's render path so what's previewed
+                                matches what gets applied). The user
+                                explicitly asked for this layout: no
+                                names, square previews, one above the
+                                other. */}
+                            <div ref={presetsContainerRef} className='space-y-3'>
                                 {presets.map(preset => {
                                     const presetKey = preset.id || preset.name
                                     const isActive = activePreset === presetKey
+                                    const resolved = resolvePreset(preset).values || {}
+                                    const previewStyle = { ...defaultStyle, ...resolved }
                                     return (
                                         <div key={presetKey} className='relative group'>
                                             <button
                                                 onClick={() => applyPreset(preset)}
-                                                className={`relative h-16 w-full rounded-lg border transition-all overflow-hidden ${
+                                                title={preset.name}
+                                                className={`relative w-full rounded-lg border overflow-hidden transition-all ${
                                                     isActive
                                                         ? 'ring-2 ring-[#AA8840] border-transparent'
-                                                        : 'border-gray-200 hover:scale-[1.02]'
+                                                        : 'border-gray-200 hover:scale-[1.01]'
                                                 }`}
-                                                style={{ background: preset.preview }}
+                                                style={{ aspectRatio: '1 / 1' }}
                                             >
-                                                <span className='absolute bottom-1 end-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/90 text-black'>
-                                                    {preset.name}
-                                                </span>
+                                                {presetsTileWidth > 0 && (
+                                                    <BookPageTemplate
+                                                        entry={MINI_PREVIEW_ENTRY}
+                                                        styleSettings={previewStyle}
+                                                        scaledWidth={presetsTileWidth}
+                                                        scaledHeight={presetsTileWidth}
+                                                    />
+                                                )}
                                             </button>
-                                            {/* Trash — hides on hover; works on
-                                                system + studio presets alike (the
-                                                lib-level guard was lifted at the
-                                                user's "no restrictions" request). */}
+                                            {/* Trash — admin only, hovers in
+                                                from the corner so the preview
+                                                stays clean. */}
                                             {isAdmin && (
                                                 <button
                                                     onClick={e => {
