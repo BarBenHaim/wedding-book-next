@@ -34,6 +34,7 @@ import {
     resolvePreset, FRAMES_REGISTRY, FONTS_REGISTRY, TEXTURES_REGISTRY,
     FONT_IDS, FRAME_IDS,
 } from '@/lib/studioPresets'
+import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 
 // ── Mock blessings at the three lengths the photo form supports ──
 // Calibrated to read naturally in Hebrew at each length, not just hit
@@ -240,9 +241,20 @@ function StudioContent() {
 
     // Resolve the DRAFT (not the persisted preset) to the runtime
     // shape so the preview reflects unsaved edits live.
+    //
+    // CRITICAL — merge with `defaultStyle` exactly the way the viewer
+    // does (`{ ...defaultStyle, ...firestoreData.coverDesign }`). The
+    // viewer's render path always sees defaultStyle's baseline fields
+    // (e.g. `pagePadding: 0`, `imageStyle: { width: 90, ... }`)
+    // because of that merge. If the studio preview renders the raw
+    // preset values without the same merge, BookPageTemplate's `??`
+    // fallbacks kick in (pagePadding → 4, etc) and the same preset
+    // looks DIFFERENT in studio vs in the actual book — the bug the
+    // user hit when their nameMarginTop edits "didn't show right" in
+    // the wedding viewer.
     const resolvedStyle = useMemo(() => {
         if (!draft) return null
-        return resolvePreset(draft).values
+        return { ...defaultStyle, ...resolvePreset(draft).values }
     }, [draft])
 
     // Helpers for the properties panel — apply a partial values patch
