@@ -94,6 +94,11 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                             styleSettings.nameFontSizePercent ??
                                 (styleSettings.fontSizePercent ? styleSettings.fontSizePercent * 0.7 : 2.1)
                         ),
+                        // fontWeight is applied numerically (300/400/500/600/700)
+                        // so next/font/local picks the closest available weight
+                        // file. nameFontWeight overrides; falls back to fontWeight,
+                        // then to undefined (=> font's natural weight per its file).
+                        fontWeight: styleSettings.nameFontWeight ?? styleSettings.fontWeight,
                         color: styleSettings.fontColor,
                         opacity: 0.85,
                         marginTop: onlyOne ? 0 : h(styleSettings.nameMarginTop ?? 2),
@@ -158,6 +163,10 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         className={styleSettings.fontClass}
                         style={{
                             fontSize: h(styleSettings.fontSizePercent ?? 3),
+                            // See fontWeight comment on the name block above —
+                            // same fallback chain. The body text uses fontWeight
+                            // directly (no body-specific override field).
+                            fontWeight: styleSettings.fontWeight,
                             color: styleSettings.fontColor,
                             lineHeight: styleSettings.textLineHeight ?? 1.5,
                             whiteSpace: 'pre-line',

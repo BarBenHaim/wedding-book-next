@@ -992,6 +992,13 @@ function PropertiesPanel({
                             onChange={n => onValuesChange({ fontSizePercent: n })}
                         />
 
+                        <PropertyWeightPicker
+                            label='משקל פונט'
+                            value={v.fontWeight}
+                            disabled={!editable}
+                            onChange={w => onValuesChange({ fontWeight: w })}
+                        />
+
                         <PropertyColorEdit
                             icon={Palette}
                             label='צבע פונט'
@@ -1018,6 +1025,13 @@ function PropertiesPanel({
                             unit='%'
                             disabled={!editable}
                             onChange={n => onValuesChange({ nameFontSizePercent: n })}
+                        />
+
+                        <PropertyWeightPicker
+                            label='משקל שם האורח'
+                            value={v.nameFontWeight}
+                            disabled={!editable}
+                            onChange={w => onValuesChange({ nameFontWeight: w })}
                         />
 
                         <PropertySlider
@@ -1616,6 +1630,61 @@ function PropertyHeader({ icon: Icon, label }) {
             <span className='text-[11px] font-semibold text-[#7a6a52] uppercase tracking-wider'>
                 {label}
             </span>
+        </div>
+    )
+}
+
+// Font weight picker — segmented control with the five most useful
+// weights. Stored as a numeric CSS font-weight (300/400/500/600/700)
+// so next/font/local picks the closest available weight file at
+// render time. "אוטומטי" sends `undefined`, which means the font uses
+// its natural weight (whatever single weight the font file ships with,
+// or the font's CSS default). Adding a weight here doesn't require
+// touching BookPageTemplate — it just writes to styleSettings.fontWeight
+// (or nameFontWeight) which the renderer already honors.
+const WEIGHT_OPTIONS = [
+    { value: undefined, label: 'אוטומטי' },
+    { value: 300, label: 'Light' },
+    { value: 400, label: 'Regular' },
+    { value: 500, label: 'Medium' },
+    { value: 600, label: 'SemiBold' },
+    { value: 700, label: 'Bold' },
+]
+
+function PropertyWeightPicker({ label, value, disabled, onChange }) {
+    return (
+        <div>
+            <PropertyHeader icon={Type} label={label} />
+            <div
+                className='flex flex-wrap gap-1 rounded-lg p-1'
+                style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}
+            >
+                {WEIGHT_OPTIONS.map(opt => {
+                    const active = value === opt.value
+                    return (
+                        <button
+                            key={opt.label}
+                            type='button'
+                            onClick={() => !disabled && onChange(opt.value)}
+                            disabled={disabled}
+                            className={`px-2.5 py-1 rounded-md text-[11px] transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                                active
+                                    ? 'text-white shadow-sm'
+                                    : 'text-[#7a6a52] hover:bg-white'
+                            }`}
+                            style={{
+                                ...(active && {
+                                    background:
+                                        'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                }),
+                                fontWeight: opt.value || 400,
+                            }}
+                        >
+                            {opt.label}
+                        </button>
+                    )
+                })}
+            </div>
         </div>
     )
 }
