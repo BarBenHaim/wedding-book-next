@@ -475,12 +475,15 @@ function BookViewer({ wedding, entries, weddingId }) {
     // ─── Flipbook view ─────────────────────────────────────────────
     return (
         <div
-            className='min-h-screen flex flex-col relative'
+            className='h-screen flex flex-col relative overflow-hidden'
             style={{
                 // Cream paper backdrop with a soft floral wash to
                 // match the brand. The book itself sits on top with
                 // its own halo, so the page bg is intentionally
                 // subdued — it frames, doesn't compete.
+                // h-screen + overflow-hidden = no page scroll, no
+                // jitter during page flip (the flip animation
+                // briefly pushes layout past viewport otherwise).
                 background: 'linear-gradient(180deg, #f5ead2 0%, #ebd9b3 100%)',
                 backgroundImage: 'url(/backgrounds/romanticgarden.png)',
                 backgroundSize: 'cover',
@@ -576,21 +579,23 @@ function BookViewer({ wedding, entries, weddingId }) {
                     <div
                         className='relative animate-[bookOpen_500ms_cubic-bezier(0.2,0.8,0.2,1)_both]'
                         style={{
-                            // Soft golden halo behind the book on
-                            // the cream backdrop. drop-shadow
-                            // follows the book's actual silhouette
-                            // (including mid-flip page rotation),
-                            // unlike box-shadow which would glow
-                            // around an invisible rectangle.
-                            filter: 'drop-shadow(0 30px 60px rgba(45,30,16,0.30)) drop-shadow(0 0 40px rgba(201,164,78,0.20))',
+                            // box-shadow on the wrapper instead of
+                            // filter:drop-shadow — drop-shadow forces
+                            // the browser to repaint the whole filter
+                            // pipeline on every page-flip frame
+                            // (heavy GPU work, causes the lag the
+                            // user reported). box-shadow stays around
+                            // the wrapper rectangle and renders for
+                            // free at composition time.
+                            boxShadow: '0 30px 60px -10px rgba(45,30,16,0.30), 0 0 40px rgba(201,164,78,0.20)',
                         }}
                     >
-                        {/* Side arrow — RIGHT (start in RTL = "prev"
-                            in reading direction). Anchored to the
-                            book's right edge with negative offset. */}
+                        {/* Side arrow — RIGHT side. Per the user's
+                            preferred direction, the right arrow now
+                            calls next() (was prev()). */}
                         <button
-                            onClick={prev}
-                            aria-label='הקודם'
+                            onClick={next}
+                            aria-label='הבא'
                             className='absolute top-1/2 -translate-y-1/2 transition-all hover:scale-105 active:scale-95'
                             style={{
                                 right: pageSize.isPortrait ? -56 : -68,
@@ -610,10 +615,12 @@ function BookViewer({ wedding, entries, weddingId }) {
                             </svg>
                         </button>
 
-                        {/* Side arrow — LEFT (end in RTL = "next") */}
+                        {/* Side arrow — LEFT side. Per the user's
+                            preferred direction, the left arrow now
+                            calls prev() (was next()). */}
                         <button
-                            onClick={next}
-                            aria-label='הבא'
+                            onClick={prev}
+                            aria-label='הקודם'
                             className='absolute top-1/2 -translate-y-1/2 transition-all hover:scale-105 active:scale-95'
                             style={{
                                 left: pageSize.isPortrait ? -56 : -68,
@@ -638,16 +645,15 @@ function BookViewer({ wedding, entries, weddingId }) {
                             height={pageSize.h}
                             size='fixed'
                             showCover={true}
-                            // 450ms ≈ Apple Photos / Kindle book turn —
-                            // long enough to see the page curl, short
-                            // enough to feel responsive. 900ms felt
-                            // sluggish per user feedback.
-                            flippingTime={450}
                             usePortrait={pageSize.isPortrait}
                             mobileScrollSupport={true}
-                            useMouseEvents={true}
-                            swipeDistance={30}
-                            maxShadowOpacity={0.5}
+                            // drawShadow=false matches /viewer — the
+                            // library's internal page shadow is the
+                            // expensive part during flip; turning it
+                            // off restores the snappy feel without
+                            // a visible loss (the wrapper's static
+                            // box-shadow handles depth instead).
+                            drawShadow={false}
                             onFlip={e => setPage(e.data)}
                         >
                             <div>
