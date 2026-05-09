@@ -809,6 +809,151 @@ function QuickLink({ href, label, icon: Icon }) {
 // Renders the scan → start → submit funnel for a single wedding using the
 // stats payload returned by /api/admin/wedding-stats. Receives the stats
 // + loading flag from its parent so the caller controls when to refetch.
+// ─── DigitalEditionPanel ────────────────────────────────────────────────
+// Lists existing digital tokens for a wedding and lets the super-admin
+// generate new ones (with optional email-to-owner). Revocation is
+// out-of-scope for v1 — drop a token from the array via Firestore
+// console for now.
+function DigitalEditionPanel({ wedding }) {
+    const tokens = Array.isArray(wedding.digitalTokens) ? wedding.digitalTokens : []
+    const [busy, setBusy] = useState(false)
+    const [lastLink, setLastLink] = useState('')
+    const [lastEmailSent, setLastEmailSent] = useState(false)
+    const [error, setError] = useState('')
+
+    async function generate(sendEmail) {
+        if (busy) return
+        setBusy(true)
+        setError('')
+        setLastLink('')
+        setLastEmailSent(false)
+        try {
+            const token = await getToken()
+            const res = await fetch('/api/digital-edition/grant', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ weddingId: wedding.id, sendEmail }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+            setLastLink(data.link || '')
+            setLastEmailSent(!!data.emailSent)
+            // Optimistically refresh the page so the new token shows
+            // up in the list. Cheap; works without re-fetching state.
+            wedding.digitalTokens = [...tokens, data.token]
+        } catch (e) {
+            setError(e.message || 'שגיאה')
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    return (
+        <div className='space-y-3'>
+            <div className='flex items-center justify-between'>
+                <p className='text-sm text-[#3d2e1a]'>
+                    {tokens.length === 0
+                        ? 'עדיין לא הופקה מהדורה דיגיטלית.'
+                        : `${tokens.length} ${tokens.length === 1 ? 'קישור פעיל' : 'קישורים פעילים'}`}
+                </p>
+            </div>
+
+            <div className='flex flex-wrap gap-2'>
+                <button
+                    onClick={() => generate(false)}
+                    disabled={busy}
+                    className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white disabled:opacity-50'
+                    style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}
+                >
+                    {busy ? <Loader2 size={12} className='animate-spin' /> : <Link2 size={12} />}
+                    צור קישור חדש
+                </button>
+                <button
+                    onClick={() => generate(true)}
+                    disabled={busy || !(wedding.ownerEmail || wedding.email)}
+                    className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-[#ead9b3] text-[#3d2e1a] disabled:opacity-50'
+                    style={{ background: '#ffffff' }}
+                    title={!(wedding.ownerEmail || wedding.email) ? 'אין אימייל בעלים — הוסף קודם' : ''}
+                >
+                    <Mail size={12} />
+                    צור + שלח לבעלים במייל
+                </button>
+            </div>
+
+            {lastLink && (
+                <div className='rounded-xl bg-emerald-50 border border-emerald-200 p-3'>
+                    <p className='text-[11px] font-bold text-emerald-700 mb-1.5'>
+                        ✓ קישור הופק{lastEmailSent ? ' ונשלח לבעלים במייל' : ''}
+                    </p>
+                    <div className='flex items-center gap-2'>
+                        <code className='flex-1 text-[11px] bg-white border border-emerald-200 rounded-lg px-2 py-1.5 font-mono text-emerald-900 truncate'>
+                            {lastLink}
+                        </code>
+                        <button
+                            onClick={() => navigator.clipboard.writeText(lastLink).then(() => {})}
+                            className='shrink-0 w-7 h-7 rounded-lg bg-white hover:bg-emerald-100 border border-emerald-200 flex items-center justify-center'
+                            title='העתק'
+                        >
+                            <Copy size={11} className='text-emerald-700' />
+                        </button>
+                        <a
+                            href={lastLink}
+                            target='_blank'
+                            rel='noreferrer'
+                            className='shrink-0 w-7 h-7 rounded-lg bg-white hover:bg-emerald-100 border border-emerald-200 flex items-center justify-center'
+                            title='פתח'
+                        >
+                            <ExternalLink size={11} className='text-emerald-700' />
+                        </a>
+                    </div>
+                </div>
+            )}
+
+            {error && (
+                <div className='rounded-xl bg-red-50 border border-red-200 p-3 text-[11px] text-red-700'>{error}</div>
+            )}
+
+            {tokens.length > 0 && (
+                <details className='group'>
+                    <summary className='cursor-pointer text-[11px] text-[#7a6a52] hover:text-[#aa8840] select-none'>
+                        הצג קישורים קיימים ({tokens.length})
+                    </summary>
+                    <div className='mt-2 space-y-1.5'>
+                        {tokens.map(tok => {
+                            const link = `${typeof window !== 'undefined' ? window.location.origin : ''}/wedding/${wedding.id}/book/${tok}`
+                            return (
+                                <div key={tok} className='flex items-center gap-1.5 group'>
+                                    <code className='flex-1 text-[10px] bg-[#fbf6ec] border border-[#ead9b3] rounded-md px-2 py-1 font-mono text-[#7a6a52] truncate'>
+                                        {tok}
+                                    </code>
+                                    <button
+                                        onClick={() => navigator.clipboard.writeText(link)}
+                                        className='shrink-0 w-6 h-6 rounded-md bg-[#fbf6ec] hover:bg-[#f4ecd9] border border-[#ead9b3] flex items-center justify-center'
+                                        title='העתק לינק'
+                                    >
+                                        <Copy size={10} className='text-[#a8843a]' />
+                                    </button>
+                                    <a
+                                        href={link}
+                                        target='_blank'
+                                        rel='noreferrer'
+                                        className='shrink-0 w-6 h-6 rounded-md bg-[#fbf6ec] hover:bg-[#f4ecd9] border border-[#ead9b3] flex items-center justify-center'
+                                    >
+                                        <ExternalLink size={10} className='text-[#a8843a]' />
+                                    </a>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </details>
+            )}
+        </div>
+    )
+}
+
 function FunnelView({ stats, loading }) {
     if (loading && !stats) {
         return (
@@ -998,6 +1143,16 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                         <QuickLink href={`/w/${wedding.slug}`} label={`קישור קצר (/${wedding.slug})`} icon={ExternalLink} />
                     )}
                 </div>
+            </div>
+
+            {/* ── Digital Edition ──
+                Generate a public, token-gated link that lets the
+                couple (and anyone they share with) view the book in
+                an interactive flipbook viewer. The token is appended
+                to wedding.digitalTokens; revoke = remove from array. */}
+            <div className='px-6 py-5 border-b border-[#f0e8d4]'>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>מהדורה דיגיטלית</p>
+                <DigitalEditionPanel wedding={wedding} />
             </div>
 
             {/* ── Funnel analytics ── */}
