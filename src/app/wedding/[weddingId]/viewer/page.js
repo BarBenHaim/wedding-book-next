@@ -553,11 +553,31 @@ function BookViewerInner({ onLocaleDiscovered }) {
         <AdminPageWrapper>
             <div
                 dir={locale === 'he' ? 'rtl' : 'ltr'}
-                className='relative flex flex-col-reverse lg:flex-row h-[calc(100vh-64px)] overflow-hidden bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] font-sans'
+                // h-[calc(100dvh-64px)] uses the dynamic-viewport unit
+                // so the outer container exactly matches the visible
+                // area as mobile browser chrome (URL bar) shows / hides.
+                // 100vh would have been 100lvh on mobile (= max area
+                // assuming chrome is gone), pushing the bottom of the
+                // book + aside under the URL bar and triggering body-
+                // level scroll — the user's "white scrolling" complaint.
+                // 64px is the global Header sitting above this div.
+                className='relative flex flex-col-reverse lg:flex-row h-[calc(100dvh-64px)] overflow-hidden bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] font-sans'
             >
                 <aside
+                    // On mobile the aside used to be a fixed 350px
+                    // strip below the book. After we removed the
+                    // preset picker (a473262), couples land in book
+                    // mode with NOTHING to interact with there, so
+                    // those 300+ px were just empty white space. Now
+                    // the aside is content-sized (h-auto) — it
+                    // collapses to ~50px (just the mode tabs) in
+                    // empty book mode and grows when the user
+                    // switches to cover mode where the cover-text /
+                    // image / design controls live. max-h-[60dvh]
+                    // caps it so cover mode doesn't crush the book
+                    // area.
                     className={`relative z-20 flex flex-col shrink-0 bg-white/80 backdrop-blur-md border-l border-white/50 transition-all ${
-                        isMobile ? 'h-[350px] w-full border-t rounded-t-3xl' : 'h-full w-[380px]'
+                        isMobile ? 'h-auto max-h-[60dvh] w-full border-t rounded-t-3xl' : 'h-full w-[380px]'
                     }`}
                 >
                     <div className='h-full overflow-hidden'>
