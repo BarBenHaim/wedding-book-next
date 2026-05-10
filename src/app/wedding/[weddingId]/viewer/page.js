@@ -71,6 +71,13 @@ function BookViewerInner({ onLocaleDiscovered }) {
     const [viewerSize, setViewerSize] = useState(500)
     const [isMobile, setIsMobile] = useState(false)
     const [styleSettings, setStyleSettings] = useState(defaultStyle)
+    // Bottom-sheet visibility on mobile. Closed by default so the
+    // book takes the full visible height. On desktop the side
+    // panel is always visible (panelOpen is ignored on lg+).
+    // calculateBookSize syncs isMobile + panelOpen for the initial
+    // pass; afterwards toggling panelOpen doesn't resize the book —
+    // the sheet slides over it, the book stays at its own size.
+    const [panelOpen, setPanelOpen] = useState(false)
     // Hold the raw wedding doc so the cover template can derive the
     // default "ספר הברכות של {names}" content from eventType +
     // brideName/groomName/celebrantName when no custom cover content
@@ -193,14 +200,25 @@ function BookViewerInner({ onLocaleDiscovered }) {
     const calculateBookSize = useCallback(() => {
         const w = window.innerWidth
         const h = window.innerHeight
-        setIsMobile(w < 1024)
+        const mobile = w < 1024
+        setIsMobile(mobile)
 
+        // Vertical budget on mobile:
+        //   • 64 px global header
+        //   • 56 px collapsed bottom-sheet handle ("✏️ עיצוב" button)
+        //   • ~40 px for the page-flip controls under the book
+        // → mobile reserves ~160 px around the book, matching the
+        // previous magic number but for clearer reasons. The sheet
+        // slides OVER the book when expanded, so opening / closing
+        // the panel doesn't resize the book itself — that would
+        // produce jarring reflows. Desktop reserves the same ~160
+        // around the book for the surrounding chrome.
         const SIDEBAR_W = 380
-        const availableWidth = w < 1024 ? w - 20 : w - SIDEBAR_W - 60
+        const availableWidth = mobile ? w - 20 : w - SIDEBAR_W - 60
         const availableHeight = h - 160
 
         const optimalSize =
-            w < 1024 ? Math.min(availableWidth, availableHeight) : Math.min(availableWidth / 2, availableHeight)
+            mobile ? Math.min(availableWidth, availableHeight) : Math.min(availableWidth / 2, availableHeight)
 
         setViewerSize(Math.floor(Math.min(Math.max(optimalSize, 280), 750)))
     }, [])
@@ -556,31 +574,94 @@ function BookViewerInner({ onLocaleDiscovered }) {
                 // h-[calc(100dvh-64px)] uses the dynamic-viewport unit
                 // so the outer container exactly matches the visible
                 // area as mobile browser chrome (URL bar) shows / hides.
-                // 100vh would have been 100lvh on mobile (= max area
-                // assuming chrome is gone), pushing the bottom of the
-                // book + aside under the URL bar and triggering body-
-                // level scroll — the user's "white scrolling" complaint.
                 // 64px is the global Header sitting above this div.
+                //
+                // flex-col-reverse on mobile used to place the aside
+                // below the book in-flow; the aside is now a fixed-
+                // position bottom sheet (see below) so the reverse is
+                // moot on mobile but kept harmless for source order.
                 className='relative flex flex-col-reverse lg:flex-row h-[calc(100dvh-64px)] overflow-hidden bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] font-sans'
             >
+                {/* Dim backdrop — visible only when the mobile sheet
+                    is open. Clicking it closes the sheet so the user
+                    can dismiss without finding the close button. */}
+                {isMobile && panelOpen && (
+                    <button
+                        type='button'
+                        aria-label='סגור פאנל עיצוב'
+                        onClick={() => setPanelOpen(false)}
+                        className='fixed inset-0 z-20 bg-black/30 backdrop-blur-[1px] animate-fadeIn lg:hidden'
+                        style={{ transition: 'opacity 220ms ease-out' }}
+                    />
+                )}
+
+                {/* Floating "edit design" trigger — only visible on
+                    mobile when the sheet is CLOSED. On desktop the
+                    aside is permanently visible (right rail) so no
+                    trigger is needed. Sits above the book + flip
+                    controls so the user can reach it without
+                    overlapping the page-flip arrows. */}
+                {isMobile && !panelOpen && (
+                    <button
+                        type='button'
+                        onClick={() => setPanelOpen(true)}
+                        className='fixed bottom-3 left-1/2 -translate-x-1/2 z-30 inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-[13px] font-bold text-white shadow-lg active:scale-95 transition-transform lg:hidden'
+                        style={{
+                            background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                            boxShadow: '0 10px 22px -8px rgba(170,136,64,0.55), inset 0 1px 0 rgba(255,255,255,0.30)',
+                        }}
+                    >
+                        ✏️ עיצוב
+                    </button>
+                )}
+
                 <aside
-                    // On mobile the aside used to be a fixed 350px
-                    // strip below the book. After we removed the
-                    // preset picker (a473262), couples land in book
-                    // mode with NOTHING to interact with there, so
-                    // those 300+ px were just empty white space. Now
-                    // the aside is content-sized (h-auto) — it
-                    // collapses to ~50px (just the mode tabs) in
-                    // empty book mode and grows when the user
-                    // switches to cover mode where the cover-text /
-                    // image / design controls live. max-h-[60dvh]
-                    // caps it so cover mode doesn't crush the book
-                    // area.
-                    className={`relative z-20 flex flex-col shrink-0 bg-white/80 backdrop-blur-md border-l border-white/50 transition-all ${
-                        isMobile ? 'h-auto max-h-[60dvh] w-full border-t rounded-t-3xl' : 'h-full w-[380px]'
+                    // Bottom-sheet on mobile. Closed → translated
+                    // fully off-screen (a separate "✏️ עיצוב" floating
+                    // button above peeks into view as the affordance
+                    // to open it). Open → translateY(0) at h-[65dvh]
+                    // with a 250 ms ease-out slide. On desktop the
+                    // aside is in-flow at w-[380px] full-height — the
+                    // sheet styles disappear via the lg: prefix and
+                    // the conditional translate.
+                    className={`shrink-0 flex flex-col bg-white/95 backdrop-blur-md transition-transform duration-300 ease-out z-30 lg:relative lg:z-20 lg:translate-y-0 lg:bg-white/80 ${
+                        isMobile
+                            ? 'fixed bottom-0 inset-x-0 h-[65dvh] w-full border-t border-white/50 rounded-t-3xl shadow-2xl'
+                            : 'h-full w-[380px] border-l border-white/50'
                     }`}
+                    style={
+                        isMobile
+                            ? { transform: panelOpen ? 'translateY(0)' : 'translateY(100%)' }
+                            : undefined
+                    }
                 >
-                    <div className='h-full overflow-hidden'>
+                    {/* Sheet drag handle + close button — visible only
+                        on the mobile sheet. The pill in the centre is
+                        a decoration; the actual dismiss target is the
+                        ✕ on the trailing side so a thumb tap doesn't
+                        accidentally close the sheet while scrolling. */}
+                    {isMobile && (
+                        <div className='shrink-0 px-4 pt-2 pb-1 flex items-center justify-between lg:hidden'>
+                            {/* Spacer so the centre pill is exactly
+                                centered, mirroring the close button
+                                on the other side. */}
+                            <span className='w-6 h-6' aria-hidden='true' />
+                            <span
+                                className='block w-10 h-1 rounded-full bg-[#d4c8a8]'
+                                aria-hidden='true'
+                            />
+                            <button
+                                type='button'
+                                onClick={() => setPanelOpen(false)}
+                                className='w-6 h-6 rounded-full flex items-center justify-center text-[#7a6a52] hover:bg-[#f4ecd9] transition-colors'
+                                aria-label='סגור פאנל עיצוב'
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    )}
+
+                    <div className='flex-1 min-h-0 overflow-hidden'>
                         <DesignControls
                             settings={styleSettings}
                             onChange={handleStyleChange}
