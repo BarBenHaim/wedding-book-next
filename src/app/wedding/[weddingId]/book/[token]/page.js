@@ -862,16 +862,19 @@ function BookViewer({ wedding, entries, weddingId }) {
                             useMouseEvents={true}
                             onFlip={e => setPage(e.data)}
                         >
-                            {/* Page order — matches /viewer's RTL
-                                convention: BookBackCoverTemplate
-                                (the branded image cover) appears
-                                FIRST so the user opens straight onto
-                                a designed page; entries flow in the
-                                middle; BookCoverTemplate (with names
-                                + default "ספר הברכות של ..." text)
-                                sits as the closing piece. */}
+                            {/* Page order — FrontCover (with names +
+                                "ספר הברכות של…" fallback) FIRST so the
+                                book opens directly on the page that
+                                identifies whose book it is. Entries
+                                flow next, BackCover at the end as the
+                                closing artwork. */}
                             <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
-                                <BookBackCoverTemplate scaledWidth={pageSize.w} scaledHeight={pageSize.h} />
+                                <BookCoverTemplate
+                                    wedding={wedding}
+                                    styleSettings={styleSettings}
+                                    scaledWidth={pageSize.w}
+                                    scaledHeight={pageSize.h}
+                                />
                             </div>
                             {entries.map(entry => (
                                 <div key={entry.id} style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
@@ -884,12 +887,7 @@ function BookViewer({ wedding, entries, weddingId }) {
                                 </div>
                             ))}
                             <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
-                                <BookCoverTemplate
-                                    wedding={wedding}
-                                    styleSettings={styleSettings}
-                                    scaledWidth={pageSize.w}
-                                    scaledHeight={pageSize.h}
-                                />
+                                <BookBackCoverTemplate scaledWidth={pageSize.w} scaledHeight={pageSize.h} />
                             </div>
                         </HTMLFlipBook>
 
