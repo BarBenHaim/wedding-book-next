@@ -388,7 +388,14 @@ function BookViewer({ wedding, entries, weddingId }) {
         function recalc() {
             if (typeof window === 'undefined') return
             const vw = window.innerWidth
-            const vh = window.innerHeight - 160 // toolbar + nav row
+            // Vertical budget reserved for the UI surrounding the
+            // book: arrow row (~74px) + page counter (already in the
+            // arrow row) + preset strip (~160px: caption + 130px tile
+            // + label + padding) + top padding above the book (~40-
+            // 60px). Total ≈ 290px. Bumping this means the book sizes
+            // a bit smaller, but the WHOLE page fits in 100vh — no
+            // scroll on desktop, no clipping on mobile.
+            const vh = window.innerHeight - 290
             const isWide = vw >= 900
             // Wide screen: two pages side-by-side. Each page can be
             // up to 48% of viewport width. The book is square (Lulu
@@ -799,7 +806,7 @@ function BookViewer({ wedding, entries, weddingId }) {
                 it sits visually centered (was hugging the top edge
                 after the header was removed). pt-6 on phones, pt-10
                 on tablet+. */}
-            <div className='flex-1 flex items-center justify-center relative z-10 px-0 pt-6 sm:pt-10'>
+            <div className='flex-1 flex items-center justify-center relative z-10 px-0 pt-12 sm:pt-10'>
                 {entries.length > 0 ? (
                     <div
                         className='relative animate-[bookOpen_500ms_cubic-bezier(0.2,0.8,0.2,1)_both]'
