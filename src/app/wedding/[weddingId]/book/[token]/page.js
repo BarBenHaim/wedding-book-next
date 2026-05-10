@@ -394,7 +394,7 @@ function BookViewer({ wedding, entries, weddingId }) {
             // up to 48% of viewport width. The book is square (Lulu
             // 8.5×8.5), so pageHeight = pageWidth.
             // Narrow: one page, up to 94% of viewport width.
-            const targetByWidth = isWide ? vw * 0.42 : vw * 0.94
+            const targetByWidth = isWide ? vw * 0.42 : vw * 0.98
             // Cap by available vertical so the book never spills past
             // the bottom (with toolbar+nav reserved).
             const target = Math.min(targetByWidth, vh)
@@ -795,7 +795,7 @@ function BookViewer({ wedding, entries, weddingId }) {
             {/* Flipbook + side navigation arrows. The arrows are
                 absolutely positioned next to the book so they hug
                 the spine on either side at any viewport. */}
-            <div className='flex-1 flex items-center justify-center relative z-10 px-2'>
+            <div className='flex-1 flex items-center justify-center relative z-10 px-0'>
                 {entries.length > 0 ? (
                     <div
                         className='relative animate-[bookOpen_500ms_cubic-bezier(0.2,0.8,0.2,1)_both]'
@@ -910,7 +910,7 @@ function BookViewer({ wedding, entries, weddingId }) {
                     }}
                 >
                     <svg viewBox='0 0 24 24' className='w-[18px] h-[18px]' fill='none' stroke='currentColor' strokeWidth={1.8}>
-                        <path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7' />
+                        <path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
                     </svg>
                 </button>
 
@@ -957,7 +957,7 @@ function BookViewer({ wedding, entries, weddingId }) {
                     }}
                 >
                     <svg viewBox='0 0 24 24' className='w-[18px] h-[18px]' fill='none' stroke='currentColor' strokeWidth={1.8}>
-                        <path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
+                        <path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7' />
                     </svg>
                 </button>
             </div>
@@ -1014,14 +1014,10 @@ function PresetStrip({ presets, activeStyle, onApply }) {
     // is 96x96 → scale = 0.4. Big enough that the user can SEE the
     // typography, the photo placement and the background, not just
     // a colour swatch.
-    // Bigger thumbnails — at 96px the BookPageTemplate-scaled
-    // typography was so small it read as an empty square. 130px
-    // gives the photo placeholder + name + blessing room to actually
-    // be visible. Internal RENDER bumped in step so the scale is
-    // 0.5 (sharp at retina, not aliased like 0.4 was).
+    // 130×130 thumbnails — gives BookPageTemplate's typography +
+    // photo placeholder + bg color enough room to actually read as
+    // a preset preview, not just a colored square.
     const TILE = 130
-    const RENDER = 260
-    const SCALE = TILE / RENDER
     return (
         <div
             className='relative z-10 pb-5 pt-2'
@@ -1100,24 +1096,24 @@ function PresetStrip({ presets, activeStyle, onApply }) {
                                     boxShadow: isActive
                                         ? '0 8px 18px -6px rgba(170,136,64,0.50), 0 0 0 4px rgba(170,136,64,0.10)'
                                         : '0 4px 10px -5px rgba(45,30,16,0.20)',
+                                    pointerEvents: 'none',
                                 }}
                             >
-                                <div
-                                    style={{
-                                        width: RENDER,
-                                        height: RENDER,
-                                        transform: `scale(${SCALE})`,
-                                        transformOrigin: 'top left',
-                                        pointerEvents: 'none',
-                                    }}
-                                >
-                                    <BookPageTemplate
-                                        entry={PRESET_PREVIEW_ENTRY}
-                                        styleSettings={previewStyle}
-                                        scaledWidth={RENDER}
-                                        scaledHeight={RENDER}
-                                    />
-                                </div>
+                                {/* Render directly at TILE×TILE — the
+                                    previous CSS transform:scale wrapper
+                                    was rendering as an empty white
+                                    square inside the digital-book-root
+                                    (overflow + transform-origin +
+                                    `pointer-events: none` on global
+                                    images interacted in a way that hid
+                                    the content). Direct render at
+                                    TILE×TILE works cleanly. */}
+                                <BookPageTemplate
+                                    entry={PRESET_PREVIEW_ENTRY}
+                                    styleSettings={previewStyle}
+                                    scaledWidth={TILE}
+                                    scaledHeight={TILE}
+                                />
                             </div>
                             {/* Label — preset's name, small + serif,
                                 gold when active so the choice is
