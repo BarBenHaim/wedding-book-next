@@ -19,6 +19,7 @@ import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCo
 import PrintOrderModal from '@/components/PrintOrderModal/PrintOrderModal'
 import { getEntries } from '../../../../lib/classifyMedia'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import { listPresets, resolvePreset, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import { BOOK_FORMATS, resolveFormatConfig } from '@/lib/bookFormats'
 import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
@@ -71,13 +72,6 @@ function BookViewerInner({ onLocaleDiscovered }) {
     const [viewerSize, setViewerSize] = useState(500)
     const [isMobile, setIsMobile] = useState(false)
     const [styleSettings, setStyleSettings] = useState(defaultStyle)
-    // Bottom-sheet visibility on mobile. Closed by default so the
-    // book takes the full visible height. On desktop the side
-    // panel is always visible (panelOpen is ignored on lg+).
-    // calculateBookSize syncs isMobile + panelOpen for the initial
-    // pass; afterwards toggling panelOpen doesn't resize the book —
-    // the sheet slides over it, the book stays at its own size.
-    const [panelOpen, setPanelOpen] = useState(false)
     // Hold the raw wedding doc so the cover template can derive the
     // default "ספר הברכות של {names}" content from eventType +
     // brideName/groomName/celebrantName when no custom cover content
@@ -205,17 +199,16 @@ function BookViewerInner({ onLocaleDiscovered }) {
 
         // Vertical budget on mobile:
         //   • 64 px global header
-        //   • 56 px collapsed bottom-sheet handle ("✏️ עיצוב" button)
-        //   • ~40 px for the page-flip controls under the book
-        // → mobile reserves ~160 px around the book, matching the
-        // previous magic number but for clearer reasons. The sheet
-        // slides OVER the book when expanded, so opening / closing
-        // the panel doesn't resize the book itself — that would
-        // produce jarring reflows. Desktop reserves the same ~160
-        // around the book for the surrounding chrome.
+        //   • 80 px top preset strip (thumbnail row, the user's
+        //     primary control — kept always-visible per their ask)
+        //   • ~40 px page-flip controls under the book
+        // → ~184 reserved around the book on mobile, leaving roughly
+        // 483 px square on iPhone SE — comfortably fits without
+        // clipping. Desktop reserves the same ~160 around the book
+        // for the right-rail design panel.
         const SIDEBAR_W = 380
         const availableWidth = mobile ? w - 20 : w - SIDEBAR_W - 60
-        const availableHeight = h - 160
+        const availableHeight = mobile ? h - 184 : h - 160
 
         const optimalSize =
             mobile ? Math.min(availableWidth, availableHeight) : Math.min(availableWidth / 2, availableHeight)
@@ -578,89 +571,31 @@ function BookViewerInner({ onLocaleDiscovered }) {
                 //
                 // flex-col-reverse on mobile used to place the aside
                 // below the book in-flow; the aside is now a fixed-
-                // position bottom sheet (see below) so the reverse is
-                // moot on mobile but kept harmless for source order.
-                className='relative flex flex-col-reverse lg:flex-row h-[calc(100dvh-64px)] overflow-hidden bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] font-sans'
+                // Mobile uses flex-col (preset strip on top, book below);
+                // desktop keeps the original side-by-side rail layout.
+                className='relative flex flex-col lg:flex-row h-[calc(100dvh-64px)] overflow-hidden bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] font-sans'
             >
-                {/* Dim backdrop — visible only when the mobile sheet
-                    is open. Clicking it closes the sheet so the user
-                    can dismiss without finding the close button. */}
-                {isMobile && panelOpen && (
-                    <button
-                        type='button'
-                        aria-label='סגור פאנל עיצוב'
-                        onClick={() => setPanelOpen(false)}
-                        className='fixed inset-0 z-20 bg-black/30 backdrop-blur-[1px] animate-fadeIn lg:hidden'
-                        style={{ transition: 'opacity 220ms ease-out' }}
+                {/* MOBILE — top preset strip. Horizontal scroll of mini
+                    book-page previews, ~64 px tall. Replaces the
+                    bottom-sheet pattern (35f0bc6): the user asked for
+                    presets to be always-visible at the top, not behind
+                    a button. Hidden on desktop where the right-rail
+                    DesignControls already exposes the gallery in the
+                    Card. */}
+                {isMobile && (
+                    <MobilePresetStrip
+                        styleSettings={styleSettings}
+                        onApply={vals => handleStyleChange(vals)}
                     />
                 )}
 
-                {/* Floating "edit design" trigger — only visible on
-                    mobile when the sheet is CLOSED. On desktop the
-                    aside is permanently visible (right rail) so no
-                    trigger is needed. Sits above the book + flip
-                    controls so the user can reach it without
-                    overlapping the page-flip arrows. */}
-                {isMobile && !panelOpen && (
-                    <button
-                        type='button'
-                        onClick={() => setPanelOpen(true)}
-                        className='fixed bottom-3 left-1/2 -translate-x-1/2 z-30 inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-[13px] font-bold text-white shadow-lg active:scale-95 transition-transform lg:hidden'
-                        style={{
-                            background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
-                            boxShadow: '0 10px 22px -8px rgba(170,136,64,0.55), inset 0 1px 0 rgba(255,255,255,0.30)',
-                        }}
-                    >
-                        ✏️ עיצוב
-                    </button>
-                )}
-
+                {/* DESKTOP — full side rail with the design controls.
+                    Hidden entirely on mobile (the mobile preset strip
+                    above covers the couple's primary need; the rest of
+                    DesignControls is admin-only via isAdmin=false). */}
                 <aside
-                    // Bottom-sheet on mobile. Closed → translated
-                    // fully off-screen (a separate "✏️ עיצוב" floating
-                    // button above peeks into view as the affordance
-                    // to open it). Open → translateY(0) at h-[65dvh]
-                    // with a 250 ms ease-out slide. On desktop the
-                    // aside is in-flow at w-[380px] full-height — the
-                    // sheet styles disappear via the lg: prefix and
-                    // the conditional translate.
-                    className={`shrink-0 flex flex-col bg-white/95 backdrop-blur-md transition-transform duration-300 ease-out z-30 lg:relative lg:z-20 lg:translate-y-0 lg:bg-white/80 ${
-                        isMobile
-                            ? 'fixed bottom-0 inset-x-0 h-[65dvh] w-full border-t border-white/50 rounded-t-3xl shadow-2xl'
-                            : 'h-full w-[380px] border-l border-white/50'
-                    }`}
-                    style={
-                        isMobile
-                            ? { transform: panelOpen ? 'translateY(0)' : 'translateY(100%)' }
-                            : undefined
-                    }
+                    className='hidden lg:flex relative z-20 flex-col shrink-0 h-full w-[380px] bg-white/80 backdrop-blur-md border-l border-white/50'
                 >
-                    {/* Sheet drag handle + close button — visible only
-                        on the mobile sheet. The pill in the centre is
-                        a decoration; the actual dismiss target is the
-                        ✕ on the trailing side so a thumb tap doesn't
-                        accidentally close the sheet while scrolling. */}
-                    {isMobile && (
-                        <div className='shrink-0 px-4 pt-2 pb-1 flex items-center justify-between lg:hidden'>
-                            {/* Spacer so the centre pill is exactly
-                                centered, mirroring the close button
-                                on the other side. */}
-                            <span className='w-6 h-6' aria-hidden='true' />
-                            <span
-                                className='block w-10 h-1 rounded-full bg-[#d4c8a8]'
-                                aria-hidden='true'
-                            />
-                            <button
-                                type='button'
-                                onClick={() => setPanelOpen(false)}
-                                className='w-6 h-6 rounded-full flex items-center justify-center text-[#7a6a52] hover:bg-[#f4ecd9] transition-colors'
-                                aria-label='סגור פאנל עיצוב'
-                            >
-                                ✕
-                            </button>
-                        </div>
-                    )}
-
                     <div className='flex-1 min-h-0 overflow-hidden'>
                         <DesignControls
                             settings={styleSettings}
@@ -675,18 +610,13 @@ function BookViewerInner({ onLocaleDiscovered }) {
                 </aside>
 
                 <main
-                    // On mobile (flex-col-reverse parent → main sits
-                    // at the top of the viewport, design panel at the
-                    // bottom), `justify-center` was bunching the book
-                    // up near the page header. `justify-end` anchors
-                    // the book + arrows to the BOTTOM of the main
-                    // column (just above the design panel divider) so
-                    // there's natural breathing room from the header
-                    // — closer to where a thumb naturally rests.
-                    // pb-4 keeps the controls from crashing into the
-                    // panel border. Desktop keeps the original
-                    // centered layout.
-                    className='relative z-10 flex-1 flex flex-col items-center justify-end pb-4 lg:justify-center lg:pb-0 p-4 min-h-0 overflow-hidden'
+                    // Centered on both axes: mobile (preset strip
+                    // above + book below) and desktop (book filling
+                    // the remaining width to the right of the rail).
+                    // The flex centering plus min-h-0 lets the book
+                    // sit in the middle of whatever vertical space
+                    // remains without overflowing the parent.
+                    className='relative z-10 flex-1 flex flex-col items-center justify-center p-4 min-h-0 overflow-hidden'
                 >
                     <div
                         className='relative shrink-0'
@@ -724,33 +654,67 @@ function BookViewerInner({ onLocaleDiscovered }) {
                         ) : (
                             <HTMLFlipBook
                                 ref={flipRef}
-                                key={`${viewerSize}-${isMobile}`}
+                                // Include pages.length in the key so the
+                                // book remounts when entries finish
+                                // loading — startPage is an INITIAL
+                                // value in react-pageflip, not reactive,
+                                // so we need the fresh mount to land on
+                                // the FrontCover (which is now the LAST
+                                // child after the RTL reversal below).
+                                key={`${viewerSize}-${isMobile}-${pages.length}`}
                                 width={viewerSize}
                                 height={viewerSize}
                                 size='fixed'
                                 usePortrait={isMobile}
                                 showCover={true}
+                                // Land on FrontCover (which sits at the
+                                // end of the reversed array). When pages
+                                // is empty (still loading), there's no
+                                // entry to land on, so we fall back to 0
+                                // which shows BackCover — the remount
+                                // triggered by the key change above
+                                // bumps us to the FrontCover once data
+                                // arrives.
+                                startPage={pages.length + 1}
                                 mobileScrollSupport={true}
                                 className='book-flip'
                                 drawShadow={false}
                                 flippable={true}
                             >
-                                {/* Page order: FrontCover (with the
-                                    couple's names + cover image) is
-                                    the FIRST child so the book opens
-                                    on it. With showCover={true},
-                                    react-pageflip renders the first
-                                    child standalone on the visible
-                                    right-hand side in RTL — the
-                                    Hebrew "first page when opening
-                                    a book" position. Entries flow as
-                                    spreads after, BackCover closes
-                                    the book. Same order as the
-                                    public /book/[token] edition.
-                                    Was flipped to BackCover-first in
-                                    7f9e94e and the user immediately
-                                    asked for it reverted; restoring
-                                    here. */}
+                                {/* RTL reading order:
+                                      BackCover (index 0)
+                                      → entries (1 … N)
+                                      → FrontCover (index N+1)
+                                    Combined with startPage={N+1}, the
+                                    book opens on the FrontCover but
+                                    "going forward in the reading" =
+                                    decreasing index = flipPrev. The
+                                    left-pointing chevron in the arrow
+                                    row below is wired to flipPrev so
+                                    its visual direction matches the
+                                    user's mental "next page" action
+                                    in a Hebrew book.
+
+                                    react-pageflip has no native RTL
+                                    flag (checked the .d.ts) so the
+                                    flip animation itself still peels
+                                    LTR — we get RTL semantics via
+                                    array reversal + arrow handlers,
+                                    the page-turn animation is the
+                                    library's fixed visual. */}
+                                <div className='demo-page shadow-inner'>
+                                    <BookBackCoverTemplate scaledWidth={viewerSize} scaledHeight={viewerSize} />
+                                </div>
+                                {pages.map(entry => (
+                                    <div key={entry.id} className='demo-page border-l border-[#AA8840]/10'>
+                                        <BookPageTemplate
+                                            entry={entry}
+                                            styleSettings={styleWithLocale}
+                                            scaledWidth={viewerSize}
+                                            scaledHeight={viewerSize}
+                                        />
+                                    </div>
+                                ))}
                                 <div className='demo-page shadow-inner'>
                                     <BookCoverTemplate
                                         wedding={{
@@ -765,19 +729,6 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                         scaledWidth={viewerSize}
                                         scaledHeight={viewerSize}
                                     />
-                                </div>
-                                {pages.map(entry => (
-                                    <div key={entry.id} className='demo-page border-l border-[#AA8840]/10'>
-                                        <BookPageTemplate
-                                            entry={entry}
-                                            styleSettings={styleWithLocale}
-                                            scaledWidth={viewerSize}
-                                            scaledHeight={viewerSize}
-                                        />
-                                    </div>
-                                ))}
-                                <div className='demo-page shadow-inner'>
-                                    <BookBackCoverTemplate scaledWidth={viewerSize} scaledHeight={viewerSize} />
                                 </div>
                             </HTMLFlipBook>
                         )}
@@ -1093,4 +1044,108 @@ function BookViewerInner({ onLocaleDiscovered }) {
             )}
         </AdminPageWrapper>
     )
+}
+
+// ── Mobile preset strip ─────────────────────────────────────────────
+// Top-of-viewport row of mini book-page previews, always visible on
+// mobile (no toggle, no button to press). Each tile renders an actual
+// <BookPageTemplate /> at small scale using the preset's resolved
+// values so the user picks by sight, not by name.
+//
+// Reads the live list from Firestore via listPresets() with the
+// hardcoded BUILTIN_PRESETS as the offline fallback — same path
+// DesignControls uses. Apply mutates the wedding doc through the
+// parent's onApply (which is handleStyleChange → saveCoverDesign).
+//
+// Tile size: 64×64 — enough to show the typography, background, and
+// photo placement, small enough that four tiles fit across an iPhone
+// SE without scrolling. More than four overflow horizontally with a
+// scroll-snap row (thumb-friendly).
+function MobilePresetStrip({ styleSettings, onApply }) {
+    const [presets, setPresets] = useState(BUILTIN_PRESETS)
+
+    useEffect(() => {
+        let cancelled = false
+        listPresets().then(list => {
+            if (!cancelled && Array.isArray(list) && list.length > 0) setPresets(list)
+        })
+        return () => { cancelled = true }
+    }, [])
+
+    // Identify which preset is currently active by signature-matching
+    // the wedding's styleSettings against each preset's resolved
+    // values — same shape DesignControls uses. Cheaper than a deep
+    // compare and resilient to defaultStyle merging.
+    const activeKey = useMemo(() => {
+        for (const p of presets) {
+            const v = resolvePreset(p).values || {}
+            if (
+                v.backgroundColor === styleSettings.backgroundColor &&
+                v.fontClass === styleSettings.fontClass &&
+                v.texture === styleSettings.texture &&
+                v.template === styleSettings.template
+            ) {
+                return p.id || p.name
+            }
+        }
+        return null
+    }, [presets, styleSettings])
+
+    const TILE = 56
+
+    return (
+        <div
+            className='lg:hidden shrink-0 w-full bg-white/80 backdrop-blur-md border-b border-[#ead9b3]'
+            style={{ paddingBlock: 8 }}
+        >
+            <div
+                className='flex items-center gap-2 overflow-x-auto px-3'
+                style={{
+                    scrollbarWidth: 'none',
+                    WebkitOverflowScrolling: 'touch',
+                    scrollSnapType: 'x mandatory',
+                }}
+            >
+                {presets.map(preset => {
+                    const presetKey = preset.id || preset.name
+                    const isActive = activeKey === presetKey
+                    const resolved = resolvePreset(preset).values || {}
+                    const previewStyle = { ...defaultStyle, ...resolved }
+                    return (
+                        <button
+                            key={presetKey}
+                            type='button'
+                            onClick={() => onApply(resolved)}
+                            title={preset.name}
+                            aria-label={preset.name}
+                            className={`shrink-0 relative rounded-md overflow-hidden transition-all active:scale-95 ${
+                                isActive
+                                    ? 'ring-2 ring-[#AA8840]'
+                                    : 'ring-1 ring-[#ead9b3]'
+                            }`}
+                            style={{ width: TILE, height: TILE, scrollSnapAlign: 'start' }}
+                        >
+                            <BookPageTemplate
+                                entry={MOBILE_STRIP_MOCK_ENTRY}
+                                styleSettings={previewStyle}
+                                scaledWidth={TILE}
+                                scaledHeight={TILE}
+                            />
+                        </button>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
+// Mock entry for the mobile preset strip — same shape DesignControls'
+// gallery uses. Tiny placeholder photo, short blessing, generic name.
+const MOBILE_STRIP_MOCK_ENTRY = {
+    id: 'viewer-mobile-strip-mock',
+    name: 'יעל ויואב',
+    text: 'ברכה',
+    imageUrl: `data:image/svg+xml;utf8,${encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f5d39e"/><stop offset="100%" stop-color="#d8b986"/></linearGradient></defs><rect width="400" height="300" fill="url(#g)"/><path d="M0 220 Q100 170 200 200 T 400 210 V 300 H 0 Z" fill="#a87f4b"/></svg>'
+    )}`,
 }
