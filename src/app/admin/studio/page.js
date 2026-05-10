@@ -1139,7 +1139,11 @@ function PropertiesPanel({
                             onChange={width =>
                                 onImageStyleChange({
                                     width,
-                                    height: Math.round(width * 0.75),
+                                    // Keep one decimal so 0.1% slider
+                                    // steps don't get rounded away —
+                                    // the user wants finer control
+                                    // than integer percentages.
+                                    height: Math.round(width * 0.75 * 10) / 10,
                                 })
                             }
                         />
@@ -1664,7 +1668,7 @@ function PropertyImageSize({ imageStyle, disabled, onChange }) {
                     <Lock size={9} className='text-[#a89378]' />
                 </div>
                 <span className='text-[11px] font-mono text-[#3d3225]'>
-                    {Number(width).toFixed(0)}% × {Number(height).toFixed(0)}%
+                    {Number(width).toFixed(1)}% × {Number(height).toFixed(1)}%
                 </span>
             </div>
             <input
@@ -1672,7 +1676,7 @@ function PropertyImageSize({ imageStyle, disabled, onChange }) {
                 value={width}
                 min={30}
                 max={100}
-                step={1}
+                step={0.1}
                 disabled={disabled}
                 onChange={e => onChange && onChange(Number(e.target.value))}
                 className='w-full accent-[#AA8840] disabled:opacity-50 disabled:cursor-not-allowed'
