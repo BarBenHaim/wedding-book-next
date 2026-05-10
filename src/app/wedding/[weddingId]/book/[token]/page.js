@@ -573,8 +573,8 @@ function BookViewer({ wedding, entries, weddingId }) {
                     style={{
                         backgroundImage: `url(${
                             pageSize.isPortrait
-                                ? '/backgrounds/ebookmobilebg.png'
-                                : '/backgrounds/romanticgarden.png'
+                                ? '/backgrounds/ebookmobilebg.webp'
+                                : '/backgrounds/romanticgarden.webp'
                         })`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
@@ -721,8 +721,8 @@ function BookViewer({ wedding, entries, weddingId }) {
     // (ebookmobilebg.png) — the desktop garden image is composed
     // for landscape framing and crops awkwardly on tall viewports.
     const bgImage = pageSize.isPortrait
-        ? '/backgrounds/ebookmobilebg.png'
-        : '/backgrounds/romanticgarden.png'
+        ? '/backgrounds/ebookmobilebg.webp'
+        : '/backgrounds/romanticgarden.webp'
     return (
         <div
             className='h-screen flex flex-col relative overflow-hidden'

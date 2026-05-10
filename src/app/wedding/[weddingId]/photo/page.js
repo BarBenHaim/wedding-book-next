@@ -242,7 +242,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
               // pattern in the felt itself. We don't need any of the SVG
               // decorations we used to layer on top.
               pageBg: '#0a2818',
-              pageBgImage: 'url(/backgrounds/pokerbg.png)',
+              pageBgImage: 'url(/backgrounds/pokerbg.webp)',
               pageBgSize: 'cover',
               pageBgPosition: 'center',
               pageBgRepeat: 'no-repeat',
@@ -286,7 +286,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                 // the photo and let the cream card sit centred over the
                 // greenery in the lower third.
                 pageBg: '#1f3527',
-                pageBgImage: 'url(/backgrounds/weddingdesign1.png)',
+                pageBgImage: 'url(/backgrounds/weddingdesign1.webp)',
                 pageBgSize: 'cover',
                 pageBgPosition: 'center top',
                 pageBgRepeat: 'no-repeat',
@@ -926,7 +926,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                     // arch behind the form. The cream fallback
                     // colour shows if the asset fails to load.
                     backgroundColor: '#fbf6ec',
-                    backgroundImage: 'url(/backgrounds/romanticgarden.png)',
+                    backgroundImage: 'url(/backgrounds/romanticgarden.webp)',
                     backgroundSize: 'cover',
                     backgroundPosition: 'center top',
                     backgroundRepeat: 'no-repeat',

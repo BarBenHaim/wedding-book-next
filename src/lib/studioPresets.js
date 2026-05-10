@@ -98,11 +98,14 @@ export const TEXTURES_REGISTRY = Array.from({ length: 9 }, (_, i) => ({
 // `studio_backgrounds`) and the picker will merge both lists — that
 // wires up in commit 5.
 export const STATIC_BACKGROUNDS = [
+    // wedding-bg / wedding-bg2 stay as PNG (under-1MB, not in this
+    // pass's WebP conversion). The other three were re-encoded to
+    // WebP at q 0.85, ~93% smaller than the source PNG.
     { id: 'wedding-bg', label: 'חתונה — לבן', src: '/backgrounds/wedding-bg.png', tags: ['wedding'] },
     { id: 'wedding-bg2', label: 'חתונה — עדין', src: '/backgrounds/wedding-bg2.png', tags: ['wedding'] },
-    { id: 'weddingdesign1', label: 'חתונה — פרחוני', src: '/backgrounds/weddingdesign1.png', tags: ['wedding', 'romantic'] },
-    { id: 'romanticgarden', label: 'גן רומנטי', src: '/backgrounds/romanticgarden.png', tags: ['wedding', 'romantic'] },
-    { id: 'pokerbg', label: 'פוקר — לבד ירוק', src: '/backgrounds/pokerbg.png', tags: ['poker'] },
+    { id: 'weddingdesign1', label: 'חתונה — פרחוני', src: '/backgrounds/weddingdesign1.webp', tags: ['wedding', 'romantic'] },
+    { id: 'romanticgarden', label: 'גן רומנטי', src: '/backgrounds/romanticgarden.webp', tags: ['wedding', 'romantic'] },
+    { id: 'pokerbg', label: 'פוקר — לבד ירוק', src: '/backgrounds/pokerbg.webp', tags: ['poker'] },
 ]
 
 // ── UNIFIED BACKGROUNDS ──────────────────────────────────────────────

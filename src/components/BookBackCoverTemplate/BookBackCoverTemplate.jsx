@@ -14,7 +14,7 @@ export default function BookBackCoverTemplate({ scaledWidth, scaledHeight }) {
             }}
         >
             <img
-                src='/backgrounds/backcover.png'
+                src='/backgrounds/backcover.webp'
                 alt='Back Cover'
                 crossOrigin='anonymous'
                 style={{

@@ -150,7 +150,7 @@ function GuestLanding({ weddingId, onLocaleDiscovered }) {
                     <div
                         className='absolute inset-0'
                         style={{
-                            backgroundImage: 'url(/backgrounds/buttonbg.png)',
+                            backgroundImage: 'url(/backgrounds/buttonbg.webp)',
                             backgroundSize: 'cover',
                             backgroundPosition: 'center',
                         }}

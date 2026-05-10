@@ -112,7 +112,7 @@ function GalleryApp({ eventType, entries, loading }) {
     const palette = isPoker
         ? {
               pageBg: '#0a2818',
-              pageBgImage: 'url(/backgrounds/pokerbg.png)',
+              pageBgImage: 'url(/backgrounds/pokerbg.webp)',
               titleColor: '#fde9b3',
               subtitleColor: '#94b09b',
               cardBg: 'linear-gradient(180deg, #1c2820 0%, #131d17 100%)',

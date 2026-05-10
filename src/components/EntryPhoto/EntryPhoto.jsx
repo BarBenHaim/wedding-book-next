@@ -29,12 +29,28 @@ export default function EntryPhoto({
     style = {},
     className = '',
     alt = '',
+    eager = false,
 }) {
+    // loading="lazy" + decoding="async" let the browser defer the
+    // photo request until react-pageflip's transform brings the
+    // page into (or near) the viewport, instead of firing N
+    // simultaneous fetches when every entry mounts up-front. With
+    // weddings carrying 50+ entries each at ~1 MB after compression,
+    // this is the difference between ~75 MB on first paint and ~2 MB.
+    //
+    // The `eager` prop lets a parent opt out for the first-visible
+    // page so the open-the-book impression isn't a blank photo slot.
+    // No caller passes it today — react-pageflip preloads adjacent
+    // spreads aggressively enough that the visible page lands
+    // before the user perceives the gap.
     return (
         <img
             src={src}
             alt={alt}
             className={className}
+            loading={eager ? 'eager' : 'lazy'}
+            decoding='async'
+            fetchpriority={eager ? 'high' : 'auto'}
             style={{
                 width: maxWidth,
                 height: maxHeight,

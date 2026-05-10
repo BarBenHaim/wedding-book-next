@@ -6,8 +6,10 @@ import HTMLFlipBook from 'react-pageflip'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage, db } from '@/lib/firebaseClient'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
-import html2canvas from 'html2canvas'
-import jsPDF from 'jspdf'
+// html2canvas + jsPDF are ~400 KB combined and only used by the
+// admin's "Send to Lulu" + "Download PDFs" flows — never by normal
+// viewing. Dynamically imported inside the handlers below so a
+// regular viewer load never pays for them.
 
 import DesignControls from '../../../../components/DesignControls/DesignControls'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
@@ -141,37 +143,48 @@ function BookViewerInner({ onLocaleDiscovered }) {
 
     useEffect(() => {
         const init = async () => {
-            if (weddingId) {
-                // Load entries
-                const data = await getEntries(weddingId)
-                setPages(data.reverse())
-                setLoading(false)
+            if (!weddingId) return
+            // Fire both reads in parallel — they're independent and
+            // were costing us a serialized RTT before. Promise.allSettled
+            // so an entries failure (e.g. a Firestore rules issue) can
+            // still let the cover design load, and vice versa.
+            const [entriesResult, weddingResult] = await Promise.allSettled([
+                getEntries(weddingId),
+                getDoc(doc(db, 'weddings', weddingId)),
+            ])
 
-                // Load cover design from Firestore
-                try {
-                    const snap = await getDoc(doc(db, 'weddings', weddingId))
-                    if (snap.exists()) {
-                        const firestoreData = snap.data()
-                        // Bubble the doc's locale up to the outer provider so
-                        // every chrome string (DesignControls, viewer status
-                        // messages) speaks the wedding's configured language.
-                        onLocaleDiscovered(normalizeLocale(firestoreData.locale))
-                        // Stash the doc so BookCoverTemplate can pull
-                        // eventType + names for its default content.
-                        setWeddingDoc(firestoreData)
-                        if (firestoreData.coverDesign) {
-                            setStyleSettings({ ...defaultStyle, ...firestoreData.coverDesign })
-                        } else if (typeof window !== 'undefined') {
-                            // Migration: fall back to localStorage if never saved to Firestore
-                            const savedStyle = localStorage.getItem('bookStyle')
-                            if (savedStyle) setStyleSettings(JSON.parse(savedStyle))
-                        }
+            // ── Entries ──
+            if (entriesResult.status === 'fulfilled') {
+                setPages(entriesResult.value.reverse())
+            } else {
+                console.error('Failed to load entries:', entriesResult.reason)
+                setPages([])
+            }
+            setLoading(false)
+
+            // ── Cover design / wedding doc ──
+            try {
+                if (weddingResult.status === 'fulfilled' && weddingResult.value.exists()) {
+                    const firestoreData = weddingResult.value.data()
+                    // Bubble the doc's locale up to the outer provider so
+                    // every chrome string (DesignControls, viewer status
+                    // messages) speaks the wedding's configured language.
+                    onLocaleDiscovered(normalizeLocale(firestoreData.locale))
+                    // Stash the doc so BookCoverTemplate can pull
+                    // eventType + names for its default content.
+                    setWeddingDoc(firestoreData)
+                    if (firestoreData.coverDesign) {
+                        setStyleSettings({ ...defaultStyle, ...firestoreData.coverDesign })
+                    } else if (typeof window !== 'undefined') {
+                        // Migration: fall back to localStorage if never saved to Firestore
+                        const savedStyle = localStorage.getItem('bookStyle')
+                        if (savedStyle) setStyleSettings(JSON.parse(savedStyle))
                     }
-                } catch (err) {
-                    console.error('Failed to load cover design:', err)
-                } finally {
-                    setDesignLoading(false)
+                } else if (weddingResult.status === 'rejected') {
+                    console.error('Failed to load cover design:', weddingResult.reason)
                 }
+            } finally {
+                setDesignLoading(false)
             }
         }
         init()
@@ -290,6 +303,16 @@ function BookViewerInner({ onLocaleDiscovered }) {
     const generatePdfFromRef = async (elementRef, fileNamePrefix, config) => {
         if (!elementRef.current) return null
 
+        // Dynamic-import the heavy PDF deps the first time the admin
+        // actually generates a PDF. Keeps these ~400 KB off every
+        // viewer's initial bundle. The libs are cached after the
+        // first call (Next handles that), so subsequent generations
+        // don't re-pay the import cost.
+        const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+            import('html2canvas'),
+            import('jspdf'),
+        ])
+
         const pdf = new jsPDF({
             orientation: config.widthMM > config.heightMM ? 'landscape' : 'portrait',
             unit: 'mm',
@@ -335,6 +358,14 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // exclusively by the super-admin "Download PDFs" flow.
     const generatePdfBlobFromRef = async (elementRef, config) => {
         if (!elementRef.current) return null
+
+        // Same dynamic-import as generatePdfFromRef — see the comment
+        // there for the rationale. Module cache means this is free
+        // on the second + subsequent generation.
+        const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+            import('html2canvas'),
+            import('jspdf'),
+        ])
 
         const pdf = new jsPDF({
             orientation: config.widthMM > config.heightMM ? 'landscape' : 'portrait',
