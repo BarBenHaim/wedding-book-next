@@ -511,12 +511,8 @@ function BookViewer({ wedding, entries, weddingId }) {
 
     const totalPages = entries.length + 2
 
-    // Visual "next" / "prev" are reversed against react-pageflip's
-    // index direction so the book reads right-to-left (Hebrew). The
-    // user's eyes go forward as the array index DECREASES — array
-    // index N = page #1, index 0 = the last page in reading order.
-    function next() { flipRef.current?.pageFlip().flipPrev() }
-    function prev() { flipRef.current?.pageFlip().flipNext() }
+    function next() { flipRef.current?.pageFlip().flipNext() }
+    function prev() { flipRef.current?.pageFlip().flipPrev() }
     function fullscreen() {
         const el = document.documentElement
         if (!document.fullscreenElement) el.requestFullscreen?.()
@@ -844,13 +840,14 @@ function BookViewer({ wedding, entries, weddingId }) {
                             height={pageSize.h}
                             size='fixed'
                             showCover={true}
-                            // Open on the LAST page (FrontCover at
-                            // index entries.length + 1) so the book's
-                            // first impression is the page with the
-                            // couple's names. Combined with the
-                            // reversed prev/next helpers, this gives
-                            // a true right-to-left reading flow.
-                            startPage={entries.length + 1}
+                            // Anchor the initial page explicitly to
+                            // index 0 (FrontCover). Without this,
+                            // react-pageflip's mobile/portrait mode
+                            // sometimes lands on the LAST child first
+                            // in RTL contexts — the user reported that
+                            // the back cover was showing instead of
+                            // the front. This pins the start.
+                            startPage={0}
                             usePortrait={pageSize.isPortrait}
                             mobileScrollSupport={true}
                             // drawShadow=false matches /viewer — the
@@ -873,21 +870,15 @@ function BookViewer({ wedding, entries, weddingId }) {
                             useMouseEvents={true}
                             onFlip={e => setPage(e.data)}
                         >
-                            {/* Page order — [BackCover, entries,
-                                FrontCover]. The book OPENS on the last
-                                child (FrontCover) thanks to startPage,
-                                and the page counter displays the LAST
-                                page as "1" (counts down from
-                                totalPages). Reading-direction is
-                                right-to-left: hitting "next" calls
-                                flipPrev so the array index decreases
-                                as the user moves forward. Net result:
-                                Hebrew reader sees the FrontCover with
-                                names first, flips right-to-left
-                                through the entries, lands on the
-                                BackCover at "the end". */}
+                            {/* Page order — FrontCover first, then
+                                entries, then back cover. */}
                             <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
-                                <BookBackCoverTemplate scaledWidth={pageSize.w} scaledHeight={pageSize.h} />
+                                <BookCoverTemplate
+                                    wedding={wedding}
+                                    styleSettings={styleSettings}
+                                    scaledWidth={pageSize.w}
+                                    scaledHeight={pageSize.h}
+                                />
                             </div>
                             {entries.map(entry => (
                                 <div key={entry.id} style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
@@ -900,12 +891,7 @@ function BookViewer({ wedding, entries, weddingId }) {
                                 </div>
                             ))}
                             <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
-                                <BookCoverTemplate
-                                    wedding={wedding}
-                                    styleSettings={styleSettings}
-                                    scaledWidth={pageSize.w}
-                                    scaledHeight={pageSize.h}
-                                />
+                                <BookBackCoverTemplate scaledWidth={pageSize.w} scaledHeight={pageSize.h} />
                             </div>
                         </HTMLFlipBook>
 
@@ -974,7 +960,7 @@ function BookViewer({ wedding, entries, weddingId }) {
                             letterSpacing: '0.12em',
                         }}
                     >
-                        <span style={{ fontWeight: 600 }}>{Math.max(1, totalPages - page)}</span>
+                        <span style={{ fontWeight: 600 }}>{Math.min(page + 1, totalPages)}</span>
                         <span style={{ opacity: 0.4, margin: '0 6px' }}>/</span>
                         <span style={{ opacity: 0.7 }}>{totalPages}</span>
                     </span>
