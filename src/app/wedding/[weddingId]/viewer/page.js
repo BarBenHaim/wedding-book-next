@@ -671,8 +671,8 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                 left button's arrow points LEFT (←).
                                 Was reversed before this fix. */}
                             <button
-                                onClick={() => flipRef.current?.pageFlip().flipPrev()}
-                                aria-label='הקודם'
+                                onClick={() => flipRef.current?.pageFlip().flipNext()}
+                                aria-label='הבא'
                                 className='inline-flex items-center justify-center transition-all hover:scale-105 active:scale-95'
                                 style={{
                                     width: 44,
@@ -690,8 +690,8 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                 </svg>
                             </button>
                             <button
-                                onClick={() => flipRef.current?.pageFlip().flipNext()}
-                                aria-label='הבא'
+                                onClick={() => flipRef.current?.pageFlip().flipPrev()}
+                                aria-label='הקודם'
                                 className='inline-flex items-center justify-center transition-all hover:scale-105 active:scale-95'
                                 style={{
                                     width: 44,
