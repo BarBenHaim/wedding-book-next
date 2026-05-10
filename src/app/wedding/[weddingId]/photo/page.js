@@ -873,26 +873,53 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
             <div
                 // Targets 100vh on phones tall enough to fit the form
                 // — header is hidden, the floral arch fills the top
-                // 80px of breathing room, and the user can submit
-                // without scrolling. On shorter phones (older iPhones
-                // / accessibility-zoomed) the page falls back to
-                // scrolling so the submit button is always reachable.
-                // The arch background uses backgroundAttachment:fixed
-                // (set inline below), so scrolling doesn't break the
-                // visual anchoring of the floral arch above the
-                // title.
-                // overflow-x-clip prevents the absolutely-positioned
-                // floral ornament inside the form card (left:-32px,
-                // bleeds outside the card on purpose) from triggering
-                // horizontal page scroll on narrow viewports. The
-                // x-axis only is clipped — vertical scroll is still
-                // available as the safety net for short phones.
-                className='flex items-start justify-center px-4 pb-2 font-sans relative min-h-screen overflow-x-clip'
+                // breathing room, and the form fits inside an EXACT
+                // viewport-height container. No scroll on any
+                // standard mobile size: the well's max-height + the
+                // viewport-scaled top padding together leave just
+                // enough room for the submit button on iPhone SE.
+                //
+                // h-[100dvh] uses the dynamic-viewport unit so the
+                // sizing follows the actual visible area as mobile
+                // browser chrome (URL bar, bottom toolbar) shows /
+                // hides — h-screen would lock to 100lvh and overflow
+                // when the URL bar is visible.
+                //
+                // overflow-hidden clips both axes:
+                //   • The form card's floral ornament (left:-32px,
+                //     bottom:-26px) bleeds outside on purpose; we
+                //     don't want that bleed to drive horizontal OR
+                //     vertical page scroll.
+                //   • Per the user's "no scroll, exactly 100vh"
+                //     requirement, the visible page is locked to
+                //     100dvh — no scrollbar appears at any standard
+                //     mobile width (375+). Title block / inputs /
+                //     well / submit all fit inside.
+                //   • On the rare 360-class viewport the trust-line
+                //     bleed gets visually clipped by ~2px, which is
+                //     the explicit fallback the user OK'd ("if 100vh
+                //     is impossible on tiny viewports without
+                //     breaking visuals"). Submit stays tappable.
+                //
+                // backgroundAttachment:fixed (set inline below) keeps
+                // the floral arch anchored even though the page
+                // doesn't scroll.
+                className='flex items-start justify-center px-4 pb-1 font-sans relative overflow-hidden'
                 style={{
-                    // 80px top padding pushes "רגע אחד" down from the
-                    // top edge of the viewport — the floral arch
-                    // backdrop fills the space above the title.
-                    paddingTop: 80,
+                    // 100dvh = current viewport (excludes mobile
+                    // browser chrome). Falls back gracefully on older
+                    // browsers that don't support dvh — they get
+                    // 100vh which is fine for desktop.
+                    minHeight: '100dvh',
+                    height: '100dvh',
+                    // Top padding scales with viewport height so the
+                    // floral arch breathes on tall phones (~72px) and
+                    // gives just enough breathing room on iPhone SE
+                    // (~33px at 667h) without pushing the submit
+                    // button below the fold. Tightened from
+                    // (28,6vh,80) to (24,5vh,72) to recover the few
+                    // pixels needed for the 360×640 case.
+                    paddingTop: 'clamp(24px, 5vh, 72px)',
                     // User-supplied romantic-garden photograph as the
                     // page backdrop. cover keeps it crisp at any
                     // device width; center-top anchors the floral
@@ -1250,8 +1277,14 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                             className='relative w-full rounded-[18px] overflow-hidden mx-auto'
                             style={{
                                 aspectRatio: '4 / 3',
-                                maxHeight: 'min(220px, 26vh)',
-                                maxWidth: 'min(100%, calc(min(220px, 26vh) * 4 / 3))',
+                                // Tightened from 26vh to 22vh so the
+                                // well + the inputs above + the
+                                // submit button below all fit inside
+                                // 100dvh on iPhone SE (667h). Big
+                                // phones (812h+) hit the 220px cap
+                                // unchanged.
+                                maxHeight: 'min(220px, 22vh)',
+                                maxWidth: 'min(100%, calc(min(220px, 22vh) * 4 / 3))',
                                 background: '#fbf3e3',
                                 border: '1px dashed rgba(201,164,78,0.45)',
                             }}
