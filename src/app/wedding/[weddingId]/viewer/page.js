@@ -597,41 +597,28 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                 height={viewerSize}
                                 size='fixed'
                                 usePortrait={isMobile}
-                                showCover={!!hasCover}
+                                showCover={true}
                                 mobileScrollSupport={true}
                                 className='book-flip'
                                 drawShadow={false}
                                 flippable={true}
                             >
-                                {/* Page order — kept as the original
-                                    Hebrew RTL convention: BackCover
-                                    first, entries, FrontCover last.
+                                {/* Page order: FrontCover (with the
+                                    couple's names + cover image) is
+                                    the FIRST child so the book opens
+                                    on it. With showCover={true},
                                     react-pageflip renders the first
-                                    child on the visible right-hand
-                                    side when the book opens in RTL,
-                                    which puts the back-cover artwork
-                                    on the right and the FrontCover
-                                    (with the couple's names) at the
-                                    end of the flow. The user reverted
-                                    to this after a brief experiment
-                                    with FrontCover-first because the
-                                    swap broke the right-to-left feel.
-                                    The /book/[token] digital edition
-                                    uses the swapped order — that one
-                                    the user wants kept. */}
-                                <div className='demo-page shadow-inner'>
-                                    <BookBackCoverTemplate scaledWidth={viewerSize} scaledHeight={viewerSize} />
-                                </div>
-                                {pages.map(entry => (
-                                    <div key={entry.id} className='demo-page border-l border-[#AA8840]/10'>
-                                        <BookPageTemplate
-                                            entry={entry}
-                                            styleSettings={styleWithLocale}
-                                            scaledWidth={viewerSize}
-                                            scaledHeight={viewerSize}
-                                        />
-                                    </div>
-                                ))}
+                                    child standalone on the visible
+                                    right-hand side in RTL — the
+                                    Hebrew "first page when opening
+                                    a book" position. Entries flow as
+                                    spreads after, BackCover closes
+                                    the book. Same order as the
+                                    public /book/[token] edition.
+                                    Was flipped to BackCover-first in
+                                    7f9e94e and the user immediately
+                                    asked for it reverted; restoring
+                                    here. */}
                                 <div className='demo-page shadow-inner'>
                                     <BookCoverTemplate
                                         wedding={{
@@ -646,6 +633,19 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                         scaledWidth={viewerSize}
                                         scaledHeight={viewerSize}
                                     />
+                                </div>
+                                {pages.map(entry => (
+                                    <div key={entry.id} className='demo-page border-l border-[#AA8840]/10'>
+                                        <BookPageTemplate
+                                            entry={entry}
+                                            styleSettings={styleWithLocale}
+                                            scaledWidth={viewerSize}
+                                            scaledHeight={viewerSize}
+                                        />
+                                    </div>
+                                ))}
+                                <div className='demo-page shadow-inner'>
+                                    <BookBackCoverTemplate scaledWidth={viewerSize} scaledHeight={viewerSize} />
                                 </div>
                             </HTMLFlipBook>
                         )}
