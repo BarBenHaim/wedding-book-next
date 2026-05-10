@@ -795,7 +795,11 @@ function BookViewer({ wedding, entries, weddingId }) {
             {/* Flipbook + side navigation arrows. The arrows are
                 absolutely positioned next to the book so they hug
                 the spine on either side at any viewport. */}
-            <div className='flex-1 flex items-center justify-center relative z-10 px-0'>
+            {/* Spacer above the book — pushes the book down so
+                it sits visually centered (was hugging the top edge
+                after the header was removed). pt-6 on phones, pt-10
+                on tablet+. */}
+            <div className='flex-1 flex items-center justify-center relative z-10 px-0 pt-6 sm:pt-10'>
                 {entries.length > 0 ? (
                     <div
                         className='relative animate-[bookOpen_500ms_cubic-bezier(0.2,0.8,0.2,1)_both]'
@@ -895,8 +899,8 @@ function BookViewer({ wedding, entries, weddingId }) {
                 on mobile (no thumbs blocking page edges). */}
             <div className='flex items-center justify-center gap-3 pt-2 pb-3 relative z-10'>
                 <button
-                    onClick={prev}
-                    aria-label='הקודם'
+                    onClick={next}
+                    aria-label='הבא'
                     className='inline-flex items-center justify-center transition-all hover:scale-105 active:scale-95'
                     style={{
                         width: 44,
@@ -942,8 +946,8 @@ function BookViewer({ wedding, entries, weddingId }) {
                 </div>
 
                 <button
-                    onClick={next}
-                    aria-label='הבא'
+                    onClick={prev}
+                    aria-label='הקודם'
                     className='inline-flex items-center justify-center transition-all hover:scale-105 active:scale-95'
                     style={{
                         width: 44,
