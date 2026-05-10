@@ -418,24 +418,31 @@ export default function DesignControls({
                 )}
             </div>
 
-            <div className='bg-[#ebe5da]/60 p-1 rounded-xl flex gap-1 shadow-inner shrink-0'>
-                <button
-                    onClick={() => onModeChange('book')}
-                    className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${
-                        mode === 'book' ? 'bg-white text-[#AA8840] shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                    {t.modeBook}
-                </button>
-                <button
-                    onClick={() => onModeChange('cover')}
-                    className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${
-                        mode === 'cover' ? 'bg-white text-[#c9a44e] shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                    {t.modeCover}
-                </button>
-            </div>
+            {/* Mode tabs (book / cover) — admin-only. The couple
+                doesn't need the cover-editing tab; for them the
+                experience is "pick a preset, you're done." Hiding
+                the tab also implicitly forces them onto book mode
+                (the only render branch they ever see below). */}
+            {isAdmin && (
+                <div className='bg-[#ebe5da]/60 p-1 rounded-xl flex gap-1 shadow-inner shrink-0'>
+                    <button
+                        onClick={() => onModeChange('book')}
+                        className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${
+                            mode === 'book' ? 'bg-white text-[#AA8840] shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                    >
+                        {t.modeBook}
+                    </button>
+                    <button
+                        onClick={() => onModeChange('cover')}
+                        className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${
+                            mode === 'cover' ? 'bg-white text-[#c9a44e] shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                    >
+                        {t.modeCover}
+                    </button>
+                </div>
+            )}
 
             <div className='flex-1 overflow-y-auto pr-0.5 pl-0.5 space-y-4 pb-10 scrollbar-hide'>
                 {mode === 'book' && (
