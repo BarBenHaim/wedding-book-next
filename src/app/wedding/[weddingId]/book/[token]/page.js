@@ -395,7 +395,7 @@ function BookViewer({ wedding, entries, weddingId }) {
             // 60px). Total ≈ 290px. Bumping this means the book sizes
             // a bit smaller, but the WHOLE page fits in 100vh — no
             // scroll on desktop, no clipping on mobile.
-            const vh = window.innerHeight - 290
+            const vh = window.innerHeight - 350
             const isWide = vw >= 900
             // Wide screen: two pages side-by-side. Each page can be
             // up to 48% of viewport width. The book is square (Lulu
@@ -436,29 +436,35 @@ function BookViewer({ wedding, entries, weddingId }) {
         return () => window.removeEventListener('keydown', onKey)
     }, [opened])
 
-    // styleSettings is local state (NOT useMemo) so the preset picker
-    // at the bottom can swap designs live. Initial value mirrors the
-    // /viewer's render path: read `wedding.coverDesign` (the field the
-    // viewer reads + writes) merged with defaultStyle's baseline so
-    // undefined fields don't fall through to BookPageTemplate's `??`
-    // fallbacks (which would visually diverge from the viewer — the
-    // same bug we already fixed in the /admin/studio preview).
+    // styleSettings is local state so the preset picker at the bottom
+    // can swap designs live. Initial value priority (first match wins):
     //
-    // Field order:
-    //   1. wedding.coverDesign         — what /viewer writes to
-    //   2. wedding.book?.designSettings — legacy field (some old docs
-    //                                     still store the design here)
-    //   3. defaultStyle                 — first-time fallback
+    //   1. localStorage — the SAME device picked a preset on a prior
+    //      visit, restore it. Per-device preference per the spring
+    //      2026 product decision.
+    //   2. wedding.coverDesign — the owner's authoritative design,
+    //      set in /viewer. New visitors land on this.
+    //   3. wedding.book?.designSettings — legacy field for old docs.
+    //   4. defaultStyle — first-time fallback.
     //
-    // This is the fix for the bug the user hit: "the design I chose in
-    // the viewer doesn't show up in the digital book." The viewer
-    // writes to coverDesign; the digital book was reading from
-    // book.designSettings — different fields, so the design never
-    // propagated.
-    const [styleSettings, setStyleSettings] = useState(() => ({
-        ...defaultStyle,
-        ...(wedding.coverDesign || wedding.book?.designSettings || {}),
-    }))
+    // All four sources are merged with defaultStyle's baseline so
+    // BookPageTemplate's `??` fallbacks don't get triggered for fields
+    // a preset doesn't define (same fix we made for /admin/studio).
+    const [styleSettings, setStyleSettings] = useState(() => {
+        let stored = null
+        try {
+            if (typeof window !== 'undefined') {
+                const raw = window.localStorage.getItem(`digital-book-style:${weddingId}`)
+                if (raw) stored = JSON.parse(raw)
+            }
+        } catch {
+            // bad JSON / blocked storage — silently fall through
+        }
+        return {
+            ...defaultStyle,
+            ...(stored || wedding.coverDesign || wedding.book?.designSettings || {}),
+        }
+    })
 
     // Live preset list for the bottom picker. listPresets falls back
     // to BUILTIN_PRESETS on any Firestore error, so the strip is
@@ -472,28 +478,34 @@ function BookViewer({ wedding, entries, weddingId }) {
         return () => { cancelled = true }
     }, [])
 
-    // Apply a preset: update local state immediately so the flipbook
-    // re-renders with the new design, then persist to the wedding doc
-    // so the change survives reload + propagates to /viewer + /book
-    // for everyone with the link. Best-effort save — UI doesn't wait
-    // for the network round-trip; if it fails the local state still
-    // reflects the user's choice for this session.
+    // Apply a preset — DEVICE-LOCAL ONLY.
+    //
+    // Per-device by design: each guest picks how THEIR copy of the
+    // digital book reads, without dragging every other viewer's
+    // experience along. The owner's authoritative design (set in
+    // /viewer) stays the default; this just lets a guest swap
+    // styles for their own session.
+    //
+    // Persistence: localStorage scoped by weddingId. So the same
+    // device gets its preference back on refresh; a different device
+    // (or a fresh browser profile) starts from the owner's default.
+    // No Firestore write, no cross-user contamination.
     const applyPreset = preset => {
         const resolved = resolvePreset(preset).values || {}
         const merged = { ...defaultStyle, ...resolved }
         setStyleSettings(merged)
-        // Sanitize: drop runtime-resolved keys that shouldn't persist
-        // back as duplicates. coverDesign is the field /viewer uses
-        // (we've kept that name for back-compat — the wedding doc
-        // already has it).
         try {
-            setDoc(
-                doc(db, 'weddings', weddingId),
-                { coverDesign: merged },
-                { merge: true }
-            )
+            if (typeof window !== 'undefined') {
+                window.localStorage.setItem(
+                    `digital-book-style:${weddingId}`,
+                    JSON.stringify(merged)
+                )
+            }
         } catch (err) {
-            console.warn('[digital book] preset save failed:', err?.message || err)
+            // localStorage can throw in private/incognito modes —
+            // in that case we just lose the preference on refresh.
+            // Acceptable; the live state still works.
+            console.warn('[digital book] preset persist failed:', err?.message || err)
         }
     }
 
@@ -806,7 +818,7 @@ function BookViewer({ wedding, entries, weddingId }) {
                 it sits visually centered (was hugging the top edge
                 after the header was removed). pt-6 on phones, pt-10
                 on tablet+. */}
-            <div className='flex-1 flex items-center justify-center relative z-10 px-0 pt-12 sm:pt-10'>
+            <div className='flex-1 flex items-center justify-center relative z-10 px-0 pt-[108px] sm:pt-[100px]'>
                 {entries.length > 0 ? (
                     <div
                         className='relative animate-[bookOpen_500ms_cubic-bezier(0.2,0.8,0.2,1)_both]'
@@ -837,14 +849,14 @@ function BookViewer({ wedding, entries, weddingId }) {
                             // a visible loss (the wrapper's static
                             // box-shadow handles depth instead).
                             drawShadow={false}
-                            // Mobile flip tuning: slightly snappier
-                            // than the default 1000ms feels more
-                            // responsive on a phone, where users are
-                            // used to instant transitions. Lower swipe
-                            // distance makes a small thumb gesture
-                            // enough to flip a page — the default 30px
-                            // requires a deliberate drag.
-                            flippingTime={pageSize.isPortrait ? 650 : 800}
+                            // Mobile flip tuning: deliberately a bit
+                            // slower than the default for a more
+                            // luxurious "real book" feel. Lower swipe
+                            // distance keeps a small thumb gesture
+                            // enough to trigger a page turn — the
+                            // default 30px requires a more deliberate
+                            // drag.
+                            flippingTime={pageSize.isPortrait ? 900 : 1100}
                             swipeDistance={pageSize.isPortrait ? 18 : 30}
                             maxShadowOpacity={0.4}
                             useMouseEvents={true}
