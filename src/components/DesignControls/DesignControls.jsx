@@ -218,22 +218,21 @@ export default function DesignControls({
     const [activePreset, setActivePreset] = useState(null)
     const [uploadingCover, setUploadingCover] = useState(false)
 
-    // ── Super-admin gate ────────────────────────────────────────────
-    // The viewer is the couple's design panel. By product decision,
-    // wedding owners (the couple) get a CURATED experience: pick a
-    // preset and you're done. Free-form editing — fonts, sizes,
-    // colors, backgrounds, deleting/saving presets — stays super-
-    // admin-only so couples don't accidentally break the look or
-    // wipe shared studio assets. Detection runs on every auth-state
-    // change so the UI reflects sign-in/sign-out without a refresh.
-    const [isAdmin, setIsAdmin] = useState(false)
-    useEffect(() => {
-        const auth = getAuth(firebaseApp)
-        const unsub = onAuthStateChanged(auth, user => {
-            setIsAdmin(isSuperAdmin(user?.email))
-        })
-        return unsub
-    }, [])
+    // ── No editing in the viewer panel ──────────────────────────────
+    // Per spring 2026 product decision: ALL preset editing lives in
+    // /admin/studio. The viewer's design panel is preset-pick only —
+    // for everyone, including the super-admin. The previous behavior
+    // (super-admin sees inline font/color/bg controls + save/delete)
+    // created two ways to edit the same preset and the resulting
+    // confusion ("which save wins?") wasn't worth it.
+    //
+    // `isAdmin` is hardcoded false so every gated UI block (trash
+    // icons, save button, font card, name card, background card,
+    // mode tabs) always renders the non-admin path. The other
+    // imports (getAuth, onAuthStateChanged, isSuperAdmin) remain in
+    // case we need to bring per-control admin escapes back later;
+    // they're cheap to leave as long as the variable stays false.
+    const isAdmin = false
 
     // i18n — `locale` is passed in by the parent (viewer page) so the
     // panel speaks the same language the couple sees on their guest

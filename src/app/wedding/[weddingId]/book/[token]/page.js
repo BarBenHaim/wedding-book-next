@@ -192,15 +192,156 @@ export default function DigitalEditionPage() {
 function LoadingScreen() {
     return (
         <div
-            className='min-h-screen flex items-center justify-center'
+            className='min-h-screen flex items-center justify-center relative overflow-hidden'
             style={{ background: 'radial-gradient(ellipse at 50% 30%, #2a1f17 0%, #14100c 100%)' }}
         >
-            <div className='flex flex-col items-center gap-4'>
-                <svg viewBox='0 0 24 24' className='w-10 h-10 animate-pulse' fill='#c9a44e'>
-                    <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
-                </svg>
-                <p style={{ color: '#c9a44e', fontSize: '12px', letterSpacing: '0.2em' }}>טוען את הספר שלכם</p>
+            {/* Slow gold particles drifting up — same vibe as the
+                landing/flipbook background but quieter (8 dots, low
+                opacity, long durations) so the loader feels alive
+                without distracting. */}
+            <div aria-hidden className='absolute inset-0 pointer-events-none'>
+                {[...Array(10)].map((_, i) => (
+                    <span
+                        key={i}
+                        className='absolute rounded-full'
+                        style={{
+                            width: 2 + (i % 3),
+                            height: 2 + (i % 3),
+                            background: '#c9a44e',
+                            opacity: 0.35,
+                            top: `${(i * 41) % 100}%`,
+                            left: `${(i * 67) % 100}%`,
+                            animation: `loaderFloat ${10 + (i % 5)}s ease-in-out infinite`,
+                            animationDelay: `${i * 0.5}s`,
+                        }}
+                    />
+                ))}
             </div>
+
+            {/* The "book" — two cream pages opening, a hairline
+                gold spine, and a slow shimmer across the surface.
+                Pure CSS + a single SVG ornament. Reads as luxurious
+                without being heavy. */}
+            <div className='relative z-10 flex flex-col items-center gap-7'>
+                <div
+                    className='relative'
+                    style={{
+                        width: 116,
+                        height: 88,
+                        animation: 'loaderBookFloat 3.8s ease-in-out infinite',
+                    }}
+                >
+                    {/* Left page */}
+                    <div
+                        className='absolute top-0 left-0 h-full'
+                        style={{
+                            width: '50%',
+                            background: 'linear-gradient(180deg, #fdf6e8 0%, #f6ebd0 100%)',
+                            borderRadius: '4px 0 0 4px',
+                            transformOrigin: 'right center',
+                            animation: 'loaderPageLeft 3.8s ease-in-out infinite',
+                            boxShadow: 'inset -2px 0 4px rgba(170,136,64,0.15)',
+                        }}
+                    />
+                    {/* Right page */}
+                    <div
+                        className='absolute top-0 right-0 h-full'
+                        style={{
+                            width: '50%',
+                            background: 'linear-gradient(180deg, #fdf6e8 0%, #f6ebd0 100%)',
+                            borderRadius: '0 4px 4px 0',
+                            transformOrigin: 'left center',
+                            animation: 'loaderPageRight 3.8s ease-in-out infinite',
+                            boxShadow: 'inset 2px 0 4px rgba(170,136,64,0.15)',
+                        }}
+                    />
+                    {/* Spine — hairline gold rule down the center */}
+                    <div
+                        className='absolute top-1 bottom-1'
+                        style={{
+                            left: 'calc(50% - 0.5px)',
+                            width: 1,
+                            background: 'linear-gradient(180deg, transparent 0%, #c9a44e 50%, transparent 100%)',
+                            opacity: 0.7,
+                        }}
+                    />
+                    {/* Heart ornament floating just above the book —
+                        stitches the brand without saying it out loud. */}
+                    <svg
+                        viewBox='0 0 24 24'
+                        className='absolute'
+                        style={{
+                            width: 18,
+                            height: 18,
+                            top: -26,
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            fill: '#c9a44e',
+                            animation: 'loaderHeartPulse 1.8s ease-in-out infinite',
+                            filter: 'drop-shadow(0 2px 6px rgba(201,164,78,0.45))',
+                        }}
+                    >
+                        <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                    </svg>
+                </div>
+
+                {/* Three-dot rhythm + caption */}
+                <div className='flex flex-col items-center gap-3'>
+                    <div className='flex items-center gap-1.5'>
+                        {[0, 1, 2].map(i => (
+                            <span
+                                key={i}
+                                className='block rounded-full'
+                                style={{
+                                    width: 4,
+                                    height: 4,
+                                    background: '#c9a44e',
+                                    animation: 'loaderDot 1.4s ease-in-out infinite',
+                                    animationDelay: `${i * 0.18}s`,
+                                }}
+                            />
+                        ))}
+                    </div>
+                    <p
+                        style={{
+                            color: '#d4b86b',
+                            fontSize: '11.5px',
+                            letterSpacing: '0.32em',
+                            textTransform: 'uppercase',
+                            fontWeight: 500,
+                        }}
+                    >
+                        טוען את הספר שלכם
+                    </p>
+                </div>
+            </div>
+
+            <style jsx>{`
+                @keyframes loaderBookFloat {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-6px); }
+                }
+                @keyframes loaderPageLeft {
+                    0%, 100% { transform: rotateY(0deg); }
+                    50% { transform: rotateY(-25deg); }
+                }
+                @keyframes loaderPageRight {
+                    0%, 100% { transform: rotateY(0deg); }
+                    50% { transform: rotateY(25deg); }
+                }
+                @keyframes loaderHeartPulse {
+                    0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.85; }
+                    50% { transform: translateX(-50%) scale(1.12); opacity: 1; }
+                }
+                @keyframes loaderDot {
+                    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+                    40% { transform: scale(1.1); opacity: 1; }
+                }
+                @keyframes loaderFloat {
+                    0%, 100% { transform: translateY(0) translateX(0); }
+                    50% { transform: translateY(-30px) translateX(8px); }
+                }
+            `}</style>
         </div>
     )
 }
@@ -566,13 +707,13 @@ function BookViewer({ wedding, entries, weddingId }) {
                 backgroundBlendMode: 'soft-light',
             }}
         >
-            {/* Top brand nav — WT logo on the start side, action
-                icons on the end side. Cream wash with hairline
-                bottom border to feel like a premium app chrome.
-                Hidden on mobile (portrait viewport) per product
-                decision: the header competes with the small book
-                area on phones; full bleed reads more premium. */}
-            {!pageSize.isPortrait && (
+            {/* Top brand nav was here — fully removed per the
+                spring 2026 user request. The book + bottom nav +
+                preset strip is the whole experience now; chrome at
+                the top only added clutter. The share/fullscreen
+                actions and the WT branding moved to the bottom-bar
+                or were dropped entirely. */}
+            {false && (
             <div
                 className='flex items-center justify-between px-5 py-3 relative z-20'
                 style={{
@@ -698,22 +839,16 @@ function BookViewer({ wedding, entries, weddingId }) {
                             useMouseEvents={true}
                             onFlip={e => setPage(e.data)}
                         >
-                            {/* Page order — front cover FIRST (the
-                                branded page with the couple's names),
-                                then entries, then back cover. The user
-                                explicitly asked for this: starting on
-                                the back cover felt strange, even though
-                                Hebrew books traditionally open right-to-
-                                left. react-pageflip's flip direction
-                                still works either way; this just changes
-                                the resting first/last page. */}
+                            {/* Page order — matches /viewer's RTL
+                                convention: BookBackCoverTemplate
+                                (the branded image cover) appears
+                                FIRST so the user opens straight onto
+                                a designed page; entries flow in the
+                                middle; BookCoverTemplate (with names
+                                + default "ספר הברכות של ..." text)
+                                sits as the closing piece. */}
                             <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
-                                <BookCoverTemplate
-                                    wedding={wedding}
-                                    styleSettings={styleSettings}
-                                    scaledWidth={pageSize.w}
-                                    scaledHeight={pageSize.h}
-                                />
+                                <BookBackCoverTemplate scaledWidth={pageSize.w} scaledHeight={pageSize.h} />
                             </div>
                             {entries.map(entry => (
                                 <div key={entry.id} style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
@@ -726,7 +861,12 @@ function BookViewer({ wedding, entries, weddingId }) {
                                 </div>
                             ))}
                             <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
-                                <BookBackCoverTemplate scaledWidth={pageSize.w} scaledHeight={pageSize.h} />
+                                <BookCoverTemplate
+                                    wedding={wedding}
+                                    styleSettings={styleSettings}
+                                    scaledWidth={pageSize.w}
+                                    scaledHeight={pageSize.h}
+                                />
                             </div>
                         </HTMLFlipBook>
 
@@ -874,8 +1014,13 @@ function PresetStrip({ presets, activeStyle, onApply }) {
     // is 96x96 → scale = 0.4. Big enough that the user can SEE the
     // typography, the photo placement and the background, not just
     // a colour swatch.
-    const TILE = 96
-    const RENDER = 240
+    // Bigger thumbnails — at 96px the BookPageTemplate-scaled
+    // typography was so small it read as an empty square. 130px
+    // gives the photo placeholder + name + blessing room to actually
+    // be visible. Internal RENDER bumped in step so the scale is
+    // 0.5 (sharp at retina, not aliased like 0.4 was).
+    const TILE = 130
+    const RENDER = 260
     const SCALE = TILE / RENDER
     return (
         <div
