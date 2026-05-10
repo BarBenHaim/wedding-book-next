@@ -22,6 +22,14 @@
 import { adminDb } from '@/lib/firebaseAdmin'
 import { buildTitle, normalizeEventType } from '@/lib/eventTypes'
 
+// metadataBase tells Next.js what to prefix relative og:image / og:url
+// with when emitting the <meta> tags. Without this, relative paths
+// would render as plain "/og/wedding-tales-book.png" — Facebook /
+// WhatsApp crawlers can't resolve those, so the preview falls back
+// to a small text-only card. Setting it explicitly to the deployed
+// origin guarantees big-hero previews everywhere.
+export const metadata = {}
+
 // Brand fallback when the couple hasn't uploaded a cover image.
 // Lives in /public/og/ — designed at the canonical 1200×630 OG card
 // size with the gold-on-espresso brand palette + Hebrew title +
@@ -89,37 +97,54 @@ function buildShareTitle(data) {
     return `${prefix} ${names}`
 }
 
-const FALLBACK_META = {
-    title: 'הספר הדיגיטלי — Wedding Tales',
-    description: 'ברכות ותמונות מהאורחים, נשמרות לכם לתמיד',
-    openGraph: {
+const FALLBACK_META_BUILDER = () => {
+    const origin = siteOrigin()
+    const ogImage = abs(FALLBACK_OG_IMAGE)
+    return {
+        metadataBase: origin ? new URL(origin) : undefined,
         title: 'הספר הדיגיטלי — Wedding Tales',
         description: 'ברכות ותמונות מהאורחים, נשמרות לכם לתמיד',
-        type: 'website',
-        images: [{ url: FALLBACK_OG_IMAGE, width: 1200, height: 630 }],
-    },
-    twitter: {
-        card: 'summary_large_image',
-        title: 'הספר הדיגיטלי — Wedding Tales',
-        description: 'ברכות ותמונות מהאורחים, נשמרות לכם לתמיד',
-        images: [FALLBACK_OG_IMAGE],
-    },
+        openGraph: {
+            title: 'הספר הדיגיטלי — Wedding Tales',
+            description: 'ברכות ותמונות מהאורחים, נשמרות לכם לתמיד',
+            type: 'website',
+            locale: 'he_IL',
+            siteName: 'Wedding Tales',
+            images: [
+                {
+                    url: ogImage,
+                    secureUrl: ogImage,
+                    width: 1200,
+                    height: 630,
+                    type: 'image/png',
+                },
+            ],
+        },
+        twitter: {
+            card: 'summary_large_image',
+            title: 'הספר הדיגיטלי — Wedding Tales',
+            description: 'ברכות ותמונות מהאורחים, נשמרות לכם לתמיד',
+            images: [ogImage],
+        },
+        other: { 'image': ogImage },
+    }
 }
+const FALLBACK_META = FALLBACK_META_BUILDER
 
 export async function generateMetadata({ params }) {
     const { weddingId, token } = await params
-    if (!weddingId || !token) return FALLBACK_META
+    if (!weddingId || !token) return FALLBACK_META()
 
     try {
         const snap = await adminDb.collection('weddings').doc(weddingId).get()
-        if (!snap.exists) return FALLBACK_META
+        if (!snap.exists) return FALLBACK_META()
         const data = snap.data() || {}
 
         // Token validation — same check the page does at runtime.
         // Without this, anyone trying random tokens could enumerate
         // wedding identities through the metadata.
         const tokens = Array.isArray(data.digitalTokens) ? data.digitalTokens : []
-        if (!tokens.includes(token)) return FALLBACK_META
+        if (!tokens.includes(token)) return FALLBACK_META()
 
         const title = buildShareTitle(data)
         const description = 'הברכות והתמונות שלכם, נשמרות לתמיד בספר דיגיטלי יוקרתי'
@@ -129,7 +154,12 @@ export async function generateMetadata({ params }) {
         const coverImage = data.coverDesign?.coverImage || null
         const ogImage = abs(coverImage) || abs(FALLBACK_OG_IMAGE)
 
+        // The full share URL — used as og:url so the crawler
+        // canonicalizes the preview against this exact page.
+        const shareUrl = abs(`/wedding/${weddingId}/book/${token}`)
+
         return {
+            metadataBase: siteOrigin() ? new URL(siteOrigin()) : undefined,
             title,
             description,
             openGraph: {
@@ -137,12 +167,16 @@ export async function generateMetadata({ params }) {
                 description,
                 type: 'website',
                 locale: 'he_IL',
+                siteName: 'Wedding Tales',
+                url: shareUrl || undefined,
                 images: [
                     {
                         url: ogImage,
+                        secureUrl: ogImage,
                         width: 1200,
                         height: 630,
                         alt: title,
+                        type: 'image/png',
                     },
                 ],
             },
@@ -152,10 +186,16 @@ export async function generateMetadata({ params }) {
                 description,
                 images: [ogImage],
             },
+            // Direct <link rel="image_src"> hint — some legacy
+            // crawlers (older WhatsApp on iOS, some Telegram clients)
+            // pick up this tag faster than og:image.
+            other: {
+                'image': ogImage,
+            },
         }
         } catch (err) {
         console.warn('[digital-book] metadata generation failed:', err?.message || err)
-        return FALLBACK_META
+        return FALLBACK_META()
     }
 }
 

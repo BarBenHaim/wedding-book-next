@@ -466,6 +466,21 @@ function BookViewer({ wedding, entries, weddingId }) {
         }
     })
 
+    // ── Cover style — pinned to the wedding owner's choice ─────────
+    // The front cover (BookCoverTemplate, with the couple's names) is
+    // the wedding owner's territory: their design from /viewer should
+    // ALWAYS render here, regardless of which preset a guest picks
+    // for the interior. Building this from `wedding` (not from
+    // styleSettings) ensures preset changes don't leak in.
+    //
+    // useMemo so the reference is stable until the wedding doc itself
+    // changes — prevents BookCoverTemplate from re-rendering on every
+    // styleSettings update the guest makes.
+    const coverStyleSettings = useMemo(() => ({
+        ...defaultStyle,
+        ...(wedding.coverDesign || wedding.book?.designSettings || {}),
+    }), [wedding])
+
     // Live preset list for the bottom picker. listPresets falls back
     // to BUILTIN_PRESETS on any Firestore error, so the strip is
     // never empty.
@@ -875,7 +890,13 @@ function BookViewer({ wedding, entries, weddingId }) {
                             <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
                                 <BookCoverTemplate
                                     wedding={wedding}
-                                    styleSettings={styleSettings}
+                                    /* Cover uses the OWNER's design,
+                                       not the guest's preset choice
+                                       — so the names + font + bg the
+                                       couple set in /viewer are
+                                       preserved no matter which
+                                       template the guest picks. */
+                                    styleSettings={coverStyleSettings}
                                     scaledWidth={pageSize.w}
                                     scaledHeight={pageSize.h}
                                 />
