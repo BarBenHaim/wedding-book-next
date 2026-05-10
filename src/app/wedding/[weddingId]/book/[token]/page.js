@@ -379,6 +379,27 @@ function BookViewer({ wedding, entries, weddingId }) {
     const [pageSize, setPageSize] = useState({ w: 480, h: 480, isPortrait: true })
     const [shareToast, setShareToast] = useState(false)
 
+    // Hide the global Header + Footer on this route so the book
+    // experience owns the full viewport — same DOM-toggle pattern the
+    // photo page uses. Without this, the global Header (~64 px) shows
+    // as a white strip above the book on mobile because the body's
+    // default white background doesn't match the cream/floral page
+    // wash. Restored on unmount so other routes still render their
+    // chrome normally.
+    useEffect(() => {
+        if (typeof document === 'undefined') return
+        const header = document.querySelector('body > header')
+        const footer = document.querySelector('body > footer')
+        const prevHeader = header?.style.display
+        const prevFooter = footer?.style.display
+        if (header) header.style.display = 'none'
+        if (footer) footer.style.display = 'none'
+        return () => {
+            if (header) header.style.display = prevHeader || ''
+            if (footer) footer.style.display = prevFooter || ''
+        }
+    }, [])
+
     // ─── Page sizing — bigger on desktop, two-page spread on
     //     wide screens, single portrait on mobile. We deliberately
     //     don't cap with a tight max because this is the premium
@@ -389,13 +410,13 @@ function BookViewer({ wedding, entries, weddingId }) {
             if (typeof window === 'undefined') return
             const vw = window.innerWidth
             // Vertical budget reserved for the UI surrounding the
-            // book: arrow row (~74px) + page counter (already in the
-            // arrow row) + preset strip (~160px: caption + 130px tile
-            // + label + padding) + top padding above the book (~40-
-            // 60px). Total ≈ 290px. Bumping this means the book sizes
-            // a bit smaller, but the WHOLE page fits in 100vh — no
-            // scroll on desktop, no clipping on mobile.
-            const vh = window.innerHeight - 350
+            // book: arrow row (~74px) + page counter (in the arrow
+            // row) + top padding above the book (~40-60px). The
+            // preset-strip allowance (~160px) was removed when the
+            // strip itself was dropped — the book now uses that
+            // recovered height to grow toward the full viewport on
+            // mobile. Total ≈ 160-180px reserved.
+            const vh = window.innerHeight - 180
             const isWide = vw >= 900
             // Wide screen: two pages side-by-side. Each page can be
             // up to 48% of viewport width. The book is square (Lulu
@@ -725,15 +746,17 @@ function BookViewer({ wedding, entries, weddingId }) {
         : '/backgrounds/romanticgarden.webp'
     return (
         <div
-            className='h-screen flex flex-col relative overflow-hidden'
+            className='h-[100dvh] flex flex-col relative overflow-hidden'
             style={{
                 // Cream paper backdrop with a soft floral wash to
                 // match the brand. The book itself sits on top with
                 // its own halo, so the page bg is intentionally
                 // subdued — it frames, doesn't compete.
-                // h-screen + overflow-hidden = no page scroll, no
-                // jitter during page flip (the flip animation
-                // briefly pushes layout past viewport otherwise).
+                // h-[100dvh] + overflow-hidden = locked to the actual
+                // visible viewport (dvh tracks mobile browser-chrome
+                // shows/hides, vh would have been lvh = max chrome-
+                // hidden area, overflowing under the URL bar). No
+                // page scroll, no jitter during page flip.
                 background: 'linear-gradient(180deg, #f5ead2 0%, #ebd9b3 100%)',
                 backgroundImage: `url(${bgImage})`,
                 backgroundSize: 'cover',
@@ -1008,19 +1031,14 @@ function BookViewer({ wedding, entries, weddingId }) {
                 </button>
             </div>
 
-            {/* Preset strip — horizontal row of mini live previews,
-                each rendered with the actual <BookPageTemplate /> at
-                a small scale so the user sees the design, not a name.
-                Click to apply: updates local styleSettings instantly
-                (the flipbook re-renders with the new design) AND
-                writes the wedding doc so the change persists. The
-                strip scrolls horizontally on mobile to fit any number
-                of presets without crowding the book area. */}
-            <PresetStrip
-                presets={presets}
-                activeStyle={styleSettings}
-                onApply={applyPreset}
-            />
+            {/* Preset strip removed — guests / couples viewing the
+                public digital book shouldn't be picking from a
+                preset gallery here. The studio at /admin/studio is
+                the single source of truth for which preset ships on
+                each wedding's design doc. Mirrors the same removal
+                we did on the auth-gated viewer (a473262). The
+                PresetStrip component itself stays in this file as
+                orphan code in case the choice gets reversed. */}
 
             {shareToast && (
                 <div

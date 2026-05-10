@@ -26,9 +26,11 @@ import { buildTitle, normalizeEventType } from '@/lib/eventTypes'
 // with when emitting the <meta> tags. Without this, relative paths
 // would render as plain "/og/wedding-tales-book.png" — Facebook /
 // WhatsApp crawlers can't resolve those, so the preview falls back
-// to a small text-only card. Setting it explicitly to the deployed
-// origin guarantees big-hero previews everywhere.
-export const metadata = {}
+// to a small text-only card. The metadataBase + every per-wedding
+// override is now set inside generateMetadata() below — Next 15
+// rejects having BOTH `export const metadata` and
+// `export async function generateMetadata` on the same file, so
+// the empty static placeholder that used to live here was removed.
 
 // Brand fallback when the couple hasn't uploaded a cover image.
 // Lives in /public/og/ — designed at the canonical 1200×630 OG card
