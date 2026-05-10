@@ -597,7 +597,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                 height={viewerSize}
                                 size='fixed'
                                 usePortrait={isMobile}
-                                showCover={!!hasCover}
+                                showCover={true}
                                 mobileScrollSupport={true}
                                 className='book-flip'
                                 drawShadow={false}
