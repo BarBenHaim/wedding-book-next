@@ -401,6 +401,14 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
     const [text, setText] = useState('')
     const [photoUrl, setPhotoUrl] = useState('')
     const [photoBlob, setPhotoBlob] = useState(null)
+    // Fire photo_upload once per session — re-pick shouldn't inflate
+    // the count. Tracks whether we've already logged for this guest.
+    const photoUploadLoggedRef = useRef(false)
+    const reportPhotoPicked = () => {
+        if (photoUploadLoggedRef.current) return
+        photoUploadLoggedRef.current = true
+        logEvent(weddingId, 'photo_upload')
+    }
 
     // מצלמה
     const [stream, setStream] = useState(null)
@@ -519,6 +527,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                     const url = URL.createObjectURL(blob)
                     setPhotoBlob(blob)
                     setPhotoUrl(url)
+                    reportPhotoPicked()
                     setIsUpload(false)
                     setCameraOpen(false)
                 }
@@ -538,6 +547,10 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
     async function onSubmit(e) {
         e.preventDefault()
         if (!text.trim() || !photoUrl) return
+
+        // Analytics — guest pressed "send" on the blessing form.
+        // Fire-and-forget; doesn't affect the actual submit path.
+        logEvent(weddingId, 'form_submit')
 
         setSubmitting(true)
 
@@ -708,6 +721,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                 const rawMsg = err?.message || err?.name || ''
                 if (/permission|PERMISSION_DENIED|unauthor/i.test(rawMsg)) {
                     // Permanent — show it now, don't pretend it worked.
+                    logEvent(weddingId, 'blessing_sent_error', `permission:${rawMsg}`)
                     alert(t('errPermission'))
                     setSubmitting(false)
                     return
@@ -719,6 +733,10 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
             // Pass the entry ID so the thanks page can poll Firestore
             // and show the guest a real "received ✓" confirmation
             // instead of an optimistic "thanks!" that masks failures.
+            // Analytics — blessing landed (or at least staged
+            // locally + uploaded within budget). The thanks page
+            // does its own polling to confirm Firestore acked it.
+            logEvent(weddingId, 'blessing_sent_success')
             router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}`)
             return
         }
@@ -729,10 +747,14 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
         // silently lose their blessing).
         try {
             await uploadQueuedEntry(entry)
+            logEvent(weddingId, 'blessing_sent_success')
             router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}`)
         } catch (err) {
             console.error('[photo] direct upload also failed:', err)
             const rawMsg = err?.message || err?.name || ''
+            // Analytics — tier 2 (no IDB) upload definitively failed.
+            // Captures the real error category in `meta` for triage.
+            logEvent(weddingId, 'blessing_sent_error', rawMsg.slice(0, 180))
             let userMessage
             if (/Failed to fetch|NetworkError|network|ETIMEDOUT|ERR_INTERNET/i.test(rawMsg)) {
                 userMessage = t('errNetwork')
@@ -1423,6 +1445,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                                     if (file) {
                                                         setPhotoBlob(file)
                                                         setPhotoUrl(URL.createObjectURL(file))
+                                                        reportPhotoPicked()
                                                         setIsUpload(true)
                                                     }
                                                 }}
@@ -2390,6 +2413,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                                         if (file) {
                                                             setPhotoBlob(file)
                                                             setPhotoUrl(URL.createObjectURL(file))
+                                                            reportPhotoPicked()
                                                             setIsUpload(true)
                                                         }
                                                     }}

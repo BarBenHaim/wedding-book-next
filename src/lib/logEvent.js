@@ -11,11 +11,16 @@
 //      moving. We use `fetch(..., { keepalive: true })` so the request
 //      survives even if the user navigates away immediately after.
 //
+// Supported events:
+//   scan, start_blessing, form_submit, photo_upload,
+//   blessing_sent_success, blessing_sent_error
+//
 // Usage:
 //   import { logEvent } from '@/lib/logEvent'
 //   useEffect(() => { logEvent(weddingId, 'scan') }, [weddingId])
+//   logEvent(weddingId, 'blessing_sent_error', err?.message)
 
-export function logEvent(weddingId, event) {
+export function logEvent(weddingId, event, meta = '') {
     if (!weddingId || !event) return
     if (typeof window === 'undefined') return // SSR safety
 
@@ -23,7 +28,7 @@ export function logEvent(weddingId, event) {
         fetch('/api/log-event', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ weddingId, event }),
+            body: JSON.stringify({ weddingId, event, meta }),
             keepalive: true,
         }).catch(() => {
             /* silent — analytics must never break the real flow */
