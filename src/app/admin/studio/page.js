@@ -300,6 +300,13 @@ function StudioContent() {
         if (!draft) return
         setDraft(prev => ({ ...prev, name }))
     }
+    // Toggle the draft's `isPrivate` flag. The save flow persists
+    // whatever value is on draft, so we just flip it in local state
+    // and let the user decide when to commit (Save button).
+    const togglePrivate = () => {
+        if (!draft) return
+        setDraft(prev => ({ ...prev, isPrivate: !prev.isPrivate }))
+    }
 
     // Mock entry passed to the renderer. `text` swaps with the length
     // toggle; everything else stays fixed.
@@ -467,6 +474,7 @@ function StudioContent() {
                         dirty={dirty}
                         saving={saving}
                         onNameChange={updateName}
+                        onTogglePrivate={togglePrivate}
                         onClone={handleClone}
                         onSave={handleSave}
                         onSaveAsNew={handleSaveAsNew}
@@ -610,6 +618,7 @@ function ActionBar({
     dirty,
     saving,
     onNameChange,
+    onTogglePrivate,
     onClone,
     onSave,
     onSaveAsNew,
