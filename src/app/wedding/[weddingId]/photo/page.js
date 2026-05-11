@@ -922,36 +922,40 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                 // backgroundAttachment:fixed (set inline below) keeps
                 // the floral arch anchored even though the page
                 // doesn't scroll.
-                className='flex items-start justify-center px-4 pb-1 font-sans relative overflow-hidden'
+                className='flex items-start justify-center px-4 font-sans relative overflow-x-clip overflow-y-auto'
                 style={{
-                    // ── True 100vh on mobile without cut-off ──────
-                    // The previous `100dvh` adapted to the URL bar
-                    // showing/hiding, but on iOS Safari the value
-                    // can briefly lag and clip the submit button.
-                    // Stack svh → dvh → vh as fallbacks:
-                    //   • 100svh — small viewport (URL bar visible)
-                    //     guarantees the WHOLE page fits even in
-                    //     worst-case browser-chrome state.
-                    //   • 100dvh kicks in when the browser supports
-                    //     it (URL bar hidden = more space).
-                    //   • 100vh — old browsers (desktop, ancient
-                    //     mobile).
-                    // The cascade picks the LAST supported value.
+                    // ── No-cutoff sizing ──
+                    // minHeight: 100svh = small viewport (browser
+                    // chrome visible) — the SMALLEST plausible visible
+                    // area, so on a normal-content load the page fits
+                    // without scroll on every device. Fallback to
+                    // 100vh covers old browsers that don't know svh.
+                    //
+                    // No fixed `height` set: if a device class is so
+                    // cramped that the layout overflows (Android in
+                    // landscape, keyboard up on a 360×640 budget
+                    // phone, iOS Safari mid-chrome-animation), the
+                    // page GROWS past 100svh and the user can scroll
+                    // the remainder. Explicit fix for the user's
+                    // "bottom is cut off" report — content > viewport
+                    // → scroll, never clip.
+                    //
+                    // overflow-x-clip keeps the form card's
+                    // intentional floral bleed (left:-32px) from
+                    // triggering horizontal scroll; overflow-y-auto
+                    // is the vertical scroll fallback.
                     minHeight: '100vh',
-                    height: '100vh',
                     minBlockSize: '100svh',
-                    blockSize: '100dvh',
-                    // Top padding — was broken: clamp(80px, 5vh, 72px)
-                    // has min > max so the browser pinned it to 80px.
-                    // Use a sane clamp PLUS env(safe-area-inset-top)
-                    // so the iOS notch on iPhone X+ doesn't crash
-                    // into the floral arch.
+                    // Top padding — clamp 24→56 px scales from small
+                    // phones to tall ones. safe-area-inset-top
+                    // accounts for the iOS notch on iPhone X+.
                     paddingTop: 'calc(clamp(24px, 4vh, 56px) + env(safe-area-inset-top, 0px))',
-                    // Bottom padding — accounts for iOS home indicator
-                    // (the little bar that floats over content on
-                    // notch-era iPhones) so the submit button is
-                    // always tappable above it.
-                    paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0px))',
+                    // Bottom padding — 16 px breathing room above the
+                    // iOS home indicator. env(safe-area-inset-bottom)
+                    // is typically 34 px on notch-era iPhones, 0
+                    // elsewhere. Submit button now always sits clear
+                    // of the indicator strip.
+                    paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
                     // User-supplied romantic-garden photograph as the
                     // page backdrop. cover keeps it crisp at any
                     // device width; center-top anchors the floral
@@ -1699,10 +1703,23 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
 
     return (
         <div
-            className={`flex items-start justify-center px-4 py-8 font-sans relative overflow-hidden ${
-                isPoker ? 'min-h-screen' : 'min-h-[calc(100vh-4rem)]'
+            className={`flex items-start justify-center px-4 pt-8 font-sans relative overflow-x-clip overflow-y-auto ${
+                isPoker ? '' : ''
             }`}
             style={{
+                // ── No-cutoff sizing (same approach as the moment
+                // layout above): minHeight pinned to the SMALLEST
+                // viewport unit available so the page reliably fits
+                // on every device with chrome visible. No fixed
+                // height — content can grow past 100svh and the
+                // page scrolls if the device is too cramped (small
+                // Android in landscape, keyboard up on 360×640).
+                // env(safe-area-inset-bottom) keeps the submit
+                // button above the iOS home-indicator strip on
+                // notch-era iPhones.
+                minHeight: isPoker ? '100vh' : 'calc(100vh - 4rem)',
+                minBlockSize: isPoker ? '100svh' : 'calc(100svh - 4rem)',
+                paddingBottom: 'calc(32px + env(safe-area-inset-bottom, 0px))',
                 // Premium ivory wash — base is a near-white warm neutral
                 // (#f8f4ec, "fine paper"). Two very low-opacity radial
                 // glows give the surface depth without any saturated
