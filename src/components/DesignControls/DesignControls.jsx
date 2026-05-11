@@ -264,15 +264,19 @@ export default function DesignControls({
     // scale relative to those, so they need to match the actual
     // pixel size on screen).
     const [presetsContainerRef, presetsTileWidth] = useElementWidth()
+    // Re-fetch presets whenever isAdmin flips — private presets
+    // appear only for super-admin, so they need to load after the
+    // auth check resolves. The fetch passes includePrivate so the
+    // server returns the right set per role.
     useEffect(() => {
         let cancelled = false
-        listPresets().then(list => {
+        listPresets({ includePrivate: isAdmin }).then(list => {
             if (!cancelled && Array.isArray(list) && list.length > 0) setPresets(list)
         })
         return () => {
             cancelled = true
         }
-    }, [])
+    }, [isAdmin])
 
     // Apply a preset to the wedding's design doc. The picker holds
     // storage-shape presets (with fontKey / frameId); resolvePreset
@@ -494,6 +498,22 @@ export default function DesignControls({
                                                         scaledWidth={tileSize}
                                                         scaledHeight={tileSize}
                                                     />
+                                                )}
+                                                {/* "פרטי" badge for admin-only
+                                                    private presets so admin can
+                                                    see at a glance which presets
+                                                    are visible only to them. */}
+                                                {preset.isPrivate && (
+                                                    <span
+                                                        className='absolute top-1 start-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold'
+                                                        style={{
+                                                            background: 'rgba(170,136,64,0.92)',
+                                                            color: '#fff',
+                                                            letterSpacing: '0.05em',
+                                                        }}
+                                                    >
+                                                        פרטי
+                                                    </span>
                                                 )}
                                             </button>
                                             {isAdminEditing && (

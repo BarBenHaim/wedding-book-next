@@ -334,17 +334,29 @@ const COLLECTION = 'studio_presets'
 // hiddenPresetIds — that's how we honor "delete a system preset"
 // without fighting the seeder. On any error or empty collection we
 // fall back to BUILTIN_PRESETS so the viewer's picker is never blank.
-export async function listPresets() {
+//
+// `includePrivate` — when false (the default for couples / non-admin
+// surfaces), presets flagged `isPrivate: true` are filtered out so
+// they NEVER appear in the gallery. Super-admin's /admin/studio and
+// the admin-detected branch of DesignControls pass `true` to see
+// their private presets.
+export async function listPresets({ includePrivate = false } = {}) {
     try {
         const [snap, vis] = await Promise.all([
             getDocs(query(collection(db, COLLECTION), orderBy('createdAt', 'asc'))),
             readVisibility(),
         ])
         const hidden = new Set(vis.hiddenPresetIds)
-        if (snap.empty) return BUILTIN_PRESETS.filter(p => !hidden.has(p.id))
+        const filterPrivate = preset => includePrivate || !preset.isPrivate
+        if (snap.empty) {
+            return BUILTIN_PRESETS
+                .filter(p => !hidden.has(p.id))
+                .filter(filterPrivate)
+        }
         const docs = snap.docs
             .map(d => ({ id: d.id, ...d.data() }))
             .filter(d => !hidden.has(d.id))
+            .filter(filterPrivate)
         // Sort: system first, then studio (most-recent updatedAt first).
         const system = docs.filter(d => d.ownerType === 'system')
         const studio = docs

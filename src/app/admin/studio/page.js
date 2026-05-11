@@ -638,6 +638,24 @@ function ActionBar({
                 }}
             />
 
+            {/* Private toggle — marks the preset as super-admin-only
+                so it never appears in /viewer's gallery for couples.
+                A single click toggles draft.isPrivate; saving the
+                preset persists it. */}
+            <button
+                type='button'
+                onClick={onTogglePrivate}
+                title={draft.isPrivate ? 'הסר סטטוס פרטי' : 'הפוך לפריסט פרטי (רק לסופר־אדמין)'}
+                className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11.5px] font-semibold transition-all'
+                style={{
+                    background: draft.isPrivate ? 'rgba(170,136,64,0.18)' : '#fff',
+                    border: `1px solid ${draft.isPrivate ? '#aa8840' : '#ead9b3'}`,
+                    color: draft.isPrivate ? '#7a5d27' : '#7a6a52',
+                }}
+            >
+                {draft.isPrivate ? '🔒 פרטי' : 'פרטי?'}
+            </button>
+
             {/* "Source" badge — purely informational. System
                 presets stay flagged so the user knows which ones
                 ship with the app and which they created. Editing
