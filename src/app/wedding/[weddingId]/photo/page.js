@@ -902,20 +902,34 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                 // doesn't scroll.
                 className='flex items-start justify-center px-4 pb-1 font-sans relative overflow-hidden'
                 style={{
-                    // 100dvh = current viewport (excludes mobile
-                    // browser chrome). Falls back gracefully on older
-                    // browsers that don't support dvh — they get
-                    // 100vh which is fine for desktop.
-                    minHeight: '100dvh',
-                    height: '100dvh',
-                    // Top padding scales with viewport height so the
-                    // floral arch breathes on tall phones (~72px) and
-                    // gives just enough breathing room on iPhone SE
-                    // (~33px at 667h) without pushing the submit
-                    // button below the fold. Tightened from
-                    // (28,6vh,80) to (24,5vh,72) to recover the few
-                    // pixels needed for the 360×640 case.
-                    paddingTop: 'clamp(80px, 5vh, 72px)',
+                    // ── True 100vh on mobile without cut-off ──────
+                    // The previous `100dvh` adapted to the URL bar
+                    // showing/hiding, but on iOS Safari the value
+                    // can briefly lag and clip the submit button.
+                    // Stack svh → dvh → vh as fallbacks:
+                    //   • 100svh — small viewport (URL bar visible)
+                    //     guarantees the WHOLE page fits even in
+                    //     worst-case browser-chrome state.
+                    //   • 100dvh kicks in when the browser supports
+                    //     it (URL bar hidden = more space).
+                    //   • 100vh — old browsers (desktop, ancient
+                    //     mobile).
+                    // The cascade picks the LAST supported value.
+                    minHeight: '100vh',
+                    height: '100vh',
+                    minBlockSize: '100svh',
+                    blockSize: '100dvh',
+                    // Top padding — was broken: clamp(80px, 5vh, 72px)
+                    // has min > max so the browser pinned it to 80px.
+                    // Use a sane clamp PLUS env(safe-area-inset-top)
+                    // so the iOS notch on iPhone X+ doesn't crash
+                    // into the floral arch.
+                    paddingTop: 'calc(clamp(20px, 4vh, 56px) + env(safe-area-inset-top, 0px))',
+                    // Bottom padding — accounts for iOS home indicator
+                    // (the little bar that floats over content on
+                    // notch-era iPhones) so the submit button is
+                    // always tappable above it.
+                    paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0px))',
                     // User-supplied romantic-garden photograph as the
                     // page backdrop. cover keeps it crisp at any
                     // device width; center-top anchors the floral

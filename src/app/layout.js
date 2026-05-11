@@ -18,6 +18,18 @@ import {
 } from './fonts'
 import Footer from '@/components/Footer/Footer'
 
+// Next.js 15 viewport export — viewport-fit=cover lets the page
+// extend under the iOS notch / home indicator, which is REQUIRED
+// for env(safe-area-inset-top) / env(safe-area-inset-bottom) to
+// return real values. Without this, those env() calls return 0
+// even on notched devices and content gets clipped.
+export const viewport = {
+    width: 'device-width',
+    initialScale: 1,
+    viewportFit: 'cover',
+    themeColor: '#1a1410',
+}
+
 export default function RootLayout({ children }) {
     return (
         <html lang='he' dir='rtl'>
