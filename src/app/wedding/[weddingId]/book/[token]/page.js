@@ -972,8 +972,8 @@ function BookViewer({ wedding, entries, weddingId }) {
                 on mobile (no thumbs blocking page edges). */}
             <div className='flex items-center justify-center gap-3 pt-2 pb-3 relative z-10'>
                 <button
-                    onClick={next}
-                    aria-label='הבא'
+                    onClick={prev}
+                    aria-label='הקודם'
                     className='inline-flex items-center justify-center transition-all hover:scale-105 active:scale-95'
                     style={{
                         width: 44,
@@ -1012,15 +1012,15 @@ function BookViewer({ wedding, entries, weddingId }) {
                             letterSpacing: '0.12em',
                         }}
                     >
-                        <span style={{ fontWeight: 600 }}>{Math.min(page + 1, totalPages)}</span>
+                        <span style={{ fontWeight: 600 }}>{Math.max(1, totalPages - page)}</span>
                         <span style={{ opacity: 0.4, margin: '0 6px' }}>/</span>
                         <span style={{ opacity: 0.7 }}>{totalPages}</span>
                     </span>
                 </div>
 
                 <button
-                    onClick={prev}
-                    aria-label='הקודם'
+                    onClick={next}
+                    aria-label='הבא'
                     className='inline-flex items-center justify-center transition-all hover:scale-105 active:scale-95'
                     style={{
                         width: 44,
