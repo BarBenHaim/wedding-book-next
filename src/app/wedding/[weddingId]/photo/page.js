@@ -40,9 +40,7 @@ async function compressBlob(blob) {
     if (!blob) return blob
     try {
         // The compressor expects a File; we synthesise one from the Blob.
-        const file = blob instanceof File
-            ? blob
-            : new File([blob], 'capture.jpg', { type: blob.type || 'image/jpeg' })
+        const file = blob instanceof File ? blob : new File([blob], 'capture.jpg', { type: blob.type || 'image/jpeg' })
         const compressed = await imageCompression(file, COMPRESS_OPTIONS)
         // If the compressor produced something LARGER than the source
         // (rare — happens on already-tiny images that re-encode bigger),
@@ -795,9 +793,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
     // a center-cropped 4:3 region of the full sensor frame, which on
     // every modern device is well above the threshold.
     const lowResWarning =
-        isUpload &&
-        croppedAreaPixels &&
-        Math.max(croppedAreaPixels.width || 0, croppedAreaPixels.height || 0) < 1500
+        isUpload && croppedAreaPixels && Math.max(croppedAreaPixels.width || 0, croppedAreaPixels.height || 0) < 1500
     const lowResWarningText = t('lowResWarning')
 
     // The previous PokerCornerDecor (SVG chips + cards) was retired —
@@ -919,7 +915,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                     // button below the fold. Tightened from
                     // (28,6vh,80) to (24,5vh,72) to recover the few
                     // pixels needed for the 360×640 case.
-                    paddingTop: 'clamp(24px, 5vh, 72px)',
+                    paddingTop: 'clamp(80px, 5vh, 72px)',
                     // User-supplied romantic-garden photograph as the
                     // page backdrop. cover keeps it crisp at any
                     // device width; center-top anchors the floral
