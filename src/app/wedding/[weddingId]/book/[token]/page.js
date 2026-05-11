@@ -142,6 +142,44 @@ export default function DigitalEditionPage() {
         }
     }, [])
 
+    // ─── Aggressive image preload ──────────────────────────────────
+    // The book photo proxy (/api/book-photo/.../?token=...) does a
+    // server-side fetch from Firebase Storage on every cold request,
+    // which adds ~300-600ms of latency. Without preloading, that
+    // delay shows up exactly when the user flips a page — the
+    // animation completes, then the photo pops in late.
+    //
+    // Fix: warm the browser cache for EVERY entry photo as soon as
+    // entries are loaded. `new Image()` doesn't insert into the DOM
+    // but DOES trigger a real fetch; the proxy response is cached
+    // (Cache-Control: private, max-age=3600) so subsequent <img>
+    // tags inside the flipbook hit the cache and render instantly.
+    //
+    // fetchPriority='low' so the preloads don't compete with the
+    // book's initial render and the visible first-page photo.
+    useEffect(() => {
+        if (typeof window === 'undefined') return
+        if (!entries || entries.length === 0) return
+        const preloaders = []
+        for (const e of entries) {
+            if (!e.imageUrl) continue
+            try {
+                const img = new window.Image()
+                // 'low' priority so foreground work isn't blocked.
+                img.fetchPriority = 'low'
+                img.decoding = 'async'
+                img.src = e.imageUrl
+                preloaders.push(img)
+            } catch {
+                /* ignore — some browsers may not support all hints */
+            }
+        }
+        // Clear refs on unmount so the browser can GC if needed.
+        return () => {
+            preloaders.length = 0
+        }
+    }, [entries])
+
     return (
         <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
             <style jsx global>{`

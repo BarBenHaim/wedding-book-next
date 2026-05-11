@@ -29,20 +29,19 @@ export default function EntryPhoto({
     style = {},
     className = '',
     alt = '',
-    eager = false,
+    eager = true,
 }) {
-    // loading="lazy" + decoding="async" let the browser defer the
-    // photo request until react-pageflip's transform brings the
-    // page into (or near) the viewport, instead of firing N
-    // simultaneous fetches when every entry mounts up-front. With
-    // weddings carrying 50+ entries each at ~1 MB after compression,
-    // this is the difference between ~75 MB on first paint and ~2 MB.
+    // Default to EAGER loading per the user's request: in the digital
+    // book, photos that lazy-loaded would only fetch when react-pageflip
+    // brought the page into view — leaving a visible delay between
+    // the flip animation completing and the photo appearing. The
+    // /book/[token] route now ALSO preloads every entry photo at
+    // mount via `new window.Image()` (see page.js), so by the time
+    // a user reaches any page the photo is already cached.
     //
-    // The `eager` prop lets a parent opt out for the first-visible
-    // page so the open-the-book impression isn't a blank photo slot.
-    // No caller passes it today — react-pageflip preloads adjacent
-    // spreads aggressively enough that the visible page lands
-    // before the user perceives the gap.
+    // Callers that want to opt back into lazy loading (e.g. a future
+    // archive view that lists hundreds of entries) can pass
+    // eager={false}; the existing behavior is preserved.
     return (
         <img
             src={src}
