@@ -218,21 +218,33 @@ export default function DesignControls({
     const [activePreset, setActivePreset] = useState(null)
     const [uploadingCover, setUploadingCover] = useState(false)
 
-    // ── No editing in the viewer panel ──────────────────────────────
-    // Per spring 2026 product decision: ALL preset editing lives in
-    // /admin/studio. The viewer's design panel is preset-pick only —
-    // for everyone, including the super-admin. The previous behavior
-    // (super-admin sees inline font/color/bg controls + save/delete)
-    // created two ways to edit the same preset and the resulting
-    // confusion ("which save wins?") wasn't worth it.
+    // ── Mixed admin model ───────────────────────────────────────────
+    // The super-admin in /viewer gets a SLIM editing surface:
+    //   • Preset gallery (pick a saved design)        — visible to all
+    //   • Mode tabs (book / cover)                    — admin only
+    //   • Cover-mode editing (title, image, position) — admin only
+    //   • Book-mode font/color/bg cards               — HIDDEN entirely
+    //     (those edit the styleSettings shape and belong in the
+    //     studio's preset workflow, not on individual weddings)
+    //   • Preset trash + "save changes" buttons       — HIDDEN entirely
+    //     (preset CRUD lives in /admin/studio)
     //
-    // `isAdmin` is hardcoded false so every gated UI block (trash
-    // icons, save button, font card, name card, background card,
-    // mode tabs) always renders the non-admin path. The other
-    // imports (getAuth, onAuthStateChanged, isSuperAdmin) remain in
-    // case we need to bring per-control admin escapes back later;
-    // they're cheap to leave as long as the variable stays false.
-    const isAdmin = false
+    // The font/color/bg cards and the preset-management buttons are
+    // gated by a separate `isAdminEditing` flag (also false). That
+    // way we can re-enable mode tabs / cover editing for the admin
+    // without re-exposing book-mode typography editing.
+    const [isAdmin, setIsAdmin] = useState(false)
+    useEffect(() => {
+        const auth = getAuth(firebaseApp)
+        const unsub = onAuthStateChanged(auth, user => {
+            setIsAdmin(isSuperAdmin(user?.email))
+        })
+        return unsub
+    }, [])
+    // Book-mode typography editing + preset CRUD — explicitly kept
+    // OFF per user request. Studio (/admin/studio) is the single
+    // source of truth for these.
+    const isAdminEditing = false
 
     // i18n — `locale` is passed in by the parent (viewer page) so the
     // panel speaks the same language the couple sees on their guest
@@ -484,7 +496,7 @@ export default function DesignControls({
                                                     />
                                                 )}
                                             </button>
-                                            {isAdmin && (
+                                            {isAdminEditing && (
                                                 <button
                                                     onClick={e => {
                                                         e.stopPropagation()
@@ -504,7 +516,7 @@ export default function DesignControls({
                             <p className='text-[10px] text-gray-400 mt-3 leading-relaxed'>
                                 {t.presetsHint}
                             </p>
-                            {isAdmin && activePreset && (
+                            {isAdminEditing && activePreset && (
                                 <button
                                     onClick={handleSaveActivePreset}
                                     className='mt-3 w-full py-2 rounded-lg bg-[#AA8840]/10 hover:bg-[#AA8840]/20 text-[#AA8840] text-[11px] font-bold transition-colors border border-[#AA8840]/30'
@@ -514,7 +526,7 @@ export default function DesignControls({
                             )}
                         </Card>
 
-                        {isAdmin && (
+                        {isAdminEditing && (
                         <>
                         {/* BODY (TEXT) FONT — the blessing copy. */}
                         <Card title={t.fontsTitle}>

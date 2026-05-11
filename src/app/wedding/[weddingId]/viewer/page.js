@@ -71,7 +71,16 @@ function BookViewerInner({ onLocaleDiscovered }) {
     const [mode, setMode] = useState('book')
     const [viewerSize, setViewerSize] = useState(500)
     const [isMobile, setIsMobile] = useState(false)
+    // styleSettings drives the page interior (BookPageTemplate).
+    // Picking a preset in book mode mutates this slice only.
     const [styleSettings, setStyleSettings] = useState(defaultStyle)
+    // coverStyleSettings drives the FRONT cover (BookCoverTemplate).
+    // It's pinned to whatever the owner saved as `wedding.coverDesign`
+    // — switching presets in book mode does NOT touch it, so the
+    // names + cover image + cover typography the user explicitly
+    // configured stay locked. Only edits made while mode === 'cover'
+    // mutate this slice.
+    const [coverStyleSettings, setCoverStyleSettings] = useState(defaultStyle)
     // Hold the raw wedding doc so the cover template can derive the
     // default "ספר הברכות של {names}" content from eventType +
     // brideName/groomName/celebrantName when no custom cover content
@@ -84,6 +93,13 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // return below would violate the rules of hooks (different render
     // paths returned different hook counts on first vs. second render).
     const styleWithLocale = useMemo(() => ({ ...styleSettings, locale }), [styleSettings, locale])
+    // Cover-only style merged with locale, used by BookCoverTemplate
+    // so dir/RTL behavior matches the body without leaking the book's
+    // typography changes.
+    const coverStyleWithLocale = useMemo(
+        () => ({ ...coverStyleSettings, locale }),
+        [coverStyleSettings, locale]
+    )
 
     // Dynamic cover config — Lulu's PB cover is wider for thicker books
     // because the spine grows with page count (0.0572 mm/page for the
@@ -174,12 +190,21 @@ function BookViewerInner({ onLocaleDiscovered }) {
                     // Stash the doc so BookCoverTemplate can pull
                     // eventType + names for its default content.
                     setWeddingDoc(firestoreData)
-                    if (firestoreData.coverDesign) {
-                        setStyleSettings({ ...defaultStyle, ...firestoreData.coverDesign })
+                    // Split-state hydration: bookDesign drives the page
+                    // interior; coverDesign drives the front cover.
+                    // Backward-compat: weddings created before this
+                    // split only have `coverDesign`, so we use it for
+                    // BOTH the first time.
+                    const savedBook = firestoreData.bookDesign || firestoreData.coverDesign
+                    const savedCover = firestoreData.coverDesign || firestoreData.bookDesign
+                    if (savedBook) {
+                        setStyleSettings({ ...defaultStyle, ...savedBook })
                     } else if (typeof window !== 'undefined') {
-                        // Migration: fall back to localStorage if never saved to Firestore
                         const savedStyle = localStorage.getItem('bookStyle')
                         if (savedStyle) setStyleSettings(JSON.parse(savedStyle))
+                    }
+                    if (savedCover) {
+                        setCoverStyleSettings({ ...defaultStyle, ...savedCover })
                     }
                 } else if (weddingResult.status === 'rejected') {
                     console.error('Failed to load cover design:', weddingResult.reason)
@@ -272,42 +297,55 @@ function BookViewerInner({ onLocaleDiscovered }) {
         }
     }, [weddingId])
 
-    const saveCoverDesign = useCallback((newSettings) => {
+    // Saves the design slice that's currently being edited. `target`
+    // is 'cover' or 'book' — Firestore field swaps to coverDesign or
+    // bookDesign respectively. Cover-image migration only runs when
+    // saving the cover (bookDesign never carries a coverImage).
+    const saveDesign = useCallback((newSettings, target) => {
         setSaveStatus('saving')
         clearTimeout(saveTimerRef.current)
         saveTimerRef.current = setTimeout(async () => {
             try {
-                // Migrate any oversized base64 coverImage to Storage before
-                // the Firestore write — otherwise the whole doc gets rejected.
-                const migratedUrl = await migrateCoverImageIfNeeded(newSettings.coverImage)
-                const settingsToSave =
-                    migratedUrl !== newSettings.coverImage
-                        ? { ...newSettings, coverImage: migratedUrl }
-                        : newSettings
-                // Sync the migration back into local state so subsequent saves
-                // see the URL (and the preview <img> starts loading from CDN
-                // instead of carrying the giant data URL around).
-                if (migratedUrl !== newSettings.coverImage) {
-                    setStyleSettings(prev => ({ ...prev, coverImage: migratedUrl }))
+                let settingsToSave = newSettings
+                if (target === 'cover') {
+                    const migratedUrl = await migrateCoverImageIfNeeded(newSettings.coverImage)
+                    settingsToSave =
+                        migratedUrl !== newSettings.coverImage
+                            ? { ...newSettings, coverImage: migratedUrl }
+                            : newSettings
+                    if (migratedUrl !== newSettings.coverImage) {
+                        setCoverStyleSettings(prev => ({ ...prev, coverImage: migratedUrl }))
+                    }
                 }
+                const field = target === 'cover' ? 'coverDesign' : 'bookDesign'
                 await setDoc(
                     doc(db, 'weddings', weddingId),
-                    { coverDesign: sanitize(settingsToSave) },
+                    { [field]: sanitize(settingsToSave) },
                     { merge: true }
                 )
                 setSaveStatus('saved')
                 setTimeout(() => setSaveStatus('idle'), 2500)
             } catch (err) {
-                console.error('Failed to save cover design:', err?.message || err)
+                console.error('Failed to save design:', err?.message || err)
                 setSaveStatus('idle')
             }
         }, 800)
     }, [weddingId, migrateCoverImageIfNeeded])
 
+    // handleStyleChange routes updates by mode: cover edits flow into
+    // coverStyleSettings + Firestore.coverDesign; book edits into
+    // styleSettings + Firestore.bookDesign. This is why picking a
+    // preset in book mode no longer mutates the cover.
     const handleStyleChange = updated => {
-        const newSettings = { ...styleSettings, ...updated }
-        setStyleSettings(newSettings)
-        saveCoverDesign(newSettings)
+        if (mode === 'cover') {
+            const newSettings = { ...coverStyleSettings, ...updated }
+            setCoverStyleSettings(newSettings)
+            saveDesign(newSettings, 'cover')
+        } else {
+            const newSettings = { ...styleSettings, ...updated }
+            setStyleSettings(newSettings)
+            saveDesign(newSettings, 'book')
+        }
     }
 
     // --- יצירת PDF גנרית (מקבלת קונפיגורציה) ---
@@ -598,7 +636,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                 >
                     <div className='flex-1 min-h-0 overflow-hidden'>
                         <DesignControls
-                            settings={styleSettings}
+                            settings={mode === 'cover' ? coverStyleSettings : styleSettings}
                             onChange={handleStyleChange}
                             mode={mode}
                             onModeChange={setMode}
@@ -645,7 +683,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                             customTitle: weddingDoc?.customTitle,
                                             age: weddingDoc?.age,
                                         }}
-                                        styleSettings={styleWithLocale}
+                                        styleSettings={coverStyleWithLocale}
                                         scaledWidth={viewerSize}
                                         scaledHeight={viewerSize}
                                     />
@@ -725,7 +763,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                             customTitle: weddingDoc?.customTitle,
                                             age: weddingDoc?.age,
                                         }}
-                                        styleSettings={styleWithLocale}
+                                        styleSettings={coverStyleWithLocale}
                                         scaledWidth={viewerSize}
                                         scaledHeight={viewerSize}
                                     />
@@ -907,7 +945,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                             }}
                         >
                             <BookCoverTemplate
-                                styleSettings={styleWithLocale}
+                                styleSettings={coverStyleWithLocale}
                                 scaledWidth={panelWidthPx}
                                 scaledHeight={spreadDisplayHeight}
                             />
@@ -991,7 +1029,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                     {/* Front cover */}
                                     <div style={{ width: `${panelWidthPxExport}px`, height: '100%', position: 'relative', overflow: 'hidden' }}>
                                         <BookCoverTemplate
-                                            styleSettings={styleWithLocale}
+                                            styleSettings={coverStyleWithLocale}
                                             scaledWidth={panelWidthPxExport}
                                             scaledHeight={renderH}
                                         />
