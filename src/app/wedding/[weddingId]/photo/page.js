@@ -946,7 +946,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                     // Use a sane clamp PLUS env(safe-area-inset-top)
                     // so the iOS notch on iPhone X+ doesn't crash
                     // into the floral arch.
-                    paddingTop: 'calc(clamp(20px, 4vh, 56px) + env(safe-area-inset-top, 0px))',
+                    paddingTop: 'calc(clamp(90px, 4vh, 56px) + env(safe-area-inset-top, 0px))',
                     // Bottom padding — accounts for iOS home indicator
                     // (the little bar that floats over content on
                     // notch-era iPhones) so the submit button is
