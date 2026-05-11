@@ -547,8 +547,13 @@ function BookViewer({ wedding, entries, weddingId }) {
 
     const totalPages = entries.length + 2
 
-    function next() { flipRef.current?.pageFlip().flipNext() }
-    function prev() { flipRef.current?.pageFlip().flipPrev() }
+    // Hebrew "descending" flow: user opens on page #totalPages and
+    // flipping forward reduces the count toward 1. Visual "next"
+    // therefore calls flipPrev (lower index) and "prev" calls
+    // flipNext (higher index). Counter below stays at page+1, which
+    // displays totalPages at the start and 1 at the end.
+    function next() { flipRef.current?.pageFlip().flipPrev() }
+    function prev() { flipRef.current?.pageFlip().flipNext() }
     function fullscreen() {
         const el = document.documentElement
         if (!document.fullscreenElement) el.requestFullscreen?.()
@@ -880,6 +885,13 @@ function BookViewer({ wedding, entries, weddingId }) {
                             height={pageSize.h}
                             size='fixed'
                             showCover={true}
+                            // Open on the LAST array index (FrontCover —
+                            // see page-order comment further down).
+                            // Combined with the swapped prev/next
+                            // helpers below this means the user lands
+                            // on page #totalPages and counts down to
+                            // page 1 as they flip "next".
+                            startPage={entries.length + 1}
                             usePortrait={pageSize.isPortrait}
                             mobileScrollSupport={true}
                             // drawShadow=false matches /viewer — the
