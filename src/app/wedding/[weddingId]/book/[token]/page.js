@@ -853,10 +853,12 @@ function BookViewer({ wedding, entries, weddingId }) {
                 absolutely positioned next to the book so they hug
                 the spine on either side at any viewport. */}
             {/* Spacer above the book — pushes the book down so
-                it sits visually centered (was hugging the top edge
-                after the header was removed). pt-6 on phones, pt-10
-                on tablet+. */}
-            <div className='flex-1 flex items-center justify-center relative z-10 px-0 pt-[108px] sm:pt-[100px]'>
+                it sits visually centered.
+                dir="rtl" matches the viewer's RTL setup so
+                react-pageflip's flip animation reverses (Hebrew
+                reading direction) and the book lands on the
+                FrontCover (last child) as its opening view. */}
+            <div dir='rtl' className='flex-1 flex items-center justify-center relative z-10 px-0 pt-[108px] sm:pt-[100px]'>
                 {entries.length > 0 ? (
                     <div
                         className='relative animate-[bookOpen_500ms_cubic-bezier(0.2,0.8,0.2,1)_both]'
@@ -878,14 +880,6 @@ function BookViewer({ wedding, entries, weddingId }) {
                             height={pageSize.h}
                             size='fixed'
                             showCover={true}
-                            // Anchor the initial page explicitly to
-                            // index 0 (FrontCover). Without this,
-                            // react-pageflip's mobile/portrait mode
-                            // sometimes lands on the LAST child first
-                            // in RTL contexts — the user reported that
-                            // the back cover was showing instead of
-                            // the front. This pins the start.
-                            startPage={0}
                             usePortrait={pageSize.isPortrait}
                             mobileScrollSupport={true}
                             // drawShadow=false matches /viewer — the
@@ -908,21 +902,16 @@ function BookViewer({ wedding, entries, weddingId }) {
                             useMouseEvents={true}
                             onFlip={e => setPage(e.data)}
                         >
-                            {/* Page order — FrontCover first, then
-                                entries, then back cover. */}
+                            {/* Page order matches /viewer EXACTLY:
+                                BackCover (decorative artwork) first,
+                                entries in the middle, FrontCover
+                                (with names) last. dir="rtl" on the
+                                wrapper + showCover=true lands a
+                                Hebrew reader on the FrontCover when
+                                the book "opens" and flips right-to-
+                                left through entries. */}
                             <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
-                                <BookCoverTemplate
-                                    wedding={wedding}
-                                    /* Cover uses the OWNER's design,
-                                       not the guest's preset choice
-                                       — so the names + font + bg the
-                                       couple set in /viewer are
-                                       preserved no matter which
-                                       template the guest picks. */
-                                    styleSettings={coverStyleSettings}
-                                    scaledWidth={pageSize.w}
-                                    scaledHeight={pageSize.h}
-                                />
+                                <BookBackCoverTemplate scaledWidth={pageSize.w} scaledHeight={pageSize.h} />
                             </div>
                             {entries.map(entry => (
                                 <div key={entry.id} style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
@@ -935,7 +924,14 @@ function BookViewer({ wedding, entries, weddingId }) {
                                 </div>
                             ))}
                             <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
-                                <BookBackCoverTemplate scaledWidth={pageSize.w} scaledHeight={pageSize.h} />
+                                <BookCoverTemplate
+                                    wedding={wedding}
+                                    /* Cover uses the OWNER's design,
+                                       not the guest's preset choice. */
+                                    styleSettings={coverStyleSettings}
+                                    scaledWidth={pageSize.w}
+                                    scaledHeight={pageSize.h}
+                                />
                             </div>
                         </HTMLFlipBook>
 
