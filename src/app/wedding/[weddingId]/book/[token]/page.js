@@ -471,21 +471,28 @@ function BookViewer({ wedding, entries, weddingId }) {
     // All four sources are merged with defaultStyle's baseline so
     // BookPageTemplate's `??` fallbacks don't get triggered for fields
     // a preset doesn't define (same fix we made for /admin/studio).
-    const [styleSettings, setStyleSettings] = useState(() => {
-        let stored = null
-        try {
-            if (typeof window !== 'undefined') {
-                const raw = window.localStorage.getItem(`digital-book-style:${weddingId}`)
-                if (raw) stored = JSON.parse(raw)
-            }
-        } catch {
-            // bad JSON / blocked storage — silently fall through
-        }
-        return {
-            ...defaultStyle,
-            ...(stored || wedding.coverDesign || wedding.book?.designSettings || {}),
-        }
-    })
+    // Initial styleSettings — ALWAYS the owner's design as set in
+    // /viewer's "book mode" (the wedding.bookDesign slice). No
+    // session memory, no localStorage, no cross-device sync. Every
+    // visitor opening the link lands on the owner's authoritative
+    // design. The bottom preset strip lets them try other looks
+    // FOR THIS SESSION ONLY — closing/reopening the tab returns to
+    // the owner's design.
+    //
+    // Backward-compat fallback chain:
+    //   1. wedding.bookDesign  — current canonical field
+    //   2. wedding.coverDesign — pre-split docs that only had this
+    //   3. wedding.book?.designSettings — very old docs
+    //   4. defaultStyle — virgin wedding
+    const [styleSettings, setStyleSettings] = useState(() => ({
+        ...defaultStyle,
+        ...(
+            wedding.bookDesign ||
+            wedding.coverDesign ||
+            wedding.book?.designSettings ||
+            {}
+        ),
+    }))
 
     // ── Cover style — pinned to the wedding owner's choice ─────────
     // The front cover (BookCoverTemplate, with the couple's names) is
@@ -514,35 +521,22 @@ function BookViewer({ wedding, entries, weddingId }) {
         return () => { cancelled = true }
     }, [])
 
-    // Apply a preset — DEVICE-LOCAL ONLY.
+    // Apply a preset — SESSION-ONLY, VISUAL ONLY.
     //
-    // Per-device by design: each guest picks how THEIR copy of the
-    // digital book reads, without dragging every other viewer's
-    // experience along. The owner's authoritative design (set in
-    // /viewer) stays the default; this just lets a guest swap
-    // styles for their own session.
+    // The bottom preset strip is a "what would this look like?"
+    // tool, not a setting. Clicking a preset updates the in-memory
+    // styleSettings so the book re-renders with the new design, and
+    // that's it: no Firestore write, no localStorage, no cross-user
+    // contamination. Refresh / close+reopen → the user is back on
+    // the owner's authoritative design from /viewer.
     //
-    // Persistence: localStorage scoped by weddingId. So the same
-    // device gets its preference back on refresh; a different device
-    // (or a fresh browser profile) starts from the owner's default.
-    // No Firestore write, no cross-user contamination.
+    // The owner's design stays the canonical one across every share
+    // surface (WhatsApp preview, repeat visits, other devices). The
+    // guest just gets to play.
     const applyPreset = preset => {
         const resolved = resolvePreset(preset).values || {}
         const merged = { ...defaultStyle, ...resolved }
         setStyleSettings(merged)
-        try {
-            if (typeof window !== 'undefined') {
-                window.localStorage.setItem(
-                    `digital-book-style:${weddingId}`,
-                    JSON.stringify(merged)
-                )
-            }
-        } catch (err) {
-            // localStorage can throw in private/incognito modes —
-            // in that case we just lose the preference on refresh.
-            // Acceptable; the live state still works.
-            console.warn('[digital book] preset persist failed:', err?.message || err)
-        }
     }
 
     const totalPages = entries.length + 2
