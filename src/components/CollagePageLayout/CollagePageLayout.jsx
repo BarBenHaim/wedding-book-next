@@ -216,7 +216,7 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
                         left: w(15),
                         fontSize: h(styleSettings.nameFontSizePercent ?? 2.8),
                         fontWeight: styleSettings.nameFontWeight ?? styleSettings.fontWeight,
-                        color: styleSettings.fontColor ?? GOLD,
+                        color: styleSettings.nameColor ?? styleSettings.fontColor ?? GOLD,
                         display: 'flex',
                         alignItems: 'center',
                         gap: '0.3em',

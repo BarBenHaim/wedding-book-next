@@ -306,15 +306,20 @@ export function resolvePreset(preset) {
     if (!preset || !preset.values) return preset
     const v = preset.values
     const fontEntry = v.fontKey ? FONTS_REGISTRY[v.fontKey] : null
+    const nameFontEntry = v.nameFontKey ? FONTS_REGISTRY[v.nameFontKey] : null
     const frameEntry = v.frameId ? FRAMES_REGISTRY[v.frameId] : null
     // Strip the stable keys from the output so the wedding doc that
     // gets saved doesn't accumulate both shapes.
-    const { fontKey, frameId, ...rest } = v
+    const { fontKey, nameFontKey, frameId, ...rest } = v
     return {
         ...preset,
         values: {
             ...rest,
             fontClass: fontEntry ? fontEntry.font.className : undefined,
+            // Guest name gets its own font when nameFontKey is set;
+            // otherwise BookPageTemplate falls back to fontClass at
+            // render time (same behavior as before this addition).
+            nameFontClass: nameFontEntry ? nameFontEntry.font.className : undefined,
             frame: frameEntry ? frameEntry.src : null,
         },
     }

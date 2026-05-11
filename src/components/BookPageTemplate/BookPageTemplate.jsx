@@ -99,7 +99,11 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         // file. nameFontWeight overrides; falls back to fontWeight,
                         // then to undefined (=> font's natural weight per its file).
                         fontWeight: styleSettings.nameFontWeight ?? styleSettings.fontWeight,
-                        color: styleSettings.fontColor,
+                        // Guest-name color is independent: nameColor wins, then
+                        // fontColor (body color) as a fallback. Lets the studio
+                        // give the name a distinct accent without recolouring
+                        // the blessing copy.
+                        color: styleSettings.nameColor ?? styleSettings.fontColor,
                         opacity: 0.85,
                         marginTop: onlyOne ? 0 : h(styleSettings.nameMarginTop ?? 2),
                         marginBottom: onlyOne ? 0 : h(styleSettings.nameMarginBottom ?? 1),

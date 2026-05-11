@@ -206,7 +206,7 @@ export default function PolaroidPageLayout({ entry, styleSettings, scaledWidth, 
                     style={{
                         fontSize: h(styleSettings.nameFontSizePercent ?? 2.6),
                         fontWeight: styleSettings.nameFontWeight ?? styleSettings.fontWeight,
-                        color: styleSettings.fontColor ?? GOLD,
+                        color: styleSettings.nameColor ?? styleSettings.fontColor ?? GOLD,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',

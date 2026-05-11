@@ -1125,6 +1125,35 @@ function PropertiesPanel({
                             onChange={w => onValuesChange({ nameFontWeight: w })}
                         />
 
+                        {/* Independent font for the guest name —
+                            usually you want a different family for
+                            the name (e.g. an elegant handwriting
+                            face like גברת לוין) while the blessing
+                            stays in a clean readable face. Setting
+                            this to "אוטומטי" falls back to the body
+                            font. */}
+                        <PropertyFontEdit
+                            icon={Type}
+                            label='פונט שם האורח'
+                            fontKey={v.nameFontKey}
+                            disabled={!editable}
+                            onChange={k => onValuesChange({ nameFontKey: k })}
+                        />
+
+                        {/* Independent color for the guest name —
+                            lets the studio give the name a distinct
+                            accent (e.g. gold) without recolouring
+                            the blessing text. Falls back to body
+                            fontColor in BookPageTemplate when unset. */}
+                        <PropertyColorEdit
+                            icon={Palette}
+                            label='צבע שם האורח'
+                            value={v.nameColor}
+                            disabled={!editable}
+                            onChange={c => onValuesChange({ nameColor: c })}
+                            hint='צובע רק את שם האורח. אם לא מוגדר — משתמש בצבע גוף הברכה.'
+                        />
+
                         <PropertySlider
                             icon={Type}
                             label='ריווח שם מלמעלה'
