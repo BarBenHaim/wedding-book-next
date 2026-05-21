@@ -1155,6 +1155,26 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                 <DigitalEditionPanel wedding={wedding} />
             </div>
 
+            {/* ── Print export (WOW Pro) ──
+                Renders the entire book to a ZIP of 300-dpi JPGs
+                (cover.jpg + 001.jpg, 002.jpg…) ready to upload to
+                wowpro.co.il. Lives on a separate route because the
+                render pipeline is heavy and only used per-wedding
+                at the end of the order flow. */}
+            <div className='px-6 py-5 border-b border-[#f0e8d4]'>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>הדפסת ספר (WOW Pro)</p>
+                <a
+                    href={`/admin/wedding/${wedding.id}/print-export`}
+                    className='inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-bold'
+                    style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', boxShadow: '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)' }}
+                >
+                    <Printer size={14} /> ייצא ל-WOW Pro
+                </a>
+                <p className='text-[11px] text-[#a89378] mt-2 leading-relaxed'>
+                    מייצר ZIP של JPG-ים ב-300dpi (cover + עמודים ממוספרים), מוכן להעלאה ל-wowpro.co.il
+                </p>
+            </div>
+
             {/* ── Funnel analytics ── */}
             <div className='px-6 py-5 border-b border-[#f0e8d4]'>
                 <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>פאנל המרה</p>
