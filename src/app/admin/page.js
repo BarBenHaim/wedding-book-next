@@ -809,6 +809,148 @@ function QuickLink({ href, label, icon: Icon }) {
 // Renders the scan → start → submit funnel for a single wedding using the
 // stats payload returned by /api/admin/wedding-stats. Receives the stats
 // + loading flag from its parent so the caller controls when to refetch.
+// ─── PublicLinkPanel ─────────────────────────────────────────────────
+// One-click "copy the couple-facing view link" affordance. Sits ABOVE
+// DigitalEditionPanel as the simplified, always-visible primary path —
+// admins want to grab the link and send it to the couple via WhatsApp,
+// not hunt through an accordion of N tokens. Picks digitalTokens[0] as
+// the primary; the rich panel below still lists everything for admins
+// who need fine-grained control.
+//
+// Critical constraint enforced here: every grant call uses
+// `sendEmail: false`. No couple ever receives an email from this flow.
+function PublicLinkPanel({ wedding }) {
+    const [generating, setGenerating] = useState(false)
+    const [error, setError] = useState('')
+    const [copied, setCopied] = useState(false)
+    // Local override so the freshly-generated token shows up in the
+    // copy row INSTANTLY without waiting for a parent state refresh.
+    // Mirrors the optimistic-update pattern DigitalEditionPanel uses
+    // a few lines below (it mutates wedding.digitalTokens in place).
+    const [linkOverride, setLinkOverride] = useState(null)
+
+    const existingToken =
+        Array.isArray(wedding.digitalTokens) && wedding.digitalTokens.length > 0
+            ? wedding.digitalTokens[0]
+            : null
+    const effectiveToken = linkOverride || existingToken
+
+    // Short-link URL — /b/[token] does a server-side Firestore lookup
+    // to find the wedding the token belongs to, then 307s to the full
+    // /wedding/.../book/... path. Same UX, shorter to paste into
+    // WhatsApp / SMS.
+    const effectiveLink = effectiveToken
+        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/b/${effectiveToken}`
+        : null
+
+    async function generate() {
+        if (generating) return
+        setGenerating(true)
+        setError('')
+        try {
+            const token = await getToken()
+            const res = await fetch('/api/digital-edition/grant', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                // Hard-coded false — couples must never receive an
+                // email from this affordance. The other panel below
+                // is where the optional email is offered.
+                body: JSON.stringify({ weddingId: wedding.id, sendEmail: false }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+            // Optimistic update: both the local override (for instant
+            // re-render this turn) and the parent's mutable array (so
+            // DigitalEditionPanel below also picks up the new token
+            // without a refetch).
+            setLinkOverride(data.token)
+            wedding.digitalTokens = [...(wedding.digitalTokens || []), data.token]
+        } catch (e) {
+            setError(e.message || 'שגיאה ביצירת קישור')
+        } finally {
+            setGenerating(false)
+        }
+    }
+
+    async function copyLink() {
+        if (!effectiveLink) return
+        try {
+            await navigator.clipboard.writeText(effectiveLink)
+            setCopied(true)
+            setTimeout(() => setCopied(false), 1500)
+        } catch {
+            // Clipboard API unavailable (non-secure context, old
+            // browser). Silent — admin can still read + select the
+            // <code> text manually.
+        }
+    }
+
+    return (
+        <div className='space-y-2'>
+            {effectiveLink ? (
+                <>
+                    <div className='flex items-center gap-2'>
+                        <code className='flex-1 text-[11px] bg-[#fbf6ec] border border-[#ead9b3] rounded-lg px-3 py-2 font-mono text-[#7a6a52] truncate'>
+                            {effectiveLink}
+                        </code>
+                        <button
+                            onClick={copyLink}
+                            className='shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white whitespace-nowrap'
+                            style={{
+                                background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                boxShadow:
+                                    '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
+                            }}
+                        >
+                            {copied ? <CheckCircle2 size={12} /> : <Copy size={12} />}
+                            {copied ? 'הועתק' : 'העתק'}
+                        </button>
+                        <a
+                            href={effectiveLink}
+                            target='_blank'
+                            rel='noreferrer'
+                            className='shrink-0 w-9 h-9 rounded-lg bg-white hover:bg-[#fbf6ec] border border-[#ead9b3] flex items-center justify-center'
+                            title='פתח'
+                        >
+                            <ExternalLink size={13} className='text-[#a8843a]' />
+                        </a>
+                    </div>
+                    <p className='text-[11px] text-[#a89378] leading-relaxed'>
+                        הקישור הציבורי לצפייה בספר — שתפו עם הזוג. הם לא צריכים להתחבר.
+                    </p>
+                </>
+            ) : (
+                <>
+                    <button
+                        onClick={generate}
+                        disabled={generating}
+                        className='inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50'
+                        style={{
+                            background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                            boxShadow:
+                                '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
+                        }}
+                    >
+                        {generating ? <Loader2 size={14} className='animate-spin' /> : <Link2 size={14} />}
+                        {generating ? 'מייצר...' : 'צור קישור צפייה'}
+                    </button>
+                    <p className='text-[11px] text-[#a89378] leading-relaxed'>
+                        ייצור קישור ציבורי לצפייה בספר. הם לא צריכים להתחבר. לא נשלח מייל.
+                    </p>
+                </>
+            )}
+            {error && (
+                <div className='rounded-xl bg-red-50 border border-red-200 p-2.5 text-[11px] text-red-700'>
+                    {error}
+                </div>
+            )}
+        </div>
+    )
+}
+
 // ─── DigitalEditionPanel ────────────────────────────────────────────────
 // Lists existing digital tokens for a wedding and lets the super-admin
 // generate new ones (with optional email-to-owner). Revocation is
@@ -1153,6 +1295,16 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
             <div className='px-6 py-5 border-b border-[#f0e8d4]'>
                 <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>מהדורה דיגיטלית</p>
                 <DigitalEditionPanel wedding={wedding} />
+            </div>
+
+            {/* ── Public view link (couple-facing) ──
+                One-click "copy the link you'd send to the couple" —
+                short form via /b/[token]. Built additive: pre-existing
+                login + /viewer flow untouched. The rich admin tool
+                above (DigitalEditionPanel) still lists every token. */}
+            <div className='px-6 py-5 border-b border-[#f0e8d4]'>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>קישור צפייה לזוג</p>
+                <PublicLinkPanel wedding={wedding} />
             </div>
 
             {/* ── Print export (WOW Pro) ──
