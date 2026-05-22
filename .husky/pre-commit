@@ -1,0 +1,13 @@
+# Pre-commit gate. Runs `lint-staged`, which itself runs `eslint --fix`
+# (Next.js core-web-vitals config) on every staged .js / .jsx file
+# and re-stages any auto-fixes. ESLint errors fail the commit;
+# warnings pass through.
+#
+# Why not `npm run build`? The full Next build takes 30-60 s on this
+# codebase — too slow to run on every commit. Vercel runs the build
+# on every push, so a broken build still gets caught before deploy,
+# just one step later. If a class of regression starts slipping
+# through to Vercel and getting noticed there too late, escalate to
+# `next lint` (project-wide, ~5 s) here in the hook.
+
+npx lint-staged

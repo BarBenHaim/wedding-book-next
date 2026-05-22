@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "i18n:check": "node scripts/i18n-check.mjs"
+    "i18n:check": "node scripts/i18n-check.mjs",
+    "prepare": "husky"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^16.6.0",
@@ -45,7 +46,12 @@
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "15.5.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.5",
     "tailwindcss": "^4",
     "vitest": "^2.1.8"
+  },
+  "lint-staged": {
+    "*.{js,jsx,mjs}": "eslint --fix"
   }
 }
