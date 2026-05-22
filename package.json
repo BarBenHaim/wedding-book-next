@@ -44,14 +44,18 @@
     "@eslint/eslintrc": "^3",
     "@svgr/webpack": "^8.1.0",
     "@tailwindcss/postcss": "^4",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
     "eslint": "^9",
     "eslint-config-next": "15.5.3",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.5",
     "tailwindcss": "^4",
+    "typescript": "^6.0.3",
     "vitest": "^2.1.8"
   },
   "lint-staged": {
-    "*.{js,jsx,mjs}": "eslint --fix"
+    "*.{js,jsx,mjs,ts,tsx}": "eslint --fix"
   }
 }
