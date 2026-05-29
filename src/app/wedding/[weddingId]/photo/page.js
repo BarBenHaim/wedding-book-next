@@ -67,13 +67,30 @@ export default function TextPage() {
     // PhotoApp to swap background, palette, and copy.
     const [designVariant, setDesignVariant] = useState('')
     const [recipients, setRecipients] = useState({ bride: '', groom: '', celebrant: '' })
-    // Per-event admin overrides for the form-field labels + placeholders.
-    // Empty strings → fall back to the i18n default in PhotoApp.
+    // Per-event admin overrides for every piece of guest-facing copy
+    // on the photo page. Empty strings → fall back to the i18n default
+    // in PhotoApp. The block splits cleanly into two groups:
+    //   • Form-field labels + placeholders (legacy, shared with all
+    //     layouts) — nameLabel, namePlaceholder, blessingLabel,
+    //     blessingPlaceholder.
+    //   • Moment-layout specific copy (subtitle, pill badge, photo
+    //     section, submit button, trust line) — only consumed when
+    //     the page renders in moment layout (i.e., not poker, not
+    //     romantic).
     const [formCopy, setFormCopy] = useState({
         nameLabel: '',
         namePlaceholder: '',
         blessingLabel: '',
         blessingPlaceholder: '',
+        momentSubtitle: '',
+        momentPill: '',
+        momentPhotoTitle: '',
+        momentPhotoCta: '',
+        momentPhotoCtaSub: '',
+        momentTakeNow: '',
+        momentChooseGallery: '',
+        momentSubmit: '',
+        momentSecurityNote: '',
     })
     // Gate the first paint on the wedding doc fetch. Without this the
     // initial render uses the wedding/classic defaults and the user
@@ -108,6 +125,18 @@ export default function TextPage() {
                         namePlaceholder: (data.customNamePlaceholder || '').trim(),
                         blessingLabel: (data.customBlessingLabel || '').trim(),
                         blessingPlaceholder: (data.customBlessingPlaceholder || '').trim(),
+                        // Moment-layout copy overrides set in /admin →
+                        // "טקסטים בעמוד האורחים". Each field falls back
+                        // to its `t('moment*')` i18n default when empty.
+                        momentSubtitle: (data.customMomentSubtitle || '').trim(),
+                        momentPill: (data.customMomentPill || '').trim(),
+                        momentPhotoTitle: (data.customMomentPhotoTitle || '').trim(),
+                        momentPhotoCta: (data.customMomentPhotoCta || '').trim(),
+                        momentPhotoCtaSub: (data.customMomentPhotoCtaSub || '').trim(),
+                        momentTakeNow: (data.customMomentTakeNow || '').trim(),
+                        momentChooseGallery: (data.customMomentChooseGallery || '').trim(),
+                        momentSubmit: (data.customMomentSubmit || '').trim(),
+                        momentSecurityNote: (data.customMomentSecurityNote || '').trim(),
                     })
                 }
             } catch {
@@ -1115,7 +1144,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                         className='text-center leading-snug'
                         style={{ color: '#7a6a52', fontSize: '12px', maxWidth: 270, margin: '4px auto 0' }}
                     >
-                        {t('momentSubtitle')}
+                        {formCopy?.momentSubtitle || t('momentSubtitle')}
                     </p>
 
                     {/* ── Form card ──
@@ -1171,7 +1200,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                             <svg viewBox='0 0 24 24' className='w-[10px] h-[10px]' fill='#d8a4a4'>
                                 <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                             </svg>
-                            <span>{t('momentPill')}</span>
+                            <span>{formCopy?.momentPill || t('momentPill')}</span>
                             <svg viewBox='0 0 24 24' className='w-[10px] h-[10px]' fill='#d8a4a4'>
                                 <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                             </svg>
@@ -1183,7 +1212,9 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                         <div className='mb-3'>
                             <div className='flex items-center justify-between gap-2 mb-1.5'>
                                 <span style={{ color: '#1a1410', fontSize: '14.5px', fontWeight: 700 }}>
-                                    {t('momentNameLabel')}
+                                    {/* Existing per-event customNameLabel override
+                                        wins; else the moment-layout i18n default. */}
+                                    {formCopy?.nameLabel || t('momentNameLabel')}
                                 </span>
                                 <svg
                                     viewBox='0 0 24 24'
@@ -1203,7 +1234,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                 type='text'
                                 value={name}
                                 onChange={e => setName(e.target.value)}
-                                placeholder={t('momentNamePlaceholder')}
+                                placeholder={formCopy?.namePlaceholder || t('momentNamePlaceholder')}
                                 className='w-full rounded-xl outline-none transition'
                                 style={{
                                     background: '#fbf6ec',
@@ -1223,7 +1254,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                         <div className='mb-2'>
                             <div className='flex items-center justify-between gap-2 mb-1.5'>
                                 <span style={{ color: '#1a1410', fontSize: '14.5px', fontWeight: 700 }}>
-                                    {t('momentBlessingLabel')}
+                                    {formCopy?.blessingLabel || t('momentBlessingLabel')}
                                 </span>
                                 <svg
                                     viewBox='0 0 24 24'
@@ -1242,7 +1273,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                             <textarea
                                 value={text}
                                 onChange={e => setText(e.target.value)}
-                                placeholder={t('momentBlessingPlaceholder')}
+                                placeholder={formCopy?.blessingPlaceholder || t('momentBlessingPlaceholder')}
                                 maxLength={210}
                                 className='w-full rounded-xl outline-none transition resize-none leading-snug'
                                 style={{
@@ -1270,7 +1301,8 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                             trailing (end = left). No circle. */}
                         <div className='flex items-center justify-between gap-2 mb-2 mt-3'>
                             <span style={{ color: '#1a1410', fontSize: '14.5px', fontWeight: 700 }}>
-                                <span style={{ color: '#c14a4a' }}>*</span> {t('momentPhotoTitle')}
+                                <span style={{ color: '#c14a4a' }}>*</span>{' '}
+                                {formCopy?.momentPhotoTitle || t('momentPhotoTitle')}
                             </span>
                             <svg
                                 viewBox='0 0 24 24'
@@ -1373,10 +1405,10 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                                 marginTop: 4,
                                             }}
                                         >
-                                            {t('momentPhotoCta')}
+                                            {formCopy?.momentPhotoCta || t('momentPhotoCta')}
                                         </div>
                                         <div style={{ color: '#9a8665', fontSize: '11px', marginTop: 1 }}>
-                                            {t('momentPhotoCtaSub')}
+                                            {formCopy?.momentPhotoCtaSub || t('momentPhotoCtaSub')}
                                         </div>
                                     </div>
 
@@ -1413,7 +1445,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                                     d='M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z'
                                                 />
                                             </svg>
-                                            <span>{t('momentTakeNow')}</span>
+                                            <span>{formCopy?.momentTakeNow || t('momentTakeNow')}</span>
                                         </button>
                                         <label
                                             className='flex-1 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer'
@@ -1439,7 +1471,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                                     d='m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Z'
                                                 />
                                             </svg>
-                                            <span>{t('momentChooseGallery')}</span>
+                                            <span>{formCopy?.momentChooseGallery || t('momentChooseGallery')}</span>
                                             <input
                                                 type='file'
                                                 accept='image/*'
@@ -1669,7 +1701,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                         <svg viewBox='0 0 24 24' className='w-[12px] h-[12px] shrink-0' fill='#e8c878'>
                             <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                         </svg>
-                        <span>{submitting ? t('submitting') : t('momentSubmit')}</span>
+                        <span>{submitting ? t('submitting') : formCopy?.momentSubmit || t('momentSubmit')}</span>
                         <svg viewBox='0 0 24 24' className='w-[12px] h-[12px] shrink-0' fill='#e8c878'>
                             <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                         </svg>
@@ -1694,7 +1726,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                                 d='M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'
                             />
                         </svg>
-                        <span>{t('securityNote')}</span>
+                        <span>{formCopy?.momentSecurityNote || t('securityNote')}</span>
                     </div>
                 </div>
             </div>

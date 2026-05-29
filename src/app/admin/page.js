@@ -392,6 +392,20 @@ function EventTypeEditor({ wedding, onSave }) {
         customNamePlaceholder: w.customNamePlaceholder || '',
         customBlessingLabel: w.customBlessingLabel || '',
         customBlessingPlaceholder: w.customBlessingPlaceholder || '',
+        // Guest-page moment-layout copy overrides — every string the
+        // guest sees on the /photo flow that ISN'T the form-field
+        // label/placeholder pair above.
+        customMomentSubtitle: w.customMomentSubtitle || '',
+        customMomentPill: w.customMomentPill || '',
+        customMomentPhotoTitle: w.customMomentPhotoTitle || '',
+        customMomentPhotoCta: w.customMomentPhotoCta || '',
+        customMomentPhotoCtaSub: w.customMomentPhotoCtaSub || '',
+        customMomentTakeNow: w.customMomentTakeNow || '',
+        customMomentChooseGallery: w.customMomentChooseGallery || '',
+        customMomentSubmit: w.customMomentSubmit || '',
+        customMomentSecurityNote: w.customMomentSecurityNote || '',
+        // Super-admin private notes (never shown to guests).
+        adminNotes: w.adminNotes || '',
     })
 
     const [draft, setDraft] = useState(() => buildDraft(wedding))
@@ -439,6 +453,18 @@ function EventTypeEditor({ wedding, onSave }) {
         patch.customNamePlaceholder = draft.customNamePlaceholder
         patch.customBlessingLabel = draft.customBlessingLabel
         patch.customBlessingPlaceholder = draft.customBlessingPlaceholder
+        // Moment-layout guest-page copy overrides.
+        patch.customMomentSubtitle = draft.customMomentSubtitle
+        patch.customMomentPill = draft.customMomentPill
+        patch.customMomentPhotoTitle = draft.customMomentPhotoTitle
+        patch.customMomentPhotoCta = draft.customMomentPhotoCta
+        patch.customMomentPhotoCtaSub = draft.customMomentPhotoCtaSub
+        patch.customMomentTakeNow = draft.customMomentTakeNow
+        patch.customMomentChooseGallery = draft.customMomentChooseGallery
+        patch.customMomentSubmit = draft.customMomentSubmit
+        patch.customMomentSecurityNote = draft.customMomentSecurityNote
+        // Super-admin private notes.
+        patch.adminNotes = draft.adminNotes
         return patch
     }
 
@@ -613,7 +639,7 @@ function EventTypeEditor({ wedding, onSave }) {
                         </div>
                     </div>
                     <p className='text-[11px] text-[#a89378] mb-3 leading-relaxed'>
-                        השם הראשון מופיע בעמוד הראשי של האורחים ("ספר הברכות של Noa & Alon"). הגרסה בעברית מופיעה בעמוד יצירת הברכה ("השאירו ברכה לנועה ולאלון"). אם תשאיר ריק — נשתמש בשם הראשון.
+                        השם הראשון מופיע בעמוד הראשי של האורחים (&quot;ספר הברכות של Noa &amp; Alon&quot;). הגרסה בעברית מופיעה בעמוד יצירת הברכה (&quot;השאירו ברכה לנועה ולאלון&quot;). אם תשאיר ריק — נשתמש בשם הראשון.
                     </p>
                 </>
             )}
@@ -757,6 +783,133 @@ function EventTypeEditor({ wedding, onSave }) {
                         className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white resize-y'
                     />
                 </div>
+            </div>
+
+            {/* Moment-layout copy overrides — every other guest-facing
+                string on the /photo page (subtitle, pill, photo
+                section CTA, submit button, trust line). The
+                blessing/name field labels above keep their own block
+                because they're the legacy override surface. Empty =
+                fall back to the i18n default for the event locale. */}
+            <div className='space-y-3 mb-3 p-3 rounded-xl bg-[#c9a44e]/5 border border-[#c9a44e]/15'>
+                <p className='text-[11px] font-bold text-[#aa8840] uppercase tracking-widest'>טקסטים בעמוד האורחים</p>
+                <p className='text-[11px] text-[#7a6a52] leading-relaxed'>
+                    שולט בכל הטקסטים שהאורח רואה בעמוד הברכה (כותרת משנה, באדג&apos;, אזור התמונה, כפתורים, שורת בטחון).
+                    השאר ריק = ברירת מחדל לפי שפת האירוע.
+                </p>
+                <div>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>כותרת משנה (מתחת לשמות)</label>
+                    <textarea
+                        value={draft.customMomentSubtitle}
+                        onChange={e => set('customMomentSubtitle', e.target.value)}
+                        placeholder='כתבו ברכה והוסיפו תמונה לספר הזיכרונות שלנו'
+                        rows={2}
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white resize-y'
+                    />
+                </div>
+                <div>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>תווית הבאדג&apos; (Pill מעל הכרטיס)</label>
+                    <input
+                        type='text'
+                        value={draft.customMomentPill}
+                        onChange={e => set('customMomentPill', e.target.value)}
+                        placeholder='ברכה + תמונה, ואתם בפנים'
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                    />
+                </div>
+                <div>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>כותרת אזור התמונה</label>
+                    <input
+                        type='text'
+                        value={draft.customMomentPhotoTitle}
+                        onChange={e => set('customMomentPhotoTitle', e.target.value)}
+                        placeholder='הוסיפו גם תמונה לספר'
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                    />
+                </div>
+                <div>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>טקסט CTA העלאה (בתוך הקופסה)</label>
+                    <input
+                        type='text'
+                        value={draft.customMomentPhotoCta}
+                        onChange={e => set('customMomentPhotoCta', e.target.value)}
+                        placeholder='לחצו כדי להעלות תמונה'
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                    />
+                </div>
+                <div>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>תת-טקסט CTA העלאה</label>
+                    <input
+                        type='text'
+                        value={draft.customMomentPhotoCtaSub}
+                        onChange={e => set('customMomentPhotoCtaSub', e.target.value)}
+                        placeholder='אפשר מהגלריה או לצלם עכשיו'
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                    />
+                </div>
+                <div className='grid grid-cols-2 gap-2'>
+                    <div>
+                        <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>כפתור מצלמה</label>
+                        <input
+                            type='text'
+                            value={draft.customMomentTakeNow}
+                            onChange={e => set('customMomentTakeNow', e.target.value)}
+                            placeholder='צלמו עכשיו'
+                            className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                        />
+                    </div>
+                    <div>
+                        <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>כפתור גלריה</label>
+                        <input
+                            type='text'
+                            value={draft.customMomentChooseGallery}
+                            onChange={e => set('customMomentChooseGallery', e.target.value)}
+                            placeholder='בחרו מהגלריה'
+                            className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                        />
+                    </div>
+                </div>
+                <div>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>כפתור שליחה</label>
+                    <input
+                        type='text'
+                        value={draft.customMomentSubmit}
+                        onChange={e => set('customMomentSubmit', e.target.value)}
+                        placeholder='שלחו לנו את הרגע'
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                    />
+                </div>
+                <div>
+                    <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>שורת בטחון (תחתון)</label>
+                    <input
+                        type='text'
+                        value={draft.customMomentSecurityNote}
+                        onChange={e => set('customMomentSecurityNote', e.target.value)}
+                        placeholder='זה לוקח פחות מדקה'
+                        className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                    />
+                </div>
+            </div>
+
+            {/* Super-admin private notes — never shown to guests or
+                the couple. Use for printing-job status, supplier
+                contacts, payment notes, custom requests, anything
+                that doesn't belong in a guest-facing field. */}
+            <div className='space-y-2 mb-3 p-3 rounded-xl bg-[#3d3225]/5 border border-[#3d3225]/15'>
+                <p className='text-[11px] font-bold text-[#3d3225] uppercase tracking-widest inline-flex items-center gap-1.5'>
+                    <Shield size={10} /> הערות פרטיות (סופר אדמין)
+                </p>
+                <p className='text-[11px] text-[#7a6a52] leading-relaxed'>
+                    מקום לכתוב הערות פנימיות שרק אתה רואה — סטטוס הדפסה, איש קשר אצל הספק, סכומים, בקשות מיוחדות, וכו&apos;.
+                    האורחים והזוג לא רואים את זה.
+                </p>
+                <textarea
+                    value={draft.adminNotes}
+                    onChange={e => set('adminNotes', e.target.value)}
+                    placeholder='לדוגמה: שולם 850 ש&quot;ח במזומן. דפוס בארי קיבל קובץ ב-12/05. צריך לבדוק שכריכה מהקטלוג מספר 4. טלפון לזוג: 050-...'
+                    rows={6}
+                    className='w-full px-3 py-2.5 rounded-xl border border-[#3d3225]/30 text-sm text-[#3d3225] outline-none focus:border-[#3d3225] focus:ring-2 focus:ring-[#3d3225]/10 transition-all bg-white resize-y leading-relaxed'
+                />
             </div>
 
             <button
@@ -1488,7 +1641,7 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                     >
                         <Download size={14} className='text-[#AA8840]' />
                         <div className='text-right flex-1'>
-                            <div className='font-semibold'>קלאסי — כריכה רכה 8.5"</div>
+                            <div className='font-semibold'>קלאסי — כריכה רכה 8.5&quot;</div>
                             <div className='text-[11px] text-[#a89378]'>Perfect Bound · מה שנשלח כרגע ללולו</div>
                         </div>
                     </a>
@@ -1500,7 +1653,7 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                     >
                         <Download size={14} className='text-[#AA8840]' />
                         <div className='text-right flex-1'>
-                            <div className='font-semibold'>כריכה קשה 8.5" (Case Wrap)</div>
+                            <div className='font-semibold'>כריכה קשה 8.5&quot; (Case Wrap)</div>
                             <div className='text-[11px] text-[#a89378]'>Hardcover עם הדפסה מלאה + wrap margins</div>
                         </div>
                     </a>
@@ -1513,7 +1666,7 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                         <Download size={14} className='text-[#AA8840]' />
                         <div className='text-right flex-1'>
                             <div className='font-semibold'>ספרון (Saddle Stitch)</div>
-                            <div className='text-[11px] text-[#a89378]'>עד 24 עמודים · 17.25" × 8.75" · בלי שדרה</div>
+                            <div className='text-[11px] text-[#a89378]'>עד 24 עמודים · 17.25&quot; × 8.75&quot; · בלי שדרה</div>
                         </div>
                     </a>
                 </div>
@@ -2159,6 +2312,11 @@ export default function AdminPage() {
     return (
         <AdminPageWrapper>
             <AdminDashboardContent />
+        </AdminPageWrapper>
+    )
+}
+// EOF
+tent />
         </AdminPageWrapper>
     )
 }

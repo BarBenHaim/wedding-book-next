@@ -115,7 +115,22 @@ export async function PATCH(req) {
             return NextResponse.json({ error: 'Missing patch' }, { status: 400 })
         }
 
-        const ALLOWED = ['eventType', 'designVariant', 'locale', 'themeColor', 'celebrantName', 'celebrantNameHe', 'age', 'customTitle', 'customSubtitle', 'customDescription', 'customNameLabel', 'customNamePlaceholder', 'customBlessingLabel', 'customBlessingPlaceholder', 'brideName', 'brideNameHe', 'groomName', 'groomNameHe']
+        const ALLOWED = [
+            'eventType', 'designVariant', 'locale', 'themeColor',
+            'celebrantName', 'celebrantNameHe', 'age',
+            'customTitle', 'customSubtitle', 'customDescription',
+            'customNameLabel', 'customNamePlaceholder',
+            'customBlessingLabel', 'customBlessingPlaceholder',
+            // Per-wedding overrides for the moment-layout guest page copy.
+            // Each replaces the corresponding i18n default; '' clears to default.
+            'customMomentSubtitle', 'customMomentPill',
+            'customMomentPhotoTitle', 'customMomentPhotoCta', 'customMomentPhotoCtaSub',
+            'customMomentTakeNow', 'customMomentChooseGallery',
+            'customMomentSubmit', 'customMomentSecurityNote',
+            // Super-admin private notes per wedding — never shown to guests.
+            'adminNotes',
+            'brideName', 'brideNameHe', 'groomName', 'groomNameHe',
+        ]
         const clean = {}
 
         for (const key of ALLOWED) {
