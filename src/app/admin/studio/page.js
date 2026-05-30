@@ -1912,6 +1912,3 @@ export default function StudioPage() {
         </AdminPageWrapper>
     )
 }
-ageWrapper>
-    )
-}
