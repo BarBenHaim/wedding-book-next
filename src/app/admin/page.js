@@ -2315,8 +2315,3 @@ export default function AdminPage() {
         </AdminPageWrapper>
     )
 }
-// EOF
-tent />
-        </AdminPageWrapper>
-    )
-}
