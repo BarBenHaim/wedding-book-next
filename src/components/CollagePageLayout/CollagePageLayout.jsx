@@ -206,21 +206,35 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
                 </div>
             )}
 
-            {/* ── Signature — name + heart, bottom-right corner, tilted ── */}
+            {/* ── Signature — name + heart, bottom corner, tilted ──
+                Position controllable from the admin design studio
+                (collage-only sliders): nameOffsetX, nameOffsetY,
+                nameRotation. Defaults match the original hand-placed
+                values (left: 15%, bottom: 12%, rotate: 6deg) so older
+                presets render unchanged.
+
+                Coordinate system:
+                  • nameOffsetX  → % from the LEFT edge of the page
+                                   (0 = left edge, 100 = right edge,
+                                   the name starts at this anchor).
+                  • nameOffsetY  → % from the BOTTOM edge.
+                  • nameRotation → degrees; positive = clockwise.
+            */}
             {hasName && (
                 <div
                     className={nameFontClass}
                     style={{
                         position: 'absolute',
-                        bottom: h(12),
-                        left: w(15),
+                        bottom: h(styleSettings.nameOffsetY ?? 12),
+                        left: w(styleSettings.nameOffsetX ?? 15),
                         fontSize: h(styleSettings.nameFontSizePercent ?? 2.8),
                         fontWeight: styleSettings.nameFontWeight ?? styleSettings.fontWeight,
                         color: styleSettings.nameColor ?? styleSettings.fontColor ?? GOLD,
                         display: 'flex',
                         alignItems: 'center',
                         gap: '0.3em',
-                        transform: 'rotate(6deg)',
+                        transform: `rotate(${styleSettings.nameRotation ?? 6}deg)`,
+                        transformOrigin: 'left center',
                         zIndex: 6,
                     }}
                 >

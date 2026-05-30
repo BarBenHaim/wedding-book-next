@@ -909,7 +909,7 @@ function PreviewPanel({
                     <h2 className='text-[14px] font-bold text-[#1a1410] truncate'>
                         {preset?.name || 'תצוגה חיה'}
                     </h2>
-                    <span className='hidden sm:inline text-[10.5px] text-[#a89378]'>1:1 · 8.5"×8.5"</span>
+                    <span className='hidden sm:inline text-[10.5px] text-[#a89378]'>1:1 · 8.5&quot;×8.5&quot;</span>
                 </div>
 
                 {/* Photo controls — upload a real wedding photo
@@ -1036,7 +1036,7 @@ function PropertiesPanel({
                 </p>
                 {draft && (
                     <p className='text-[10.5px] text-[#a89378] mt-1 leading-relaxed'>
-                        השינויים מתעדכנים בתצוגה החיה. לחץ "שמור" כדי לשמר.
+                        השינויים מתעדכנים בתצוגה החיה. לחץ &quot;שמור&quot; כדי לשמר.
                         {isSystem && ' עריכת תבנית מערכת — מומלץ "שמור כעותק" כדי לשמור את המקור.'}
                     </p>
                 )}
@@ -1165,6 +1165,51 @@ function PropertiesPanel({
                             disabled={!editable}
                             onChange={n => onValuesChange({ nameMarginTop: n })}
                         />
+
+                        {/* Collage-only — name is positioned absolutely
+                            in this layout (other layouts use flow with
+                            nameMarginTop). Three sliders control where
+                            the signature sits on the page + how much it
+                            tilts. Defaults preserve the original
+                            handmade look: 15% from left, 12% from
+                            bottom, tilted 6°. */}
+                        {v.template === 'collage' && (
+                            <>
+                                <PropertySlider
+                                    icon={Type}
+                                    label='מיקום שם — אופקי (מהשמאל)'
+                                    value={v.nameOffsetX ?? 15}
+                                    min={0}
+                                    max={90}
+                                    step={1}
+                                    unit='%'
+                                    disabled={!editable}
+                                    onChange={n => onValuesChange({ nameOffsetX: n })}
+                                />
+                                <PropertySlider
+                                    icon={Type}
+                                    label='מיקום שם — אנכי (מהתחתית)'
+                                    value={v.nameOffsetY ?? 12}
+                                    min={0}
+                                    max={90}
+                                    step={1}
+                                    unit='%'
+                                    disabled={!editable}
+                                    onChange={n => onValuesChange({ nameOffsetY: n })}
+                                />
+                                <PropertySlider
+                                    icon={Type}
+                                    label='זווית שם (סיבוב)'
+                                    value={v.nameRotation ?? 6}
+                                    min={-30}
+                                    max={30}
+                                    step={1}
+                                    unit='°'
+                                    disabled={!editable}
+                                    onChange={n => onValuesChange({ nameRotation: n })}
+                                />
+                            </>
+                        )}
 
                         <PropertyFrameEdit
                             icon={Frame}
@@ -1865,5 +1910,8 @@ export default function StudioPage() {
                 <StudioContent />
             </SuperAdminGate>
         </AdminPageWrapper>
+    )
+}
+ageWrapper>
     )
 }
