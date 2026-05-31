@@ -681,32 +681,3 @@ export default function PrintExportPage() {
         </AdminPageWrapper>
     )
 }
-    )
-}
-
-// Blank page placeholder for padded slots.
-function BlankPage({ styleSettings }) {
-    return (
-        <div
-            style={{
-                width: '100%',
-                height: '100%',
-                backgroundColor: styleSettings?.backgroundColor || '#fdfaf3',
-                backgroundImage: styleSettings?.backgroundUrl ? `url(${styleSettings.backgroundUrl})` : 'none',
-                backgroundRepeat: 'repeat',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-            }}
-        />
-    )
-}
-
-export default function PrintExportPage() {
-    return (
-        <AdminPageWrapper>
-            <SuperAdminGate>
-                <PrintExportContent />
-            </SuperAdminGate>
-        </AdminPageWrapper>
-    )
-}
