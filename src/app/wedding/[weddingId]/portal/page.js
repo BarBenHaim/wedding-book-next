@@ -9,7 +9,6 @@ import { normalizeEventType, getEventConfig } from '../../../../lib/eventTypes'
 import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale, dirFor } from '@/i18n/locales'
-import CoupleDesignPicker from '@/components/CoupleDesignPicker/CoupleDesignPicker'
 import { getEntries } from '@/lib/classifyMedia'
 
 // ייבוא רכיב לוח השנה המקצועי
@@ -370,48 +369,35 @@ function PortalApp({ onLocaleDiscovered }) {
 
                 {/* כפתורי פעולה */}
                 <div className='space-y-6 relative z-10'>
-                    {/* הספר שלכם — צפייה, בחירת עיצוב, ומי כבר העלה ברכה */}
-                    <div className='rounded-2xl border border-[#AA8840]/20 bg-white/60 p-4 text-center'>
-                        <h2 className='text-lg font-bold text-gray-800 mb-1'>הספר שלכם</h2>
-                        <p className='text-xs text-gray-400 mb-4'>
-                            {entries.length > 0
-                                ? `${entries.length} ברכות כבר נאספו`
-                                : 'עדיין אין ברכות — שתפו את הקישור כדי שיתחילו להגיע'}
-                        </p>
-                        {bookLink && (
-                            <a
-                                href={bookLink}
-                                target='_blank'
-                                rel='noopener noreferrer'
-                                className='w-full py-4 px-6 rounded-2xl gold-shimmer text-white font-bold text-lg shadow-lg hover:scale-[1.02] transition-all duration-300 flex items-center justify-center gap-3'
-                            >
-                                צפו בספר ובחרו עיצוב
-                            </a>
-                        )}
-                        {entries.length > 0 && (
-                            <div className='mt-4 flex flex-wrap gap-1.5 justify-center'>
-                                {entries.slice(0, 12).map((e, idx) => (
-                                    <span
-                                        key={e.id || idx}
-                                        className='text-[11px] bg-[#AA8840]/10 text-[#7a6548] px-2 py-1 rounded-full'
-                                    >
-                                        {e.name || 'אורח/ת'}
-                                    </span>
-                                ))}
-                                {entries.length > 12 && (
-                                    <span className='text-[11px] text-gray-400 px-2 py-1'>+{entries.length - 12}</span>
-                                )}
-                            </div>
+                    {/* הספר שלכם — דפדוף בתוכן הנוכחי + בחירת עיצוב, כמו ה-viewer */}
+                    <div className='rounded-2xl border border-[#AA8840]/20 bg-white/60 p-4'>
+                        <div className='flex items-center justify-between mb-3'>
+                            <h2 className='text-lg font-bold text-gray-800'>הספר שלכם</h2>
+                            <span className='text-xs text-gray-400'>
+                                {entries.length > 0 ? `${entries.length} ברכות` : 'עדיין אין ברכות'}
+                            </span>
+                        </div>
+                        {bookLink ? (
+                            <>
+                                <div
+                                    className='rounded-2xl overflow-hidden border border-[#AA8840]/15 bg-white'
+                                    style={{ height: 560 }}
+                                >
+                                    <iframe src={bookLink} title='הספר שלכם' className='w-full h-full' style={{ border: 'none' }} />
+                                </div>
+                                <a
+                                    href={bookLink}
+                                    target='_blank'
+                                    rel='noopener noreferrer'
+                                    className='mt-3 w-full py-3 px-6 rounded-2xl gold-shimmer text-white font-bold shadow hover:scale-[1.01] transition-all duration-300 flex items-center justify-center gap-2'
+                                >
+                                    פתחו במסך מלא — לדפדוף ובחירת עיצוב
+                                </a>
+                            </>
+                        ) : (
+                            <p className='text-xs text-gray-400 text-center py-8'>טוען את הספר...</p>
                         )}
                     </div>
-
-                    {/* בורר עיצוב הספר */}
-                    <CoupleDesignPicker
-                        activeDesign={bookDesign}
-                        onSelect={handleSelectDesign}
-                        title='בחרו עיצוב לספר'
-                        hint='לחיצה על עיצוב משנה מיד את מראה הספר שלכם.'
-                    />
 
                     <div className='w-full h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent'></div>
 
