@@ -10,6 +10,7 @@ import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale, dirFor } from '@/i18n/locales'
 import { getEntries } from '@/lib/classifyMedia'
+import CoupleDesignPicker from '@/components/CoupleDesignPicker/CoupleDesignPicker'
 
 // ייבוא רכיב לוח השנה המקצועי
 import DatePicker from 'react-datepicker'
@@ -115,6 +116,7 @@ function PortalApp({ onLocaleDiscovered }) {
     const [bookToken, setBookToken] = useState('')
     const [entries, setEntries] = useState([])
     const [bookDesign, setBookDesign] = useState(null)
+    const [bookRefresh, setBookRefresh] = useState(0)
 
     // Resolved event-type config — drives field labels + placeholders.
     // Now locale-aware: in English, cfg.label === 'Bar Mitzvah'.
@@ -254,6 +256,7 @@ function PortalApp({ onLocaleDiscovered }) {
                 { merge: true },
             )
             setBookDesign(design)
+            setBookRefresh(k => k + 1)
         },
         [weddingId],
     )
@@ -369,35 +372,55 @@ function PortalApp({ onLocaleDiscovered }) {
 
                 {/* כפתורי פעולה */}
                 <div className='space-y-6 relative z-10'>
-                    {/* הספר שלכם — דפדוף בתוכן הנוכחי + בחירת עיצוב, כמו ה-viewer */}
-                    <div className='rounded-2xl border border-[#AA8840]/20 bg-white/60 p-4'>
+                    {/* הספר שלכם — דפדוף בתוכן הנוכחי, בסגנון ה-viewer */}
+                    <div>
                         <div className='flex items-center justify-between mb-3'>
                             <h2 className='text-lg font-bold text-gray-800'>הספר שלכם</h2>
-                            <span className='text-xs text-gray-400'>
+                            <span className='text-xs font-semibold text-[#AA8840] bg-[#AA8840]/10 px-3 py-1 rounded-full'>
                                 {entries.length > 0 ? `${entries.length} ברכות` : 'עדיין אין ברכות'}
                             </span>
                         </div>
                         {bookLink ? (
                             <>
                                 <div
-                                    className='rounded-2xl overflow-hidden border border-[#AA8840]/15 bg-white'
-                                    style={{ height: 560 }}
+                                    className='rounded-[1.75rem] overflow-hidden shadow-2xl'
+                                    style={{
+                                        height: 600,
+                                        background: 'radial-gradient(ellipse at 50% 30%, #2a1f17 0%, #14100c 100%)',
+                                        border: '1px solid rgba(201,164,78,0.25)',
+                                    }}
                                 >
-                                    <iframe src={bookLink} title='הספר שלכם' className='w-full h-full' style={{ border: 'none' }} />
+                                    <iframe
+                                        key={bookRefresh}
+                                        src={`${bookLink}?embed=1`}
+                                        title='הספר שלכם'
+                                        className='w-full h-full'
+                                        style={{ border: 'none' }}
+                                    />
                                 </div>
-                                <a
-                                    href={bookLink}
-                                    target='_blank'
-                                    rel='noopener noreferrer'
-                                    className='mt-3 w-full py-3 px-6 rounded-2xl gold-shimmer text-white font-bold shadow hover:scale-[1.01] transition-all duration-300 flex items-center justify-center gap-2'
-                                >
-                                    פתחו במסך מלא — לדפדוף ובחירת עיצוב
-                                </a>
+                                <div className='text-center mt-2'>
+                                    <a
+                                        href={bookLink}
+                                        target='_blank'
+                                        rel='noopener noreferrer'
+                                        className='inline-flex items-center justify-center gap-1 text-sm font-semibold text-[#AA8840] hover:underline'
+                                    >
+                                        פתחו במסך מלא ↗
+                                    </a>
+                                </div>
                             </>
                         ) : (
                             <p className='text-xs text-gray-400 text-center py-8'>טוען את הספר...</p>
                         )}
                     </div>
+
+                    {/* בחירת עיצוב — נֵיטיב; הספר שלמעלה מתרענן מיד */}
+                    <CoupleDesignPicker
+                        activeDesign={bookDesign}
+                        onSelect={handleSelectDesign}
+                        title='בחרו עיצוב לספר'
+                        hint='בחרו עיצוב — הספר שלמעלה יתעדכן מיד.'
+                    />
 
                     <div className='w-full h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent'></div>
 

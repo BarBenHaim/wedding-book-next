@@ -49,6 +49,13 @@ export default function DigitalEditionPage() {
     const [status, setStatus] = useState('loading') // loading | invalid | ready
     const [wedding, setWedding] = useState(null)
     const [entries, setEntries] = useState([])
+    // Embedded mode (portal iframe): ?embed=1 hides the in-book design
+    // strip, because the portal supplies its own native design picker.
+    const [embed, setEmbed] = useState(false)
+
+    useEffect(() => {
+        setEmbed(typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('embed') === '1')
+    }, [])
 
     useEffect(() => {
         if (!weddingId || !token) return
@@ -219,7 +226,7 @@ export default function DigitalEditionPage() {
                 {status === 'loading' && <LoadingScreen />}
                 {status === 'invalid' && <InvalidScreen />}
                 {status === 'ready' && wedding && (
-                    <BookViewer wedding={wedding} entries={entries} weddingId={weddingId} token={token} />
+                    <BookViewer wedding={wedding} entries={entries} weddingId={weddingId} token={token} embed={embed} />
                 )}
             </div>
         </NextIntlClientProvider>
@@ -405,7 +412,7 @@ function InvalidScreen() {
 }
 
 // ─── Main book viewer ───────────────────────────────────────────────────
-function BookViewer({ wedding, entries, weddingId, token }) {
+function BookViewer({ wedding, entries, weddingId, token, embed }) {
     const flipRef = useRef(null)
     const [page, setPage] = useState(0)
     // Skip the landing/welcome screen — the user opted to drop the
@@ -1098,7 +1105,7 @@ function BookViewer({ wedding, entries, weddingId, token }) {
                 sticks across devices and into production. (Reversal of
                 the earlier "studio is the sole source of truth"
                 decision, per 2026 product request.) */}
-            <PresetStrip presets={presets} activeStyle={styleSettings} onApply={applyPreset} />
+            {!embed && <PresetStrip presets={presets} activeStyle={styleSettings} onApply={applyPreset} />}
 
             {shareToast && (
                 <div
