@@ -311,18 +311,15 @@ export function resolvePreset(preset) {
     // Strip the stable keys from the output so the wedding doc that
     // gets saved doesn't accumulate both shapes.
     const { fontKey, nameFontKey, frameId, ...rest } = v
-    return {
-        ...preset,
-        values: {
-            ...rest,
-            fontClass: fontEntry ? fontEntry.font.className : undefined,
-            // Guest name gets its own font when nameFontKey is set;
-            // otherwise BookPageTemplate falls back to fontClass at
-            // render time (same behavior as before this addition).
-            nameFontClass: nameFontEntry ? nameFontEntry.font.className : undefined,
-            frame: frameEntry ? frameEntry.src : null,
-        },
-    }
+    // Build values WITHOUT undefined keys — Firestore's client SDK rejects
+    // `undefined` field values (the JSON round-trip in server paths hid this,
+    // but a direct client setDoc from the portal does not). Only set
+    // fontClass / nameFontClass when they actually resolve; BookPageTemplate
+    // falls back gracefully when they're absent.
+    const values = { ...rest, frame: frameEntry ? frameEntry.src : null }
+    if (fontEntry) values.fontClass = fontEntry.font.className
+    if (nameFontEntry) values.nameFontClass = nameFontEntry.font.className
+    return { ...preset, values }
 }
 
 // ── Firestore plumbing ───────────────────────────────────────────────

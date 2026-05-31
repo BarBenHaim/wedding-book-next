@@ -286,7 +286,7 @@ function PortalApp({ onLocaleDiscovered }) {
                 }
             `}</style>
 
-            <div className='w-full max-w-lg bg-white/80 backdrop-blur-xl rounded-[2rem] shadow-2xl border border-white/50 p-6 md:p-8 relative overflow-hidden animate-scaleIn'>
+            <div className='w-full max-w-4xl bg-white/80 backdrop-blur-xl rounded-[2rem] shadow-2xl border border-white/50 p-6 md:p-10 relative overflow-hidden animate-scaleIn'>
                 {/* לוגו */}
                 <div className='text-center mb-3 relative z-10'>
                     <img
@@ -304,6 +304,7 @@ function PortalApp({ onLocaleDiscovered }) {
                     </span>
                 </div>
 
+                <div className='max-w-md mx-auto'>
                 {/* שמות — מבנה משתנה לפי סוג האירוע */}
                 {isWedding ? (
                     <div className='relative z-10 flex items-center justify-center gap-4 mb-6'>
@@ -368,6 +369,7 @@ function PortalApp({ onLocaleDiscovered }) {
                         placeholderText={t('datePickerPlaceholder')}
                         className='bg-[#AA8840]/5 text-[#AA8840] px-8 py-3 rounded-2xl border border-[#AA8840]/20 outline-none focus:ring-4 focus:ring-[#AA8840]/10 focus:border-[#AA8840] transition-all font-bold text-center cursor-pointer shadow-sm hover:bg-[#AA8840]/10 w-full'
                     />
+                </div>
                 </div>
 
                 {/* כפתורי פעולה */}

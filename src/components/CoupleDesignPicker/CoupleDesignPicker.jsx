@@ -56,7 +56,8 @@ export default function CoupleDesignPicker({ activeDesign, onSelect, title = 'ב
     }, [])
 
     async function pick(preset) {
-        const merged = { ...defaultStyle, ...(resolvePreset(preset).values || {}) }
+        // JSON round-trip drops any leftover `undefined` values — Firestore rejects them.
+        const merged = JSON.parse(JSON.stringify({ ...defaultStyle, ...(resolvePreset(preset).values || {}) }))
         try {
             setSavingKey(preset.id || preset.name)
             setSave('')
