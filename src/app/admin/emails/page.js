@@ -29,6 +29,7 @@ const SEGMENTS = [
     { type: 'past', label: 'אירועים שעברו' },
     { type: 'noDate', label: 'בלי תאריך (לא הוקמו)' },
     { type: 'eventType', label: 'לפי סוג אירוע' },
+    { type: 'specific', label: 'זוגות ספציפיים (בחירה)' },
 ]
 
 const EVENT_TYPES = [
@@ -43,6 +44,13 @@ const TRIGGERS = [
     { type: 'afterWedding', label: 'אחרי האירוע' },
     { type: 'afterPurchase', label: 'אחרי הרכישה' },
 ]
+
+function coupleOf(w) {
+    const b = (w.brideName || '').trim()
+    const g = (w.groomName || '').trim()
+    if (b && g) return `${b} ו${g}`
+    return b || g || w.celebrantName || w.ownerEmail || '—'
+}
 
 async function callEmailApi(op, payload = {}) {
     const user = auth.currentUser
@@ -65,6 +73,7 @@ function segmentLabel(seg) {
     const base = SEGMENTS.find(s => s.type === seg.type)?.label || seg.type
     if (seg.type === 'nextNdays') return `אירוע ב-${seg.n || 14} ימים הקרובים`
     if (seg.type === 'eventType') return `סוג: ${EVENT_TYPES.find(e => e.id === seg.eventType)?.label || seg.eventType}`
+    if (seg.type === 'specific') return `${seg.ids?.length || 0} זוגות נבחרו`
     return base
 }
 
@@ -186,16 +195,29 @@ function Compose({ flash }) {
     const [templates, setTemplates] = useState([])
     const [subject, setSubject] = useState('')
     const [bodyText, setBodyText] = useState('')
-    const [seg, setSeg] = useState({ type: 'all', n: 14, eventType: 'wedding' })
+    const [seg, setSeg] = useState({ type: 'all', n: 14, eventType: 'wedding', ids: [] })
     const [scheduleFor, setScheduleFor] = useState('')
     const [preview, setPreview] = useState(null)
     const [waList, setWaList] = useState(null)
+    const [testEmail, setTestEmail] = useState('')
+    const [allWeddings, setAllWeddings] = useState([])
+    const [wedSearch, setWedSearch] = useState('')
     const [busy, setBusy] = useState(false)
     const bodyRef = useRef(null)
 
     useEffect(() => {
         callEmailApi('listTemplates').then(r => setTemplates(r.items || [])).catch(() => {})
     }, [])
+
+    useEffect(() => {
+        const e = auth.currentUser?.email
+        if (e) setTestEmail(e)
+    }, [])
+
+    useEffect(() => {
+        if (seg.type === 'specific' && allWeddings.length === 0) fetchWeddings()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [seg.type])
 
     function loadTemplate(id) {
         const t = templates.find(x => x.id === id)
@@ -286,6 +308,37 @@ function Compose({ flash }) {
         }
     }
 
+    async function fetchWeddings() {
+        try {
+            const t = await auth.currentUser.getIdToken(false)
+            const res = await fetch('/api/admin/weddings', { headers: { Authorization: `Bearer ${t}` } })
+            if (res.ok) setAllWeddings(await res.json())
+        } catch (e) {
+            flash(e.message, 'error')
+        }
+    }
+
+    async function doTest() {
+        const to = (testEmail || '').trim()
+        if (!to) {
+            flash('הכניסו כתובת לבדיקה', 'error')
+            return
+        }
+        if (!subject.trim() && !bodyText.trim()) {
+            flash('כתבו הודעה קודם', 'error')
+            return
+        }
+        setBusy(true)
+        try {
+            await callEmailApi('sendTest', { subject, body: bodyText, to })
+            flash(`מייל בדיקה נשלח ל-${to}`)
+        } catch (e) {
+            flash(e.message, 'error')
+        } finally {
+            setBusy(false)
+        }
+    }
+
     return (
         <div className='space-y-4'>
             <Card>
@@ -334,11 +387,50 @@ function Compose({ flash }) {
                         ))}
                     </select>
                 )}
+                {seg.type === 'specific' && (
+                    <div className='mt-2'>
+                        <input className={inputCls} placeholder='חיפוש זוג...' value={wedSearch} onChange={e => setWedSearch(e.target.value)} />
+                        <div className='mt-2 max-h-[240px] overflow-y-auto space-y-1 border border-[#e7dcc6] rounded-xl p-2'>
+                            {allWeddings
+                                .filter(w => coupleOf(w).includes(wedSearch) || (w.ownerEmail || '').includes(wedSearch))
+                                .map(w => {
+                                    const checked = (seg.ids || []).includes(w.id)
+                                    return (
+                                        <label key={w.id} className='flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg hover:bg-[#f8f4ec] cursor-pointer'>
+                                            <input
+                                                type='checkbox'
+                                                checked={checked}
+                                                onChange={() =>
+                                                    setSeg(s => ({
+                                                        ...s,
+                                                        ids: checked ? (s.ids || []).filter(x => x !== w.id) : [...(s.ids || []), w.id],
+                                                    }))
+                                                }
+                                            />
+                                            <span className='truncate'>{coupleOf(w)}</span>
+                                            <span className='text-[11px] text-[#a89378] ms-auto'>{w.weddingDate ? new Date(w.weddingDate).toLocaleDateString('he-IL') : ''}</span>
+                                        </label>
+                                    )
+                                })}
+                            {allWeddings.length === 0 && <p className='text-xs text-[#a89378] text-center py-3'>טוען זוגות...</p>}
+                        </div>
+                        <p className='text-[11px] text-[#7a6a52] mt-1'>{(seg.ids || []).length} נבחרו</p>
+                    </div>
+                )}
             </Card>
 
             <Card>
                 <label className='flex items-center gap-2 text-xs font-bold text-[#7a6a52] mb-2'><Clock3 size={13} /> תזמון (לא חובה — ריק = שליחה מיידית)</label>
                 <input type='datetime-local' className={inputCls} value={scheduleFor} onChange={e => setScheduleFor(e.target.value)} />
+            </Card>
+
+            <Card>
+                <label className='block text-xs font-bold text-[#7a6a52] mb-2'>מייל בדיקה (לפני שליחה אמיתית)</label>
+                <div className='flex gap-2'>
+                    <input className={inputCls} type='email' value={testEmail} onChange={e => setTestEmail(e.target.value)} placeholder='your@email.com' />
+                    <button onClick={doTest} disabled={busy} className='flex-shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold bg-white border border-[#e7dcc6] text-[#7a6a52] disabled:opacity-50'>שלח בדיקה</button>
+                </div>
+                <p className='text-[11px] text-[#a89378] mt-2'>{'נשלח לכתובת הזו עם נתוני דוגמה — בלי להשפיע על אף זוג.'}</p>
             </Card>
 
             <div className='flex gap-2'>

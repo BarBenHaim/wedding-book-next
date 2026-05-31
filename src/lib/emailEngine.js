@@ -424,3 +424,35 @@ export const DEFAULT_AUTOMATIONS = [
     { name: 'תזכורת זנב — 3 ימים אחרי', templateName: 'תזכורת זנב — כמה ימים אחרי', trigger: { type: 'afterWedding', offsetDays: 3 }, active: true },
     { name: 'הספר מוכן — 10 ימים אחרי', templateName: 'הספר מוכן', trigger: { type: 'afterWedding', offsetDays: 10 }, active: true },
 ]
+
+// ─── Test send ───────────────────────────────────────────────────────
+// Renders the template against a built-in sample wedding (token already
+// present → no DB write) and sends it to an arbitrary address. Subject is
+// prefixed [בדיקה]; nothing is logged and no couple is touched.
+function sampleWeddingForTest() {
+    const d = new Date()
+    d.setUTCDate(d.getUTCDate() + 14)
+    return {
+        id: 'sample',
+        brideName: 'יעל',
+        groomName: 'יואב',
+        celebrantName: '',
+        weddingDate: d.toISOString().slice(0, 10),
+        slug: 'sample',
+        ownerEmail: 'demo@weddingtales.co.il',
+        eventType: 'wedding',
+        digitalTokens: ['preview-token'],
+    }
+}
+
+export async function sendTest({ template, to }) {
+    if (!to) throw new Error('missing test recipient')
+    const { subject, html } = await renderForWedding(template, sampleWeddingForTest())
+    await transporter().sendMail({
+        from: `"Wedding Tales" <${process.env.MAIL_USER}>`,
+        to,
+        subject: `[בדיקה] ${subject}`,
+        html,
+    })
+    return { ok: true, to }
+}

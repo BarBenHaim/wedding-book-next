@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server'
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { isSuperAdmin } from '@/lib/superAdmin'
-import { COL, resolveWeddings, renderForWedding, sendCampaign, DEFAULT_TEMPLATES, DEFAULT_AUTOMATIONS, waRecipients as buildWaRecipients } from '@/lib/emailEngine'
+import { COL, resolveWeddings, renderForWedding, sendCampaign, sendTest, DEFAULT_TEMPLATES, DEFAULT_AUTOMATIONS, waRecipients as buildWaRecipients } from '@/lib/emailEngine'
 
 // Consolidated super-admin endpoint for the email system. Mirrors the
 // /api/studio op-based pattern. Auth: Firebase ID token that resolves to
@@ -225,6 +225,12 @@ export async function POST(req) {
                     result,
                 })
                 return NextResponse.json({ ok: true, sent: true, id, result })
+            }
+            case 'sendTest': {
+                const to = (body.to || auth.email || '').trim()
+                if (!to) return NextResponse.json({ error: 'Missing test recipient' }, { status: 400 })
+                const r = await sendTest({ template: { subject: body.subject || '', body: body.body || '' }, to })
+                return NextResponse.json(r)
             }
             case 'waRecipients': {
                 const segment = body.segment || { type: 'all' }
