@@ -37,6 +37,16 @@ function transporter() {
     })
 }
 
+// Map client attachment payloads ({ filename, contentBase64 }) to the
+// shape nodemailer expects. Returns undefined when there are none.
+function toMailAttachments(list) {
+    if (!Array.isArray(list) || list.length === 0) return undefined
+    const out = list
+        .filter(a => a && a.filename && a.contentBase64)
+        .map(a => ({ filename: String(a.filename).slice(0, 200), content: a.contentBase64, encoding: 'base64' }))
+    return out.length ? out : undefined
+}
+
 // ─── Date helpers (day granularity, UTC) ─────────────────────────────
 function todayISO() {
     return new Date().toISOString().slice(0, 10)
@@ -199,7 +209,7 @@ export async function renderForWedding(template, w) {
 
 // Send to one wedding. `dedupKey` (optional) makes the send idempotent
 // (used by automations so a daily cron never double-sends).
-export async function sendToWedding({ template, wedding, source, dedupKey }) {
+export async function sendToWedding({ template, wedding, source, dedupKey, attachments }) {
     const to = emailOf(wedding)
     if (!to) return { skipped: 'no-email' }
     if (dedupKey) {
@@ -212,6 +222,7 @@ export async function sendToWedding({ template, wedding, source, dedupKey }) {
         to,
         subject,
         html,
+        attachments: toMailAttachments(attachments),
     })
     const logDoc = {
         to,
@@ -226,14 +237,14 @@ export async function sendToWedding({ template, wedding, source, dedupKey }) {
 }
 
 // Send a template to every wedding in a segment, throttled for Gmail.
-export async function sendCampaign({ template, segment, source }) {
+export async function sendCampaign({ template, segment, source, attachments }) {
     const weddings = await resolveWeddings(segment)
     let sent = 0,
         skipped = 0,
         failed = 0
     for (const w of weddings) {
         try {
-            const r = await sendToWedding({ template, wedding: w, source })
+            const r = await sendToWedding({ template, wedding: w, source, attachments })
             if (r.sent) sent++
             else skipped++
         } catch (e) {
@@ -351,6 +362,63 @@ export const DEFAULT_TEMPLATES = [
         body:
             'שלום {{coupleName}},\n\nאיזה כיף — אוסף הברכות שלכם מוכן לצפייה. פתחו, דפדפו, ותיהנו מכל הרגעים שהאורחים השאירו לכם:\n\n{{bookButton}}\n\nהספר המודפס בהפקה ויגיע אליכם בקרוב.',
     },
+    {
+        name: 'המדריך המלא — כל ההוראות והקישורים',
+        subject: 'המדריך המלא שלכם — Wedding Tales ✨',
+        body: `שלום {{coupleName}},
+
+ברוכים הבאים ל-Wedding Tales! ריכזנו כאן את כל מה שצריך לדעת — דקה אחת ואתם מסודרים.
+
+<b>מה זה בעצם?</b>
+האורחים שלכם סורקים קוד QR באירוע, כותבים ברכה ומצרפים תמונה — והכל נאסף אוטומטית לספר ברכות יוקרתי, דיגיטלי ומודפס. בלי אפליקציה ובלי הרשמה.
+
+<hr>
+
+<b>שלושת הדברים שיש לכם:</b>
+
+<b>1. עמוד הניהול שלכם</b> — לעריכת שמות ותאריך, ולמעקב אחרי הברכות שמגיעות.
+{{portalButton}}
+
+<b>2. הספר שלכם</b> — לצפייה ולבחירת העיצוב שאתם הכי אוהבים (אפשר לדפדף בו).
+{{bookButton}}
+
+<b>3. הקישור לאורחים</b> — שתפו אותו בקבוצות הוואטסאפ של האירוע. ככל שתשתפו יותר, יגיעו יותר ברכות.
+{{whatsappButton}}
+או העתיקו ושלחו ידנית: {{guestLink}}
+
+<hr>
+
+<b>📎 הקבצים להדפסה שצירפנו למייל</b>
+צירפנו למייל הזה קבצים מוכנים להדפסה — שלטי QR יפים לסריקה.
+הדפיסו אותם והציבו במקומות אסטרטגיים: <b>ליד הבר</b>, <b>ליד קבלת הפנים</b>, או <b>על כל שולחן</b> — מה שמתאים לכם. ככל שה-QR גלוי ונגיש יותר, כך יותר אורחים שמים לב, סורקים, ומשאירים ברכה.
+
+<hr>
+
+<b>💡 הכי חשוב — לידע את האורחים מראש</b>
+אורח שיודע מראש שיש ספר ברכות מגיע מוכן ומקדיש רגע לכתוב. שתפו את הקישור בוואטסאפ כמה ימים לפני האירוע, ותזכירו שוב ביום עצמו — זה מה שמכפיל את כמות הברכות.
+
+<hr>
+
+<b>איך זה עובד — שלב אחר שלב:</b>
+
+• <b>עכשיו:</b> היכנסו לעמוד הניהול, מלאו שמות ותאריך, ובחרו עיצוב לספר.
+• <b>לפני האירוע:</b> הדפיסו את הקבצים המצורפים, ושתפו את הקישור עם האורחים בוואטסאפ — שיכירו וידעו שזה מגיע.
+• <b>ביום האירוע:</b> הציבו את שלטי ה-QR במקומות בולטים (אנחנו גם מקימים את הרול-אפ). האורחים סורקים, כותבים ומצרפים תמונה.
+• <b>אחרי האירוע:</b> הספר מתמלא בברכות — תצפו ותתרגשו. הספר המודפס בהפקה ויגיע אליכם.
+
+<hr>
+
+<b>שאלות נפוצות:</b>
+
+• <b>יש לנו אורחים מבוגרים — מתאים להם?</b> בהחלט. סורקים QR ישירות מהמצלמה, בלי אפליקציה ובלי הרשמה.
+• <b>מה אם לא כולם הספיקו לברך?</b> אפשר לשתף שוב גם אחרי האירוע — הקישור נשאר פעיל עוד כמה ימים.
+• <b>רוצים לשנות עיצוב?</b> בכל רגע — מעמוד הניהול או מקישור הספר שלמעלה.
+
+יש שאלה? פשוט השיבו למייל הזה ונשמח לעזור 💛
+
+באהבה,
+צוות Wedding Tales`,
+    },
 ]
 
 // ─── WhatsApp helpers ────────────────────────────────────────────────
@@ -445,7 +513,7 @@ function sampleWeddingForTest() {
     }
 }
 
-export async function sendTest({ template, to }) {
+export async function sendTest({ template, to, attachments }) {
     if (!to) throw new Error('missing test recipient')
     const { subject, html } = await renderForWedding(template, sampleWeddingForTest())
     await transporter().sendMail({
@@ -453,6 +521,7 @@ export async function sendTest({ template, to }) {
         to,
         subject: `[בדיקה] ${subject}`,
         html,
+        attachments: toMailAttachments(attachments),
     })
     return { ok: true, to }
 }

@@ -82,7 +82,14 @@ function QrCodesContent() {
                     const bride = data.brideNameHe || data.brideName || ''
                     const groom = data.groomNameHe || data.groomName || ''
                     const celeb = data.celebrantNameHe || data.celebrantName || ''
-                    const label = (bride && groom) ? `${bride} ו${groom}` : (celeb || d.id)
+                    const names = (bride && groom) ? `${bride} ו${groom}` : (celeb || `חתונה ${d.id.slice(0, 6)}`)
+                    let dateStr = ''
+                    const wd = data.weddingDate
+                    if (wd) {
+                        const dt = typeof wd?.toDate === 'function' ? wd.toDate() : new Date(wd)
+                        if (!isNaN(dt.getTime())) dateStr = dt.toLocaleDateString('he-IL')
+                    }
+                    const label = dateStr ? `${names} · ${dateStr}` : names
                     return { id: d.id, label, raw: data }
                 })
                 setWeddings(list)

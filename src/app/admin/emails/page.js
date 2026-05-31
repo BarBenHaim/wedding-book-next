@@ -202,6 +202,7 @@ function Compose({ flash }) {
     const [testEmail, setTestEmail] = useState('')
     const [allWeddings, setAllWeddings] = useState([])
     const [wedSearch, setWedSearch] = useState('')
+    const [attachments, setAttachments] = useState([]) // [{ filename, contentBase64, size }]
     const [busy, setBusy] = useState(false)
     const bodyRef = useRef(null)
 
@@ -243,6 +244,24 @@ function Compose({ flash }) {
         })
     }
 
+    function onFiles(fileList) {
+        Array.from(fileList || []).forEach(file => {
+            const reader = new FileReader()
+            reader.onload = () => {
+                const res = String(reader.result || '')
+                const base64 = res.includes(',') ? res.split(',')[1] : res
+                setAttachments(prev => [...prev, { filename: file.name, contentBase64: base64, size: file.size }])
+            }
+            reader.readAsDataURL(file)
+        })
+    }
+    function removeAttachment(i) {
+        setAttachments(prev => prev.filter((_, idx) => idx !== i))
+    }
+    function attachmentsPayload() {
+        return attachments.map(a => ({ filename: a.filename, contentBase64: a.contentBase64 }))
+    }
+
     async function doPreview() {
         setBusy(true)
         try {
@@ -270,6 +289,7 @@ function Compose({ flash }) {
                 body: bodyText,
                 segment: seg,
                 scheduleFor: scheduled ? new Date(scheduleFor).toISOString() : null,
+                attachments: attachmentsPayload(),
             })
             if (r.scheduled) flash('המייל תוזמן בהצלחה')
             else flash(`נשלח ל-${r.result?.sent || 0} זוגות (דילוג: ${r.result?.skipped || 0})`)
@@ -330,7 +350,7 @@ function Compose({ flash }) {
         }
         setBusy(true)
         try {
-            await callEmailApi('sendTest', { subject, body: bodyText, to })
+            await callEmailApi('sendTest', { subject, body: bodyText, to, attachments: attachmentsPayload() })
             flash(`מייל בדיקה נשלח ל-${to}`)
         } catch (e) {
             flash(e.message, 'error')
@@ -367,6 +387,26 @@ function Compose({ flash }) {
                 <p className='text-[11px] text-[#a89378] mt-2'>{'שורות חדשות הופכות אוטומטית לירידות שורה. כפתורים כמו "כפתור: ספר" מוסיפים כפתור מעוצב.'}</p>
             </Card>
 
+            <Card>
+                <label className='block text-xs font-bold text-[#7a6a52] mb-2'>📎 קבצים מצורפים (אופציונלי)</label>
+                <input
+                    type='file'
+                    multiple
+                    onChange={e => onFiles(e.target.files)}
+                    className='block w-full text-xs text-[#7a6a52] file:mr-3 file:rounded-lg file:border-0 file:bg-[#AA8840]/10 file:px-3 file:py-2 file:text-[#AA8840] file:font-bold'
+                />
+                {attachments.length > 0 && (
+                    <div className='mt-3 space-y-1.5'>
+                        {attachments.map((a, i) => (
+                            <div key={i} className='flex items-center justify-between gap-2 text-xs bg-[#f8f4ec] rounded-lg px-3 py-2'>
+                                <span className='truncate text-[#5a4a32]'>{a.filename} · {Math.round(a.size / 1024)}KB</span>
+                                <button onClick={() => removeAttachment(i)} className='text-[#c0392b] flex-shrink-0'><Trash2 size={14} /></button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                <p className='text-[11px] text-[#a89378] mt-2'>{'הקבצים יישלחו מצורפים למייל (למשל שלטי QR להדפסה). עד ~6MB. תזמון עם קבצים לא נתמך — שלחו מיד.'}</p>
+            </Card>
             <Card>
                 <label className='flex items-center gap-2 text-xs font-bold text-[#7a6a52] mb-2'><Users size={13} /> תפוצה</label>
                 <select className={inputCls} value={seg.type} onChange={e => setSeg(s => ({ ...s, type: e.target.value }))}>

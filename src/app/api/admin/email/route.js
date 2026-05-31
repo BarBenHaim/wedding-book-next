@@ -16,6 +16,17 @@ function newId(prefix) {
     return prefix + '_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)
 }
 
+// Validate client attachment payloads: array of { filename, contentBase64 }.
+// Caps total base64 size (~6MB of files) so a request can't blow up email/SMTP.
+function parseAttachments(raw) {
+    if (!Array.isArray(raw)) return { list: undefined, tooBig: false }
+    const list = raw
+        .filter(a => a && typeof a.filename === 'string' && typeof a.contentBase64 === 'string' && a.contentBase64)
+        .map(a => ({ filename: a.filename, contentBase64: a.contentBase64 }))
+    const totalChars = list.reduce((n, a) => n + a.contentBase64.length, 0)
+    return { list: list.length ? list : undefined, tooBig: totalChars > 9000000 }
+}
+
 async function authSuper(req) {
     const h = req.headers.get('authorization')
     if (!h?.startsWith('Bearer ')) return { ok: false, status: 401, error: 'Unauthorized' }
@@ -198,8 +209,11 @@ export async function POST(req) {
                     template = { subject: body.subject || '', body: body.body || '' }
                 }
                 const scheduleFor = body.scheduleFor ? new Date(body.scheduleFor) : null
+                const att = parseAttachments(body.attachments)
+                if (att.tooBig) return NextResponse.json({ error: 'הקבצים המצורפים גדולים מדי (מקסימום ~6MB)' }, { status: 413 })
                 const id = newId('camp')
                 if (scheduleFor && scheduleFor.getTime() > Date.now()) {
+                    if (att.list) return NextResponse.json({ error: 'תזמון עם קבצים מצורפים אינו נתמך — שלחו מיד או הסירו את הקבצים' }, { status: 400 })
                     await adminDb.collection(COL.campaigns).doc(id).set({
                         templateId: body.templateId || null,
                         subject: template.subject,
@@ -212,7 +226,7 @@ export async function POST(req) {
                     })
                     return NextResponse.json({ ok: true, scheduled: true, id, when: scheduleFor.toISOString() })
                 }
-                const result = await sendCampaign({ template, segment, source: { kind: 'campaign', id } })
+                const result = await sendCampaign({ template, segment, source: { kind: 'campaign', id }, attachments: att.list })
                 await adminDb.collection(COL.campaigns).doc(id).set({
                     templateId: body.templateId || null,
                     subject: template.subject,
@@ -229,7 +243,9 @@ export async function POST(req) {
             case 'sendTest': {
                 const to = (body.to || auth.email || '').trim()
                 if (!to) return NextResponse.json({ error: 'Missing test recipient' }, { status: 400 })
-                const r = await sendTest({ template: { subject: body.subject || '', body: body.body || '' }, to })
+                const att = parseAttachments(body.attachments)
+                if (att.tooBig) return NextResponse.json({ error: 'הקבצים המצורפים גדולים מדי (מקסימום ~6MB)' }, { status: 413 })
+                const r = await sendTest({ template: { subject: body.subject || '', body: body.body || '' }, to, attachments: att.list })
                 return NextResponse.json(r)
             }
             case 'waRecipients': {

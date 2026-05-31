@@ -12,7 +12,7 @@ import {
     CheckCircle2, Trash2, KeyRound, Download, Database, X,
     ChevronRight, Eye, Link2, Mail, Shield, HardDrive, RefreshCw,
     AlertTriangle, Copy, Clock, Printer, Package, Truck, UserPlus,
-    Pencil, Save, PartyPopper, Wand2, BarChart3, QrCode,
+    Pencil, Save, PartyPopper, Wand2, BarChart3, QrCode, Phone, Wallet,
 } from 'lucide-react'
 import {
     EVENT_TYPE_ORDER,
@@ -123,7 +123,30 @@ function formatDate(isoString) {
 
 function coupleLabel(w) {
     if (w.brideName || w.groomName) return [w.brideName, w.groomName].filter(Boolean).join(' & ')
+    if (w.celebrantName) return w.celebrantName
     return w.ownerEmail || '—'
+}
+
+const EVENT_TYPE_META = {
+    wedding: { label: 'חתונה', bg: '#fdeef2', color: '#b84a6a' },
+    bar_mitzvah: { label: 'בר מצווה', bg: '#eef2fd', color: '#4a5fb8' },
+    bat_mitzvah: { label: 'בת מצווה', bg: '#f6eefd', color: '#8a4ab8' },
+    birthday: { label: 'יום הולדת', bg: '#fef6e9', color: '#b8862f' },
+}
+function EventTypeBadge({ type }) {
+    const m = EVENT_TYPE_META[normalizeEventType(type)] || EVENT_TYPE_META.wedding
+    return (
+        <span className='inline-block px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap' style={{ background: m.bg, color: m.color }}>
+            {m.label}
+        </span>
+    )
+}
+function formatAmount(w) {
+    if (w.amountPaid == null || w.amountPaid === '') return null
+    const n = Number(w.amountPaid)
+    if (!Number.isFinite(n) || n <= 0) return null
+    const sym = !w.currency || w.currency === 'ILS' ? '₪' : `${w.currency} `
+    return `${sym}${n % 1 === 0 ? n : n.toFixed(2)}`
 }
 
 function getWeddingStatus(d) {
@@ -1382,8 +1405,10 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
               ]),
         { label: 'תאריך האירוע', value: formatDate(wedding.weddingDate), icon: CalendarDays },
         { label: 'אימייל בעלים', value: wedding.ownerEmail || '—', icon: Mail },
+        { label: 'טלפון', value: wedding.ownerPhone || '—', icon: Phone },
         { label: 'מזהה בעלים (UID)', value: wedding.ownerId || '—', icon: Shield, mono: true },
         { label: 'מזהה הזמנה', value: wedding.orderId ? `#${wedding.orderId}` : '—', icon: Hash, mono: true },
+        { label: 'סכום ששולם', value: formatAmount(wedding) || '—', icon: Wallet },
         { label: 'סה"כ ברכות', value: String(wedding.greetingsCount ?? 0), icon: MessageCircle },
         { label: 'נוצר בתאריך', value: wedding.createdAt ? formatDate(wedding.createdAt) : '—', icon: Clock },
         { label: 'סטטוס הדפסה', value: wedding.printOrder ? 'הוזמן' : 'לא הוזמן', icon: Printer },
@@ -2271,7 +2296,7 @@ function AdminDashboardContent() {
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'>סטטוס</th>
                                         <SortableHeader sortKey='greetings' currentSort={sort} onSort={setSort} justify='center'><MessageCircle size={11} /> ברכות</SortableHeader>
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'><span className='flex items-center gap-1.5 justify-center'><Printer size={11} /> הדפסה</span></th>
-                                        <th className='px-6 py-4 font-semibold text-[#a89378]'><span className='flex items-center gap-1.5 justify-end'><Hash size={11} /> הזמנה</span></th>
+                                        <th className='px-6 py-4 font-semibold text-[#a89378] text-center'><span className='flex items-center gap-1.5 justify-center'><Wallet size={11} /> תשלום</span></th>
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'>פעולות</th>
                                     </tr>
                                 </thead>
@@ -2287,18 +2312,26 @@ function AdminDashboardContent() {
                                             </td>
                                             <td className='px-6 py-4'>
                                                 <div className='text-right'>
-                                                    <div className='font-semibold text-[#1a1410]'>{coupleLabel(w)}</div>
-                                                    {w.ownerEmail && (w.brideName || w.groomName) && <div className='text-xs text-[#a89378] mt-0.5'>{w.ownerEmail}</div>}
+                                                    <div className='flex items-center gap-2 justify-end'>
+                                                        <span className='font-semibold text-[#1a1410]'>{coupleLabel(w)}</span>
+                                                        <EventTypeBadge type={w.eventType} />
+                                                    </div>
+                                                    {(w.ownerEmail || w.ownerPhone) && (
+                                                        <div className='text-xs text-[#a89378] mt-1 flex items-center gap-2 justify-end flex-wrap'>
+                                                            {w.ownerEmail && <span className='truncate max-w-[200px]'>{w.ownerEmail}</span>}
+                                                            {w.ownerPhone && <span dir='ltr' className='tabular-nums'>{w.ownerPhone}</span>}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </td>
                                             <td className='px-6 py-4 text-[#7a6a52] whitespace-nowrap text-sm tabular-nums'>{formatDate(w.weddingDate)}</td>
                                             <td className='px-6 py-4 text-center'><StatusBadge weddingDate={w.weddingDate} /></td>
                                             <td className='px-6 py-4 text-center'><GreetingsBadge count={w.greetingsCount} /></td>
                                             <td className='px-6 py-4 text-center'><PrintBadge printOrder={w.printOrder} /></td>
-                                            <td className='px-6 py-4 text-right'>
-                                                {w.orderId
-                                                    ? <span className='font-mono text-xs bg-[#fbf6ec] text-[#7a6a52] px-2.5 py-1 rounded-lg border border-[#ead9b3]'>#{w.orderId}</span>
-                                                    : <span className='text-[#c4b9a4] text-xs'>ידני</span>}
+                                            <td className='px-6 py-4 text-center'>
+                                                {formatAmount(w)
+                                                    ? <span className='text-sm font-bold text-[#3d7a3e] tabular-nums whitespace-nowrap'>{formatAmount(w)}</span>
+                                                    : <span className='text-[#c4b9a4] text-xs'>—</span>}
                                             </td>
                                             <td className='px-6 py-4'>
                                                 <div className='flex items-center justify-center gap-1.5' onClick={e => e.stopPropagation()}>

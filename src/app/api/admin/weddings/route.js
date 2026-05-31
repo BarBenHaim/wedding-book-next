@@ -64,6 +64,23 @@ export async function GET(req) {
                     }
                 }
 
+                // Amount paid — captured on new orders; for older ones fall back
+                // to the raw WooCommerce webhook payload we stored in ordersRaw.
+                let amountPaid = data.amountPaid ?? null
+                let currency = data.currency ?? null
+                if (amountPaid == null && data.orderId) {
+                    try {
+                        const raw = await adminDb.collection('ordersRaw').doc(String(data.orderId)).get()
+                        if (raw.exists) {
+                            const b = raw.data()?.body || {}
+                            amountPaid = b.total ?? null
+                            currency = b.currency ?? null
+                        }
+                    } catch {
+                        /* ignore — amount stays null */
+                    }
+                }
+
                 return {
                     id: doc.id,
                     brideName: data.brideName ?? null,
@@ -77,6 +94,9 @@ export async function GET(req) {
                     createdAt,
                     printOrder: data.printOrder ?? null,
                     productionStatus: data.productionStatus ?? 'new',
+                    ownerPhone: data.ownerPhone ?? null,
+                    amountPaid,
+                    currency,
                     // Event-type + theme fields (may be absent on legacy docs → normalized on read)
                     eventType: normalizeEventType(data.eventType),
                     themeColor: normalizeThemeColor(data.themeColor), // null = use event-type default
