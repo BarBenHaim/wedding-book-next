@@ -455,6 +455,10 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
     useEffect(() => {
         function recalc() {
             if (typeof window === 'undefined') return
+            // Embedded in the portal iframe (?embed=1) → lower the "wide"
+            // threshold so a ~700px book column still shows the two-page
+            // spread; a standalone tab keeps the 900px threshold.
+            const embedded = new URLSearchParams(window.location.search).get('embed') === '1'
             const vw = window.innerWidth
             // Vertical budget reserved for the UI surrounding the
             // book: arrow row (~74px) + page counter (in the arrow
@@ -463,13 +467,13 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
             // strip itself was dropped — the book now uses that
             // recovered height to grow toward the full viewport on
             // mobile. Total ≈ 160-180px reserved.
-            const vh = window.innerHeight - 180
-            const isWide = vw >= 900
+            const vh = window.innerHeight - (embedded ? 120 : 180)
+            const isWide = vw >= (embedded ? 680 : 900)
             // Wide screen: two pages side-by-side. Each page can be
             // up to 48% of viewport width. The book is square (Lulu
             // 8.5×8.5), so pageHeight = pageWidth.
             // Narrow: one page, up to 94% of viewport width.
-            const targetByWidth = isWide ? vw * 0.42 : vw * 0.98
+            const targetByWidth = isWide ? vw * (embedded ? 0.46 : 0.42) : vw * (embedded ? 0.96 : 0.98)
             // Cap by available vertical so the book never spills past
             // the bottom (with toolbar+nav reserved).
             const target = Math.min(targetByWidth, vh)

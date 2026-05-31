@@ -286,8 +286,8 @@ function PortalApp({ onLocaleDiscovered }) {
                 }
             `}</style>
 
-            <div className='w-full max-w-4xl bg-white/80 backdrop-blur-xl rounded-[2rem] shadow-2xl border border-white/50 p-6 md:p-10 relative overflow-hidden animate-scaleIn'>
-                {/* לוגו */}
+            <div className='w-full max-w-7xl bg-white/80 backdrop-blur-xl rounded-[2rem] shadow-2xl border border-white/50 p-6 md:p-10 relative overflow-hidden animate-scaleIn'>
+                                {/* לוגו */}
                 <div className='text-center mb-3 relative z-10'>
                     <img
                         src='/logo-wt.png'
@@ -304,7 +304,64 @@ function PortalApp({ onLocaleDiscovered }) {
                     </span>
                 </div>
 
-                <div className='max-w-md mx-auto'>
+                
+
+                <div className='grid lg:grid-cols-3 gap-6 lg:gap-8 items-start relative z-10'>
+                    {/* MAIN — הספר + בחירת עיצוב */}
+                    <div className='lg:col-span-2 space-y-5'>
+                    {/* הספר שלכם — דפדוף בתוכן הנוכחי, בסגנון ה-viewer */}
+                    <div>
+                        <div className='flex items-center justify-between mb-3'>
+                            <h2 className='text-lg font-bold text-gray-800'>הספר שלכם</h2>
+                            <span className='text-xs font-semibold text-[#AA8840] bg-[#AA8840]/10 px-3 py-1 rounded-full'>
+                                {entries.length > 0 ? `${entries.length} ברכות` : 'עדיין אין ברכות'}
+                            </span>
+                        </div>
+                        {bookLink ? (
+                            <>
+                                <div
+                                    className='rounded-[1.75rem] overflow-hidden shadow-2xl h-[440px] sm:h-[520px] lg:h-[600px]'
+                                    style={{
+                                        background: 'radial-gradient(ellipse at 50% 30%, #2a1f17 0%, #14100c 100%)',
+                                        border: '1px solid rgba(201,164,78,0.25)',
+                                    }}
+                                >
+                                    <iframe
+                                        key={bookRefresh}
+                                        src={`${bookLink}?embed=1`}
+                                        title='הספר שלכם'
+                                        className='w-full h-full'
+                                        style={{ border: 'none' }}
+                                    />
+                                </div>
+                                <div className='text-center mt-2'>
+                                    <a
+                                        href={bookLink}
+                                        target='_blank'
+                                        rel='noopener noreferrer'
+                                        className='inline-flex items-center justify-center gap-1 text-sm font-semibold text-[#AA8840] hover:underline'
+                                    >
+                                        פתחו במסך מלא ↗
+                                    </a>
+                                </div>
+                            </>
+                        ) : (
+                            <p className='text-xs text-gray-400 text-center py-8'>טוען את הספר...</p>
+                        )}
+                    </div>
+
+                    {/* בחירת עיצוב — נֵיטיב; הספר שלמעלה מתרענן מיד */}
+                    <CoupleDesignPicker
+                        activeDesign={bookDesign}
+                        onSelect={handleSelectDesign}
+                        title='בחרו עיצוב לספר'
+                        hint='בחרו עיצוב — הספר שלמעלה יתעדכן מיד.'
+                    />
+
+                    
+                    </div>
+                    {/* SIDE — פרטי האירוע ושיתוף */}
+                    <div className='space-y-6'>
                 {/* שמות — מבנה משתנה לפי סוג האירוע */}
                 {isWedding ? (
                     <div className='relative z-10 flex items-center justify-center gap-4 mb-6'>
@@ -370,62 +427,8 @@ function PortalApp({ onLocaleDiscovered }) {
                         className='bg-[#AA8840]/5 text-[#AA8840] px-8 py-3 rounded-2xl border border-[#AA8840]/20 outline-none focus:ring-4 focus:ring-[#AA8840]/10 focus:border-[#AA8840] transition-all font-bold text-center cursor-pointer shadow-sm hover:bg-[#AA8840]/10 w-full'
                     />
                 </div>
-                </div>
-
-                {/* כפתורי פעולה */}
-                <div className='space-y-6 relative z-10'>
-                    {/* הספר שלכם — דפדוף בתוכן הנוכחי, בסגנון ה-viewer */}
-                    <div>
-                        <div className='flex items-center justify-between mb-3'>
-                            <h2 className='text-lg font-bold text-gray-800'>הספר שלכם</h2>
-                            <span className='text-xs font-semibold text-[#AA8840] bg-[#AA8840]/10 px-3 py-1 rounded-full'>
-                                {entries.length > 0 ? `${entries.length} ברכות` : 'עדיין אין ברכות'}
-                            </span>
-                        </div>
-                        {bookLink ? (
-                            <>
-                                <div
-                                    className='rounded-[1.75rem] overflow-hidden shadow-2xl'
-                                    style={{
-                                        height: 600,
-                                        background: 'radial-gradient(ellipse at 50% 30%, #2a1f17 0%, #14100c 100%)',
-                                        border: '1px solid rgba(201,164,78,0.25)',
-                                    }}
-                                >
-                                    <iframe
-                                        key={bookRefresh}
-                                        src={`${bookLink}?embed=1`}
-                                        title='הספר שלכם'
-                                        className='w-full h-full'
-                                        style={{ border: 'none' }}
-                                    />
-                                </div>
-                                <div className='text-center mt-2'>
-                                    <a
-                                        href={bookLink}
-                                        target='_blank'
-                                        rel='noopener noreferrer'
-                                        className='inline-flex items-center justify-center gap-1 text-sm font-semibold text-[#AA8840] hover:underline'
-                                    >
-                                        פתחו במסך מלא ↗
-                                    </a>
-                                </div>
-                            </>
-                        ) : (
-                            <p className='text-xs text-gray-400 text-center py-8'>טוען את הספר...</p>
-                        )}
-                    </div>
-
-                    {/* בחירת עיצוב — נֵיטיב; הספר שלמעלה מתרענן מיד */}
-                    <CoupleDesignPicker
-                        activeDesign={bookDesign}
-                        onSelect={handleSelectDesign}
-                        title='בחרו עיצוב לספר'
-                        hint='בחרו עיצוב — הספר שלמעלה יתעדכן מיד.'
-                    />
-
-                    <div className='w-full h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent'></div>
-
+                
+                        <div className='w-full h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent'></div>
                     <div className='text-center'>
                         <h2 className='text-lg font-bold text-gray-800 mb-1'>{t('shareTitle')}</h2>
                         <p className='text-xs text-gray-400 mb-4'>{t('shareSubtitle')}</p>
@@ -467,6 +470,8 @@ function PortalApp({ onLocaleDiscovered }) {
                                 {copied ? t('copied') : t('copy')}
                             </span>
                         </button>
+                    </div>
+                
                     </div>
                 </div>
             </div>
