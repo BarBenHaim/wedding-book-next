@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server'
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { isSuperAdmin } from '@/lib/superAdmin'
-import { COL, resolveWeddings, renderForWedding, sendCampaign, DEFAULT_TEMPLATES } from '@/lib/emailEngine'
+import { COL, resolveWeddings, renderForWedding, sendCampaign, DEFAULT_TEMPLATES, DEFAULT_AUTOMATIONS, waRecipients as buildWaRecipients } from '@/lib/emailEngine'
 
 // Consolidated super-admin endpoint for the email system. Mirrors the
 // /api/studio op-based pattern. Auth: Firebase ID token that resolves to
@@ -93,18 +93,46 @@ export async function POST(req) {
                 return NextResponse.json({ ok: true })
             }
             case 'seedDefaults': {
-                const existing = await adminDb.collection(COL.templates).limit(1).get()
-                if (!existing.empty) return NextResponse.json({ ok: true, skipped: 'not-empty' })
-                let created = 0
-                for (const t of DEFAULT_TEMPLATES) {
-                    await adminDb.collection(COL.templates).doc(newId('tmpl')).set({
-                        ...t,
-                        createdAt: FieldValue.serverTimestamp(),
-                        updatedAt: FieldValue.serverTimestamp(),
+                // Templates — create the journey set if none exist; otherwise
+                // map existing names so automations can still be wired.
+                const tSnap = await adminDb.collection(COL.templates).get()
+                const nameToId = {}
+                let templatesCreated = 0
+                if (tSnap.empty) {
+                    for (const t of DEFAULT_TEMPLATES) {
+                        const id = newId('tmpl')
+                        await adminDb.collection(COL.templates).doc(id).set({
+                            ...t,
+                            createdAt: FieldValue.serverTimestamp(),
+                            updatedAt: FieldValue.serverTimestamp(),
+                        })
+                        nameToId[t.name] = id
+                        templatesCreated++
+                    }
+                } else {
+                    tSnap.docs.forEach(d => {
+                        nameToId[d.data().name] = d.id
                     })
-                    created++
                 }
-                return NextResponse.json({ ok: true, created })
+                // Automations — create the journey rules if none exist.
+                const aSnap = await adminDb.collection(COL.automations).get()
+                let automationsCreated = 0
+                if (aSnap.empty) {
+                    for (const a of DEFAULT_AUTOMATIONS) {
+                        const templateId = nameToId[a.templateName]
+                        if (!templateId) continue
+                        await adminDb.collection(COL.automations).doc(newId('auto')).set({
+                            name: a.name,
+                            templateId,
+                            trigger: a.trigger,
+                            active: a.active !== false,
+                            createdAt: FieldValue.serverTimestamp(),
+                            updatedAt: FieldValue.serverTimestamp(),
+                        })
+                        automationsCreated++
+                    }
+                }
+                return NextResponse.json({ ok: true, templatesCreated, automationsCreated })
             }
             case 'listAutomations': {
                 const snap = await adminDb.collection(COL.automations).get()
@@ -197,6 +225,16 @@ export async function POST(req) {
                     result,
                 })
                 return NextResponse.json({ ok: true, sent: true, id, result })
+            }
+            case 'waRecipients': {
+                const segment = body.segment || { type: 'all' }
+                const items = await buildWaRecipients({ subject: body.subject || '', body: body.body || '' }, segment)
+                return NextResponse.json({ items })
+            }
+            case 'setPhone': {
+                if (!body.weddingId) return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
+                await adminDb.collection('weddings').doc(body.weddingId).set({ ownerPhone: (body.phone || '').toString().trim() }, { merge: true })
+                return NextResponse.json({ ok: true })
             }
             default:
                 return NextResponse.json({ error: `Unknown op: ${op}` }, { status: 400 })

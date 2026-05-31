@@ -76,6 +76,7 @@ export async function GET(req) {
                     greetingsCount,
                     createdAt,
                     printOrder: data.printOrder ?? null,
+                    productionStatus: data.productionStatus ?? 'new',
                     // Event-type + theme fields (may be absent on legacy docs → normalized on read)
                     eventType: normalizeEventType(data.eventType),
                     themeColor: normalizeThemeColor(data.themeColor), // null = use event-type default
@@ -129,6 +130,8 @@ export async function PATCH(req) {
             'customMomentSubmit', 'customMomentSecurityNote',
             // Super-admin private notes per wedding — never shown to guests.
             'adminNotes',
+            // Production pipeline stage (managed from /admin/pipeline).
+            'productionStatus',
             'brideName', 'brideNameHe', 'groomName', 'groomNameHe',
         ]
         const clean = {}
@@ -162,6 +165,12 @@ export async function PATCH(req) {
                     const n = Number(v)
                     clean[key] = Number.isFinite(n) ? n : null
                 }
+                continue
+            }
+
+            if (key === 'productionStatus') {
+                const ALLOWED_STATUS = ['new', 'setup', 'pre_event', 'collecting', 'to_print', 'shipped', 'delivered']
+                clean[key] = ALLOWED_STATUS.includes(v) ? v : 'new'
                 continue
             }
 

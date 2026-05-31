@@ -5,7 +5,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
-import { Mail, Send, Clock3, FileText, Zap, Lock, Plus, Trash2, Eye, Save, Users } from 'lucide-react'
+import { Mail, Send, Clock3, FileText, Zap, Lock, Plus, Trash2, Eye, Save, Users, MessageCircle } from 'lucide-react'
 
 // Variables surfaced as insert buttons. Kept in sync with
 // TEMPLATE_VARIABLES in src/lib/emailEngine.js (server-only — can't be
@@ -189,6 +189,7 @@ function Compose({ flash }) {
     const [seg, setSeg] = useState({ type: 'all', n: 14, eventType: 'wedding' })
     const [scheduleFor, setScheduleFor] = useState('')
     const [preview, setPreview] = useState(null)
+    const [waList, setWaList] = useState(null)
     const [busy, setBusy] = useState(false)
     const bodyRef = useRef(null)
 
@@ -257,6 +258,34 @@ function Compose({ flash }) {
         }
     }
 
+    async function doWhatsapp() {
+        if (!subject.trim() && !bodyText.trim()) {
+            flash('כתבו הודעה קודם', 'error')
+            return
+        }
+        setBusy(true)
+        try {
+            const r = await callEmailApi('waRecipients', { subject, body: bodyText, segment: seg })
+            setWaList(r.items || [])
+        } catch (e) {
+            flash(e.message, 'error')
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    async function addPhone(id) {
+        const phone = prompt('מספר טלפון של הזוג (למשל 0541234567):')
+        if (!phone) return
+        try {
+            await callEmailApi('setPhone', { weddingId: id, phone })
+            flash('הטלפון נשמר')
+            doWhatsapp()
+        } catch (e) {
+            flash(e.message, 'error')
+        }
+    }
+
     return (
         <div className='space-y-4'>
             <Card>
@@ -319,6 +348,9 @@ function Compose({ flash }) {
                 <button onClick={doSend} disabled={busy} className='flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white disabled:opacity-50' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}>
                     <Send size={15} /> {scheduleFor ? 'תזמן שליחה' : 'שלח עכשיו'}
                 </button>
+                <button onClick={doWhatsapp} disabled={busy} className='flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-50' style={{ background: '#25D366' }}>
+                    <MessageCircle size={15} /> וואטסאפ
+                </button>
             </div>
 
             {preview && (
@@ -339,6 +371,29 @@ function Compose({ flash }) {
                             </div>
                         </div>
                     )}
+                </Card>
+            )}
+
+            {waList && (
+                <Card>
+                    <div className='flex items-center justify-between mb-3'>
+                        <span className='text-sm font-bold text-[#1a1410]'>שליחה בוואטסאפ — {waList.length} זוגות</span>
+                    </div>
+                    <p className='text-[11px] text-[#a89378] mb-3'>{'לחיצה פותחת וואטסאפ עם ההודעה מוכנה — שולחים מהטלפון שלך, זוג-זוג. (וואטסאפ לא מאפשר שליחה אוטומטית בכמות.)'}</p>
+                    <div className='space-y-2 max-h-[360px] overflow-y-auto'>
+                        {waList.map(r => (
+                            <div key={r.id} className='flex items-center justify-between gap-2 border border-[#e7dcc6] rounded-xl px-3 py-2'>
+                                <span className='text-sm text-[#1a1410] truncate'>{r.name}{r.hasPhone ? '' : ' · אין טלפון'}</span>
+                                {r.hasPhone ? (
+                                    <a href={r.waLink} target='_blank' rel='noopener noreferrer' className='flex items-center gap-1.5 text-xs font-bold text-white px-3 py-1.5 rounded-lg flex-shrink-0' style={{ background: '#25D366' }}>
+                                        <MessageCircle size={13} /> שלח
+                                    </a>
+                                ) : (
+                                    <button onClick={() => addPhone(r.id)} className='text-xs font-bold text-[#AA8840] bg-[#AA8840]/10 px-3 py-1.5 rounded-lg flex-shrink-0'>הוסף טלפון</button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
                 </Card>
             )}
         </div>
@@ -366,14 +421,20 @@ function Templates({ flash }) {
         try { await callEmailApi('deleteTemplate', { id }); flash('נמחק'); load() } catch (e) { flash(e.message, 'error') }
     }
     async function seed() {
-        try { const r = await callEmailApi('seedDefaults'); flash(r.skipped ? 'כבר קיימים טמפלייטים' : `נוצרו ${r.created} טמפלייטים`); load() } catch (e) { flash(e.message, 'error') }
+        try {
+            const r = await callEmailApi('seedDefaults')
+            flash(`נוצרו ${r.templatesCreated} טמפלייטים ו-${r.automationsCreated} אוטומציות`)
+            load()
+        } catch (e) {
+            flash(e.message, 'error')
+        }
     }
 
     return (
         <div className='space-y-4'>
             <div className='flex gap-2'>
                 <button onClick={() => setEditing({ name: '', subject: '', body: '' })} className='flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}><Plus size={14} /> טמפלייט חדש</button>
-                <button onClick={seed} className='flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold bg-white border border-[#e7dcc6] text-[#7a6a52]'>טען טמפלייטים למסע (ברירת מחדל)</button>
+                <button onClick={seed} className='flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold bg-white border border-[#e7dcc6] text-[#7a6a52]'>טען מסע מלא (טמפלייטים + אוטומציות)</button>
             </div>
 
             {editing && (

@@ -113,6 +113,7 @@ export async function POST(req) {
             {
                 ownerId: userRecord.uid, // הקישור החשוב ללקוח במערכת
                 ownerEmail: email,
+                ownerPhone: (billing?.phone || '').trim(),
                 createdAt: FieldValue.serverTimestamp(),
                 orderId,
                 slug,

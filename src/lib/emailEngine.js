@@ -352,3 +352,75 @@ export const DEFAULT_TEMPLATES = [
             'שלום {{coupleName}},\n\nאיזה כיף — אוסף הברכות שלכם מוכן לצפייה. פתחו, דפדפו, ותיהנו מכל הרגעים שהאורחים השאירו לכם:\n\n{{bookButton}}\n\nהספר המודפס בהפקה ויגיע אליכם בקרוב.',
     },
 ]
+
+// ─── WhatsApp helpers ────────────────────────────────────────────────
+function phoneOf(w) {
+    return (w.ownerPhone || w.phone || '').toString().trim()
+}
+
+// Normalize an Israeli / international phone to wa.me digits (country
+// code, no +). 0541234567 → 972541234567.
+export function normalizePhone(raw) {
+    let p = (raw || '').toString().replace(/[^\d+]/g, '')
+    if (!p) return ''
+    if (p.startsWith('+')) p = p.slice(1)
+    if (p.startsWith('00')) p = p.slice(2)
+    if (p.startsWith('0')) p = '972' + p.slice(1)
+    return p
+}
+
+function htmlToPlain(html) {
+    return String(html || '')
+        .replace(/<a [^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, '$2 ($1)')
+        .replace(/<br\s*\/?>(\n)?/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+}
+
+// Plain-text render for WhatsApp (no email shell). Subject becomes the
+// first line; styled buttons collapse to "label (url)".
+export async function renderPlainForWedding(template, w) {
+    const vars = await varsFor(w)
+    const subject = applyVars(template.subject, vars)
+    const bodyHtml = applyVars(template.body, vars)
+    const text = (subject ? subject + '\n\n' : '') + htmlToPlain(bodyHtml)
+    return { to: emailOf(w), phone: phoneOf(w), text }
+}
+
+export function waLinkFor(phone, text) {
+    const p = normalizePhone(phone)
+    const t = encodeURIComponent(text || '')
+    return p ? `https://wa.me/${p}?text=${t}` : `https://wa.me/?text=${t}`
+}
+
+// WhatsApp send list for a segment — each recipient gets a ready wa.me
+// deep link the admin taps to send from their own phone.
+export async function waRecipients(template, segment) {
+    const weddings = await resolveWeddings(segment)
+    const out = []
+    for (const w of weddings) {
+        const r = await renderPlainForWedding(template, w)
+        out.push({
+            id: w.id,
+            name: coupleName(w),
+            phone: r.phone,
+            hasPhone: Boolean(normalizePhone(r.phone)),
+            waLink: waLinkFor(r.phone, r.text),
+        })
+    }
+    return out
+}
+
+// Default journey automations — wired to the seeded templates by name.
+// Active by default: they only fire for weddings matching the trigger on
+// a given day, so turning them on never back-blasts existing customers.
+export const DEFAULT_AUTOMATIONS = [
+    { name: 'הקמה — יומיים אחרי הרכישה', templateName: 'הקמה — יום-יומיים אחרי הרכישה', trigger: { type: 'afterPurchase', offsetDays: 2 }, active: true },
+    { name: 'תזכורת שיתוף — 14 יום לפני', templateName: 'תזכורת שיתוף — שבועיים לפני', trigger: { type: 'beforeWedding', offsetDays: 14 }, active: true },
+    { name: 'תזכורת שיתוף — 3 ימים לפני', templateName: 'תזכורת שיתוף — שבועיים לפני', trigger: { type: 'beforeWedding', offsetDays: 3 }, active: true },
+    { name: 'תזכורת זנב — 3 ימים אחרי', templateName: 'תזכורת זנב — כמה ימים אחרי', trigger: { type: 'afterWedding', offsetDays: 3 }, active: true },
+    { name: 'הספר מוכן — 10 ימים אחרי', templateName: 'הספר מוכן', trigger: { type: 'afterWedding', offsetDays: 10 }, active: true },
+]
