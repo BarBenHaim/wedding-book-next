@@ -82,14 +82,19 @@ function QrCodesContent() {
                     const bride = data.brideNameHe || data.brideName || ''
                     const groom = data.groomNameHe || data.groomName || ''
                     const celeb = data.celebrantNameHe || data.celebrantName || ''
-                    const names = (bride && groom) ? `${bride} ו${groom}` : (celeb || `חתונה ${d.id.slice(0, 6)}`)
+                    // Event-type prefix so a bar-mitzvah (e.g. "בר מצווה · אורי")
+                    // is identifiable at a glance among many QR codes — not just
+                    // a bare name that could be anything.
+                    const ET = { wedding: 'חתונה', bar_mitzvah: 'בר מצווה', bat_mitzvah: 'בת מצווה', birthday: 'יום הולדת' }
+                    const etLabel = ET[data.eventType] || 'חתונה'
+                    const names = (bride && groom) ? `${bride} ו${groom}` : (celeb || `אירוע ${d.id.slice(0, 6)}`)
                     let dateStr = ''
                     const wd = data.weddingDate
                     if (wd) {
                         const dt = typeof wd?.toDate === 'function' ? wd.toDate() : new Date(wd)
                         if (!isNaN(dt.getTime())) dateStr = dt.toLocaleDateString('he-IL')
                     }
-                    const label = dateStr ? `${names} · ${dateStr}` : names
+                    const label = [etLabel, names, dateStr].filter(Boolean).join(' · ')
                     return { id: d.id, label, raw: data }
                 })
                 setWeddings(list)
