@@ -6,36 +6,47 @@
 // resolution and bundles them as a ZIP ready to upload to
 // wowpro.co.il (WOW Professional).
 //
-// ── What WOW Pro actually expects (verified from FAQ + research) ──
+// ── What WOW Pro actually expects (verified from their FAQ) ──
+// Spec source: https://www.wowpro.co.il/p/ImportantToKnow
 //
-// File naming (quoted from wowpro.co.il/p/ImportantToKnow):
-//   "File names should be numbered sequentially, e.g. 001, 002.
-//    The cover file should be saved under the name `cover`."
+// File format: JPG ONLY. Color profile: sRGB. Resolution: 300 DPI.
+// File naming: 001.jpg, 002.jpg, 003.jpg, … (sequential, 3-digit pad)
+//              + cover.jpg (only if you're not picking a stock cover
+//              from their catalog).
 //
-// Each file is a SPREAD — two facing pages bonded as one rigid
-// 700g leaf. NOT a single page. The Silver album spec: "every two
-// pages are bonded to rigid 300g cardboard, resulting in 700g page
-// thickness." 12 spreads = 24 visible pages.
+// Each numbered file is a SPREAD — two facing pages bonded as one
+// rigid 700g layflat panel. NOT a single page. Submit at the
+// finished spread size; WOW Pro may trim 3–4 mm from each side
+// during cutting. **NO BLEED extension required.** Keep critical
+// content ≥ 10 mm from the outer edges (our safe-area
+// recommendation — WOW doesn't publish one).
 //
-// Inner-spread dimensions (40×20 cm layflat):
-//   Trim:  4724 × 2362 px @ 300 dpi
-//   Bleed: +5 mm all around → 4842 × 2480 px (recommended)
-//   Safe area: keep important content ≥ 5 mm from outer edges,
-//              ≥ 10 mm from the centre gutter.
+// Pages: minimum 24, maximum 70 — counted as single SIDES. So
+// 24 pages = 12 spreads = 12 numbered files; 70 pages = 35 spreads
+// = 35 files. The selected page count on WOW Pro must exactly
+// match the number of files uploaded.
 //
-// The cover (`cover.jpg`) is a FULL WRAP: front + spine + back, all
-// in one file. The spine width depends on the page count (layflat
-// spreads are thick — ~1.4 mm per spread is a safe estimate). WOW
-// Pro doesn't publish exact wrap dimensions publicly; they live
-// inside the photographer dashboard. So:
-//   • Cover generation is OPTIONAL here. Default: skip the cover
-//     and let the user pick a ready-made cover from WOW Pro's
-//     catalog (covers_catalog) — simplest, no risk of wrong wrap.
-//   • If the user opts in to "generate cover", we produce a
-//     best-effort wrap with computed spine. The dashboard's exact
-//     template should still be cross-checked.
+// Cover: `cover.jpg` only needed for the "full image" or "window"
+// cover types. For fabric / material / UV-text / emboss covers
+// (the default), you skip the file and select the cover style on
+// WOW Pro instead. When a cover file IS needed, WOW Pro treats it
+// as a single spread at the album's spread dimensions — they
+// handle the spine internally. We do NOT compute a spine width.
 //
 // All output is JPG, sRGB, 300 dpi, q ≥ 0.92.
+//
+// ── 6 album sizes available on WOW Pro ──
+//
+//   Squares     Spread        Pixels @ 300 DPI
+//   ─────────   ───────       ──────────────
+//   20×40       40×20 cm      4724 × 2362
+//   25×50       50×25 cm      5906 × 2953
+//   30×60       60×30 cm      7087 × 3543
+//   40×80 XXL   80×40 cm      9449 × 4724
+//
+//   Horizontals
+//   20×54       54×20 cm      6378 × 2362
+//   30×80       80×30 cm      9449 × 3543
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams } from 'next/navigation'
@@ -59,77 +70,86 @@ const MM_PER_INCH = 25.4
 const mmToPx = mm => Math.round((mm / MM_PER_INCH) * DPI)
 const cmToPx = cm => mmToPx(cm * 10)
 
-// Bleed safety margin recommended for WOW Pro. They cite a 3-4 mm
-// possible trim — 5 mm is the safe industry default.
-const BLEED_MM = 5
-
-// Layflat spread thickness — used to estimate spine width on the
-// cover wrap. Each printed spread is glued onto 300g cardboard ×2 =
-// ~1.4 mm physical thickness per spread. This is a conservative
-// estimate — WOW Pro's actual template (in the photographer
-// dashboard) is the source of truth.
-const SPINE_MM_PER_SPREAD = 1.4
+// WOW Pro doesn't ask for a bleed extension — you submit at the
+// finished spread size and they may trim 3–4 mm from each side
+// during cutting. Our SAFE_INSET keeps important content (text,
+// faces) away from the cut line. 10 mm is our own recommendation —
+// WOW doesn't publish a number.
+const TRIM_TOLERANCE_MM = 4   // max edge WOW may trim during cutting
+const SAFE_INSET_MM = 10      // recommended distance from outer edges
 
 // ── Product presets ────────────────────────────────────────────────
-// Each preset defines the trim size of one spread (closed-page-width
-// × open-height in cm). Inner-spread pixel dims include the 5 mm
-// bleed all around. Cover wrap dims are computed dynamically because
-// the spine width depends on the user's chosen spread count.
+// Six album sizes verified from wowpro.co.il/products/1 and the
+// configurator dropdown. All are Silver Halide layflat books —
+// WOW Pro doesn't sell a singles/perfect-bound product. Spread
+// dims are submitted exactly as defined; pixel dims are pure
+// cm→px at 300 DPI, NO bleed extension.
 const PRODUCT_PRESETS = {
     '20x40_layflat': {
-        label: '20×40 layflat (סגור 20×20)',
-        spreadCm: { w: 40, h: 20 },    // open spread = 40×20 cm
-        pageCm:   { w: 20, h: 20 },    // closed page = 20×20 cm
+        label: 'ריבועי 20×40 (סגור 20×20)',
+        spreadCm: { w: 40, h: 20 },
+        pageCm:   { w: 20, h: 20 },
+        // Default = 12 spreads = 24 pages (WOW Pro minimum).
         defaultSpreadCount: 12,
     },
     '25x50_layflat': {
-        label: '25×50 layflat (סגור 25×25)',
+        label: 'ריבועי 25×50 (סגור 25×25)',
         spreadCm: { w: 50, h: 25 },
         pageCm:   { w: 25, h: 25 },
-        defaultSpreadCount: 14,
+        defaultSpreadCount: 12,
     },
     '30x60_layflat': {
-        label: '30×60 layflat (סגור 30×30)',
+        label: 'ריבועי 30×60 (סגור 30×30)',
         spreadCm: { w: 60, h: 30 },
         pageCm:   { w: 30, h: 30 },
-        defaultSpreadCount: 16,
+        defaultSpreadCount: 12,
     },
-    '20x20_singles': {
-        label: '20×20 עמודים בודדים (לא layflat)',
-        spreadCm: { w: 20, h: 20 },
-        pageCm:   { w: 20, h: 20 },
-        defaultSpreadCount: 24,
-        singleMode: true,
+    '40x80_xxl_layflat': {
+        label: 'ריבועי XXL 40×80 (סגור 40×40)',
+        spreadCm: { w: 80, h: 40 },
+        pageCm:   { w: 40, h: 40 },
+        defaultSpreadCount: 12,
+    },
+    '20x54_horizontal_layflat': {
+        label: 'שוכב 20×54 (סגור 27×20)',
+        spreadCm: { w: 54, h: 20 },
+        pageCm:   { w: 27, h: 20 },
+        defaultSpreadCount: 12,
+    },
+    '30x80_horizontal_layflat': {
+        label: 'שוכב 30×80 (סגור 40×30)',
+        spreadCm: { w: 80, h: 30 },
+        pageCm:   { w: 40, h: 30 },
+        defaultSpreadCount: 12,
     },
 }
 
-// Build the print dimensions for a given preset + spread count.
-// Returns { spread: {wPx,hPx,wCm,hCm}, cover: {wPx,hPx,spineMm} }
-// — cover wPx grows with spine width.
-function computeDims(preset, spreadCount) {
-    const isSingle = !!preset.singleMode
+// WOW Pro's hard limits — every product accepts 24 to 70 pages
+// (FAQ: "אלבומי ה Silver מגיעים במינימום של 24 עמודים ועד
+// למקסימום של 70 עמודים"). Pages = single sides, so spread count
+// is half: 12 to 35.
+const MIN_SPREADS = 12
+const MAX_SPREADS = 35
+
+// Build the print dimensions for a given preset. NO bleed, NO
+// spine — the cover (when included) is rendered as a single
+// spread at the album's spread dimensions, exactly like an
+// interior file. WOW Pro handles the spine internally based on
+// the page count selected on their site.
+function computeDims(preset) {
     const spreadWcm = preset.spreadCm.w
     const spreadHcm = preset.spreadCm.h
-    const pageWcm   = preset.pageCm.w
-    const pageHcm   = preset.pageCm.h
 
-    const spreadWpx = cmToPx(spreadWcm) + mmToPx(BLEED_MM) * 2
-    const spreadHpx = cmToPx(spreadHcm) + mmToPx(BLEED_MM) * 2
-
-    // Cover wrap = front + spine + back + bleed.
-    // For single-page (non-layflat) products there's no real spine —
-    // just front cover. For layflat we estimate spine from the
-    // chosen spread count.
-    const spineMm = isSingle ? 0 : SPINE_MM_PER_SPREAD * spreadCount
-    const coverWcm = pageWcm * 2 + (spineMm / 10) // front + back + spine, in cm
-    const coverHcm = pageHcm
-
-    const coverWpx = cmToPx(coverWcm) + mmToPx(BLEED_MM) * 2
-    const coverHpx = cmToPx(coverHcm) + mmToPx(BLEED_MM) * 2
+    const spreadWpx = cmToPx(spreadWcm)
+    const spreadHpx = cmToPx(spreadHcm)
 
     return {
-        spread: { wPx: spreadWpx, hPx: spreadHpx, wCm: spreadWcm, hCm: spreadHcm, isSingle },
-        cover:  { wPx: coverWpx, hPx: coverHpx, wCm: coverWcm.toFixed(1), hCm: coverHcm, spineMm },
+        spread: { wPx: spreadWpx, hPx: spreadHpx, wCm: spreadWcm, hCm: spreadHcm },
+        // Cover uses the same dimensions as a spread — that's the
+        // shape WOW Pro asks for on the rare cover types that need
+        // an upload (full-image or window). For fabric/material
+        // covers no file is needed at all.
+        cover:  { wPx: spreadWpx, hPx: spreadHpx, wCm: spreadWcm, hCm: spreadHcm },
     }
 }
 
@@ -212,10 +232,10 @@ function PrintExportContent() {
     })()
 
     const preset = PRODUCT_PRESETS[productPreset]
-    const isSingleMode = !!preset.singleMode
-    const dims = computeDims(preset, spreadCount)
+    const dims = computeDims(preset)
 
-    const slotsAvailable = isSingleMode ? spreadCount : spreadCount * 2
+    // Every spread holds 2 entries (right + left page in RTL).
+    const slotsAvailable = spreadCount * 2
     const slotsNeeded = entries.length
     const willPad = slotsNeeded < slotsAvailable
     const willTrim = slotsNeeded > slotsAvailable
@@ -253,13 +273,6 @@ function PrintExportContent() {
     }, [])
 
     const buildRenderList = () => {
-        if (isSingleMode) {
-            const out = []
-            for (let i = 0; i < spreadCount; i++) {
-                out.push({ kind: 'singlePage', entry: entries[i] || null, index: i })
-            }
-            return out
-        }
         const out = []
         for (let i = 0; i < spreadCount; i++) {
             const rightIdx = i * 2
@@ -299,11 +312,11 @@ function PrintExportContent() {
                 setProgress({ done: stepIdx, total, label: 'כריכה ✓' })
             }
 
-            // 2) Spreads / Pages
+            // 2) Spreads
             for (let i = 0; i < renderList.length; i++) {
                 const item = renderList[i]
                 const num = String(i + 1).padStart(3, '0')
-                setProgress({ done: stepIdx, total, label: `מצלם ${isSingleMode ? 'עמוד' : 'spread'} ${num}...` })
+                setProgress({ done: stepIdx, total, label: `מצלם spread ${num}...` })
                 setRenderingPage(item)
                 await new Promise(r => setTimeout(r, 120))
                 const blob = await captureCurrentStage(dims.spread.wPx, dims.spread.hPx)
@@ -313,22 +326,34 @@ function PrintExportContent() {
             }
 
             // 3) Manifest
+            const pageCount = spreadCount * 2
             const manifest = [
                 `Wedding Tales — WOW Professional export`,
                 `Wedding: ${wedding?.brideNameHe || wedding?.brideName || ''} ${wedding?.groomNameHe ? 'ו' + wedding.groomNameHe : (wedding?.groomName ? 'and ' + wedding.groomName : '')}`,
                 `Generated: ${new Date().toISOString()}`,
+                ``,
                 `Product: ${preset.label}`,
-                `Layout: ${isSingleMode ? 'single page per file' : 'spread (2 entries per file)'}`,
-                `Spread dimensions: ${dims.spread.wCm}×${dims.spread.hCm} cm + ${BLEED_MM} mm bleed = ${dims.spread.wPx}×${dims.spread.hPx} px @ ${DPI} dpi`,
-                includeCover ? `Cover wrap: ${dims.cover.wCm}×${dims.cover.hCm} cm (incl. ${dims.cover.spineMm.toFixed(1)} mm spine, ${BLEED_MM} mm bleed) = ${dims.cover.wPx}×${dims.cover.hPx} px` : `Cover: not included — pick a ready-made cover from WOW Pro's catalog`,
-                `Files: ${includeCover ? 'cover.jpg + ' : ''}${renderList.length} ${isSingleMode ? 'pages' : 'spreads'}`,
-                `Entries in book: ${entries.length} · Slots filled: ${Math.min(entries.length, slotsAvailable)} / ${slotsAvailable}`,
+                `Page count on WOW Pro: ${pageCount} pages (= ${spreadCount} spreads / files)`,
+                `Spread dimensions: ${dims.spread.wCm} × ${dims.spread.hCm} cm = ${dims.spread.wPx} × ${dims.spread.hPx} px @ ${DPI} DPI`,
+                includeCover
+                    ? `Cover file: cover.jpg at the same dimensions (${dims.cover.wPx} × ${dims.cover.hPx} px). Only needed for full-image or window cover types on WOW Pro.`
+                    : `Cover file: NOT included — pick a stock cover (fabric/material/UV text/emboss) from WOW Pro's catalog: https://www.wowpro.co.il/shops/covers_catalog`,
                 ``,
-                `Color profile: sRGB. Quality: JPG q=0.92.`,
-                `Safe area: keep critical content >= 5 mm from outer edges, >= 10 mm from centre gutter.`,
+                `File format: JPG, sRGB, ${DPI} DPI, q=0.92`,
+                `Naming: ${includeCover ? 'cover.jpg + ' : ''}001.jpg, 002.jpg, ... ${String(renderList.length).padStart(3, '0')}.jpg`,
                 ``,
-                `Upload to: https://www.wowpro.co.il/dashboard`,
-                `Spec source: https://www.wowpro.co.il/p/ImportantToKnow`,
+                `Entries in book: ${entries.length} · Slots filled: ${Math.min(entries.length, slotsAvailable)} / ${slotsAvailable} (${slotsAvailable - Math.min(entries.length, slotsAvailable)} blank)`,
+                ``,
+                `Trim allowance: WOW Pro may cut up to ${TRIM_TOLERANCE_MM} mm from each side during finishing.`,
+                `Recommended safe area: keep critical content (faces, text) at least ${SAFE_INSET_MM} mm from every outer edge.`,
+                ``,
+                `Upload at:    https://www.wowpro.co.il (choose product → upload designed files)`,
+                `Cover catalog: https://www.wowpro.co.il/shops/covers_catalog`,
+                `Spec source:   https://www.wowpro.co.il/p/ImportantToKnow`,
+                ``,
+                `IMPORTANT: the page count you select on WOW Pro's site must`,
+                `match this export exactly — ${pageCount} pages (${spreadCount} files). Mismatched`,
+                `uploads are rejected by their validator.`,
             ].join('\n')
             zip.file('README.txt', manifest)
 
@@ -382,7 +407,7 @@ function PrintExportContent() {
                         </div>
                         <div>
                             <h1 className='font-bold text-[#1a1410] text-[22px] leading-tight'>ייצוא ל-WOW Pro</h1>
-                            <p className='text-[12px] text-[#a89378] mt-0.5'>spreads + bleed + כריכה אופציונלית</p>
+                            <p className='text-[12px] text-[#a89378] mt-0.5'>Silver Halide layflat · 6 גדלים · sRGB 300dpi</p>
                         </div>
                     </div>
                     <a href='/admin' className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52]' style={{ background: '#fff', border: '1px solid #ead9b3' }}>
@@ -415,33 +440,36 @@ function PrintExportContent() {
                             ))}
                         </select>
                         <p className='text-[11px] text-[#a89378] mt-1.5'>
-                            spread = {dims.spread.wPx}×{dims.spread.hPx} px (כולל {BLEED_MM} מ&quot;מ bleed) @ {DPI}dpi
+                            spread = {dims.spread.wCm}×{dims.spread.hCm} ס&quot;מ = {dims.spread.wPx}×{dims.spread.hPx} px @ {DPI}dpi · ללא bleed
                         </p>
                     </div>
 
                     <div>
                         <label className='block text-[12px] font-semibold text-[#3d2e1a] mb-1'>
-                            מספר {isSingleMode ? 'עמודים' : 'spreads'} להפקה
+                            מספר עמודים ב-WOW Pro (24–70)
                         </label>
                         <div className='flex items-center gap-2'>
                             <input
                                 type='number'
-                                min='1'
-                                max='60'
-                                value={spreadCount}
-                                onChange={e => setSpreadCount(Math.max(1, Math.min(60, parseInt(e.target.value, 10) || 1)))}
+                                min={MIN_SPREADS * 2}
+                                max={MAX_SPREADS * 2}
+                                step='2'
+                                value={spreadCount * 2}
+                                onChange={e => {
+                                    const pages = Math.max(MIN_SPREADS * 2, Math.min(MAX_SPREADS * 2, parseInt(e.target.value, 10) || MIN_SPREADS * 2))
+                                    // Round to even page count → integer spread count.
+                                    setSpreadCount(Math.round(pages / 2))
+                                }}
                                 disabled={running}
                                 className='w-24 px-3 py-2 rounded-lg text-[14px] font-bold text-[#3d2e1a] outline-none text-center'
                                 style={{ background: '#fff', border: '1px solid #ead9b3' }}
                             />
                             <span className='text-[12px] text-[#7a6a52]'>
-                                {isSingleMode
-                                    ? `${spreadCount} קבצים = ${spreadCount} עמודים`
-                                    : `${spreadCount} spreads = ${spreadCount * 2} עמודי תוכן`}
+                                = {spreadCount} spreads ({spreadCount} קבצי JPG)
                             </span>
                         </div>
                         <p className='text-[11px] text-[#a89378] mt-1.5'>
-                            חייב להתאים בדיוק לכמות הדפים של המוצר שהזמנת ב-WOW Pro (אחרת ההעלאה נדחית).
+                            בחר את אותו מספר עמודים ב-WOW Pro כשמזמינים. כל עמוד = צד אחד, כל spread = 2 עמודים = קובץ אחד.
                         </p>
                     </div>
 
@@ -457,19 +485,21 @@ function PrintExportContent() {
                                 style={{ accentColor: '#aa8840' }}
                             />
                             <div className='flex-1'>
-                                <p className='text-[12.5px] font-bold text-[#3d2e1a]'>כלול קובץ כריכה מלא (cover.jpg)</p>
+                                <p className='text-[12.5px] font-bold text-[#3d2e1a]'>כלול cover.jpg (לכריכה &quot;תמונה מלאה&quot; / &quot;חלון&quot; ב-WOW Pro)</p>
                                 <p className='text-[11px] text-[#7a6a52] leading-relaxed mt-0.5'>
                                     {includeCover ? (
                                         <>
-                                            יוצר עטיפה מלאה: <b>{dims.cover.wCm}×{dims.cover.hCm} ס&quot;מ</b> ({dims.cover.wPx}×{dims.cover.hPx} px),
-                                            כולל שדרה משוערת של <b>{dims.cover.spineMm.toFixed(1)} מ&quot;מ</b> ל-{spreadCount} spreads.
-                                            <span className='block mt-1 text-[#b32424]'>⚠️ רוחב השדרה הוא הערכה — צריך לאמת מול תבנית WOW Pro לפני שמכניסים תוכן קריטי על השדרה.</span>
+                                            יוצר קובץ <b>cover.jpg</b> בגודל <b>{dims.cover.wCm}×{dims.cover.hCm} ס&quot;מ</b> ({dims.cover.wPx}×{dims.cover.hPx} px) —
+                                            אותן מידות בדיוק כמו spread פנים, כי WOW Pro לוקח את הקובץ כעטיפה אחת והם
+                                            דואגים לחישוב השדרה לפי מספר העמודים שתבחר אצלם. רלוונטי רק לסוגי כריכה
+                                            &quot;תמונה מלאה&quot; או &quot;חלון&quot;.
                                         </>
                                     ) : (
                                         <>
-                                            <b>מומלץ:</b> השאר ללא כריכה, בחר עטיפה מוכנה מהקטלוג של WOW Pro
+                                            <b>מומלץ למרבית האירועים:</b> השאר את ה-checkbox כבוי ובחר כריכה
+                                            מהקטלוג של WOW Pro
                                             (<a href='https://www.wowpro.co.il/shops/covers_catalog' target='_blank' rel='noreferrer' className='underline' style={{ color: '#aa8840' }}>covers_catalog</a>) —
-                                            עור, בד, מתכת, חלון תמונה. בלי סיכון של מידות שגויות.
+                                            בד / חומר / טקסט UV / תבליט. שום סיכון של מידות לא נכונות.
                                         </>
                                     )}
                                 </p>
@@ -481,9 +511,9 @@ function PrintExportContent() {
                     <div className='rounded-lg px-3 py-2.5 flex items-start gap-2' style={{ background: '#fdfaf3', border: '1px solid #f0e8d4' }}>
                         <Info size={14} className='flex-shrink-0 mt-0.5' style={{ color: '#aa8840' }} />
                         <div className='flex-1 text-[12px] text-[#3d2e1a] leading-relaxed'>
-                            יש לך <b>{entries.length}</b> ברכות. ההגדרה הנוכחית מכילה <b>{slotsAvailable}</b> {isSingleMode ? 'עמודים' : 'מקומות'}.
+                            יש לך <b>{entries.length}</b> ברכות. ההגדרה הנוכחית מכילה <b>{slotsAvailable}</b> מקומות ({spreadCount} spreads × 2).
                             {willPad && <span className='text-[#7a6a52]'> ‒ יוסיף {slotsAvailable - slotsNeeded} עמודים ריקים.</span>}
-                            {willTrim && <span className='text-[#b32424]'> ‒ ⚠️ {slotsNeeded - slotsAvailable} ברכות לא ייכנסו! העלה את ספירת הדפים.</span>}
+                            {willTrim && <span className='text-[#b32424]'> ‒ ⚠️ {slotsNeeded - slotsAvailable} ברכות לא ייכנסו! העלה את מספר העמודים.</span>}
                             {!willPad && !willTrim && <span className='text-[#4f7a3e]'> ‒ ✓ התאמה מושלמת.</span>}
                         </div>
                     </div>
@@ -529,13 +559,15 @@ function PrintExportContent() {
                 </div>
 
                 <div className='rounded-2xl p-5' style={{ background: '#fff', border: '1px solid rgba(212,184,103,0.20)' }}>
-                    <p className='text-[11px] text-[#a89378] uppercase tracking-widest font-semibold mb-2'>הערות חשובות</p>
+                    <p className='text-[11px] text-[#a89378] uppercase tracking-widest font-semibold mb-2'>הערות חשובות (מאומת מול ה-FAQ של WOW Pro)</p>
                     <ul className='text-[12.5px] text-[#3d2e1a] leading-relaxed space-y-1.5 list-disc pr-5'>
-                        <li>כל spread = 40×20 ס&quot;מ עם {BLEED_MM} מ&quot;מ bleed לכל צד = {dims.spread.wPx}×{dims.spread.hPx} px @ 300dpi.</li>
+                        <li>כל spread = {dims.spread.wCm}×{dims.spread.hCm} ס&quot;מ = {dims.spread.wPx}×{dims.spread.hPx} px @ 300dpi. <b>ללא bleed</b> — WOW Pro מקבלים בגודל הסופי וחותכים עד {TRIM_TOLERANCE_MM} מ&quot;מ בכל צד.</li>
+                        <li>תוכן חשוב (פנים, טקסט) שמור לפחות <b>{SAFE_INSET_MM} מ&quot;מ מהקצוות</b>.</li>
                         <li>ערך ראשון נכנס לעמוד הימני של ה-spread, ערך שני לעמוד השמאלי (סדר קריאה עברי).</li>
-                        <li>תוכן חשוב להחזיק לפחות 5 מ&quot;מ מהקצוות ו-10 מ&quot;מ מקו האמצע (gutter) של ה-spread.</li>
-                        <li>קובץ הכריכה (אם מסומן) הוא <b>עטיפה מלאה</b> — קדמית + שדרה + אחורית. רוחב השדרה מחושב {SPINE_MM_PER_SPREAD} מ&quot;מ לכל spread (הערכה).</li>
-                        <li><b>מספר הקבצים חייב להתאים בדיוק</b> למוצר ב-WOW Pro — אחרת ההעלאה נדחית.</li>
+                        <li>קבצים: JPG בלבד, sRGB, 300 DPI, איכות 0.92. שמות: <code>001.jpg, 002.jpg, ...</code> + <code>cover.jpg</code> אופציונלי.</li>
+                        <li>טווח עמודים אצל WOW Pro: <b>24 עד 70 עמודים</b> (= 12 עד 35 spreads). מספר העמודים שתבחר אצלם חייב להתאים בדיוק למספר הקבצים בזיפ.</li>
+                        <li>השדרה (spine) של הכריכה הקשה מטופלת אוטומטית ב-WOW Pro לפי מספר העמודים שתבחר — קובץ ה-cover.jpg הוא spread יחיד באותו גודל של עמוד פנים.</li>
+                        <li>העלאה: <a href='https://www.wowpro.co.il' target='_blank' rel='noreferrer' className='underline' style={{ color: '#aa8840' }}>wowpro.co.il</a> (דרך מחשב בלבד — מובייל לא נתמך). מקור: <a href='https://www.wowpro.co.il/p/ImportantToKnow' target='_blank' rel='noreferrer' className='underline' style={{ color: '#aa8840' }}>חשוב לדעת</a>.</li>
                     </ul>
                 </div>
             </div>
@@ -560,25 +592,11 @@ function PrintExportContent() {
                 }}
             >
                 {renderingPage?.kind === 'cover' && wedding && (
-                    <CoverWrap
+                    <CoverSpread
                         wedding={wedding}
                         coverDesign={coverDesign}
                         dims={dims}
                     />
-                )}
-                {renderingPage?.kind === 'singlePage' && (
-                    <div style={{ width: '100%', height: '100%' }}>
-                        {renderingPage.entry ? (
-                            <BookPageTemplate
-                                entry={renderingPage.entry}
-                                styleSettings={styleSettings}
-                                scaledWidth={dims.spread.wPx}
-                                scaledHeight={dims.spread.hPx}
-                            />
-                        ) : (
-                            <BlankPage styleSettings={styleSettings} />
-                        )}
-                    </div>
                 )}
                 {renderingPage?.kind === 'spread' && (
                     <div style={{ display: 'flex', width: '100%', height: '100%' }}>
@@ -615,46 +633,54 @@ function PrintExportContent() {
     )
 }
 
-// ── Full-cover wrap renderer ────────────────────────────────────────
-// Lays out the cover as [Front | Spine | Back] in RTL reading order.
-// Front (BookCoverTemplate) goes on the RIGHT — that's the side the
-// reader sees when the closed book is in front of them with the
-// binding on the right (Hebrew convention).
-// Spine in the middle. Back cover gets a quiet matching background
-// — no text, no photos. Bleed is baked into the captured pixels by
-// the parent stage sizing.
-function CoverWrap({ wedding, coverDesign, dims }) {
-    const totalW = dims.cover.wPx
-    const totalH = dims.cover.hPx
-    const spinePx = mmToPx(dims.cover.spineMm)
-    const sidePx = Math.round((totalW - spinePx) / 2)
-
-    // Same surface as the book pages — keeps the back cover visually
-    // consistent with the inside, without putting names/photos there.
-    const backSurface = {
-        backgroundColor: coverDesign?.backgroundColor || '#fdfaf3',
-        backgroundImage: coverDesign?.backgroundUrl ? `url(${coverDesign.backgroundUrl})` : 'none',
-        backgroundRepeat: 'repeat',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-    }
-
+// ── Cover renderer ──────────────────────────────────────────────────
+// WOW Pro treats the cover file as a single spread at the album's
+// spread dimensions — they compute the actual physical wrap (front
+// + spine + back) internally based on the page count selected on
+// their site. So we render the front-cover design across the
+// entire spread, exactly the way a /viewer cover renders. Hebrew
+// reading order means the binding will end up on the right when
+// printed; WOW Pro handles that based on the language setting in
+// the order form.
+function CoverSpread({ wedding, coverDesign, dims }) {
     return (
-        <div style={{ display: 'flex', width: '100%', height: '100%' }}>
-            {/* RIGHT: Front cover (visible when book is closed, Hebrew RTL) */}
-            <div style={{ width: sidePx, height: totalH, overflow: 'hidden' }}>
-                <BookCoverTemplate
-                    wedding={wedding}
-                    styleSettings={coverDesign}
-                    scaledWidth={sidePx}
-                    scaledHeight={totalH}
-                />
-            </div>
-            {/* MIDDLE: Spine — quiet, matches book surface */}
-            <div style={{ width: spinePx, height: totalH, ...backSurface }} />
-            {/* LEFT: Back cover */}
-            <div style={{ width: sidePx, height: totalH, ...backSurface }} />
+        <div style={{ width: '100%', height: '100%' }}>
+            <BookCoverTemplate
+                wedding={wedding}
+                styleSettings={coverDesign}
+                scaledWidth={dims.cover.wPx}
+                scaledHeight={dims.cover.hPx}
+            />
         </div>
+    )
+}
+
+// Blank page placeholder for padded slots.
+function BlankPage({ styleSettings }) {
+    return (
+        <div
+            style={{
+                width: '100%',
+                height: '100%',
+                backgroundColor: styleSettings?.backgroundColor || '#fdfaf3',
+                backgroundImage: styleSettings?.backgroundUrl ? `url(${styleSettings.backgroundUrl})` : 'none',
+                backgroundRepeat: 'repeat',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+            }}
+        />
+    )
+}
+
+export default function PrintExportPage() {
+    return (
+        <AdminPageWrapper>
+            <SuperAdminGate>
+                <PrintExportContent />
+            </SuperAdminGate>
+        </AdminPageWrapper>
+    )
+}
     )
 }
 
