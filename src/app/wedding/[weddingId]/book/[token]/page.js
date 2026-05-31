@@ -28,7 +28,7 @@
 //     security layers are deterrents for the 99% casual case,
 //     not a fortress against the 1% determined.
 
-import React, { useEffect, useState, useRef, useMemo } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import HTMLFlipBook from 'react-pageflip'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
@@ -219,7 +219,7 @@ export default function DigitalEditionPage() {
                 {status === 'loading' && <LoadingScreen />}
                 {status === 'invalid' && <InvalidScreen />}
                 {status === 'ready' && wedding && (
-                    <BookViewer wedding={wedding} entries={entries} weddingId={weddingId} />
+                    <BookViewer wedding={wedding} entries={entries} weddingId={weddingId} token={token} />
                 )}
             </div>
         </NextIntlClientProvider>
@@ -405,7 +405,7 @@ function InvalidScreen() {
 }
 
 // ─── Main book viewer ───────────────────────────────────────────────────
-function BookViewer({ wedding, entries, weddingId }) {
+function BookViewer({ wedding, entries, weddingId, token }) {
     const flipRef = useRef(null)
     const [page, setPage] = useState(0)
     // Skip the landing/welcome screen — the user opted to drop the
@@ -416,6 +416,8 @@ function BookViewer({ wedding, entries, weddingId }) {
     const [opened, setOpened] = useState(true)
     const [pageSize, setPageSize] = useState({ w: 480, h: 480, isPortrait: true })
     const [shareToast, setShareToast] = useState(false)
+    // Design save feedback for the couple's preset picker: '' | 'saving' | 'saved' | 'error'
+    const [designSave, setDesignSave] = useState('')
 
     // Hide the global Header + Footer on this route so the book
     // experience owns the full viewport — same DOM-toggle pattern the
@@ -542,10 +544,10 @@ function BookViewer({ wedding, entries, weddingId }) {
     // useMemo so the reference is stable until the wedding doc itself
     // changes — prevents BookCoverTemplate from re-rendering on every
     // styleSettings update the guest makes.
-    const coverStyleSettings = useMemo(() => ({
+    const [coverStyleSettings, setCoverStyleSettings] = useState(() => ({
         ...defaultStyle,
         ...(wedding.coverDesign || wedding.book?.designSettings || {}),
-    }), [wedding])
+    }))
 
     // Live preset list for the bottom picker. listPresets falls back
     // to BUILTIN_PRESETS on any Firestore error, so the strip is
@@ -559,22 +561,40 @@ function BookViewer({ wedding, entries, weddingId }) {
         return () => { cancelled = true }
     }, [])
 
-    // Apply a preset — SESSION-ONLY, VISUAL ONLY.
+    // Apply a preset AND persist it as the couple's chosen book design.
     //
-    // The bottom preset strip is a "what would this look like?"
-    // tool, not a setting. Clicking a preset updates the in-memory
-    // styleSettings so the book re-renders with the new design, and
-    // that's it: no Firestore write, no localStorage, no cross-user
-    // contamination. Refresh / close+reopen → the user is back on
-    // the owner's authoritative design from /viewer.
-    //
-    // The owner's design stays the canonical one across every share
-    // surface (WhatsApp preview, repeat visits, other devices). The
-    // guest just gets to play.
-    const applyPreset = preset => {
+    // The public link is token-gated; Firestore rules block anonymous
+    // writes to the wedding doc, so the save goes through the
+    // /api/digital-edition/set-design server route (Admin SDK), which
+    // re-validates the token. Local state updates immediately for
+    // instant feedback; the network write follows. The chosen design
+    // becomes the canonical one the owner/admin sees in /viewer and
+    // that ships to production.
+    const applyPreset = async preset => {
         const resolved = resolvePreset(preset).values || {}
         const merged = { ...defaultStyle, ...resolved }
         setStyleSettings(merged)
+        // Cover adopts the same look, but keep any uploaded cover image.
+        setCoverStyleSettings(prev => ({
+            ...merged,
+            ...(prev?.coverImage ? { coverImage: prev.coverImage } : {}),
+        }))
+        if (!token) return
+        try {
+            setDesignSave('saving')
+            const res = await fetch('/api/digital-edition/set-design', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ weddingId, token, design: merged }),
+            })
+            if (!res.ok) throw new Error('save failed')
+            setDesignSave('saved')
+            setTimeout(() => setDesignSave(''), 2500)
+        } catch (err) {
+            console.error('[digital-edition] design save failed', err)
+            setDesignSave('error')
+            setTimeout(() => setDesignSave(''), 3500)
+        }
     }
 
     const totalPages = entries.length + 2
@@ -1071,14 +1091,14 @@ function BookViewer({ wedding, entries, weddingId }) {
                 </button>
             </div>
 
-            {/* Preset strip removed — guests / couples viewing the
-                public digital book shouldn't be picking from a
-                preset gallery here. The studio at /admin/studio is
-                the single source of truth for which preset ships on
-                each wedding's design doc. Mirrors the same removal
-                we did on the auth-gated viewer (a473262). The
-                PresetStrip component itself stays in this file as
-                orphan code in case the choice gets reversed. */}
+            {/* Couple's design picker — the no-login link is where the
+                couple chooses the book's look. Picking a preset persists
+                to the wedding doc via the token-gated
+                /api/digital-edition/set-design route, so the choice
+                sticks across devices and into production. (Reversal of
+                the earlier "studio is the sole source of truth"
+                decision, per 2026 product request.) */}
+            <PresetStrip presets={presets} activeStyle={styleSettings} onApply={applyPreset} />
 
             {shareToast && (
                 <div
@@ -1086,6 +1106,20 @@ function BookViewer({ wedding, entries, weddingId }) {
                     style={{ background: 'rgba(201,164,78,0.15)', border: '1px solid rgba(201,164,78,0.5)', color: '#f5ead2', backdropFilter: 'blur(6px)' }}
                 >
                     ✓ הקישור הועתק
+                </div>
+            )}
+
+            {designSave && (
+                <div
+                    className='fixed bottom-20 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full text-xs z-50'
+                    style={{
+                        background: designSave === 'error' ? 'rgba(180,60,60,0.18)' : 'rgba(201,164,78,0.15)',
+                        border: designSave === 'error' ? '1px solid rgba(180,60,60,0.5)' : '1px solid rgba(201,164,78,0.5)',
+                        color: '#f5ead2',
+                        backdropFilter: 'blur(6px)',
+                    }}
+                >
+                    {designSave === 'saving' ? 'שומר עיצוב…' : designSave === 'saved' ? '✓ העיצוב נשמר' : 'שמירה נכשלה — נסו שוב'}
                 </div>
             )}
 

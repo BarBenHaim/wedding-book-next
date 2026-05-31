@@ -19,6 +19,8 @@ const FALLBACK_EMAIL = 'barbenbh@gmail.com'
 const rawList =
     (typeof process !== 'undefined' && process.env.SUPER_ADMIN_EMAILS) ||
     (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS) ||
+    (typeof process !== 'undefined' && process.env.SUPER_ADMIN_EMAIL) ||
+    (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL) ||
     FALLBACK_EMAIL
 
 export const SUPER_ADMIN_EMAILS = rawList

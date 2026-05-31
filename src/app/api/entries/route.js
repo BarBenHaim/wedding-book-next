@@ -3,7 +3,7 @@ export const runtime = 'nodejs'
 export const fetchCache = 'force-no-store'
 
 import { NextResponse } from 'next/server'
-import { db, auth } from '@/lib/firebaseAdmin'
+import { adminDb as db, adminAuth as auth } from '@/lib/firebaseAdmin'
 
 export async function GET(req) {
     const authHeader = req.headers.get('authorization')

@@ -2,13 +2,15 @@
 
 import { useParams } from 'next/navigation'
 import { useMemo, useState, useEffect, useCallback } from 'react'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, arrayUnion } from 'firebase/firestore'
 import { db } from '../../../../lib/firebaseClient'
 import { generateSlug } from '../../../../lib/generateSlug'
 import { normalizeEventType, getEventConfig } from '../../../../lib/eventTypes'
 import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale, dirFor } from '@/i18n/locales'
+import CoupleDesignPicker from '@/components/CoupleDesignPicker/CoupleDesignPicker'
+import { getEntries } from '@/lib/classifyMedia'
 
 // ייבוא רכיב לוח השנה המקצועי
 import DatePicker from 'react-datepicker'
@@ -102,7 +104,6 @@ function PortalApp({ onLocaleDiscovered }) {
     const [age, setAge] = useState('')
 
     const [weddingDate, setWeddingDate] = useState(null)
-    const [selectedBg, setSelectedBg] = useState('wedding-bg')
     const [slug, setSlug] = useState('')
 
     // Editable copy (customTitle/customSubtitle/customDescription) is
@@ -111,8 +112,10 @@ function PortalApp({ onLocaleDiscovered }) {
     // marketing-copy choices. Firestore merge:true means our save
     // payloads preserve the admin's overrides untouched.
 
-    const [downloading, setDownloading] = useState(false)
     const [copied, setCopied] = useState(false)
+    const [bookToken, setBookToken] = useState('')
+    const [entries, setEntries] = useState([])
+    const [bookDesign, setBookDesign] = useState(null)
 
     // Resolved event-type config — drives field labels + placeholders.
     // Now locale-aware: in English, cfg.label === 'Bar Mitzvah'.
@@ -145,6 +148,25 @@ function PortalApp({ onLocaleDiscovered }) {
                         await setDoc(docRef, { slug: newSlug }, { merge: true })
                         setSlug(newSlug)
                     }
+
+                    // עיצוב הספר הנוכחי — לסימון הפריסט הפעיל בבורר
+                    setBookDesign(data.bookDesign || data.coverDesign || null)
+
+                    // טוקן לספר הדיגיטלי — אם אין, ניצור ונשמור (הבעלים מורשה לכתוב)
+                    const existingToken =
+                        Array.isArray(data.digitalTokens) && data.digitalTokens.length > 0
+                            ? data.digitalTokens[0]
+                            : null
+                    if (existingToken) {
+                        setBookToken(existingToken)
+                    } else {
+                        const tok =
+                            typeof crypto !== 'undefined' && crypto.randomUUID
+                                ? crypto.randomUUID()
+                                : `tok-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`
+                        await setDoc(docRef, { digitalTokens: arrayUnion(tok) }, { merge: true })
+                        setBookToken(tok)
+                    }
                 }
             } catch (error) {
                 console.error('Error fetching:', error)
@@ -152,6 +174,20 @@ function PortalApp({ onLocaleDiscovered }) {
         }
         fetchWeddingData()
     }, [weddingId, onLocaleDiscovered])
+
+    // רשימת המעלים ברכות — מונה + שמות לתצוגה בפורטל
+    useEffect(() => {
+        if (!weddingId) return
+        let cancelled = false
+        getEntries(weddingId)
+            .then(list => {
+                if (!cancelled) setEntries(Array.isArray(list) ? list : [])
+            })
+            .catch(() => {})
+        return () => {
+            cancelled = true
+        }
+    }, [weddingId])
 
     // שמירה ל-DB. We send only the fields visible in the UI for the
     // current event type — that way switching the type from the admin
@@ -201,6 +237,27 @@ function PortalApp({ onLocaleDiscovered }) {
         const shortId = weddingId?.slice(0, 8) || ''
         return `${baseHost}/wedding/${shortId}...`
     }, [weddingId, slug])
+
+    const bookLink = useMemo(() => {
+        const baseUrl =
+            process.env.NEXT_PUBLIC_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+        return bookToken ? `${baseUrl}/wedding/${weddingId}/book/${bookToken}` : ''
+    }, [weddingId, bookToken])
+
+    // שמירת העיצוב שהזוג בחר — כתיבה ישירה (הבעלים מורשה בחוקי Firestore)
+    const handleSelectDesign = useCallback(
+        async design => {
+            if (!weddingId) return
+            const docRef = doc(db, 'weddings', weddingId)
+            await setDoc(
+                docRef,
+                { bookDesign: design, coverDesign: design, bookDesignSource: 'portal' },
+                { merge: true },
+            )
+            setBookDesign(design)
+        },
+        [weddingId],
+    )
 
     return (
         <div
@@ -313,132 +370,66 @@ function PortalApp({ onLocaleDiscovered }) {
 
                 {/* כפתורי פעולה */}
                 <div className='space-y-6 relative z-10'>
-                    {/* בחירת רקע לשלט */}
-                    <div>
-                        <label className='block text-sm font-bold text-gray-600 mb-3'>{t('designPickerLabel')}</label>
-                        <div className='grid grid-cols-2 gap-3'>
-                            {BG_OPTIONS.map(bg => {
-                                const isSelected = selectedBg === bg.id
-                                const bgLabel = t(bg.labelKey)
-                                return (
-                                    <button
-                                        key={bg.id}
-                                        onClick={() => setSelectedBg(bg.id)}
-                                        className='group relative rounded-xl overflow-hidden transition-all duration-300'
-                                        style={{
-                                            border: isSelected ? '2.5px solid #AA8840' : '2.5px solid transparent',
-                                            boxShadow: isSelected
-                                                ? '0 4px 20px rgba(170,136,64,0.2)'
-                                                : '0 2px 8px rgba(0,0,0,0.06)',
-                                            transform: isSelected ? 'scale(1.02)' : 'scale(1)',
-                                        }}
+                    {/* הספר שלכם — צפייה, בחירת עיצוב, ומי כבר העלה ברכה */}
+                    <div className='rounded-2xl border border-[#AA8840]/20 bg-white/60 p-4 text-center'>
+                        <h2 className='text-lg font-bold text-gray-800 mb-1'>הספר שלכם</h2>
+                        <p className='text-xs text-gray-400 mb-4'>
+                            {entries.length > 0
+                                ? `${entries.length} ברכות כבר נאספו`
+                                : 'עדיין אין ברכות — שתפו את הקישור כדי שיתחילו להגיע'}
+                        </p>
+                        {bookLink && (
+                            <a
+                                href={bookLink}
+                                target='_blank'
+                                rel='noopener noreferrer'
+                                className='w-full py-4 px-6 rounded-2xl gold-shimmer text-white font-bold text-lg shadow-lg hover:scale-[1.02] transition-all duration-300 flex items-center justify-center gap-3'
+                            >
+                                צפו בספר ובחרו עיצוב
+                            </a>
+                        )}
+                        {entries.length > 0 && (
+                            <div className='mt-4 flex flex-wrap gap-1.5 justify-center'>
+                                {entries.slice(0, 12).map((e, idx) => (
+                                    <span
+                                        key={e.id || idx}
+                                        className='text-[11px] bg-[#AA8840]/10 text-[#7a6548] px-2 py-1 rounded-full'
                                     >
-                                        <div className='aspect-[3/4] relative'>
-                                            <img
-                                                src={`/backgrounds/${bg.file}`}
-                                                alt={bgLabel}
-                                                className='w-full h-full object-cover'
-                                            />
-                                            {/* Selected overlay */}
-                                            {isSelected && (
-                                                <div className='absolute inset-0 bg-[#AA8840]/[0.08] flex items-start justify-end p-2'>
-                                                    <div className='w-6 h-6 rounded-full bg-[#AA8840] flex items-center justify-center shadow-md'>
-                                                        <svg
-                                                            className='w-3.5 h-3.5 text-white'
-                                                            fill='none'
-                                                            viewBox='0 0 24 24'
-                                                            stroke='currentColor'
-                                                            strokeWidth={3}
-                                                        >
-                                                            <path
-                                                                strokeLinecap='round'
-                                                                strokeLinejoin='round'
-                                                                d='M5 13l4 4L19 7'
-                                                            />
-                                                        </svg>
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {/* Hover overlay */}
-                                            {!isSelected && (
-                                                <div className='absolute inset-0 bg-black/0 group-hover:bg-black/[0.04] transition-colors duration-200' />
-                                            )}
-                                        </div>
-                                        <div
-                                            className='py-2 px-1 text-center'
-                                            style={{ background: isSelected ? 'rgba(170,136,64,0.05)' : 'white' }}
-                                        >
-                                            <span
-                                                className='text-xs font-bold'
-                                                style={{ color: isSelected ? '#AA8840' : '#666' }}
-                                            >
-                                                {bgLabel}
-                                            </span>
-                                        </div>
-                                    </button>
-                                )
-                            })}
-                        </div>
+                                        {e.name || 'אורח/ת'}
+                                    </span>
+                                ))}
+                                {entries.length > 12 && (
+                                    <span className='text-[11px] text-gray-400 px-2 py-1'>+{entries.length - 12}</span>
+                                )}
+                            </div>
+                        )}
                     </div>
 
-                    {/* כפתור הורדה */}
-                    <button
-                        onClick={async () => {
-                            try {
-                                setDownloading(true)
-                                const bgFile = BG_OPTIONS.find(b => b.id === selectedBg)?.file || 'wedding-bg.png'
-                                const url = `/api/generate-qr-pdf?weddingId=${weddingId}&bg=${encodeURIComponent(bgFile)}${slug ? `&slug=${slug}` : ''}`
-                                const res = await fetch(url)
-                                if (!res.ok) throw new Error('PDF generation failed')
-                                const blob = await res.blob()
-                                const a = document.createElement('a')
-                                a.href = URL.createObjectURL(blob)
-                                // Filename mirrors the event identity. For weddings keep
-                                // the historical "bride-groom" pattern; otherwise use the
-                                // celebrant name (or fall back to the event-type id).
-                                const filenameStem = isWedding
-                                    ? [brideName, groomName].filter(Boolean).join('-') || 'wedding'
-                                    : celebrantName || cfg.id
-                                a.download = `WeddingTales-${filenameStem}.pdf`
-                                a.click()
-                                URL.revokeObjectURL(a.href)
-                            } catch (err) {
-                                console.error('PDF download error:', err)
-                                alert(t('pdfError'))
-                            } finally {
-                                setDownloading(false)
-                            }
-                        }}
-                        disabled={downloading}
-                        className='w-full py-4 px-6 rounded-2xl gold-shimmer text-white font-bold text-lg shadow-lg hover:scale-[1.02] hover:shadow-xl active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100'
-                    >
-                        {downloading ? (
-                            <>
-                                <svg className='w-6 h-6 animate-spin' fill='none' viewBox='0 0 24 24'>
-                                    <circle
-                                        className='opacity-25'
-                                        cx='12'
-                                        cy='12'
-                                        r='10'
-                                        stroke='currentColor'
-                                        strokeWidth='4'
-                                    />
-                                    <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8v8z' />
-                                </svg>
-                                <span>{t('generatingPdf')}</span>
-                            </>
-                        ) : (
-                            <>
-                                <PdfIcon /> <span>{t('downloadPdf')}</span>
-                            </>
-                        )}
-                    </button>
+                    {/* בורר עיצוב הספר */}
+                    <CoupleDesignPicker
+                        activeDesign={bookDesign}
+                        onSelect={handleSelectDesign}
+                        title='בחרו עיצוב לספר'
+                        hint='לחיצה על עיצוב משנה מיד את מראה הספר שלכם.'
+                    />
 
                     <div className='w-full h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent'></div>
 
                     <div className='text-center'>
                         <h2 className='text-lg font-bold text-gray-800 mb-1'>{t('shareTitle')}</h2>
                         <p className='text-xs text-gray-400 mb-4'>{t('shareSubtitle')}</p>
+                        <a
+                            href={`https://wa.me/?text=${encodeURIComponent('הוזמנתם לכתוב ברכה ולשתף רגע מהאירוע שלנו 💛 ' + guestLink)}`}
+                            target='_blank'
+                            rel='noopener noreferrer'
+                            className='w-full mb-3 flex items-center justify-center gap-2 rounded-2xl p-4 font-bold text-white transition-all hover:scale-[1.01] active:scale-[0.99]'
+                            style={{ background: '#25D366' }}
+                        >
+                            <svg viewBox='0 0 24 24' className='w-5 h-5' fill='currentColor'>
+                                <path d='M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.945C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 001.51 5.26l-.999 3.648 3.978-1.607zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.612-.916-2.207-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z' />
+                            </svg>
+                            שיתוף בוואטסאפ
+                        </a>
                         <button
                             onClick={() => {
                                 navigator.clipboard.writeText(guestLink)
