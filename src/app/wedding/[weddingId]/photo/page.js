@@ -981,6 +981,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
         const mdButtonBg = mdGd.buttonGradient
             ? mdGd.buttonGradient
             : 'url(/backgrounds/gardenbtnbg.svg) center / 100% 100% no-repeat'
+        const mdHasCircle = md.uploadCircle && md.uploadCircle !== 'transparent'
 
         return (
             <div
@@ -1433,27 +1434,33 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                         bold CTA + soft subtitle. */}
                                     <div className='flex flex-col items-center gap-1'>
                                         <div className='relative'>
-                                            <svg
-                                                viewBox='0 0 24 24'
-                                                className='absolute -top-1 -left-4 w-[9px] h-[9px]'
-                                                fill={md.accentColor}
-                                                opacity='0.9'
-                                            >
-                                                <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
-                                            </svg>
-                                            <svg
-                                                viewBox='0 0 24 24'
-                                                className='absolute -bottom-1 -right-4 w-[8px] h-[8px]'
-                                                fill={md.accentColor}
-                                                opacity='0.7'
-                                            >
-                                                <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
-                                            </svg>
+                                            {!mdHasCircle && (
+                                                <>
+                                                    <svg
+                                                        viewBox='0 0 24 24'
+                                                        className='absolute -top-1 -left-4 w-[9px] h-[9px]'
+                                                        fill={md.accentColor}
+                                                        opacity='0.9'
+                                                    >
+                                                        <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
+                                                    </svg>
+                                                    <svg
+                                                        viewBox='0 0 24 24'
+                                                        className='absolute -bottom-1 -right-4 w-[8px] h-[8px]'
+                                                        fill={md.accentColor}
+                                                        opacity='0.7'
+                                                    >
+                                                        <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
+                                                    </svg>
+                                                </>
+                                            )}
                                             <div
                                                 style={{
+                                                    width: mdHasCircle ? 48 : 'auto',
+                                                    height: mdHasCircle ? 48 : 'auto',
                                                     borderRadius: '9999px',
                                                     background: md.uploadCircle,
-                                                    padding: md.uploadCircle && md.uploadCircle !== 'transparent' ? 13 : 0,
+                                                    boxShadow: mdHasCircle ? '0 6px 16px -8px rgba(0,0,0,0.4)' : 'none',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
@@ -1461,10 +1468,10 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                             >
                                                 <svg
                                                     viewBox='0 0 24 24'
-                                                    className='w-9 h-9'
+                                                    className={mdHasCircle ? 'w-[21px] h-[21px]' : 'w-9 h-9'}
                                                     fill='none'
                                                     stroke={md.uploadIcon}
-                                                    strokeWidth={1.4}
+                                                    strokeWidth={1.5}
                                                 >
                                                     <path
                                                         strokeLinecap='round'
