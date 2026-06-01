@@ -21,7 +21,7 @@ const PRESETS = [
             wellBg: '#eef3fc', wellBorder: '#cdd8ec',
             inputBg: '#fbf7ee', inputBorder: '#e3cfa3', inputFocusBorder: '#c9a44e', inputTextColor: '#1c2740', inputPlaceholderColor: '#a9b3c4',
             buttonGradient: '#c9a44e', buttonTextColor: '#f0e2bf', trustText: '#9fb3d4',
-            cornerImage: 'none',
+            cornerImage: 'none', uploadCircle: '#16243d', uploadIcon: '#f0e2bf',
         },
         copy: {
             momentSubtitle: 'כתבו ברכה והוסיפו תמונה לספר הזיכרונות שלו',

@@ -971,6 +971,8 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
             iconColor: '#9a8665',
             buttonTextColor: '#f5ead2',
             cornerImage: '/backgrounds/flowers.svg',
+            uploadCircle: 'transparent',
+            uploadIcon: '#a8843a',
             ...mdGd,
         }
         // Submit-button surface: an uploaded image or solid colour from the
@@ -1447,19 +1449,30 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                             >
                                                 <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
                                             </svg>
-                                            <svg
-                                                viewBox='0 0 24 24'
-                                                className='w-9 h-9'
-                                                fill='none'
-                                                stroke='#a8843a'
-                                                strokeWidth={1.4}
+                                            <div
+                                                style={{
+                                                    borderRadius: '9999px',
+                                                    background: md.uploadCircle,
+                                                    padding: md.uploadCircle && md.uploadCircle !== 'transparent' ? 13 : 0,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                }}
                                             >
-                                                <path
-                                                    strokeLinecap='round'
-                                                    strokeLinejoin='round'
-                                                    d='M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 7.5m0 0L7.5 12M12 7.5v9'
-                                                />
-                                            </svg>
+                                                <svg
+                                                    viewBox='0 0 24 24'
+                                                    className='w-9 h-9'
+                                                    fill='none'
+                                                    stroke={md.uploadIcon}
+                                                    strokeWidth={1.4}
+                                                >
+                                                    <path
+                                                        strokeLinecap='round'
+                                                        strokeLinejoin='round'
+                                                        d='M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 7.5m0 0L7.5 12M12 7.5v9'
+                                                    />
+                                                </svg>
+                                            </div>
                                         </div>
                                         <div
                                             style={{
