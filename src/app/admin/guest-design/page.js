@@ -17,6 +17,9 @@ const PRESETS = [
             cardBg: '#16243d', cardLabelColor: '#e8ddc0', cardCounterColor: '#8fa3bf',
             inputBg: '#0d1626', inputBorder: '#2e425f', inputFocusBorder: '#cba44e', inputTextColor: '#f0e6c8', inputPlaceholderColor: '#5f738c',
             buttonGradient: '#cba44e', trustText: '#8fa3bf',
+            cardBorder: '#2e425f', cardFrame: '#1f3050', iconColor: '#8fa3bf',
+            pillBg: '#16243d', pillBorder: '#cba44e', pillText: '#e8ddc0',
+            wellBg: '#0d1626', wellBorder: '#2e425f', cornerImage: 'none',
         },
     },
     {
@@ -26,6 +29,9 @@ const PRESETS = [
             cardBg: '#fffafc', cardLabelColor: '#5a2a3a', cardCounterColor: '#c0a0aa',
             inputBg: '#fffafc', inputBorder: '#f0d0d8', inputFocusBorder: '#d98aa0', inputTextColor: '#5a2a3a', inputPlaceholderColor: '#d0aab4',
             buttonGradient: '#d98aa0', trustText: '#b89aa2',
+            cardBorder: '#e7b8c4', cardFrame: '#ffffff', iconColor: '#b07a8c',
+            pillBg: '#fffafc', pillBorder: '#d98aa0', pillText: '#5a2a3a',
+            wellBg: '#fff5f8', wellBorder: '#f0d0d8',
         },
     },
     {
@@ -35,20 +41,28 @@ const PRESETS = [
             cardBg: '#fbfdfa', cardLabelColor: '#26352a', cardCounterColor: '#9ab09c',
             inputBg: '#fbfdfa', inputBorder: '#d2e0d0', inputFocusBorder: '#7ba27f', inputTextColor: '#26352a', inputPlaceholderColor: '#a8bca8',
             buttonGradient: '#5f8f66', trustText: '#8fa890',
+            cardBorder: '#bcd0bc', cardFrame: '#ffffff', iconColor: '#6f8a72',
+            pillBg: '#fbfdfa', pillBorder: '#7ba27f', pillText: '#26352a',
+            wellBg: '#f3f7f1', wellBorder: '#d2e0d0',
         },
     },
 ]
 
 const DEFAULT_DESIGN = {
-    pageBg: '#f8f4ec', pageBgImage: 'none', titleColor: '#1a1410', subtitleColor: '#9a8a72', accentColor: '#c9a44e',
+    pageBg: '#fbf6ec', pageBgImage: 'none', titleColor: '#1a1410', subtitleColor: '#7a6a52', accentColor: '#c9a44e',
     cardBg: '#ffffff', cardLabelColor: '#1a1410', cardCounterColor: '#b9a684',
-    inputBg: '#ffffff', inputBorder: '#ead9b3', inputFocusBorder: '#c9a44e', inputTextColor: '#1a1410', inputPlaceholderColor: '#c9b888',
+    inputBg: '#fbf6ec', inputBorder: '#ead9b3', inputFocusBorder: '#c9a44e', inputTextColor: '#1a1410', inputPlaceholderColor: '#c9b888',
     buttonGradient: '#c9a44e', trustText: '#b9a684',
+    cardBorder: '#c9a44e', cardFrame: '#ffffff', iconColor: '#9a8665',
+    pillBg: '#fdf8ec', pillBorder: '#c9a44e', pillText: '#8a6d40',
+    wellBg: '#fbf3e3', wellBorder: '#c9a44e',
 }
 
 const GROUPS = [
     { title: 'רקע העמוד', fields: [['pageBg', 'צבע רקע'], ['titleColor', 'כותרת'], ['subtitleColor', 'תת-כותרת'], ['accentColor', 'הדגשה']] },
-    { title: 'כרטיס הטופס', fields: [['cardBg', 'רקע הכרטיס'], ['cardLabelColor', 'תוויות'], ['cardCounterColor', 'מונה תווים']] },
+    { title: 'כרטיס הטופס', fields: [['cardBg', 'רקע הכרטיס'], ['cardLabelColor', 'תוויות'], ['cardCounterColor', 'מונה תווים'], ['cardBorder', 'מסגרת'], ['cardFrame', 'מסגרת פנימית'], ['iconColor', 'אייקונים']] },
+    { title: 'תגית עליונה', fields: [['pillBg', 'רקע התגית'], ['pillBorder', 'מסגרת'], ['pillText', 'טקסט']] },
+    { title: 'אזור התמונה', fields: [['wellBg', 'רקע'], ['wellBorder', 'מסגרת']] },
     { title: 'תיבות הטקסט', fields: [['inputBg', 'רקע'], ['inputBorder', 'מסגרת'], ['inputFocusBorder', 'מסגרת בפוקוס'], ['inputTextColor', 'טקסט'], ['inputPlaceholderColor', 'רמז']] },
 ]
 
@@ -215,6 +229,19 @@ function Editor() {
         }
     }
 
+    async function onUploadCorner(file) {
+        if (!file) return
+        setUploading('corner')
+        try {
+            const url = await uploadImage(file)
+            setField('cornerImage', url)
+        } catch (e) {
+            flash('העלאה נכשלה: ' + (e?.message || ''), 'error')
+        } finally {
+            setUploading('')
+        }
+    }
+
     function loadPreset(p) {
         setDesign({ ...p.design })
         setBgImage('')
@@ -314,6 +341,27 @@ function Editor() {
                                 {bgImage && <button onClick={() => onBgImageUrl('')} className='text-[11px] text-red-500'>הסר</button>}
                             </div>
                             <input value={bgImage} onChange={e => onBgImageUrl(e.target.value)} placeholder='או הדביקו URL...' className='w-full mt-2 rounded-xl border border-[#e7dcc6] px-3 py-2 text-xs bg-white outline-none focus:border-[#AA8840]' dir='ltr' />
+                        </div>
+
+                        {/* Corner decoration (flower) */}
+                        <div className='bg-white rounded-2xl border border-[#e7dcc6] p-4'>
+                            <label className='block text-xs font-bold text-[#7a6a52] mb-2'>פרח / קישוט בפינה</label>
+                            <div className='flex items-center gap-2 flex-wrap'>
+                                <label className={fileBtn}>
+                                    <Upload size={13} /> {uploading === 'corner' ? 'מעלה...' : 'העלאת תמונה'}
+                                    <input type='file' accept='image/*' className='hidden' onChange={e => onUploadCorner(e.target.files?.[0])} />
+                                </label>
+                                <button onClick={() => setField('cornerImage', 'none')} className='text-[11px] text-red-500 font-bold'>הסר קישוט</button>
+                                <button onClick={() => setField('cornerImage', '/backgrounds/flowers.svg')} className='text-[11px] text-[#7a6a52] font-bold'>פרח ברירת מחדל</button>
+                            </div>
+                            <input
+                                value={typeof design.cornerImage === 'string' && design.cornerImage !== 'none' ? design.cornerImage : ''}
+                                onChange={e => setField('cornerImage', e.target.value || 'none')}
+                                placeholder='או הדביקו URL...'
+                                className='w-full mt-2 rounded-xl border border-[#e7dcc6] px-3 py-2 text-xs bg-white outline-none focus:border-[#AA8840]'
+                                dir='ltr'
+                            />
+                            {design.cornerImage === 'none' && <p className='text-[10.5px] text-[#a89378] mt-1.5'>אין קישוט (מוסתר)</p>}
                         </div>
 
                         {/* Button */}

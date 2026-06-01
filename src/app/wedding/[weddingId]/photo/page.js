@@ -961,6 +961,16 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
             inputFocusBorder: '#c9a44e',
             inputTextColor: '#1a1410',
             trustText: '#b9a684',
+            cardBorder: 'rgba(201,164,78,0.45)',
+            cardFrame: 'rgba(255,255,255,0.85)',
+            pillBg: '#fdf8ec',
+            pillBorder: 'rgba(201,164,78,0.40)',
+            pillText: '#8a6d40',
+            wellBg: '#fbf3e3',
+            wellBorder: 'rgba(201,164,78,0.45)',
+            iconColor: '#9a8665',
+            buttonTextColor: '#f5ead2',
+            cornerImage: '/backgrounds/flowers.svg',
             ...mdGd,
         }
         // Submit-button surface: an uploaded image or solid colour from the
@@ -1095,7 +1105,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                                 y='52'
                                                 textAnchor='middle'
                                                 fontSize='28'
-                                                fill='#c9a44e'
+                                                fill={md.accentColor}
                                                 fontFamily="'David Libre', 'Times New Roman', serif"
                                             >
                                                 &amp;
@@ -1118,7 +1128,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                 ) : (
                                     <path
                                         d='M 100 60 L 88 48 C 76 36, 88 22, 100 32 C 112 22, 124 36, 112 48 Z'
-                                        fill='#c9a44e'
+                                        fill={md.accentColor}
                                     />
                                 )}
                             </svg>
@@ -1130,7 +1140,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                         flourish line, then the subtitle. ── */}
                     {/* Small gold heart cap */}
                     <div className='flex justify-center mb-1'>
-                        <svg viewBox='0 0 24 24' className='w-[12px] h-[12px]' fill='#c9a44e'>
+                        <svg viewBox='0 0 24 24' className='w-[12px] h-[12px]' fill={md.accentColor}>
                             <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                         </svg>
                     </div>
@@ -1219,12 +1229,12 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                         className='rounded-[20px] px-4 pt-7 pb-4 relative mt-9'
                         style={{
                             background: md.cardBg,
-                            border: '1px solid rgba(201,164,78,0.45)',
+                            border: `1px solid ${md.cardBorder}`,
                             overflow: 'visible',
                             boxShadow: [
                                 // Inner double-line: 5px cream gap +
                                 // 1px dusty-pink hairline. Stationery feel.
-                                'inset 0 0 0 5px rgba(255,255,255,0.85)',
+                                `inset 0 0 0 5px ${md.cardFrame}`,
                                 'inset 0 0 0 6px rgba(216,164,164,0.35)',
                                 // Outer rose halo + warm gold drop —
                                 // blends the card edge into the
@@ -1241,9 +1251,9 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                         <div
                             className='absolute -top-3.5 left-1/2 -translate-x-1/2 inline-flex items-center gap-1.5 rounded-full whitespace-nowrap'
                             style={{
-                                background: '#fdf8ec',
-                                border: '1px solid rgba(201,164,78,0.40)',
-                                color: '#8a6d40',
+                                background: md.pillBg,
+                                border: `1px solid ${md.pillBorder}`,
+                                color: md.pillText,
                                 padding: '5px 14px',
                                 fontSize: '11px',
                                 fontWeight: 700,
@@ -1274,7 +1284,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                     viewBox='0 0 24 24'
                                     className='w-[18px] h-[18px] shrink-0'
                                     fill='none'
-                                    stroke='#9a8665'
+                                    stroke={md.iconColor}
                                     strokeWidth={1.8}
                                 >
                                     <path
@@ -1314,7 +1324,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                     viewBox='0 0 24 24'
                                     className='w-[18px] h-[18px] shrink-0'
                                     fill='none'
-                                    stroke='#9a8665'
+                                    stroke={md.iconColor}
                                     strokeWidth={1.8}
                                 >
                                     <path
@@ -1362,7 +1372,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                 viewBox='0 0 24 24'
                                 className='w-[18px] h-[18px] shrink-0'
                                 fill='none'
-                                stroke='#9a8665'
+                                stroke={md.iconColor}
                                 strokeWidth={1.8}
                             >
                                 <path
@@ -1407,8 +1417,8 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                 // unchanged.
                                 maxHeight: 'min(220px, 22vh)',
                                 maxWidth: 'min(100%, calc(min(220px, 22vh) * 4 / 3))',
-                                background: '#fbf3e3',
-                                border: '1px dashed rgba(201,164,78,0.45)',
+                                background: md.wellBg,
+                                border: `1px dashed ${md.wellBorder}`,
                             }}
                         >
                             {/* Empty state — top: image-with-arrow
@@ -1424,7 +1434,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                             <svg
                                                 viewBox='0 0 24 24'
                                                 className='absolute -top-1 -left-4 w-[9px] h-[9px]'
-                                                fill='#c9a44e'
+                                                fill={md.accentColor}
                                                 opacity='0.9'
                                             >
                                                 <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
@@ -1432,7 +1442,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                             <svg
                                                 viewBox='0 0 24 24'
                                                 className='absolute -bottom-1 -right-4 w-[8px] h-[8px]'
-                                                fill='#c9a44e'
+                                                fill={md.accentColor}
                                                 opacity='0.7'
                                             >
                                                 <path d='M12 2 L13.2 9.5 L21 11 L13.2 12.5 L12 22 L10.8 12.5 L3 11 L10.8 9.5 Z' />
@@ -1485,7 +1495,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                                 viewBox='0 0 24 24'
                                                 className='w-[14px] h-[14px]'
                                                 fill='none'
-                                                stroke='#9a8665'
+                                                stroke={md.iconColor}
                                                 strokeWidth={1.8}
                                             >
                                                 <path
@@ -1516,7 +1526,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                                 viewBox='0 0 24 24'
                                                 className='w-[14px] h-[14px]'
                                                 fill='none'
-                                                stroke='#9a8665'
+                                                stroke={md.iconColor}
                                                 strokeWidth={1.8}
                                             >
                                                 <path
@@ -1697,8 +1707,9 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                             bottom-left corner of the card. No
                             rotation: the asset is already oriented
                             correctly. */}
+                        {md.cornerImage !== 'none' && (
                         <img
-                            src='/backgrounds/flowers.svg'
+                            src={md.cornerImage}
                             alt=''
                             aria-hidden='true'
                             className='absolute pointer-events-none'
@@ -1711,6 +1722,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                 zIndex: 5,
                             }}
                         />
+                        )}
                     </div>
 
                     {/* ── Submit button — uses the user-supplied
@@ -1740,7 +1752,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                             aspectRatio: '185 / 40',
                             fontSize: '17px',
                             letterSpacing: '0.01em',
-                            color: '#f5ead2',
+                            color: md.buttonTextColor,
                             textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                             // Crisper rendering when the browser
                             // has to upscale the small (185px)
