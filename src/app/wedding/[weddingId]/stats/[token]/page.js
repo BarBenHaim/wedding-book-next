@@ -225,7 +225,7 @@ export default function StatsPage() {
 
                     <div className='rounded-2xl p-5 flex flex-col justify-between' style={{ background: 'linear-gradient(135deg, rgba(170,136,64,0.10) 0%, rgba(170,136,64,0.02) 100%)', border: '1px solid rgba(212,184,103,0.35)' }}>
                         <div>
-                            <p className='text-[11px] font-bold text-[#7a6a52] uppercase tracking-widest mb-3'>הספר הדיגיטלי</p>
+                            <p className='text-[11px] font-bold text-[#7a6a52] uppercase tracking-widest mb-3'>ספר הברכות</p>
                             <p className='text-[13px] text-[#3d2e1a] leading-relaxed mb-4'>
                                 לראות איך נראה הספר עם כל הברכות והתמונות שכבר נכנסו. הפריסה מתעדכנת אוטומטית.
                             </p>
@@ -236,7 +236,7 @@ export default function StatsPage() {
                                 className='inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-white text-[14px] font-bold'
                                 style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', boxShadow: '0 10px 22px -10px rgba(170,136,64,0.45)' }}
                             >
-                                <BookOpen size={16} /> צפו בספר הדיגיטלי
+                                <BookOpen size={16} /> צפו בספר הברכות
                             </a>
                         ) : (
                             <p className='text-[12px] text-[#a89378] italic'>הקישור לספר עוד לא נוצר. נדאג לכם בהקדם.</p>

@@ -127,6 +127,30 @@ function coupleLabel(w) {
     return w.ownerEmail || '—'
 }
 
+// Contact (buyer) name — prefer the stored ownerName (from the order's
+// billing), else fall back to the event names. Phone + a one-tap
+// WhatsApp link are derived from ownerPhone.
+function contactName(w) {
+    if (w.ownerName && String(w.ownerName).trim()) return String(w.ownerName).trim()
+    return coupleLabel(w)
+}
+function normalizePhoneIntl(raw) {
+    if (!raw) return null
+    let d = String(raw).replace(/[^\d]/g, '')
+    if (!d) return null
+    if (d.startsWith('972')) return d
+    if (d.startsWith('0')) return '972' + d.slice(1)
+    if (d.length === 9 && d.startsWith('5')) return '972' + d
+    return d
+}
+function waMeLink(w) {
+    const p = normalizePhoneIntl(w.ownerPhone)
+    if (!p || p.length < 9) return null
+    const first = (w.ownerName || '').trim().split(/\s+/)[0]
+    const text = `היי${first ? ' ' + first : ''}! כאן צוות Wedding Tales 💛`
+    return `https://wa.me/${p}?text=${encodeURIComponent(text)}`
+}
+
 const EVENT_TYPE_META = {
     wedding: { label: 'חתונה', bg: '#fdeef2', color: '#b84a6a' },
     bar_mitzvah: { label: 'בר מצווה', bg: '#eef2fd', color: '#4a5fb8' },
@@ -1174,7 +1198,7 @@ function DigitalEditionPanel({ wedding }) {
             <div className='flex items-center justify-between'>
                 <p className='text-sm text-[#3d2e1a]'>
                     {tokens.length === 0
-                        ? 'עדיין לא הופקה מהדורה דיגיטלית.'
+                        ? 'עדיין לא הופק קישור לצפייה בספר.'
                         : `${tokens.length} ${tokens.length === 1 ? 'קישור פעיל' : 'קישורים פעילים'}`}
                 </p>
             </div>
@@ -1471,7 +1495,7 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                 an interactive flipbook viewer. The token is appended
                 to wedding.digitalTokens; revoke = remove from array. */}
             <div className='px-6 py-5 border-b border-[#f0e8d4]'>
-                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>מהדורה דיגיטלית</p>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>קישור לצפייה בספר</p>
                 <DigitalEditionPanel wedding={wedding} />
             </div>
 
@@ -2300,11 +2324,12 @@ function AdminDashboardContent() {
                     )}
                     {status === 'ok' && sorted.length > 0 && (
                         <div className='overflow-x-auto'>
-                            <table className='w-full text-sm text-right' style={{ minWidth: '880px' }}>
+                            <table className='w-full text-sm text-right' style={{ minWidth: '1040px' }}>
                                 <thead>
                                     <tr className='border-b border-[#AA8840]/15 text-[11px] uppercase tracking-widest bg-[#AA8840]/5'>
                                         <th className='px-6 py-4 text-[#a89378] font-semibold w-12'>#</th>
                                         <SortableHeader sortKey='couple' currentSort={sort} onSort={setSort}><Users size={11} /> זוג</SortableHeader>
+                                        <th className='px-6 py-4 font-semibold text-[#a89378]'><span className='flex items-center gap-1.5'><Phone size={11} /> איש קשר</span></th>
                                         <SortableHeader sortKey='date' currentSort={sort} onSort={setSort}><CalendarDays size={11} /> תאריך</SortableHeader>
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'>סטטוס</th>
                                         <SortableHeader sortKey='greetings' currentSort={sort} onSort={setSort} justify='center'><MessageCircle size={11} /> ברכות</SortableHeader>
@@ -2329,12 +2354,29 @@ function AdminDashboardContent() {
                                                         <span className='font-semibold text-[#1a1410]'>{coupleLabel(w)}</span>
                                                         <EventTypeBadge type={w.eventType} />
                                                     </div>
-                                                    {(w.ownerEmail || w.ownerPhone) && (
+                                                    {w.ownerEmail && (
                                                         <div className='text-xs text-[#a89378] mt-1 flex items-center gap-2 justify-end flex-wrap'>
                                                             {w.ownerEmail && <span className='truncate max-w-[200px]'>{w.ownerEmail}</span>}
-                                                            {w.ownerPhone && <span dir='ltr' className='tabular-nums'>{w.ownerPhone}</span>}
+                                                            
                                                         </div>
                                                     )}
+                                                </div>
+                                            </td>
+                                            <td className='px-6 py-4'>
+                                                <div className='text-right'>
+                                                    <div className='text-sm text-[#1a1410]'>{contactName(w)}</div>
+                                                    {w.ownerPhone ? (
+                                                        <div className='mt-1 flex items-center gap-2 justify-end flex-wrap' onClick={e => e.stopPropagation()}>
+                                                            <span dir='ltr' className='text-xs text-[#a89378] tabular-nums'>{w.ownerPhone}</span>
+                                                            {waMeLink(w) && (
+                                                                <a href={waMeLink(w)} target='_blank' rel='noopener noreferrer' title='שליחת הודעה בוואטסאפ'
+                                                                    className='inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold transition-colors'
+                                                                    style={{ background: 'rgba(37,211,102,0.12)', border: '1px solid rgba(37,211,102,0.45)', color: '#1b8f4d' }}>
+                                                                    <MessageCircle size={12} /> וואטסאפ
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    ) : <div className='text-xs text-[#c4b9a4] mt-1'>—</div>}
                                                 </div>
                                             </td>
                                             <td className='px-6 py-4 text-[#7a6a52] whitespace-nowrap text-sm tabular-nums'>{formatDate(w.weddingDate)}</td>

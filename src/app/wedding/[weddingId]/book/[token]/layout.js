@@ -68,7 +68,7 @@ function abs(pathOrUrl) {
 function buildShareTitle(data) {
     const type = normalizeEventType(data?.eventType) || 'wedding'
     const title = buildTitle(data || {}, 'he')
-    if (!title || title.kind === 'empty') return 'הספר הדיגיטלי שלכם'
+    if (!title || title.kind === 'empty') return 'ספר הברכות שלכם'
 
     const names =
         title.kind === 'names'
@@ -104,10 +104,10 @@ const FALLBACK_META_BUILDER = () => {
     const ogImage = abs(FALLBACK_OG_IMAGE)
     return {
         metadataBase: origin ? new URL(origin) : undefined,
-        title: 'הספר הדיגיטלי — Wedding Tales',
+        title: 'ספר הברכות — Wedding Tales',
         description: 'ברכות ותמונות מהאורחים, נשמרות לכם לתמיד',
         openGraph: {
-            title: 'הספר הדיגיטלי — Wedding Tales',
+            title: 'ספר הברכות — Wedding Tales',
             description: 'ברכות ותמונות מהאורחים, נשמרות לכם לתמיד',
             type: 'website',
             locale: 'he_IL',
@@ -124,7 +124,7 @@ const FALLBACK_META_BUILDER = () => {
         },
         twitter: {
             card: 'summary_large_image',
-            title: 'הספר הדיגיטלי — Wedding Tales',
+            title: 'ספר הברכות — Wedding Tales',
             description: 'ברכות ותמונות מהאורחים, נשמרות לכם לתמיד',
             images: [ogImage],
         },
@@ -149,7 +149,7 @@ export async function generateMetadata({ params }) {
         if (!tokens.includes(token)) return FALLBACK_META()
 
         const title = buildShareTitle(data)
-        const description = 'הברכות והתמונות שלכם, נשמרות לתמיד בספר דיגיטלי יוקרתי'
+        const description = 'הברכות והתמונות מהאורחים — שמורות לכם לתמיד'
 
         // Image priority: couple's uploaded cover (already an absolute
         // Firebase Storage URL) → static brand fallback in /public.

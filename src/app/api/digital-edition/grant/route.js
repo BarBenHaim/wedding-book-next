@@ -90,16 +90,16 @@ export async function POST(req) {
             await transporter.sendMail({
                 from: process.env.MAIL_USER,
                 to: ownerEmail,
-                subject: `הספר הדיגיטלי שלכם מוכן ✨${headlineNames ? ` — ${headlineNames}` : ''}`,
+                subject: `ספר הברכות שלכם מוכן לצפייה ✨${headlineNames ? ` — ${headlineNames}` : ''}`,
                 html: `
 <div style="font-family:Arial,sans-serif;direction:rtl;text-align:right;max-width:600px;margin:0 auto;background:#fdf9ef;padding:0;border-radius:16px;overflow:hidden;">
   <div style="background:linear-gradient(135deg,#aa8840,#c9a44e);padding:28px 24px;color:#fff;">
-    <h1 style="margin:0;font-size:22px;">הספר הדיגיטלי שלכם מוכן! 💌</h1>
+    <h1 style="margin:0;font-size:22px;">ספר הברכות שלכם מוכן לצפייה! 💌</h1>
     <p style="margin:8px 0 0;opacity:.85;font-size:14px;">${headlineNames ? `${headlineNames} — ` : ''}Wedding Tales</p>
   </div>
   <div style="padding:24px;">
     <p style="font-size:15px;line-height:1.7;color:#3d2e1a;margin:0 0 16px;">
-      שמחים לבשר — המהדורה הדיגיטלית של ספר הברכות שלכם זמינה לצפייה בכל מכשיר, בכל זמן, ללא הגבלה.
+      שמחים לבשר — ספר הברכות שלכם זמין לצפייה בכל מכשיר, בכל זמן, ללא הגבלה.
     </p>
     <p style="font-size:14px;line-height:1.7;color:#7a6a52;margin:0 0 24px;">
       הקישור אישי לכם בלבד — אפשר לשתף אותו עם משפחה וחברים. פתחו במחשב או בטלפון.

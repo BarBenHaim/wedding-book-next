@@ -212,7 +212,7 @@ export default function DigitalEditionPage() {
                 @media print {
                     .digital-book-root { display: none !important; }
                     body::before {
-                        content: 'הספר הדיגיטלי לא ניתן להדפסה. להזמנת הספר הפיזי — צרו קשר.';
+                        content: 'התצוגה המקוונת אינה מודפסת — הספר המודפס יישלח אליכם.';
                         display: block;
                         padding: 40px;
                         font-family: sans-serif;
@@ -404,7 +404,7 @@ function InvalidScreen() {
                 </svg>
                 <h2 style={{ color: '#f5ead2', fontSize: '24px', fontWeight: 700, marginBottom: 8 }}>הקישור לא תקף</h2>
                 <p style={{ color: '#9a8665', fontSize: '14px', maxWidth: 320, margin: '0 auto', lineHeight: 1.6 }}>
-                    הקישור שעקבת אחריו פג תוקף או שאינו שייך לספר זה. אם רכשת את המהדורה הדיגיטלית — בדוק את האימייל שקיבלת או פנה אלינו.
+                    הקישור שעקבת אחריו פג תוקף או שאינו שייך לספר זה. אם רכשת את הספר — בדוק את האימייל שקיבלת או פנה אלינו.
                 </p>
             </div>
         </div>
@@ -627,7 +627,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
         const bride = (wedding.brideNameHe || wedding.brideName || '').trim()
         const groom = (wedding.groomNameHe || wedding.groomName || '').trim()
         const names = bride && groom ? `${bride} ו${groom}` : bride || groom || ''
-        const title = names ? `הספר הדיגיטלי של ${names}` : 'הספר הדיגיטלי שלנו'
+        const title = names ? `ספר הברכות של ${names}` : 'ספר הברכות שלנו'
         try {
             if (navigator.share) {
                 await navigator.share({ title, url })
@@ -694,7 +694,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                 <div className='relative z-10 max-w-md animate-[fadeUp_900ms_ease-out_both]'>
                     {/* Tiny tag */}
                     <p style={{ color: '#c9a44e', fontSize: '11px', letterSpacing: '0.3em', marginBottom: 18 }}>
-                        WEDDING TALES · ספר הברכות הדיגיטלי
+                        WEDDING TALES · ספר הברכות
                     </p>
 
                     {/* Ornament cap */}
@@ -735,7 +735,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                     >
                         {entries.length > 0
                             ? `${entries.length} ברכות ותמונות מהאורחים, נשמרות לכם לתמיד`
-                            : 'הספר הדיגיטלי שלכם'}
+                            : 'ספר הברכות שלכם'}
                     </p>
 
                     {/* Open CTA */}
@@ -876,7 +876,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                             Wedding Tales
                         </div>
                         <div style={{ color: '#aa8840', fontSize: '10.5px', letterSpacing: '0.18em' }}>
-                            ספר דיגיטלי
+                            ספר הברכות
                         </div>
                     </div>
                 </button>

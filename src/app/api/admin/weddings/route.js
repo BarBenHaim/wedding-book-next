@@ -87,6 +87,7 @@ export async function GET(req) {
                     groomName: data.groomName ?? null,
                     weddingDate,
                     ownerEmail: data.ownerEmail ?? data.email ?? null,
+                    ownerName: data.ownerName ?? null,
                     ownerId: data.ownerId ?? null,
                     orderId: data.orderId ?? null,
                     slug: data.slug ?? null,
