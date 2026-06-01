@@ -107,9 +107,13 @@ export default function TextPage() {
         ;(async () => {
             // Live-preview override from the studio editor: ?gd=<base64 JSON>.
             let previewGd = null
+            let previewCopy = null
             try {
-                const raw = new URLSearchParams(window.location.search).get('gd')
+                const sp = new URLSearchParams(window.location.search)
+                const raw = sp.get('gd')
                 if (raw) previewGd = JSON.parse(decodeURIComponent(escape(atob(raw))))
+                const rawc = sp.get('gc')
+                if (rawc) previewCopy = JSON.parse(decodeURIComponent(escape(atob(rawc))))
             } catch {
                 previewGd = null
             }
@@ -150,6 +154,7 @@ export default function TextPage() {
                         momentSecurityNote: (data.customMomentSecurityNote || '').trim(),
                     })
                     setGuestDesign(previewGd || data.guestDesign || null)
+                    if (previewCopy) setFormCopy(prev => ({ ...prev, ...previewCopy }))
                 }
             } catch {
                 /* keep Hebrew default */

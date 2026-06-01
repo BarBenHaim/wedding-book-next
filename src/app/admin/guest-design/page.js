@@ -2,81 +2,91 @@
 
 import { useEffect, useState } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
-import { auth } from '@/lib/firebaseClient'
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { auth, storage } from '@/lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
-import { Lock, Palette, Save, RefreshCw, Eye, Check } from 'lucide-react'
+import { Lock, Palette, Save, RefreshCw, Eye, Check, Upload, Smartphone, Tablet, Monitor, Type } from 'lucide-react'
 
-// Built-in starting points. Each `design` is a partial theme override applied
-// over the /photo page's built-in palette (empty = the classic built-in look).
 const PRESETS = [
     { id: 'classic', name: 'קלאסי (ברירת מחדל)', swatch: '#c9a44e', design: {} },
     {
-        id: 'bar_mitzvah',
-        name: 'בר מצווה — כחול וזהב',
-        swatch: '#16243d',
+        id: 'bar_mitzvah', name: 'בר מצווה — כחול וזהב', swatch: '#16243d',
         design: {
-            pageBg: '#0f1d33', pageBgImage: 'none',
-            titleColor: '#f0e6c8', subtitleColor: '#9db4cf', accentColor: '#cba44e',
+            pageBg: '#0f1d33', pageBgImage: 'none', titleColor: '#f0e6c8', subtitleColor: '#9db4cf', accentColor: '#cba44e',
             cardBg: '#16243d', cardLabelColor: '#e8ddc0', cardCounterColor: '#8fa3bf',
-            inputBg: '#0d1626', inputBorder: '#2e425f', inputFocusBorder: '#cba44e',
-            inputTextColor: '#f0e6c8', inputPlaceholderColor: '#5f738c',
+            inputBg: '#0d1626', inputBorder: '#2e425f', inputFocusBorder: '#cba44e', inputTextColor: '#f0e6c8', inputPlaceholderColor: '#5f738c',
             buttonGradient: '#cba44e', trustText: '#8fa3bf',
         },
     },
     {
-        id: 'pink',
-        name: 'ורוד עדין',
-        swatch: '#d98aa0',
+        id: 'pink', name: 'ורוד עדין', swatch: '#d98aa0',
         design: {
-            pageBg: '#fdf0f3', pageBgImage: 'none',
-            titleColor: '#5a2a3a', subtitleColor: '#b07a8c', accentColor: '#d98aa0',
+            pageBg: '#fdf0f3', pageBgImage: 'none', titleColor: '#5a2a3a', subtitleColor: '#b07a8c', accentColor: '#d98aa0',
             cardBg: '#fffafc', cardLabelColor: '#5a2a3a', cardCounterColor: '#c0a0aa',
-            inputBg: '#fffafc', inputBorder: '#f0d0d8', inputFocusBorder: '#d98aa0',
-            inputTextColor: '#5a2a3a', inputPlaceholderColor: '#d0aab4',
+            inputBg: '#fffafc', inputBorder: '#f0d0d8', inputFocusBorder: '#d98aa0', inputTextColor: '#5a2a3a', inputPlaceholderColor: '#d0aab4',
             buttonGradient: '#d98aa0', trustText: '#b89aa2',
         },
     },
     {
-        id: 'green',
-        name: 'ירוק טבעי',
-        swatch: '#5f8f66',
+        id: 'green', name: 'ירוק טבעי', swatch: '#5f8f66',
         design: {
-            pageBg: '#eef3ec', pageBgImage: 'none',
-            titleColor: '#26352a', subtitleColor: '#6f8a72', accentColor: '#7ba27f',
+            pageBg: '#eef3ec', pageBgImage: 'none', titleColor: '#26352a', subtitleColor: '#6f8a72', accentColor: '#7ba27f',
             cardBg: '#fbfdfa', cardLabelColor: '#26352a', cardCounterColor: '#9ab09c',
-            inputBg: '#fbfdfa', inputBorder: '#d2e0d0', inputFocusBorder: '#7ba27f',
-            inputTextColor: '#26352a', inputPlaceholderColor: '#a8bca8',
+            inputBg: '#fbfdfa', inputBorder: '#d2e0d0', inputFocusBorder: '#7ba27f', inputTextColor: '#26352a', inputPlaceholderColor: '#a8bca8',
             buttonGradient: '#5f8f66', trustText: '#8fa890',
         },
     },
 ]
 
-// Editor defaults — the classic built-in palette, so every color picker shows
-// a sensible value even before the user touches it.
 const DEFAULT_DESIGN = {
-    pageBg: '#f8f4ec', pageBgImage: 'none',
-    titleColor: '#1a1410', subtitleColor: '#9a8a72', accentColor: '#c9a44e',
+    pageBg: '#f8f4ec', pageBgImage: 'none', titleColor: '#1a1410', subtitleColor: '#9a8a72', accentColor: '#c9a44e',
     cardBg: '#ffffff', cardLabelColor: '#1a1410', cardCounterColor: '#b9a684',
-    inputBg: '#ffffff', inputBorder: '#ead9b3', inputFocusBorder: '#c9a44e',
-    inputTextColor: '#1a1410', inputPlaceholderColor: '#c9b888',
+    inputBg: '#ffffff', inputBorder: '#ead9b3', inputFocusBorder: '#c9a44e', inputTextColor: '#1a1410', inputPlaceholderColor: '#c9b888',
     buttonGradient: '#c9a44e', trustText: '#b9a684',
 }
 
 const GROUPS = [
     { title: 'רקע העמוד', fields: [['pageBg', 'צבע רקע'], ['titleColor', 'כותרת'], ['subtitleColor', 'תת-כותרת'], ['accentColor', 'הדגשה']] },
     { title: 'כרטיס הטופס', fields: [['cardBg', 'רקע הכרטיס'], ['cardLabelColor', 'תוויות'], ['cardCounterColor', 'מונה תווים']] },
-    { title: 'תיבות הטקסט', fields: [['inputBg', 'רקע'], ['inputBorder', 'מסגרת'], ['inputFocusBorder', 'מסגרת בפוקוס'], ['inputTextColor', 'טקסט'], ['inputPlaceholderColor', 'placeholder']] },
-    { title: 'כפתור ושוליים', fields: [['buttonGradient', 'צבע כפתור'], ['trustText', 'טקסט אמון']] },
+    { title: 'תיבות הטקסט', fields: [['inputBg', 'רקע'], ['inputBorder', 'מסגרת'], ['inputFocusBorder', 'מסגרת בפוקוס'], ['inputTextColor', 'טקסט'], ['inputPlaceholderColor', 'רמז']] },
 ]
 
-function encodeDesign(d) {
+// formCopy-shape keys → the wedding-doc fields the PATCH whitelist accepts.
+const COPY_FIELDS = [
+    ['momentSubtitle', 'תת-כותרת', 'customMomentSubtitle'],
+    ['momentPill', 'תגית עליונה', 'customMomentPill'],
+    ['momentPhotoTitle', 'כותרת מקטע התמונה', 'customMomentPhotoTitle'],
+    ['momentPhotoCta', 'כפתור הוספת תמונה', 'customMomentPhotoCta'],
+    ['momentPhotoCtaSub', 'טקסט משני לכפתור', 'customMomentPhotoCtaSub'],
+    ['momentTakeNow', 'צילום עכשיו', 'customMomentTakeNow'],
+    ['momentChooseGallery', 'בחירה מהגלריה', 'customMomentChooseGallery'],
+    ['momentSubmit', 'כפתור השליחה', 'customMomentSubmit'],
+    ['momentSecurityNote', 'הערת אבטחה (למטה)', 'customMomentSecurityNote'],
+    ['nameLabel', 'תווית שדה השם', 'customNameLabel'],
+    ['namePlaceholder', 'רמז בשדה השם', 'customNamePlaceholder'],
+    ['blessingLabel', 'תווית שדה הברכה', 'customBlessingLabel'],
+    ['blessingPlaceholder', 'רמז בשדה הברכה', 'customBlessingPlaceholder'],
+]
+
+function b64(obj) {
     try {
-        return btoa(unescape(encodeURIComponent(JSON.stringify(d))))
+        return btoa(unescape(encodeURIComponent(JSON.stringify(obj))))
     } catch {
         return ''
     }
 }
+function nonEmpty(obj) {
+    const out = {}
+    for (const k in obj) if (obj[k] && String(obj[k]).trim()) out[k] = obj[k]
+    return out
+}
+
+const WIDTHS = [
+    { id: '390px', label: 'מובייל', icon: Smartphone },
+    { id: '768px', label: 'טאבלט', icon: Tablet },
+    { id: '100%', label: 'מלא', icon: Monitor },
+]
 
 export default function GuestDesignPage() {
     return (
@@ -91,18 +101,14 @@ export default function GuestDesignPage() {
 function SuperAdminGate({ children }) {
     const [state, setState] = useState('checking')
     useEffect(() => {
-        const unsub = onAuthStateChanged(auth, user => {
-            setState(user && isSuperAdmin(user.email) ? 'allowed' : 'denied')
-        })
+        const unsub = onAuthStateChanged(auth, user => setState(user && isSuperAdmin(user.email) ? 'allowed' : 'denied'))
         return unsub
     }, [])
     if (state === 'checking') return <div className='flex h-screen items-center justify-center text-[#7a6a52]'>טוען...</div>
     if (state === 'denied') {
         return (
             <div className='flex h-screen flex-col items-center justify-center text-center px-6' style={{ background: '#f8f4ec' }}>
-                <div className='w-12 h-12 rounded-2xl flex items-center justify-center mb-4' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}>
-                    <Lock size={20} className='text-white' />
-                </div>
+                <div className='w-12 h-12 rounded-2xl flex items-center justify-center mb-4' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}><Lock size={20} className='text-white' /></div>
                 <h2 className='text-[18px] font-bold text-[#1a1410] mb-1'>הגישה מוגבלת</h2>
                 <p className='text-[13px] text-[#a89378]'>עיצוב דף הברכה זמין רק למנהל הראשי.</p>
             </div>
@@ -119,16 +125,16 @@ function Editor() {
     const [weddings, setWeddings] = useState([])
     const [selWedding, setSelWedding] = useState('')
     const [design, setDesign] = useState({})
+    const [copy, setCopy] = useState({})
     const [bgImage, setBgImage] = useState('')
+    const [btnImg, setBtnImg] = useState('')
+    const [previewWidth, setPreviewWidth] = useState('390px')
     const [previewSrc, setPreviewSrc] = useState('')
     const [busy, setBusy] = useState(false)
+    const [uploading, setUploading] = useState('')
     const [saved, setSaved] = useState(false)
     const [toast, setToast] = useState(null)
-
-    const flash = (m, type = 'success') => {
-        setToast({ m, type })
-        setTimeout(() => setToast(null), 3000)
-    }
+    const flash = (m, type = 'success') => { setToast({ m, type }); setTimeout(() => setToast(null), 3000) }
 
     useEffect(() => {
         ;(async () => {
@@ -148,62 +154,91 @@ function Editor() {
         })()
     }, [])
 
-    // When switching wedding, load its saved guestDesign (if any).
     function pickWedding(id) {
         setSelWedding(id)
         const w = weddings.find(x => x.id === id)
         setDesign(w?.guestDesign || {})
+        setCopy({})
         setBgImage('')
+        setBtnImg('')
     }
 
-    // Debounced live preview — points the iframe at the real /photo page with
-    // ?gd= so the design renders exactly as guests will see it.
     useEffect(() => {
         if (!selWedding) {
             setPreviewSrc('')
             return
         }
         const t = setTimeout(() => {
-            setPreviewSrc(`/wedding/${selWedding}/photo?gd=${encodeDesign(design)}`)
+            setPreviewSrc(`/wedding/${selWedding}/photo?gd=${b64(design)}&gc=${b64(nonEmpty(copy))}`)
         }, 450)
         return () => clearTimeout(t)
-    }, [design, selWedding])
+    }, [design, copy, selWedding])
 
-    function setField(key, value) {
-        setDesign(prev => ({ ...prev, [key]: value }))
-    }
-    function onPageBg(value) {
-        // A solid page colour means we also drop any built-in gradient image,
-        // unless the user supplied an explicit background image below.
-        setDesign(prev => ({ ...prev, pageBg: value, pageBgImage: bgImage ? prev.pageBgImage : 'none' }))
-    }
-    function onBgImage(url) {
+    const setField = (key, value) => setDesign(prev => ({ ...prev, [key]: value }))
+    const onPageBg = value => setDesign(prev => ({ ...prev, pageBg: value, pageBgImage: bgImage ? prev.pageBgImage : 'none' }))
+    function onBgImageUrl(url) {
         setBgImage(url)
-        setDesign(prev =>
-            url
-                ? { ...prev, pageBgImage: `url(${url})`, pageBgSize: 'cover', pageBgPosition: 'center', pageBgRepeat: 'no-repeat' }
-                : { ...prev, pageBgImage: 'none' },
-        )
+        setDesign(prev => (url
+            ? { ...prev, pageBgImage: `url(${url})`, pageBgSize: 'cover', pageBgPosition: 'center', pageBgRepeat: 'no-repeat' }
+            : { ...prev, pageBgImage: 'none' }))
     }
+
+    async function uploadImage(file) {
+        const safe = (file.name || 'bg').replace(/[^\w.\-]/g, '_')
+        const r = storageRef(storage, `studio/backgrounds/guest-${Date.now()}-${safe}`)
+        await uploadBytes(r, file, { contentType: file.type || 'image/png' })
+        return getDownloadURL(r)
+    }
+    async function onUploadPageBg(file) {
+        if (!file) return
+        setUploading('page')
+        try {
+            const url = await uploadImage(file)
+            onBgImageUrl(url)
+        } catch (e) {
+            flash('העלאה נכשלה: ' + (e?.message || ''), 'error')
+        } finally {
+            setUploading('')
+        }
+    }
+    async function onUploadBtnBg(file) {
+        if (!file) return
+        setUploading('button')
+        try {
+            const url = await uploadImage(file)
+            setBtnImg(url)
+            setDesign(prev => ({ ...prev, buttonGradient: `url(${url}) center/cover no-repeat` }))
+        } catch (e) {
+            flash('העלאה נכשלה: ' + (e?.message || ''), 'error')
+        } finally {
+            setUploading('')
+        }
+    }
+
     function loadPreset(p) {
         setDesign({ ...p.design })
         setBgImage('')
+        setBtnImg('')
     }
 
     async function apply() {
         if (!selWedding) return flash('בחרו אירוע', 'error')
         setBusy(true)
         try {
+            const patch = { guestDesign: design }
+            for (const [key, , docKey] of COPY_FIELDS) {
+                if (copy[key] && String(copy[key]).trim()) patch[docKey] = copy[key]
+            }
             const res = await fetch('/api/admin/weddings', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await token()}` },
-                body: JSON.stringify({ weddingId: selWedding, patch: { guestDesign: design } }),
+                body: JSON.stringify({ weddingId: selWedding, patch }),
             })
             if (!res.ok) throw new Error('שמירה נכשלה')
             setWeddings(prev => prev.map(w => (w.id === selWedding ? { ...w, guestDesign: design } : w)))
             setSaved(true)
             setTimeout(() => setSaved(false), 2500)
-            flash('העיצוב הוחל על האירוע ✓')
+            flash('הוחל על האירוע ✓')
         } catch (e) {
             flash(e.message, 'error')
         } finally {
@@ -212,18 +247,17 @@ function Editor() {
     }
 
     const val = key => design[key] ?? DEFAULT_DESIGN[key] ?? '#000000'
+    const fileBtn = 'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold bg-[#AA8840]/10 text-[#AA8840] cursor-pointer'
 
     return (
         <div dir='rtl' className='min-h-screen' style={{ background: '#f8f4ec' }}>
             <div className='max-w-[1500px] mx-auto px-4 py-8'>
                 <div className='flex items-center justify-between gap-3 mb-6 flex-wrap'>
                     <div className='flex items-center gap-3'>
-                        <div className='w-11 h-11 rounded-2xl flex items-center justify-center' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}>
-                            <Palette size={20} className='text-white' />
-                        </div>
+                        <div className='w-11 h-11 rounded-2xl flex items-center justify-center' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}><Palette size={20} className='text-white' /></div>
                         <div>
                             <h1 className='text-xl font-bold text-[#1a1410]'>עיצוב דף הברכה לאורחים</h1>
-                            <p className='text-xs text-[#a89378]'>פריסטים, צבעים ורקע — עם תצוגה חיה. החלה על אירוע ספציפי.</p>
+                            <p className='text-xs text-[#a89378]'>פריסטים, צבעים, רקע, וטקסטים — עם תצוגה חיה.</p>
                         </div>
                     </div>
                     <a href='/admin/studio' className='text-sm font-bold text-[#7a6a52] bg-white border border-[#e7dcc6] rounded-xl px-3 py-2'>← לסטודיו</a>
@@ -260,12 +294,7 @@ function Editor() {
                                 <div className='grid grid-cols-2 gap-3'>
                                     {g.fields.map(([key, label]) => (
                                         <label key={key} className='flex items-center gap-2 text-xs text-[#5a4a32]'>
-                                            <input
-                                                type='color'
-                                                value={val(key)}
-                                                onChange={e => (key === 'pageBg' ? onPageBg(e.target.value) : setField(key, e.target.value))}
-                                                className='w-9 h-9 rounded-lg border border-[#e7dcc6] cursor-pointer p-0.5 bg-white flex-shrink-0'
-                                            />
+                                            <input type='color' value={val(key)} onChange={e => (key === 'pageBg' ? onPageBg(e.target.value) : setField(key, e.target.value))} className='w-9 h-9 rounded-lg border border-[#e7dcc6] cursor-pointer p-0.5 bg-white flex-shrink-0' />
                                             <span className='truncate'>{label}</span>
                                         </label>
                                     ))}
@@ -273,17 +302,58 @@ function Editor() {
                             </div>
                         ))}
 
+                        {/* Page background image */}
                         <div className='bg-white rounded-2xl border border-[#e7dcc6] p-4'>
-                            <label className='block text-xs font-bold text-[#7a6a52] mb-2'>תמונת רקע (URL, אופציונלי)</label>
-                            <input value={bgImage} onChange={e => onBgImage(e.target.value)} placeholder='https://.../bg.webp' className='w-full rounded-xl border border-[#e7dcc6] px-3 py-2.5 text-sm bg-white outline-none focus:border-[#AA8840]' dir='ltr' />
-                            <p className='text-[11px] text-[#a89378] mt-2'>השאירו ריק לרקע צבע אחיד. לטקסטים (כותרות/כפתורים) — נערכים במסך הניהול של האירוע.</p>
+                            <label className='block text-xs font-bold text-[#7a6a52] mb-2'>תמונת רקע לעמוד</label>
+                            <div className='flex items-center gap-2 flex-wrap'>
+                                <label className={fileBtn}>
+                                    <Upload size={13} /> {uploading === 'page' ? 'מעלה...' : 'העלאת תמונה'}
+                                    <input type='file' accept='image/*' className='hidden' onChange={e => onUploadPageBg(e.target.files?.[0])} />
+                                </label>
+                                {bgImage && <span className='text-[11px] text-emerald-600 font-bold'>✓ הועלתה</span>}
+                                {bgImage && <button onClick={() => onBgImageUrl('')} className='text-[11px] text-red-500'>הסר</button>}
+                            </div>
+                            <input value={bgImage} onChange={e => onBgImageUrl(e.target.value)} placeholder='או הדביקו URL...' className='w-full mt-2 rounded-xl border border-[#e7dcc6] px-3 py-2 text-xs bg-white outline-none focus:border-[#AA8840]' dir='ltr' />
                         </div>
 
-                        <div className='flex gap-2'>
-                            <button onClick={apply} disabled={busy} className='flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white disabled:opacity-50' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}>
+                        {/* Button */}
+                        <div className='bg-white rounded-2xl border border-[#e7dcc6] p-4'>
+                            <label className='block text-xs font-bold text-[#7a6a52] mb-3'>כפתור השליחה</label>
+                            <div className='flex items-center gap-3 flex-wrap'>
+                                <label className='flex items-center gap-2 text-xs text-[#5a4a32]'>
+                                    <input type='color' value={/^#/.test(val('buttonGradient')) ? val('buttonGradient') : '#c9a44e'} onChange={e => { setBtnImg(''); setField('buttonGradient', e.target.value) }} className='w-9 h-9 rounded-lg border border-[#e7dcc6] cursor-pointer p-0.5 bg-white' />
+                                    צבע
+                                </label>
+                                <label className={fileBtn}>
+                                    <Upload size={13} /> {uploading === 'button' ? 'מעלה...' : 'תמונת רקע לכפתור'}
+                                    <input type='file' accept='image/*' className='hidden' onChange={e => onUploadBtnBg(e.target.files?.[0])} />
+                                </label>
+                                {btnImg && <span className='text-[11px] text-emerald-600 font-bold'>✓ תמונה</span>}
+                                <label className='flex items-center gap-2 text-xs text-[#5a4a32]'>
+                                    <input type='color' value={val('trustText')} onChange={e => setField('trustText', e.target.value)} className='w-9 h-9 rounded-lg border border-[#e7dcc6] cursor-pointer p-0.5 bg-white' />
+                                    טקסט אמון
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Texts */}
+                        <div className='bg-white rounded-2xl border border-[#e7dcc6] p-4'>
+                            <label className='flex items-center gap-2 text-xs font-bold text-[#7a6a52] mb-3'><Type size={13} /> טקסטים (ריק = ברירת מחדל)</label>
+                            <div className='space-y-2'>
+                                {COPY_FIELDS.map(([key, label]) => (
+                                    <div key={key}>
+                                        <span className='block text-[10.5px] text-[#a89378] mb-0.5'>{label}</span>
+                                        <input value={copy[key] || ''} onChange={e => setCopy(prev => ({ ...prev, [key]: e.target.value }))} className='w-full rounded-lg border border-[#e7dcc6] px-2.5 py-1.5 text-xs bg-white outline-none focus:border-[#AA8840]' />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className='flex gap-2 sticky bottom-3 z-10'>
+                            <button onClick={apply} disabled={busy} className='flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white shadow-lg disabled:opacity-50' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}>
                                 {saved ? <Check size={15} /> : <Save size={15} />} {saved ? 'הוחל!' : 'החל על האירוע'}
                             </button>
-                            <button onClick={() => { setDesign({}); setBgImage('') }} className='flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold bg-white border border-[#e7dcc6] text-[#7a6a52]'>
+                            <button onClick={() => { setDesign({}); setCopy({}); setBgImage(''); setBtnImg('') }} className='flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold bg-white border border-[#e7dcc6] text-[#7a6a52] shadow'>
                                 <RefreshCw size={14} /> אפס
                             </button>
                         </div>
@@ -291,22 +361,35 @@ function Editor() {
 
                     {/* Live preview */}
                     <div className='lg:sticky lg:top-6'>
-                        <div className='flex items-center gap-2 mb-2 text-xs font-bold text-[#7a6a52]'><Eye size={13} /> תצוגה חיה</div>
-                        <div className='rounded-2xl overflow-hidden border border-[#e7dcc6] bg-white shadow-lg' style={{ height: 680 }}>
-                            {previewSrc ? (
-                                <iframe src={previewSrc} title='תצוגה' className='w-full h-full' style={{ border: 'none' }} />
-                            ) : (
-                                <div className='h-full flex items-center justify-center text-sm text-[#a89378]'>בחרו אירוע לתצוגה</div>
-                            )}
+                        <div className='flex items-center justify-between mb-2 flex-wrap gap-2'>
+                            <span className='flex items-center gap-2 text-xs font-bold text-[#7a6a52]'><Eye size={13} /> תצוגה חיה</span>
+                            <div className='flex items-center gap-1 bg-white border border-[#e7dcc6] rounded-xl p-1'>
+                                {WIDTHS.map(w => {
+                                    const active = previewWidth === w.id
+                                    const Icon = w.icon
+                                    return (
+                                        <button key={w.id} onClick={() => setPreviewWidth(w.id)} className='flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors' style={{ background: active ? 'linear-gradient(180deg,#d3b46a,#b8893d)' : 'transparent', color: active ? '#fff' : '#7a6a52' }}>
+                                            <Icon size={12} /> {w.label}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                        <div className='rounded-2xl bg-[#efe7d6] p-3 border border-[#e7dcc6]' style={{ height: 700 }}>
+                            <div className='h-full mx-auto transition-all duration-300' style={{ maxWidth: previewWidth }}>
+                                {previewSrc ? (
+                                    <iframe src={previewSrc} title='תצוגה' className='w-full h-full rounded-xl bg-white shadow' style={{ border: 'none' }} />
+                                ) : (
+                                    <div className='h-full flex items-center justify-center text-sm text-[#a89378]'>בחרו אירוע לתצוגה</div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
             {toast && (
-                <div className='fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl text-sm font-bold text-white shadow-lg z-50' style={{ background: toast.type === 'error' ? '#c0392b' : 'linear-gradient(180deg,#d3b46a,#b8893d)' }}>
-                    {toast.m}
-                </div>
+                <div className='fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl text-sm font-bold text-white shadow-lg z-50' style={{ background: toast.type === 'error' ? '#c0392b' : 'linear-gradient(180deg,#d3b46a,#b8893d)' }}>{toast.m}</div>
             )}
         </div>
     )
