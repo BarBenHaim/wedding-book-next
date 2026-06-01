@@ -939,6 +939,37 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
             momentTitle = c ? t('momentTitleWithName', { name: c }) : t('momentTitleGeneric')
         }
 
+        // ── Guest-design override (moment layout) ──────────────
+        // Defaults reproduce the built-in garden look EXACTLY; any field
+        // set in the studio editor (the wedding's `guestDesign`, or a live
+        // ?gd= preview) overrides it. Non-customised events stay identical.
+        const mdGd = guestDesign && typeof guestDesign === 'object' ? guestDesign : {}
+        const md = {
+            pageBg: '#fbf6ec',
+            pageBgImage: 'url(/backgrounds/romanticgarden.webp)',
+            pageBgSize: 'cover',
+            pageBgPosition: 'center top',
+            pageBgRepeat: 'no-repeat',
+            titleColor: '#1a1410',
+            subtitleColor: '#7a6a52',
+            accentColor: '#c9a44e',
+            cardBg: 'linear-gradient(180deg, #ffffff 0%, #fdf9ef 100%)',
+            cardLabelColor: '#1a1410',
+            cardCounterColor: '#b9a684',
+            inputBg: '#fbf6ec',
+            inputBorder: '#ead9b3',
+            inputFocusBorder: '#c9a44e',
+            inputTextColor: '#1a1410',
+            trustText: '#b9a684',
+            ...mdGd,
+        }
+        // Submit-button surface: an uploaded image or solid colour from the
+        // editor (mdGd.buttonGradient) replaces the painted garden button;
+        // otherwise keep the original SVG artwork.
+        const mdButtonBg = mdGd.buttonGradient
+            ? mdGd.buttonGradient
+            : 'url(/backgrounds/gardenbtnbg.svg) center / 100% 100% no-repeat'
+
         return (
             <div
                 // Targets 100vh on phones tall enough to fit the form
@@ -1013,11 +1044,11 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                     // device width; center-top anchors the floral
                     // arch behind the form. The cream fallback
                     // colour shows if the asset fails to load.
-                    backgroundColor: '#fbf6ec',
-                    backgroundImage: 'url(/backgrounds/romanticgarden.webp)',
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center top',
-                    backgroundRepeat: 'no-repeat',
+                    backgroundColor: md.pageBg,
+                    backgroundImage: md.pageBgImage,
+                    backgroundSize: md.pageBgSize,
+                    backgroundPosition: md.pageBgPosition,
+                    backgroundRepeat: md.pageBgRepeat,
                     backgroundAttachment: 'fixed',
                 }}
             >
@@ -1122,7 +1153,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                             <div className='text-center'>
                                 <h1
                                     className='font-bold leading-[1.15]'
-                                    style={{ color: '#1a1410', fontSize: '26px', letterSpacing: '-0.005em' }}
+                                    style={{ color: md.titleColor, fontSize: '26px', letterSpacing: '-0.005em' }}
                                 >
                                     רגע אחד
                                 </h1>
@@ -1137,24 +1168,24 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                                 className='block h-px w-12'
                                                 style={{
                                                     background:
-                                                        'linear-gradient(to left, transparent, #c9a44e, transparent)',
+                                                        `linear-gradient(to left, transparent, ${md.accentColor}, transparent)`,
                                                 }}
                                             />
                                             <span
                                                 className='inline-block w-1.5 h-1.5 rotate-45'
-                                                style={{ background: '#c9a44e' }}
+                                                style={{ background: md.accentColor }}
                                             />
                                             <span
                                                 className='block h-px w-12'
                                                 style={{
                                                     background:
-                                                        'linear-gradient(to right, transparent, #c9a44e, transparent)',
+                                                        `linear-gradient(to right, transparent, ${md.accentColor}, transparent)`,
                                                 }}
                                             />
                                         </div>
                                         <h1
                                             className='font-bold leading-[1.15]'
-                                            style={{ color: '#1a1410', fontSize: '26px', letterSpacing: '-0.005em' }}
+                                            style={{ color: md.titleColor, fontSize: '26px', letterSpacing: '-0.005em' }}
                                         >
                                             {namesPart}
                                         </h1>
@@ -1165,7 +1196,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                     })()}
                     <p
                         className='text-center leading-snug'
-                        style={{ color: '#7a6a52', fontSize: '12px', maxWidth: 270, margin: '4px auto 0' }}
+                        style={{ color: md.subtitleColor, fontSize: '12px', maxWidth: 270, margin: '4px auto 0' }}
                     >
                         {formCopy?.momentSubtitle || t('momentSubtitle')}
                     </p>
@@ -1187,7 +1218,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                     <div
                         className='rounded-[20px] px-4 pt-7 pb-4 relative mt-9'
                         style={{
-                            background: 'linear-gradient(180deg, #ffffff 0%, #fdf9ef 100%)',
+                            background: md.cardBg,
                             border: '1px solid rgba(201,164,78,0.45)',
                             overflow: 'visible',
                             boxShadow: [
@@ -1234,7 +1265,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                             circle background. */}
                         <div className='mb-3'>
                             <div className='flex items-center justify-between gap-2 mb-1.5'>
-                                <span style={{ color: '#1a1410', fontSize: '14.5px', fontWeight: 700 }}>
+                                <span style={{ color: md.cardLabelColor, fontSize: '14.5px', fontWeight: 700 }}>
                                     {/* Existing per-event customNameLabel override
                                         wins; else the moment-layout i18n default. */}
                                     {formCopy?.nameLabel || t('momentNameLabel')}
@@ -1260,14 +1291,14 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                 placeholder={formCopy?.namePlaceholder || t('momentNamePlaceholder')}
                                 className='w-full rounded-xl outline-none transition'
                                 style={{
-                                    background: '#fbf6ec',
-                                    border: '1px solid #ead9b3',
+                                    background: md.inputBg,
+                                    border: `1px solid ${md.inputBorder}`,
                                     padding: '10px 14px',
-                                    color: '#1a1410',
+                                    color: md.inputTextColor,
                                     fontSize: '16px',
                                 }}
-                                onFocus={e => (e.currentTarget.style.borderColor = '#c9a44e')}
-                                onBlur={e => (e.currentTarget.style.borderColor = '#ead9b3')}
+                                onFocus={e => (e.currentTarget.style.borderColor = md.inputFocusBorder)}
+                                onBlur={e => (e.currentTarget.style.borderColor = md.inputBorder)}
                             />
                         </div>
 
@@ -1276,7 +1307,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                             (end = left). No background circle. */}
                         <div className='mb-2'>
                             <div className='flex items-center justify-between gap-2 mb-1.5'>
-                                <span style={{ color: '#1a1410', fontSize: '14.5px', fontWeight: 700 }}>
+                                <span style={{ color: md.cardLabelColor, fontSize: '14.5px', fontWeight: 700 }}>
                                     {formCopy?.blessingLabel || t('momentBlessingLabel')}
                                 </span>
                                 <svg
@@ -1300,17 +1331,17 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                 maxLength={210}
                                 className='w-full rounded-xl outline-none transition resize-none leading-snug'
                                 style={{
-                                    background: '#fbf6ec',
-                                    border: '1px solid #ead9b3',
+                                    background: md.inputBg,
+                                    border: `1px solid ${md.inputBorder}`,
                                     padding: '10px 14px',
-                                    color: '#1a1410',
+                                    color: md.inputTextColor,
                                     fontSize: '16px',
                                     height: '64px',
                                 }}
-                                onFocus={e => (e.currentTarget.style.borderColor = '#c9a44e')}
-                                onBlur={e => (e.currentTarget.style.borderColor = '#ead9b3')}
+                                onFocus={e => (e.currentTarget.style.borderColor = md.inputFocusBorder)}
+                                onBlur={e => (e.currentTarget.style.borderColor = md.inputBorder)}
                             />
-                            <div className='text-start mt-1' style={{ color: '#b9a684', fontSize: '10.5px' }}>
+                            <div className='text-start mt-1' style={{ color: md.cardCounterColor, fontSize: '10.5px' }}>
                                 {text.length}/210
                             </div>
                         </div>
@@ -1323,7 +1354,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                             (start = right in RTL), camera icon
                             trailing (end = left). No circle. */}
                         <div className='flex items-center justify-between gap-2 mb-2 mt-3'>
-                            <span style={{ color: '#1a1410', fontSize: '14.5px', fontWeight: 700 }}>
+                            <span style={{ color: md.cardLabelColor, fontSize: '14.5px', fontWeight: 700 }}>
                                 <span style={{ color: '#c14a4a' }}>*</span>{' '}
                                 {formCopy?.momentPhotoTitle || t('momentPhotoTitle')}
                             </span>
@@ -1422,7 +1453,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                         </div>
                                         <div
                                             style={{
-                                                color: '#1a1410',
+                                                color: md.inputTextColor,
                                                 fontSize: '13.5px',
                                                 fontWeight: 700,
                                                 marginTop: 4,
@@ -1647,7 +1678,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                 className='w-full mt-2 rounded-lg text-[12.5px]'
                                 style={{
                                     background: '#ffffff',
-                                    border: '1px solid #ead9b3',
+                                    border: `1px solid ${md.inputBorder}`,
                                     color: '#9a8665',
                                     padding: '7px 12px',
                                     fontWeight: 600,
@@ -1700,11 +1731,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                         disabled={submitting || !text.trim() || !photoUrl}
                         className='w-full mt-3 font-bold transition-transform duration-200 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-[0.99] relative'
                         style={{
-                            backgroundImage: 'url(/backgrounds/gardenbtnbg.svg)',
-                            backgroundSize: '100% 100%',
-                            backgroundPosition: 'center',
-                            backgroundRepeat: 'no-repeat',
-                            backgroundColor: 'transparent',
+                            background: mdButtonBg,
                             border: 'none',
                             // Lock height to the asset's 185:40
                             // canvas ratio so the painted artwork
@@ -1734,7 +1761,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                         than a minute" rather than security. */}
                     <div
                         className='flex items-center justify-center gap-1.5 mt-2'
-                        style={{ color: '#b9a684', fontSize: '10.5px' }}
+                        style={{ color: md.trustText, fontSize: '10.5px' }}
                     >
                         <svg
                             viewBox='0 0 24 24'
