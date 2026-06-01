@@ -1,0 +1,26 @@
+import { adminDb } from '@/lib/firebaseAdmin'
+import { eventOgImage } from '@/lib/ogCard'
+
+export const runtime = 'nodejs'
+export const alt = 'ספר הברכות'
+export const size = { width: 1200, height: 630 }
+export const contentType = 'image/png'
+
+function origin() {
+    if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')
+    if (process.env.NEXT_PUBLIC_BASE_URL) return process.env.NEXT_PUBLIC_BASE_URL.replace(/\/$/, '')
+    if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL.replace(/\/$/, '')}`
+    return ''
+}
+
+export default async function Image({ params }) {
+    const { weddingId } = await params
+    let data = {}
+    try {
+        const snap = await adminDb.collection('weddings').doc(weddingId).get()
+        if (snap.exists) data = snap.data() || {}
+    } catch {
+        data = {}
+    }
+    return eventOgImage(data, origin())
+}

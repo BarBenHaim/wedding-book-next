@@ -15,6 +15,7 @@
 //   emailLog/{id}         audit + dedup (automations use a deterministic id)
 
 import nodemailer from 'nodemailer'
+import { buildShareCopy } from '@/lib/shareCopy'
 import { randomUUID } from 'node:crypto'
 import { adminDb } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
@@ -108,7 +109,7 @@ async function varsFor(w) {
     const portalLink = `${BASE_URL}/wedding/${w.id}/portal`
     const wd = w.weddingDate || ''
     const daysUntil = wd ? daysBetween(todayISO(), wd) : ''
-    const waText = 'הוזמנתם לכתוב ברכה ולשתף רגע מהאירוע שלנו 💛 ' + guestLink
+    const waText = buildShareCopy(w).whatsapp + ' ' + guestLink
     const waLink = `https://wa.me/?text=${encodeURIComponent(waText)}`
 
     const btn = (href, label, solid = true) =>

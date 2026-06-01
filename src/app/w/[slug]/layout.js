@@ -1,9 +1,6 @@
-// Shared layout for every /wedding/[weddingId]/* guest + owner route.
-// generateMetadata gives the GUEST link (base page + /photo) an
-// event-aware title/description + a generated preview card so
-// messaging-app crawlers build a rich preview. The digital-book route
-// (/book/[token]) has its OWN deeper layout whose generateMetadata
-// overrides this for that path (keeps its couple-cover preview).
+// Server layout for the short guest link /w/[slug]. Hosts
+// generateMetadata so the shared link shows an event-aware preview
+// (title/description + generated card image).
 import { adminDb } from '@/lib/firebaseAdmin'
 import { buildShareCopy } from '@/lib/shareCopy'
 
@@ -16,12 +13,14 @@ function siteOrigin() {
 
 export async function generateMetadata({ params }) {
     try {
-        const { weddingId } = await params
-        const snap = await adminDb.collection('weddings').doc(weddingId).get()
-        const data = snap.exists ? snap.data() || {} : {}
+        const { slug } = await params
+        const q = await adminDb.collection('weddings').where('slug', '==', slug).limit(1).get()
+        if (q.empty) return { title: 'ספר הברכות — Wedding Tales' }
+        const doc = q.docs[0]
+        const data = doc.data() || {}
         const { title, description } = buildShareCopy(data)
         const origin = siteOrigin()
-        const ogImage = `${origin}/api/og/${weddingId}`
+        const ogImage = `${origin}/api/og/${doc.id}`
         const images = [{ url: ogImage, secureUrl: ogImage, width: 1200, height: 630, type: 'image/png', alt: title }]
         return {
             metadataBase: origin ? new URL(origin) : undefined,
@@ -35,6 +34,6 @@ export async function generateMetadata({ params }) {
     }
 }
 
-export default function WeddingLayout({ children }) {
-    return <div className='min-h-[calc(100vh-4rem)] bg-white'>{children}</div>
+export default function SlugLayout({ children }) {
+    return children
 }

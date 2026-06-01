@@ -6,6 +6,7 @@ import { doc, getDoc, setDoc, arrayUnion } from 'firebase/firestore'
 import { db } from '../../../../lib/firebaseClient'
 import { generateSlug } from '../../../../lib/generateSlug'
 import { normalizeEventType, getEventConfig } from '../../../../lib/eventTypes'
+import { buildShareCopy } from '@/lib/shareCopy'
 import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale, dirFor } from '@/i18n/locales'
@@ -433,7 +434,7 @@ function PortalApp({ onLocaleDiscovered }) {
                         <h2 className='text-lg font-bold text-gray-800 mb-1'>{t('shareTitle')}</h2>
                         <p className='text-xs text-gray-400 mb-4'>{t('shareSubtitle')}</p>
                         <a
-                            href={`https://wa.me/?text=${encodeURIComponent('הוזמנתם לכתוב ברכה ולשתף רגע מהאירוע שלנו 💛 ' + guestLink)}`}
+                            href={`https://wa.me/?text=${encodeURIComponent(buildShareCopy({ eventType, brideName, groomName, celebrantName }).whatsapp + ' ' + guestLink)}`}
                             target='_blank'
                             rel='noopener noreferrer'
                             className='w-full mb-3 flex items-center justify-center gap-2 rounded-2xl p-4 font-bold text-white transition-all hover:scale-[1.01] active:scale-[0.99]'
