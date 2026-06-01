@@ -152,6 +152,8 @@ export async function PATCH(req) {
             'adminNotes',
             // Production pipeline stage (managed from /admin/pipeline).
             'productionStatus',
+            // Guest /photo page design preset (managed from /admin/guest-design).
+            'guestDesign',
             'brideName', 'brideNameHe', 'groomName', 'groomNameHe',
         ]
         const clean = {}
@@ -191,6 +193,14 @@ export async function PATCH(req) {
             if (key === 'productionStatus') {
                 const ALLOWED_STATUS = ['new', 'setup', 'pre_event', 'collecting', 'to_print', 'shipped', 'delivered']
                 clean[key] = ALLOWED_STATUS.includes(v) ? v : 'new'
+                continue
+            }
+
+            if (key === 'guestDesign') {
+                // A plain object of theme overrides; null clears it. Capped so a
+                // bad payload can't bloat the doc.
+                clean[key] =
+                    v && typeof v === 'object' && !Array.isArray(v) && JSON.stringify(v).length < 6000 ? v : null
                 continue
             }
 

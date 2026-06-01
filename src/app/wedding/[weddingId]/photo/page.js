@@ -96,12 +96,23 @@ export default function TextPage() {
     // initial render uses the wedding/classic defaults and the user
     // sees a brief flash of the ivory premium look before the
     // poker/romantic theme swaps in.
+    // Optional full theme override (palette/background/etc.) from a studio
+    // "guest page" preset saved on the wedding, or a live ?gd= preview.
+    const [guestDesign, setGuestDesign] = useState(null)
     const [loaded, setLoaded] = useState(false)
 
     useEffect(() => {
         if (!weddingId) return
         let cancelled = false
         ;(async () => {
+            // Live-preview override from the studio editor: ?gd=<base64 JSON>.
+            let previewGd = null
+            try {
+                const raw = new URLSearchParams(window.location.search).get('gd')
+                if (raw) previewGd = JSON.parse(decodeURIComponent(escape(atob(raw))))
+            } catch {
+                previewGd = null
+            }
             try {
                 const snap = await getDoc(doc(db, 'weddings', weddingId))
                 if (cancelled) return
@@ -138,6 +149,7 @@ export default function TextPage() {
                         momentSubmit: (data.customMomentSubmit || '').trim(),
                         momentSecurityNote: (data.customMomentSecurityNote || '').trim(),
                     })
+                    setGuestDesign(previewGd || data.guestDesign || null)
                 }
             } catch {
                 /* keep Hebrew default */
@@ -169,7 +181,7 @@ export default function TextPage() {
 
     return (
         <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
-            <PhotoApp eventType={eventType} designVariant={designVariant} recipients={recipients} formCopy={formCopy} />
+            <PhotoApp eventType={eventType} designVariant={designVariant} recipients={recipients} formCopy={formCopy} guestDesign={guestDesign} />
         </NextIntlClientProvider>
     )
 }
@@ -232,7 +244,7 @@ function ChipBadge({ number, active, done, isPoker }) {
     )
 }
 
-function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
+function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign }) {
     const t = useTranslations('photo')
 
     // Resolve every form string to either the per-event admin override
@@ -262,7 +274,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
     //     card + dusty-pink accents + forest-green button
     //   • Default (wedding/birthday/bar/bat/travel) → champagne-ivory
     //     premium look
-    const theme = isPoker
+    const baseTheme = isPoker
         ? {
               // Real poker-felt photograph — chips + cards already baked
               // into the corners of the asset, plus a subtle club/spade
@@ -382,6 +394,12 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy }) {
                 showCrown: false,
                 showRings: false,
             }
+
+    // A studio "guest page" preset (or ?gd= live preview) overrides the
+    // built-in palette — merged over the eventType/variant base so a preset
+    // only needs to specify the fields it changes.
+    const theme =
+        guestDesign && typeof guestDesign === 'object' ? { ...baseTheme, ...guestDesign } : baseTheme
 
     // ── Page title (personalised) ───────────────────────────────────────
     // Build the "Leave a blessing for X" headline from the doc's names:
