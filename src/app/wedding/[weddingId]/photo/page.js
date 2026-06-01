@@ -966,6 +966,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
             pillBg: '#fdf8ec',
             pillBorder: 'rgba(201,164,78,0.40)',
             pillText: '#8a6d40',
+            pillHeart: '#d8a4a4',
             wellBg: '#fbf3e3',
             wellBorder: 'rgba(201,164,78,0.45)',
             iconColor: '#9a8665',
@@ -1264,11 +1265,11 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                 boxShadow: '0 2px 6px -2px rgba(170,136,64,0.20)',
                             }}
                         >
-                            <svg viewBox='0 0 24 24' className='w-[10px] h-[10px]' fill='#d8a4a4'>
+                            <svg viewBox='0 0 24 24' className='w-[10px] h-[10px]' fill={md.pillHeart}>
                                 <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                             </svg>
                             <span>{formCopy?.momentPill || t('momentPill')}</span>
-                            <svg viewBox='0 0 24 24' className='w-[10px] h-[10px]' fill='#d8a4a4'>
+                            <svg viewBox='0 0 24 24' className='w-[10px] h-[10px]' fill={md.pillHeart}>
                                 <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                             </svg>
                         </div>

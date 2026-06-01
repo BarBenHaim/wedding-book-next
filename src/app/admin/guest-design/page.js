@@ -21,7 +21,7 @@ const PRESETS = [
             wellBg: '#eef3fc', wellBorder: '#cdd8ec',
             inputBg: '#fbf7ee', inputBorder: '#e3cfa3', inputFocusBorder: '#c9a44e', inputTextColor: '#1c2740', inputPlaceholderColor: '#a9b3c4',
             buttonGradient: '#c9a44e', buttonTextColor: '#f0e2bf', trustText: '#9fb3d4',
-            cornerImage: 'none', uploadCircle: '#16243d', uploadIcon: '#f0e2bf',
+            cornerImage: 'none', uploadCircle: '#16243d', uploadIcon: '#f0e2bf', pillHeart: '#d4af5f',
         },
         copy: {
             momentSubtitle: 'כתבו ברכה והוסיפו תמונה לספר הזיכרונות שלו',
@@ -446,7 +446,7 @@ function Editor() {
                                 })}
                             </div>
                         </div>
-                        <div className='rounded-2xl bg-[#efe7d6] p-3 border border-[#e7dcc6]' style={{ height: 700 }}>
+                        <div className='rounded-2xl bg-[#efe7d6] p-3 border border-[#e7dcc6]' style={{ height: 840 }}>
                             <div className='h-full mx-auto transition-all duration-300' style={{ maxWidth: previewWidth }}>
                                 {previewSrc ? (
                                     <iframe src={previewSrc} title='תצוגה' className='w-full h-full rounded-xl bg-white shadow' style={{ border: 'none' }} />
