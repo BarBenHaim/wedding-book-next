@@ -13,13 +13,18 @@ const PRESETS = [
     {
         id: 'bar_mitzvah', name: 'בר מצווה — כחול וזהב', swatch: '#16243d',
         design: {
-            pageBg: '#0f1d33', pageBgImage: 'none', titleColor: '#f0e6c8', subtitleColor: '#9db4cf', accentColor: '#cba44e',
-            cardBg: '#16243d', cardLabelColor: '#e8ddc0', cardCounterColor: '#8fa3bf',
-            inputBg: '#0d1626', inputBorder: '#2e425f', inputFocusBorder: '#cba44e', inputTextColor: '#f0e6c8', inputPlaceholderColor: '#5f738c',
-            buttonGradient: '#cba44e', trustText: '#8fa3bf',
-            cardBorder: '#2e425f', cardFrame: '#1f3050', iconColor: '#8fa3bf',
-            pillBg: '#16243d', pillBorder: '#cba44e', pillText: '#e8ddc0',
-            wellBg: '#0d1626', wellBorder: '#2e425f', cornerImage: 'none',
+            pageBg: '#0c1c3a', pageBgImage: 'none',
+            titleColor: '#f0e2bf', subtitleColor: '#9fb3d4', accentColor: '#d4af5f',
+            cardBg: '#fffdf8', cardLabelColor: '#1c2740', cardCounterColor: '#9aa7bd',
+            cardBorder: '#e3ddcb', cardFrame: '#ffffff', iconColor: '#6a7a96',
+            pillBg: '#16243d', pillBorder: '#c9a44e', pillText: '#e8d9a8',
+            wellBg: '#eef3fc', wellBorder: '#cdd8ec',
+            inputBg: '#fbf7ee', inputBorder: '#e3cfa3', inputFocusBorder: '#c9a44e', inputTextColor: '#1c2740', inputPlaceholderColor: '#a9b3c4',
+            buttonGradient: '#c9a44e', buttonTextColor: '#f0e2bf', trustText: '#9fb3d4',
+            cornerImage: 'none',
+        },
+        copy: {
+            momentSubtitle: 'כתבו ברכה והוסיפו תמונה לספר הזיכרונות שלו',
         },
     },
     {
@@ -52,7 +57,7 @@ const DEFAULT_DESIGN = {
     pageBg: '#fbf6ec', pageBgImage: 'none', titleColor: '#1a1410', subtitleColor: '#7a6a52', accentColor: '#c9a44e',
     cardBg: '#ffffff', cardLabelColor: '#1a1410', cardCounterColor: '#b9a684',
     inputBg: '#fbf6ec', inputBorder: '#ead9b3', inputFocusBorder: '#c9a44e', inputTextColor: '#1a1410', inputPlaceholderColor: '#c9b888',
-    buttonGradient: '#c9a44e', trustText: '#b9a684',
+    buttonGradient: '#c9a44e', trustText: '#b9a684', buttonTextColor: '#f5ead2',
     cardBorder: '#c9a44e', cardFrame: '#ffffff', iconColor: '#9a8665',
     pillBg: '#fdf8ec', pillBorder: '#c9a44e', pillText: '#8a6d40',
     wellBg: '#fbf3e3', wellBorder: '#c9a44e',
@@ -243,9 +248,23 @@ function Editor() {
     }
 
     function loadPreset(p) {
-        setDesign({ ...p.design })
-        setBgImage('')
-        setBtnImg('')
+        // Apply the preset's colours/text, but KEEP any page-bg or button
+        // IMAGES already uploaded — a preset restyles, it doesn't wipe
+        // custom photographs the couple set.
+        setDesign(prev => {
+            const next = { ...p.design }
+            if (typeof prev.pageBgImage === 'string' && prev.pageBgImage.includes('url(')) {
+                next.pageBgImage = prev.pageBgImage
+                if (prev.pageBgSize) next.pageBgSize = prev.pageBgSize
+                if (prev.pageBgPosition) next.pageBgPosition = prev.pageBgPosition
+                if (prev.pageBgRepeat) next.pageBgRepeat = prev.pageBgRepeat
+            }
+            if (typeof prev.buttonGradient === 'string' && prev.buttonGradient.includes('url(')) {
+                next.buttonGradient = prev.buttonGradient
+            }
+            return next
+        })
+        if (p.copy) setCopy(prev => ({ ...prev, ...p.copy }))
     }
 
     async function apply() {
@@ -371,6 +390,10 @@ function Editor() {
                                 <label className='flex items-center gap-2 text-xs text-[#5a4a32]'>
                                     <input type='color' value={/^#/.test(val('buttonGradient')) ? val('buttonGradient') : '#c9a44e'} onChange={e => { setBtnImg(''); setField('buttonGradient', e.target.value) }} className='w-9 h-9 rounded-lg border border-[#e7dcc6] cursor-pointer p-0.5 bg-white' />
                                     צבע
+                                </label>
+                                <label className='flex items-center gap-2 text-xs text-[#5a4a32]'>
+                                    <input type='color' value={val('buttonTextColor')} onChange={e => setField('buttonTextColor', e.target.value)} className='w-9 h-9 rounded-lg border border-[#e7dcc6] cursor-pointer p-0.5 bg-white' />
+                                    טקסט הכפתור
                                 </label>
                                 <label className={fileBtn}>
                                     <Upload size={13} /> {uploading === 'button' ? 'מעלה...' : 'תמונת רקע לכפתור'}
