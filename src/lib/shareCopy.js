@@ -32,7 +32,23 @@ export function buildShareCopy(data = {}) {
     const bride = (data?.brideNameHe || data?.brideName || '').trim()
     const groom = (data?.groomNameHe || data?.groomName || '').trim()
     const celebrant = (data?.celebrantNameHe || data?.celebrantName || '').trim()
-    const names = type === 'wedding' ? [bride, groom].filter(Boolean).join(' ו') : celebrant
+    // Many production weddings (especially older orders) never had
+    // brideName/groomName explicitly filled but DO carry an ownerName
+    // from /api/createWedding (route.js:116). Without this fallback,
+    // those weddings get a generic "ספר הברכות" in WhatsApp previews
+    // even though a real name is right there in the doc.
+    const owner = (data?.ownerNameHe || data?.ownerName || '').trim()
+
+    let names
+    if (type === 'wedding') {
+        const joined = [bride, groom].filter(Boolean).join(' ו')
+        // If neither bride nor groom is set but the owner is, use the
+        // owner name as the single fallback. Better one real name
+        // than the generic catch-all.
+        names = joined || owner
+    } else {
+        names = celebrant || owner
+    }
 
     const prefix = PREFIX[type] || PREFIX.wedding
     const noun = NOUN[type] || 'האירוע'
