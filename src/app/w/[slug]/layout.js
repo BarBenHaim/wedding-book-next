@@ -1,6 +1,6 @@
 // Server layout for the short guest link /w/[slug]. Hosts
 // generateMetadata so the shared link shows an event-aware preview
-// (title/description + generated card image).
+// (title/description + branded card image).
 import { adminDb } from '@/lib/firebaseAdmin'
 import { buildShareCopy } from '@/lib/shareCopy'
 
@@ -11,6 +11,11 @@ function siteOrigin() {
     return ''
 }
 
+// See the matching comment in /wedding/[weddingId]/layout.js:
+// the dynamic /api/og/[weddingId] route was rendering Hebrew glyphs
+// crooked in WhatsApp previews. Static branded card replaces it.
+const STATIC_OG_IMAGE = '/og/wedding-tales-book.png'
+
 export async function generateMetadata({ params }) {
     try {
         const { slug } = await params
@@ -20,7 +25,7 @@ export async function generateMetadata({ params }) {
         const data = doc.data() || {}
         const { title, description } = buildShareCopy(data)
         const origin = siteOrigin()
-        const ogImage = `${origin}/api/og/${doc.id}`
+        const ogImage = `${origin}${STATIC_OG_IMAGE}`
         const images = [{ url: ogImage, secureUrl: ogImage, width: 1200, height: 630, type: 'image/png', alt: title }]
         return {
             metadataBase: origin ? new URL(origin) : undefined,
