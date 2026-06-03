@@ -14,19 +14,12 @@ function siteOrigin() {
     return ''
 }
 
-// Static, hand-designed branded preview at 1200×630. Replaces the
-// previous dynamic /api/og/[weddingId] generator, which used satori
-// (next/og) with a fetched Noto Sans Hebrew TTF — Hebrew glyphs were
-// rendering crooked in WhatsApp previews because of how satori handles
-// RTL + glyph rotation when fonts subset-mismatch. Static image is
-// the same for every wedding (less personalization, but always clean),
-// and the route's title/description still carry the per-wedding copy
-// so WhatsApp's preview card text stays personalised.
-// The /api/og/[weddingId] route is left in place for now in case any
-// external system still links to it (no consumers in src/ besides
-// these two layouts, which both moved to the static asset).
-const STATIC_OG_IMAGE = '/og/wedding-tales-book.png'
-
+// Per-wedding preview card, rendered on demand at 1200×630 by
+// /api/og/[weddingId] (sharp + librsvg, base64-embedded Hebrew TTF).
+// The image text mirrors the og:title below — so the WhatsApp link
+// card shows the same personalized headline both above and inside
+// the preview. The /api route falls back to /og/wedding-tales-book.png
+// on errors, so a transient render failure won't break the preview.
 export async function generateMetadata({ params }) {
     try {
         const { weddingId } = await params
@@ -34,7 +27,7 @@ export async function generateMetadata({ params }) {
         const data = snap.exists ? snap.data() || {} : {}
         const { title, description } = buildShareCopy(data)
         const origin = siteOrigin()
-        const ogImage = `${origin}${STATIC_OG_IMAGE}`
+        const ogImage = `${origin}/api/og/${weddingId}`
         const images = [{ url: ogImage, secureUrl: ogImage, width: 1200, height: 630, type: 'image/png', alt: title }]
         return {
             metadataBase: origin ? new URL(origin) : undefined,

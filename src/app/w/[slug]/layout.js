@@ -11,11 +11,10 @@ function siteOrigin() {
     return ''
 }
 
-// See the matching comment in /wedding/[weddingId]/layout.js:
-// the dynamic /api/og/[weddingId] route was rendering Hebrew glyphs
-// crooked in WhatsApp previews. Static branded card replaces it.
-const STATIC_OG_IMAGE = '/og/wedding-tales-book.png'
-
+// Per-wedding preview card from /api/og/[weddingId]. See the matching
+// comment in /wedding/[weddingId]/layout.js — both layouts point at
+// the same generator so the headline text inside the image stays in
+// sync with og:title.
 export async function generateMetadata({ params }) {
     try {
         const { slug } = await params
@@ -25,7 +24,7 @@ export async function generateMetadata({ params }) {
         const data = doc.data() || {}
         const { title, description } = buildShareCopy(data)
         const origin = siteOrigin()
-        const ogImage = `${origin}${STATIC_OG_IMAGE}`
+        const ogImage = `${origin}/api/og/${doc.id}`
         const images = [{ url: ogImage, secureUrl: ogImage, width: 1200, height: 630, type: 'image/png', alt: title }]
         return {
             metadataBase: origin ? new URL(origin) : undefined,
