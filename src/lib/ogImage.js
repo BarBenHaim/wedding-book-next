@@ -2,110 +2,218 @@
 // per-wedding share preview that WhatsApp / Facebook / Slack / etc.
 // scrape from the page's og:image meta tag.
 //
-// Why not @vercel/og / satori?
-//   We tried. Satori's RTL + Hebrew glyph handling produced visibly
-//   crooked text in production. Even with the NotoSansHebrew TTF
-//   passed via the fonts option, the rendered Hebrew came out
-//   distorted. Switching to sharp + librsvg gives us proper Hebrew
-//   shaping (HarfBuzz under the hood) at the cost of a slightly
-//   heavier render — fine for an asset that's cached aggressively
-//   downstream.
+// Approach: pre-extract glyph outlines via opentype.js, emit them as
+// raw SVG <path> data, then rasterise with sharp. The rendering
+// pipeline never touches a font system.
 //
-// Font handling:
-//   We embed NotoSansHebrew-Regular.ttf as a base64 data: URL inside
-//   an @font-face declaration in the SVG. librsvg loads the font
-//   from the data URL without needing any system fontconfig setup,
-//   which keeps the render deterministic on Vercel's read-only fs.
+// Why not @font-face + <text>?
+//   Two earlier approaches failed:
+//   - satori (next/og): RTL+shaping bugs distorted Hebrew glyphs.
+//   - sharp + librsvg + @font-face data URI: works locally on
+//     Windows but renders tofu boxes on Vercel's Linux build —
+//     that librsvg ignores data:font URLs and has no system Hebrew
+//     font, so glyphs come out as empty rects.
+//
+//   Pre-baking glyphs as <path d="…"/> sidesteps the entire font
+//   subsystem at raster time. librsvg sees only vector geometry.
+//
+// Path data quirks that matter:
+//   - opentype.js's toPathData() omits Z (close-path) commands and
+//     uses minus-as-separator (e.g. "M5.90-59.30"). librsvg in
+//     sharp's libvips bundle on Linux fails to fill correctly when
+//     either of those happen: the right half of the text vanishes.
+//     We emit explicit Z after each subpath AND put a space between
+//     every coordinate. With those two changes, identical SVGs
+//     render correctly on both platforms.
+//
+// Visual design: matches public/og/wedding-tales-book.png (the
+// static card customers liked) — warm gold gradient, thin gold
+// border, subtle corner sparkles, bright cream serif title.
 
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { parse as parseFont } from 'opentype.js'
 import sharp from 'sharp'
 
-// Font is read once per process and cached. process.cwd() resolves
-// to the project root on both `next dev` and Vercel's serverless
-// runtime, so public/fonts/... is always reachable.
-let cachedFontB64 = null
+// Font is parsed once per process. opentype.parse wants a true
+// ArrayBuffer, not a Node Buffer view. The file is resolved from
+// process.cwd(); on Vercel's Node runtime next.config.js's
+// outputFileTracingIncludes bundles it into the function package.
+let cachedFont = null
 function loadFont() {
-    if (cachedFontB64) return cachedFontB64
+    if (cachedFont) return cachedFont
     const fontPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansHebrew-Regular.ttf')
-    cachedFontB64 = readFileSync(fontPath).toString('base64')
-    return cachedFontB64
+    const buf = readFileSync(fontPath)
+    const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+    cachedFont = parseFont(ab)
+    return cachedFont
 }
 
-// XML-escape only the characters that break SVG: <, >, &, ". Hebrew
-// glyphs pass through unchanged. Defensive — even though titles come
-// from a controlled buildShareCopy() helper, a malformed name in
-// Firestore shouldn't be able to inject SVG.
-function escapeForSvg(s) {
-    return String(s || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
+// Build an SVG path d="…" string from an opentype.js Path object.
+// Every numeric coordinate is space-separated (no minus-as-separator)
+// and every subpath gets an explicit Z at the end. Both of those are
+// load-bearing — see the file-level comment.
+function pathDataFromCommands(commands) {
+    const n2 = (v) => v.toFixed(2)
+    let out = ''
+    let inSubpath = false
+    for (const c of commands) {
+        if (c.type === 'M') {
+            if (inSubpath) out += 'Z '
+            out += `M ${n2(c.x)} ${n2(c.y)} `
+            inSubpath = true
+        } else if (c.type === 'L') {
+            out += `L ${n2(c.x)} ${n2(c.y)} `
+        } else if (c.type === 'Q') {
+            out += `Q ${n2(c.x1)} ${n2(c.y1)} ${n2(c.x)} ${n2(c.y)} `
+        } else if (c.type === 'C') {
+            out += `C ${n2(c.x1)} ${n2(c.y1)} ${n2(c.x2)} ${n2(c.y2)} ${n2(c.x)} ${n2(c.y)} `
+        } else if (c.type === 'Z') {
+            out += 'Z '
+        }
+    }
+    if (inSubpath) out += 'Z'
+    return out.trim()
 }
 
-// Auto-shrink the title font so even a long compound title (e.g.
-// "ספר הברכות ליום ההולדת של תקווה") still fits horizontally without
-// touching the border frame. The brackets here are a rough
-// approximation — Hebrew serif glyphs run ~0.55 px wide per font-size
-// unit in this font, so a 30-char title at 68 px ≈ 1120 px wide,
-// which is the limit of our 1000-ish-px safe area.
-function titleFontSize(text) {
-    const n = text.length
-    if (n <= 12) return 108
-    if (n <= 18) return 90
-    if (n <= 24) return 72
-    if (n <= 30) return 62
-    return 54
+// Hebrew text → centred SVG <path>. NotoSansHebrew is monocase with
+// no contextual shaping, so visually reversing the code points before
+// laying out LTR is sufficient to get correct RTL output.
+function hebrewTextPath({ font, text, cx, baselineY, size, fill }) {
+    const visualOrder = Array.from(text).reverse().join('')
+    const width = font.getAdvanceWidth(visualOrder, size)
+    const x = cx - width / 2
+    const p = font.getPath(visualOrder, x, baselineY, size)
+    return `<path d="${pathDataFromCommands(p.commands)}" fill="${fill}"/>`
+}
+
+// Latin text with per-glyph letter-spacing (librsvg's letter-spacing
+// CSS doesn't apply to text-via-path).
+function latinTextPath({ font, text, cx, baselineY, size, fill, letterSpacing = 0 }) {
+    const chars = Array.from(text)
+    const advances = chars.map((ch) => font.getAdvanceWidth(ch, size))
+    const total = advances.reduce((a, b) => a + b, 0) + letterSpacing * (chars.length - 1)
+    let x = cx - total / 2
+    const parts = []
+    for (let i = 0; i < chars.length; i++) {
+        const p = font.getPath(chars[i], x, baselineY, size)
+        parts.push(`<path d="${pathDataFromCommands(p.commands)}" fill="${fill}"/>`)
+        x += advances[i] + letterSpacing
+    }
+    return parts.join('')
+}
+
+// Step the title font size down until the rendered width fits within
+// the safe area inside the gold border (~1040 px). max/min are tuned
+// so the shortest titles ("ספר הברכות") feel large and confident
+// while long compound titles ("ספר הברכות ליום ההולדת של תקווה") still
+// fit on one line.
+function pickTitleSize({ font, text, maxWidth, max = 96, min = 50 }) {
+    const visualOrder = Array.from(text).reverse().join('')
+    let size = max
+    while (size > min) {
+        if (font.getAdvanceWidth(visualOrder, size) <= maxWidth) return size
+        size -= 4
+    }
+    return min
 }
 
 /**
- * Build the SVG markup and rasterise to a PNG buffer.
+ * Build the OG image SVG with glyph outlines pre-baked and rasterise
+ * to a PNG buffer.
  *
  * @param {object} opts
- * @param {string} opts.title - The big Hebrew headline. From
- *   `buildShareCopy(weddingData).title`, e.g. "ספר הברכות של נועם".
- * @param {string} [opts.subtitle] - Small line under the title.
- *   Defaults to the brand tagline.
- * @returns {Promise<Buffer>} - PNG buffer, 1200×630.
+ * @param {string} opts.title - The big Hebrew headline, e.g.
+ *   "ספר הברכות של נועם" — comes from buildShareCopy(data).title.
+ * @param {string} [opts.subtitle]
+ * @returns {Promise<Buffer>} PNG buffer, 1200×630.
  */
 export async function renderOgImage({ title, subtitle = 'הברכות והתמונות שלכם, נשמרות לתמיד' }) {
     const W = 1200
     const H = 630
-    const titleSize = titleFontSize(title)
-    const fontB64 = loadFont()
+    const font = loadFont()
 
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${W}' height='${H}'>
+    const titleSize = pickTitleSize({ font, text: title, maxWidth: 1000, max: 96, min: 52 })
+
+    const titlePath = hebrewTextPath({
+        font,
+        text: title,
+        cx: W / 2,
+        // y is baseline in opentype coords. The font's bbox extends
+        // above baseline by ~0.75 × size and below by ~0.25 × size, so
+        // baseline at 330 puts the visual centre of the title around y=300.
+        baselineY: 330,
+        size: titleSize,
+        fill: '#fdf6e3',
+    })
+
+    const subtitlePath = hebrewTextPath({
+        font,
+        text: subtitle,
+        cx: W / 2,
+        baselineY: 440,
+        size: 28,
+        fill: '#f0dcb0',
+    })
+
+    const wordmarkPath = latinTextPath({
+        font,
+        text: 'WEDDING TALES',
+        cx: W / 2,
+        baselineY: 580,
+        size: 26,
+        fill: '#d8b876',
+        letterSpacing: 10,
+    })
+
+    // Sparkle ornaments scattered around the corners — small gold
+    // diamonds composed of two thin crossed rects. Eyeballed against
+    // the customer-loved static image at public/og/wedding-tales-book.png.
+    const sparkle = (x, y, r, opacity = 0.7) =>
+        `<g transform="translate(${x} ${y}) rotate(45)">
+            <rect x="-${r}" y="-${r / 4}" width="${r * 2}" height="${r / 2}" fill="#e8c66a" opacity="${opacity}" rx="${r / 4}"/>
+            <rect x="-${r / 4}" y="-${r}" width="${r / 2}" height="${r * 2}" fill="#e8c66a" opacity="${opacity}" rx="${r / 4}"/>
+        </g>`
+
+    const sparkles = [
+        sparkle(170, 130, 14, 0.75),
+        sparkle(1040, 110, 18, 0.85),
+        sparkle(1080, 250, 8, 0.55),
+        sparkle(140, 280, 10, 0.6),
+        sparkle(160, 510, 12, 0.7),
+        sparkle(1050, 500, 14, 0.7),
+        sparkle(1090, 380, 6, 0.4),
+        sparkle(110, 400, 7, 0.45),
+        sparkle(230, 70, 5, 0.4),
+        sparkle(970, 560, 5, 0.4),
+    ].join('')
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
         <defs>
-            <style type='text/css'><![CDATA[
-                @font-face {
-                    font-family: 'NotoHe';
-                    src: url('data:font/ttf;base64,${fontB64}') format('truetype');
-                }
-                .title { font-family: 'NotoHe', serif; fill: #fdf6e3; }
-                .small { font-family: 'NotoHe', serif; fill: #d8b876; letter-spacing: 8px; }
-                .latin { font-family: serif; fill: #c9a44e; letter-spacing: 10px; }
-            ]]></style>
-            <linearGradient id='bg' x1='0' y1='0' x2='1' y2='1'>
-                <stop offset='0%' stop-color='#2b2117'/>
-                <stop offset='55%' stop-color='#3d2e1a'/>
-                <stop offset='100%' stop-color='#241b12'/>
+            <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#5b3f1c"/>
+                <stop offset="45%" stop-color="#7a5727"/>
+                <stop offset="100%" stop-color="#3e2913"/>
             </linearGradient>
+            <radialGradient id="glow" cx="50%" cy="42%" r="55%">
+                <stop offset="0%" stop-color="#a87b35" stop-opacity="0.55"/>
+                <stop offset="100%" stop-color="#a87b35" stop-opacity="0"/>
+            </radialGradient>
         </defs>
-        <rect width='${W}' height='${H}' fill='url(#bg)'/>
-        <rect x='28' y='28' width='${W - 56}' height='${H - 56}'
-              fill='none' stroke='#c9a44e' stroke-opacity='0.55'
-              stroke-width='2' rx='24'/>
-        <text x='${W / 2}' y='280' class='title'
-              font-size='${titleSize}' text-anchor='middle'
-              direction='rtl'>${escapeForSvg(title)}</text>
-        <line x1='${W / 2 - 90}' y1='335' x2='${W / 2 + 90}' y2='335'
-              stroke='#c9a44e' stroke-width='3'/>
-        <text x='${W / 2}' y='400' class='small'
-              font-size='30' text-anchor='middle'
-              direction='rtl'>${escapeForSvg(subtitle)}</text>
-        <text x='${W / 2}' y='560' class='latin'
-              font-size='28' text-anchor='middle'>WEDDING TALES</text>
+        <rect width="${W}" height="${H}" fill="url(#bg)"/>
+        <rect width="${W}" height="${H}" fill="url(#glow)"/>
+        <rect x="28" y="28" width="${W - 56}" height="${H - 56}"
+              fill="none" stroke="#d8b876" stroke-opacity="0.65"
+              stroke-width="2" rx="22"/>
+        <rect x="38" y="38" width="${W - 76}" height="${H - 76}"
+              fill="none" stroke="#d8b876" stroke-opacity="0.18"
+              stroke-width="1" rx="18"/>
+        ${sparkles}
+        ${titlePath}
+        <line x1="${W / 2 - 70}" y1="380" x2="${W / 2 + 70}" y2="380"
+              stroke="#d8b876" stroke-width="2" stroke-opacity="0.85"/>
+        ${subtitlePath}
+        ${wordmarkPath}
     </svg>`
 
     return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer()
