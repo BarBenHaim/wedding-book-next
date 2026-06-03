@@ -27,8 +27,8 @@ export async function generateMetadata({ params }) {
         const data = snap.exists ? snap.data() || {} : {}
         const { title, description } = buildShareCopy(data)
         const origin = siteOrigin()
-        const ogImage = `${origin}/api/og/${weddingId}`
-        const images = [{ url: ogImage, secureUrl: ogImage, width: 1200, height: 630, type: 'image/png', alt: title }]
+        const ogImage = `${origin}/og/wedding-tales-book.png`
+        const images = [{ url: ogImage, secureUrl: ogImage, width: 1200, height: 630, type: 'image/png', alt: 'Wedding Tales' }]
         return {
             metadataBase: origin ? new URL(origin) : undefined,
             title,

@@ -24,8 +24,8 @@ export async function generateMetadata({ params }) {
         const data = doc.data() || {}
         const { title, description } = buildShareCopy(data)
         const origin = siteOrigin()
-        const ogImage = `${origin}/api/og/${doc.id}`
-        const images = [{ url: ogImage, secureUrl: ogImage, width: 1200, height: 630, type: 'image/png', alt: title }]
+        const ogImage = `${origin}/og/wedding-tales-book.png`
+        const images = [{ url: ogImage, secureUrl: ogImage, width: 1200, height: 630, type: 'image/png', alt: 'Wedding Tales' }]
         return {
             metadataBase: origin ? new URL(origin) : undefined,
             title,
