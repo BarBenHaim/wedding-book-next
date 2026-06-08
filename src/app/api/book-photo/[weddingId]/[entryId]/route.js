@@ -43,7 +43,33 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 import { NextResponse } from 'next/server'
-import { adminDb } from '@/lib/firebaseAdmin'
+import { adminDb, adminStorage } from '@/lib/firebaseAdmin'
+
+// Pull { bucket, path } out of a Firebase/GCS URL so we can read the object
+// directly with the Admin SDK — independent of the URL's download token.
+function parseStorageLocation(url) {
+    if (!url || typeof url !== 'string') return null
+    try {
+        if (url.startsWith('gs://')) {
+            const rest = url.slice(5)
+            const i = rest.indexOf('/')
+            if (i < 0) return null
+            return { bucket: rest.slice(0, i), path: rest.slice(i + 1) }
+        }
+        const u = new URL(url)
+        if (u.hostname === 'firebasestorage.googleapis.com' || u.hostname.endsWith('.firebasestorage.app')) {
+            const m = u.pathname.match(/\/v0\/b\/([^/]+)\/o\/(.+)$/)
+            if (m) return { bucket: m[1], path: decodeURIComponent(m[2]) }
+        }
+        if (u.hostname === 'storage.googleapis.com') {
+            const parts = u.pathname.replace(/^\/+/, '').split('/')
+            if (parts.length >= 2) return { bucket: parts[0], path: decodeURIComponent(parts.slice(1).join('/')) }
+        }
+    } catch {
+        /* not a parseable storage URL */
+    }
+    return null
+}
 
 export async function GET(req, { params }) {
     const { weddingId, entryId } = await params
@@ -77,6 +103,42 @@ export async function GET(req, { params }) {
         const photoUrl = entry.photoUrl || entry.imageUrl
         if (!photoUrl) {
             return NextResponse.json({ error: 'No photo' }, { status: 404 })
+        }
+
+        // ─── 3a. PRIMARY: read straight from Storage via the Admin SDK.
+        // Immune to a stale/invalid download token on the stored URL or a
+        // flaky public CDN edge — the main cause of an entry photo 502-ing
+        // in the book. Falls through to the public fetch below for
+        // non-Firebase (legacy/external) URLs, or if the object is missing.
+        const _loc = parseStorageLocation(photoUrl)
+        if (_loc) {
+            try {
+                const file = adminStorage.bucket(_loc.bucket).file(_loc.path)
+                const [exists] = await file.exists()
+                if (exists) {
+                    let ct = 'image/jpeg'
+                    try {
+                        const [meta] = await file.getMetadata()
+                        if (meta?.contentType) ct = meta.contentType
+                    } catch {
+                        /* keep default */
+                    }
+                    const [buf] = await file.download()
+                    return new NextResponse(buf, {
+                        status: 200,
+                        headers: {
+                            'Content-Type': ct,
+                            'Content-Disposition': `inline; filename="moment_${entryId.slice(0, 6)}.jpg"`,
+                            'Cache-Control': 'private, max-age=86400, stale-while-revalidate=604800',
+                            'X-Content-Type-Options': 'nosniff',
+                            'X-Robots-Tag': 'noindex, noarchive, noimageindex',
+                            'Cross-Origin-Resource-Policy': 'same-origin',
+                        },
+                    })
+                }
+            } catch (err) {
+                console.warn('[book-photo] admin read failed, falling back to public fetch:', err?.message || err)
+            }
         }
 
         // ─── 3. Server-side fetch (the real URL never hits the wire
