@@ -151,6 +151,8 @@ export async function PATCH(req) {
             'customMomentSubmit', 'customMomentSecurityNote',
             // Super-admin private notes per wedding — never shown to guests.
             'adminNotes',
+            // Amount paid is auto-captured from the order, but editable here.
+            'amountPaid', 'currency',
             // Production pipeline stage (managed from /admin/pipeline).
             'productionStatus',
             // Guest /photo page design preset (managed from /admin/guest-design).
@@ -187,6 +189,16 @@ export async function PATCH(req) {
                 } else {
                     const n = Number(v)
                     clean[key] = Number.isFinite(n) ? n : null
+                }
+                continue
+            }
+
+            if (key === 'amountPaid') {
+                if (v === null || v === '' || v === undefined) {
+                    clean[key] = null
+                } else {
+                    const n = Number(v)
+                    clean[key] = Number.isFinite(n) && n >= 0 ? n : null
                 }
                 continue
             }

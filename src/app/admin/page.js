@@ -453,6 +453,9 @@ function EventTypeEditor({ wedding, onSave }) {
         customMomentSecurityNote: w.customMomentSecurityNote || '',
         // Super-admin private notes (never shown to guests).
         adminNotes: w.adminNotes || '',
+        // Amount paid (auto-captured from the order; editable by the admin).
+        amountPaid: w.amountPaid ?? '',
+        currency: w.currency || 'ILS',
     })
 
     const [draft, setDraft] = useState(() => buildDraft(wedding))
@@ -512,6 +515,9 @@ function EventTypeEditor({ wedding, onSave }) {
         patch.customMomentSecurityNote = draft.customMomentSecurityNote
         // Super-admin private notes.
         patch.adminNotes = draft.adminNotes
+        // Amount paid — '' clears it; otherwise the API coerces to a number.
+        patch.amountPaid = draft.amountPaid === '' ? null : draft.amountPaid
+        patch.currency = draft.currency
         return patch
     }
 
@@ -543,6 +549,35 @@ function EventTypeEditor({ wedding, onSave }) {
                         <option key={t} value={t}>{getEventConfig(t).hebrewLabel}</option>
                     ))}
                 </select>
+            </div>
+
+            {/* Amount paid — auto-captured from the order, editable here so
+                the super-admin can correct or fill it manually. */}
+            <div className='mb-3'>
+                <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>סכום ששולם</label>
+                <div className='flex items-center gap-2'>
+                    <input
+                        type='number'
+                        inputMode='decimal'
+                        min='0'
+                        step='0.01'
+                        value={draft.amountPaid}
+                        onChange={e => set('amountPaid', e.target.value)}
+                        placeholder='0'
+                        dir='ltr'
+                        className='flex-1 px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white tabular-nums'
+                    />
+                    <select
+                        value={draft.currency || 'ILS'}
+                        onChange={e => set('currency', e.target.value)}
+                        className='px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] bg-white'
+                    >
+                        <option value='ILS'>₪ ILS</option>
+                        <option value='USD'>$ USD</option>
+                        <option value='EUR'>€ EUR</option>
+                    </select>
+                </div>
+                <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>נטען אוטומטית מההזמנה — אפשר לערוך ידנית.</p>
             </div>
 
             {/* Design variant — visual style within an event type. Wedding
