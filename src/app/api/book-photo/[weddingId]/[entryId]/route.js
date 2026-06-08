@@ -40,6 +40,7 @@
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 import { NextResponse } from 'next/server'
 import { adminDb } from '@/lib/firebaseAdmin'
@@ -102,20 +103,20 @@ export async function GET(req, { params }) {
             return NextResponse.json({ error: lastErr || 'Upstream error' }, { status: 502 })
         }
         const contentType = upstream.headers.get('content-type') || 'image/jpeg'
-        const buf = Buffer.from(await upstream.arrayBuffer())
 
         // ─── 4. Send back with hardening headers ──────────────────
-        // Obfuscated filename — even if a user manages to "Save as",
-        // they get something like "moment_a91b2c.jpg" not the entry
-        // ID or storage path.
+        // Stream the bytes straight through (no full in-memory buffer) so
+        // large full-res photos start arriving immediately and never hit a
+        // memory/time ceiling on the serverless function — a frequent cause
+        // of an intermittently "broken" image in the book.
         const obfuscated = `moment_${entryId.slice(0, 6)}.jpg`
 
-        return new NextResponse(buf, {
+        return new NextResponse(upstream.body, {
             status: 200,
             headers: {
                 'Content-Type': contentType,
                 'Content-Disposition': `inline; filename="${obfuscated}"`,
-                'Cache-Control': 'private, max-age=3600',
+                'Cache-Control': 'private, max-age=86400, stale-while-revalidate=604800',
                 'X-Content-Type-Options': 'nosniff',
                 'X-Robots-Tag': 'noindex, noarchive, noimageindex',
                 // Discourage hot-linking from external sites.
