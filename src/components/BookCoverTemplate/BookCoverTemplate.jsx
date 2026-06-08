@@ -2,6 +2,7 @@
 
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { buildTitle, normalizeEventType } from '@/lib/eventTypes'
+import SmartImg from '@/components/SmartImg/SmartImg'
 
 // Default cover content when the user hasn't uploaded an image and
 // hasn't typed coverTitle/coverSubtitle. Prevents the "blank cream
@@ -172,7 +173,7 @@ export default function BookCoverTemplate({ wedding, styleSettings, scaledWidth,
         >
             {/* תמונת כריכה */}
             {styleSettings.coverImage && (
-                <img
+                <SmartImg
                     src={styleSettings.coverImage}
                     alt='cover'
                     className='absolute'
@@ -193,7 +194,7 @@ export default function BookCoverTemplate({ wedding, styleSettings, scaledWidth,
 
             {/* מסגרת */}
             {frameSrc && (
-                <img
+                <SmartImg
                     src={frameSrc}
                     alt='frame'
                     className='absolute inset-0 w-full h-full object-contain pointer-events-none'

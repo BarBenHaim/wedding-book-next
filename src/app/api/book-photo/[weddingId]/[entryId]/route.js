@@ -80,15 +80,26 @@ export async function GET(req, { params }) {
 
         // ─── 3. Server-side fetch (the real URL never hits the wire
         //         to the client). We keep the upstream's content-type. ─
-        const upstream = await fetch(photoUrl, {
-            // Defensive: don't follow redirects to non-image hosts.
-            redirect: 'follow',
-        })
-        if (!upstream.ok) {
-            return NextResponse.json(
-                { error: `Upstream ${upstream.status}` },
-                { status: 502 }
-            )
+        // Retry the upstream fetch — Firebase Storage occasionally returns
+        // a transient 5xx or resets the connection, which would otherwise
+        // surface as a broken image in the book. 4xx are permanent, so we
+        // stop retrying on those.
+        let upstream = null
+        let lastErr = null
+        for (let i = 0; i < 3; i++) {
+            try {
+                upstream = await fetch(photoUrl, { redirect: 'follow' })
+                if (upstream.ok) break
+                lastErr = `Upstream ${upstream.status}`
+                if (upstream.status < 500) break
+            } catch (e) {
+                lastErr = e?.message || 'fetch failed'
+                upstream = null
+            }
+            await new Promise(r => setTimeout(r, 300 * (i + 1)))
+        }
+        if (!upstream || !upstream.ok) {
+            return NextResponse.json({ error: lastErr || 'Upstream error' }, { status: 502 })
         }
         const contentType = upstream.headers.get('content-type') || 'image/jpeg'
         const buf = Buffer.from(await upstream.arrayBuffer())
