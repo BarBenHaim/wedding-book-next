@@ -78,19 +78,21 @@ export default function DigitalEditionPage() {
                 setWedding(w)
                 const list = await getEntries(weddingId)
                 if (cancelled) return
-                // ─── Swap each entry's direct Firebase Storage URL
-                //     for our token-gated proxy URL. The book layouts
-                //     (which don't know about tokens) just see a
-                //     normal `imageUrl` and render via <img src=...>.
-                const proxied = list.map(e => {
-                    if (!e.imageUrl && !e.photoUrl) return e
-                    return {
-                        ...e,
-                        imageUrl: `/api/book-photo/${weddingId}/${e.id}?token=${encodeURIComponent(token)}`,
-                        photoUrl: `/api/book-photo/${weddingId}/${e.id}?token=${encodeURIComponent(token)}`,
-                    }
+                // Render entry photos straight from their stored Firebase
+                // URLs — exactly like the viewer and the portal, which load
+                // reliably. We previously routed these through the
+                // /api/book-photo proxy for anti-extraction, but that proxy
+                // intermittently 502'd (stale download tokens / CDN) and
+                // broke the shared book link. Matching the viewer's
+                // direct-load behaviour is the reliable choice. We normalise
+                // imageUrl = photoUrl = whichever field actually holds the
+                // URL, so every book layout (which reads entry.imageUrl)
+                // renders it.
+                const normalized = list.map(e => {
+                    const real = e.imageUrl || e.photoUrl
+                    return real ? { ...e, imageUrl: real, photoUrl: real } : e
                 })
-                setEntries(proxied)
+                setEntries(normalized)
                 setStatus('ready')
             } catch (err) {
                 console.error('[digital-edition] load failed', err)
