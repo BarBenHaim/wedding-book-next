@@ -6,7 +6,8 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { auth, storage } from '@/lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
-import { Lock, Palette, Save, RefreshCw, Eye, Check, Upload, Smartphone, Tablet, Monitor, Type } from 'lucide-react'
+import { listGuestPresets, saveGuestPreset, deleteGuestPreset } from '@/lib/guestDesignPresets'
+import { Lock, Palette, Save, RefreshCw, Eye, Check, Upload, Smartphone, Tablet, Monitor, Type, Plus, Trash2 } from 'lucide-react'
 
 const PRESETS = [
     { id: 'classic', name: 'קלאסי (ברירת מחדל)', swatch: '#c9a44e', design: {} },
@@ -145,6 +146,7 @@ function Editor() {
     const [selWedding, setSelWedding] = useState('')
     const [design, setDesign] = useState({})
     const [copy, setCopy] = useState({})
+    const [savedPresets, setSavedPresets] = useState([])
     const [bgImage, setBgImage] = useState('')
     const [btnImg, setBtnImg] = useState('')
     const [previewWidth, setPreviewWidth] = useState('390px')
@@ -171,6 +173,10 @@ function Editor() {
                 /* ignore */
             }
         })()
+    }, [])
+
+    useEffect(() => {
+        listGuestPresets().then(list => setSavedPresets(Array.isArray(list) ? list : []))
     }, [])
 
     function pickWedding(id) {
@@ -248,23 +254,57 @@ function Editor() {
     }
 
     function loadPreset(p) {
-        // Apply the preset's colours/text, but KEEP any page-bg or button
-        // IMAGES already uploaded — a preset restyles, it doesn't wipe
-        // custom photographs the couple set.
-        setDesign(prev => {
-            const next = { ...p.design }
-            if (typeof prev.pageBgImage === 'string' && prev.pageBgImage.includes('url(')) {
-                next.pageBgImage = prev.pageBgImage
-                if (prev.pageBgSize) next.pageBgSize = prev.pageBgSize
-                if (prev.pageBgPosition) next.pageBgPosition = prev.pageBgPosition
-                if (prev.pageBgRepeat) next.pageBgRepeat = prev.pageBgRepeat
-            }
-            if (typeof prev.buttonGradient === 'string' && prev.buttonGradient.includes('url(')) {
-                next.buttonGradient = prev.buttonGradient
-            }
-            return next
-        })
-        if (p.copy) setCopy(prev => ({ ...prev, ...p.copy }))
+        // A SAVED preset that includes its own bg/button image applies that
+        // image. A colour-only preset (the built-in starters) keeps whatever
+        // bg/button image the current event already has — so it just
+        // restyles without wiping a custom photo.
+        const pd = p.design || {}
+        const presetHasBg = typeof pd.pageBgImage === 'string' && pd.pageBgImage.includes('url(')
+        const presetHasBtn = typeof pd.buttonGradient === 'string' && pd.buttonGradient.includes('url(')
+        const next = { ...pd }
+        if (!presetHasBg && typeof design.pageBgImage === 'string' && design.pageBgImage.includes('url(')) {
+            next.pageBgImage = design.pageBgImage
+            if (design.pageBgSize) next.pageBgSize = design.pageBgSize
+            if (design.pageBgPosition) next.pageBgPosition = design.pageBgPosition
+            if (design.pageBgRepeat) next.pageBgRepeat = design.pageBgRepeat
+        }
+        if (!presetHasBtn && typeof design.buttonGradient === 'string' && design.buttonGradient.includes('url(')) {
+            next.buttonGradient = design.buttonGradient
+        }
+        setDesign(next)
+        const bgM = typeof next.pageBgImage === 'string' ? next.pageBgImage.match(/url\((.*?)\)/) : null
+        setBgImage(bgM ? bgM[1] : '')
+        const btnM = typeof next.buttonGradient === 'string' ? next.buttonGradient.match(/url\((.*?)\)/) : null
+        setBtnImg(btnM ? btnM[1] : '')
+        setCopy(p.copy && typeof p.copy === 'object' ? { ...p.copy } : {})
+    }
+
+    async function saveAsPreset() {
+        const name = (typeof window !== 'undefined' ? window.prompt('שם לפריסט החדש:') : '') || ''
+        if (!name.trim()) return
+        setBusy(true)
+        try {
+            const hex = v => typeof v === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(v)
+            const swatch = hex(design.pageBg) ? design.pageBg : hex(design.buttonGradient) ? design.buttonGradient : '#c9a44e'
+            const saved = await saveGuestPreset({ name: name.trim(), swatch, design: { ...design }, copy: nonEmpty(copy) })
+            setSavedPresets(prev => [saved, ...prev.filter(x => x.id !== saved.id)])
+            flash('הפריסט נשמר ✓')
+        } catch (e) {
+            flash('שמירת הפריסט נכשלה: ' + (e?.message || ''), 'error')
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    async function removePreset(p) {
+        if (typeof window !== 'undefined' && !window.confirm(`למחוק את הפריסט "${p.name}"?`)) return
+        try {
+            await deleteGuestPreset(p.id)
+            setSavedPresets(prev => prev.filter(x => x.id !== p.id))
+            flash('הפריסט נמחק')
+        } catch (e) {
+            flash('מחיקה נכשלה: ' + (e?.message || ''), 'error')
+        }
     }
 
     async function apply() {
@@ -323,7 +363,12 @@ function Editor() {
                         </div>
 
                         <div className='bg-white rounded-2xl border border-[#e7dcc6] p-4'>
-                            <label className='block text-xs font-bold text-[#7a6a52] mb-3'>פריסטים מוכנים</label>
+                            <div className='flex items-center justify-between mb-3 gap-2'>
+                                <label className='block text-xs font-bold text-[#7a6a52]'>פריסטים</label>
+                                <button onClick={saveAsPreset} disabled={busy} className='inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold bg-[#AA8840]/10 text-[#AA8840] hover:bg-[#AA8840]/20 disabled:opacity-50'>
+                                    <Plus size={13} /> שמור עיצוב נוכחי כפריסט
+                                </button>
+                            </div>
                             <div className='grid grid-cols-2 sm:grid-cols-4 gap-2'>
                                 {PRESETS.map(p => (
                                     <button key={p.id} onClick={() => loadPreset(p)} className='rounded-xl border border-[#e7dcc6] p-2 hover:border-[#AA8840] transition-colors text-center'>
@@ -331,7 +376,19 @@ function Editor() {
                                         <span className='text-[11px] font-bold text-[#5a4a32]'>{p.name}</span>
                                     </button>
                                 ))}
+                                {savedPresets.map(p => (
+                                    <div key={p.id} className='relative'>
+                                        <button onClick={() => loadPreset(p)} title={p.name} className='w-full rounded-xl border border-[#e7dcc6] p-2 hover:border-[#AA8840] transition-colors text-center'>
+                                            <span className='block w-full h-8 rounded-lg mb-1.5' style={{ background: p.swatch || '#c9a44e' }} />
+                                            <span className='block text-[11px] font-bold text-[#5a4a32] truncate'>{p.name}</span>
+                                        </button>
+                                        <button onClick={() => removePreset(p)} title='מחק פריסט' className='absolute -top-1.5 -start-1.5 w-5 h-5 rounded-full bg-white border border-[#e7dcc6] text-red-500 flex items-center justify-center shadow-sm hover:bg-red-50'>
+                                            <Trash2 size={11} />
+                                        </button>
+                                    </div>
+                                ))}
                             </div>
+                            <p className='text-[10.5px] text-[#a89378] mt-2 leading-relaxed'>עצב אירוע כרצונך (כולל תמונות רקע/כפתור) ולחץ "שמור עיצוב נוכחי כפריסט" — כדי להשתמש בו שוב בכל אירוע.</p>
                         </div>
 
                         {GROUPS.map(g => (
