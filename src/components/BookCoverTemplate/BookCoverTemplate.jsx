@@ -2,6 +2,7 @@
 
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { buildTitle, normalizeEventType } from '@/lib/eventTypes'
+import { normalizeLocale } from '@/i18n/locales'
 
 // Default cover content when the user hasn't uploaded an image and
 // hasn't typed coverTitle/coverSubtitle. Prevents the "blank cream
@@ -12,36 +13,27 @@ import { buildTitle, normalizeEventType } from '@/lib/eventTypes'
 function buildDefaultCoverContent(wedding) {
     if (!wedding) return null
     const type = normalizeEventType(wedding.eventType) || 'wedding'
-    const title = buildTitle(wedding, 'he')
+    // Use the EVENT's language (was hardcoded 'he', which left English
+    // events with a Hebrew cover). The prefix + name idiom both follow it.
+    const locale = normalizeLocale(wedding.locale) || 'he'
+    const title = buildTitle(wedding, locale)
     if (!title || title.kind === 'empty') return null
 
-    // Format the names label per event type. buildTitle returns
-    // { kind: 'names', left, right } for weddings (so we join with
-    // " ו" idiomatically) and { kind: 'single', text } otherwise.
     const namesLabel =
         title.kind === 'names'
-            ? [title.left, title.right].filter(Boolean).join(' ו')
+            ? [title.left, title.right].filter(Boolean).join(locale === 'he' ? ' ו' : ' & ')
             : title.text
 
-    let prefix
-    switch (type) {
-        case 'wedding':
-            prefix = 'ספר הברכות של'
-            break
-        case 'birthday':
-        case 'bar_mitzvah':
-        case 'bat_mitzvah':
-            prefix = 'ספר הברכות של'
-            break
-        case 'poker':
-            prefix = 'אלבום המשחק'
-            break
-        case 'travel':
-            prefix = 'ספר המסע של'
-            break
-        default:
-            prefix = 'ספר הברכות של'
+    // Localised cover prefix. Hebrew keeps the original wording; the other
+    // languages mirror the platform's "greeting"-based copy.
+    const PREFIX = {
+        he: { poker: 'אלבום המשחק', travel: 'ספר המסע של', _: 'ספר הברכות של' },
+        en: { poker: 'Game album', travel: 'Travel book of', _: 'Greetings for' },
+        es: { poker: 'Álbum del juego', travel: 'Libro de viaje de', _: 'Saludos para' },
+        it: { poker: 'Album del gioco', travel: 'Libro di viaggio di', _: 'Auguri per' },
     }
+    const table = PREFIX[locale] || PREFIX.he
+    const prefix = table[type] || table._
 
     return { coverTitle: prefix, coverSubtitle: namesLabel }
 }

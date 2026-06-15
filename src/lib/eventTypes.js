@@ -241,13 +241,13 @@ export function buildTitle(data = {}, locale = 'he') {
         // in messages/*.json) because the order of {name}/{age} sometimes
         // flips, and ICU plural rules for ordinals would dwarf this code.
         if (age != null && name) {
-            if (locale === 'en') return { kind: 'single', text: `${name}'s ${age}${nthSuffix(age)} birthday` }
+            if (locale === 'en') return { kind: 'single', text: `${name} Celebrating ${age} Years` }
             if (locale === 'es') return { kind: 'single', text: `${age}º cumpleaños de ${name}` }
             if (locale === 'it') return { kind: 'single', text: `${age}° compleanno di ${name}` }
             return { kind: 'single', text: `יום הולדת ${age} ל${name}` }
         }
         if (age != null) {
-            if (locale === 'en') return { kind: 'single', text: `${age}${nthSuffix(age)} birthday` }
+            if (locale === 'en') return { kind: 'single', text: `Celebrating ${age} Years` }
             if (locale === 'es') return { kind: 'single', text: `${age}º cumpleaños` }
             if (locale === 'it') return { kind: 'single', text: `${age}° compleanno` }
             return { kind: 'single', text: `יום הולדת ${age}` }
