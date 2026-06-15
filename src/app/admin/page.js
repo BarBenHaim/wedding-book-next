@@ -626,7 +626,7 @@ function EventTypeEditor({ wedding, onSave }) {
                 couple/celebrant in their portal AND to guests on the
                 shared link. Defaults to Hebrew for legacy events. */}
             <div className='mb-3'>
-                <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>שפת ממשק</label>
+                <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>שפת דף הברכה (עברית / אנגלית)</label>
                 <select
                     value={draft.locale}
                     onChange={e => set('locale', e.target.value)}
@@ -637,7 +637,7 @@ function EventTypeEditor({ wedding, onSave }) {
                     ))}
                 </select>
                 <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>
-                    השפה שתוצג למשתמש בעמוד הפורטל ולאורחים בעמוד השיתוף.
+                    השפה של דף כתיבת הברכה לאורחים ושל הפורטל (עברית / אנגלית / ספרדית / איטלקית). נבחר לכל אירוע בנפרד.
                 </p>
             </div>
 
