@@ -1820,6 +1820,7 @@ function AdminDashboardContent() {
 
     // Stats
     const totalGreetings = weddings.reduce((sum, w) => sum + (w.greetingsCount ?? 0), 0)
+    const totalRevenue = weddings.reduce((sum, w) => { const n = Number(w.amountPaid); return sum + (Number.isFinite(n) && n > 0 ? n : 0) }, 0)
     const todayCount = weddings.filter(w => getWeddingStatus(w.weddingDate) === 'today').length
     const upcomingCount = weddings.filter(w => getWeddingStatus(w.weddingDate) === 'upcoming').length
 
@@ -1957,6 +1958,7 @@ function AdminDashboardContent() {
     const stats = [
         { icon: Heart, label: 'סך חתונות', value: weddings.length, iconBg: 'bg-[#AA8840]/10', iconColor: 'text-[#AA8840]' },
         { icon: MessageCircle, label: 'סך ברכות', value: totalGreetings, iconBg: 'bg-[#AA8840]/10', iconColor: 'text-[#AA8840]' },
+        { icon: Wallet, label: 'סה"כ הכנסות', value: '₪' + totalRevenue.toLocaleString('he-IL'), iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600' },
         // Today's events break the warm-gold rhythm with a small emerald
         // burst — kept different on purpose so the eye flicks straight to
         // "anything happening right now?". The pulse ring makes it
@@ -2379,13 +2381,14 @@ function AdminDashboardContent() {
                     )}
                     {status === 'ok' && sorted.length > 0 && (
                         <div className='overflow-x-auto'>
-                            <table className='w-full text-sm text-right' style={{ minWidth: '1040px' }}>
+                            <table className='w-full text-sm text-right' style={{ minWidth: '1180px' }}>
                                 <thead>
                                     <tr className='border-b border-[#AA8840]/15 text-[11px] uppercase tracking-widest bg-[#AA8840]/5'>
                                         <th className='px-6 py-4 text-[#a89378] font-semibold w-12'>#</th>
                                         <SortableHeader sortKey='couple' currentSort={sort} onSort={setSort}><Users size={11} /> זוג</SortableHeader>
                                         <th className='px-6 py-4 font-semibold text-[#a89378]'><span className='flex items-center gap-1.5'><Phone size={11} /> איש קשר</span></th>
                                         <SortableHeader sortKey='date' currentSort={sort} onSort={setSort}><CalendarDays size={11} /> תאריך</SortableHeader>
+                                        <th className='px-6 py-4 font-semibold text-[#a89378] whitespace-nowrap'><span className='flex items-center gap-1.5'><Clock size={11} /> תאריך רכישה</span></th>
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'>סטטוס</th>
                                         <SortableHeader sortKey='greetings' currentSort={sort} onSort={setSort} justify='center'><MessageCircle size={11} /> ברכות</SortableHeader>
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'><span className='flex items-center gap-1.5 justify-center'><Printer size={11} /> הדפסה</span></th>
@@ -2435,6 +2438,7 @@ function AdminDashboardContent() {
                                                 </div>
                                             </td>
                                             <td className='px-6 py-4 text-[#7a6a52] whitespace-nowrap text-sm tabular-nums'>{formatDate(w.weddingDate)}</td>
+                                            <td className='px-6 py-4 text-[#7a6a52] whitespace-nowrap text-sm tabular-nums'>{w.createdAt ? formatDate(w.createdAt) : '—'}</td>
                                             <td className='px-6 py-4 text-center'><StatusBadge weddingDate={w.weddingDate} /></td>
                                             <td className='px-6 py-4 text-center'><GreetingsBadge count={w.greetingsCount} /></td>
                                             <td className='px-6 py-4 text-center'><PrintBadge printOrder={w.printOrder} /></td>
