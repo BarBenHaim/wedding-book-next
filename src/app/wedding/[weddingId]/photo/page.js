@@ -1413,17 +1413,13 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                             without it, w-full would force the box
                             wider than 4:3. ── */}
                         <div
-                            className='relative w-full rounded-[18px] overflow-hidden mx-auto'
+                            className='relative w-full rounded-[18px] overflow-hidden'
                             style={{
                                 aspectRatio: '4 / 3',
-                                // Tightened from 26vh to 22vh so the
-                                // well + the inputs above + the
-                                // submit button below all fit inside
-                                // 100dvh on iPhone SE (667h). Big
-                                // phones (812h+) hit the 220px cap
-                                // unchanged.
-                                maxHeight: 'min(220px, 22vh)',
-                                maxWidth: 'min(100%, calc(min(220px, 22vh) * 4 / 3))',
+                                // Full card width, locked 4:3. Generous height
+                                // cap so a full-width 4:3 well isn't clamped
+                                // narrow; the page scrolls on a short device.
+                                maxHeight: 'min(360px, 44vh)',
                                 background: md.wellBg,
                                 border: `1px dashed ${md.wellBorder}`,
                             }}
@@ -1433,7 +1429,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 subtitle. Bottom: two pill buttons
                                 (camera / gallery) inside the well. */}
                             {!photoUrl && !cameraOpen && (
-                                <div className='absolute inset-0 flex flex-col items-center justify-between px-3 py-3 text-center'>
+                                <div className='absolute inset-0 flex flex-col items-center justify-center gap-1 px-4 text-center'>
                                     {/* Top — sparkle-flanked icon +
                                         bold CTA + soft subtitle. */}
                                     <div className='flex flex-col items-center gap-1'>
@@ -1500,82 +1496,6 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                         </div>
                                     </div>
 
-                                    {/* Bottom — two pill buttons,
-                                        full width inside the well. */}
-                                    <div className='flex gap-2 w-full'>
-                                        <button
-                                            onClick={() => setCameraOpen(true)}
-                                            className='flex-1 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]'
-                                            style={{
-                                                background: 'transparent',
-                                                border: '1px solid rgba(201,164,78,0.45)',
-                                                color: '#3d2e1a',
-                                                padding: '7px 10px',
-                                                fontSize: '11.5px',
-                                                fontWeight: 700,
-                                            }}
-                                        >
-                                            <svg
-                                                viewBox='0 0 24 24'
-                                                className='w-[14px] h-[14px]'
-                                                fill='none'
-                                                stroke={md.iconColor}
-                                                strokeWidth={1.8}
-                                            >
-                                                <path
-                                                    strokeLinecap='round'
-                                                    strokeLinejoin='round'
-                                                    d='M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z'
-                                                />
-                                                <path
-                                                    strokeLinecap='round'
-                                                    strokeLinejoin='round'
-                                                    d='M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z'
-                                                />
-                                            </svg>
-                                            <span>{formCopy?.momentTakeNow || t('momentTakeNow')}</span>
-                                        </button>
-                                        <label
-                                            className='flex-1 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer'
-                                            style={{
-                                                background: 'transparent',
-                                                border: '1px solid rgba(201,164,78,0.45)',
-                                                color: '#3d2e1a',
-                                                padding: '7px 10px',
-                                                fontSize: '11.5px',
-                                                fontWeight: 700,
-                                            }}
-                                        >
-                                            <svg
-                                                viewBox='0 0 24 24'
-                                                className='w-[14px] h-[14px]'
-                                                fill='none'
-                                                stroke={md.iconColor}
-                                                strokeWidth={1.8}
-                                            >
-                                                <path
-                                                    strokeLinecap='round'
-                                                    strokeLinejoin='round'
-                                                    d='m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Z'
-                                                />
-                                            </svg>
-                                            <span>{formCopy?.momentChooseGallery || t('momentChooseGallery')}</span>
-                                            <input
-                                                type='file'
-                                                accept='image/*'
-                                                className='hidden'
-                                                onChange={e => {
-                                                    const file = e.target.files?.[0]
-                                                    if (file) {
-                                                        setPhotoBlob(file)
-                                                        setPhotoUrl(URL.createObjectURL(file))
-                                                        reportPhotoPicked()
-                                                        setIsUpload(true)
-                                                    }
-                                                }}
-                                            />
-                                        </label>
-                                    </div>
                                 </div>
                             )}
 
@@ -1663,6 +1583,47 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 <img src={photoUrl} className='w-full h-full object-contain' alt='Preview' />
                             )}
                         </div>
+
+                        {/* Upload buttons — a full-width row BELOW the well
+                            (gallery + camera), matching the reference. */}
+                        {!photoUrl && !cameraOpen && (
+                            <div className='flex gap-2.5 w-full mt-3'>
+                                <label
+                                    className='flex-1 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer'
+                                    style={{ background: md.inputBg, border: `1px solid ${md.inputBorder}`, color: md.cardLabelColor, padding: '12px 12px', fontSize: '13px', fontWeight: 700 }}
+                                >
+                                    <svg viewBox='0 0 24 24' className='w-[16px] h-[16px]' fill='none' stroke={md.iconColor} strokeWidth={1.8}>
+                                        <path strokeLinecap='round' strokeLinejoin='round' d='m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Z' />
+                                    </svg>
+                                    <span>{formCopy?.momentChooseGallery || t('momentChooseGallery')}</span>
+                                    <input
+                                        type='file'
+                                        accept='image/*'
+                                        className='hidden'
+                                        onChange={e => {
+                                            const file = e.target.files?.[0]
+                                            if (file) {
+                                                setPhotoBlob(file)
+                                                setPhotoUrl(URL.createObjectURL(file))
+                                                reportPhotoPicked()
+                                                setIsUpload(true)
+                                            }
+                                        }}
+                                    />
+                                </label>
+                                <button
+                                    onClick={() => setCameraOpen(true)}
+                                    className='flex-1 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]'
+                                    style={{ background: md.inputBg, border: `1px solid ${md.inputBorder}`, color: md.cardLabelColor, padding: '12px 12px', fontSize: '13px', fontWeight: 700 }}
+                                >
+                                    <svg viewBox='0 0 24 24' className='w-[16px] h-[16px]' fill='none' stroke={md.iconColor} strokeWidth={1.8}>
+                                        <path strokeLinecap='round' strokeLinejoin='round' d='M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z' />
+                                        <path strokeLinecap='round' strokeLinejoin='round' d='M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z' />
+                                    </svg>
+                                    <span>{formCopy?.momentTakeNow || t('momentTakeNow')}</span>
+                                </button>
+                            </div>
+                        )}
 
                         {/* Low-res print-quality notice. Doesn't block
                             submission — guests on small uploaded
