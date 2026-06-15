@@ -88,6 +88,7 @@ export async function GET(req) {
                     weddingDate,
                     ownerEmail: data.ownerEmail ?? data.email ?? null,
                     ownerName: data.ownerName ?? null,
+                    blessingMaxChars: data.blessingMaxChars ?? null,
                     ownerId: data.ownerId ?? null,
                     orderId: data.orderId ?? null,
                     slug: data.slug ?? null,
@@ -153,6 +154,8 @@ export async function PATCH(req) {
             'adminNotes',
             // Amount paid is auto-captured from the order, but editable here.
             'amountPaid', 'currency',
+            // Per-event max blessing length (210 default, capped 50–1200).
+            'blessingMaxChars',
             // Production pipeline stage (managed from /admin/pipeline).
             'productionStatus',
             // Guest /photo page design preset (managed from /admin/guest-design).
@@ -200,6 +203,12 @@ export async function PATCH(req) {
                     const n = Number(v)
                     clean[key] = Number.isFinite(n) && n >= 0 ? n : null
                 }
+                continue
+            }
+
+            if (key === 'blessingMaxChars') {
+                const n = Number(v)
+                clean[key] = Number.isFinite(n) ? Math.max(50, Math.min(1200, Math.round(n))) : 210
                 continue
             }
 

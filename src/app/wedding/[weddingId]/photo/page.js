@@ -67,6 +67,8 @@ export default function TextPage() {
     // PhotoApp to swap background, palette, and copy.
     const [designVariant, setDesignVariant] = useState('')
     const [recipients, setRecipients] = useState({ bride: '', groom: '', celebrant: '' })
+    // Per-event max blessing length (admin-settable, 210 default, up to 1200).
+    const [maxChars, setMaxChars] = useState(210)
     // Per-event admin overrides for every piece of guest-facing copy
     // on the photo page. Empty strings → fall back to the i18n default
     // in PhotoApp. The block splits cleanly into two groups:
@@ -125,6 +127,7 @@ export default function TextPage() {
                     setLocale(normalizeLocale(data.locale))
                     if (data.eventType) setEventType(data.eventType)
                     if (data.designVariant) setDesignVariant(data.designVariant)
+                    if (data.blessingMaxChars) setMaxChars(Number(data.blessingMaxChars) || 210)
                     // Prefer the Hebrew-script names for the headline
                     // ("השאירו ברכה ל..."). Fall back to the original
                     // names when the super-admin didn't fill the Hebrew
@@ -186,7 +189,7 @@ export default function TextPage() {
 
     return (
         <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
-            <PhotoApp eventType={eventType} designVariant={designVariant} recipients={recipients} formCopy={formCopy} guestDesign={guestDesign} />
+            <PhotoApp eventType={eventType} designVariant={designVariant} recipients={recipients} formCopy={formCopy} guestDesign={guestDesign} maxChars={maxChars} />
         </NextIntlClientProvider>
     )
 }
@@ -249,7 +252,7 @@ function ChipBadge({ number, active, done, isPoker }) {
     )
 }
 
-function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign }) {
+function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign, maxChars = 210 }) {
     const t = useTranslations('photo')
 
     // Resolve every form string to either the per-event admin override
@@ -1342,7 +1345,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                 value={text}
                                 onChange={e => setText(e.target.value)}
                                 placeholder={formCopy?.blessingPlaceholder || t('momentBlessingPlaceholder')}
-                                maxLength={210}
+                                maxLength={maxChars}
                                 className='w-full rounded-xl outline-none transition resize-none leading-snug'
                                 style={{
                                     background: md.inputBg,
@@ -1356,7 +1359,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                 onBlur={e => (e.currentTarget.style.borderColor = md.inputBorder)}
                             />
                             <div className='text-start mt-1' style={{ color: md.cardCounterColor, fontSize: '10.5px' }}>
-                                {text.length}/210
+                                {text.length}/{maxChars}
                             </div>
                         </div>
 
@@ -2198,13 +2201,13 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign 
                                     }}
                                     onFocus={e => (e.currentTarget.style.borderColor = theme.inputFocusBorder)}
                                     onBlur={e => (e.currentTarget.style.borderColor = theme.inputBorder)}
-                                    maxLength={210}
+                                    maxLength={maxChars}
                                 />
                                 <div
                                     className='text-end mt-1.5'
                                     style={{ color: theme.cardCounterColor, fontSize: '11px' }}
                                 >
-                                    {t('charCount', { used: text.length, max: 210 })}
+                                    {t('charCount', { used: text.length, max: maxChars })}
                                 </div>
                             </div>
 

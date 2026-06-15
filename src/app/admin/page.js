@@ -456,6 +456,7 @@ function EventTypeEditor({ wedding, onSave }) {
         // Amount paid (auto-captured from the order; editable by the admin).
         amountPaid: w.amountPaid ?? '',
         currency: w.currency || 'ILS',
+        blessingMaxChars: w.blessingMaxChars || 210,
     })
 
     const [draft, setDraft] = useState(() => buildDraft(wedding))
@@ -518,6 +519,7 @@ function EventTypeEditor({ wedding, onSave }) {
         // Amount paid — '' clears it; otherwise the API coerces to a number.
         patch.amountPaid = draft.amountPaid === '' ? null : draft.amountPaid
         patch.currency = draft.currency
+        patch.blessingMaxChars = draft.blessingMaxChars
         return patch
     }
 
@@ -549,6 +551,24 @@ function EventTypeEditor({ wedding, onSave }) {
                         <option key={t} value={t}>{getEventConfig(t).hebrewLabel}</option>
                     ))}
                 </select>
+            </div>
+
+            {/* Max blessing length — per event. Higher limits make the
+                book page shrink the blessing font so it still fits with the photo. */}
+            <div className='mb-3'>
+                <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>אורך ברכה מקסימלי</label>
+                <select
+                    value={draft.blessingMaxChars}
+                    onChange={e => set('blessingMaxChars', Number(e.target.value))}
+                    className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                >
+                    <option value={210}>קצר — 210 תווים (ברירת מחדל)</option>
+                    <option value={400}>בינוני — 400 תווים</option>
+                    <option value={600}>ארוך — 600 תווים</option>
+                    <option value={900}>ארוך מאוד — 900 תווים</option>
+                    <option value={1200}>מקסימלי — 1200 תווים</option>
+                </select>
+                <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>ככל שהמגבלה גבוהה יותר, הטקסט בספר יוקטן אוטומטית כדי להישאר קריא לצד התמונה.</p>
             </div>
 
             {/* Amount paid — auto-captured from the order, editable here so

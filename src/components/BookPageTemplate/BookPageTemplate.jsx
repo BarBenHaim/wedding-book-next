@@ -48,6 +48,13 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
     const hasName = Boolean(entry.name)
     const hasText = Boolean(cleanText)
     const hasImage = Boolean(entry.imageUrl)
+    // Per-event max blessing length can now be up to 1200 chars. The page
+    // is fixed-height + overflow-hidden, so long text would clip — shrink
+    // the body font as the blessing grows, more when a photo shares the
+    // slot, so it always fits and stays readable.
+    const _blessingLen = (cleanText || '').length
+    const _fitTarget = hasImage ? 230 : 360
+    const fontFitFactor = Math.max(0.5, Math.min(1, Math.sqrt(_fitTarget / Math.max(_blessingLen, _fitTarget))))
 
     const elementsCount = [hasName, hasText, hasImage].filter(Boolean).length
     const onlyOne = elementsCount === 1
@@ -166,7 +173,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                     <p
                         className={styleSettings.fontClass}
                         style={{
-                            fontSize: h(styleSettings.fontSizePercent ?? 3),
+                            fontSize: h((styleSettings.fontSizePercent ?? 3) * fontFitFactor),
                             // See fontWeight comment on the name block above —
                             // same fallback chain. The body text uses fontWeight
                             // directly (no body-specific override field).
