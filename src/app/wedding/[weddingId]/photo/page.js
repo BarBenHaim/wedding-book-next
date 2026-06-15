@@ -189,7 +189,7 @@ export default function TextPage() {
 
     return (
         <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
-            <PhotoApp eventType={eventType} designVariant={designVariant} recipients={recipients} formCopy={formCopy} guestDesign={guestDesign} maxChars={maxChars} />
+            <PhotoApp eventType={eventType} designVariant={designVariant} recipients={recipients} formCopy={formCopy} guestDesign={guestDesign} maxChars={maxChars} locale={locale} />
         </NextIntlClientProvider>
     )
 }
@@ -252,7 +252,7 @@ function ChipBadge({ number, active, done, isPoker }) {
     )
 }
 
-function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign, maxChars = 210 }) {
+function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign, maxChars = 210, locale = 'he' }) {
     const t = useTranslations('photo')
 
     // Resolve every form string to either the per-event admin override
@@ -264,6 +264,11 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     // still wins over both.
     const isPoker = eventType === 'poker'
     const isRomantic = eventType === 'wedding' && designVariant === 'romantic'
+    // Page direction follows the event language: Hebrew is RTL, every
+    // other language (English/Spanish/Italian) is LTR. Without this the
+    // page inherits the app's global RTL and English punctuation (?, …)
+    // and alignment flip to the wrong side.
+    const pageDir = locale === 'he' ? 'rtl' : 'ltr'
     const variantLabel = isPoker ? 'Poker' : isRomantic ? 'Romantic' : ''
     const nameLabel = formCopy?.nameLabel || (variantLabel ? t(`nameLabel${variantLabel}`) : t('nameLabel'))
     const namePlaceholder =
@@ -1022,6 +1027,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                 // backgroundAttachment:fixed (set inline below) keeps
                 // the floral arch anchored even though the page
                 // doesn't scroll.
+                dir={pageDir}
                 className='flex items-start justify-center px-4 font-sans relative overflow-x-clip overflow-y-auto'
                 style={{
                     // ── No-cutoff sizing ──
@@ -1305,7 +1311,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 type='text'
                                 value={name}
                                 onChange={e => setName(e.target.value)}
-                                placeholder={formCopy?.namePlaceholder || t('momentNamePlaceholder')}
+                                placeholder={formCopy?.namePlaceholder || ''}
                                 className='w-full rounded-xl outline-none transition'
                                 style={{
                                     background: md.inputBg,
@@ -1344,7 +1350,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                             <textarea
                                 value={text}
                                 onChange={e => setText(e.target.value)}
-                                placeholder={formCopy?.blessingPlaceholder || t('momentBlessingPlaceholder')}
+                                placeholder={formCopy?.blessingPlaceholder || ''}
                                 maxLength={maxChars}
                                 className='w-full rounded-xl outline-none transition resize-none leading-snug'
                                 style={{
@@ -1782,6 +1788,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
 
     return (
         <div
+            dir={pageDir}
             className={`flex items-start justify-center px-4 pt-8 font-sans relative overflow-x-clip overflow-y-auto ${
                 isPoker ? '' : ''
             }`}
