@@ -1159,12 +1159,12 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                             if (eventType === 'wedding') {
                                 const b = recipients?.bride || ''
                                 const g = recipients?.groom || ''
-                                if (b && g) return `בשביל ${b} ו${g}`
-                                if (b || g) return `בשביל ${b || g}`
+                                if (b && g) return t('momentForCouple', { first: b, second: g })
+                                if (b || g) return t('momentForName', { name: b || g })
                                 return ''
                             }
                             const c = recipients?.celebrant || ''
-                            return c ? `בשביל ${c}` : ''
+                            return c ? t('momentForName', { name: c }) : ''
                         })()
                         return (
                             <div className='text-center'>
@@ -1172,7 +1172,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                     className='font-bold leading-[1.15]'
                                     style={{ color: md.titleColor, fontSize: '26px', letterSpacing: '-0.005em' }}
                                 >
-                                    רגע אחד
+                                    {t('momentEyebrow')}
                                 </h1>
                                 {namesPart && (
                                     <>
