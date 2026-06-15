@@ -2388,7 +2388,7 @@ function AdminDashboardContent() {
                                         <SortableHeader sortKey='couple' currentSort={sort} onSort={setSort}><Users size={11} /> זוג</SortableHeader>
                                         <th className='px-6 py-4 font-semibold text-[#a89378]'><span className='flex items-center gap-1.5'><Phone size={11} /> איש קשר</span></th>
                                         <SortableHeader sortKey='date' currentSort={sort} onSort={setSort}><CalendarDays size={11} /> תאריך</SortableHeader>
-                                        <th className='px-6 py-4 font-semibold text-[#a89378] whitespace-nowrap'><span className='flex items-center gap-1.5'><Clock size={11} /> תאריך רכישה</span></th>
+                                        <th className='px-6 py-4 font-semibold text-[#a89378] whitespace-nowrap'><span className='flex items-center gap-1.5'><Clock size={11} /> תאריך תשלום</span></th>
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'>סטטוס</th>
                                         <SortableHeader sortKey='greetings' currentSort={sort} onSort={setSort} justify='center'><MessageCircle size={11} /> ברכות</SortableHeader>
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'><span className='flex items-center gap-1.5 justify-center'><Printer size={11} /> הדפסה</span></th>
