@@ -48,14 +48,23 @@ import {
 } from 'lucide-react'
 
 // ── Print math ──────────────────────────────────────────────────────
-const DPI = 300
+// We render at 360 DPI (not the 300 minimum) so there is ~20% pixel
+// headroom: when the operator stretches the image to full bleed in
+// albume's editor — pushing it past the 22 cm trim — the effective
+// resolution still stays comfortably above the 300 DPI print standard,
+// and albume's per-photo quality indicator stays green. NOTE: the true
+// ceiling is the guest photo itself (uploaded at max 2560 px on the
+// long edge), so a 360-DPI page keeps the photo region near its native
+// resolution while making the text / frame / decorations crisper.
+const DPI = 360
 const MM_PER_INCH = 25.4
 const mmToPx = mm => Math.round((mm / MM_PER_INCH) * DPI)
 const cmToPx = cm => mmToPx(cm * 10)
 
 // albume "כיס" pocket album — fixed 22×22 cm square, single pages.
 const PAGE_CM = 22
-const PAGE_PX = cmToPx(PAGE_CM) // 2598
+const PAGE_PX = cmToPx(PAGE_CM) // 3118 px @ 360 DPI (≈ 2598 px would be 300 DPI)
+const JPEG_QUALITY = 0.95
 
 const SAFE_INSET_MM = 10        // keep faces/text this far from edges
 const ALBUME_URL = 'https://www.albume.co.il/express_album'
@@ -179,7 +188,7 @@ function AlbumeExportContent() {
             y: 0,
         })
         return await new Promise(resolve => {
-            canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.92)
+            canvas.toBlob(blob => resolve(blob), 'image/jpeg', JPEG_QUALITY)
         })
     }, [])
 
@@ -233,7 +242,7 @@ function AlbumeExportContent() {
                 ``,
                 `Product on albume:  כיס 22×22 (pocket) · hard cover (כריכה קשה)`,
                 `Page dimensions:    22 × 22 cm = ${PAGE_PX} × ${PAGE_PX} px @ ${DPI} DPI`,
-                `File format:        JPG, sRGB, ${DPI} DPI, q=0.92`,
+                `File format:        JPG, sRGB, ${DPI} DPI, q=${JPEG_QUALITY}`,
                 `Files:              ${includeCover ? 'cover.jpg + ' : ''}001.jpg … ${String(renderList.length).padStart(3, '0')}.jpg  (one image per page)`,
                 ``,
                 `Blessings in book:  ${entries.length} · Pages exported: ${pageCount} (${Math.max(0, pageCount - entries.length)} blank)`,
@@ -299,7 +308,7 @@ function AlbumeExportContent() {
                         </div>
                         <div>
                             <h1 className='font-bold text-[#1a1410] text-[22px] leading-tight'>ייצוא ל-albume (כיס 22×22)</h1>
-                            <p className='text-[12px] text-[#a89378] mt-0.5'>עמוד בודד · 22×22 ס&quot;מ · {PAGE_PX}×{PAGE_PX}px · sRGB 300dpi</p>
+                            <p className='text-[12px] text-[#a89378] mt-0.5'>עמוד בודד · 22×22 ס&quot;מ · {PAGE_PX}×{PAGE_PX}px · sRGB {DPI}dpi</p>
                         </div>
                     </div>
                     <a href='/admin' className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52]' style={{ background: '#fff', border: '1px solid #ead9b3' }}>
@@ -429,7 +438,7 @@ function AlbumeExportContent() {
                 <div className='rounded-2xl p-5' style={{ background: '#fff', border: '1px solid rgba(212,184,103,0.20)' }}>
                     <p className='text-[11px] text-[#a89378] uppercase tracking-widest font-semibold mb-2'>הערות</p>
                     <ul className='text-[12.5px] text-[#3d2e1a] leading-relaxed space-y-1.5 list-disc pr-5'>
-                        <li>כל עמוד = 22×22 ס&quot;מ = {PAGE_PX}×{PAGE_PX}px @ 300dpi, JPG sRGB. ללא bleed — שמור תוכן חשוב לפחות <b>{SAFE_INSET_MM} מ&quot;מ מהקצוות</b>.</li>
+                        <li>כל עמוד = 22×22 ס&quot;מ = {PAGE_PX}×{PAGE_PX}px @ {DPI}dpi (מעל תקן 300dpi), JPG sRGB. שמור תוכן חשוב לפחות <b>{SAFE_INSET_MM} מ&quot;מ מהקצוות</b>.</li>
                         <li>ב-albume בחר <b>כיס 22×22</b> + <b>כריכה קשה</b>, והעלה את הקבצים לפי הסדר (001, 002, …). בעורך הצב תמונה אחת לכל עמוד שממלאת את העמוד.</li>
                         <li>ל-albume <b>אין API או קישור מוכן</b> — האשף רץ בצד-לקוח. הכפתור למעלה פותח את האשף ומעתיק את שם האלבום, וזה הקיצור המקסימלי האפשרי.</li>
                         <li>קובץ <code>README.txt</code> בתוך ה-ZIP מסכם את כל ההגדרות וההוראות.</li>
