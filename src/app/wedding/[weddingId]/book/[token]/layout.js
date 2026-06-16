@@ -20,7 +20,7 @@
 // who tries random tokens.
 
 import { adminDb } from '@/lib/firebaseAdmin'
-import { buildTitle, normalizeEventType } from '@/lib/eventTypes'
+import { buildShareCopy } from '@/lib/shareCopy'
 
 // metadataBase tells Next.js what to prefix relative og:image / og:url
 // with when emitting the <meta> tags. Without this, relative paths
@@ -61,42 +61,14 @@ function abs(pathOrUrl) {
     return origin + (pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`)
 }
 
-// Build the share title from the wedding doc. Uses the same buildTitle
-// helper as the public guest page so the wording is consistent across
-// every surface ("ספר הברכות של דור ושקד" appears identically on the
-// landing, the cover, and the share card).
+// "צפו ב…" + the event-aware book title from the single source of truth
+// (buildShareCopy). For a bar mitzvah this reads "צפו בספר הברכות לבר
+// המצווה של נועם"; for a wedding "צפו בספר הברכות של דור ושקד". Falls
+// back to a clean generic line when no name is on the doc yet.
 function buildShareTitle(data) {
-    const type = normalizeEventType(data?.eventType) || 'wedding'
-    const title = buildTitle(data || {}, 'he')
-    if (!title || title.kind === 'empty') return 'ספר הברכות שלכם'
-
-    const names =
-        title.kind === 'names'
-            ? [title.left, title.right].filter(Boolean).join(' ו')
-            : title.text
-
-    let prefix
-    switch (type) {
-        case 'wedding':
-            prefix = 'תראו את ספר הברכות של'
-            break
-        case 'birthday':
-            prefix = 'ספר הברכות של'
-            break
-        case 'bar_mitzvah':
-        case 'bat_mitzvah':
-            prefix = 'ספר הברכות של'
-            break
-        case 'poker':
-            prefix = 'אלבום המשחק של'
-            break
-        case 'travel':
-            prefix = 'ספר המסע של'
-            break
-        default:
-            prefix = 'ספר הברכות של'
-    }
-    return `${prefix} ${names}`
+    const { title } = buildShareCopy(data || {})
+    if (!title) return 'צפו בספר הברכות'
+    return `צפו ב${title}`
 }
 
 const FALLBACK_META_BUILDER = () => {
@@ -149,12 +121,16 @@ export async function generateMetadata({ params }) {
         if (!tokens.includes(token)) return FALLBACK_META()
 
         const title = buildShareTitle(data)
-        const description = 'הברכות והתמונות מהאורחים — שמורות לכם לתמיד'
+        const description = buildShareCopy(data).description || 'הברכות והתמונות מהאורחים — שמורות לכם לתמיד'
 
-        // Image priority: couple's uploaded cover (already an absolute
-        // Firebase Storage URL) → static brand fallback in /public.
+        // Image priority:
+        //   1. couple's uploaded cover photo (absolute Firebase URL), if any;
+        //   2. the per-event dynamic card at /api/og/<id> — personalised with
+        //      the event's name and themed by event type (navy for bar
+        //      mitzvah, etc.), so EVERY book link shows a real cover-style
+        //      preview instead of the generic brand logo.
         const coverImage = data.coverDesign?.coverImage || null
-        const ogImage = abs(coverImage) || abs(FALLBACK_OG_IMAGE)
+        const ogImage = abs(coverImage) || abs(`/api/og/${weddingId}`)
 
         // The full share URL — used as og:url so the crawler
         // canonicalizes the preview against this exact page.

@@ -57,7 +57,7 @@ export async function GET(req, { params }) {
         }
 
         const { title } = buildShareCopy(data)
-        const png = await renderOgImage({ title })
+        const png = await renderOgImage({ title, eventType: data?.eventType })
         return new Response(png, {
             status: 200,
             headers: {

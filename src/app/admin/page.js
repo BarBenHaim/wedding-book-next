@@ -1571,16 +1571,25 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                 render pipeline is heavy and only used per-wedding
                 at the end of the order flow. */}
             <div className='px-6 py-5 border-b border-[#f0e8d4]'>
-                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>הדפסת ספר (WOW Pro)</p>
-                <a
-                    href={`/admin/wedding/${wedding.id}/print-export`}
-                    className='inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-bold'
-                    style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', boxShadow: '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)' }}
-                >
-                    <Printer size={14} /> ייצא ל-WOW Pro
-                </a>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>הדפסת ספר</p>
+                <div className='flex flex-wrap gap-2'>
+                    <a
+                        href={`/admin/wedding/${wedding.id}/albume-export`}
+                        className='inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-bold'
+                        style={{ background: '#0e9f8e', boxShadow: '0 10px 22px -10px rgba(14,159,142,0.45), inset 0 1px 0 rgba(255,255,255,0.20)' }}
+                    >
+                        <Printer size={14} /> ייצא ל-albume (כיס 22×22)
+                    </a>
+                    <a
+                        href={`/admin/wedding/${wedding.id}/print-export`}
+                        className='inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-[#7a6a52]'
+                        style={{ background: '#fff', border: '1px solid #ead9b3' }}
+                    >
+                        <Printer size={14} /> WOW Pro
+                    </a>
+                </div>
                 <p className='text-[11px] text-[#a89378] mt-2 leading-relaxed'>
-                    מייצר ZIP של JPG-ים ב-300dpi (cover + עמודים ממוספרים), מוכן להעלאה ל-wowpro.co.il
+                    albume: ZIP של עמודים 22×22 ב-300dpi + פתיחת האשף והעתקת שם האלבום. WOW Pro: spreads layflat.
                 </p>
             </div>
 

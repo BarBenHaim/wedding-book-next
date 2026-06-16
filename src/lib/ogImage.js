@@ -34,6 +34,46 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { parse as parseFont } from 'opentype.js'
 import sharp from 'sharp'
+import { normalizeEventType } from '@/lib/eventTypes'
+
+// Per-event-type palettes so the share card echoes the book's cover:
+// weddings/birthdays use the warm gold the brand card always had, the
+// bar/bat-mitzvah cards switch to navy / burgundy + gold to match the
+// guest-page presets. Any event type without an entry falls back to
+// `default` (warm gold).
+const THEMES = {
+    default: {
+        bg: ['#5b3f1c', '#7a5727', '#3e2913'],
+        glow: '#a87b35',
+        border: '#d8b876',
+        title: '#fdf6e3',
+        subtitle: '#f0dcb0',
+        wordmark: '#d8b876',
+        sparkle: '#e8c66a',
+    },
+    bar_mitzvah: {
+        bg: ['#0c1c3a', '#16243d', '#0a1428'],
+        glow: '#1e3a6b',
+        border: '#d8b876',
+        title: '#f0e2bf',
+        subtitle: '#cdb98a',
+        wordmark: '#d8b876',
+        sparkle: '#e8c66a',
+    },
+    bat_mitzvah: {
+        bg: ['#5e2440', '#7a2f52', '#3f1830'],
+        glow: '#a8456f',
+        border: '#e7c98f',
+        title: '#fdeef5',
+        subtitle: '#f0d6c4',
+        wordmark: '#e7c98f',
+        sparkle: '#f0cf8a',
+    },
+}
+
+function resolveTheme(eventType) {
+    return THEMES[normalizeEventType(eventType)] || THEMES.default
+}
 
 // Font is parsed once per process. opentype.parse wants a true
 // ArrayBuffer, not a Node Buffer view. The file is resolved from
@@ -126,12 +166,15 @@ function pickTitleSize({ font, text, maxWidth, max = 96, min = 50 }) {
  * @param {string} opts.title - The big Hebrew headline, e.g.
  *   "ספר הברכות של נועם" — comes from buildShareCopy(data).title.
  * @param {string} [opts.subtitle]
+ * @param {string} [opts.eventType] - wedding|bar_mitzvah|bat_mitzvah|… —
+ *   selects the colour palette so the card matches the event's cover.
  * @returns {Promise<Buffer>} PNG buffer, 1200×630.
  */
-export async function renderOgImage({ title, subtitle = 'הברכות והתמונות שלכם, נשמרות לתמיד' }) {
+export async function renderOgImage({ title, subtitle = 'הברכות והתמונות שלכם, נשמרות לתמיד', eventType } = {}) {
     const W = 1200
     const H = 630
     const font = loadFont()
+    const T = resolveTheme(eventType)
 
     const titleSize = pickTitleSize({ font, text: title, maxWidth: 1000, max: 96, min: 52 })
 
@@ -144,7 +187,7 @@ export async function renderOgImage({ title, subtitle = 'הברכות והתמו
         // baseline at 330 puts the visual centre of the title around y=300.
         baselineY: 330,
         size: titleSize,
-        fill: '#fdf6e3',
+        fill: T.title,
     })
 
     const subtitlePath = hebrewTextPath({
@@ -153,7 +196,7 @@ export async function renderOgImage({ title, subtitle = 'הברכות והתמו
         cx: W / 2,
         baselineY: 440,
         size: 28,
-        fill: '#f0dcb0',
+        fill: T.subtitle,
     })
 
     const wordmarkPath = latinTextPath({
@@ -162,7 +205,7 @@ export async function renderOgImage({ title, subtitle = 'הברכות והתמו
         cx: W / 2,
         baselineY: 580,
         size: 26,
-        fill: '#d8b876',
+        fill: T.wordmark,
         letterSpacing: 10,
     })
 
@@ -171,8 +214,8 @@ export async function renderOgImage({ title, subtitle = 'הברכות והתמו
     // the customer-loved static image at public/og/wedding-tales-book.png.
     const sparkle = (x, y, r, opacity = 0.7) =>
         `<g transform="translate(${x} ${y}) rotate(45)">
-            <rect x="-${r}" y="-${r / 4}" width="${r * 2}" height="${r / 2}" fill="#e8c66a" opacity="${opacity}" rx="${r / 4}"/>
-            <rect x="-${r / 4}" y="-${r}" width="${r / 2}" height="${r * 2}" fill="#e8c66a" opacity="${opacity}" rx="${r / 4}"/>
+            <rect x="-${r}" y="-${r / 4}" width="${r * 2}" height="${r / 2}" fill="${T.sparkle}" opacity="${opacity}" rx="${r / 4}"/>
+            <rect x="-${r / 4}" y="-${r}" width="${r / 2}" height="${r * 2}" fill="${T.sparkle}" opacity="${opacity}" rx="${r / 4}"/>
         </g>`
 
     const sparkles = [
@@ -191,27 +234,27 @@ export async function renderOgImage({ title, subtitle = 'הברכות והתמו
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
         <defs>
             <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#5b3f1c"/>
-                <stop offset="45%" stop-color="#7a5727"/>
-                <stop offset="100%" stop-color="#3e2913"/>
+                <stop offset="0%" stop-color="${T.bg[0]}"/>
+                <stop offset="45%" stop-color="${T.bg[1]}"/>
+                <stop offset="100%" stop-color="${T.bg[2]}"/>
             </linearGradient>
             <radialGradient id="glow" cx="50%" cy="42%" r="55%">
-                <stop offset="0%" stop-color="#a87b35" stop-opacity="0.55"/>
-                <stop offset="100%" stop-color="#a87b35" stop-opacity="0"/>
+                <stop offset="0%" stop-color="${T.glow}" stop-opacity="0.55"/>
+                <stop offset="100%" stop-color="${T.glow}" stop-opacity="0"/>
             </radialGradient>
         </defs>
         <rect width="${W}" height="${H}" fill="url(#bg)"/>
         <rect width="${W}" height="${H}" fill="url(#glow)"/>
         <rect x="28" y="28" width="${W - 56}" height="${H - 56}"
-              fill="none" stroke="#d8b876" stroke-opacity="0.65"
+              fill="none" stroke="${T.border}" stroke-opacity="0.65"
               stroke-width="2" rx="22"/>
         <rect x="38" y="38" width="${W - 76}" height="${H - 76}"
-              fill="none" stroke="#d8b876" stroke-opacity="0.18"
+              fill="none" stroke="${T.border}" stroke-opacity="0.18"
               stroke-width="1" rx="18"/>
         ${sparkles}
         ${titlePath}
         <line x1="${W / 2 - 70}" y1="380" x2="${W / 2 + 70}" y2="380"
-              stroke="#d8b876" stroke-width="2" stroke-opacity="0.85"/>
+              stroke="${T.border}" stroke-width="2" stroke-opacity="0.85"/>
         ${subtitlePath}
         ${wordmarkPath}
     </svg>`

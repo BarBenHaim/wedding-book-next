@@ -205,9 +205,12 @@ function WeddingCard({ w, onMove }) {
                 ))}
             </select>
 
-            <div className='flex gap-2 mt-2'>
+            <div className='flex gap-2 mt-2 flex-wrap'>
+                <a href={`/admin/wedding/${w.id}/albume-export`} className='flex items-center gap-1 text-[10.5px] font-bold text-white bg-[#0e9f8e] px-2 py-1 rounded-lg'>
+                    <Printer size={11} /> albume
+                </a>
                 <a href={`/admin/wedding/${w.id}/print-export`} className='flex items-center gap-1 text-[10.5px] font-bold text-[#AA8840] bg-[#AA8840]/10 px-2 py-1 rounded-lg'>
-                    <Printer size={11} /> ייצוא
+                    <Printer size={11} /> WOW Pro
                 </a>
                 {w.slug && (
                     <a href={`/w/${w.slug}`} target='_blank' rel='noopener noreferrer' className='flex items-center gap-1 text-[10.5px] font-bold text-[#7a6a52] bg-[#f0ebe0] px-2 py-1 rounded-lg'>
