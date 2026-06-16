@@ -51,7 +51,11 @@ export default function AdminDashboard() {
     const [editValues, setEditValues] = useState({ name: '', text: '' })
     const [expandedId, setExpandedId] = useState(null)
     const [currentPage, setCurrentPage] = useState(1)
+    const [showAll, setShowAll] = useState(false)
     const [uploadingImageId, setUploadingImageId] = useState(null)
+    const [framingId, setFramingId] = useState(null)
+    const [framingPos, setFramingPos] = useState('50% 50%')
+    const [savingFraming, setSavingFraming] = useState(false)
     const fileInputRef = useRef(null)
     const replaceTargetId = useRef(null)
     const { weddingId } = useParams()
@@ -67,10 +71,74 @@ export default function AdminDashboard() {
         fetchData()
     }, [weddingId])
 
-    // Pagination
+    // Pagination — `showAll` disables it so the owner can drag-reorder
+    // across the WHOLE list (otherwise drag only works inside the current
+    // 12-item page and you can't move an entry to another page).
     const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE)
     const startIdx = (currentPage - 1) * ITEMS_PER_PAGE
     const paginatedEntries = entries.slice(startIdx, startIdx + ITEMS_PER_PAGE)
+    const displayEntries = showAll ? entries : paginatedEntries
+    // Offset added to a Draggable's local index to get its index in the
+    // full entries array (0 in show-all mode, page offset otherwise).
+    const pageOffset = showAll ? 0 : startIdx
+
+    // Persist the current order to Firestore (orderIndex per entry).
+    async function persistOrder(reordered) {
+        const batch = writeBatch(db)
+        reordered.forEach((entry, index) => {
+            batch.update(doc(db, 'weddings', weddingId, 'entries', entry.id), {
+                orderIndex: index,
+            })
+        })
+        await batch.commit()
+    }
+
+    // Move a single entry across the FULL list — works regardless of which
+    // pagination page it's on, so you can send an entry to the very front
+    // or nudge it past a page boundary without dragging.
+    async function moveEntry(entryId, where) {
+        const idx = entries.findIndex(e => e.id === entryId)
+        if (idx < 0) return
+        let target = idx
+        if (where === 'top') target = 0
+        else if (where === 'bottom') target = entries.length - 1
+        else if (where === 'up') target = Math.max(0, idx - 1)
+        else if (where === 'down') target = Math.min(entries.length - 1, idx + 1)
+        if (target === idx) return
+        const reordered = Array.from(entries)
+        const [moved] = reordered.splice(idx, 1)
+        reordered.splice(target, 0, moved)
+        setEntries(reordered)
+        await persistOrder(reordered)
+    }
+
+    // ── Photo framing (focal point) ─────────────────────────────────────
+    function openFraming(entry) {
+        setFramingId(entry.id)
+        setFramingPos(entry.photoPosition || '50% 50%')
+    }
+    function setFocalFromImageClick(e) {
+        const rect = e.currentTarget.getBoundingClientRect()
+        const x = Math.min(100, Math.max(0, Math.round(((e.clientX - rect.left) / rect.width) * 100)))
+        const y = Math.min(100, Math.max(0, Math.round(((e.clientY - rect.top) / rect.height) * 100)))
+        setFramingPos(`${x}% ${y}%`)
+    }
+    async function saveFraming() {
+        if (!framingId) return
+        setSavingFraming(true)
+        try {
+            await updateDoc(doc(db, 'weddings', weddingId, 'entries', framingId), {
+                photoPosition: framingPos,
+            })
+            setEntries(prev => prev.map(e => (e.id === framingId ? { ...e, photoPosition: framingPos } : e)))
+            setFramingId(null)
+        } catch (err) {
+            console.error('Error saving framing:', err)
+            alert('שגיאה בשמירת המסגור')
+        } finally {
+            setSavingFraming(false)
+        }
+    }
 
     async function handleDeleteEntry(id) {
         if (!confirm('למחוק את הברכה לצמיתות?')) return
@@ -91,33 +159,21 @@ export default function AdminDashboard() {
 
     async function handleDragEnd(result) {
         if (!result.destination) return
-        // Calculate actual indices within full entries array
-        const sourceActual = startIdx + result.source.index
-        const destActual = startIdx + result.destination.index
+        // Calculate actual indices within the full entries array. pageOffset
+        // is 0 in show-all mode and the page start otherwise.
+        const sourceActual = pageOffset + result.source.index
+        const destActual = pageOffset + result.destination.index
         const reordered = Array.from(entries)
         const [moved] = reordered.splice(sourceActual, 1)
         reordered.splice(destActual, 0, moved)
         setEntries(reordered)
-
-        const batch = writeBatch(db)
-        reordered.forEach((entry, index) => {
-            batch.update(doc(db, 'weddings', weddingId, 'entries', entry.id), {
-                orderIndex: index,
-            })
-        })
-        await batch.commit()
+        await persistOrder(reordered)
     }
 
     async function resetToChronological() {
         const sorted = [...entries].sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0))
         setEntries(sorted)
-        const batch = writeBatch(db)
-        sorted.forEach((entry, index) => {
-            batch.update(doc(db, 'weddings', weddingId, 'entries', entry.id), {
-                orderIndex: index,
-            })
-        })
-        await batch.commit()
+        await persistOrder(sorted)
     }
 
     function triggerImageReplace(entryId) {
@@ -185,13 +241,29 @@ export default function AdminDashboard() {
                     </div>
 
                     {entries.length > 0 && (
-                        <button
-                            onClick={resetToChronological}
-                            className='group flex items-center gap-2 bg-white text-[#AA8840] px-4 py-2.5 rounded-xl hover:bg-[#AA8840]/5 transition-all shadow-sm border border-[#AA8840]/15 font-semibold text-sm'
-                        >
-                            <svg className='w-4 h-4 group-hover:rotate-180 transition-transform duration-500' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}><path strokeLinecap='round' strokeLinejoin='round' d='M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99' /></svg>
-                            סדר לפי זמן
-                        </button>
+                        <div className='flex items-center gap-2'>
+                            {entries.length > ITEMS_PER_PAGE && (
+                                <button
+                                    onClick={() => setShowAll(v => !v)}
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all shadow-sm border font-semibold text-sm ${
+                                        showAll
+                                            ? 'bg-[#AA8840] text-white border-[#AA8840]'
+                                            : 'bg-white text-[#AA8840] border-[#AA8840]/15 hover:bg-[#AA8840]/5'
+                                    }`}
+                                    title='הצגת כל הברכות בבת אחת מאפשרת לגרור ולסדר בין כל העמודים'
+                                >
+                                    <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}><path strokeLinecap='round' strokeLinejoin='round' d='M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5' /></svg>
+                                    {showAll ? 'תצוגת עמודים' : 'הצג הכל'}
+                                </button>
+                            )}
+                            <button
+                                onClick={resetToChronological}
+                                className='group flex items-center gap-2 bg-white text-[#AA8840] px-4 py-2.5 rounded-xl hover:bg-[#AA8840]/5 transition-all shadow-sm border border-[#AA8840]/15 font-semibold text-sm'
+                            >
+                                <svg className='w-4 h-4 group-hover:rotate-180 transition-transform duration-500' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}><path strokeLinecap='round' strokeLinejoin='round' d='M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99' /></svg>
+                                סדר לפי זמן
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -211,7 +283,7 @@ export default function AdminDashboard() {
                                 <Droppable droppableId='entries-list'>
                                     {provided => (
                                         <div {...provided.droppableProps} ref={provided.innerRef} className='grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4'>
-                                            {paginatedEntries.map((entry, index) => (
+                                            {displayEntries.map((entry, index) => (
                                                 <Draggable key={entry.id} draggableId={entry.id} index={index}>
                                                     {(provided, snapshot) => (
                                                         <div
@@ -335,6 +407,16 @@ export default function AdminDashboard() {
                                                                                 <ImageIcon />
                                                                                 <span>{entry.imageUrl ? 'החלף תמונה' : 'הוסף תמונה'}</span>
                                                                             </button>
+                                                                            {entry.imageUrl && (
+                                                                                <button
+                                                                                    onClick={() => openFraming(entry)}
+                                                                                    className='flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-gray-400 hover:text-[#AA8840] hover:bg-[#AA8840]/5 rounded-lg active:scale-95 transition-all'
+                                                                                    title='מרכוז ומסגור התמונה בספר'
+                                                                                >
+                                                                                    <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={2} className='w-4 h-4'><path strokeLinecap='round' strokeLinejoin='round' d='M6.75 3v2.25M6.75 3H4.5m2.25 0h12.75A1.5 1.5 0 0 1 21 4.5v12.75m0 0V19.5m0-2.25h-2.25M17.25 21v-2.25M17.25 21H4.5A1.5 1.5 0 0 1 3 19.5V6.75m0 0H5.25M3 6.75V4.5' /></svg>
+                                                                                    <span>מסגור</span>
+                                                                                </button>
+                                                                            )}
                                                                             <button
                                                                                 onClick={() => handleDeleteEntry(entry.id)}
                                                                                 className='flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg active:scale-95 transition-all'
@@ -342,9 +424,32 @@ export default function AdminDashboard() {
                                                                                 <TrashIcon />
                                                                                 <span>מחק</span>
                                                                             </button>
-                                                                            <span className='mr-auto text-gray-200'>
-                                                                                <DragIcon />
-                                                                            </span>
+                                                                            <div className='mr-auto flex items-center gap-0.5'>
+                                                                                <button
+                                                                                    onClick={() => moveEntry(entry.id, 'top')}
+                                                                                    className='p-1.5 text-gray-300 hover:text-[#AA8840] hover:bg-[#AA8840]/5 rounded-md active:scale-95 transition-all'
+                                                                                    title='העבר לראש הספר'
+                                                                                >
+                                                                                    <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={2} className='w-4 h-4'><path strokeLinecap='round' strokeLinejoin='round' d='M4.5 5.25h15M8.25 19.5V9.75m0 0L4.5 13.5m3.75-3.75L12 13.5' /></svg>
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => moveEntry(entry.id, 'up')}
+                                                                                    className='p-1.5 text-gray-300 hover:text-[#AA8840] hover:bg-[#AA8840]/5 rounded-md active:scale-95 transition-all'
+                                                                                    title='הזז מעלה'
+                                                                                >
+                                                                                    <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={2} className='w-4 h-4'><path strokeLinecap='round' strokeLinejoin='round' d='M4.5 15.75l7.5-7.5 7.5 7.5' /></svg>
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => moveEntry(entry.id, 'down')}
+                                                                                    className='p-1.5 text-gray-300 hover:text-[#AA8840] hover:bg-[#AA8840]/5 rounded-md active:scale-95 transition-all'
+                                                                                    title='הזז מטה'
+                                                                                >
+                                                                                    <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={2} className='w-4 h-4'><path strokeLinecap='round' strokeLinejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5' /></svg>
+                                                                                </button>
+                                                                                <span className='text-gray-200 ms-0.5'>
+                                                                                    <DragIcon />
+                                                                                </span>
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 </>
@@ -359,8 +464,8 @@ export default function AdminDashboard() {
                                 </Droppable>
                             </DragDropContext>
 
-                            {/* Pagination */}
-                            {totalPages > 1 && (
+                            {/* Pagination — hidden in show-all mode */}
+                            {!showAll && totalPages > 1 && (
                                 <div className='flex items-center justify-center gap-2 mt-8'>
                                     <button
                                         onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
@@ -397,6 +502,85 @@ export default function AdminDashboard() {
                     )}
                 </div>
             </div>
+
+            {/* ── Photo framing modal (focal point) ─────────────────────── */}
+            {framingId && (() => {
+                const fe = entries.find(e => e.id === framingId)
+                if (!fe) return null
+                const parts = framingPos.replace(/%/g, '').trim().split(/\s+/)
+                const fx = parseFloat(parts[0])
+                const fy = parseFloat(parts[1])
+                const markerX = Number.isFinite(fx) ? fx : 50
+                const markerY = Number.isFinite(fy) ? fy : 50
+                return (
+                    <div
+                        className='fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'
+                        onClick={() => setFramingId(null)}
+                    >
+                        <div
+                            className='bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[92vh] overflow-auto p-5'
+                            onClick={e => e.stopPropagation()}
+                            dir='rtl'
+                        >
+                            <div className='flex items-center justify-between mb-2'>
+                                <h3 className='text-lg font-bold text-gray-900'>מסגור התמונה</h3>
+                                <button onClick={() => setFramingId(null)} className='text-gray-400 hover:text-gray-700 text-3xl leading-none'>×</button>
+                            </div>
+                            <p className='text-sm text-gray-500 mb-4'>
+                                לחצו על הנקודה בתמונה שחשוב שתישאר במרכז בספר. התצוגה המוקטנת מראה איך החיתוך ייראה (4:3).
+                            </p>
+                            <div className='flex flex-col md:flex-row gap-5 items-start'>
+                                {/* Full image — click to set focal point */}
+                                <div className='flex-1 min-w-0'>
+                                    <div className='inline-block relative max-w-full align-top'>
+                                        <img
+                                            src={fe.imageUrl}
+                                            alt=''
+                                            onClick={setFocalFromImageClick}
+                                            className='block max-w-full max-h-[55vh] w-auto h-auto rounded-lg cursor-crosshair select-none'
+                                        />
+                                        <div
+                                            className='absolute w-6 h-6 rounded-full border-2 border-white bg-[#AA8840]/70 shadow-md pointer-events-none -translate-x-1/2 -translate-y-1/2'
+                                            style={{ left: `${markerX}%`, top: `${markerY}%` }}
+                                        />
+                                    </div>
+                                    <p className='text-xs text-gray-400 mt-2'>התמונה המלאה שהאורח העלה</p>
+                                </div>
+                                {/* 4:3 crop preview */}
+                                <div className='flex-shrink-0 mx-auto md:mx-0'>
+                                    <div className='w-48 rounded-lg overflow-hidden border border-gray-200 shadow-sm' style={{ aspectRatio: '4 / 3' }}>
+                                        <img
+                                            src={fe.imageUrl}
+                                            alt=''
+                                            className='w-full h-full'
+                                            style={{ objectFit: 'cover', objectPosition: framingPos }}
+                                        />
+                                    </div>
+                                    <p className='text-xs text-gray-400 mt-2 text-center'>כך זה ייראה בספר</p>
+                                    <button
+                                        onClick={() => setFramingPos('50% 50%')}
+                                        className='w-full text-xs text-gray-500 hover:text-[#AA8840] px-2 py-1.5 mt-3 rounded-md border border-gray-200 hover:border-[#AA8840]/30 transition-colors'
+                                    >
+                                        אפס למרכז
+                                    </button>
+                                </div>
+                            </div>
+                            <div className='flex gap-2 justify-end mt-5 pt-4 border-t border-gray-100'>
+                                <button onClick={() => setFramingId(null)} className='text-sm text-gray-500 px-4 py-2 hover:bg-gray-50 rounded-lg transition-colors'>
+                                    ביטול
+                                </button>
+                                <button
+                                    onClick={saveFraming}
+                                    disabled={savingFraming}
+                                    className='text-sm font-bold gold-shimmer text-white px-6 py-2 rounded-lg disabled:opacity-50'
+                                >
+                                    {savingFraming ? 'שומר...' : 'שמור מסגור'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            })()}
         </AdminPageWrapper>
     )
 }

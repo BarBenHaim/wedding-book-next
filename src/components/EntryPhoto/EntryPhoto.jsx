@@ -30,6 +30,12 @@ export default function EntryPhoto({
     className = '',
     alt = '',
     eager = true,
+    // Focal point for the cover-crop, as a CSS object-position value
+    // (e.g. "50% 30%"). Set per-entry from the admin "frame photo"
+    // editor (entry.photoPosition) so the owner can re-center a photo
+    // that got cropped badly. Defaults to 'center' — unchanged behavior
+    // for every entry that was never re-framed.
+    objectPosition = 'center',
 }) {
     // Default to EAGER loading per the user's request: in the digital
     // book, photos that lazy-loaded would only fetch when react-pageflip
@@ -54,7 +60,7 @@ export default function EntryPhoto({
                 width: maxWidth,
                 height: maxHeight,
                 objectFit: 'cover',
-                objectPosition: 'center',
+                objectPosition,
                 display: 'block',
                 ...style,
             }}

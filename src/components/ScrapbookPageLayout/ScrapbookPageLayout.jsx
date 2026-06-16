@@ -119,6 +119,7 @@ export default function ScrapbookPageLayout({ entry, styleSettings, scaledWidth,
                         src={entry.imageUrl}
                         maxWidth={photoWidth}
                         maxHeight={photoHeight}
+                        objectPosition={entry.photoPosition || 'center'}
                     />
 
                     {/* Washi tape — top-left, tilted clockwise */}

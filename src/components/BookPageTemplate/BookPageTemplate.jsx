@@ -142,6 +142,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         src={entry.imageUrl}
                         maxWidth={slotW}
                         maxHeight={slotH}
+                        objectPosition={entry.photoPosition || 'center'}
                         className='relative'
                         style={{
                             borderRadius: styleSettings.imageStyle?.borderRadius ?? '12px',

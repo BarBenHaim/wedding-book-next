@@ -122,6 +122,7 @@ export default function NotebookPageLayout({ entry, styleSettings, scaledWidth, 
                     src={entry.imageUrl}
                     maxWidth={photoWidth}
                     maxHeight={photoHeight}
+                    objectPosition={entry.photoPosition || 'center'}
                     style={{ flexShrink: 0, zIndex: 1 }}
                 />
             )}

@@ -166,6 +166,7 @@ export default function PolaroidPageLayout({ entry, styleSettings, scaledWidth, 
                         src={entry.imageUrl}
                         maxWidth={photoWidth}
                         maxHeight={photoHeight}
+                        objectPosition={entry.photoPosition || 'center'}
                     />
                 </div>
             )}
