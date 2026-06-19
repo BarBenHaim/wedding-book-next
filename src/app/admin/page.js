@@ -61,6 +61,19 @@ async function updateWedding(weddingId, patch) {
     return res.json()
 }
 
+// Full clone of an event — doc + all blessings + every photo (server-side
+// Storage copy, so the duplicate is independent of the source).
+async function duplicateWedding(weddingId) {
+    const token = await getToken()
+    const res = await fetch('/api/admin/duplicate-wedding', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceWeddingId: weddingId }),
+    })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Duplication failed')
+    return res.json()
+}
+
 async function resetPassword(email) {
     const token = await getToken()
     const res = await fetch('/api/admin/reset-password', {
@@ -1436,6 +1449,20 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
     //    the early-return below to keep React's hook order stable.
     const [stats, setStats] = useState(null)
     const [statsLoading, setStatsLoading] = useState(false)
+    // Duplicate-event flow: idle → running → done | error
+    const [dup, setDup] = useState({ phase: 'idle', result: null, error: '' })
+
+    async function handleDuplicate() {
+        if (dup.phase === 'running') return
+        if (!confirm('לשכפל את האירוע הזה? ייווצר אירוע חדש עם כל הברכות והתמונות (עותק עצמאי).')) return
+        setDup({ phase: 'running', result: null, error: '' })
+        try {
+            const result = await duplicateWedding(wedding.id)
+            setDup({ phase: 'done', result, error: '' })
+        } catch (err) {
+            setDup({ phase: 'error', result: null, error: err?.message || 'השכפול נכשל' })
+        }
+    }
 
     useEffect(() => {
         if (!wedding?.id) return
@@ -1590,6 +1617,48 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                 </div>
                 <p className='text-[11px] text-[#a89378] mt-2 leading-relaxed'>
                     albume: ZIP של עמודים 22×22 ב-300dpi + פתיחת האשף והעתקת שם האלבום. WOW Pro: spreads layflat.
+                </p>
+            </div>
+
+            {/* ── Duplicate event ── */}
+            <div className='px-6 py-5 border-b border-[#f0e8d4]'>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>שכפול אירוע</p>
+                <button
+                    onClick={handleDuplicate}
+                    disabled={dup.phase === 'running'}
+                    className='inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-[#7a6a52] disabled:opacity-60'
+                    style={{ background: '#fff', border: '1px solid #ead9b3' }}
+                >
+                    {dup.phase === 'running' ? (
+                        <>
+                            <svg className='w-4 h-4 animate-spin' fill='none' viewBox='0 0 24 24'><circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4'/><path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8v8z'/></svg>
+                            משכפל… (מעתיק תמונות)
+                        </>
+                    ) : (
+                        <>
+                            <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}><path strokeLinecap='round' strokeLinejoin='round' d='M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75' /></svg>
+                            שכפל אירוע (כולל ברכות ותמונות)
+                        </>
+                    )}
+                </button>
+                {dup.phase === 'done' && dup.result && (
+                    <div className='mt-3 rounded-xl p-3 text-[12px]' style={{ background: '#f1faf4', border: '1px solid #c8e9d4', color: '#256b42' }}>
+                        <p className='font-bold mb-1'>✓ האירוע שוכפל — {dup.result.entriesCopied} ברכות הועתקו.</p>
+                        <p className='text-[#3d2e1a] mb-2'>מזהה חדש: <code className='font-mono'>{dup.result.newWeddingId}</code></p>
+                        <div className='flex flex-wrap gap-2'>
+                            <a href={`/wedding/${dup.result.newWeddingId}/admin`} target='_blank' rel='noreferrer' className='underline font-bold' style={{ color: '#0e9f8e' }}>ניהול הברכות של העותק</a>
+                            <a href={dup.result.guestUrl} target='_blank' rel='noreferrer' className='underline font-bold' style={{ color: '#aa8840' }}>דף האורחים</a>
+                            <button onClick={() => window.location.reload()} className='underline font-bold text-[#7a6a52]'>רענן רשימה</button>
+                        </div>
+                    </div>
+                )}
+                {dup.phase === 'error' && (
+                    <div className='mt-3 rounded-xl px-3 py-2 text-[12px]' style={{ background: '#fff5f5', border: '1px solid #ffcdcd', color: '#b32424' }}>
+                        {dup.error}
+                    </div>
+                )}
+                <p className='text-[11px] text-[#a89378] mt-2 leading-relaxed'>
+                    יוצר אירוע חדש עם slug וקישור חדשים, מעתיק את כל הברכות ומעתיק פיזית את כל התמונות (עותק עצמאי — מחיקת המקור לא תפגע בעותק). ללא הזמנה/תשלום.
                 </p>
             </div>
 
