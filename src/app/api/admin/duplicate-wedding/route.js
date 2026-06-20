@@ -147,6 +147,12 @@ export async function POST(req) {
     }
     const sourceId = (body?.sourceWeddingId || '').toString().trim()
     if (!sourceId) return NextResponse.json({ error: 'Missing sourceWeddingId' }, { status: 400 })
+    // When true, the copy keeps all CONTENT (blessings + photos) and the
+    // visual identity (background, colours, fonts, photo size) but RESETS
+    // the stuck typography overrides that made the source look different
+    // from every other event (a leftover bold fontWeight + an oversized
+    // name margin). Use this to get a clean copy of a misconfigured event.
+    const cleanDesign = body?.cleanDesign === true
 
     try {
         const srcRef = adminDb.collection('weddings').doc(sourceId)
@@ -189,6 +195,21 @@ export async function POST(req) {
         // only if there's an ownerName to suffix).
         if (typeof src.ownerName === 'string' && src.ownerName.trim()) {
             newData.ownerName = `${src.ownerName.trim()} (עותק)`
+        }
+
+        // Clean-design copy: strip the stuck overrides (bold weight + the
+        // oversized name margin) from the interior + cover design so the new
+        // event renders like every standard event, while keeping the
+        // background / colours / fonts / photo sizing intact.
+        if (cleanDesign) {
+            const STRIP = ['fontWeight', 'nameFontWeight', 'nameMarginBottom']
+            for (const field of ['bookDesign', 'coverDesign']) {
+                if (newData[field] && typeof newData[field] === 'object' && !Array.isArray(newData[field])) {
+                    const d = { ...newData[field] }
+                    for (const k of STRIP) delete d[k]
+                    newData[field] = d
+                }
+            }
         }
 
         await newRef.set(newData)

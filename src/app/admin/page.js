@@ -63,12 +63,12 @@ async function updateWedding(weddingId, patch) {
 
 // Full clone of an event — doc + all blessings + every photo (server-side
 // Storage copy, so the duplicate is independent of the source).
-async function duplicateWedding(weddingId) {
+async function duplicateWedding(weddingId, cleanDesign = false) {
     const token = await getToken()
     const res = await fetch('/api/admin/duplicate-wedding', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceWeddingId: weddingId }),
+        body: JSON.stringify({ sourceWeddingId: weddingId, cleanDesign }),
     })
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Duplication failed')
     return res.json()
@@ -1451,13 +1451,17 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
     const [statsLoading, setStatsLoading] = useState(false)
     // Duplicate-event flow: idle → running → done | error
     const [dup, setDup] = useState({ phase: 'idle', result: null, error: '' })
+    const [dupClean, setDupClean] = useState(true)
 
     async function handleDuplicate() {
         if (dup.phase === 'running') return
-        if (!confirm('לשכפל את האירוע הזה? ייווצר אירוע חדש עם כל הברכות והתמונות (עותק עצמאי).')) return
+        const msg = dupClean
+            ? 'ליצור אירוע חדש עם כל הברכות והתמונות של האירוע הזה, אבל עם עיצוב נקי (בלי ההגדרות התקועות)?'
+            : 'לשכפל את האירוע הזה? ייווצר אירוע חדש עם כל הברכות, התמונות והעיצוב (עותק מדויק).'
+        if (!confirm(msg)) return
         setDup({ phase: 'running', result: null, error: '' })
         try {
-            const result = await duplicateWedding(wedding.id)
+            const result = await duplicateWedding(wedding.id, dupClean)
             setDup({ phase: 'done', result, error: '' })
         } catch (err) {
             setDup({ phase: 'error', result: null, error: err?.message || 'השכפול נכשל' })
@@ -1623,11 +1627,24 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
             {/* ── Duplicate event ── */}
             <div className='px-6 py-5 border-b border-[#f0e8d4]'>
                 <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>שכפול אירוע</p>
+                <label className='flex items-start gap-2 mb-3 cursor-pointer'>
+                    <input
+                        type='checkbox'
+                        checked={dupClean}
+                        onChange={e => setDupClean(e.target.checked)}
+                        disabled={dup.phase === 'running'}
+                        className='mt-0.5'
+                        style={{ accentColor: '#0e9f8e' }}
+                    />
+                    <span className='text-[12px] text-[#3d2e1a] leading-relaxed'>
+                        <b>עיצוב נקי</b> — מעתיק את כל הברכות והתמונות, אבל מאפס הגדרות עיצוב תקועות (בולד/מרווחים) כך שייראה כמו שאר האירועים. <span className='text-[#a89378]'>בטל סימון לעותק מדויק כולל העיצוב הקיים.</span>
+                    </span>
+                </label>
                 <button
                     onClick={handleDuplicate}
                     disabled={dup.phase === 'running'}
-                    className='inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-[#7a6a52] disabled:opacity-60'
-                    style={{ background: '#fff', border: '1px solid #ead9b3' }}
+                    className='inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-60'
+                    style={{ background: '#0e9f8e', border: '1px solid #0e9f8e' }}
                 >
                     {dup.phase === 'running' ? (
                         <>
@@ -1637,7 +1654,7 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                     ) : (
                         <>
                             <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}><path strokeLinecap='round' strokeLinejoin='round' d='M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75' /></svg>
-                            שכפל אירוע (כולל ברכות ותמונות)
+                            {dupClean ? 'צור אירוע חדש (תוכן + עיצוב נקי)' : 'שכפל עותק מדויק'}
                         </>
                     )}
                 </button>
