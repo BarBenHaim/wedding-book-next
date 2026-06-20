@@ -36,34 +36,60 @@ export default function EntryPhoto({
     // that got cropped badly. Defaults to 'center' — unchanged behavior
     // for every entry that was never re-framed.
     objectPosition = 'center',
+    // Quarter-turn rotation in degrees (0 | 90 | 180 | 270), set from the
+    // admin "rotate photo" control (entry.photoRotation) for guests who
+    // uploaded a sideways/upside-down photo. Defaults to 0.
+    rotation = 0,
 }) {
-    // Default to EAGER loading per the user's request: in the digital
-    // book, photos that lazy-loaded would only fetch when react-pageflip
-    // brought the page into view — leaving a visible delay between
-    // the flip animation completing and the photo appearing. The
-    // /book/[token] route now ALSO preloads every entry photo at
-    // mount via `new window.Image()` (see page.js), so by the time
-    // a user reaches any page the photo is already cached.
-    //
-    // Callers that want to opt back into lazy loading (e.g. a future
-    // archive view that lists hundreds of entries) can pass
-    // eager={false}; the existing behavior is preserved.
+    // The slot is ALWAYS maxWidth×maxHeight in layout (a wrapper reserves
+    // it) so rotating the photo never shifts the text/name below it. The
+    // photo is absolutely centred inside and fills the slot via
+    // object-fit:cover. For 90°/270° the photo's pre-rotation dimensions
+    // are swapped so that AFTER rotation it still covers the slot exactly
+    // (no cream bars). For 0°/180° this is identical to the old behaviour.
+    const rot = (((Number(rotation) || 0) % 360) + 360) % 360
+    const swapped = rot === 90 || rot === 270
+    const imgW = swapped ? maxHeight : maxWidth
+    const imgH = swapped ? maxWidth : maxHeight
+
+    // Default to EAGER loading: in the digital book, lazy-loaded photos
+    // would only fetch once react-pageflip brought the page into view,
+    // leaving a visible delay. /book/[token] also preloads every entry
+    // photo at mount, so by the time a user reaches a page it's cached.
     return (
-        <img
-            src={src}
-            alt={alt}
+        <div
             className={className}
-            loading={eager ? 'eager' : 'lazy'}
-            decoding='async'
-            fetchpriority={eager ? 'high' : 'auto'}
             style={{
                 width: maxWidth,
                 height: maxHeight,
-                objectFit: 'cover',
-                objectPosition,
+                position: 'relative',
+                overflow: 'hidden',
                 display: 'block',
+                // Caller styles (borderRadius, margins, alignSelf, boxShadow,
+                // zIndex, border…) apply to the slot wrapper. overflow:hidden
+                // means a borderRadius here clips the photo to rounded corners.
                 ...style,
             }}
-        />
+        >
+            <img
+                src={src}
+                alt={alt}
+                loading={eager ? 'eager' : 'lazy'}
+                decoding='async'
+                fetchpriority={eager ? 'high' : 'auto'}
+                style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    width: imgW,
+                    height: imgH,
+                    objectFit: 'cover',
+                    objectPosition,
+                    transform: `translate(-50%, -50%) rotate(${rot}deg)`,
+                    transformOrigin: 'center center',
+                    display: 'block',
+                }}
+            />
+        </div>
     )
 }

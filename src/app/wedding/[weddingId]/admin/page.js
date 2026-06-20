@@ -9,6 +9,7 @@ import { db, storage } from '../../../../lib/firebaseClient'
 import { normalizeBlessing } from '../../../../lib/normalizeText'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
+import EntryPhoto from '@/components/EntryPhoto/EntryPhoto'
 import { Heebo } from 'next/font/google'
 
 const heebo = Heebo({ subsets: ['hebrew'], weight: ['400', '700', '900'] })
@@ -55,6 +56,7 @@ export default function AdminDashboard() {
     const [uploadingImageId, setUploadingImageId] = useState(null)
     const [framingId, setFramingId] = useState(null)
     const [framingPos, setFramingPos] = useState('50% 50%')
+    const [framingRot, setFramingRot] = useState(0)
     const [savingFraming, setSavingFraming] = useState(false)
     const fileInputRef = useRef(null)
     const replaceTargetId = useRef(null)
@@ -112,10 +114,11 @@ export default function AdminDashboard() {
         await persistOrder(reordered)
     }
 
-    // ── Photo framing (focal point) ─────────────────────────────────────
+    // ── Photo framing (focal point + rotation) ──────────────────────────
     function openFraming(entry) {
         setFramingId(entry.id)
         setFramingPos(entry.photoPosition || '50% 50%')
+        setFramingRot((((Number(entry.photoRotation) || 0) % 360) + 360) % 360)
     }
     function setFocalFromImageClick(e) {
         const rect = e.currentTarget.getBoundingClientRect()
@@ -123,18 +126,22 @@ export default function AdminDashboard() {
         const y = Math.min(100, Math.max(0, Math.round(((e.clientY - rect.top) / rect.height) * 100)))
         setFramingPos(`${x}% ${y}%`)
     }
+    function rotateFraming(delta) {
+        setFramingRot(r => ((((r + delta) % 360) + 360) % 360))
+    }
     async function saveFraming() {
         if (!framingId) return
         setSavingFraming(true)
         try {
             await updateDoc(doc(db, 'weddings', weddingId, 'entries', framingId), {
                 photoPosition: framingPos,
+                photoRotation: framingRot,
             })
-            setEntries(prev => prev.map(e => (e.id === framingId ? { ...e, photoPosition: framingPos } : e)))
+            setEntries(prev => prev.map(e => (e.id === framingId ? { ...e, photoPosition: framingPos, photoRotation: framingRot } : e)))
             setFramingId(null)
         } catch (err) {
             console.error('Error saving framing:', err)
-            alert('שגיאה בשמירת המסגור')
+            alert('שגיאה בשמירת התמונה')
         } finally {
             setSavingFraming(false)
         }
@@ -338,7 +345,11 @@ export default function AdminDashboard() {
                                                                                 src={entry.imageUrl}
                                                                                 alt=''
                                                                                 loading='lazy'
-                                                                                className='w-full h-full object-cover group-hover:scale-105 transition-transform duration-500'
+                                                                                className='w-full h-full object-cover transition-transform duration-500'
+                                                                                style={{
+                                                                                    objectPosition: entry.photoPosition || 'center',
+                                                                                    transform: `rotate(${((((Number(entry.photoRotation) || 0) % 360) + 360) % 360)}deg)`,
+                                                                                }}
                                                                             />
                                                                             {uploadingImageId === entry.id && (
                                                                                 <div className='absolute inset-0 bg-black/40 flex items-center justify-center'>
@@ -411,10 +422,10 @@ export default function AdminDashboard() {
                                                                                 <button
                                                                                     onClick={() => openFraming(entry)}
                                                                                     className='flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-gray-400 hover:text-[#AA8840] hover:bg-[#AA8840]/5 rounded-lg active:scale-95 transition-all'
-                                                                                    title='מרכוז ומסגור התמונה בספר'
+                                                                                    title='מרכוז וסיבוב התמונה בספר'
                                                                                 >
                                                                                     <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={2} className='w-4 h-4'><path strokeLinecap='round' strokeLinejoin='round' d='M6.75 3v2.25M6.75 3H4.5m2.25 0h12.75A1.5 1.5 0 0 1 21 4.5v12.75m0 0V19.5m0-2.25h-2.25M17.25 21v-2.25M17.25 21H4.5A1.5 1.5 0 0 1 3 19.5V6.75m0 0H5.25M3 6.75V4.5' /></svg>
-                                                                                    <span>מסגור</span>
+                                                                                    <span>תמונה</span>
                                                                                 </button>
                                                                             )}
                                                                             <button
@@ -523,11 +534,11 @@ export default function AdminDashboard() {
                             dir='rtl'
                         >
                             <div className='flex items-center justify-between mb-2'>
-                                <h3 className='text-lg font-bold text-gray-900'>מסגור התמונה</h3>
+                                <h3 className='text-lg font-bold text-gray-900'>עריכת תמונה — מרכוז וסיבוב</h3>
                                 <button onClick={() => setFramingId(null)} className='text-gray-400 hover:text-gray-700 text-3xl leading-none'>×</button>
                             </div>
                             <p className='text-sm text-gray-500 mb-4'>
-                                לחצו על הנקודה בתמונה שחשוב שתישאר במרכז בספר. התצוגה המוקטנת מראה איך החיתוך ייראה (4:3).
+                                לחצו על הנקודה בתמונה שחשוב שתישאר במרכז בספר, וסובבו אם הועלתה הפוך/בצד. התצוגה המוקטנת מראה בדיוק איך זה ייראה בספר (4:3).
                             </p>
                             <div className='flex flex-col md:flex-row gap-5 items-start'>
                                 {/* Full image — click to set focal point */}
@@ -546,22 +557,42 @@ export default function AdminDashboard() {
                                     </div>
                                     <p className='text-xs text-gray-400 mt-2'>התמונה המלאה שהאורח העלה</p>
                                 </div>
-                                {/* 4:3 crop preview */}
+                                {/* 4:3 crop preview — exactly how the book renders it (focal + rotation) */}
                                 <div className='flex-shrink-0 mx-auto md:mx-0'>
-                                    <div className='w-48 rounded-lg overflow-hidden border border-gray-200 shadow-sm' style={{ aspectRatio: '4 / 3' }}>
-                                        <img
+                                    <div className='rounded-lg overflow-hidden border border-gray-200 shadow-sm'>
+                                        <EntryPhoto
                                             src={fe.imageUrl}
-                                            alt=''
-                                            className='w-full h-full'
-                                            style={{ objectFit: 'cover', objectPosition: framingPos }}
+                                            maxWidth={192}
+                                            maxHeight={144}
+                                            objectPosition={framingPos}
+                                            rotation={framingRot}
                                         />
                                     </div>
                                     <p className='text-xs text-gray-400 mt-2 text-center'>כך זה ייראה בספר</p>
+                                    {/* Rotate controls */}
+                                    <div className='flex items-center justify-center gap-2 mt-3'>
+                                        <button
+                                            onClick={() => rotateFraming(-90)}
+                                            className='flex-1 inline-flex items-center justify-center gap-1 text-xs font-bold text-[#7a6a52] px-2 py-2 rounded-lg border border-gray-200 hover:border-[#AA8840]/40 hover:text-[#AA8840] transition-colors'
+                                            title='סובב שמאלה'
+                                        >
+                                            <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}><path strokeLinecap='round' strokeLinejoin='round' d='M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3' /></svg>
+                                            שמאלה
+                                        </button>
+                                        <button
+                                            onClick={() => rotateFraming(90)}
+                                            className='flex-1 inline-flex items-center justify-center gap-1 text-xs font-bold text-[#7a6a52] px-2 py-2 rounded-lg border border-gray-200 hover:border-[#AA8840]/40 hover:text-[#AA8840] transition-colors'
+                                            title='סובב ימינה'
+                                        >
+                                            <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}><path strokeLinecap='round' strokeLinejoin='round' d='M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 100 12h3' /></svg>
+                                            ימינה
+                                        </button>
+                                    </div>
                                     <button
-                                        onClick={() => setFramingPos('50% 50%')}
-                                        className='w-full text-xs text-gray-500 hover:text-[#AA8840] px-2 py-1.5 mt-3 rounded-md border border-gray-200 hover:border-[#AA8840]/30 transition-colors'
+                                        onClick={() => { setFramingPos('50% 50%'); setFramingRot(0) }}
+                                        className='w-full text-xs text-gray-500 hover:text-[#AA8840] px-2 py-1.5 mt-2 rounded-md border border-gray-200 hover:border-[#AA8840]/30 transition-colors'
                                     >
-                                        אפס למרכז
+                                        אפס (מרכז + ללא סיבוב)
                                     </button>
                                 </div>
                             </div>
@@ -574,7 +605,7 @@ export default function AdminDashboard() {
                                     disabled={savingFraming}
                                     className='text-sm font-bold gold-shimmer text-white px-6 py-2 rounded-lg disabled:opacity-50'
                                 >
-                                    {savingFraming ? 'שומר...' : 'שמור מסגור'}
+                                    {savingFraming ? 'שומר...' : 'שמור'}
                                 </button>
                             </div>
                         </div>

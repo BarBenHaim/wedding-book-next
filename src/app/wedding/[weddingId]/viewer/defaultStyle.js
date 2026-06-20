@@ -27,3 +27,24 @@ const BASE_DEFAULTS = {
 }
 
 export default BASE_DEFAULTS
+
+// Resolve the design used for the book's INTERIOR pages from a wedding doc.
+//
+// Priority: bookDesign → coverDesign (pre-split docs) → book.designSettings
+// → null. The important nuance: when there is no dedicated `bookDesign`
+// and we fall back to `coverDesign`, we DROP the cover's `imageStyle`.
+// The cover's imageStyle is tuned for the single cover photo (often a
+// smaller width like 55%), and reusing it on interior pages shrinks every
+// photo and leaves an unexplained cream gap around it. Stripping it lets
+// interior photos use the default ~90% width while still inheriting the
+// cover's background / colours for a cohesive look.
+export function resolveInteriorDesign(wedding) {
+    if (!wedding) return null
+    if (wedding.bookDesign) return wedding.bookDesign
+    if (wedding.coverDesign) {
+        const { imageStyle, ...rest } = wedding.coverDesign  
+        return rest
+    }
+    if (wedding.book?.designSettings) return wedding.book.designSettings
+    return null
+}

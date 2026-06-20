@@ -626,11 +626,11 @@ function EventTypeEditor({ wedding, onSave }) {
                         onChange={e => set('designVariant', e.target.value === 'classic' ? '' : e.target.value)}
                         className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
                     >
-                        <option value='classic'>קלאסי — שמנת ושמפניה (ברירת מחדל)</option>
-                        <option value='romantic'>רומנטי — עיצוב פרחוני</option>
+                        <option value='classic'>רגע אחד — עיצוב פרחוני עדכני (ברירת מחדל)</option>
+                        <option value='romantic'>סגנון ישן — &quot;מי משאיר לנו ברכה?&quot;</option>
                     </select>
                     <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>
-                        הסגנון משפיע רק על עמוד יצירת הברכה לאורחים — לא על הספר עצמו.
+                        משפיע רק על עמוד יצירת הברכה לאורחים. <b>ברירת המחדל</b> היא העיצוב הפרחוני העדכני (&quot;רגע אחד&quot;, &quot;שם&quot;/&quot;הברכה שלכם&quot;). &quot;סגנון ישן&quot; הוא הלייאאוט הקודם (כהה, עם placeholders) — מומלץ להשאיר על ברירת המחדל.
                     </p>
                 </div>
             )}

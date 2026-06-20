@@ -37,7 +37,7 @@ import { getEntries } from '@/lib/classifyMedia'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
-import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 import { listPresets, resolvePreset, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
@@ -539,12 +539,10 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
     //   4. defaultStyle — virgin wedding
     const [styleSettings, setStyleSettings] = useState(() => ({
         ...defaultStyle,
-        ...(
-            wedding.bookDesign ||
-            wedding.coverDesign ||
-            wedding.book?.designSettings ||
-            {}
-        ),
+        // Interior pages: bookDesign, else coverDesign WITHOUT its imageStyle
+        // (the cover's photo size shrinks interior photos and leaves a gap —
+        // see resolveInteriorDesign).
+        ...(resolveInteriorDesign(wedding) || {}),
     }))
 
     // ── Cover style — pinned to the wedding owner's choice ─────────

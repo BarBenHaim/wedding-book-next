@@ -138,6 +138,7 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
                         maxWidth={photoWidth}
                         maxHeight={photoHeight}
                         objectPosition={entry.photoPosition || 'center'}
+                        rotation={entry.photoRotation || 0}
                     />
                     {/* Washi tape — top-left corner */}
                     <div

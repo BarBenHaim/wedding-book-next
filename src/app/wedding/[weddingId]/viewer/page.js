@@ -18,7 +18,7 @@ import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
 import PrintOrderModal from '@/components/PrintOrderModal/PrintOrderModal'
 import { getEntries } from '../../../../lib/classifyMedia'
-import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 import { listPresets, resolvePreset, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import { BOOK_FORMATS, resolveFormatConfig } from '@/lib/bookFormats'
 import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
@@ -195,7 +195,10 @@ function BookViewerInner({ onLocaleDiscovered }) {
                     // Backward-compat: weddings created before this
                     // split only have `coverDesign`, so we use it for
                     // BOTH the first time.
-                    const savedBook = firestoreData.bookDesign || firestoreData.coverDesign
+                    // Interior pages: bookDesign, else coverDesign WITHOUT its
+                    // imageStyle (the cover's photo size shrinks interior photos
+                    // and leaves a gap — see resolveInteriorDesign).
+                    const savedBook = resolveInteriorDesign(firestoreData)
                     const savedCover = firestoreData.coverDesign || firestoreData.bookDesign
                     if (savedBook) {
                         setStyleSettings({ ...defaultStyle, ...savedBook })
