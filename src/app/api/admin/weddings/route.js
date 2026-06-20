@@ -160,6 +160,11 @@ export async function PATCH(req) {
             'productionStatus',
             // Guest /photo page design preset (managed from /admin/guest-design).
             'guestDesign',
+            // Book interior design. Written via set(merge:true) so a PARTIAL
+            // object deep-merges into the existing bookDesign — lets us
+            // surgically reset stray fields (e.g. a stuck fontWeight:700)
+            // without replacing the whole design.
+            'bookDesign',
             'brideName', 'brideNameHe', 'groomName', 'groomNameHe',
         ]
         const clean = {}
@@ -223,6 +228,17 @@ export async function PATCH(req) {
                 // bad payload can't bloat the doc.
                 clean[key] =
                     v && typeof v === 'object' && !Array.isArray(v) && JSON.stringify(v).length < 6000 ? v : null
+                continue
+            }
+
+            if (key === 'bookDesign') {
+                // Object of interior-design overrides. Deep-merged via
+                // set(merge:true), so sending a PARTIAL object updates only
+                // those sub-fields (e.g. { fontWeight: null }) and leaves the
+                // rest of bookDesign intact. Ignored if not a sane object.
+                if (v && typeof v === 'object' && !Array.isArray(v) && JSON.stringify(v).length < 12000) {
+                    clean[key] = v
+                }
                 continue
             }
 
