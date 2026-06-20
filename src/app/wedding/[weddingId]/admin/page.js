@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { getEntries } from '../../../../lib/classifyMedia'
 import { useParams } from 'next/navigation'
-import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore'
+import { doc, updateDoc, deleteDoc, writeBatch, collection, addDoc } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../../../../lib/firebaseClient'
 import { normalizeBlessing } from '../../../../lib/normalizeText'
@@ -58,6 +58,7 @@ export default function AdminDashboard() {
     const [framingPos, setFramingPos] = useState('50% 50%')
     const [framingRot, setFramingRot] = useState(0)
     const [savingFraming, setSavingFraming] = useState(false)
+    const [duplicatingId, setDuplicatingId] = useState(null)
     const fileInputRef = useRef(null)
     const replaceTargetId = useRef(null)
     const { weddingId } = useParams()
@@ -151,6 +152,36 @@ export default function AdminDashboard() {
         if (!confirm('למחוק את הברכה לצמיתות?')) return
         await deleteDoc(doc(db, 'weddings', weddingId, 'entries', id))
         setEntries(prev => prev.filter(e => e.id !== id))
+    }
+
+    // Duplicate a single blessing — creates a copy right after the original
+    // (same name/text/photo + framing/rotation). The photo URL is shared with
+    // the original (same event, same Storage object), so it's instant.
+    async function duplicateEntry(entry) {
+        if (!weddingId || duplicatingId) return
+        setDuplicatingId(entry.id)
+        try {
+            const copy = {
+                name: entry.name || '',
+                text: entry.text || '',
+                imageUrl: entry.imageUrl || null,
+                photoPosition: entry.photoPosition || null,
+                photoRotation: Number(entry.photoRotation) || 0,
+                timestamp: entry.timestamp || null,
+                orderIndex: entry.orderIndex ?? 0,
+            }
+            const ref = await addDoc(collection(db, 'weddings', weddingId, 'entries'), copy)
+            const idx = entries.findIndex(e => e.id === entry.id)
+            const reordered = Array.from(entries)
+            reordered.splice(idx < 0 ? entries.length : idx + 1, 0, { id: ref.id, ...copy })
+            setEntries(reordered)
+            await persistOrder(reordered)
+        } catch (err) {
+            console.error('Error duplicating entry:', err)
+            alert('שגיאה בשכפול הברכה')
+        } finally {
+            setDuplicatingId(null)
+        }
     }
 
     async function handleUpdateEntry(id) {
@@ -409,6 +440,15 @@ export default function AdminDashboard() {
                                                                             >
                                                                                 <EditIcon />
                                                                                 <span>ערוך</span>
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => duplicateEntry(entry)}
+                                                                                disabled={duplicatingId === entry.id}
+                                                                                className='flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-gray-400 hover:text-[#AA8840] hover:bg-[#AA8840]/5 rounded-lg active:scale-95 transition-all disabled:opacity-50'
+                                                                                title='שכפל ברכה'
+                                                                            >
+                                                                                <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={2} className='w-4 h-4'><path strokeLinecap='round' strokeLinejoin='round' d='M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75' /></svg>
+                                                                                <span>{duplicatingId === entry.id ? 'משכפל…' : 'שכפל'}</span>
                                                                             </button>
                                                                             <button
                                                                                 onClick={() => triggerImageReplace(entry.id)}
