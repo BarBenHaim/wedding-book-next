@@ -21,7 +21,7 @@ import { NextResponse } from 'next/server'
 import { adminDb } from '@/lib/firebaseAdmin'
 import { normalizeEventType } from '@/lib/eventTypes'
 
-const MODEL = 'claude-haiku-4-5-20251001' // small, cheap, good at Hebrew
+const MODEL = 'claude-sonnet-4-6' // higher quality for genuinely good, natural blessings
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 
 // ── Tiny best-effort in-memory rate limit (per IP). Serverless instances
@@ -141,12 +141,17 @@ export async function POST(req) {
         const { occasion, who } = eventContext(type, names)
 
         const system =
-            `You help everyday guests write a short, heartfelt ${occasion} blessing for ${who}. ` +
-            `Write ONLY in ${lang}. ` +
-            `Rules: warm and sincere; SPECIFIC and personal, never generic; avoid clichés and filler ` +
-            `("מאחלים לכם חיים מאושרים", "כל הכבוד", "המון אהבה" alone are too generic); ` +
-            `natural spoken tone, not flowery or pompous; no hashtags; emojis only if they truly fit (at most one); ` +
-            `keep each blessing under ${maxChars} characters. Use the recipient's name naturally when known. ` +
+            `You are a gifted writer helping an everyday guest write a genuinely beautiful, heartfelt ` +
+            `${occasion} blessing for ${who}. Write ONLY in ${lang}.\n` +
+            `Make it EXCELLENT — something the guest would be proud to sign:\n` +
+            `- Warm, sincere and human; sounds like a real person speaking from the heart, not a greeting-card cliché.\n` +
+            `- Complete, flowing, grammatical sentences. NEVER fragments, cut-off thoughts, or filler.\n` +
+            `- Specific in feeling; avoid empty generic lines used alone (e.g. "מאחלים לכם חיים מאושרים", "המון אהבה", "כל הכבוד").\n` +
+            `- CRITICAL: never invent names, initials, single letters (like "ש."), or placeholders. ` +
+            `Use the recipient's name only if it is given to you. If no name is given, address them warmly without one. ` +
+            `Do NOT mention any other people unless the guest explicitly provided them.\n` +
+            `- Natural, modern tone — not flowery, pompous or archaic. No hashtags. At most one emoji, only if it truly fits.\n` +
+            `- Keep each blessing under ${maxChars} characters, ideally 2–4 short sentences.\n` +
             `Return plain text only — no preamble, no quotes, no numbering, no labels.`
 
         if (mode === 'improve') {
