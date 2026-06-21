@@ -13,6 +13,7 @@ import { NextIntlClientProvider, useTranslations } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
 import { logEvent } from '@/lib/logEvent'
+import BlessingAssist from '@/components/BlessingAssist/BlessingAssist'
 
 // ── Image compression settings ──
 // Targeted at the highest-resolution book layout (notebook at 75% page
@@ -1364,8 +1365,24 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 onFocus={e => (e.currentTarget.style.borderColor = md.inputFocusBorder)}
                                 onBlur={e => (e.currentTarget.style.borderColor = md.inputBorder)}
                             />
-                            <div className='text-start mt-1' style={{ color: md.cardCounterColor, fontSize: '10.5px' }}>
-                                {text.length}/{maxChars}
+                            <div className='flex items-center justify-between gap-2 mt-1'>
+                                <BlessingAssist
+                                    weddingId={weddingId}
+                                    draft={text}
+                                    onUse={s => setText((s || '').slice(0, maxChars))}
+                                    locale={locale}
+                                    theme={{
+                                        accent: md.accentColor,
+                                        title: md.titleColor,
+                                        sub: md.subtitleColor,
+                                        inputBg: md.inputBg,
+                                        inputBorder: md.inputBorder,
+                                        text: md.inputTextColor,
+                                    }}
+                                />
+                                <span style={{ color: md.cardCounterColor, fontSize: '10.5px' }}>
+                                    {text.length}/{maxChars}
+                                </span>
                             </div>
                         </div>
 
