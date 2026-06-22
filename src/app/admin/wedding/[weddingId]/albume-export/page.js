@@ -66,6 +66,14 @@ const PAGE_CM = 22
 const PAGE_PX = cmToPx(PAGE_CM) // 3118 px @ 360 DPI (≈ 2598 px would be 300 DPI)
 const JPEG_QUALITY = 0.95
 
+// Bleed — render every page/cover slightly LARGER than the 22×22 trim so
+// that when albume auto-places the image it covers the whole page edge to
+// edge (into the dashed bleed area) with no cream gap. albume trims the
+// overflow. Square in / square out, so no distortion.
+const BLEED_MM = 4
+const BLEED_PX = mmToPx(BLEED_MM)
+const FULL_PX = PAGE_PX + 2 * BLEED_PX // full bled canvas, square
+
 const SAFE_INSET_MM = 10        // keep faces/text this far from edges
 const ALBUME_URL = 'https://www.albume.co.il/express_album'
 
@@ -106,7 +114,7 @@ function AlbumeExportContent() {
     const [entries, setEntries] = useState([])
     const [loadStatus, setLoadStatus] = useState('loading')
     const [pageCount, setPageCount] = useState(MIN_PAGES)
-    const [includeCover, setIncludeCover] = useState(false)
+    const [includeCover, setIncludeCover] = useState(true)
     const [running, setRunning] = useState(false)
     const [progress, setProgress] = useState({ done: 0, total: 0, label: '' })
     const [done, setDone] = useState(false)
@@ -143,9 +151,14 @@ function AlbumeExportContent() {
         const fromWedding = wedding?.bookDesign || wedding?.book?.designSettings || {}
         return { ...defaultStyle, ...fromWedding }
     })()
+    // Cover design — mirror the /viewer exactly: coverDesign, else fall back
+    // to bookDesign, merged over defaults, with the event locale injected so
+    // BookCoverTemplate builds the title in the right language. This is the
+    // SAME source the viewer's front cover uses, so the exported cover looks
+    // identical to what the couple sees in the viewer.
     const coverDesign = (() => {
-        const c = wedding?.coverDesign || {}
-        return { ...defaultStyle, ...c }
+        const c = wedding?.coverDesign || wedding?.bookDesign || {}
+        return { ...defaultStyle, ...c, locale: wedding?.locale || 'he' }
     })()
 
     const slotsNeeded = entries.length
@@ -202,7 +215,7 @@ function AlbumeExportContent() {
         for (let i = 0; i < pageCount; i++) {
             renderList.push({ kind: 'page', entry: entries[i] || null, index: i })
         }
-        const total = (includeCover ? 1 : 0) + renderList.length
+        const total = (includeCover ? 2 : 0) + renderList.length
         setProgress({ done: 0, total, label: 'מתחיל...' })
 
         try {
@@ -210,24 +223,29 @@ function AlbumeExportContent() {
             const zip = new JSZip()
             let stepIdx = 0
 
-            // 1) Cover (optional) — front cover at 22×22.
+            // 1) Covers (optional) — front + back, full-bleed, same look as the viewer.
             if (includeCover) {
-                setProgress({ done: 0, total, label: 'מצלם כריכה...' })
+                setProgress({ done: stepIdx, total, label: 'מצלם כריכה קדמית...' })
                 setRenderingItem({ kind: 'cover' })
-                await new Promise(r => setTimeout(r, 150))
-                const coverBlob = await captureCurrentStage(PAGE_PX, PAGE_PX)
-                zip.file('cover.jpg', coverBlob)
+                await new Promise(r => setTimeout(r, 200))
+                zip.file('cover.jpg', await captureCurrentStage(FULL_PX, FULL_PX))
                 stepIdx++
-                setProgress({ done: stepIdx, total, label: 'כריכה ✓' })
+
+                setProgress({ done: stepIdx, total, label: 'מצלם כריכה אחורית...' })
+                setRenderingItem({ kind: 'back' })
+                await new Promise(r => setTimeout(r, 200))
+                zip.file('cover_back.jpg', await captureCurrentStage(FULL_PX, FULL_PX))
+                stepIdx++
+                setProgress({ done: stepIdx, total, label: 'כריכות ✓' })
             }
 
-            // 2) Pages — one 22×22 JPG per book page.
+            // 2) Pages — one full-bleed 22×22 JPG per book page.
             for (let i = 0; i < renderList.length; i++) {
                 const num = String(i + 1).padStart(3, '0')
                 setProgress({ done: stepIdx, total, label: `מצלם עמוד ${num}...` })
                 setRenderingItem(renderList[i])
                 await new Promise(r => setTimeout(r, 120))
-                const blob = await captureCurrentStage(PAGE_PX, PAGE_PX)
+                const blob = await captureCurrentStage(FULL_PX, FULL_PX)
                 zip.file(`${num}.jpg`, blob)
                 stepIdx++
                 setProgress({ done: stepIdx, total, label: `${num} ✓` })
@@ -241,9 +259,10 @@ function AlbumeExportContent() {
                 `Generated: ${new Date().toISOString()}`,
                 ``,
                 `Product on albume:  כיס 22×22 (pocket) · hard cover (כריכה קשה)`,
-                `Page dimensions:    22 × 22 cm = ${PAGE_PX} × ${PAGE_PX} px @ ${DPI} DPI`,
+                `Page dimensions:    22×22 cm trim + ${BLEED_MM}mm bleed = ${FULL_PX} × ${FULL_PX} px @ ${DPI} DPI`,
                 `File format:        JPG, sRGB, ${DPI} DPI, q=${JPEG_QUALITY}`,
-                `Files:              ${includeCover ? 'cover.jpg + ' : ''}001.jpg … ${String(renderList.length).padStart(3, '0')}.jpg  (one image per page)`,
+                `Files:              ${includeCover ? 'cover.jpg (front) + cover_back.jpg (back) + ' : ''}001.jpg … ${String(renderList.length).padStart(3, '0')}.jpg  (one image per page)`,
+                `Note:               images include bleed — in albume just let it auto-fill; it covers edge to edge.`,
                 ``,
                 `Blessings in book:  ${entries.length} · Pages exported: ${pageCount} (${Math.max(0, pageCount - entries.length)} blank)`,
                 `Safe area:          keep faces / text at least ${SAFE_INSET_MM} mm from every edge.`,
@@ -366,7 +385,7 @@ function AlbumeExportContent() {
                             <span className='text-[12px] text-[#7a6a52]'>= {pageCount} קבצי JPG (עמוד אחד לכל קובץ)</span>
                         </div>
                         <p className='text-[11px] text-[#a89378] mt-1.5'>
-                            כל עמוד = 22×22 ס&quot;מ = {PAGE_PX}×{PAGE_PX}px @ {DPI}dpi · ללא bleed · בחר את אותו מספר עמודים ב-albume.
+                            כל עמוד = 22×22 ס&quot;מ + {BLEED_MM}מ&quot;מ bleed = {FULL_PX}×{FULL_PX}px @ {DPI}dpi · התמונות נחתכות אוטומטית וממלאות מקצה לקצה ב-albume. בחר את אותו מספר עמודים ב-albume.
                         </p>
                     </div>
 
@@ -382,9 +401,9 @@ function AlbumeExportContent() {
                                 style={{ accentColor: '#aa8840' }}
                             />
                             <div className='flex-1'>
-                                <p className='text-[12.5px] font-bold text-[#3d2e1a]'>כלול cover.jpg (כריכת חזית 22×22)</p>
+                                <p className='text-[12.5px] font-bold text-[#3d2e1a]'>כלול כריכות (קדמית + אחורית)</p>
                                 <p className='text-[11px] text-[#7a6a52] leading-relaxed mt-0.5'>
-                                    יוצר קובץ <b>cover.jpg</b> בגודל 22×22 ({PAGE_PX}×{PAGE_PX}px) עם עיצוב הכריכה. השאר כבוי אם תבחר כריכה מעוצבת ישירות ב-albume.
+                                    יוצר <b>cover.jpg</b> (כריכה קדמית — בדיוק כמו ב-viewer) ו-<b>cover_back.jpg</b> (כריכה אחורית בעיצוב תואם), עם bleed כדי שימלאו מקצה לקצה. השאר דולק אם אתה רוצה שהמערכת תפיק גם את הכריכות.
                                 </p>
                             </div>
                         </label>
@@ -407,7 +426,7 @@ function AlbumeExportContent() {
                             className='w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-white text-[14px] font-bold'
                             style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', boxShadow: '0 10px 22px -10px rgba(170,136,64,0.45)' }}
                         >
-                            <FileArchive size={16} /> ייצא ZIP של {pageCount + (includeCover ? 1 : 0)} קבצים
+                            <FileArchive size={16} /> ייצא ZIP של {pageCount + (includeCover ? 2 : 0)} קבצים
                         </button>
                     )}
                     {running && (
@@ -446,7 +465,7 @@ function AlbumeExportContent() {
                 </div>
             </div>
 
-            {/* Hidden capture stage — sized to the current 22×22 page. */}
+            {/* Hidden capture stage — full bled 22×22 canvas (FULL_PX). */}
             <div
                 ref={stageRef}
                 aria-hidden
@@ -454,8 +473,8 @@ function AlbumeExportContent() {
                     position: 'fixed',
                     top: 0,
                     left: -99999,
-                    width: PAGE_PX,
-                    height: PAGE_PX,
+                    width: FULL_PX,
+                    height: FULL_PX,
                     overflow: 'hidden',
                     backgroundColor: '#ffffff',
                     pointerEvents: 'none',
@@ -466,8 +485,29 @@ function AlbumeExportContent() {
                     <BookCoverTemplate
                         wedding={wedding}
                         styleSettings={coverDesign}
-                        scaledWidth={PAGE_PX}
-                        scaledHeight={PAGE_PX}
+                        scaledWidth={FULL_PX}
+                        scaledHeight={FULL_PX}
+                    />
+                )}
+                {/* Back cover — clean full-bleed background from the cover
+                    design (the floral / themed surface) without title or
+                    photo, so it matches the front aesthetically. */}
+                {renderingItem?.kind === 'back' && (
+                    <div
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            backgroundColor: coverDesign?.backgroundColor || styleSettings?.backgroundColor || '#fdfaf3',
+                            backgroundImage:
+                                coverDesign?.backgroundUrl
+                                    ? `url(${coverDesign.backgroundUrl})`
+                                    : styleSettings?.backgroundUrl
+                                    ? `url(${styleSettings.backgroundUrl})`
+                                    : 'none',
+                            backgroundRepeat: 'no-repeat',
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center',
+                        }}
                     />
                 )}
                 {renderingItem?.kind === 'page' && (
@@ -475,8 +515,8 @@ function AlbumeExportContent() {
                         <BookPageTemplate
                             entry={renderingItem.entry}
                             styleSettings={styleSettings}
-                            scaledWidth={PAGE_PX}
-                            scaledHeight={PAGE_PX}
+                            scaledWidth={FULL_PX}
+                            scaledHeight={FULL_PX}
                         />
                     ) : (
                         <div
