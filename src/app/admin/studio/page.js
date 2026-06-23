@@ -1083,6 +1083,43 @@ function PropertiesPanel({
                             onChange={n => onValuesChange({ fontSizePercent: n })}
                         />
 
+                        {/* Blessing alignment — 'auto' = per-language (Hebrew
+                            right / English left, great for mixed books); or
+                            force right/center/left. Direction (RTL/LTR) is
+                            always auto-detected per blessing for correct flow. */}
+                        <PropertyAlignPicker
+                            label='יישור הברכה'
+                            value={v.textAlign}
+                            disabled={!editable}
+                            onChange={a => onValuesChange({ textAlign: a })}
+                        />
+
+                        {/* Line spacing of the blessing body. */}
+                        <PropertySlider
+                            icon={Type}
+                            label='ריווח שורות'
+                            value={v.textLineHeight ?? 1.5}
+                            min={1}
+                            max={2.4}
+                            step={0.05}
+                            disabled={!editable}
+                            onChange={n => onValuesChange({ textLineHeight: n })}
+                        />
+
+                        {/* Readability floor for LONG blessings: how small the
+                            body font may shrink to fit (with a photo). Higher =
+                            stays bigger/more readable (photo gets the squeeze). */}
+                        <PropertySlider
+                            icon={Type}
+                            label='מינ׳ גודל טקסט (ברכה ארוכה)'
+                            value={v.fontMinFactor ?? 0.62}
+                            min={0.5}
+                            max={1}
+                            step={0.02}
+                            disabled={!editable}
+                            onChange={n => onValuesChange({ fontMinFactor: n })}
+                        />
+
                         <PropertyWeightPicker
                             label='משקל פונט'
                             value={v.fontWeight}
@@ -1848,6 +1885,46 @@ function PropertyWeightPicker({ label, value, disabled, onChange }) {
                                 }),
                                 fontWeight: opt.value || 400,
                             }}
+                        >
+                            {opt.label}
+                        </button>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
+// Blessing text alignment options. 'auto' aligns each blessing by its own
+// language (Hebrew → right, English → left) — perfect for mixed books;
+// the others force one alignment regardless of language.
+const ALIGN_OPTIONS = [
+    { value: 'auto', label: 'אוטומטי' },
+    { value: 'right', label: 'ימין' },
+    { value: 'center', label: 'מרכז' },
+    { value: 'left', label: 'שמאל' },
+]
+
+function PropertyAlignPicker({ label, value, disabled, onChange }) {
+    return (
+        <div>
+            <PropertyHeader icon={Type} label={label} />
+            <div
+                className='flex flex-wrap gap-1 rounded-lg p-1'
+                style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}
+            >
+                {ALIGN_OPTIONS.map(opt => {
+                    const active = (value ?? 'center') === opt.value
+                    return (
+                        <button
+                            key={opt.value}
+                            type='button'
+                            onClick={() => !disabled && onChange(opt.value)}
+                            disabled={disabled}
+                            className={`px-2.5 py-1 rounded-md text-[11px] transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                                active ? 'text-white shadow-sm' : 'text-[#7a6a52] hover:bg-white'
+                            }`}
+                            style={{ ...(active && { background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }) }}
                         >
                             {opt.label}
                         </button>

@@ -53,8 +53,36 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
     // the body font as the blessing grows, more when a photo shares the
     // slot, so it always fits and stays readable.
     const _blessingLen = (cleanText || '').length
-    const _fitTarget = hasImage ? 230 : 360
-    const fontFitFactor = Math.max(0.5, Math.min(1, Math.sqrt(_fitTarget / Math.max(_blessingLen, _fitTarget))))
+    // `fontFitTarget` is the length beyond which the body font starts to
+    // shrink; `fontMinFactor` is the readable floor it never goes below.
+    // Both are tunable per-preset from the studio so the owner can balance
+    // text size against the photo (a long blessing + photo no longer
+    // collapses to an unreadable size).
+    const _fitTarget = Number.isFinite(styleSettings.fontFitTarget)
+        ? styleSettings.fontFitTarget
+        : (hasImage ? 230 : 360)
+    const _minFactor = Number.isFinite(styleSettings.fontMinFactor) ? styleSettings.fontMinFactor : 0.62
+    const fontFitFactor = Math.max(_minFactor, Math.min(1, Math.sqrt(_fitTarget / Math.max(_blessingLen, _fitTarget))))
+
+    // Per-blessing text direction — detect the dominant script so a Hebrew
+    // blessing flows RTL and an English one LTR. Critical for mixed books
+    // (some guests write Hebrew, some English) so punctuation/wrapping and
+    // alignment land correctly on EACH blessing independently.
+    const detectDir = t => {
+        const s = String(t || '')
+        const heb = (s.match(/[֐-׿]/g) || []).length
+        const lat = (s.match(/[A-Za-z]/g) || []).length
+        return lat > heb ? 'ltr' : 'rtl'
+    }
+    const blessingDir = detectDir(cleanText)
+    const nameDir = detectDir(entry.name)
+    // Alignment preset: 'auto' follows each blessing's language (Hebrew →
+    // right, English → left); 'right' | 'center' | 'left' force it regardless
+    // of language. Default stays 'center' so existing books look unchanged.
+    const _alignFor = (pref, dir) =>
+        pref === 'auto' ? (dir === 'rtl' ? 'right' : 'left') : pref
+    const resolvedTextAlign = _alignFor(styleSettings.textAlign ?? 'center', blessingDir)
+    const resolvedNameAlign = _alignFor(styleSettings.nameAlign ?? 'center', nameDir)
 
     const elementsCount = [hasName, hasText, hasImage].filter(Boolean).length
     const onlyOne = elementsCount === 1
@@ -114,7 +142,8 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         opacity: 0.85,
                         marginTop: onlyOne ? 0 : h(styleSettings.nameMarginTop ?? 2),
                         marginBottom: onlyOne ? 0 : h(styleSettings.nameMarginBottom ?? 1),
-                        textAlign: styleSettings.nameAlign ?? 'center',
+                        direction: nameDir,
+                        textAlign: resolvedNameAlign,
                         maxWidth: w(styleSettings.nameMaxWidth ?? 60),
                         wordWrap: 'break-word',
                         position: 'relative',
@@ -167,7 +196,8 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                     style={{
                         maxWidth: w(styleSettings.textMaxWidth ?? 85),
                         marginTop: onlyOne ? 0 : h(styleSettings.textMarginTop ?? 0),
-                        textAlign: styleSettings.textAlign ?? 'center',
+                        direction: blessingDir,
+                        textAlign: resolvedTextAlign,
                         position: 'relative',
                         zIndex: 5,
                     }}

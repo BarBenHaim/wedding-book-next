@@ -1618,6 +1618,13 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                     >
                         <Printer size={14} /> WOW Pro
                     </a>
+                    <a
+                        href={`/admin/wedding/${wedding.id}/page-image`}
+                        className='inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-[#7a6a52]'
+                        style={{ background: '#fff', border: '1px solid #ead9b3' }}
+                    >
+                        <Printer size={14} /> הורד עמוד/כריכה
+                    </a>
                 </div>
                 <p className='text-[11px] text-[#a89378] mt-2 leading-relaxed'>
                     albume: ZIP של עמודים 22×22 ב-300dpi + פתיחת האשף והעתקת שם האלבום. WOW Pro: spreads layflat.
