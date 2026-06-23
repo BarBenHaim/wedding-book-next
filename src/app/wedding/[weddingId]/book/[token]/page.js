@@ -28,7 +28,7 @@
 //     security layers are deterrents for the 99% casual case,
 //     not a fortress against the 1% determined.
 
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import HTMLFlipBook from 'react-pageflip'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
@@ -546,6 +546,20 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
         ...(resolveInteriorDesign(wedding) || {}),
     }))
 
+    // The actual page sequence the book renders — entries expanded by the
+    // smart auto-split (a long blessing → its own text page + photo page).
+    // Hoisted so the flipbook's key + startPage track the REAL page count.
+    // Keying react-pageflip on the un-expanded entries.length made it keep
+    // the pre-split page count and silently drop the extra split pages once
+    // autoSplit loaded from the design — i.e. missing blessings.
+    const bookPages = useMemo(
+        () => expandBookPages(entries, {
+            autoSplit: styleSettings.autoSplit,
+            splitThreshold: styleSettings.splitThreshold,
+        }),
+        [entries, styleSettings.autoSplit, styleSettings.splitThreshold]
+    )
+
     // ── Cover style — pinned to the wedding owner's choice ─────────
     // The front cover (BookCoverTemplate, with the couple's names) is
     // the wedding owner's territory: their design from /viewer should
@@ -944,6 +958,10 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                         }}
                     >
                         <HTMLFlipBook
+                            // Remount when the real (expanded) page count
+                            // changes so react-pageflip rebuilds its internal
+                            // page list and never drops the extra split pages.
+                            key={`flip-${bookPages.length}`}
                             ref={flipRef}
                             width={pageSize.w}
                             height={pageSize.h}
@@ -955,7 +973,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                             // helpers below this means the user lands
                             // on page #totalPages and counts down to
                             // page 1 as they flip "next".
-                            startPage={entries.length + 1}
+                            startPage={bookPages.length + 1}
                             usePortrait={pageSize.isPortrait}
                             mobileScrollSupport={true}
                             // drawShadow=false matches /viewer — the
@@ -989,7 +1007,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                             <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
                                 <BookBackCoverTemplate scaledWidth={pageSize.w} scaledHeight={pageSize.h} />
                             </div>
-                            {expandBookPages(entries, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold }).map(entry => (
+                            {bookPages.map(entry => (
                                 <div key={entry.id} style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
                                     <BookPageTemplate
                                         entry={entry}

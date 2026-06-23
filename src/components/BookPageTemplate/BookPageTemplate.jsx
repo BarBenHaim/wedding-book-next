@@ -213,7 +213,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                     }}
                 >
                     <p
-                        className={styleSettings.fontClass}
+                        className={blessingDir === 'ltr' && styleSettings.fontClassLatin ? styleSettings.fontClassLatin : styleSettings.fontClass}
                         style={{
                             fontSize: h((styleSettings.fontSizePercent ?? 3) * fontFitFactor),
                             // See fontWeight comment on the name block above —

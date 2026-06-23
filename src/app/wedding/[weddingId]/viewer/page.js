@@ -711,7 +711,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                 // so we need the fresh mount to land on
                                 // the FrontCover (which is now the LAST
                                 // child after the RTL reversal below).
-                                key={`${viewerSize}-${isMobile}-${pages.length}`}
+                                key={`${viewerSize}-${isMobile}-${displayPages.length}`}
                                 width={viewerSize}
                                 height={viewerSize}
                                 size='fixed'
@@ -725,7 +725,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                 // triggered by the key change above
                                 // bumps us to the FrontCover once data
                                 // arrives.
-                                startPage={pages.length + 1}
+                                startPage={displayPages.length + 1}
                                 mobileScrollSupport={true}
                                 className='book-flip'
                                 drawShadow={false}

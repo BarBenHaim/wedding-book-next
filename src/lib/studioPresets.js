@@ -306,11 +306,15 @@ export function resolvePreset(preset) {
     if (!preset || !preset.values) return preset
     const v = preset.values
     const fontEntry = v.fontKey ? FONTS_REGISTRY[v.fontKey] : null
+    // Separate font for LATIN/English blessings (used when a blessing is
+    // detected as English). Lets a mixed book pair, e.g., a Hebrew serif
+    // with a matching English serif.
+    const latinFontEntry = v.fontKeyLatin ? FONTS_REGISTRY[v.fontKeyLatin] : null
     const nameFontEntry = v.nameFontKey ? FONTS_REGISTRY[v.nameFontKey] : null
     const frameEntry = v.frameId ? FRAMES_REGISTRY[v.frameId] : null
     // Strip the stable keys from the output so the wedding doc that
     // gets saved doesn't accumulate both shapes.
-    const { fontKey, nameFontKey, frameId, ...rest } = v
+    const { fontKey, fontKeyLatin, nameFontKey, frameId, ...rest } = v
     // Build values WITHOUT undefined keys — Firestore's client SDK rejects
     // `undefined` field values (the JSON round-trip in server paths hid this,
     // but a direct client setDoc from the portal does not). Only set
@@ -318,6 +322,7 @@ export function resolvePreset(preset) {
     // falls back gracefully when they're absent.
     const values = { ...rest, frame: frameEntry ? frameEntry.src : null }
     if (fontEntry) values.fontClass = fontEntry.font.className
+    if (latinFontEntry) values.fontClassLatin = latinFontEntry.font.className
     if (nameFontEntry) values.nameFontClass = nameFontEntry.font.className
     return { ...preset, values }
 }

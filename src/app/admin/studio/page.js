@@ -1065,10 +1065,22 @@ function PropertiesPanel({
 
                         <PropertyFontEdit
                             icon={Type}
-                            label='פונט'
+                            label='פונט הברכה (עברית)'
                             fontKey={v.fontKey}
                             disabled={!editable}
                             onChange={k => onValuesChange({ fontKey: k })}
+                        />
+
+                        {/* Separate font for English blessings — the book
+                            auto-detects each blessing's language and uses this
+                            font for English ones (falls back to the Hebrew font
+                            if not set). Great for mixed books like Jerry's. */}
+                        <PropertyFontEdit
+                            icon={Type}
+                            label='פונט הברכה (אנגלית)'
+                            fontKey={v.fontKeyLatin}
+                            disabled={!editable}
+                            onChange={k => onValuesChange({ fontKeyLatin: k })}
                         />
 
                         <PropertySlider
