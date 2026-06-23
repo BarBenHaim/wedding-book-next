@@ -41,6 +41,7 @@ import { getEntries } from '@/lib/classifyMedia'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
+import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 import {
     Printer, Lock, CheckCircle2, Loader2, AlertTriangle,
@@ -493,22 +494,7 @@ function AlbumeExportContent() {
                     design (the floral / themed surface) without title or
                     photo, so it matches the front aesthetically. */}
                 {renderingItem?.kind === 'back' && (
-                    <div
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            backgroundColor: coverDesign?.backgroundColor || styleSettings?.backgroundColor || '#fdfaf3',
-                            backgroundImage:
-                                coverDesign?.backgroundUrl
-                                    ? `url(${coverDesign.backgroundUrl})`
-                                    : styleSettings?.backgroundUrl
-                                    ? `url(${styleSettings.backgroundUrl})`
-                                    : 'none',
-                            backgroundRepeat: 'no-repeat',
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
-                        }}
-                    />
+                    <BookBackCoverTemplate scaledWidth={FULL_PX} scaledHeight={FULL_PX} />
                 )}
                 {renderingItem?.kind === 'page' && (
                     renderingItem.entry ? (

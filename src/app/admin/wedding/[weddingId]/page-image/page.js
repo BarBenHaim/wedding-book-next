@@ -30,6 +30,7 @@ import { getEntries } from '@/lib/classifyMedia'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
+import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
 import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 import { Printer, Lock, Loader2, AlertTriangle, ArrowLeft, Download } from 'lucide-react'
 
@@ -246,12 +247,7 @@ function PageImageContent() {
                     <BookCoverTemplate wedding={wedding} styleSettings={coverDesign} scaledWidth={PX} scaledHeight={PX} />
                 )}
                 {renderingItem?.kind === 'back' && (
-                    <div style={{
-                        width: '100%', height: '100%',
-                        backgroundColor: coverDesign?.backgroundColor || styleSettings?.backgroundColor || '#fdfaf3',
-                        backgroundImage: coverDesign?.backgroundUrl ? `url(${coverDesign.backgroundUrl})` : styleSettings?.backgroundUrl ? `url(${styleSettings.backgroundUrl})` : 'none',
-                        backgroundRepeat: 'no-repeat', backgroundSize: 'cover', backgroundPosition: 'center',
-                    }} />
+                    <BookBackCoverTemplate scaledWidth={PX} scaledHeight={PX} />
                 )}
                 {renderingItem?.kind === 'page' && (
                     renderingItem.entry ? (
