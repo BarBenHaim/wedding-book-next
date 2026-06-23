@@ -169,7 +169,12 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 centre-crop — uniformity > preserving every pixel
                 of a single edge case. */}
             {hasImage && (() => {
-                const slotW = w(styleSettings.imageStyle?.width ?? 80)
+                // On a dedicated split photo page, show the photo large so it
+                // fills the page nicely (it's the only thing there). Otherwise
+                // use the preset's image width.
+                const isSplitPhoto = entry?._split === 'photo'
+                const baseW = styleSettings.imageStyle?.width ?? 80
+                const slotW = w(isSplitPhoto ? Math.max(90, baseW) : baseW)
                 const slotH = slotW * 0.75 // 4:3 lock
                 return (
                     <EntryPhoto
