@@ -43,6 +43,7 @@ import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import { expandBookPages } from '@/lib/bookPages'
 import {
     Printer, Lock, CheckCircle2, Loader2, AlertTriangle,
     ArrowLeft, FileArchive, Info, ExternalLink, Check,
@@ -138,7 +139,10 @@ function AlbumeExportContent() {
                 setEntries(list)
                 // Default to enough pages to hold every blessing (rounded
                 // up to the 24 minimum), so the common case is one click.
-                setPageCount(Math.max(MIN_PAGES, Math.min(MAX_PAGES, list.length)))
+                // Account for smart auto-split (a long blessing becomes 2 pages).
+                const _bd = wSnap.data()?.bookDesign || wSnap.data()?.book?.designSettings || {}
+                const _needed = expandBookPages(list, { autoSplit: _bd.autoSplit, splitThreshold: _bd.splitThreshold }).length
+                setPageCount(Math.max(MIN_PAGES, Math.min(MAX_PAGES, _needed)))
                 setLoadStatus('ready')
             } catch (err) {
                 console.error('[albume-export] load failed', err)
@@ -162,7 +166,10 @@ function AlbumeExportContent() {
         return { ...defaultStyle, ...c, locale: wedding?.locale || 'he' }
     })()
 
-    const slotsNeeded = entries.length
+    // Expand entries into the actual page sequence (smart auto-split honored
+    // from the book design) — the print must match the displayed book.
+    const bookPages = expandBookPages(entries, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold })
+    const slotsNeeded = bookPages.length
     const willPad = slotsNeeded < pageCount
     const willTrim = slotsNeeded > pageCount
 
@@ -214,7 +221,7 @@ function AlbumeExportContent() {
 
         const renderList = []
         for (let i = 0; i < pageCount; i++) {
-            renderList.push({ kind: 'page', entry: entries[i] || null, index: i })
+            renderList.push({ kind: 'page', entry: bookPages[i] || null, index: i })
         }
         const total = (includeCover ? 2 : 0) + renderList.length
         setProgress({ done: 0, total, label: 'מתחיל...' })

@@ -16,6 +16,7 @@ import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
+import { expandBookPages } from '@/lib/bookPages'
 import PrintOrderModal from '@/components/PrintOrderModal/PrintOrderModal'
 import { getEntries } from '../../../../lib/classifyMedia'
 import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
@@ -93,6 +94,14 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // return below would violate the rules of hooks (different render
     // paths returned different hook counts on first vs. second render).
     const styleWithLocale = useMemo(() => ({ ...styleSettings, locale }), [styleSettings, locale])
+    // Smart auto-split pagination (optional, per-design): a long blessing +
+    // photo becomes a blessing-only page followed by a photo-only page; short
+    // ones stay combined. `pages` is already in flip order, and the split
+    // keeps each blessing's two pages adjacent, so order stays correct.
+    const displayPages = useMemo(
+        () => expandBookPages(pages, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold }),
+        [pages, styleSettings.autoSplit, styleSettings.splitThreshold]
+    )
     // Cover-only style merged with locale, used by BookCoverTemplate
     // so dir/RTL behavior matches the body without leaking the book's
     // typography changes.
@@ -746,7 +755,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                 <div className='demo-page shadow-inner'>
                                     <BookBackCoverTemplate scaledWidth={viewerSize} scaledHeight={viewerSize} />
                                 </div>
-                                {pages.map(entry => (
+                                {displayPages.map(entry => (
                                     <div key={entry.id} className='demo-page border-l border-[#AA8840]/10'>
                                         <BookPageTemplate
                                             entry={entry}
@@ -879,7 +888,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
             <div style={{ position: 'fixed', left: '-9999px', top: 0 }}>
                 {/* 1. Content PDF (8.5x8.5) */}
                 <div ref={contentRef}>
-                    {pages.map(entry => (
+                    {displayPages.map(entry => (
                         <div
                             key={entry.id}
                             className='page-for-pdf'
@@ -969,7 +978,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                     {/* Interior content — one page per entry, at the format's
                         content size (includes bleed). */}
                     <div ref={exportContentRef}>
-                        {pages.map(entry => {
+                        {displayPages.map(entry => {
                             // Scale to a comfortable 1000px render width; the
                             // PDF generator will rescale to hit 300 DPI.
                             const renderW = 1000

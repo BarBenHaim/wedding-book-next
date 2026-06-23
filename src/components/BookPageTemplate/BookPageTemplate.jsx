@@ -86,13 +86,18 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
 
     const elementsCount = [hasName, hasText, hasImage].filter(Boolean).length
     const onlyOne = elementsCount === 1
+    // Center the content block vertically when the page has a single element
+    // OR no photo at all (e.g. a blessing-only page produced by the smart
+    // auto-split layout) — so a stand-alone blessing sits centered and roomy
+    // instead of clinging to the top.
+    const centerBlock = onlyOne || !hasImage
 
     const { w, h } = pageScale(scaledWidth, scaledHeight)
 
     return (
         <div
             className={`relative flex flex-col items-center text-center box-border overflow-hidden ${
-                onlyOne ? 'justify-center' : ''
+                centerBlock ? 'justify-center' : ''
             }`}
             style={{
                 width: '100%',

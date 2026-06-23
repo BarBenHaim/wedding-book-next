@@ -35,6 +35,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebaseClient'
 import { getEntries } from '@/lib/classifyMedia'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
+import { expandBookPages } from '@/lib/bookPages'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
 import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
@@ -988,7 +989,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                             <div style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
                                 <BookBackCoverTemplate scaledWidth={pageSize.w} scaledHeight={pageSize.h} />
                             </div>
-                            {entries.map(entry => (
+                            {expandBookPages(entries, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold }).map(entry => (
                                 <div key={entry.id} style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
                                     <BookPageTemplate
                                         entry={entry}

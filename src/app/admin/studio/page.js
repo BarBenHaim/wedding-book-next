@@ -1120,6 +1120,28 @@ function PropertiesPanel({
                             onChange={n => onValuesChange({ fontMinFactor: n })}
                         />
 
+                        {/* Smart auto-split: a long blessing + photo becomes a
+                            blessing-only page (centered, roomy) followed by a
+                            photo-only page; short blessings stay combined. */}
+                        <PropertyToggle
+                            label='פיצול אוטומטי: ברכה ארוכה לעמוד נפרד'
+                            value={v.autoSplit}
+                            disabled={!editable}
+                            onChange={b => onValuesChange({ autoSplit: b })}
+                        />
+                        {v.autoSplit && (
+                            <PropertySlider
+                                icon={Type}
+                                label='אורך לפיצול (תווים)'
+                                value={v.splitThreshold ?? 240}
+                                min={120}
+                                max={600}
+                                step={10}
+                                disabled={!editable}
+                                onChange={n => onValuesChange({ splitThreshold: n })}
+                            />
+                        )}
+
                         <PropertyWeightPicker
                             label='משקל פונט'
                             value={v.fontWeight}
@@ -1927,6 +1949,34 @@ function PropertyAlignPicker({ label, value, disabled, onChange }) {
                             style={{ ...(active && { background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }) }}
                         >
                             {opt.label}
+                        </button>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
+// Simple on/off segmented toggle, styled like the pickers above.
+function PropertyToggle({ label, value, disabled, onChange, onLabel = 'דלוק', offLabel = 'כבוי' }) {
+    return (
+        <div>
+            <PropertyHeader icon={Type} label={label} />
+            <div className='flex gap-1 rounded-lg p-1' style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}>
+                {[[true, onLabel], [false, offLabel]].map(([val, lbl]) => {
+                    const active = Boolean(value) === val
+                    return (
+                        <button
+                            key={String(val)}
+                            type='button'
+                            onClick={() => !disabled && onChange(val)}
+                            disabled={disabled}
+                            className={`flex-1 px-2.5 py-1 rounded-md text-[11px] transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                                active ? 'text-white shadow-sm' : 'text-[#7a6a52] hover:bg-white'
+                            }`}
+                            style={{ ...(active && { background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }) }}
+                        >
+                            {lbl}
                         </button>
                     )
                 })}

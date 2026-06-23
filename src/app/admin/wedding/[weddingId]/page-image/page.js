@@ -32,6 +32,7 @@ import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
 import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import { expandBookPages } from '@/lib/bookPages'
 import { Printer, Lock, Loader2, AlertTriangle, ArrowLeft, Download } from 'lucide-react'
 
 // Square render resolution. The book pages are square; this is high enough
@@ -104,14 +105,17 @@ function PageImageContent() {
         return { ...defaultStyle, ...c, locale }
     })()
 
+    // Interior pages, with smart auto-split honored (matches the book/viewer).
+    const bookPages = expandBookPages(entries, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold })
+
     // total = front cover + interior pages + back cover.
-    const total = entries.length + 2
+    const total = bookPages.length + 2
 
     // Map a 1-based page number to what to render.
     function itemForPage(num) {
         if (num <= 1) return { kind: 'cover', name: 'cover-front' }
         if (num >= total) return { kind: 'back', name: 'cover-back' }
-        const entry = entries[num - 2] || null
+        const entry = bookPages[num - 2] || null
         return { kind: 'page', entry, name: `page-${String(num).padStart(3, '0')}` }
     }
 
