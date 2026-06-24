@@ -19,7 +19,7 @@
 // /textures/polaroid-frame-botanical.png) — the open clear area suits the
 // off-center signature placement. Works on any background.
 
-import { normalizeBlessing } from '@/lib/normalizeText'
+import { getBlessingText } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
 import EntryPhoto from '../EntryPhoto/EntryPhoto'
@@ -51,7 +51,7 @@ function Heart({ color = GOLD, filled = false }) {
 }
 
 export default function ScrapbookPageLayout({ entry, styleSettings, scaledWidth, scaledHeight }) {
-    const cleanText = normalizeBlessing(entry.text)
+    const cleanText = getBlessingText(entry)
     const resolvedTexture = resolveTextureUrl(styleSettings.texture)
     const hasName = Boolean(entry.name)
     const hasText = Boolean(cleanText)

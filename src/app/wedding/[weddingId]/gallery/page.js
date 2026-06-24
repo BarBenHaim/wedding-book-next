@@ -61,6 +61,7 @@ export default function GalleryPage() {
                             id: d.id,
                             name: e.name || '',
                             blessing: e.blessing || e.text || '',
+                            preserveLineBreaks: !!e.preserveLineBreaks,
                             photoUrl: e.photoUrl || e.imageUrl || '',
                             createdAt:
                                 e.timestamp?.toDate?.()?.toISOString?.() ||
@@ -237,11 +238,15 @@ function GalleryApp({ eventType, entries, loading }) {
                                     >
                                         {e.name || 'אנונימי'}
                                     </div>
+                                    {/* Match the book: render the blessing exactly as
+                                        typed when the admin set preserveLineBreaks on
+                                        this entry; otherwise collapse whitespace to a
+                                        single flowing line. */}
                                     <div
-                                        className='leading-relaxed whitespace-pre-wrap'
-                                        style={{ color: palette.textColor, fontSize: '14px' }}
+                                        className='leading-relaxed'
+                                        style={{ color: palette.textColor, fontSize: '14px', whiteSpace: e.preserveLineBreaks ? 'pre-wrap' : 'normal' }}
                                     >
-                                        {e.blessing}
+                                        {e.preserveLineBreaks ? e.blessing : (e.blessing || '').replace(/\s+/g, ' ').trim()}
                                     </div>
                                 </div>
                             </div>

@@ -17,7 +17,7 @@
 //
 // Used by BookPageTemplate when styleSettings.template === 'collage'.
 
-import { normalizeBlessing } from '@/lib/normalizeText'
+import { getBlessingText } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { gveretLevin } from '@/app/fonts'
 import { pageScale } from '@/lib/pageGeometry'
@@ -63,7 +63,7 @@ function Sparkle({ size = '1em', color = GOLD }) {
 }
 
 export default function CollagePageLayout({ entry, styleSettings, scaledWidth, scaledHeight }) {
-    const cleanText = normalizeBlessing(entry.text)
+    const cleanText = getBlessingText(entry)
     const resolvedTexture = resolveTextureUrl(styleSettings.texture)
     const hasName = Boolean(entry.name)
     const hasText = Boolean(cleanText)

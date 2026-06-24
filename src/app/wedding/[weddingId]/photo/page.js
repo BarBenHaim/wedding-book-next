@@ -8,7 +8,6 @@ import Cropper from 'react-easy-crop'
 import imageCompression from 'browser-image-compression'
 import { enqueue, genId } from '../../../../lib/offlineQueue'
 import { uploadQueuedEntry } from '../../../../lib/uploadEntry'
-import { normalizeBlessing } from '../../../../lib/normalizeText'
 import { NextIntlClientProvider, useTranslations } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
@@ -726,7 +725,12 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
             id: genId(),
             weddingId,
             name: name || '',
-            text: normalizeBlessing(text),
+            // Store the text as the guest typed it (line breaks and all).
+            // The book templates collapse whitespace at display time by
+            // default via getBlessingText(); the admin can flip an
+            // entry's preserveLineBreaks flag to render the raw text
+            // exactly as written.
+            text: text || '',
             image: finalBlob,
         }
 

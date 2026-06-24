@@ -17,7 +17,6 @@ import Link from 'next/link'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebaseClient'
 import imageCompression from 'browser-image-compression'
-import { normalizeBlessing } from '@/lib/normalizeText'
 import { normalizeLocale } from '@/i18n/locales'
 import { updateSubmissionMeta } from '@/lib/mySubmissions'
 
@@ -166,7 +165,9 @@ export default function EditBlessingPage() {
                 weddingId,
                 entryId,
                 name: name.trim(),
-                text: normalizeBlessing(text),
+                // Store as-typed; the book templates collapse whitespace
+                // at display time unless preserveLineBreaks is set.
+                text: text || '',
             }
             if (removeImage && !newBlob) {
                 payload.removeImage = true

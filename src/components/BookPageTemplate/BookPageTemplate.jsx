@@ -1,6 +1,6 @@
 'use client'
 
-import { normalizeBlessing } from '@/lib/normalizeText'
+import { getBlessingText } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
 import EntryPhoto from '../EntryPhoto/EntryPhoto'
@@ -31,11 +31,11 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
     if (styleSettings?.template === 'collage') return <CollagePageLayout {...passThrough} />
 
     // ── Classic layout (default) ─────────────────────────────────────────
-    // Auto-clean the blessing at display time so legacy entries with extra
-    // blank lines / runs of spaces don't overflow the page. Newly submitted
-    // blessings are already normalized on the way in, so this is a no-op for
-    // them.
-    const cleanText = normalizeBlessing(entry.text)
+    // getBlessingText collapses whitespace to one line by default, but if
+    // entry.preserveLineBreaks is true the admin opted this entry into
+    // keep-as-typed mode and we return the raw stored text (the templates
+    // already use white-space: pre-line so \n characters render).
+    const cleanText = getBlessingText(entry)
     const resolvedTexture = resolveTextureUrl(styleSettings.texture)
     // Spring 2026: the studio collapsed frames + textures + page bgs
     // into one "background" gallery, written to the unified

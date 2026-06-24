@@ -31,7 +31,7 @@
 // different photo size, they should switch back to the classic template
 // where imageStyle is honored.
 
-import { normalizeBlessing } from '@/lib/normalizeText'
+import { getBlessingText } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
 import EntryPhoto from '../EntryPhoto/EntryPhoto'
@@ -63,9 +63,9 @@ function Heart({ color = GOLD }) {
 }
 
 export default function PolaroidPageLayout({ entry, styleSettings, scaledWidth, scaledHeight }) {
-    // Same normalization as BookPageTemplate so legacy entries with messy
-    // whitespace still render cleanly.
-    const cleanText = normalizeBlessing(entry.text)
+    // getBlessingText: collapse whitespace by default; preserve newlines
+    // if the admin flipped preserveLineBreaks for this entry.
+    const cleanText = getBlessingText(entry)
     const resolvedTexture = resolveTextureUrl(styleSettings.texture)
     const hasName = Boolean(entry.name)
     const hasText = Boolean(cleanText)

@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation'
 import { doc, updateDoc, deleteDoc, writeBatch, collection, addDoc } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../../../../lib/firebaseClient'
-import { normalizeBlessing } from '../../../../lib/normalizeText'
+import { getBlessingText } from '../../../../lib/normalizeText'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import EntryPhoto from '@/components/EntryPhoto/EntryPhoto'
@@ -190,13 +190,33 @@ export default function AdminDashboard() {
 
     async function handleUpdateEntry(id) {
         if (!weddingId) return
-        const cleanedText = normalizeBlessing(editValues.text)
+        // Store the text as-typed. The book templates collapse whitespace
+        // at display time via getBlessingText() unless the entry has
+        // preserveLineBreaks set — in which case the admin's line breaks
+        // here will render verbatim on the book page.
+        const nextText = editValues.text || ''
         await updateDoc(doc(db, 'weddings', weddingId, 'entries', id), {
             name: editValues.name,
-            text: cleanedText,
+            text: nextText,
         })
-        setEntries(prev => prev.map(e => (e.id === id ? { ...e, ...editValues, text: cleanedText } : e)))
+        setEntries(prev => prev.map(e => (e.id === id ? { ...e, ...editValues, text: nextText } : e)))
         setEditingId(null)
+    }
+
+    // Per-entry toggle: when true, the book templates render the text
+    // exactly as typed (line breaks preserved). When false / missing,
+    // whitespace collapses to a single flowing paragraph like before.
+    async function togglePreserveLineBreaks(entryId, next) {
+        if (!weddingId) return
+        try {
+            await updateDoc(doc(db, 'weddings', weddingId, 'entries', entryId), {
+                preserveLineBreaks: next,
+            })
+            setEntries(prev => prev.map(e => (e.id === entryId ? { ...e, preserveLineBreaks: next } : e)))
+        } catch (err) {
+            console.error('Failed to toggle preserveLineBreaks', err)
+            alert('שגיאה בשמירת הגדרת ירידות שורה')
+        }
     }
 
     async function handleDragEnd(result) {
@@ -505,11 +525,16 @@ export default function AdminDashboard() {
                                                                             )}
                                                                         </div>
 
-                                                                        {/* Text */}
+                                                                        {/* Text — preview matches what the book will render: raw
+                                                                            text (with breaks) if preserveLineBreaks is on, the
+                                                                            collapsed normalized version otherwise. */}
                                                                         {entry.text && (
                                                                             <div className='text-[13px] text-gray-500 leading-relaxed'>
-                                                                                <p className={expandedId !== entry.id && entry.text?.length > 80 ? 'line-clamp-2' : ''}>
-                                                                                    {entry.text}
+                                                                                <p
+                                                                                    className={expandedId !== entry.id && entry.text?.length > 80 ? 'line-clamp-2' : ''}
+                                                                                    style={entry.preserveLineBreaks ? { whiteSpace: 'pre-line' } : undefined}
+                                                                                >
+                                                                                    {getBlessingText(entry)}
                                                                                 </p>
                                                                                 {entry.text?.length > 80 && (
                                                                                     <button
@@ -564,6 +589,23 @@ export default function AdminDashboard() {
                                                                                 >
                                                                                     <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={2} className='w-4 h-4'><path strokeLinecap='round' strokeLinejoin='round' d='M6.75 3v2.25M6.75 3H4.5m2.25 0h12.75A1.5 1.5 0 0 1 21 4.5v12.75m0 0V19.5m0-2.25h-2.25M17.25 21v-2.25M17.25 21H4.5A1.5 1.5 0 0 1 3 19.5V6.75m0 0H5.25M3 6.75V4.5' /></svg>
                                                                                     <span>תמונה</span>
+                                                                                </button>
+                                                                            )}
+                                                                            {/* Preserve-line-breaks toggle. Default OFF — guest's
+                                                                                whitespace collapses on the book page. When ON,
+                                                                                the book renders the blessing exactly as typed. */}
+                                                                            {entry.text && (
+                                                                                <button
+                                                                                    onClick={() => togglePreserveLineBreaks(entry.id, !entry.preserveLineBreaks)}
+                                                                                    className={`flex items-center gap-1 px-2.5 py-2 text-xs font-medium rounded-lg active:scale-95 transition-all ${
+                                                                                        entry.preserveLineBreaks
+                                                                                            ? 'text-[#AA8840] bg-[#AA8840]/10 hover:bg-[#AA8840]/15'
+                                                                                            : 'text-gray-400 hover:text-[#AA8840] hover:bg-[#AA8840]/5'
+                                                                                    }`}
+                                                                                    title={entry.preserveLineBreaks ? 'הברכה מוצגת בספר עם ירידות שורה כפי שנכתבו — לחץ לבטל' : 'הצג את הברכה בספר עם ירידות שורה כפי שנכתבו'}
+                                                                                >
+                                                                                    <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={2} className='w-4 h-4'><path strokeLinecap='round' strokeLinejoin='round' d='M3 6h18M3 12h12m-12 6h18M16 9l3 3m0 0l-3 3m3-3H9' /></svg>
+                                                                                    <span>{entry.preserveLineBreaks ? 'שורות נשמרות' : 'שמור שורות'}</span>
                                                                                 </button>
                                                                             )}
                                                                             <button

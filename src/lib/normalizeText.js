@@ -29,3 +29,21 @@ export function normalizeBlessing(text) {
     // One pass collapses everything down to a single space.
     return text.replace(/\s+/g, ' ').trim()
 }
+
+// Display-time helper. The admin can opt an individual entry into "keep
+// the line breaks the guest typed" via the per-entry preserveLineBreaks
+// flag on the Firestore doc. Default is off — the text is collapsed into
+// one logical line just like before. When ON, the raw text is returned
+// as-stored; the page templates already set white-space: pre-line so
+// embedded \n characters render as line breaks.
+//
+// Caveat for legacy entries: text submitted before the save-time
+// normalizer was removed has already had its line breaks flattened on
+// the way into Firestore. Flipping preserveLineBreaks on for those
+// entries won't bring the breaks back — the admin has to re-type them
+// in the edit panel.
+export function getBlessingText(entry) {
+    if (!entry) return ''
+    if (entry.preserveLineBreaks) return entry.text || ''
+    return normalizeBlessing(entry.text)
+}
