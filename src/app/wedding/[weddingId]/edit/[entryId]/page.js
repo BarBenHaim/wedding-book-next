@@ -19,7 +19,7 @@ import { db } from '@/lib/firebaseClient'
 import imageCompression from 'browser-image-compression'
 import { normalizeBlessing } from '@/lib/normalizeText'
 import { normalizeLocale } from '@/i18n/locales'
-import { updateSubmissionMeta, ownsSubmission } from '@/lib/mySubmissions'
+import { updateSubmissionMeta } from '@/lib/mySubmissions'
 
 const COMPRESS = { maxSizeMB: 1.5, maxWidthOrHeight: 2560, initialQuality: 0.92, useWebWorker: true }
 

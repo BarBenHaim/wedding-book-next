@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# scratch / temp syntax-check files (created in-session; OneDrive blocks unlink)
+_chk.cjs
+_chk*.cjs

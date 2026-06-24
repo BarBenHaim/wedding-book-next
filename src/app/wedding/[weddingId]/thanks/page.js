@@ -17,9 +17,10 @@ import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../../../../lib/firebaseClient'
 import { listUnsent } from '../../../../lib/offlineQueue'
 import { flushQueue } from '../../../../lib/uploadEntry'
-import { NextIntlClientProvider, useTranslations } from 'next-intl'
+import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
+import BookPagePreview from '@/components/BookPagePreview/BookPagePreview'
 
 // Outer wrapper: load the wedding doc's locale, wrap in i18n provider so
 // every string in the inner component (status badges, offline modal,
@@ -58,6 +59,7 @@ function ThanksApp() {
     const router = useRouter()
     const { weddingId } = useParams()
     const t = useTranslations('thanks')
+    const locale = useLocale()
     const searchParams = useSearchParams()
     // Entry id passed from /photo as ?eid=... — lets us VERIFY the
     // blessing actually exists in Firestore (not just "the local
@@ -283,6 +285,13 @@ function ThanksApp() {
                         {t('savedBody')}
                     </p>
                 </div>
+
+                {/* ── "Your page in the book" preview + design picker ──
+                    A delight moment: show the guest their own entry rendered as
+                    a real book page, and let them flip through the existing
+                    designs. Read-only — never changes the actual book. Only
+                    appears when we have an entry id (skips legacy bookmarks). */}
+                {entryId && verified && <BookPagePreview weddingId={weddingId} entryId={entryId} locale={locale} />}
 
                 {/* ── Pitch card — soft sales hook for the guest who just
                     enjoyed the experience and might want it for their own

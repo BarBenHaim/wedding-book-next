@@ -80,3 +80,14 @@ export function updateSubmissionMeta(weddingId, id, { name, text } = {}) {
 export function ownsSubmission(weddingId, id) {
     return getSubmissions(weddingId).some(e => e.id === id)
 }
+
+/** Forget a submission on this device (e.g. the entry was deleted/moderated). */
+export function removeSubmission(weddingId, id) {
+    if (typeof window === 'undefined' || !weddingId || !id) return
+    const all = readAll()
+    const list = Array.isArray(all[weddingId]) ? all[weddingId] : []
+    const next = list.filter(e => e && e.id !== id)
+    if (next.length === list.length) return
+    all[weddingId] = next
+    writeAll(all)
+}
