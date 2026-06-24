@@ -88,6 +88,12 @@ export default function BookPagePreview({ weddingId, entryId, locale = 'he' }) {
                 }
                 if (cancelled) return
                 setDesigns(opts)
+                // Default the picker to the long birthday-blessing style when it
+                // exists (the owner's "ברכת יום הולדת — ארוכה" preset); else any
+                // "long" style; else the book's own design (index 0).
+                let def = opts.findIndex(o => /ארוכ/.test(o.label) && /הולדת/.test(o.label))
+                if (def < 0) def = opts.findIndex(o => /ארוכ/.test(o.label))
+                setSel(def < 0 ? 0 : def)
                 setLoaded(true)
             } catch {
                 if (!cancelled) setLoaded(true)
