@@ -53,6 +53,10 @@ export default function AdminDashboard() {
     const [expandedId, setExpandedId] = useState(null)
     const [currentPage, setCurrentPage] = useState(1)
     const [showAll, setShowAll] = useState(false)
+    // Dedicated "reorder" mode: a clean, compact, single-column drag list
+    // (thumbnail + name + handle) shown instead of the big cards, so ordering
+    // many blessings is simple — no pagination, no per-card clutter.
+    const [reorderMode, setReorderMode] = useState(false)
     const [uploadingImageId, setUploadingImageId] = useState(null)
     const [framingId, setFramingId] = useState(null)
     const [framingPos, setFramingPos] = useState('50% 50%')
@@ -82,8 +86,8 @@ export default function AdminDashboard() {
     const paginatedEntries = entries.slice(startIdx, startIdx + ITEMS_PER_PAGE)
     const displayEntries = showAll ? entries : paginatedEntries
     // Offset added to a Draggable's local index to get its index in the
-    // full entries array (0 in show-all mode, page offset otherwise).
-    const pageOffset = showAll ? 0 : startIdx
+    // full entries array (0 in show-all / reorder mode, page offset otherwise).
+    const pageOffset = showAll || reorderMode ? 0 : startIdx
 
     // Persist the current order to Firestore (orderIndex per entry).
     async function persistOrder(reordered) {
@@ -280,7 +284,30 @@ export default function AdminDashboard() {
 
                     {entries.length > 0 && (
                         <div className='flex items-center gap-2'>
-                            {entries.length > ITEMS_PER_PAGE && (
+                            {/* Reorder mode — the simple way to set the order:
+                                one tap opens a clean compact drag list. */}
+                            <button
+                                onClick={() => setReorderMode(v => !v)}
+                                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all shadow-sm border font-semibold text-sm ${
+                                    reorderMode
+                                        ? 'bg-[#AA8840] text-white border-[#AA8840]'
+                                        : 'bg-white text-[#AA8840] border-[#AA8840]/15 hover:bg-[#AA8840]/5'
+                                }`}
+                                title='מצב סידור — גררו את הברכות לסדר הרצוי'
+                            >
+                                {reorderMode ? (
+                                    <>
+                                        <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}><path strokeLinecap='round' strokeLinejoin='round' d='M4.5 12.75l6 6 9-13.5' /></svg>
+                                        סיום סידור
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}><path strokeLinecap='round' strokeLinejoin='round' d='M3 7.5L7.5 3m0 0L12 7.5M7.5 3v18M21 16.5L16.5 21m0 0L12 16.5m4.5 4.5V3' /></svg>
+                                        סדר ברכות
+                                    </>
+                                )}
+                            </button>
+                            {!reorderMode && entries.length > ITEMS_PER_PAGE && (
                                 <button
                                     onClick={() => setShowAll(v => !v)}
                                     className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all shadow-sm border font-semibold text-sm ${
@@ -288,7 +315,7 @@ export default function AdminDashboard() {
                                             ? 'bg-[#AA8840] text-white border-[#AA8840]'
                                             : 'bg-white text-[#AA8840] border-[#AA8840]/15 hover:bg-[#AA8840]/5'
                                     }`}
-                                    title='הצגת כל הברכות בבת אחת מאפשרת לגרור ולסדר בין כל העמודים'
+                                    title='הצגת כל הברכות בבת אחת'
                                 >
                                     <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}><path strokeLinecap='round' strokeLinejoin='round' d='M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5' /></svg>
                                     {showAll ? 'תצוגת עמודים' : 'הצג הכל'}
@@ -297,6 +324,7 @@ export default function AdminDashboard() {
                             <button
                                 onClick={resetToChronological}
                                 className='group flex items-center gap-2 bg-white text-[#AA8840] px-4 py-2.5 rounded-xl hover:bg-[#AA8840]/5 transition-all shadow-sm border border-[#AA8840]/15 font-semibold text-sm'
+                                title='סידור מחדש לפי סדר הכתיבה'
                             >
                                 <svg className='w-4 h-4 group-hover:rotate-180 transition-transform duration-500' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}><path strokeLinecap='round' strokeLinejoin='round' d='M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99' /></svg>
                                 סדר לפי זמן
@@ -314,6 +342,76 @@ export default function AdminDashboard() {
                             </div>
                             <p className='text-lg md:text-xl font-bold text-gray-800'>הספר ממתין לברכות הראשונות</p>
                             <p className='text-gray-500 mt-2 text-sm'>שתפו את הקישור והקסם יתחיל...</p>
+                        </div>
+                    ) : reorderMode ? (
+                        /* ── Compact reorder list — the simple ordering view ── */
+                        <div>
+                            <div className='mb-3 flex items-center justify-center gap-2 text-center text-sm text-[#7a6a52] bg-[#AA8840]/5 border border-[#AA8840]/15 rounded-xl py-2.5 px-4'>
+                                <svg className='w-4 h-4 shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}><path strokeLinecap='round' strokeLinejoin='round' d='M7.5 3 3 7.5m0 0L7.5 12M3 7.5h13.5m0 9L21 21m0 0-4.5 4.5M21 21H7.5' /></svg>
+                                גררו את הברכות לסדר הרצוי — השינויים נשמרים אוטומטית
+                            </div>
+                            <DragDropContext onDragEnd={handleDragEnd}>
+                                <Droppable droppableId='reorder-list'>
+                                    {provided => (
+                                        <div ref={provided.innerRef} {...provided.droppableProps} className='space-y-2'>
+                                            {entries.map((entry, index) => (
+                                                <Draggable key={entry.id} draggableId={entry.id} index={index}>
+                                                    {(prov, snap) => (
+                                                        <div
+                                                            ref={prov.innerRef}
+                                                            {...prov.draggableProps}
+                                                            style={{ ...prov.draggableProps.style }}
+                                                            className={`flex items-center gap-3 bg-white rounded-xl border px-2.5 py-2 ${
+                                                                snap.isDragging
+                                                                    ? 'shadow-xl ring-2 ring-[#AA8840]/30 border-[#AA8840]/30'
+                                                                    : 'shadow-sm border-gray-100'
+                                                            }`}
+                                                        >
+                                                            {/* Drag handle — only this grabs, so the row scrolls normally on touch */}
+                                                            <div {...prov.dragHandleProps} className='cursor-grab active:cursor-grabbing text-gray-400 hover:text-[#AA8840] px-1 touch-none' title='גררו לסידור'>
+                                                                <svg className='w-5 h-5' viewBox='0 0 24 24' fill='currentColor'><circle cx='9' cy='6' r='1.6' /><circle cx='15' cy='6' r='1.6' /><circle cx='9' cy='12' r='1.6' /><circle cx='15' cy='12' r='1.6' /><circle cx='9' cy='18' r='1.6' /><circle cx='15' cy='18' r='1.6' /></svg>
+                                                            </div>
+                                                            {/* Position number */}
+                                                            <div className='w-6 text-center text-xs font-extrabold text-[#AA8840] shrink-0'>{index + 1}</div>
+                                                            {/* Thumbnail */}
+                                                            {entry.imageUrl ? (
+                                                                <div className='w-12 h-12 rounded-lg overflow-hidden bg-gray-50 shrink-0'>
+                                                                    <img
+                                                                        src={entry.imageUrl}
+                                                                        alt=''
+                                                                        loading='lazy'
+                                                                        className='w-full h-full object-cover'
+                                                                        style={{ objectPosition: entry.photoPosition || 'center', transform: `rotate(${((((Number(entry.photoRotation) || 0) % 360) + 360) % 360)}deg)` }}
+                                                                    />
+                                                                </div>
+                                                            ) : (
+                                                                <div className='w-12 h-12 rounded-lg bg-[#AA8840]/10 flex items-center justify-center shrink-0 text-[#AA8840]'>
+                                                                    <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.6}><path strokeLinecap='round' strokeLinejoin='round' d='M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25' /></svg>
+                                                                </div>
+                                                            )}
+                                                            {/* Name + snippet */}
+                                                            <div className='flex-1 min-w-0'>
+                                                                <div className='font-bold text-sm text-gray-900 truncate'>{entry.name || 'אורח/ת'}</div>
+                                                                <div className='text-xs text-gray-500 truncate'>{entry.text || (entry.imageUrl ? 'ברכה עם תמונה' : '')}</div>
+                                                            </div>
+                                                            {/* Quick "to top" for big jumps */}
+                                                            <button
+                                                                onClick={() => moveEntry(entry.id, 'top')}
+                                                                disabled={index === 0}
+                                                                className='shrink-0 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-[#AA8840]/20 text-[#AA8840] hover:bg-[#AA8840]/5 disabled:opacity-30 disabled:cursor-default'
+                                                                title='העבר לראש הרשימה'
+                                                            >
+                                                                ↑ לראש
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </Draggable>
+                                            ))}
+                                            {provided.placeholder}
+                                        </div>
+                                    )}
+                                </Droppable>
+                            </DragDropContext>
                         </div>
                     ) : (
                         <>
