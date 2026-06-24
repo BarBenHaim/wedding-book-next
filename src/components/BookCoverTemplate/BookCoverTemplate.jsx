@@ -167,6 +167,12 @@ export default function BookCoverTemplate({ wedding, styleSettings, scaledWidth,
                 <img
                     src={styleSettings.coverImage}
                     alt='cover'
+                    // CORS-enable so html2canvas can capture the (Firebase-hosted)
+                    // cover photo when this template is rendered for a downloadable
+                    // page-image / albume export. Without it the canvas taints and
+                    // the cover photo drops out of the export (the back cover needed
+                    // the exact same fix). Harmless for normal on-screen rendering.
+                    crossOrigin='anonymous'
                     className='absolute'
                     style={{
                         top: `${imgY}%`,
@@ -188,6 +194,7 @@ export default function BookCoverTemplate({ wedding, styleSettings, scaledWidth,
                 <img
                     src={frameSrc}
                     alt='frame'
+                    crossOrigin='anonymous'
                     className='absolute inset-0 w-full h-full object-contain pointer-events-none'
                     style={{ zIndex: 5 }}
                 />

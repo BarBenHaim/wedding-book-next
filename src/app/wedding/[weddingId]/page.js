@@ -9,6 +9,7 @@ import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale, dirFor } from '@/i18n/locales'
 import { logEvent } from '@/lib/logEvent'
+import MySubmissions from '@/components/MySubmissions/MySubmissions'
 
 // ── Outer: owns the runtime locale and wires the i18n provider so the
 // guest sees the page in the language the super-admin configured for the
@@ -181,6 +182,13 @@ function GuestLanding({ weddingId, onLocaleDiscovered }) {
                         {cfg.ctaLabel}
                     </span>
                 </Link>
+
+                {/* Edit-your-own panel — only shows if THIS device already sent
+                    a blessing. Sits below the "add a blessing" CTA so it's an
+                    add-on, never a replacement. */}
+                <div className='w-full mt-8'>
+                    <MySubmissions weddingId={weddingId} locale={locale} />
+                </div>
 
                 {/* Footer */}
                 <p className='mt-10 text-[10px] tracking-[2px] uppercase' style={{ color: palette.footer }}>

@@ -14,6 +14,8 @@ import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
 import { logEvent } from '@/lib/logEvent'
 import BlessingAssist from '@/components/BlessingAssist/BlessingAssist'
+import { recordSubmission } from '@/lib/mySubmissions'
+import MySubmissions from '@/components/MySubmissions/MySubmissions'
 
 // ── Image compression settings ──
 // Targeted at the highest-resolution book layout (notebook at 75% page
@@ -797,6 +799,10 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
             // Analytics — blessing landed (or at least staged
             // locally + uploaded within budget). The thanks page
             // does its own polling to confirm Firestore acked it.
+            // Remember (on this device only) what we just sent, so the guest
+            // can come back and edit this blessing/photo later — without it
+            // replacing their ability to add more from the same phone.
+            recordSubmission(weddingId, { id: entry.id, name: entry.name, text: entry.text })
             logEvent(weddingId, 'blessing_sent_success')
             router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}`)
             return
@@ -808,6 +814,10 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
         // silently lose their blessing).
         try {
             await uploadQueuedEntry(entry)
+            // Remember (on this device only) what we just sent, so the guest
+            // can come back and edit this blessing/photo later — without it
+            // replacing their ability to add more from the same phone.
+            recordSubmission(weddingId, { id: entry.id, name: entry.name, text: entry.text })
             logEvent(weddingId, 'blessing_sent_success')
             router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}`)
         } catch (err) {
@@ -1841,6 +1851,14 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                 phone-first composition. Each section sits directly on the
                 champagne wash. */}
             <div className='relative z-10 w-full max-w-[26rem] animate-scaleIn'>
+                {/* "Blessings you already sent from this phone" — shows only
+                    when this device has prior submissions (else renders null).
+                    Sits ABOVE the form so a returning guest can edit, while the
+                    full new-blessing form stays right below it. */}
+                <div className='mb-6'>
+                    <MySubmissions weddingId={weddingId} locale={locale} />
+                </div>
+
                 {/* Stepper removed — both sections (blessing + photo)
                     now render together on a single page. Guests fill
                     in everything in one flow, then hit a single

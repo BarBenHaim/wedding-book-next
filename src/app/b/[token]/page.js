@@ -1,70 +1,179 @@
-// /b/[token] — short-link redirect to the full digital-book route.
+// /b/[token] — short share link for the digital book.
 //
-// Server component: looks up which wedding owns this token via the
-// Admin SDK (Firestore `array-contains` against wedding.digitalTokens)
-// and 307-redirects to /wedding/{weddingId}/book/{token}. If no
-// wedding owns the token (typo, revoked, fake), renders the same
-// "הקישור לא תקף" screen the full route uses so a curious visitor
-// gets the same dead end.
+// This is the URL couples copy + paste into WhatsApp / Telegram / iMessage,
+// so it MUST serve a rich link preview (cover image + "צפו בספר הברכות של…").
 //
-// Public route. No auth — middleware only gates /admin, /viewer,
-// /portal. No email, no logging, no token-enumeration leak: the
-// invalid screen looks identical for "token doesn't exist" and
-// "couldn't reach Firestore".
+// It used to 307-redirect straight to /wedding/{id}/book/{token}. That broke
+// the preview: a messaging-app crawler fetches THIS url, gets a 3xx redirect
+// (which carries no <head>), and never reads any OG <meta> tags — so the
+// share card is blank and the link looks bare/ugly.
+//
+// Fix: serve the OG metadata on /b/{token} itself (generateMetadata below,
+// mirroring the full book route), then bounce real browsers onward to the
+// canonical book route with a client redirect + a <meta refresh> fallback.
+// Crawlers read the <head> and stop; humans land on the book.
+//
+// Public route. No auth — middleware only gates /admin, /viewer, /portal.
+// The invalid screen looks identical for "token doesn't exist" and
+// "couldn't reach Firestore" so tokens can't be enumerated.
 
-import { redirect } from 'next/navigation'
+import { cache } from 'react'
 import { adminDb } from '@/lib/firebaseAdmin'
+import { buildShareCopy } from '@/lib/shareCopy'
 
-// Don't pre-render or cache — every request needs to consult
-// Firestore in case tokens have been generated / revoked since the
-// last build.
+// Every request must consult Firestore (tokens can be generated/revoked
+// after the last build), and never cache the redirect target.
 export const dynamic = 'force-dynamic'
 
-export default async function ShortLinkPage({ params }) {
-    const { token } = await params
+const FALLBACK_OG_IMAGE = '/og/wedding-tales-book.png'
 
-    if (!token || typeof token !== 'string') {
-        return <InvalidScreen />
-    }
+// Site origin — crawlers require ABSOLUTE og:image / og:url. Resolution:
+// NEXT_PUBLIC_SITE_URL (canonical) → VERCEL_URL (auto) → '' (dev/relative).
+function siteOrigin() {
+    if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')
+    if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL.replace(/\/$/, '')}`
+    return ''
+}
+function abs(pathOrUrl) {
+    if (!pathOrUrl) return null
+    if (/^(https?:|data:)/i.test(pathOrUrl)) return pathOrUrl
+    const origin = siteOrigin()
+    if (!origin) return pathOrUrl
+    return origin + (pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`)
+}
 
-    // ── Lookup ──
-    // array-contains on `digitalTokens` is supported natively by
-    // Firestore on a single field — no composite index required.
-    // limit(1) because tokens are globally unique by construction
-    // (UUID-like); a match anywhere is the answer.
-    let weddingId = null
+// Dedupe the token → wedding lookup across generateMetadata + the page
+// render (both run once per request). React cache() memoizes for the
+// duration of a single request, so we hit Firestore only once.
+const lookupWedding = cache(async token => {
+    if (!token || typeof token !== 'string') return null
     try {
+        // array-contains on `digitalTokens` is a single-field query (no
+        // composite index). limit(1): tokens are globally unique (UUID-like).
         const snap = await adminDb
             .collection('weddings')
             .where('digitalTokens', 'array-contains', token)
             .limit(1)
             .get()
-        if (!snap.empty) {
-            weddingId = snap.docs[0].id
-        }
+        if (!snap.empty) return { id: snap.docs[0].id, data: snap.docs[0].data() || {} }
     } catch (err) {
-        // Swallow + show invalid: same UX as a real bad token so an
-        // attacker can't tell the difference between "Firestore down"
-        // and "token doesn't exist". Worst case for legit users:
-        // refresh restores. Log server-side for ops.
         console.error('[b/[token]] lookup failed', err)
     }
+    return null
+})
 
-    if (!weddingId) {
-        return <InvalidScreen />
+// Generic, identity-free fallback card (bad/unknown token, or Firestore down).
+function fallbackMeta() {
+    const ogImage = abs(FALLBACK_OG_IMAGE)
+    const origin = siteOrigin()
+    const title = 'ספר הברכות — Wedding Tales'
+    const description = 'ברכות ותמונות מהאורחים, נשמרות לכם לתמיד'
+    return {
+        metadataBase: origin ? new URL(origin) : undefined,
+        title,
+        description,
+        openGraph: {
+            title,
+            description,
+            type: 'website',
+            locale: 'he_IL',
+            siteName: 'Wedding Tales',
+            images: [{ url: ogImage, secureUrl: ogImage, width: 1200, height: 630, type: 'image/png' }],
+        },
+        twitter: { card: 'summary_large_image', title, description, images: [ogImage] },
+        other: { image: ogImage },
     }
+}
 
-    // 307 (next/navigation default) — preserves the request method
-    // (always GET here) and tells crawlers the canonical URL is the
-    // full /wedding/.../book/... path.
-    redirect(`/wedding/${weddingId}/book/${encodeURIComponent(token)}`)
+export async function generateMetadata({ params }) {
+    const { token } = await params
+    const found = await lookupWedding(token)
+    if (!found) return fallbackMeta()
+
+    const data = found.data
+    const { title: shareTitle, description } = buildShareCopy(data)
+    // "צפו ב…" + the event-aware title (single source of truth). Bar mitzvah →
+    // "צפו בספר הברכות לבר המצווה של נועם"; wedding → "צפו בספר הברכות של דור ושקד".
+    const title = shareTitle ? `צפו ב${shareTitle}` : 'צפו בספר הברכות'
+    const desc = description || 'הברכות והתמונות מהאורחים — שמורות לכם לתמיד'
+
+    // Image priority: the couple's uploaded cover photo, else the per-event
+    // dynamic card at /api/og/<id> (personalised + themed by event type), so
+    // EVERY short link shows a real cover-style preview, never a bare link.
+    const coverImage = data.coverDesign?.coverImage || null
+    const ogImage = abs(coverImage) || abs(`/api/og/${found.id}`)
+
+    // og:url points at THIS short link so the crawler canonicalises the
+    // preview against the URL the user actually pasted.
+    const shareUrl = abs(`/b/${encodeURIComponent(token)}`)
+    const origin = siteOrigin()
+
+    return {
+        metadataBase: origin ? new URL(origin) : undefined,
+        title,
+        description: desc,
+        openGraph: {
+            title,
+            description: desc,
+            type: 'website',
+            locale: 'he_IL',
+            siteName: 'Wedding Tales',
+            url: shareUrl || undefined,
+            images: [
+                { url: ogImage, secureUrl: ogImage, width: 1200, height: 630, alt: title, type: 'image/png' },
+            ],
+        },
+        twitter: { card: 'summary_large_image', title, description: desc, images: [ogImage] },
+        // Legacy <link rel="image_src"> hint — some older WhatsApp/Telegram
+        // clients pick this up faster than og:image.
+        other: { image: ogImage },
+    }
+}
+
+export default async function ShortLinkPage({ params }) {
+    const { token } = await params
+    const found = await lookupWedding(token)
+    if (!found) return <InvalidScreen />
+
+    const target = `/wedding/${found.id}/book/${encodeURIComponent(token)}`
+    // Deliberately NOT a server redirect() — a 3xx carries no <head>, so the
+    // OG tags from generateMetadata above would never reach the crawler.
+    // Instead, carry the preview metadata here and bounce real browsers on.
+    return <RedirectScreen target={target} />
+}
+
+// Tiny "opening the book…" screen that redirects humans to the canonical
+// book route. The OG card lives in <head> (generateMetadata), so crawlers
+// that fetch /b/{token} get the rich preview and ignore this body.
+function RedirectScreen({ target }) {
+    return (
+        <div
+            className='min-h-screen flex items-center justify-center px-6 text-center'
+            style={{ background: 'radial-gradient(ellipse at 50% 30%, #2a1f17 0%, #14100c 100%)' }}
+        >
+            {/* No-JS / crawler-follow fallback. */}
+            <meta httpEquiv='refresh' content={`0; url=${target}`} />
+            {/* Fast path for real browsers — replace() so Back doesn't loop here. */}
+            <script
+                dangerouslySetInnerHTML={{
+                    __html: `window.location.replace(${JSON.stringify(target)});`,
+                }}
+            />
+            <div>
+                <p style={{ color: '#f5ead2', fontSize: 18, marginBottom: 12 }}>פותח את ספר הברכות…</p>
+                <a
+                    href={target}
+                    style={{ color: '#c9a44e', fontSize: 14, textDecoration: 'underline' }}
+                >
+                    אם הדף לא נפתח אוטומטית — לחצו כאן
+                </a>
+            </div>
+        </div>
+    )
 }
 
 // Mirror of the InvalidScreen inside the full book route — same dark
-// gold-ember palette + Hebrew copy so a user landing here from a bad
-// short link sees the identical message they'd get from a bad full
-// link. Kept local to avoid pulling the 1.2k-line book page into the
-// short-link route's bundle for what's essentially a redirect.
+// gold-ember palette + Hebrew copy.
 function InvalidScreen() {
     return (
         <div
@@ -72,31 +181,15 @@ function InvalidScreen() {
             style={{ background: 'radial-gradient(ellipse at 50% 30%, #2a1f17 0%, #14100c 100%)' }}
         >
             <div>
-                <svg
-                    viewBox='0 0 24 24'
-                    className='w-12 h-12 mx-auto mb-4'
-                    fill='none'
-                    stroke='#c9a44e'
-                    strokeWidth={1.4}
-                >
+                <svg viewBox='0 0 24 24' className='w-12 h-12 mx-auto mb-4' fill='none' stroke='#c9a44e' strokeWidth={1.4}>
                     <path
                         strokeLinecap='round'
                         strokeLinejoin='round'
                         d='M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z'
                     />
                 </svg>
-                <h2 style={{ color: '#f5ead2', fontSize: '24px', fontWeight: 700, marginBottom: 8 }}>
-                    הקישור לא תקף
-                </h2>
-                <p
-                    style={{
-                        color: '#9a8665',
-                        fontSize: '14px',
-                        maxWidth: 320,
-                        margin: '0 auto',
-                        lineHeight: 1.6,
-                    }}
-                >
+                <h2 style={{ color: '#f5ead2', fontSize: '24px', fontWeight: 700, marginBottom: 8 }}>הקישור לא תקף</h2>
+                <p style={{ color: '#9a8665', fontSize: '14px', maxWidth: 320, margin: '0 auto', lineHeight: 1.6 }}>
                     הקישור שעקבת אחריו פג תוקף או שאינו שייך לספר זה. אם רכשת את הספר — בדוק את האימייל שקיבלת או פנה אלינו.
                 </p>
             </div>
