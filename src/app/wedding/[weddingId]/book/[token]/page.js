@@ -553,7 +553,13 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
     // the pre-split page count and silently drop the extra split pages once
     // autoSplit loaded from the design — i.e. missing blessings.
     const bookPages = useMemo(
-        () => expandBookPages(entries, {
+        // Reverse entries BEFORE expanding (exactly like /viewer does). The
+        // flipbook is RTL — children are [BackCover, ...pages, FrontCover] and
+        // the reader opens on the FrontCover and flips right-to-left. Without
+        // the reverse the blessings come out last-to-first (reversed vs the
+        // order set in blessing-management). Reversing pre-split keeps each
+        // split text→photo pair in the right order.
+        () => expandBookPages([...entries].reverse(), {
             autoSplit: styleSettings.autoSplit,
             splitThreshold: styleSettings.splitThreshold,
         }),
