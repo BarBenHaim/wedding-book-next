@@ -24,6 +24,33 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
     //   editorial, diptych, locket, story, minimal, hero, fullbleed,
     //   ketubah, stamp, confetti, poster — pruned in the spring 2026
     //   curation pass after side-by-side review.
+    // Spread-alignment divider leaf (produced by expandBookPages padToSpread):
+    // a slim, intentional blank page with a faint centered ornament on the
+    // book's own background. Keeps a split blessing's text + photo facing on a
+    // single open spread. Rendered uniformly for every template.
+    if (entry?._divider) {
+        const dividerSurface = styleSettings.backgroundUrl || resolveTextureUrl(styleSettings.texture)
+        const { w: dw } = pageScale(scaledWidth, scaledHeight)
+        return (
+            <div
+                className='flex items-center justify-center'
+                style={{
+                    width: '100%',
+                    height: '100%',
+                    backgroundColor: styleSettings.backgroundColor || '#fdfaf3',
+                    backgroundImage: dividerSurface ? `url(${dividerSurface})` : 'none',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    backgroundRepeat: 'repeat',
+                }}
+            >
+                <svg viewBox='0 0 24 24' width={dw(7)} height={dw(7)} fill={styleSettings.fontColor || '#c9a44e'} style={{ opacity: 0.22 }}>
+                    <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                </svg>
+            </div>
+        )
+    }
+
     const passThrough = { entry, styleSettings, scaledWidth, scaledHeight }
     if (styleSettings?.template === 'polaroid') return <PolaroidPageLayout {...passThrough} />
     if (styleSettings?.template === 'scrapbook') return <ScrapbookPageLayout {...passThrough} />

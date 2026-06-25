@@ -25,14 +25,27 @@ export function expandBookPages(entries, opts = {}) {
     const list = Array.isArray(entries) ? entries : []
     const autoSplit = opts.autoSplit === true
     const threshold = Number.isFinite(opts.splitThreshold) ? opts.splitThreshold : DEFAULT_SPLIT_THRESHOLD
+    // `padToSpread` keeps each split text→photo pair on ONE facing spread.
+    // The flipbook groups the interior pages two-per-spread, so a split pair
+    // must start on an EVEN index or it straddles two spreads (the photo ends
+    // up facing the wrong blessing — "off by one"). When set, we drop a slim
+    // divider leaf before a pair that would land on an odd index, and keep the
+    // total interior count even so the covers stay single. Only meaningful for
+    // the 2-up landscape flipbook — leave it off for single-page / print.
+    const padToSpread = opts.padToSpread === true
 
     if (!autoSplit) return list.map(e => ({ ...e }))
+
+    let padN = 0
+    const divider = () => ({ id: `__divider_${padN++}`, _divider: true })
 
     const pages = []
     for (const e of list) {
         const textLen = (e?.text || '').trim().length
         const hasImage = Boolean(e?.imageUrl)
         if (hasImage && textLen >= threshold) {
+            // Align the pair to a fresh spread so the text + its photo face.
+            if (padToSpread && pages.length % 2 === 1) pages.push(divider())
             // 1) Blessing-only page — keep name + text, drop the photo so the
             //    blessing sits large and centered on its own page.
             pages.push({ ...e, imageUrl: null, _split: 'text' })
@@ -52,6 +65,8 @@ export function expandBookPages(entries, opts = {}) {
             pages.push({ ...e })
         }
     }
+    // Even interior count → complete spreads + single covers.
+    if (padToSpread && pages.length % 2 === 1) pages.push(divider())
     return pages
 }
 

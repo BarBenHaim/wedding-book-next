@@ -562,8 +562,12 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
         () => expandBookPages([...entries].reverse(), {
             autoSplit: styleSettings.autoSplit,
             splitThreshold: styleSettings.splitThreshold,
+            // Keep split text+photo pairs facing on one spread — but only in
+            // the 2-up desktop view. On mobile (single page) there are no
+            // spreads, so no divider leaves are added.
+            padToSpread: !pageSize.isPortrait,
         }),
-        [entries, styleSettings.autoSplit, styleSettings.splitThreshold]
+        [entries, styleSettings.autoSplit, styleSettings.splitThreshold, pageSize.isPortrait]
     )
 
     // ── Cover style — pinned to the wedding owner's choice ─────────
