@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation'
 import { doc, updateDoc, deleteDoc, writeBatch, collection, addDoc } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../../../../lib/firebaseClient'
-import { getBlessingText } from '../../../../lib/normalizeText'
+import { getBlessingText, normalizeBlessing, formatBlessingSmart } from '../../../../lib/normalizeText'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import EntryPhoto from '@/components/EntryPhoto/EntryPhoto'
@@ -195,11 +195,15 @@ export default function AdminDashboard() {
         // preserveLineBreaks set — in which case the admin's line breaks
         // here will render verbatim on the book page.
         const nextText = editValues.text || ''
+        const nextPLB = !!editValues.preserveLineBreaks
         await updateDoc(doc(db, 'weddings', weddingId, 'entries', id), {
             name: editValues.name,
             text: nextText,
+            // Save the chosen line mode together with the text so "smart
+            // paragraphs" actually renders (continuous = false, smart = true).
+            preserveLineBreaks: nextPLB,
         })
-        setEntries(prev => prev.map(e => (e.id === id ? { ...e, ...editValues, text: nextText } : e)))
+        setEntries(prev => prev.map(e => (e.id === id ? { ...e, ...editValues, text: nextText, preserveLineBreaks: nextPLB } : e)))
         setEditingId(null)
     }
 
@@ -474,7 +478,29 @@ export default function AdminDashboard() {
                                                                             onChange={e => setEditValues({ ...editValues, text: e.target.value })}
                                                                             placeholder='תוכן הברכה'
                                                                             className='w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-700 focus:ring-2 focus:ring-[#AA8840]/20 focus:border-[#AA8840] outline-none resize-none h-24'
+                                                                            style={editValues.preserveLineBreaks ? { whiteSpace: 'pre-line' } : undefined}
                                                                         />
+                                                                        {/* Line mode: "רצף" = one flowing paragraph (default);
+                                                                            "פסקאות חכמות" = auto-break at sentence ends for a
+                                                                            clean, readable layout. The button reformats the text
+                                                                            in place + sets how the book will render it. */}
+                                                                        <div className='flex items-center gap-2 flex-wrap'>
+                                                                            <span className='text-[11px] text-gray-400'>שורות:</span>
+                                                                            <button
+                                                                                type='button'
+                                                                                onClick={() => setEditValues({ ...editValues, text: normalizeBlessing(editValues.text), preserveLineBreaks: false })}
+                                                                                className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${!editValues.preserveLineBreaks ? 'bg-[#AA8840] text-white border-[#AA8840]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#AA8840]/40'}`}
+                                                                            >
+                                                                                רצף
+                                                                            </button>
+                                                                            <button
+                                                                                type='button'
+                                                                                onClick={() => setEditValues({ ...editValues, text: formatBlessingSmart(editValues.text), preserveLineBreaks: true })}
+                                                                                className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${editValues.preserveLineBreaks ? 'bg-[#AA8840] text-white border-[#AA8840]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#AA8840]/40'}`}
+                                                                            >
+                                                                                פסקאות חכמות
+                                                                            </button>
+                                                                        </div>
                                                                         <div className='flex gap-2 justify-end'>
                                                                             <button onClick={() => setEditingId(null)} className='text-sm text-gray-500 px-3.5 py-2 hover:bg-gray-50 rounded-lg transition-colors'>
                                                                                 ביטול
@@ -558,7 +584,7 @@ export default function AdminDashboard() {
                                                                             onMouseDown={e => e.stopPropagation()}
                                                                         >
                                                                             <button
-                                                                                onClick={() => { setEditingId(entry.id); setEditValues({ name: entry.name, text: entry.text }) }}
+                                                                                onClick={() => { setEditingId(entry.id); setEditValues({ name: entry.name, text: entry.text, preserveLineBreaks: !!entry.preserveLineBreaks }) }}
                                                                                 className='flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-gray-400 hover:text-[#AA8840] hover:bg-[#AA8840]/5 rounded-lg active:scale-95 transition-all'
                                                                             >
                                                                                 <EditIcon />

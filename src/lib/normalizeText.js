@@ -47,3 +47,23 @@ export function getBlessingText(entry) {
     if (entry.preserveLineBreaks) return entry.text || ''
     return normalizeBlessing(entry.text)
 }
+
+// "Smart paragraphs" formatter for the blessing-management editor.
+//
+// Turns a continuous blessing into a clean, readable block by putting each
+// sentence on its own line: it first flattens any messy whitespace the guest
+// typed, then inserts a line break AFTER every sentence-ending punctuation
+// run (. ! ? …, plus an optional closing quote/bracket) that is followed by
+// more text. Pairs with preserveLineBreaks=true so the breaks render in the
+// book. The owner reviews/tweaks the result in the textarea before saving, so
+// the occasional false break (e.g. an abbreviation like "Mr.") is easy to fix.
+//
+// No sentence punctuation → returns the flattened single line unchanged, so a
+// one-sentence blessing simply stays on one line.
+export function formatBlessingSmart(text) {
+    if (!text || typeof text !== 'string') return text || ''
+    let t = text.replace(/\s+/g, ' ').trim()
+    if (!t) return ''
+    t = t.replace(/([.!?…]+["'”’)\]]?)\s+(?=\S)/g, '$1\n')
+    return t.trim()
+}
