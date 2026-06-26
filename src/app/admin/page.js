@@ -1904,6 +1904,9 @@ function AdminDashboardContent() {
     const [status, setStatus] = useState('loading')
     const [error, setError] = useState(null)
     const [searchQuery, setSearchQuery] = useState('')
+    // Quick status filter for the events list (doubles as a "needs attention"
+    // shortcut): all | upcoming | unpaid | unprinted | noblessings.
+    const [statusFilter, setStatusFilter] = useState('all')
     const [sort, setSort] = useState({ key: 'date', dir: 'asc' })
     const [selectedWedding, setSelectedWedding] = useState(null)
     const [modal, setModal] = useState(null)
@@ -1928,12 +1931,24 @@ function AdminDashboardContent() {
 
     // Filter + Sort
     const filtered = useMemo(() => {
-        if (!searchQuery.trim()) return weddings
+        let list = weddings
         const q = searchQuery.toLowerCase().trim()
-        return weddings.filter(w =>
-            coupleLabel(w).toLowerCase().includes(q) || (w.ownerEmail || '').toLowerCase().includes(q) || (w.orderId || '').includes(q) || (w.id || '').includes(q)
-        )
-    }, [weddings, searchQuery])
+        if (q) {
+            list = list.filter(w =>
+                coupleLabel(w).toLowerCase().includes(q) || (w.ownerEmail || '').toLowerCase().includes(q) || (w.orderId || '').includes(q) || (w.id || '').includes(q)
+            )
+        }
+        if (statusFilter && statusFilter !== 'all') {
+            list = list.filter(w => {
+                if (statusFilter === 'upcoming') return ['today', 'upcoming'].includes(getWeddingStatus(w.weddingDate))
+                if (statusFilter === 'unpaid') return !(Number(w.amountPaid) > 0)
+                if (statusFilter === 'unprinted') return !w.printOrder
+                if (statusFilter === 'noblessings') return (w.greetingsCount ?? 0) === 0
+                return true
+            })
+        }
+        return list
+    }, [weddings, searchQuery, statusFilter])
 
     const sorted = useMemo(() => {
         if (!sort.key) return filtered
@@ -2391,6 +2406,34 @@ function AdminDashboardContent() {
                         )}
                     </div>
 
+                    {/* Quick status filters — also a "needs attention" shortcut
+                        (unpaid / not-printed / no-blessings). Horizontally
+                        scrollable so it stays tidy on mobile. */}
+                    {status === 'ok' && (
+                        <div className='px-4 sm:px-6 pb-3 flex items-center gap-2 overflow-x-auto' dir='rtl'>
+                            {[
+                                { key: 'all', label: 'הכל' },
+                                { key: 'upcoming', label: 'קרובים' },
+                                { key: 'unpaid', label: 'לא שולם' },
+                                { key: 'unprinted', label: 'לא הודפס' },
+                                { key: 'noblessings', label: '0 ברכות' },
+                            ].map(f => (
+                                <button
+                                    key={f.key}
+                                    onClick={() => setStatusFilter(f.key)}
+                                    className='shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors active:scale-95'
+                                    style={
+                                        statusFilter === f.key
+                                            ? { background: '#AA8840', color: '#fff', borderColor: '#AA8840' }
+                                            : { background: '#fff', color: '#7a6a52', borderColor: '#ead9b3' }
+                                    }
+                                >
+                                    {f.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     {/* Sort ribbon — bumped opacity + 3px gold edge marker
                         on the right (RTL = inline-start) so the active
                         sort reads as a real chip-state, not a faint wash. */}
@@ -2482,7 +2525,60 @@ function AdminDashboardContent() {
                         </div>
                     )}
                     {status === 'ok' && sorted.length > 0 && (
-                        <div className='overflow-x-auto'>
+                        <>
+                        {/* Mobile: tap-friendly cards (the wide table is desktop-only) */}
+                        <div className='md:hidden divide-y divide-[#f0e8d4]'>
+                            {sorted.map((w) => (
+                                <div key={w.id} onClick={() => setSelectedWedding(w)} className='p-4 active:bg-[#AA8840]/[0.06] cursor-pointer'>
+                                    <div className='flex items-start justify-between gap-2'>
+                                        <div className='min-w-0'>
+                                            <div className='flex items-center gap-2 flex-wrap'>
+                                                <span className='font-bold text-[#1a1410] text-[15px]'>{coupleLabel(w)}</span>
+                                                <EventTypeBadge type={w.eventType} />
+                                            </div>
+                                            {w.ownerEmail && <div className='text-xs text-[#a89378] mt-0.5 truncate'>{w.ownerEmail}</div>}
+                                        </div>
+                                        <StatusBadge weddingDate={w.weddingDate} />
+                                    </div>
+                                    <div className='flex items-center gap-2 flex-wrap mt-2 text-xs text-[#7a6a52]'>
+                                        <span className='inline-flex items-center gap-1 tabular-nums'><CalendarDays size={12} /> {formatDate(w.weddingDate)}</span>
+                                        <GreetingsBadge count={w.greetingsCount} />
+                                        <PrintBadge printOrder={w.printOrder} />
+                                        {formatAmount(w) && <span className='font-bold text-[#3d7a3e] tabular-nums'>{formatAmount(w)}</span>}
+                                    </div>
+                                    {contactName(w) && (
+                                        <div className='text-xs text-[#7a6a52] mt-2'>
+                                            {contactName(w)}
+                                            {w.ownerPhone ? <span dir='ltr' className='text-[#a89378] tabular-nums'> · {w.ownerPhone}</span> : null}
+                                        </div>
+                                    )}
+                                    <div className='flex items-center gap-2 mt-3' onClick={e => e.stopPropagation()}>
+                                        <button onClick={() => setSelectedWedding(w)} className='flex-1 h-10 rounded-xl bg-[#AA8840]/10 border border-[#AA8840]/30 text-[#AA8840] font-semibold text-sm flex items-center justify-center gap-1.5 active:scale-95'>
+                                            <Database size={15} /> פרטים ופעולות
+                                        </button>
+                                        {waMeLink(w) && (
+                                            <a href={waMeLink(w)} target='_blank' rel='noopener noreferrer' title='וואטסאפ'
+                                                className='h-10 w-11 rounded-xl flex items-center justify-center'
+                                                style={{ background: 'rgba(37,211,102,0.12)', border: '1px solid rgba(37,211,102,0.45)', color: '#1b8f4d' }}>
+                                                <MessageCircle size={16} />
+                                            </a>
+                                        )}
+                                        {w.ownerEmail && (
+                                            <button onClick={() => handleResetPassword(w.ownerEmail)} title='איפוס סיסמה'
+                                                className='h-10 w-11 rounded-xl bg-white border border-[#ead9b3] text-[#7a6a52] flex items-center justify-center active:scale-95'>
+                                                <KeyRound size={15} />
+                                            </button>
+                                        )}
+                                        <button onClick={() => handleDeleteWedding(w)} title='מחק'
+                                            className='h-10 w-11 rounded-xl bg-white border border-[#ead9b3] text-[#a89378] flex items-center justify-center active:scale-95'>
+                                            <Trash2 size={15} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        {/* Desktop: full table */}
+                        <div className='overflow-x-auto hidden md:block'>
                             <table className='w-full text-sm text-right' style={{ minWidth: '1180px' }}>
                                 <thead>
                                     <tr className='border-b border-[#AA8840]/15 text-[11px] uppercase tracking-widest bg-[#AA8840]/5'>
@@ -2572,6 +2668,7 @@ function AdminDashboardContent() {
                                 </tbody>
                             </table>
                         </div>
+                        </>
                     )}
                 </motion.div>
 

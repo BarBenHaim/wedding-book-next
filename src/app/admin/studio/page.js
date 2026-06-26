@@ -1146,9 +1146,9 @@ function PropertiesPanel({
                                 icon={Type}
                                 label='אורך לפיצול (תווים)'
                                 value={v.splitThreshold ?? 240}
-                                min={120}
+                                min={2}
                                 max={600}
-                                step={10}
+                                step={1}
                                 disabled={!editable}
                                 onChange={n => onValuesChange({ splitThreshold: n })}
                             />
