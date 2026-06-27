@@ -1612,6 +1612,13 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                         <Printer size={14} /> ייצא ל-albume (כיס 22×22)
                     </a>
                     <a
+                        href={`/admin/wedding/${wedding.id}/picabook-export`}
+                        className='inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-bold'
+                        style={{ background: '#4a6cf7', boxShadow: '0 10px 22px -10px rgba(74,108,247,0.45), inset 0 1px 0 rgba(255,255,255,0.20)' }}
+                    >
+                        <Printer size={14} /> ייצא ל-Picabook (20×20)
+                    </a>
+                    <a
                         href={`/admin/wedding/${wedding.id}/print-export`}
                         className='inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-[#7a6a52]'
                         style={{ background: '#fff', border: '1px solid #ead9b3' }}
@@ -1627,7 +1634,7 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                     </a>
                 </div>
                 <p className='text-[11px] text-[#a89378] mt-2 leading-relaxed'>
-                    albume: ZIP של עמודים 22×22 ב-300dpi + פתיחת האשף והעתקת שם האלבום. WOW Pro: spreads layflat.
+                    albume: ZIP של עמודים 22×22 ב-300dpi. Picabook: ZIP של עמודים 20×20 (ספר ריבועי) ב-300dpi + 2מ&quot;מ bleed, JPG sRGB, תבנית &quot;עמוד מלא&quot;. WOW Pro: spreads layflat.
                 </p>
             </div>
 
