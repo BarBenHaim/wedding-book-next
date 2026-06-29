@@ -1619,6 +1619,13 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                         <Printer size={14} /> ייצא ל-Picabook (20×20)
                     </a>
                     <a
+                        href={`/admin/wedding/${wedding.id}/cover-print`}
+                        className='inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-bold'
+                        style={{ background: '#7c3aed', boxShadow: '0 10px 22px -10px rgba(124,58,237,0.45), inset 0 1px 0 rgba(255,255,255,0.20)' }}
+                    >
+                        <Printer size={14} /> הדפסה בבית דפוס ירושלים
+                    </a>
+                    <a
                         href={`/admin/wedding/${wedding.id}/print-export`}
                         className='inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-[#7a6a52]'
                         style={{ background: '#fff', border: '1px solid #ead9b3' }}
