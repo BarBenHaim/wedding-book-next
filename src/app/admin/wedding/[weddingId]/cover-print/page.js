@@ -45,6 +45,12 @@ const SPINE_MM = 27 // 9 + 9 + 9
 // Each side panel region INCLUDES its outer wrap (20mm) so art bleeds to edge.
 const REGION_W = mmToPx(WRAP_MM + PANEL_MM) // 216mm ≈ 2551
 const SPINE_W = mmToPx(SPINE_MM)            // 27mm ≈ 319
+// Trim-only sizes — used when a dedicated bleed-margin image is uploaded
+// and we want to isolate the inner content from the 20mm wrap strip so the
+// bleed image fills that strip instead.
+const WRAP_PX = mmToPx(WRAP_MM)             // 20mm  ≈ 236
+const INNER_PANEL_W = mmToPx(PANEL_MM)      // 196mm ≈ 2315
+const TRIM_H = mmToPx(248 - 2 * WRAP_MM)    // 208mm ≈ 2457
 const JPEG_QUALITY = 0.95
 
 // Per-cover upload card. Empty state shows the upload button; filled
@@ -159,10 +165,18 @@ function CoverPrintContent() {
     const [frontCoverImageMode, setFrontCoverImageMode] = useState('cover')
     const [backCoverImage, setBackCoverImage] = useState(null)
     const [backCoverImageMode, setBackCoverImageMode] = useState('cover')
-    const [uploadingTarget, setUploadingTarget] = useState(null) // 'spine' | 'front' | 'back' | null
+    // Optional image for the bleed-margin strip (20mm wrap on all 4 sides,
+    // between trim and bleed). When set, the inner content shrinks to the
+    // trim area (419×208 mm) and this image fills the surrounding strip.
+    // When NOT set, the existing behavior is preserved (the cover artwork
+    // bleeds into the wrap as before).
+    const [bleedImage, setBleedImage] = useState(null)
+    const [bleedImageMode, setBleedImageMode] = useState('cover')
+    const [uploadingTarget, setUploadingTarget] = useState(null) // 'spine' | 'front' | 'back' | 'bleed' | null
     const spineFileRef = useRef(null)
     const frontFileRef = useRef(null)
     const backFileRef = useRef(null)
+    const bleedFileRef = useRef(null)
     const [running, setRunning] = useState(false)
     const [done, setDone] = useState(false)
     const [error, setError] = useState('')
@@ -232,6 +246,7 @@ function CoverPrintContent() {
             if (target === 'spine') setSpineImage(dataUrl)
             else if (target === 'front') setFrontCoverImage(dataUrl)
             else if (target === 'back') setBackCoverImage(dataUrl)
+            else if (target === 'bleed') setBleedImage(dataUrl)
         } catch (err) {
             console.error(`[cover-print] ${target} image upload failed`, err)
             alert('שגיאה בהעלאת התמונה')
@@ -245,6 +260,7 @@ function CoverPrintContent() {
         if (target === 'spine') { setSpineImage(null); setSpineImageMode('cover') }
         else if (target === 'front') { setFrontCoverImage(null); setFrontCoverImageMode('cover') }
         else if (target === 'back') { setBackCoverImage(null); setBackCoverImageMode('cover') }
+        else if (target === 'bleed') { setBleedImage(null); setBleedImageMode('cover') }
     }
 
     // Helper: build the CSS for an image-as-background panel.
@@ -312,23 +328,26 @@ function CoverPrintContent() {
     if (loadStatus === 'loading') return <div className='flex h-screen items-center justify-center text-[#7a6a52]'>טוען אירוע...</div>
     if (loadStatus === 'error') return <div className='flex h-screen flex-col items-center justify-center gap-2 text-[#b32424]'><AlertTriangle size={28} /><p>{error}</p></div>
 
-    // Build the left→right order. Hebrew RTL → front on the LEFT by default.
-    // When a cover image is uploaded it REPLACES the in-app template for
-    // that panel — the panel container is REGION_W × FULL_H (2551 × 2929 px),
-    // i.e. the full bleed-to-bleed area, so a cover-mode image extends all
-    // the way into the 20mm wrap on every side automatically.
+    // Panel + stage sizing depends on whether a bleed-margin image was
+    // uploaded. With bleed image: inner content shrinks to trim area
+    // (INNER_PANEL_W × TRIM_H) and the surrounding 20mm strip reveals
+    // the bleed image. Without: legacy behavior — each side panel
+    // includes its outer wrap so the cover artwork bleeds to the edge.
+    const panelW = bleedImage ? INNER_PANEL_W : REGION_W
+    const panelH = bleedImage ? TRIM_H : FULL_H
+
     const front = (
-        <div key='front' style={{ width: REGION_W, height: FULL_H, flexShrink: 0, ...(frontCoverImage ? imageBgStyle(frontCoverImage, frontCoverImageMode) : null) }}>
+        <div key='front' style={{ width: panelW, height: panelH, flexShrink: 0, ...(frontCoverImage ? imageBgStyle(frontCoverImage, frontCoverImageMode) : null) }}>
             {!frontCoverImage && (
-                <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={REGION_W} scaledHeight={FULL_H} />
+                <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={panelW} scaledHeight={panelH} />
             )}
         </div>
     )
-    const spine = <div key='spine' style={{ width: SPINE_W, height: FULL_H, flexShrink: 0, ...spineStyle }} />
+    const spine = <div key='spine' style={{ width: SPINE_W, height: panelH, flexShrink: 0, ...spineStyle }} />
     const back = (
-        <div key='back' style={{ width: REGION_W, height: FULL_H, flexShrink: 0, ...(backCoverImage ? imageBgStyle(backCoverImage, backCoverImageMode) : null) }}>
+        <div key='back' style={{ width: panelW, height: panelH, flexShrink: 0, ...(backCoverImage ? imageBgStyle(backCoverImage, backCoverImageMode) : null) }}>
             {!backCoverImage && (
-                <BookBackCoverTemplate scaledWidth={REGION_W} scaledHeight={FULL_H} />
+                <BookBackCoverTemplate scaledWidth={panelW} scaledHeight={panelH} />
             )}
         </div>
     )
@@ -362,20 +381,29 @@ function CoverPrintContent() {
                 <div className='rounded-2xl p-5 mb-4' style={{ background: '#fff', border: '1px solid rgba(212,184,103,0.30)' }}>
                     <p className='text-[11px] text-[#a89378] uppercase tracking-widest font-semibold mb-3'>תצוגה מקדימה (חזית · שדרה · גב)</p>
                     <div className='w-full overflow-hidden rounded-lg' style={{ border: '1px solid #ead9b3' }}>
-                        <div style={{ width: '100%', aspectRatio: `${FULL_W} / ${FULL_H}`, display: 'flex' }}>
-                            <div style={{ flex: `${REGION_W}`, ...((frontSide === 'left' ? frontCoverImage : backCoverImage) ? imageBgStyle(frontSide === 'left' ? frontCoverImage : backCoverImage, frontSide === 'left' ? frontCoverImageMode : backCoverImageMode) : null) }}>
-                                <div style={{ width: '100%', height: '100%' }}>
-                                    {frontSide === 'left'
-                                        ? (!frontCoverImage && <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={520} scaledHeight={566} />)
-                                        : (!backCoverImage && <BookBackCoverTemplate scaledWidth={520} scaledHeight={566} />)}
+                        <div style={{ width: '100%', aspectRatio: `${FULL_W} / ${FULL_H}`, position: 'relative', ...(bleedImage ? imageBgStyle(bleedImage, bleedImageMode) : null), backgroundColor: bleedImage ? undefined : 'transparent' }}>
+                            <div
+                                style={
+                                    bleedImage
+                                        // Inset by WRAP_PX in % terms so the bleed strip stays visible.
+                                        ? { position: 'absolute', top: `${(WRAP_PX / FULL_H) * 100}%`, bottom: `${(WRAP_PX / FULL_H) * 100}%`, left: `${(WRAP_PX / FULL_W) * 100}%`, right: `${(WRAP_PX / FULL_W) * 100}%`, display: 'flex' }
+                                        : { width: '100%', height: '100%', display: 'flex' }
+                                }
+                            >
+                                <div style={{ flex: `${panelW}`, ...((frontSide === 'left' ? frontCoverImage : backCoverImage) ? imageBgStyle(frontSide === 'left' ? frontCoverImage : backCoverImage, frontSide === 'left' ? frontCoverImageMode : backCoverImageMode) : null) }}>
+                                    <div style={{ width: '100%', height: '100%' }}>
+                                        {frontSide === 'left'
+                                            ? (!frontCoverImage && <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={520} scaledHeight={566} />)
+                                            : (!backCoverImage && <BookBackCoverTemplate scaledWidth={520} scaledHeight={566} />)}
+                                    </div>
                                 </div>
-                            </div>
-                            <div style={{ flex: `${SPINE_W}`, ...spineStyle }} />
-                            <div style={{ flex: `${REGION_W}`, ...((frontSide === 'left' ? backCoverImage : frontCoverImage) ? imageBgStyle(frontSide === 'left' ? backCoverImage : frontCoverImage, frontSide === 'left' ? backCoverImageMode : frontCoverImageMode) : null) }}>
-                                <div style={{ width: '100%', height: '100%' }}>
-                                    {frontSide === 'left'
-                                        ? (!backCoverImage && <BookBackCoverTemplate scaledWidth={520} scaledHeight={566} />)
-                                        : (!frontCoverImage && <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={520} scaledHeight={566} />)}
+                                <div style={{ flex: `${SPINE_W}`, ...spineStyle }} />
+                                <div style={{ flex: `${panelW}`, ...((frontSide === 'left' ? backCoverImage : frontCoverImage) ? imageBgStyle(frontSide === 'left' ? backCoverImage : frontCoverImage, frontSide === 'left' ? backCoverImageMode : frontCoverImageMode) : null) }}>
+                                    <div style={{ width: '100%', height: '100%' }}>
+                                        {frontSide === 'left'
+                                            ? (!backCoverImage && <BookBackCoverTemplate scaledWidth={520} scaledHeight={566} />)
+                                            : (!frontCoverImage && <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={520} scaledHeight={566} />)}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -390,6 +418,28 @@ function CoverPrintContent() {
                             </button>
                         ))}
                     </div>
+                    {/* Bleed-margin background image. Spans the entire export
+                        canvas; inner trim content sits inset by WRAP_PX so the
+                        20mm strip around it reveals the image. Use this when
+                        you want a separate frame/border that gets trimmed off
+                        but prevents white edges. */}
+                    <div className='mt-4 pt-3' style={{ borderTop: '1px solid #f0e8d4' }}>
+                        <p className='text-[12px] font-bold text-[#3d2e1a] mb-2'>תמונת רקע לשוליים (Bleed)</p>
+                        <p className='text-[11px] text-[#a89378] leading-relaxed mb-3'>
+                            התמונה פרוסה על כל הקנבס <span className='font-mono'>{FULL_W}×{FULL_H}</span> פיקסלים @ {DPI}dpi (459×248 מ&quot;מ). התוכן הפנימי (חזית · שדרה · גב) מצטמצם לאזור ה־trim, והשוליים <span className='font-mono'>{WRAP_MM}</span> מ&quot;מ מסביב נחשפים לתמונה. למילוי מלא — מומלץ <span className='font-mono'>5500×3000</span> פיקסלים (מינימום <span className='font-mono'>{FULL_W}×{FULL_H}</span>). לטקסטורה חוזרת — כל גודל (גם <span className='font-mono'>1024×1024</span>). פורמטים: JPG, PNG, WebP.
+                        </p>
+                        <CoverImageUploader
+                            label='שוליים (Bleed)'
+                            image={bleedImage}
+                            mode={bleedImageMode}
+                            onPick={file => handleImagePick('bleed', file, bleedFileRef)}
+                            onModeChange={setBleedImageMode}
+                            onRemove={() => handleRemoveImage('bleed')}
+                            inputRef={bleedFileRef}
+                            uploading={uploadingTarget === 'bleed'}
+                        />
+                    </div>
+
                     {/* Front + back cover image uploads. When set, the image
                         REPLACES the in-app cover template for that panel and
                         fills the full bleed-to-bleed area automatically. */}
@@ -543,10 +593,26 @@ function CoverPrintContent() {
                 {error && <div className='mt-3 px-3 py-2 rounded-lg text-[12px]' style={{ background: '#fff5f5', border: '1px solid #ffcdcd', color: '#b32424' }}>{error}</div>}
             </div>
 
-            {/* Hidden full-size capture stage — 459×248mm @ 300dpi. */}
+            {/* Hidden full-size capture stage — 459×248mm @ 300dpi.
+                In bleed mode the stage owns the bleed-margin image as its
+                outermost background and inner content sits inset by WRAP_PX
+                so the surrounding strip stays visible. Otherwise we keep
+                the original flex layout where each panel includes its own
+                outer wrap. */}
             <div ref={stageRef} aria-hidden dir='ltr'
-                style={{ position: 'fixed', top: 0, left: -999999, width: FULL_W, height: FULL_H, display: 'flex', overflow: 'hidden', backgroundColor: '#ffffff', pointerEvents: 'none' }}>
-                {wedding && order}
+                style={{
+                    position: 'fixed', top: 0, left: -999999,
+                    width: FULL_W, height: FULL_H,
+                    overflow: 'hidden', pointerEvents: 'none',
+                    backgroundColor: '#ffffff',
+                    ...(bleedImage ? imageBgStyle(bleedImage, bleedImageMode) : null),
+                    ...(bleedImage ? null : { display: 'flex' }),
+                }}>
+                {wedding && (bleedImage ? (
+                    <div style={{ position: 'absolute', top: WRAP_PX, left: WRAP_PX, right: WRAP_PX, bottom: WRAP_PX, display: 'flex' }}>
+                        {order}
+                    </div>
+                ) : order)}
             </div>
         </div>
     )
