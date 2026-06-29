@@ -491,6 +491,7 @@ function AlbumeExportContent() {
             >
                 {renderingItem?.kind === 'cover' && wedding && (
                     <BookCoverTemplate
+                        fillImage
                         wedding={wedding}
                         styleSettings={coverDesign}
                         scaledWidth={FULL_PX}

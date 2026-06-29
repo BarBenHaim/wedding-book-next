@@ -248,7 +248,7 @@ function PageImageContent() {
             <div ref={stageRef} aria-hidden
                 style={{ position: 'fixed', top: 0, left: -99999, width: PX, height: PX, overflow: 'hidden', backgroundColor: '#ffffff', pointerEvents: 'none', direction: 'rtl' }}>
                 {renderingItem?.kind === 'cover' && wedding && (
-                    <BookCoverTemplate wedding={wedding} styleSettings={coverDesign} scaledWidth={PX} scaledHeight={PX} />
+                    <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={PX} scaledHeight={PX} />
                 )}
                 {renderingItem?.kind === 'back' && (
                     <BookBackCoverTemplate scaledWidth={PX} scaledHeight={PX} />

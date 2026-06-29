@@ -101,7 +101,13 @@ function inferAlignItems(position, explicitAlign) {
     }
 }
 
-export default function BookCoverTemplate({ wedding, styleSettings, scaledWidth, scaledHeight }) {
+export default function BookCoverTemplate({ wedding, styleSettings, scaledWidth, scaledHeight, fillImage = false }) {
+    // fillImage: render the cover photo edge-to-edge (objectFit: cover) instead
+    // of the default inset (maxWidth 80% / contain). Used by the PRINT exports
+    // so a full-bleed cover artwork fills the whole panel — matching what the
+    // owner sees after zooming the image in the cover designer (the inset+scale
+    // model leaves a background gap on non-square print panels, which looked
+    // like "the zoom wasn't applied").
     // Default content fallback — only kicks in when the user has put
     // NOTHING on the cover yet (no image, no title, no subtitle). Once
     // they add any of the three, the fallback disappears entirely so
@@ -174,18 +180,34 @@ export default function BookCoverTemplate({ wedding, styleSettings, scaledWidth,
                     // the exact same fix). Harmless for normal on-screen rendering.
                     crossOrigin='anonymous'
                     className='absolute'
-                    style={{
-                        top: `${imgY}%`,
-                        left: `${imgX}%`,
-                        transform: `translate(-50%, -50%) scale(${imgScale})`,
-                        width: 'auto',
-                        height: 'auto',
-                        maxWidth: '80%',
-                        maxHeight: '80%',
-                        objectFit: 'contain',
-                        zIndex: 3,
-                        pointerEvents: 'none',
-                    }}
+                    style={
+                        fillImage
+                            ? {
+                                  // Full-bleed: fill the whole cover, positioned by the
+                                  // owner's focal point. objectFit:cover already fills,
+                                  // so we don't re-apply the inset-relative scale.
+                                  top: 0,
+                                  left: 0,
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'cover',
+                                  objectPosition: `${imgX}% ${imgY}%`,
+                                  zIndex: 3,
+                                  pointerEvents: 'none',
+                              }
+                            : {
+                                  top: `${imgY}%`,
+                                  left: `${imgX}%`,
+                                  transform: `translate(-50%, -50%) scale(${imgScale})`,
+                                  width: 'auto',
+                                  height: 'auto',
+                                  maxWidth: '80%',
+                                  maxHeight: '80%',
+                                  objectFit: 'contain',
+                                  zIndex: 3,
+                                  pointerEvents: 'none',
+                              }
+                    }
                 />
             )}
 

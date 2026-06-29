@@ -174,7 +174,7 @@ function CoverPrintContent() {
     // Build the left→right order. Hebrew RTL → front on the LEFT by default.
     const front = (
         <div key='front' style={{ width: REGION_W, height: FULL_H, flexShrink: 0 }}>
-            <BookCoverTemplate wedding={wedding} styleSettings={coverDesign} scaledWidth={REGION_W} scaledHeight={FULL_H} />
+            <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={REGION_W} scaledHeight={FULL_H} />
         </div>
     )
     const spine = <div key='spine' style={{ width: SPINE_W, height: FULL_H, flexShrink: 0, ...spineStyle }} />
@@ -215,12 +215,12 @@ function CoverPrintContent() {
                     <div className='w-full overflow-hidden rounded-lg' style={{ border: '1px solid #ead9b3' }}>
                         <div style={{ width: '100%', aspectRatio: `${FULL_W} / ${FULL_H}`, display: 'flex' }}>
                             <div style={{ flex: `${REGION_W}` }}><div style={{ width: '100%', height: '100%' }}>{frontSide === 'left'
-                                ? <BookCoverTemplate wedding={wedding} styleSettings={coverDesign} scaledWidth={520} scaledHeight={566} />
+                                ? <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={520} scaledHeight={566} />
                                 : <BookBackCoverTemplate scaledWidth={520} scaledHeight={566} />}</div></div>
                             <div style={{ flex: `${SPINE_W}`, ...spineStyle }} />
                             <div style={{ flex: `${REGION_W}` }}><div style={{ width: '100%', height: '100%' }}>{frontSide === 'left'
                                 ? <BookBackCoverTemplate scaledWidth={520} scaledHeight={566} />
-                                : <BookCoverTemplate wedding={wedding} styleSettings={coverDesign} scaledWidth={520} scaledHeight={566} />}</div></div>
+                                : <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={520} scaledHeight={566} />}</div></div>
                         </div>
                     </div>
                     <div className='flex items-center gap-2 mt-3 flex-wrap'>
