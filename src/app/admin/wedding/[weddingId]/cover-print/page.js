@@ -47,6 +47,75 @@ const REGION_W = mmToPx(WRAP_MM + PANEL_MM) // 216mm ≈ 2551
 const SPINE_W = mmToPx(SPINE_MM)            // 27mm ≈ 319
 const JPEG_QUALITY = 0.95
 
+// Per-cover upload card. Empty state shows the upload button; filled
+// state shows a thumbnail, cover/repeat mode toggle, and a remove button.
+// Identical for front and back covers — driven entirely by props.
+function CoverImageUploader({ label, image, mode, onPick, onModeChange, onRemove, inputRef, uploading }) {
+    return (
+        <div className='rounded-lg p-3' style={{ background: '#fdfaf3', border: '1px solid #f0e8d4' }}>
+            <p className='text-[11px] font-bold text-[#3d2e1a] mb-2'>{label}</p>
+            {!image ? (
+                <>
+                    <input
+                        ref={inputRef}
+                        type='file'
+                        accept='image/jpeg,image/png,image/webp'
+                        className='hidden'
+                        onChange={e => onPick(e.target.files?.[0])}
+                    />
+                    <button
+                        onClick={() => inputRef.current?.click()}
+                        disabled={uploading}
+                        className='inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52] disabled:opacity-60'
+                        style={{ background: '#fff', border: '1px dashed #d3b46a' }}
+                    >
+                        {uploading ? <Loader2 size={14} className='animate-spin' /> : <ImageIcon size={14} />}
+                        {uploading ? 'מעלה…' : `העלה תמונה — ${label}`}
+                    </button>
+                </>
+            ) : (
+                <div className='flex items-center gap-3'>
+                    <div
+                        className='shrink-0 rounded-lg'
+                        style={{
+                            width: 72,
+                            height: 80,
+                            background: `#fff url(${image}) center/${mode === 'cover' ? 'cover' : 'auto'} ${mode === 'cover' ? 'no-repeat' : 'repeat'}`,
+                            border: '1px solid #ead9b3',
+                        }}
+                    />
+                    <div className='flex-1 min-w-0'>
+                        <p className='text-[11px] text-[#7a6a52] mb-1.5'>תמונה החליפה את התבנית — תכסה את כל הפאנל כולל ה־bleed</p>
+                        <div className='flex items-center gap-1.5 flex-wrap'>
+                            {[
+                                { k: 'cover', l: 'מילוי מלא' },
+                                { k: 'repeat', l: 'טקסטורה חוזרת' },
+                            ].map(o => (
+                                <button
+                                    key={o.k}
+                                    onClick={() => onModeChange(o.k)}
+                                    className='text-[11px] font-semibold px-2.5 py-1 rounded-md border transition-colors'
+                                    style={mode === o.k ? { background: '#AA8840', color: '#fff', borderColor: '#AA8840' } : { background: '#fff', color: '#7a6a52', borderColor: '#ead9b3' }}
+                                >
+                                    {o.l}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <button
+                        onClick={onRemove}
+                        className='shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold text-[#b32424]'
+                        style={{ background: '#fff5f5', border: '1px solid #ffcdcd' }}
+                        title='הסר תמונה וחזור לתבנית הכריכה'
+                    >
+                        <X size={12} /> הסר
+                    </button>
+                </div>
+            )}
+        </div>
+    )
+}
+
 function SuperAdminGate({ children }) {
     const [state, setState] = useState('checking')
     useEffect(() => {
@@ -77,14 +146,23 @@ function CoverPrintContent() {
     const [loadStatus, setLoadStatus] = useState('loading')
     const [frontSide, setFrontSide] = useState('left') // 'left' = Hebrew RTL default
     const [spineColor, setSpineColor] = useState('#efe3cc') // middle spacer / spine fill color
-    // Optional image background for the spine. Held as a data: URL so html2canvas
-    // can rasterise it without CORS, and so nothing is left behind in Firebase
-    // Storage after this one-off export. Cover mode fills the spine; repeat
-    // mode tiles a seamless texture.
+    // Optional image backgrounds. Held as data: URLs so html2canvas
+    // rasterises them without CORS, and so nothing is left behind in Firebase
+    // Storage after this one-off export. Cover mode fills the panel; repeat
+    // mode tiles a seamless texture. When set for a front/back cover the
+    // image REPLACES the in-app cover template for that panel — the panel
+    // container is already REGION_W × FULL_H (2551 × 2929 px), which is the
+    // full bleed-to-bleed area, so the image extends into the wrap by design.
     const [spineImage, setSpineImage] = useState(null)
     const [spineImageMode, setSpineImageMode] = useState('cover') // 'cover' | 'repeat'
-    const [uploadingImage, setUploadingImage] = useState(false)
-    const fileInputRef = useRef(null)
+    const [frontCoverImage, setFrontCoverImage] = useState(null)
+    const [frontCoverImageMode, setFrontCoverImageMode] = useState('cover')
+    const [backCoverImage, setBackCoverImage] = useState(null)
+    const [backCoverImageMode, setBackCoverImageMode] = useState('cover')
+    const [uploadingTarget, setUploadingTarget] = useState(null) // 'spine' | 'front' | 'back' | null
+    const spineFileRef = useRef(null)
+    const frontFileRef = useRef(null)
+    const backFileRef = useRef(null)
     const [running, setRunning] = useState(false)
     const [done, setDone] = useState(false)
     const [error, setError] = useState('')
@@ -121,51 +199,63 @@ function CoverPrintContent() {
 
     // Spine / middle spacer fill. If an image was uploaded it takes
     // precedence and is rendered either filling the spine (cover) or tiled
-    // as a seamless texture (repeat). Otherwise the operator-picked colour
-    // is used. Background color stays underneath the image so any
-    // transparent texture sits on the chosen colour.
+    // as a seamless texture (repeat). The chosen colour sits underneath so
+    // any transparency in the texture lands on the operator's surface.
     const spineStyle = spineImage
-        ? {
-              backgroundColor: spineColor,
-              backgroundImage: `url(${spineImage})`,
-              backgroundSize: spineImageMode === 'cover' ? 'cover' : 'auto',
-              backgroundRepeat: spineImageMode === 'cover' ? 'no-repeat' : 'repeat',
-              backgroundPosition: 'center',
-          }
+        ? { ...imageBgStyle(spineImage, spineImageMode), backgroundColor: spineColor }
         : { backgroundColor: spineColor }
 
-    async function handleSpineImagePick(file) {
+    // Shared upload pipeline. Compresses (phone photos can hit 6MB+, which
+    // would bloat the data URL fed to html2canvas) and resolves to a data:
+    // URL. maxWidthOrHeight of 2800 keeps a noticeable safety margin over
+    // the cover region (2551 × 2929 px) without storing pointless detail.
+    async function compressToDataUrl(file) {
+        const compressed = await imageCompression(file, {
+            maxSizeMB: 3,
+            maxWidthOrHeight: 2800,
+            initialQuality: 0.9,
+            useWebWorker: true,
+        })
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result)
+            reader.onerror = () => reject(reader.error)
+            reader.readAsDataURL(compressed)
+        })
+    }
+
+    async function handleImagePick(target, file, fileRef) {
         if (!file) return
-        setUploadingImage(true)
+        setUploadingTarget(target)
         try {
-            // Compress so a phone photo (often 4000px+ and 6MB+) doesn't
-            // bloat the data URL we feed html2canvas. 2400px max is plenty
-            // — the spine renders at ~319 × 2929 px in the final export.
-            const compressed = await imageCompression(file, {
-                maxSizeMB: 2,
-                maxWidthOrHeight: 2400,
-                initialQuality: 0.9,
-                useWebWorker: true,
-            })
-            const dataUrl = await new Promise((resolve, reject) => {
-                const reader = new FileReader()
-                reader.onload = () => resolve(reader.result)
-                reader.onerror = () => reject(reader.error)
-                reader.readAsDataURL(compressed)
-            })
-            setSpineImage(dataUrl)
+            const dataUrl = await compressToDataUrl(file)
+            if (target === 'spine') setSpineImage(dataUrl)
+            else if (target === 'front') setFrontCoverImage(dataUrl)
+            else if (target === 'back') setBackCoverImage(dataUrl)
         } catch (err) {
-            console.error('[cover-print] spine image upload failed', err)
+            console.error(`[cover-print] ${target} image upload failed`, err)
             alert('שגיאה בהעלאת התמונה')
         } finally {
-            setUploadingImage(false)
-            if (fileInputRef.current) fileInputRef.current.value = ''
+            setUploadingTarget(null)
+            if (fileRef?.current) fileRef.current.value = ''
         }
     }
 
-    function handleRemoveSpineImage() {
-        setSpineImage(null)
-        setSpineImageMode('cover')
+    function handleRemoveImage(target) {
+        if (target === 'spine') { setSpineImage(null); setSpineImageMode('cover') }
+        else if (target === 'front') { setFrontCoverImage(null); setFrontCoverImageMode('cover') }
+        else if (target === 'back') { setBackCoverImage(null); setBackCoverImageMode('cover') }
+    }
+
+    // Helper: build the CSS for an image-as-background panel.
+    function imageBgStyle(url, mode) {
+        return {
+            backgroundImage: `url(${url})`,
+            backgroundSize: mode === 'cover' ? 'cover' : 'auto',
+            backgroundRepeat: mode === 'cover' ? 'no-repeat' : 'repeat',
+            backgroundPosition: 'center',
+            backgroundColor: '#ffffff',
+        }
     }
 
     const weddingTitle = (() => {
@@ -223,15 +313,23 @@ function CoverPrintContent() {
     if (loadStatus === 'error') return <div className='flex h-screen flex-col items-center justify-center gap-2 text-[#b32424]'><AlertTriangle size={28} /><p>{error}</p></div>
 
     // Build the left→right order. Hebrew RTL → front on the LEFT by default.
+    // When a cover image is uploaded it REPLACES the in-app template for
+    // that panel — the panel container is REGION_W × FULL_H (2551 × 2929 px),
+    // i.e. the full bleed-to-bleed area, so a cover-mode image extends all
+    // the way into the 20mm wrap on every side automatically.
     const front = (
-        <div key='front' style={{ width: REGION_W, height: FULL_H, flexShrink: 0 }}>
-            <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={REGION_W} scaledHeight={FULL_H} />
+        <div key='front' style={{ width: REGION_W, height: FULL_H, flexShrink: 0, ...(frontCoverImage ? imageBgStyle(frontCoverImage, frontCoverImageMode) : null) }}>
+            {!frontCoverImage && (
+                <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={REGION_W} scaledHeight={FULL_H} />
+            )}
         </div>
     )
     const spine = <div key='spine' style={{ width: SPINE_W, height: FULL_H, flexShrink: 0, ...spineStyle }} />
     const back = (
-        <div key='back' style={{ width: REGION_W, height: FULL_H, flexShrink: 0 }}>
-            <BookBackCoverTemplate scaledWidth={REGION_W} scaledHeight={FULL_H} />
+        <div key='back' style={{ width: REGION_W, height: FULL_H, flexShrink: 0, ...(backCoverImage ? imageBgStyle(backCoverImage, backCoverImageMode) : null) }}>
+            {!backCoverImage && (
+                <BookBackCoverTemplate scaledWidth={REGION_W} scaledHeight={FULL_H} />
+            )}
         </div>
     )
     const order = frontSide === 'left' ? [front, spine, back] : [back, spine, front]
@@ -265,13 +363,21 @@ function CoverPrintContent() {
                     <p className='text-[11px] text-[#a89378] uppercase tracking-widest font-semibold mb-3'>תצוגה מקדימה (חזית · שדרה · גב)</p>
                     <div className='w-full overflow-hidden rounded-lg' style={{ border: '1px solid #ead9b3' }}>
                         <div style={{ width: '100%', aspectRatio: `${FULL_W} / ${FULL_H}`, display: 'flex' }}>
-                            <div style={{ flex: `${REGION_W}` }}><div style={{ width: '100%', height: '100%' }}>{frontSide === 'left'
-                                ? <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={520} scaledHeight={566} />
-                                : <BookBackCoverTemplate scaledWidth={520} scaledHeight={566} />}</div></div>
+                            <div style={{ flex: `${REGION_W}`, ...((frontSide === 'left' ? frontCoverImage : backCoverImage) ? imageBgStyle(frontSide === 'left' ? frontCoverImage : backCoverImage, frontSide === 'left' ? frontCoverImageMode : backCoverImageMode) : null) }}>
+                                <div style={{ width: '100%', height: '100%' }}>
+                                    {frontSide === 'left'
+                                        ? (!frontCoverImage && <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={520} scaledHeight={566} />)
+                                        : (!backCoverImage && <BookBackCoverTemplate scaledWidth={520} scaledHeight={566} />)}
+                                </div>
+                            </div>
                             <div style={{ flex: `${SPINE_W}`, ...spineStyle }} />
-                            <div style={{ flex: `${REGION_W}` }}><div style={{ width: '100%', height: '100%' }}>{frontSide === 'left'
-                                ? <BookBackCoverTemplate scaledWidth={520} scaledHeight={566} />
-                                : <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={520} scaledHeight={566} />}</div></div>
+                            <div style={{ flex: `${REGION_W}`, ...((frontSide === 'left' ? backCoverImage : frontCoverImage) ? imageBgStyle(frontSide === 'left' ? backCoverImage : frontCoverImage, frontSide === 'left' ? backCoverImageMode : frontCoverImageMode) : null) }}>
+                                <div style={{ width: '100%', height: '100%' }}>
+                                    {frontSide === 'left'
+                                        ? (!backCoverImage && <BookBackCoverTemplate scaledWidth={520} scaledHeight={566} />)
+                                        : (!frontCoverImage && <BookCoverTemplate fillImage wedding={wedding} styleSettings={coverDesign} scaledWidth={520} scaledHeight={566} />)}
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div className='flex items-center gap-2 mt-3 flex-wrap'>
@@ -284,6 +390,37 @@ function CoverPrintContent() {
                             </button>
                         ))}
                     </div>
+                    {/* Front + back cover image uploads. When set, the image
+                        REPLACES the in-app cover template for that panel and
+                        fills the full bleed-to-bleed area automatically. */}
+                    <div className='mt-4 pt-3' style={{ borderTop: '1px solid #f0e8d4' }}>
+                        <p className='text-[12px] font-bold text-[#3d2e1a] mb-2'>תמונת רקע לכריכות</p>
+                        <p className='text-[11px] text-[#a89378] leading-relaxed mb-3'>
+                            כל פאנל מודפס ב־<span className='font-mono'>{REGION_W}×{FULL_H}</span> פיקסלים @ {DPI}dpi (כולל 20 מ&quot;מ wrap בכל צד). למילוי מלא — מומלץ <span className='font-mono'>2700×3100</span> פיקסלים (מינימום <span className='font-mono'>2400×2400</span>). לטקסטורה חוזרת — כל גודל (גם <span className='font-mono'>1024×1024</span>). פורמטים: JPG, PNG, WebP.
+                        </p>
+                        <CoverImageUploader
+                            label='כריכה קדמית'
+                            image={frontCoverImage}
+                            mode={frontCoverImageMode}
+                            onPick={file => handleImagePick('front', file, frontFileRef)}
+                            onModeChange={setFrontCoverImageMode}
+                            onRemove={() => handleRemoveImage('front')}
+                            inputRef={frontFileRef}
+                            uploading={uploadingTarget === 'front'}
+                        />
+                        <div className='h-3' />
+                        <CoverImageUploader
+                            label='כריכה אחורית'
+                            image={backCoverImage}
+                            mode={backCoverImageMode}
+                            onPick={file => handleImagePick('back', file, backFileRef)}
+                            onModeChange={setBackCoverImageMode}
+                            onRemove={() => handleRemoveImage('back')}
+                            inputRef={backFileRef}
+                            uploading={uploadingTarget === 'back'}
+                        />
+                    </div>
+
                     <div className='mt-4 pt-3' style={{ borderTop: '1px solid #f0e8d4' }}>
                         <p className='text-[12px] font-bold text-[#3d2e1a] mb-2'>צבע / רקע השדרה</p>
                         <div className='flex items-center gap-2 flex-wrap'>
@@ -316,20 +453,20 @@ function CoverPrintContent() {
                         {!spineImage ? (
                             <div className='mt-3'>
                                 <input
-                                    ref={fileInputRef}
+                                    ref={spineFileRef}
                                     type='file'
                                     accept='image/jpeg,image/png,image/webp'
                                     className='hidden'
-                                    onChange={e => handleSpineImagePick(e.target.files?.[0])}
+                                    onChange={e => handleImagePick('spine', e.target.files?.[0], spineFileRef)}
                                 />
                                 <button
-                                    onClick={() => fileInputRef.current?.click()}
-                                    disabled={uploadingImage}
+                                    onClick={() => spineFileRef.current?.click()}
+                                    disabled={uploadingTarget === 'spine'}
                                     className='inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52] disabled:opacity-60'
                                     style={{ background: '#fff', border: '1px dashed #d3b46a' }}
                                 >
-                                    {uploadingImage ? <Loader2 size={14} className='animate-spin' /> : <ImageIcon size={14} />}
-                                    {uploadingImage ? 'מעלה…' : 'העלה תמונה כרקע השדרה'}
+                                    {uploadingTarget === 'spine' ? <Loader2 size={14} className='animate-spin' /> : <ImageIcon size={14} />}
+                                    {uploadingTarget === 'spine' ? 'מעלה…' : 'העלה תמונה כרקע השדרה'}
                                 </button>
                                 <p className='text-[11px] text-[#a89378] mt-2 leading-relaxed'>
                                     רזולוציה מומלצת: למילוי מלא — לפחות <span className='font-mono'>600×3000</span> פיקסלים (השדרה מודפסת ב־{SPINE_W}×{FULL_H} פיקסלים @ {DPI}dpi). לטקסטורה חוזרת — כל גודל מתאים (גם <span className='font-mono'>500×500</span>). פורמטים: JPG, PNG, WebP.
@@ -366,7 +503,7 @@ function CoverPrintContent() {
                                         </div>
                                     </div>
                                     <button
-                                        onClick={handleRemoveSpineImage}
+                                        onClick={() => handleRemoveImage('spine')}
                                         className='shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold text-[#b32424]'
                                         style={{ background: '#fff5f5', border: '1px solid #ffcdcd' }}
                                         title='הסר תמונה וחזור לצבע'
