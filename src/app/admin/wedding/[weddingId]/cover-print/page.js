@@ -29,7 +29,6 @@ import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
-import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { Printer, Lock, CheckCircle2, Loader2, AlertTriangle, ArrowLeft, Download, Info } from 'lucide-react'
 
 // ── Print math (Jerusalem print house wraparound spec) ──────────────
@@ -76,6 +75,7 @@ function CoverPrintContent() {
     const [wedding, setWedding] = useState(null)
     const [loadStatus, setLoadStatus] = useState('loading')
     const [frontSide, setFrontSide] = useState('left') // 'left' = Hebrew RTL default
+    const [spineColor, setSpineColor] = useState('#efe3cc') // middle spacer / spine fill color
     const [running, setRunning] = useState(false)
     const [done, setDone] = useState(false)
     const [error, setError] = useState('')
@@ -89,6 +89,12 @@ function CoverPrintContent() {
                 if (cancelled) return
                 if (!wSnap.exists()) { setLoadStatus('error'); setError('האירוע לא נמצא'); return }
                 setWedding({ id: weddingId, ...wSnap.data() })
+                // Smart default for the spine color: match the cover's own
+                // background when it set a real (non-white) colour, so the
+                // spacer blends; otherwise keep the warm cream default.
+                const d = wSnap.data() || {}
+                const bg = (d.coverDesign || d.bookDesign || {}).backgroundColor
+                if (bg && !/^#?f{3,6}$|white/i.test(String(bg).replace('#', '#'))) setSpineColor(bg)
                 setLoadStatus('ready')
             } catch (err) {
                 console.error('[cover-print] load failed', err)
@@ -104,18 +110,10 @@ function CoverPrintContent() {
         return { ...defaultStyle, ...c, locale: wedding?.locale || 'he' }
     })()
 
-    // Spine fill — the cover's own background so the wrap reads continuous.
-    const spineStyle = (() => {
-        const tex = resolveTextureUrl(coverDesign.coverTexture) || resolveTextureUrl(coverDesign.texture)
-        const url = tex && tex !== 'none' ? tex : null
-        return {
-            backgroundColor: coverDesign.backgroundColor || '#f5f0e8',
-            backgroundImage: url ? `url(${url})` : 'none',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'repeat',
-        }
-    })()
+    // Spine / middle spacer fill — a solid colour the operator chooses (the
+    // picker is in the UI below; default matches the cover background). Solid
+    // reads clean and matches a real hardcover spine.
+    const spineStyle = { backgroundColor: spineColor }
 
     const weddingTitle = (() => {
         const b = wedding?.brideNameHe || wedding?.brideName || ''
@@ -231,6 +229,27 @@ function CoverPrintContent() {
                                 style={frontSide === o.k ? { background: '#AA8840', color: '#fff', borderColor: '#AA8840' } : { background: '#fff', color: '#7a6a52', borderColor: '#ead9b3' }}>
                                 {o.l}
                             </button>
+                        ))}
+                    </div>
+                    <div className='flex items-center gap-2 mt-3 flex-wrap'>
+                        <span className='text-[12px] text-[#7a6a52]'>צבע הרקע באמצע (שדרה/מרווח):</span>
+                        <input
+                            type='color'
+                            value={spineColor}
+                            onChange={e => setSpineColor(e.target.value)}
+                            className='w-9 h-9 rounded-lg cursor-pointer p-0'
+                            style={{ border: '1px solid #ead9b3', background: 'none' }}
+                            aria-label='צבע שדרה'
+                        />
+                        <span className='text-[11px] font-mono text-[#7a6a52]'>{spineColor}</span>
+                        {['#efe3cc', '#f5f0e8', '#ffffff', '#1a1410', '#b8893d'].map(c => (
+                            <button
+                                key={c}
+                                onClick={() => setSpineColor(c)}
+                                title={c}
+                                aria-label={c}
+                                style={{ width: 26, height: 26, borderRadius: '50%', background: c, border: (spineColor || '').toLowerCase() === c ? '2px solid #aa8840' : '1px solid #ead9b3', cursor: 'pointer' }}
+                            />
                         ))}
                     </div>
                 </div>
