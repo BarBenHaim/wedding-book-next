@@ -29,7 +29,8 @@ import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
-import { Printer, Lock, CheckCircle2, Loader2, AlertTriangle, ArrowLeft, Download, Info } from 'lucide-react'
+import imageCompression from 'browser-image-compression'
+import { Printer, Lock, CheckCircle2, Loader2, AlertTriangle, ArrowLeft, Download, Info, ImageIcon, X } from 'lucide-react'
 
 // ── Print math (Jerusalem print house wraparound spec) ──────────────
 const DPI = 300
@@ -76,6 +77,14 @@ function CoverPrintContent() {
     const [loadStatus, setLoadStatus] = useState('loading')
     const [frontSide, setFrontSide] = useState('left') // 'left' = Hebrew RTL default
     const [spineColor, setSpineColor] = useState('#efe3cc') // middle spacer / spine fill color
+    // Optional image background for the spine. Held as a data: URL so html2canvas
+    // can rasterise it without CORS, and so nothing is left behind in Firebase
+    // Storage after this one-off export. Cover mode fills the spine; repeat
+    // mode tiles a seamless texture.
+    const [spineImage, setSpineImage] = useState(null)
+    const [spineImageMode, setSpineImageMode] = useState('cover') // 'cover' | 'repeat'
+    const [uploadingImage, setUploadingImage] = useState(false)
+    const fileInputRef = useRef(null)
     const [running, setRunning] = useState(false)
     const [done, setDone] = useState(false)
     const [error, setError] = useState('')
@@ -110,10 +119,54 @@ function CoverPrintContent() {
         return { ...defaultStyle, ...c, locale: wedding?.locale || 'he' }
     })()
 
-    // Spine / middle spacer fill — a solid colour the operator chooses (the
-    // picker is in the UI below; default matches the cover background). Solid
-    // reads clean and matches a real hardcover spine.
-    const spineStyle = { backgroundColor: spineColor }
+    // Spine / middle spacer fill. If an image was uploaded it takes
+    // precedence and is rendered either filling the spine (cover) or tiled
+    // as a seamless texture (repeat). Otherwise the operator-picked colour
+    // is used. Background color stays underneath the image so any
+    // transparent texture sits on the chosen colour.
+    const spineStyle = spineImage
+        ? {
+              backgroundColor: spineColor,
+              backgroundImage: `url(${spineImage})`,
+              backgroundSize: spineImageMode === 'cover' ? 'cover' : 'auto',
+              backgroundRepeat: spineImageMode === 'cover' ? 'no-repeat' : 'repeat',
+              backgroundPosition: 'center',
+          }
+        : { backgroundColor: spineColor }
+
+    async function handleSpineImagePick(file) {
+        if (!file) return
+        setUploadingImage(true)
+        try {
+            // Compress so a phone photo (often 4000px+ and 6MB+) doesn't
+            // bloat the data URL we feed html2canvas. 2400px max is plenty
+            // — the spine renders at ~319 × 2929 px in the final export.
+            const compressed = await imageCompression(file, {
+                maxSizeMB: 2,
+                maxWidthOrHeight: 2400,
+                initialQuality: 0.9,
+                useWebWorker: true,
+            })
+            const dataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader()
+                reader.onload = () => resolve(reader.result)
+                reader.onerror = () => reject(reader.error)
+                reader.readAsDataURL(compressed)
+            })
+            setSpineImage(dataUrl)
+        } catch (err) {
+            console.error('[cover-print] spine image upload failed', err)
+            alert('שגיאה בהעלאת התמונה')
+        } finally {
+            setUploadingImage(false)
+            if (fileInputRef.current) fileInputRef.current.value = ''
+        }
+    }
+
+    function handleRemoveSpineImage() {
+        setSpineImage(null)
+        setSpineImageMode('cover')
+    }
 
     const weddingTitle = (() => {
         const b = wedding?.brideNameHe || wedding?.brideName || ''
@@ -231,26 +284,98 @@ function CoverPrintContent() {
                             </button>
                         ))}
                     </div>
-                    <div className='flex items-center gap-2 mt-3 flex-wrap'>
-                        <span className='text-[12px] text-[#7a6a52]'>צבע הרקע באמצע (שדרה/מרווח):</span>
-                        <input
-                            type='color'
-                            value={spineColor}
-                            onChange={e => setSpineColor(e.target.value)}
-                            className='w-9 h-9 rounded-lg cursor-pointer p-0'
-                            style={{ border: '1px solid #ead9b3', background: 'none' }}
-                            aria-label='צבע שדרה'
-                        />
-                        <span className='text-[11px] font-mono text-[#7a6a52]'>{spineColor}</span>
-                        {['#efe3cc', '#f5f0e8', '#ffffff', '#1a1410', '#b8893d'].map(c => (
-                            <button
-                                key={c}
-                                onClick={() => setSpineColor(c)}
-                                title={c}
-                                aria-label={c}
-                                style={{ width: 26, height: 26, borderRadius: '50%', background: c, border: (spineColor || '').toLowerCase() === c ? '2px solid #aa8840' : '1px solid #ead9b3', cursor: 'pointer' }}
+                    <div className='mt-4 pt-3' style={{ borderTop: '1px solid #f0e8d4' }}>
+                        <p className='text-[12px] font-bold text-[#3d2e1a] mb-2'>צבע / רקע השדרה</p>
+                        <div className='flex items-center gap-2 flex-wrap'>
+                            <input
+                                type='color'
+                                value={spineColor}
+                                onChange={e => setSpineColor(e.target.value)}
+                                className='w-9 h-9 rounded-lg cursor-pointer p-0'
+                                style={{ border: '1px solid #ead9b3', background: 'none' }}
+                                aria-label='צבע שדרה'
                             />
-                        ))}
+                            <span className='text-[11px] font-mono text-[#7a6a52]'>{spineColor}</span>
+                            {['#efe3cc', '#f5f0e8', '#ffffff', '#1a1410', '#b8893d'].map(c => (
+                                <button
+                                    key={c}
+                                    onClick={() => setSpineColor(c)}
+                                    title={c}
+                                    aria-label={c}
+                                    style={{ width: 26, height: 26, borderRadius: '50%', background: c, border: (spineColor || '').toLowerCase() === c ? '2px solid #aa8840' : '1px solid #ead9b3', cursor: 'pointer' }}
+                                />
+                            ))}
+                        </div>
+
+                        {/* Or upload an image — overrides the color when set. */}
+                        <div className='flex items-center gap-3 mt-3'>
+                            <div className='text-[11px] text-[#a89378] uppercase tracking-widest font-semibold'>או</div>
+                            <div className='flex-1' style={{ borderTop: '1px dashed #ead9b3' }} />
+                        </div>
+
+                        {!spineImage ? (
+                            <div className='mt-3'>
+                                <input
+                                    ref={fileInputRef}
+                                    type='file'
+                                    accept='image/jpeg,image/png,image/webp'
+                                    className='hidden'
+                                    onChange={e => handleSpineImagePick(e.target.files?.[0])}
+                                />
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={uploadingImage}
+                                    className='inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52] disabled:opacity-60'
+                                    style={{ background: '#fff', border: '1px dashed #d3b46a' }}
+                                >
+                                    {uploadingImage ? <Loader2 size={14} className='animate-spin' /> : <ImageIcon size={14} />}
+                                    {uploadingImage ? 'מעלה…' : 'העלה תמונה כרקע השדרה'}
+                                </button>
+                                <p className='text-[11px] text-[#a89378] mt-2 leading-relaxed'>
+                                    רזולוציה מומלצת: למילוי מלא — לפחות <span className='font-mono'>600×3000</span> פיקסלים (השדרה מודפסת ב־{SPINE_W}×{FULL_H} פיקסלים @ {DPI}dpi). לטקסטורה חוזרת — כל גודל מתאים (גם <span className='font-mono'>500×500</span>). פורמטים: JPG, PNG, WebP.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className='mt-3'>
+                                <div className='flex items-center gap-3'>
+                                    <div
+                                        className='shrink-0 rounded-lg'
+                                        style={{
+                                            width: 48,
+                                            height: 80,
+                                            background: `${spineColor} url(${spineImage}) center/${spineImageMode === 'cover' ? 'cover' : 'auto'} ${spineImageMode === 'cover' ? 'no-repeat' : 'repeat'}`,
+                                            border: '1px solid #ead9b3',
+                                        }}
+                                    />
+                                    <div className='flex-1 min-w-0'>
+                                        <p className='text-[12px] font-bold text-[#3d2e1a] mb-1.5'>תמונת רקע מועלית</p>
+                                        <div className='flex items-center gap-1.5 flex-wrap'>
+                                            {[
+                                                { k: 'cover', l: 'מילוי מלא' },
+                                                { k: 'repeat', l: 'טקסטורה חוזרת' },
+                                            ].map(o => (
+                                                <button
+                                                    key={o.k}
+                                                    onClick={() => setSpineImageMode(o.k)}
+                                                    className='text-[11px] font-semibold px-2.5 py-1 rounded-md border transition-colors'
+                                                    style={spineImageMode === o.k ? { background: '#AA8840', color: '#fff', borderColor: '#AA8840' } : { background: '#fff', color: '#7a6a52', borderColor: '#ead9b3' }}
+                                                >
+                                                    {o.l}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={handleRemoveSpineImage}
+                                        className='shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold text-[#b32424]'
+                                        style={{ background: '#fff5f5', border: '1px solid #ffcdcd' }}
+                                        title='הסר תמונה וחזור לצבע'
+                                    >
+                                        <X size={12} /> הסר
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
