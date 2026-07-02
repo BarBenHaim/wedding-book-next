@@ -10,9 +10,9 @@ function siteOrigin() {
 
 export async function generateMetadata() {
     const origin = siteOrigin()
-    const title = 'ספר הברכות שהאורחים יוצרים בזמן אמת | Wedding Tales'
-    const description = 'האורחים סורקים QR, כותבים ברכה ומעלים תמונה בזמן האירוע — ואתם מקבלים ספר מודפס ודיגיטלי שנשאר לכם לתמיד. דפדפו בדוגמה חיה ואפילו נסו להוסיף ברכה.'
-    const ogImage = `${origin}/og/wedding-tales-book.png`
+    const title = 'כל האורחים מברכים. אתם מקבלים ספר | Wedding Tales'
+    const description = 'האורחים סורקים QR, כותבים ברכה ומעלים תמונה בזמן האירוע — ואתם מקבלים ספר מודפס ודיגיטלי לכל החיים. דפדפו בספרים אמיתיים של לקוחות ונסו להוסיף ברכה בעצמכם.'
+    const ogImage = `${origin}/og/landing-portfolio.png`
     return {
         metadataBase: new URL(origin),
         title,

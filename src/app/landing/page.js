@@ -1,13 +1,23 @@
 'use client'
 
-// /landing — the full marketing landing page, hosted on the app's own domain
-// (app.weddingtales.co.il/landing). Combines the proven copy from the public
-// marketing site with what was missing there: it SHOWS the product (a real
-// rendered book + a gallery of real photos), lets visitors EXPERIENCE it
-// (flip a sample book + add a blessing live), and only then asks for contact.
+// /landing — the full marketing landing page (app.weddingtales.co.il/landing).
 //
-// Self-contained + client-side (no Firestore) so it's fast and unbreakable.
-// OG preview lives in ./layout.js. Brand photos come from /public/imgs.
+// Spring 2026 rewrite: the page now leads with REAL portfolio — three live
+// customer books (see PORTFOLIO below), each linking to its actual public
+// digital book via a dedicated landing token, plus transparent pricing.
+// The live flip-a-book + add-a-blessing demo from the previous version is
+// kept (it converts) and sits right after the portfolio.
+//
+// Portfolio access tokens were minted specifically for this page with
+// issuedBy:'landing-page' in each wedding's digitalTokensIssuedAt audit
+// array — revoke them there without touching the couples' own links:
+//   wedding rOPkVWbwurT4UjKCR5hg (שקד ודור), birthday 6175 (ג'רי),
+//   bar mitzvah 5483 (נועם).
+//
+// Static screenshots live in /public/imgs/portfolio/{slug}/ — captured from
+// the production books, so the cards show the real product. Self-contained +
+// client-side (no Firestore) so the page stays fast and unbreakable.
+// OG preview lives in ./layout.js.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import HTMLFlipBook from 'react-pageflip'
@@ -16,13 +26,46 @@ import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 import { resolvePreset, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import { normalizeBlessing } from '@/lib/normalizeText'
+import { frankRuhl } from '@/app/fonts'
 import {
     QrCode, PenLine, BookHeart, Sparkles, Globe, Printer, Smartphone, Camera,
-    Check, ChevronLeft, ChevronRight, Star, ChevronDown,
+    Check, ChevronLeft, ChevronRight, Star, ChevronDown, BookOpen, MessageCircle,
 } from 'lucide-react'
 
 const WA = 'https://wa.link/0sesxc'
 
+// ─── Real customer books (the portfolio) ────────────────────────────
+const PORTFOLIO = [
+    {
+        slug: 'wedding',
+        badge: 'חתונה',
+        title: 'שקד ודור',
+        sub: 'ספר הברכות של החתונה',
+        count: 24,
+        href: '/b/529b8a86-ca5d-4944-8178-c75c0420095d',
+        accent: '#b8893d',
+    },
+    {
+        slug: 'bar-mitzvah',
+        badge: 'בר מצווה',
+        title: 'נועם',
+        sub: 'ספר הברכות של בר המצווה',
+        count: 45,
+        href: '/b/0b02382b-7d8e-40a8-804b-1c5bdd31c1ae',
+        accent: '#7aa4d6',
+    },
+    {
+        slug: 'birthday',
+        badge: 'יום הולדת 90',
+        title: 'ג׳רי',
+        sub: 'ספר ברכות ליום הולדת',
+        count: 31,
+        href: '/b/a319b00d-7ed2-48cf-b88b-d41a98f35e05',
+        accent: '#c98a9a',
+    },
+]
+
+// Demo blessings for the interactive flipbook (not a real book).
 const SAMPLE = [
     { id: 's1', name: 'דנה', text: 'סבא יקר, אין מילים לתאר כמה אנחנו אוהבים אותך. שתמיד תהיה בריא ושמח, ותמשיך להאיר לכולנו את הדרך.', imageUrl: '/imgs/img1.jpg' },
     { id: 's2', name: 'Yossi & Michal', text: 'Your stories and your smile light up every room. Here’s to many more years of laughter together — we love you!', imageUrl: '/imgs/img2.jpg' },
@@ -35,13 +78,22 @@ const SAMPLE = [
 ]
 
 const FAQ = [
-    { q: 'מה קורה אם האירוע נדחה?', a: 'אין שום בעיה — הקישור והמערכת שלכם נשארים פעילים, ופשוט נתאם מחדש לתאריך החדש. לא משלמים פעמיים.' },
-    { q: 'חלק מהאורחים שלנו מבוגרים — זה מתאים גם להם?', a: 'בהחלט. סריקת ה‑QR פותחת עמוד פשוט בדפדפן, בלי הורדת אפליקציה ובלי הרשמה. אפשר גם לעזור ולהקריא — ודווקא מהדור המבוגר מגיעות חלק מהברכות הכי מרגשות.' },
     { q: 'מה בדיוק מקבלים?', a: 'ספר מודפס יוקרתי בכריכה קשה על נייר ארכיב איכותי, ספר דיגיטלי לדפדוף ולשיתוף עם כל האורחים, וגישה למערכת לניהול הברכות ובחירת העיצוב.' },
+    { q: 'כמה זמן לוקח עד שהספר מגיע?', a: 'כ־4 שבועות מרגע שאישרתם את העיצוב הסופי. הספר הדיגיטלי זמין מיד — עוד באותו ערב אפשר לדפדף בברכות ולשתף עם המשפחה.' },
+    { q: 'אפשר להוסיף ברכות גם אחרי האירוע?', a: 'בהחלט. הקישור נשאר פעיל גם אחרי האירוע, כך שמי שפספס — סבתא, חברים מחו"ל, קולגות — יכול להוסיף ברכה עד שסוגרים את הספר להדפסה.' },
+    { q: 'חלק מהאורחים שלנו מבוגרים — זה מתאים גם להם?', a: 'בהחלט. סריקת ה‑QR פותחת עמוד פשוט בדפדפן, בלי הורדת אפליקציה ובלי הרשמה. אפשר גם לעזור ולהקריא — ודווקא מהדור המבוגר מגיעות חלק מהברכות הכי מרגשות.' },
     { q: 'מה אם לא כל האורחים ישתתפו?', a: 'גם השתתפות חלקית מספיקה לספר מלא ומרגש. אנחנו עוזרים עם שילוט, תזכורות ועיצוב שמזמין השתתפות — ותמיד אפשר להוסיף ברכות גם אחרי האירוע.' },
+    { q: 'מה קורה אם האירוע נדחה?', a: 'אין שום בעיה — הקישור והמערכת שלכם נשארים פעילים, ופשוט נתאם מחדש לתאריך החדש. לא משלמים פעמיים.' },
 ]
 
 const GALLERY = ['/imgs/img9.jpg', '/imgs/img10.jpg', '/imgs/img11.jpg', '/imgs/img12.jpg', '/imgs/img13.jpg', '/imgs/img14.jpg', '/imgs/img15.jpg', '/imgs/img16.jpg']
+
+const INCLUDED = [
+    { icon: Printer, t: 'ספר מודפס בכריכה קשה', d: 'נייר ארכיב איכותי, עיצוב אישי — מזכרת שנשארת לדורות.' },
+    { icon: Smartphone, t: 'ספר דיגיטלי לשיתוף', d: 'גרסה דיגיטלית יפהפייה לדפדוף ולשליחה לכל האורחים — זמינה כבר בערב האירוע.' },
+    { icon: Sparkles, t: 'עיצוב מותאם אישית', d: 'עם השם והתמונה של החוגגים, בסגנון שמתאים בדיוק לאירוע שלכם.' },
+    { icon: Globe, t: 'מערכת ניהול ובחירת עיצוב', d: 'גישה מלאה לניהול הברכות, סידור הספר ובחירת העיצוב.' },
+]
 
 export default function LandingPage() {
     const styleSettings = useMemo(() => {
@@ -109,39 +161,57 @@ export default function LandingPage() {
         setTimeout(() => { try { flipRef.current?.pageFlip?.()?.flip(nextIndex) } catch { /* ignore */ } }, 260)
     }
 
-    const scrollToDemo = () => {
-        document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
+    const scrollTo = id => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
     const card = { background: '#fffdf8', border: '1px solid #ead9b3', borderRadius: 20, boxShadow: '0 12px 34px -20px rgba(120,96,60,0.30)' }
-    const sectionTitle = { fontSize: 22, fontWeight: 800, color: '#1a1410', textAlign: 'center', margin: 0 }
+    const sectionTitle = { fontSize: 24, fontWeight: 700, color: '#1a1410', textAlign: 'center', margin: 0, letterSpacing: '-0.01em' }
+    const kicker = { fontSize: 12.5, fontWeight: 800, color: '#b8893d', textAlign: 'center', letterSpacing: '0.14em', margin: '0 0 8px' }
 
     return (
-        <div dir='rtl' style={{ minHeight: '100vh', background: 'radial-gradient(140% 80% at 50% 0%, #fbf7ef 0%, #f4ecda 55%, #efe3cc 100%)', fontFamily: 'system-ui,-apple-system,"Segoe UI",sans-serif', color: '#3d2e1a' }}>
-            <div style={{ maxWidth: 620, margin: '0 auto', padding: '26px 18px 60px' }}>
+        <div dir='rtl' style={{ minHeight: '100vh', background: 'radial-gradient(140% 80% at 50% 0%, #fbf7ef 0%, #f4ecda 55%, #efe3cc 100%)', fontFamily: 'system-ui,-apple-system,"Segoe UI",sans-serif', color: '#3d2e1a', overflowX: 'hidden' }}>
+            <div style={{ maxWidth: 640, margin: '0 auto', padding: '28px 18px 60px' }}>
 
                 {/* ───────── HERO ───────── */}
-                <header style={{ textAlign: 'center', marginBottom: 30 }}>
+                <header style={{ textAlign: 'center', marginBottom: 34 }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src='/logo-wt.png' alt='Wedding Tales' style={{ height: 42, margin: '0 auto 18px', opacity: 0.92 }} />
-                    <h1 style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.2, color: '#1a1410', margin: 0 }}>
-                        ספר שהאורחים שלכם<br />יוצרים <span style={{ color: '#b8893d', fontStyle: 'italic' }}>בזמן אמת</span>
+                    <img src='/logo-wt.png' alt='Wedding Tales' style={{ height: 42, margin: '0 auto 20px', opacity: 0.92 }} />
+                    <h1 className={frankRuhl.className} style={{ fontSize: 34, fontWeight: 800, lineHeight: 1.22, color: '#1a1410', margin: 0 }}>
+                        כל האורחים מברכים.<br />אתם מקבלים <span style={{ color: '#b8893d' }}>ספר.</span>
                     </h1>
-                    <p style={{ fontSize: 16, color: '#6b5836', lineHeight: 1.7, marginTop: 14, maxWidth: 460, marginInline: 'auto' }}>
-                        האורחים מעלים תמונה וכותבים ברכה בזמן האירוע, ואתם מקבלים <b>ספר מודפס ודיגיטלי</b> שנשאר למזכרת.
+                    <p style={{ fontSize: 16, color: '#6b5836', lineHeight: 1.7, marginTop: 14, maxWidth: 470, marginInline: 'auto' }}>
+                        האורחים סורקים QR, מעלים תמונה וכותבים ברכה בזמן האירוע — ואתם מקבלים
+                        <b> ספר מודפס בכריכה קשה</b> וספר דיגיטלי שנשארים לכל החיים.
                     </p>
-                    <p style={{ fontSize: 13.5, color: '#9a8763', marginTop: 10, fontWeight: 600 }}>מתאים לחתונות · בר/בת מצווה · ימי הולדת</p>
+                    <p style={{ fontSize: 13.5, color: '#9a8763', marginTop: 10, fontWeight: 600 }}>חתונות · בר/בת מצווה · ימי הולדת</p>
 
-                    {/* Book mockup — a real rendered cover, tilted like a book on a shelf */}
-                    <div style={{ display: 'flex', justifyContent: 'center', margin: '22px 0 6px' }}>
-                        <div style={{ width: 230, height: 230, borderRadius: 12, overflow: 'hidden', transform: 'rotate(-3deg)', boxShadow: '0 26px 50px -20px rgba(120,96,60,0.55), 0 0 0 1px rgba(212,184,103,0.3)' }}>
-                            <BookCoverTemplate wedding={sampleWedding} styleSettings={coverStyle} scaledWidth={230} scaledHeight={230} />
-                        </div>
+                    {/* Fan of the three REAL covers */}
+                    <div className='coverFan' aria-hidden style={{ position: 'relative', height: 250, margin: '30px auto 4px', maxWidth: 480 }}>
+                        {PORTFOLIO.map((b, i) => (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                                key={b.slug}
+                                src={`/imgs/portfolio/${b.slug}/cover.webp`}
+                                alt={b.title}
+                                onClick={() => scrollTo('portfolio')}
+                                style={{
+                                    position: 'absolute',
+                                    insetInlineStart: `${[4, 30, 56][i]}%`,
+                                    top: [16, 0, 16][i],
+                                    width: 190, height: 190, objectFit: 'cover',
+                                    borderRadius: 10, cursor: 'pointer',
+                                    transform: `rotate(${[-7, 0, 7][i]}deg)`,
+                                    zIndex: i === 1 ? 2 : 1,
+                                    boxShadow: '0 24px 44px -18px rgba(96,72,40,0.55), 0 0 0 1px rgba(212,184,103,0.35)',
+                                    transition: 'transform .25s ease',
+                                }}
+                            />
+                        ))}
                     </div>
+                    <p style={{ fontSize: 12.5, color: '#9a8763', margin: '10px 0 0' }}>שלושה ספרים אמיתיים של לקוחות — דפדפו בהם למטה ↓</p>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20, maxWidth: 380, marginInline: 'auto' }}>
-                        <button onClick={scrollToDemo} style={{ ...primaryBtn, fontSize: 16.5 }}>
-                            <Sparkles size={18} /> ראו דוגמה חיה ונסו בעצמכם
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20, maxWidth: 390, marginInline: 'auto' }}>
+                        <button onClick={() => scrollTo('portfolio')} style={{ ...primaryBtn, fontSize: 16.5 }}>
+                            <BookOpen size={18} /> דפדפו בספרים אמיתיים
                         </button>
                         <a href={WA} target='_blank' rel='noopener noreferrer' style={waBtn}>
                             <WaIcon /> דברו איתנו בוואטסאפ
@@ -150,8 +220,8 @@ export default function LandingPage() {
                 </header>
 
                 {/* ───────── HOW IT WORKS ───────── */}
-                <section style={{ ...card, padding: 20, marginBottom: 24 }}>
-                    <h2 style={sectionTitle}>איך זה עובד?</h2>
+                <section style={{ ...card, padding: 20, marginBottom: 26 }}>
+                    <h2 className={frankRuhl.className} style={sectionTitle}>איך זה עובד?</h2>
                     <div style={{ marginTop: 16 }}>
                         {[
                             { icon: QrCode, t: 'המשפחה והחברים סורקים QR', d: 'קוד על השולחן / השלט פותח עמוד אישי — בלי אפליקציה ובלי הרשמה.' },
@@ -172,10 +242,39 @@ export default function LandingPage() {
                     </div>
                 </section>
 
+                {/* ───────── PORTFOLIO — real books ───────── */}
+                <section id='portfolio' style={{ marginBottom: 26, scrollMarginTop: 16 }}>
+                    <p style={kicker}>עבודות אמיתיות</p>
+                    <h2 className={frankRuhl.className} style={sectionTitle}>ספרים של לקוחות — פתוחים לדפדוף</h2>
+                    <p style={{ fontSize: 13.5, color: '#9a8763', textAlign: 'center', marginTop: 8, lineHeight: 1.6 }}>
+                        לא הדמיות ולא דוגמאות סטודיו. שלושה ספרים אמיתיים, עם הברכות והתמונות שהאורחים העלו.
+                    </p>
+                    <div className='portfolioGrid' style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 18, marginTop: 18 }}>
+                        {PORTFOLIO.map(b => (
+                            <article key={b.slug} style={{ ...card, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ position: 'relative' }}>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={`/imgs/portfolio/${b.slug}/cover.webp`} alt={`הכריכה של ${b.title}`} loading='lazy' style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+                                    <span style={{ position: 'absolute', top: 12, insetInlineStart: 12, background: 'rgba(26,20,16,0.82)', color: '#f5ead2', fontSize: 12, fontWeight: 800, padding: '5px 12px', borderRadius: 999, letterSpacing: '0.04em' }}>{b.badge}</span>
+                                </div>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={`/imgs/portfolio/${b.slug}/spread-1.webp`} alt={`עמודים מתוך הספר של ${b.title}`} loading='lazy' style={{ width: '100%', display: 'block', borderTop: '1px solid #f2e9d6' }} />
+                                <div style={{ padding: '14px 16px 16px', display: 'flex', flexDirection: 'column', gap: 4, flexGrow: 1 }}>
+                                    <div className={frankRuhl.className} style={{ fontSize: 20, fontWeight: 800, color: '#1a1410' }}>{b.title}</div>
+                                    <div style={{ fontSize: 13, color: '#9a8763' }}>{b.sub} · <b style={{ color: '#6b5836' }}>{b.count} ברכות מהאורחים</b></div>
+                                    <a href={b.href} target='_blank' rel='noopener noreferrer' style={{ ...primaryBtn, marginTop: 12, textDecoration: 'none', fontSize: 15 }}>
+                                        <BookOpen size={17} /> דפדפו בספר האמיתי
+                                    </a>
+                                </div>
+                            </article>
+                        ))}
+                    </div>
+                </section>
+
                 {/* ───────── LIVE SAMPLE (flip + add) ───────── */}
-                <section id='demo' style={{ ...card, padding: 20, marginBottom: 24, scrollMarginTop: 16 }}>
-                    <h2 style={sectionTitle}>דפדפו בספר לדוגמה</h2>
-                    <p style={{ fontSize: 13, color: '#9a8763', textAlign: 'center', marginTop: 6 }}>החליקו או השתמשו בחיצים — בדיוק כמו הספר הדיגיטלי שתקבלו</p>
+                <section id='demo' style={{ ...card, padding: 20, marginBottom: 26, scrollMarginTop: 16 }}>
+                    <h2 className={frankRuhl.className} style={sectionTitle}>נסו בעצמכם — הוסיפו ברכה</h2>
+                    <p style={{ fontSize: 13, color: '#9a8763', textAlign: 'center', marginTop: 6 }}>ככה זה מרגיש לאורחים: כתבו ברכה, הוסיפו תמונה, ותראו אותה נכנסת לספר (הדגמה — לא נשמר)</p>
 
                     <div ref={wrapRef} style={{ display: 'flex', justifyContent: 'center', width: '100%', marginTop: 12 }}>
                         <div style={{ width: size, height: size, borderRadius: 12, overflow: 'hidden', boxShadow: '0 22px 54px -22px rgba(120,96,60,0.55), 0 0 0 1px rgba(212,184,103,0.25)' }}>
@@ -210,11 +309,8 @@ export default function LandingPage() {
                         <button onClick={() => flip('next')} aria-label='הבא' style={navBtn}><ChevronLeft size={20} /></button>
                     </div>
 
-                    {/* Try it */}
                     <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px dashed #e3d6ba' }}>
-                        <h3 style={{ fontSize: 16.5, fontWeight: 800, color: '#1a1410', textAlign: 'center', margin: 0 }}>נסו בעצמכם — הוסיפו ברכה</h3>
-                        <p style={{ fontSize: 12.5, color: '#9a8763', textAlign: 'center', marginTop: 5 }}>כתבו, הוסיפו תמונה, ותראו אותה נכנסת לספר למעלה ✨ (הדגמה — לא נשמר)</p>
-                        <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder='השם שלכם' maxLength={40} style={{ ...field, marginTop: 12 }} />
+                        <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder='השם שלכם' maxLength={40} style={{ ...field, marginTop: 2 }} />
                         <textarea value={form.text} onChange={e => setForm(f => ({ ...f, text: e.target.value.slice(0, 300) }))} placeholder='כתבו ברכה מכל הלב…' rows={3} style={{ ...field, resize: 'vertical', lineHeight: 1.6, marginTop: 10 }} />
                         <input ref={fileRef} type='file' accept='image/*' onChange={onPickPhoto} style={{ display: 'none' }} />
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
@@ -230,10 +326,10 @@ export default function LandingPage() {
                     </div>
                 </section>
 
-                {/* ───────── GALLERY ───────── */}
-                <section style={{ marginBottom: 24 }}>
-                    <h2 style={{ ...sectionTitle, marginBottom: 4 }}>רגעים מתוך ספרים אמיתיים</h2>
-                    <p style={{ fontSize: 13, color: '#9a8763', textAlign: 'center', marginBottom: 14 }}>ככה זה נראה — התמונות והברכות של האורחים, על נייר</p>
+                {/* ───────── GALLERY — the printed product ───────── */}
+                <section style={{ marginBottom: 26 }}>
+                    <h2 className={frankRuhl.className} style={{ ...sectionTitle, marginBottom: 4 }}>וככה זה נראה מודפס</h2>
+                    <p style={{ fontSize: 13, color: '#9a8763', textAlign: 'center', marginBottom: 14 }}>כריכה קשה, נייר ארכיב — התמונות והברכות של האורחים, על נייר</p>
                     <div style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '4px 2px 10px', scrollSnapType: 'x mandatory' }}>
                         {GALLERY.map((src, i) => (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -242,16 +338,16 @@ export default function LandingPage() {
                     </div>
                 </section>
 
-                {/* ───────── WHAT'S INCLUDED ───────── */}
-                <section style={{ ...card, padding: 20, marginBottom: 24 }}>
-                    <h2 style={sectionTitle}>מה כלול בחבילה</h2>
-                    <div style={{ marginTop: 14 }}>
-                        {[
-                            { icon: Sparkles, t: 'עיצוב מותאם אישית', d: 'עם השם והתמונה של החוגג/ת, בסגנון שמתאים לאירוע שלכם.' },
-                            { icon: Printer, t: 'ספר מודפס ויוקרתי', d: 'כריכה קשה על נייר ארכיב איכותי — מזכרת שנשארת לדורות.' },
-                            { icon: Smartphone, t: 'ספר דיגיטלי לשיתוף', d: 'גרסה דיגיטלית יפהפייה לדפדוף ולשליחה לכל האורחים.' },
-                            { icon: Globe, t: 'מערכת ניהול ובחירת עיצוב', d: 'גישה מלאה לניהול הברכות, סידור הספר ובחירת העיצוב.' },
-                        ].map((s, i) => (
+                {/* ───────── PRICING ───────── */}
+                <section id='pricing' style={{ ...card, padding: 24, marginBottom: 26, textAlign: 'center', background: 'linear-gradient(180deg,#fffdf8,#faf1de)', border: '1px solid #d9c48e', scrollMarginTop: 16 }}>
+                    <p style={kicker}>מחיר אחד, בלי הפתעות</p>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6 }}>
+                        <span className={frankRuhl.className} style={{ fontSize: 46, fontWeight: 800, color: '#1a1410', lineHeight: 1 }}>1,290</span>
+                        <span style={{ fontSize: 22, fontWeight: 700, color: '#b8893d' }}>₪</span>
+                    </div>
+                    <p style={{ fontSize: 13.5, color: '#9a8763', margin: '6px 0 16px' }}>הכול כלול — מהקמת העמוד ועד הספר המודפס אצלכם בבית</p>
+                    <div style={{ textAlign: 'right', maxWidth: 420, marginInline: 'auto' }}>
+                        {INCLUDED.map((s, i) => (
                             <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '10px 0', borderTop: i ? '1px solid #f2e9d6' : 'none' }}>
                                 <div style={{ flexShrink: 0, width: 30, height: 30, borderRadius: '50%', background: 'rgba(184,137,61,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <Check size={16} color='#b8893d' />
@@ -263,22 +359,25 @@ export default function LandingPage() {
                             </div>
                         ))}
                     </div>
+                    <a href={WA} target='_blank' rel='noopener noreferrer' style={{ ...waBtn, maxWidth: 380, marginInline: 'auto', marginTop: 18 }}>
+                        <MessageCircle size={19} /> אני רוצה ספר כזה — דברו איתי
+                    </a>
                 </section>
 
                 {/* ───────── TESTIMONIAL ───────── */}
-                <section style={{ ...card, padding: 24, marginBottom: 24, textAlign: 'center', background: 'linear-gradient(180deg,#fffdf8,#fbf3e3)' }}>
+                <section style={{ ...card, padding: 24, marginBottom: 26, textAlign: 'center', background: 'linear-gradient(180deg,#fffdf8,#fbf3e3)' }}>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: 3, marginBottom: 10 }}>
                         {[0, 1, 2, 3, 4].map(i => <Star key={i} size={17} fill='#d3b46a' color='#d3b46a' />)}
                     </div>
-                    <p style={{ fontSize: 17, fontWeight: 600, color: '#3d2e1a', lineHeight: 1.7, fontStyle: 'italic', margin: 0 }}>
+                    <p className={frankRuhl.className} style={{ fontSize: 18, fontWeight: 600, color: '#3d2e1a', lineHeight: 1.7, fontStyle: 'italic', margin: 0 }}>
                         ”לא תיארנו כמה פספסנו עד שראינו את הספר. בכינו, צחקנו, והרגשנו כאילו חזרנו לחתונה שוב. יצא לנו ספר מהמם.“
                     </p>
-                    <p style={{ fontSize: 13, color: '#9a8763', marginTop: 12, fontWeight: 700 }}>שקד · התחתנה במרץ 2026</p>
+                    <p style={{ fontSize: 13, color: '#9a8763', marginTop: 12, fontWeight: 700 }}>שקד · התחתנה במרץ 2026 · <a href={PORTFOLIO[0].href} target='_blank' rel='noopener noreferrer' style={{ color: '#b8893d' }}>הספר שלה למעלה ↑</a></p>
                 </section>
 
                 {/* ───────── FAQ ───────── */}
-                <section style={{ ...card, padding: 12, marginBottom: 24 }}>
-                    <h2 style={{ ...sectionTitle, padding: '8px 0 4px' }}>השאלות שלכם</h2>
+                <section style={{ ...card, padding: 12, marginBottom: 26 }}>
+                    <h2 className={frankRuhl.className} style={{ ...sectionTitle, padding: '8px 0 4px' }}>השאלות שלכם</h2>
                     {FAQ.map((f, i) => (
                         <details key={i} style={{ borderTop: '1px solid #f2e9d6', padding: '4px 8px' }}>
                             <summary style={{ cursor: 'pointer', listStyle: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '13px 4px', fontSize: 15, fontWeight: 700, color: '#1a1410' }}>
@@ -292,9 +391,9 @@ export default function LandingPage() {
 
                 {/* ───────── FINAL CTA ───────── */}
                 <section style={{ textAlign: 'center' }}>
-                    <h2 style={{ ...sectionTitle, fontSize: 24 }}>רוצים לראות איך הספר שלכם ייראה?</h2>
+                    <h2 className={frankRuhl.className} style={{ ...sectionTitle, fontSize: 26 }}>רוצים ספר כזה מהאירוע שלכם?</h2>
                     <p style={{ fontSize: 15, color: '#6b5836', lineHeight: 1.7, marginTop: 10, maxWidth: 440, marginInline: 'auto' }}>
-                        השאירו פרטים ונשלח לכם דוגמה, הסבר קצר ופירוט על החבילות שלנו.
+                        ספרו לנו על האירוע ונחזור אליכם עם כל הפרטים — בלי לחץ ובלי ספאם.
                     </p>
                     <a href={WA} target='_blank' rel='noopener noreferrer' style={{ ...waBtn, maxWidth: 420, marginInline: 'auto', marginTop: 18, fontSize: 16.5 }}>
                         <WaIcon /> דברו איתנו בוואטסאפ
@@ -306,6 +405,10 @@ export default function LandingPage() {
             <style jsx global>{`
                 .landing-flip { margin: 0 auto; }
                 details > summary::-webkit-details-marker { display: none; }
+                .coverFan img:hover { transform: rotate(0deg) scale(1.04) !important; z-index: 3 !important; }
+                @media (min-width: 700px) {
+                    .portfolioGrid { grid-template-columns: repeat(3, 1fr) !important; }
+                }
             `}</style>
         </div>
     )
