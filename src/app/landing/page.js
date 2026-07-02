@@ -1,23 +1,22 @@
 'use client'
 
-// /landing — the full marketing landing page (app.weddingtales.co.il/landing).
+// /landing — the marketing landing page (app.weddingtales.co.il/landing).
 //
-// Spring 2026 rewrite: the page now leads with REAL portfolio — three live
-// customer books (see PORTFOLIO below), each linking to its actual public
-// digital book via a dedicated landing token, plus transparent pricing.
-// The live flip-a-book + add-a-blessing demo from the previous version is
-// kept (it converts) and sits right after the portfolio.
+// Premium redesign, spring 2026 v2: dark-ink editorial hero → warm champagne
+// body. The heart of the page is the PORTFOLIO — three real customer books,
+// each with a scroll-snap filmstrip of real spreads AND a lazy-mounted
+// live embed of the actual digital book (?embed=1 — the same embed mode the
+// couple portal iframe uses; the route sends no X-Frame-Options, verified).
 //
-// Portfolio access tokens were minted specifically for this page with
-// issuedBy:'landing-page' in each wedding's digitalTokensIssuedAt audit
-// array — revoke them there without touching the couples' own links:
+// Portfolio tokens were minted with issuedBy:'landing-page' in each
+// wedding's digitalTokensIssuedAt audit array — revoke there without
+// touching the couples' own links:
 //   wedding rOPkVWbwurT4UjKCR5hg (שקד ודור), birthday 6175 (ג'רי),
 //   bar mitzvah 5483 (נועם).
 //
-// Static screenshots live in /public/imgs/portfolio/{slug}/ — captured from
-// the production books, so the cards show the real product. Self-contained +
-// client-side (no Firestore) so the page stays fast and unbreakable.
-// OG preview lives in ./layout.js.
+// Static screenshots (public/imgs/portfolio/{slug}/) are captured from the
+// production books — hand-curated, overflowing/blank pages excluded.
+// Client-side only (no Firestore) so the page stays fast and unbreakable.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import HTMLFlipBook from 'react-pageflip'
@@ -28,44 +27,43 @@ import { resolvePreset, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import { normalizeBlessing } from '@/lib/normalizeText'
 import { frankRuhl } from '@/app/fonts'
 import {
-    QrCode, PenLine, BookHeart, Sparkles, Globe, Printer, Smartphone, Camera,
-    Check, ChevronLeft, ChevronRight, Star, ChevronDown, BookOpen, MessageCircle,
+    QrCode, PenLine, BookHeart, Sparkles, Camera, Check, ChevronLeft,
+    ChevronRight, Star, ChevronDown, BookOpen, X, ExternalLink,
 } from 'lucide-react'
 
 const WA = 'https://wa.link/0sesxc'
 
-// ─── Real customer books (the portfolio) ────────────────────────────
+// ─── The three real books ────────────────────────────────────────────
 const PORTFOLIO = [
     {
         slug: 'wedding',
         badge: 'חתונה',
         title: 'שקד ודור',
-        sub: 'ספר הברכות של החתונה',
-        count: 24,
-        href: '/b/529b8a86-ca5d-4944-8178-c75c0420095d',
-        accent: '#b8893d',
+        stats: '24 ברכות · 24 תמונות מהאורחים',
+        weddingId: 'rOPkVWbwurT4UjKCR5hg',
+        token: '529b8a86-ca5d-4944-8178-c75c0420095d',
+        spreads: 5,
     },
     {
         slug: 'bar-mitzvah',
         badge: 'בר מצווה',
         title: 'נועם',
-        sub: 'ספר הברכות של בר המצווה',
-        count: 45,
-        href: '/b/0b02382b-7d8e-40a8-804b-1c5bdd31c1ae',
-        accent: '#7aa4d6',
+        stats: '45 ברכות · 45 תמונות מהאורחים',
+        weddingId: '5483',
+        token: '0b02382b-7d8e-40a8-804b-1c5bdd31c1ae',
+        spreads: 5,
     },
     {
         slug: 'birthday',
         badge: 'יום הולדת 90',
         title: 'ג׳רי',
-        sub: 'ספר ברכות ליום הולדת',
-        count: 31,
-        href: '/b/a319b00d-7ed2-48cf-b88b-d41a98f35e05',
-        accent: '#c98a9a',
+        stats: '31 ברכות · 31 תמונות · משפחה מכל העולם',
+        weddingId: '6175',
+        token: 'a319b00d-7ed2-48cf-b88b-d41a98f35e05',
+        spreads: 3,
     },
 ]
 
-// Demo blessings for the interactive flipbook (not a real book).
 const SAMPLE = [
     { id: 's1', name: 'דנה', text: 'סבא יקר, אין מילים לתאר כמה אנחנו אוהבים אותך. שתמיד תהיה בריא ושמח, ותמשיך להאיר לכולנו את הדרך.', imageUrl: '/imgs/img1.jpg' },
     { id: 's2', name: 'Yossi & Michal', text: 'Your stories and your smile light up every room. Here’s to many more years of laughter together — we love you!', imageUrl: '/imgs/img2.jpg' },
@@ -78,22 +76,91 @@ const SAMPLE = [
 ]
 
 const FAQ = [
-    { q: 'מה בדיוק מקבלים?', a: 'ספר מודפס יוקרתי בכריכה קשה על נייר ארכיב איכותי, ספר דיגיטלי לדפדוף ולשיתוף עם כל האורחים, וגישה למערכת לניהול הברכות ובחירת העיצוב.' },
-    { q: 'כמה זמן לוקח עד שהספר מגיע?', a: 'כ־4 שבועות מרגע שאישרתם את העיצוב הסופי. הספר הדיגיטלי זמין מיד — עוד באותו ערב אפשר לדפדף בברכות ולשתף עם המשפחה.' },
-    { q: 'אפשר להוסיף ברכות גם אחרי האירוע?', a: 'בהחלט. הקישור נשאר פעיל גם אחרי האירוע, כך שמי שפספס — סבתא, חברים מחו"ל, קולגות — יכול להוסיף ברכה עד שסוגרים את הספר להדפסה.' },
-    { q: 'חלק מהאורחים שלנו מבוגרים — זה מתאים גם להם?', a: 'בהחלט. סריקת ה‑QR פותחת עמוד פשוט בדפדפן, בלי הורדת אפליקציה ובלי הרשמה. אפשר גם לעזור ולהקריא — ודווקא מהדור המבוגר מגיעות חלק מהברכות הכי מרגשות.' },
-    { q: 'מה אם לא כל האורחים ישתתפו?', a: 'גם השתתפות חלקית מספיקה לספר מלא ומרגש. אנחנו עוזרים עם שילוט, תזכורות ועיצוב שמזמין השתתפות — ותמיד אפשר להוסיף ברכות גם אחרי האירוע.' },
-    { q: 'מה קורה אם האירוע נדחה?', a: 'אין שום בעיה — הקישור והמערכת שלכם נשארים פעילים, ופשוט נתאם מחדש לתאריך החדש. לא משלמים פעמיים.' },
+    { q: 'מה בדיוק מקבלים?', a: 'ספר מודפס בכריכה קשה על נייר ארכיב, ספר דיגיטלי לדפדוף ולשיתוף, וגישה למערכת לניהול הברכות ובחירת העיצוב.' },
+    { q: 'כמה זמן עד שהספר אצלכם?', a: 'כ־4 שבועות מאישור העיצוב הסופי. הספר הדיגיטלי מוכן מיד — עוד באותו ערב מדפדפים בברכות.' },
+    { q: 'אפשר להוסיף ברכות אחרי האירוע?', a: 'כן. הקישור נשאר פעיל — מי שפספס מוסיף ברכה גם בימים שאחרי, עד שסוגרים את הספר להדפסה.' },
+    { q: 'האורחים המבוגרים יסתדרו?', a: 'כן. סריקת ה־QR פותחת עמוד פשוט בדפדפן — בלי אפליקציה, בלי הרשמה. דווקא מהדור המבוגר מגיעות הברכות הכי מרגשות.' },
+    { q: 'ואם לא כולם ישתתפו?', a: 'גם השתתפות חלקית עושה ספר מלא ומרגש. אנחנו עוזרים עם שילוט ותזכורות, ואפשר להשלים ברכות אחרי האירוע.' },
+    { q: 'האירוע נדחה — מה עכשיו?', a: 'שום דבר לא הולך לאיבוד. הקישור והמערכת נשארים פעילים ופשוט מתואמים מחדש. לא משלמים פעמיים.' },
 ]
 
-const GALLERY = ['/imgs/img9.jpg', '/imgs/img10.jpg', '/imgs/img11.jpg', '/imgs/img12.jpg', '/imgs/img13.jpg', '/imgs/img14.jpg', '/imgs/img15.jpg', '/imgs/img16.jpg']
-
-const INCLUDED = [
-    { icon: Printer, t: 'ספר מודפס בכריכה קשה', d: 'נייר ארכיב איכותי, עיצוב אישי — מזכרת שנשארת לדורות.' },
-    { icon: Smartphone, t: 'ספר דיגיטלי לשיתוף', d: 'גרסה דיגיטלית יפהפייה לדפדוף ולשליחה לכל האורחים — זמינה כבר בערב האירוע.' },
-    { icon: Sparkles, t: 'עיצוב מותאם אישית', d: 'עם השם והתמונה של החוגגים, בסגנון שמתאים בדיוק לאירוע שלכם.' },
-    { icon: Globe, t: 'מערכת ניהול ובחירת עיצוב', d: 'גישה מלאה לניהול הברכות, סידור הספר ובחירת העיצוב.' },
+// Real spreads from the portfolio books, shown inside the pricing card.
+// (No staged "printed book" photography exists in /public/imgs yet — when
+// Bar shoots the physical books, swap these in and restore the original
+// "וזה מה שמגיע אליכם הביתה" caption.)
+const PRICING_SPREADS = [
+    '/imgs/portfolio/wedding/spread-2.webp',
+    '/imgs/portfolio/bar-mitzvah/spread-1.webp',
+    '/imgs/portfolio/birthday/spread-2.webp',
 ]
+
+// ─── Book showcase (filmstrip + live embed) ──────────────────────────
+function BookShowcase({ book, index }) {
+    const [live, setLive] = useState(false)
+    const frames = useMemo(
+        () => [`/imgs/portfolio/${book.slug}/cover.webp`, ...Array.from({ length: book.spreads }, (_, i) => `/imgs/portfolio/${book.slug}/spread-${i + 1}.webp`)],
+        [book]
+    )
+    const fullHref = `/b/${book.token}`
+    const embedSrc = `/wedding/${book.weddingId}/book/${book.token}?embed=1`
+
+    return (
+        <article style={{ marginBottom: index === PORTFOLIO.length - 1 ? 0 : 64 }}>
+            {/* Header row */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', padding: '0 4px', marginBottom: 14 }}>
+                <span style={{ background: '#1a1410', color: '#e9d8ab', fontSize: 12, fontWeight: 800, padding: '5px 13px', borderRadius: 999, letterSpacing: '0.06em' }}>{book.badge}</span>
+                <h3 className={frankRuhl.className} style={{ fontSize: 30, fontWeight: 800, color: '#1a1410', margin: 0, lineHeight: 1 }}>{book.title}</h3>
+                <span style={{ fontSize: 13.5, color: '#8a744d', fontWeight: 600 }}>{book.stats}</span>
+            </div>
+
+            {/* Filmstrip — real spreads, scroll-snap */}
+            <div className='filmstrip' style={{ display: 'flex', gap: 14, overflowX: 'auto', padding: '6px 4px 16px', scrollSnapType: 'x mandatory' }}>
+                {frames.map((src, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                        key={src}
+                        src={src}
+                        alt={i === 0 ? `הכריכה של ${book.title}` : `כפולה מתוך הספר של ${book.title}`}
+                        loading='lazy'
+                        className='frame'
+                        style={{
+                            height: 240,
+                            width: 'auto',
+                            borderRadius: 10,
+                            flexShrink: 0,
+                            scrollSnapAlign: 'center',
+                            boxShadow: '0 18px 40px -18px rgba(80,60,30,0.55), 0 0 0 1px rgba(180,148,90,0.28)',
+                            background: '#fff',
+                        }}
+                    />
+                ))}
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', padding: '0 4px' }}>
+                <button onClick={() => setLive(v => !v)} style={{ ...inkBtn, flexGrow: 1, maxWidth: 340 }}>
+                    {live ? <><X size={16} /> סגירת הספר</> : <><BookOpen size={16} /> דפדפו בספר החי — כאן</>}
+                </button>
+                <a href={fullHref} target='_blank' rel='noopener noreferrer' style={{ ...ghostGoldBtn, flexGrow: 1, maxWidth: 260 }}>
+                    <ExternalLink size={15} /> פתיחה במסך מלא
+                </a>
+            </div>
+
+            {/* Live embed — the ACTUAL digital book, mounted only on demand */}
+            {live && (
+                <div style={{ marginTop: 14, borderRadius: 16, overflow: 'hidden', border: '1px solid #d9c48e', boxShadow: '0 26px 60px -26px rgba(80,60,30,0.5)', background: '#14100c' }}>
+                    <iframe
+                        src={embedSrc}
+                        title={`ספר הברכות של ${book.title}`}
+                        style={{ display: 'block', width: '100%', height: 'min(78vh, 640px)', border: 'none' }}
+                        loading='lazy'
+                        allowFullScreen
+                    />
+                </div>
+            )}
+        </article>
+    )
+}
 
 export default function LandingPage() {
     const styleSettings = useMemo(() => {
@@ -115,7 +182,6 @@ export default function LandingPage() {
     const [extra, setExtra] = useState([])
     const pages = useMemo(() => [...SAMPLE, ...extra], [extra])
 
-    // Responsive square flip canvas.
     const wrapRef = useRef(null)
     const [size, setSize] = useState(320)
     useEffect(() => {
@@ -152,7 +218,7 @@ export default function LandingPage() {
         const text = normalizeBlessing(form.text)
         if (!text && !photo) return
         const entry = { id: `u${Date.now()}`, name: form.name.trim() || 'אורח/ת', text, imageUrl: photo?.url || null }
-        const nextIndex = pages.length + 1 // +1 for the cover
+        const nextIndex = pages.length + 1
         setExtra(prev => [...prev, entry])
         setForm({ name: '', text: '' })
         setPhoto(null)
@@ -163,251 +229,277 @@ export default function LandingPage() {
 
     const scrollTo = id => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
-    const card = { background: '#fffdf8', border: '1px solid #ead9b3', borderRadius: 20, boxShadow: '0 12px 34px -20px rgba(120,96,60,0.30)' }
-    const sectionTitle = { fontSize: 24, fontWeight: 700, color: '#1a1410', textAlign: 'center', margin: 0, letterSpacing: '-0.01em' }
-    const kicker = { fontSize: 12.5, fontWeight: 800, color: '#b8893d', textAlign: 'center', letterSpacing: '0.14em', margin: '0 0 8px' }
-
     return (
-        <div dir='rtl' style={{ minHeight: '100vh', background: 'radial-gradient(140% 80% at 50% 0%, #fbf7ef 0%, #f4ecda 55%, #efe3cc 100%)', fontFamily: 'system-ui,-apple-system,"Segoe UI",sans-serif', color: '#3d2e1a', overflowX: 'hidden' }}>
-            <div style={{ maxWidth: 640, margin: '0 auto', padding: '28px 18px 60px' }}>
+        <div dir='rtl' style={{ minHeight: '100vh', background: '#f6efe0', fontFamily: 'system-ui,-apple-system,"Segoe UI",sans-serif', color: '#3d2e1a', overflowX: 'hidden' }}>
 
-                {/* ───────── HERO ───────── */}
-                <header style={{ textAlign: 'center', marginBottom: 34 }}>
+            {/* ═══════════ HERO — dark ink, gold serif, real covers ═══════════ */}
+            <header style={{ position: 'relative', background: 'radial-gradient(120% 90% at 50% -10%, #2c2114 0%, #1a1208 55%, #100b06 100%)', color: '#f5ead2', padding: '54px 20px 74px', textAlign: 'center', overflow: 'hidden' }}>
+                {/* faint gold grain ornament */}
+                <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'radial-gradient(60% 40% at 50% 0%, rgba(211,180,106,0.14), transparent 70%)', pointerEvents: 'none' }} />
+
+                <div className='reveal' style={{ animationDelay: '0ms' }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src='/logo-wt.png' alt='Wedding Tales' style={{ height: 42, margin: '0 auto 20px', opacity: 0.92 }} />
-                    <h1 className={frankRuhl.className} style={{ fontSize: 34, fontWeight: 800, lineHeight: 1.22, color: '#1a1410', margin: 0 }}>
-                        כל האורחים מברכים.<br />אתם מקבלים <span style={{ color: '#b8893d' }}>ספר.</span>
-                    </h1>
-                    <p style={{ fontSize: 16, color: '#6b5836', lineHeight: 1.7, marginTop: 14, maxWidth: 470, marginInline: 'auto' }}>
-                        האורחים סורקים QR, מעלים תמונה וכותבים ברכה בזמן האירוע — ואתם מקבלים
-                        <b> ספר מודפס בכריכה קשה</b> וספר דיגיטלי שנשארים לכל החיים.
-                    </p>
-                    <p style={{ fontSize: 13.5, color: '#9a8763', marginTop: 10, fontWeight: 600 }}>חתונות · בר/בת מצווה · ימי הולדת</p>
+                    <img src='/logo-wt.png' alt='Wedding Tales' style={{ height: 40, margin: '0 auto 26px', filter: 'brightness(1.6)', opacity: 0.95 }} />
+                </div>
 
-                    {/* Fan of the three REAL covers */}
-                    <div className='coverFan' aria-hidden style={{ position: 'relative', height: 250, margin: '30px auto 4px', maxWidth: 480 }}>
-                        {PORTFOLIO.map((b, i) => (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img
-                                key={b.slug}
-                                src={`/imgs/portfolio/${b.slug}/cover.webp`}
-                                alt={b.title}
-                                onClick={() => scrollTo('portfolio')}
-                                style={{
-                                    position: 'absolute',
-                                    insetInlineStart: `${[4, 30, 56][i]}%`,
-                                    top: [16, 0, 16][i],
-                                    width: 190, height: 190, objectFit: 'cover',
-                                    borderRadius: 10, cursor: 'pointer',
-                                    transform: `rotate(${[-7, 0, 7][i]}deg)`,
-                                    zIndex: i === 1 ? 2 : 1,
-                                    boxShadow: '0 24px 44px -18px rgba(96,72,40,0.55), 0 0 0 1px rgba(212,184,103,0.35)',
-                                    transition: 'transform .25s ease',
-                                }}
-                            />
-                        ))}
-                    </div>
-                    <p style={{ fontSize: 12.5, color: '#9a8763', margin: '10px 0 0' }}>שלושה ספרים אמיתיים של לקוחות — דפדפו בהם למטה ↓</p>
+                <h1 className={`${frankRuhl.className} reveal`} style={{ fontSize: 'clamp(34px, 7.4vw, 58px)', fontWeight: 800, lineHeight: 1.18, margin: '0 auto', maxWidth: 700, animationDelay: '90ms' }}>
+                    כל האורחים מברכים.
+                    <br />
+                    <span style={{ color: '#d3b46a' }}>אתם מקבלים ספר.</span>
+                </h1>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20, maxWidth: 390, marginInline: 'auto' }}>
-                        <button onClick={() => scrollTo('portfolio')} style={{ ...primaryBtn, fontSize: 16.5 }}>
-                            <BookOpen size={18} /> דפדפו בספרים אמיתיים
-                        </button>
-                        <a href={WA} target='_blank' rel='noopener noreferrer' style={waBtn}>
-                            <WaIcon /> דברו איתנו בוואטסאפ
-                        </a>
-                    </div>
-                </header>
+                <p className='reveal' style={{ fontSize: 'clamp(15px, 2.6vw, 18px)', color: 'rgba(245,234,210,0.78)', lineHeight: 1.75, margin: '18px auto 0', maxWidth: 520, animationDelay: '180ms' }}>
+                    האורחים סורקים QR, מעלים תמונה וכותבים מהלב — בזמן האירוע.
+                    <br />
+                    אתם מקבלים ספר מודפס בכריכה קשה, וספר דיגיטלי שחי לנצח.
+                </p>
 
-                {/* ───────── HOW IT WORKS ───────── */}
-                <section style={{ ...card, padding: 20, marginBottom: 26 }}>
-                    <h2 className={frankRuhl.className} style={sectionTitle}>איך זה עובד?</h2>
-                    <div style={{ marginTop: 16 }}>
-                        {[
-                            { icon: QrCode, t: 'המשפחה והחברים סורקים QR', d: 'קוד על השולחן / השלט פותח עמוד אישי — בלי אפליקציה ובלי הרשמה.' },
-                            { icon: PenLine, t: 'מעלים תמונה וכותבים ברכה', d: 'רגע אישי מכל הלב, עם עוזר כתיבה חכם למי שצריך השראה.' },
-                            { icon: BookHeart, t: 'מקבלים ספר ברכות יוקרתי', d: 'הכל מתאחד לספר מעוצב — מודפס בכריכה קשה וגם דיגיטלי לדפדוף.' },
-                        ].map((s, i) => (
-                            <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'flex-start', padding: '12px 0', borderTop: i ? '1px solid #f2e9d6' : 'none' }}>
-                                <div style={{ flexShrink: 0, width: 46, height: 46, borderRadius: 13, background: 'linear-gradient(180deg,#d3b46a,#b8893d)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                                    <s.icon size={21} color='#fff' />
-                                    <span style={{ position: 'absolute', top: -7, insetInlineStart: -7, width: 22, height: 22, borderRadius: '50%', background: '#1a1410', color: '#fff', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{`0${i + 1}`}</span>
-                                </div>
-                                <div>
-                                    <div style={{ fontWeight: 700, fontSize: 15.5, color: '#1a1410' }}>{s.t}</div>
-                                    <div style={{ fontSize: 13.5, color: '#6b5836', lineHeight: 1.6, marginTop: 2 }}>{s.d}</div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </section>
+                {/* Fan of the three REAL covers */}
+                <div className='coverFan reveal' aria-hidden style={{ position: 'relative', height: 'clamp(230px, 40vw, 300px)', margin: '38px auto 0', maxWidth: 560, animationDelay: '280ms' }}>
+                    {PORTFOLIO.map((b, i) => (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                            key={b.slug}
+                            src={`/imgs/portfolio/${b.slug}/cover.webp`}
+                            alt=''
+                            onClick={() => scrollTo('portfolio')}
+                            className={`fan fan${i}`}
+                            style={{
+                                position: 'absolute',
+                                insetInlineStart: `${[2, 27, 52][i]}%`,
+                                top: [22, 0, 22][i],
+                                width: 'clamp(170px, 32vw, 230px)',
+                                aspectRatio: '1',
+                                objectFit: 'cover',
+                                borderRadius: 8,
+                                cursor: 'pointer',
+                                transform: `rotate(${[-6.5, 0, 6.5][i]}deg)`,
+                                zIndex: i === 1 ? 2 : 1,
+                                boxShadow: '0 34px 70px -22px rgba(0,0,0,0.75), 0 0 0 1px rgba(211,180,106,0.4)',
+                            }}
+                        />
+                    ))}
+                </div>
 
-                {/* ───────── PORTFOLIO — real books ───────── */}
-                <section id='portfolio' style={{ marginBottom: 26, scrollMarginTop: 16 }}>
-                    <p style={kicker}>עבודות אמיתיות</p>
-                    <h2 className={frankRuhl.className} style={sectionTitle}>ספרים של לקוחות — פתוחים לדפדוף</h2>
-                    <p style={{ fontSize: 13.5, color: '#9a8763', textAlign: 'center', marginTop: 8, lineHeight: 1.6 }}>
-                        לא הדמיות ולא דוגמאות סטודיו. שלושה ספרים אמיתיים, עם הברכות והתמונות שהאורחים העלו.
-                    </p>
-                    <div className='portfolioGrid' style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 18, marginTop: 18 }}>
-                        {PORTFOLIO.map(b => (
-                            <article key={b.slug} style={{ ...card, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ position: 'relative' }}>
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={`/imgs/portfolio/${b.slug}/cover.webp`} alt={`הכריכה של ${b.title}`} loading='lazy' style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
-                                    <span style={{ position: 'absolute', top: 12, insetInlineStart: 12, background: 'rgba(26,20,16,0.82)', color: '#f5ead2', fontSize: 12, fontWeight: 800, padding: '5px 12px', borderRadius: 999, letterSpacing: '0.04em' }}>{b.badge}</span>
-                                </div>
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={`/imgs/portfolio/${b.slug}/spread-1.webp`} alt={`עמודים מתוך הספר של ${b.title}`} loading='lazy' style={{ width: '100%', display: 'block', borderTop: '1px solid #f2e9d6' }} />
-                                <div style={{ padding: '14px 16px 16px', display: 'flex', flexDirection: 'column', gap: 4, flexGrow: 1 }}>
-                                    <div className={frankRuhl.className} style={{ fontSize: 20, fontWeight: 800, color: '#1a1410' }}>{b.title}</div>
-                                    <div style={{ fontSize: 13, color: '#9a8763' }}>{b.sub} · <b style={{ color: '#6b5836' }}>{b.count} ברכות מהאורחים</b></div>
-                                    <a href={b.href} target='_blank' rel='noopener noreferrer' style={{ ...primaryBtn, marginTop: 12, textDecoration: 'none', fontSize: 15 }}>
-                                        <BookOpen size={17} /> דפדפו בספר האמיתי
-                                    </a>
-                                </div>
-                            </article>
-                        ))}
-                    </div>
-                </section>
-
-                {/* ───────── LIVE SAMPLE (flip + add) ───────── */}
-                <section id='demo' style={{ ...card, padding: 20, marginBottom: 26, scrollMarginTop: 16 }}>
-                    <h2 className={frankRuhl.className} style={sectionTitle}>נסו בעצמכם — הוסיפו ברכה</h2>
-                    <p style={{ fontSize: 13, color: '#9a8763', textAlign: 'center', marginTop: 6 }}>ככה זה מרגיש לאורחים: כתבו ברכה, הוסיפו תמונה, ותראו אותה נכנסת לספר (הדגמה — לא נשמר)</p>
-
-                    <div ref={wrapRef} style={{ display: 'flex', justifyContent: 'center', width: '100%', marginTop: 12 }}>
-                        <div style={{ width: size, height: size, borderRadius: 12, overflow: 'hidden', boxShadow: '0 22px 54px -22px rgba(120,96,60,0.55), 0 0 0 1px rgba(212,184,103,0.25)' }}>
-                            <HTMLFlipBook
-                                key={`flip-${pages.length}-${size}`}
-                                ref={flipRef}
-                                width={size}
-                                height={size}
-                                size='fixed'
-                                usePortrait
-                                showCover
-                                mobileScrollSupport
-                                drawShadow
-                                maxShadowOpacity={0.3}
-                                useMouseEvents
-                                flippingTime={700}
-                                className='landing-flip'
-                            >
-                                <div style={{ width: size, height: size, background: '#fff' }}>
-                                    <BookCoverTemplate wedding={sampleWedding} styleSettings={coverStyle} scaledWidth={size} scaledHeight={size} />
-                                </div>
-                                {pages.map(entry => (
-                                    <div key={entry.id} style={{ width: size, height: size, background: '#fff' }}>
-                                        <BookPageTemplate entry={entry} styleSettings={styleSettings} scaledWidth={size} scaledHeight={size} />
-                                    </div>
-                                ))}
-                            </HTMLFlipBook>
-                        </div>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 14 }}>
-                        <button onClick={() => flip('prev')} aria-label='הקודם' style={navBtn}><ChevronRight size={20} /></button>
-                        <button onClick={() => flip('next')} aria-label='הבא' style={navBtn}><ChevronLeft size={20} /></button>
-                    </div>
-
-                    <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px dashed #e3d6ba' }}>
-                        <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder='השם שלכם' maxLength={40} style={{ ...field, marginTop: 2 }} />
-                        <textarea value={form.text} onChange={e => setForm(f => ({ ...f, text: e.target.value.slice(0, 300) }))} placeholder='כתבו ברכה מכל הלב…' rows={3} style={{ ...field, resize: 'vertical', lineHeight: 1.6, marginTop: 10 }} />
-                        <input ref={fileRef} type='file' accept='image/*' onChange={onPickPhoto} style={{ display: 'none' }} />
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
-                            <button onClick={() => fileRef.current?.click()} style={ghostBtn}><Camera size={16} /> {photo ? 'החלפת תמונה' : 'הוספת תמונה'}</button>
-                            {photo && (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={photo.url} alt='' style={{ width: 42, height: 42, borderRadius: 9, objectFit: 'cover', border: '1px solid #ead9b3' }} />
-                            )}
-                        </div>
-                        <button onClick={addBlessing} style={{ ...primaryBtn, marginTop: 14 }}>
-                            {added ? <><Check size={17} /> נוספה לספר! דפדפו למעלה</> : <><Sparkles size={17} /> הוסיפו לספר</>}
-                        </button>
-                    </div>
-                </section>
-
-                {/* ───────── GALLERY — the printed product ───────── */}
-                <section style={{ marginBottom: 26 }}>
-                    <h2 className={frankRuhl.className} style={{ ...sectionTitle, marginBottom: 4 }}>וככה זה נראה מודפס</h2>
-                    <p style={{ fontSize: 13, color: '#9a8763', textAlign: 'center', marginBottom: 14 }}>כריכה קשה, נייר ארכיב — התמונות והברכות של האורחים, על נייר</p>
-                    <div style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '4px 2px 10px', scrollSnapType: 'x mandatory' }}>
-                        {GALLERY.map((src, i) => (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img key={i} src={src} alt='' loading='lazy' style={{ width: 168, height: 210, objectFit: 'cover', borderRadius: 14, flexShrink: 0, scrollSnapAlign: 'center', boxShadow: '0 14px 30px -18px rgba(120,96,60,0.5)', border: '1px solid rgba(212,184,103,0.25)' }} />
-                        ))}
-                    </div>
-                </section>
-
-                {/* ───────── PRICING ───────── */}
-                <section id='pricing' style={{ ...card, padding: 24, marginBottom: 26, textAlign: 'center', background: 'linear-gradient(180deg,#fffdf8,#faf1de)', border: '1px solid #d9c48e', scrollMarginTop: 16 }}>
-                    <p style={kicker}>מחיר אחד, בלי הפתעות</p>
-                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6 }}>
-                        <span className={frankRuhl.className} style={{ fontSize: 46, fontWeight: 800, color: '#1a1410', lineHeight: 1 }}>1,290</span>
-                        <span style={{ fontSize: 22, fontWeight: 700, color: '#b8893d' }}>₪</span>
-                    </div>
-                    <p style={{ fontSize: 13.5, color: '#9a8763', margin: '6px 0 16px' }}>הכול כלול — מהקמת העמוד ועד הספר המודפס אצלכם בבית</p>
-                    <div style={{ textAlign: 'right', maxWidth: 420, marginInline: 'auto' }}>
-                        {INCLUDED.map((s, i) => (
-                            <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '10px 0', borderTop: i ? '1px solid #f2e9d6' : 'none' }}>
-                                <div style={{ flexShrink: 0, width: 30, height: 30, borderRadius: '50%', background: 'rgba(184,137,61,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Check size={16} color='#b8893d' />
-                                </div>
-                                <div>
-                                    <div style={{ fontWeight: 700, fontSize: 15, color: '#1a1410' }}>{s.t}</div>
-                                    <div style={{ fontSize: 13.5, color: '#6b5836', lineHeight: 1.6 }}>{s.d}</div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    <a href={WA} target='_blank' rel='noopener noreferrer' style={{ ...waBtn, maxWidth: 380, marginInline: 'auto', marginTop: 18 }}>
-                        <MessageCircle size={19} /> אני רוצה ספר כזה — דברו איתי
+                <div className='reveal' style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 36, maxWidth: 380, marginInline: 'auto', animationDelay: '380ms' }}>
+                    <button onClick={() => scrollTo('portfolio')} style={{ ...goldBtn, fontSize: 16.5 }}>
+                        <BookOpen size={18} /> דפדפו בספרים אמיתיים של לקוחות
+                    </button>
+                    <a href={WA} target='_blank' rel='noopener noreferrer' style={heroGhostBtn}>
+                        <WaIcon /> דברו איתנו בוואטסאפ
                     </a>
-                </section>
+                </div>
+                <p className='reveal' style={{ fontSize: 12.5, color: 'rgba(245,234,210,0.5)', marginTop: 22, fontWeight: 600, letterSpacing: '0.05em', animationDelay: '460ms' }}>
+                    חתונות · בר/בת מצווה · ימי הולדת
+                </p>
+            </header>
 
-                {/* ───────── TESTIMONIAL ───────── */}
-                <section style={{ ...card, padding: 24, marginBottom: 26, textAlign: 'center', background: 'linear-gradient(180deg,#fffdf8,#fbf3e3)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: 3, marginBottom: 10 }}>
-                        {[0, 1, 2, 3, 4].map(i => <Star key={i} size={17} fill='#d3b46a' color='#d3b46a' />)}
+            <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 18px 60px' }}>
+
+                {/* ═══════════ HOW IT WORKS — one quiet strip ═══════════ */}
+                <section style={{ padding: '46px 4px 40px' }}>
+                    <div className='steps' style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 22 }}>
+                        {[
+                            { icon: QrCode, n: 'א', t: 'סורקים', d: 'קוד QR על השולחן פותח עמוד אישי. בלי אפליקציה, בלי הרשמה.' },
+                            { icon: PenLine, n: 'ב', t: 'מברכים', d: 'תמונה מהטלפון וכמה מילים מהלב — לוקח דקה, נשאר לתמיד.' },
+                            { icon: BookHeart, n: 'ג', t: 'מקבלים ספר', d: 'דיגיטלי עוד באותו ערב. מודפס בכריכה קשה — אצלכם בבית.' },
+                        ].map((s, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                                <div className={frankRuhl.className} style={{ flexShrink: 0, width: 52, height: 52, borderRadius: '50%', border: '1.5px solid #c9a44e', color: '#a8843a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 800, background: '#fdf8ec' }}>{s.n}</div>
+                                <div>
+                                    <div className={frankRuhl.className} style={{ fontWeight: 800, fontSize: 20, color: '#1a1410' }}>{s.t}</div>
+                                    <div style={{ fontSize: 14.5, color: '#6b5836', lineHeight: 1.65, marginTop: 3, maxWidth: 380 }}>{s.d}</div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                    <p className={frankRuhl.className} style={{ fontSize: 18, fontWeight: 600, color: '#3d2e1a', lineHeight: 1.7, fontStyle: 'italic', margin: 0 }}>
-                        ”לא תיארנו כמה פספסנו עד שראינו את הספר. בכינו, צחקנו, והרגשנו כאילו חזרנו לחתונה שוב. יצא לנו ספר מהמם.“
-                    </p>
-                    <p style={{ fontSize: 13, color: '#9a8763', marginTop: 12, fontWeight: 700 }}>שקד · התחתנה במרץ 2026 · <a href={PORTFOLIO[0].href} target='_blank' rel='noopener noreferrer' style={{ color: '#b8893d' }}>הספר שלה למעלה ↑</a></p>
                 </section>
 
-                {/* ───────── FAQ ───────── */}
-                <section style={{ ...card, padding: 12, marginBottom: 26 }}>
-                    <h2 className={frankRuhl.className} style={{ ...sectionTitle, padding: '8px 0 4px' }}>השאלות שלכם</h2>
+                {/* ═══════════ PORTFOLIO — the heart of the page ═══════════ */}
+                <section id='portfolio' style={{ scrollMarginTop: 12, borderTop: '1px solid #e5d6b4', paddingTop: 44 }}>
+                    <p style={{ fontSize: 12.5, fontWeight: 800, color: '#a8843a', letterSpacing: '0.16em', margin: '0 0 10px' }}>עבודות אמיתיות</p>
+                    <h2 className={frankRuhl.className} style={{ fontSize: 'clamp(26px, 5vw, 36px)', fontWeight: 800, color: '#1a1410', margin: 0, lineHeight: 1.25 }}>
+                        שלושה ספרים של לקוחות.
+                        <br />
+                        פתוחים. דפדפו.
+                    </h2>
+                    <p style={{ fontSize: 15, color: '#6b5836', lineHeight: 1.7, margin: '12px 0 36px', maxWidth: 560 }}>
+                        לא הדמיות ולא דוגמאות סטודיו — הברכות והתמונות שהאורחים באמת העלו.
+                        אפשר לדפדף כאן בעמוד, או לפתוח את הספר המלא.
+                    </p>
+
+                    {PORTFOLIO.map((b, i) => <BookShowcase key={b.slug} book={b} index={i} />)}
+                </section>
+
+                {/* ═══════════ TRY IT — live demo ═══════════ */}
+                <section id='demo' style={{ scrollMarginTop: 12, borderTop: '1px solid #e5d6b4', marginTop: 54, paddingTop: 44 }}>
+                    <p style={{ fontSize: 12.5, fontWeight: 800, color: '#a8843a', letterSpacing: '0.16em', margin: '0 0 10px' }}>נסו בעצמכם</p>
+                    <h2 className={frankRuhl.className} style={{ fontSize: 'clamp(26px, 5vw, 34px)', fontWeight: 800, color: '#1a1410', margin: 0 }}>ככה זה מרגיש לאורחים</h2>
+                    <p style={{ fontSize: 14.5, color: '#6b5836', margin: '10px 0 22px', maxWidth: 480, lineHeight: 1.65 }}>כתבו ברכה, צרפו תמונה — ותראו אותה נכנסת לספר. (הדגמה בלבד, שום דבר לא נשמר.)</p>
+
+                    <div className='demoGrid' style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 26, alignItems: 'start' }}>
+                        <div>
+                            <div ref={wrapRef} style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                                <div style={{ width: size, height: size, borderRadius: 12, overflow: 'hidden', boxShadow: '0 26px 60px -24px rgba(80,60,30,0.6), 0 0 0 1px rgba(180,148,90,0.3)' }}>
+                                    <HTMLFlipBook
+                                        key={`flip-${pages.length}-${size}`}
+                                        ref={flipRef}
+                                        width={size}
+                                        height={size}
+                                        size='fixed'
+                                        usePortrait
+                                        showCover
+                                        mobileScrollSupport
+                                        drawShadow
+                                        maxShadowOpacity={0.3}
+                                        useMouseEvents
+                                        flippingTime={700}
+                                        className='landing-flip'
+                                    >
+                                        <div style={{ width: size, height: size, background: '#fff' }}>
+                                            <BookCoverTemplate wedding={sampleWedding} styleSettings={coverStyle} scaledWidth={size} scaledHeight={size} />
+                                        </div>
+                                        {pages.map(entry => (
+                                            <div key={entry.id} style={{ width: size, height: size, background: '#fff' }}>
+                                                <BookPageTemplate entry={entry} styleSettings={styleSettings} scaledWidth={size} scaledHeight={size} />
+                                            </div>
+                                        ))}
+                                    </HTMLFlipBook>
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 14 }}>
+                                <button onClick={() => flip('prev')} aria-label='הקודם' style={navBtn}><ChevronRight size={20} /></button>
+                                <button onClick={() => flip('next')} aria-label='הבא' style={navBtn}><ChevronLeft size={20} /></button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder='השם שלכם' maxLength={40} style={field} />
+                            <textarea value={form.text} onChange={e => setForm(f => ({ ...f, text: e.target.value.slice(0, 300) }))} placeholder='כתבו ברכה מכל הלב…' rows={4} style={{ ...field, resize: 'vertical', lineHeight: 1.6, marginTop: 10 }} />
+                            <input ref={fileRef} type='file' accept='image/*' onChange={onPickPhoto} style={{ display: 'none' }} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                                <button onClick={() => fileRef.current?.click()} style={ghostBtn}><Camera size={16} /> {photo ? 'החלפת תמונה' : 'הוספת תמונה'}</button>
+                                {photo && (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={photo.url} alt='' style={{ width: 42, height: 42, borderRadius: 9, objectFit: 'cover', border: '1px solid #d9c48e' }} />
+                                )}
+                            </div>
+                            <button onClick={addBlessing} style={{ ...inkBtn, width: '100%', marginTop: 14 }}>
+                                {added ? <><Check size={17} /> נוספה לספר! דפדפו</> : <><Sparkles size={17} /> הוסיפו לספר</>}
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                {/* ═══════════ PRICING — dark card, printed proof ═══════════ */}
+                <section id='pricing' style={{ scrollMarginTop: 12, marginTop: 60 }}>
+                    <div style={{ background: 'radial-gradient(130% 120% at 50% 0%, #2c2114 0%, #16100a 70%)', borderRadius: 24, padding: 'clamp(26px, 5vw, 44px)', color: '#f5ead2', boxShadow: '0 34px 80px -30px rgba(40,28,12,0.7)' }}>
+                        <div className='priceGrid' style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 30, alignItems: 'center' }}>
+                            <div>
+                                <p style={{ fontSize: 12.5, fontWeight: 800, color: '#d3b46a', letterSpacing: '0.16em', margin: '0 0 12px' }}>מחיר אחד. הכול כלול.</p>
+                                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                                    <span className={frankRuhl.className} style={{ fontSize: 'clamp(48px, 9vw, 64px)', fontWeight: 800, lineHeight: 1 }}>1,290</span>
+                                    <span style={{ fontSize: 26, fontWeight: 700, color: '#d3b46a' }}>₪</span>
+                                </div>
+                                <div style={{ marginTop: 20 }}>
+                                    {[
+                                        'ספר מודפס בכריכה קשה, נייר ארכיב',
+                                        'ספר דיגיטלי לשיתוף — מוכן עוד באותו ערב',
+                                        'עיצוב אישי עם השם והתמונה של החוגגים',
+                                        'מערכת ניהול ברכות ובחירת עיצוב',
+                                    ].map((t, i) => (
+                                        <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '7px 0', fontSize: 15, color: 'rgba(245,234,210,0.88)' }}>
+                                            <Check size={16} color='#d3b46a' style={{ flexShrink: 0 }} /> {t}
+                                        </div>
+                                    ))}
+                                </div>
+                                <a href={WA} target='_blank' rel='noopener noreferrer' style={{ ...goldBtn, maxWidth: 360, marginTop: 22, textDecoration: 'none' }}>
+                                    <WaIcon /> אני רוצה ספר כזה — דברו איתי
+                                </a>
+                            </div>
+                            <div>
+                                <p style={{ fontSize: 13, color: 'rgba(245,234,210,0.6)', margin: '0 0 10px', fontWeight: 600 }}>עמודים אמיתיים מתוך ספרי לקוחות:</p>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                    {PRICING_SPREADS.map((src, i) => (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img key={i} src={src} alt='כפולה מתוך ספר ברכות אמיתי' loading='lazy' style={{ width: '100%', borderRadius: 12, boxShadow: '0 16px 34px -14px rgba(0,0,0,0.6)', border: '1px solid rgba(211,180,106,0.35)' }} />
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                {/* ═══════════ TESTIMONIAL ═══════════ */}
+                <section style={{ textAlign: 'center', padding: '52px 8px 8px', maxWidth: 620, marginInline: 'auto' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: 3, marginBottom: 12 }}>
+                        {[0, 1, 2, 3, 4].map(i => <Star key={i} size={16} fill='#c9a44e' color='#c9a44e' />)}
+                    </div>
+                    <p className={frankRuhl.className} style={{ fontSize: 'clamp(18px, 3.4vw, 22px)', fontWeight: 600, color: '#3d2e1a', lineHeight: 1.75, fontStyle: 'italic', margin: 0 }}>
+                        ”לא תיארנו כמה פספסנו עד שראינו את הספר. בכינו, צחקנו, והרגשנו כאילו חזרנו לחתונה שוב.“
+                    </p>
+                    <p style={{ fontSize: 13, color: '#8a744d', marginTop: 12, fontWeight: 700 }}>
+                        שקד · התחתנה במרץ 2026 · <a href={`/b/${PORTFOLIO[0].token}`} target='_blank' rel='noopener noreferrer' style={{ color: '#a8843a' }}>הספר שלה למעלה</a>
+                    </p>
+                </section>
+
+                {/* ═══════════ FAQ ═══════════ */}
+                <section style={{ borderTop: '1px solid #e5d6b4', marginTop: 44, paddingTop: 38, maxWidth: 640, marginInline: 'auto' }}>
+                    <h2 className={frankRuhl.className} style={{ fontSize: 26, fontWeight: 800, color: '#1a1410', margin: '0 0 8px', textAlign: 'center' }}>שאלות ששואלים אותנו</h2>
                     {FAQ.map((f, i) => (
-                        <details key={i} style={{ borderTop: '1px solid #f2e9d6', padding: '4px 8px' }}>
-                            <summary style={{ cursor: 'pointer', listStyle: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '13px 4px', fontSize: 15, fontWeight: 700, color: '#1a1410' }}>
+                        <details key={i} style={{ borderBottom: '1px solid #e9dcbc', padding: '2px 4px' }}>
+                            <summary style={{ cursor: 'pointer', listStyle: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '15px 2px', fontSize: 15.5, fontWeight: 700, color: '#1a1410' }}>
                                 {f.q}
-                                <ChevronDown size={18} color='#b8893d' style={{ flexShrink: 0 }} />
+                                <ChevronDown size={18} color='#a8843a' style={{ flexShrink: 0 }} />
                             </summary>
-                            <p style={{ fontSize: 13.5, color: '#6b5836', lineHeight: 1.7, padding: '0 4px 14px' }}>{f.a}</p>
+                            <p style={{ fontSize: 14, color: '#6b5836', lineHeight: 1.75, padding: '0 2px 16px', margin: 0 }}>{f.a}</p>
                         </details>
                     ))}
                 </section>
 
-                {/* ───────── FINAL CTA ───────── */}
-                <section style={{ textAlign: 'center' }}>
-                    <h2 className={frankRuhl.className} style={{ ...sectionTitle, fontSize: 26 }}>רוצים ספר כזה מהאירוע שלכם?</h2>
-                    <p style={{ fontSize: 15, color: '#6b5836', lineHeight: 1.7, marginTop: 10, maxWidth: 440, marginInline: 'auto' }}>
-                        ספרו לנו על האירוע ונחזור אליכם עם כל הפרטים — בלי לחץ ובלי ספאם.
+                {/* ═══════════ FINAL CTA ═══════════ */}
+                <section style={{ textAlign: 'center', paddingTop: 52 }}>
+                    <h2 className={frankRuhl.className} style={{ fontSize: 'clamp(24px, 5vw, 32px)', fontWeight: 800, color: '#1a1410', margin: 0 }}>רוצים ספר כזה מהאירוע שלכם?</h2>
+                    <p style={{ fontSize: 15, color: '#6b5836', lineHeight: 1.7, margin: '10px auto 0', maxWidth: 420 }}>
+                        ספרו לנו על האירוע ונחזור אליכם עם כל הפרטים. בלי לחץ, בלי ספאם.
                     </p>
-                    <a href={WA} target='_blank' rel='noopener noreferrer' style={{ ...waBtn, maxWidth: 420, marginInline: 'auto', marginTop: 18, fontSize: 16.5 }}>
+                    <a href={WA} target='_blank' rel='noopener noreferrer' style={{ ...waBtn, maxWidth: 400, marginInline: 'auto', marginTop: 20, fontSize: 16.5 }}>
                         <WaIcon /> דברו איתנו בוואטסאפ
                     </a>
-                    <p style={{ fontSize: 12, color: '#9a8763', marginTop: 16 }}>© {new Date().getFullYear()} Wedding Tales · מזכרת לכל החיים</p>
+                    <p style={{ fontSize: 12, color: '#9a8763', marginTop: 18 }}>© {new Date().getFullYear()} Wedding Tales · מזכרת לכל החיים</p>
                 </section>
             </div>
 
             <style jsx global>{`
                 .landing-flip { margin: 0 auto; }
                 details > summary::-webkit-details-marker { display: none; }
-                .coverFan img:hover { transform: rotate(0deg) scale(1.04) !important; z-index: 3 !important; }
+
+                @keyframes fadeUp {
+                    from { opacity: 0; transform: translateY(18px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .reveal { opacity: 0; animation: fadeUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+                .fan { transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
+                .fan:hover { transform: rotate(0deg) scale(1.05) !important; z-index: 3 !important; }
+
+                .frame { transition: transform 0.28s ease, box-shadow 0.28s ease; }
+                .frame:hover { transform: translateY(-6px); box-shadow: 0 30px 56px -20px rgba(80,60,30,0.6), 0 0 0 1px rgba(180,148,90,0.4); }
+
+                .filmstrip { scrollbar-width: thin; scrollbar-color: #c9a44e transparent; }
+                .filmstrip::-webkit-scrollbar { height: 6px; }
+                .filmstrip::-webkit-scrollbar-thumb { background: #d9c48e; border-radius: 3px; }
+                .filmstrip::-webkit-scrollbar-track { background: transparent; }
+
                 @media (min-width: 700px) {
-                    .portfolioGrid { grid-template-columns: repeat(3, 1fr) !important; }
+                    .steps { grid-template-columns: repeat(3, 1fr) !important; }
+                    .demoGrid { grid-template-columns: 1fr 1fr !important; }
+                    .priceGrid { grid-template-columns: 1.1fr 1fr !important; }
+                    .filmstrip .frame { height: 300px !important; }
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    .reveal { animation: none; opacity: 1; }
+                    .fan, .frame { transition: none; }
                 }
             `}</style>
         </div>
@@ -422,11 +514,28 @@ function WaIcon() {
     )
 }
 
-const primaryBtn = {
-    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%',
-    background: 'linear-gradient(180deg,#d3b46a,#b8893d)', color: '#fff', fontWeight: 800, fontSize: 16,
-    borderRadius: 14, padding: '14px 0', border: 'none', cursor: 'pointer',
-    boxShadow: '0 14px 30px -12px rgba(170,136,64,0.5)',
+// ─── Buttons & fields ────────────────────────────────────────────────
+const goldBtn = {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, width: '100%',
+    background: 'linear-gradient(180deg,#e2c377,#b8893d)', color: '#1a1208', fontWeight: 800, fontSize: 16,
+    borderRadius: 14, padding: '15px 18px', border: 'none', cursor: 'pointer',
+    boxShadow: '0 18px 40px -14px rgba(211,180,106,0.45)',
+}
+const heroGhostBtn = {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, width: '100%',
+    padding: '13px 18px', borderRadius: 14, textDecoration: 'none', color: '#f5ead2', fontSize: 15.5, fontWeight: 700,
+    background: 'rgba(245,234,210,0.07)', border: '1px solid rgba(245,234,210,0.28)',
+}
+const inkBtn = {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+    background: '#1a1410', color: '#f0e2bd', fontWeight: 800, fontSize: 15,
+    borderRadius: 12, padding: '13px 20px', border: 'none', cursor: 'pointer',
+    boxShadow: '0 14px 30px -14px rgba(26,20,16,0.55)',
+}
+const ghostGoldBtn = {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, textDecoration: 'none',
+    background: 'transparent', color: '#8a6d33', fontWeight: 700, fontSize: 14.5,
+    borderRadius: 12, padding: '13px 18px', border: '1.5px solid #c9a44e', cursor: 'pointer',
 }
 const waBtn = {
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%',
@@ -434,14 +543,14 @@ const waBtn = {
     background: 'linear-gradient(180deg,#25D366,#128C7E)', boxShadow: '0 14px 30px -12px rgba(18,140,126,0.5)',
 }
 const navBtn = {
-    width: 44, height: 44, borderRadius: 12, border: '1px solid #ead9b3', background: '#fffdf8',
-    color: '#b8893d', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+    width: 44, height: 44, borderRadius: 12, border: '1px solid #d9c48e', background: '#fdf8ec',
+    color: '#a8843a', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
 }
 const field = {
-    width: '100%', boxSizing: 'border-box', border: '1px solid #e0d4ba', borderRadius: 12,
-    padding: '11px 13px', fontSize: 15, color: '#4a3f2c', background: '#fff', outline: 'none',
+    width: '100%', boxSizing: 'border-box', border: '1px solid #d9c48e', borderRadius: 12,
+    padding: '12px 14px', fontSize: 15, color: '#4a3f2c', background: '#fffdf7', outline: 'none',
 }
 const ghostBtn = {
-    display: 'inline-flex', alignItems: 'center', gap: 7, background: '#efe6d4', color: '#6b5836',
-    border: '1px solid #ddcfb0', fontWeight: 600, fontSize: 13.5, borderRadius: 11, padding: '10px 16px', cursor: 'pointer', flexShrink: 0,
+    display: 'inline-flex', alignItems: 'center', gap: 7, background: '#f1e7cf', color: '#6b5836',
+    border: '1px solid #d9c48e', fontWeight: 600, fontSize: 13.5, borderRadius: 11, padding: '10px 16px', cursor: 'pointer', flexShrink: 0,
 }
