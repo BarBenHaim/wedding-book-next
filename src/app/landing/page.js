@@ -22,9 +22,8 @@ import HTMLFlipBook from 'react-pageflip'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
-import { resolvePreset, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import { normalizeBlessing } from '@/lib/normalizeText'
-import { frankRuhl, gveretLevin } from '@/app/fonts'
+import { frankRuhl, gveretLevin, notoHebrew } from '@/app/fonts'
 import { Camera, Check, ChevronLeft, ChevronRight, ChevronDown, BookOpen, X, ExternalLink, Sparkles } from 'lucide-react'
 
 // Editorial body face — pairs with Frank Ruhl display.
@@ -184,11 +183,21 @@ function BookStory({ book, index }) {
 }
 
 export default function LandingPage() {
-    const styleSettings = useMemo(() => {
-        const preset = BUILTIN_PRESETS.find(p => /פרחי גן|פסטורלי|שמפניה/.test(p.name)) || BUILTIN_PRESETS[0]
-        const rp = preset ? resolvePreset(preset).values : {}
-        return { ...defaultStyle, ...rp, locale: 'he' }
-    }, [])
+    // The demo book renders with the SAME design the three portfolio books
+    // are configured with in the studio (verified against each wedding's
+    // bookDesign in Firestore AND the live render: white page + studio
+    // texture + Noto Serif Hebrew + ink #402d11 at 2.7%). The texture URL is
+    // a stable Firebase Storage link — the same asset the real books use.
+    const styleSettings = useMemo(() => ({
+        ...defaultStyle,
+        template: 'classic',
+        backgroundColor: '#ffffff',
+        texture: 'https://firebasestorage.googleapis.com/v0/b/wedding-memories-maker.firebasestorage.app/o/studio%2Fbackgrounds%2Fbg_eq13lu7iui7i.svg?alt=media&token=5d074117-daea-423e-97cb-b6de6c1aa4ac',
+        fontClass: notoHebrew.className,
+        fontColor: '#402d11',
+        fontSizePercent: 2.7,
+        locale: 'he',
+    }), [])
     const coverStyle = useMemo(() => ({
         ...styleSettings,
         coverImage: '/imgs/Cover%20img.jpg',
