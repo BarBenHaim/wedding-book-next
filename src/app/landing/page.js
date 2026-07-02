@@ -301,6 +301,7 @@ export default function LandingPage() {
                                 <WaIcon /> דברו איתנו
                             </a>
                         </div>
+                        <p className='heroPrice obs'>1,290 ₪ · מחיר אחד, הכול כלול · <a href='#pricing' onClick={e => { e.preventDefault(); scrollTo('pricing') }} style={{ color: '#a8843a' }}>מה בדיוק מקבלים ←</a></p>
                     </div>
 
                     {/* Overlapping covers, parallax drift */}
@@ -494,7 +495,7 @@ export default function LandingPage() {
                         ”לא תיארנו כמה פספסנו עד שראינו את הספר. בכינו, צחקנו, והרגשנו כאילו חזרנו לחתונה שוב.“
                     </p>
                     <p className='testiBy'>
-                        שקד · התחתנה במרץ 2026 · <a href={`/b/${PORTFOLIO[0].token}`} target='_blank' rel='noopener noreferrer' style={{ color: '#a8843a' }}>הספר שלה למעלה</a>
+                        שקד · התחתנה במרץ 2026 · <a href={`/b/${PORTFOLIO[0].token}`} target='_blank' rel='noopener noreferrer' style={{ color: '#a8843a', display: 'inline-block', padding: '12px 6px', margin: '-12px -6px' }}>הספר שלה למעלה</a>
                     </p>
                 </div>
             </section>
@@ -529,7 +530,7 @@ export default function LandingPage() {
                     <a href={WA} target='_blank' rel='noopener noreferrer' className='btn btnGold big' style={{ maxWidth: 400, marginInline: 'auto', marginTop: 26 }}>
                         <WaIcon /> דברו איתנו בוואטסאפ
                     </a>
-                    <p style={{ fontSize: 12.5, color: 'rgba(243,233,210,0.5)', marginTop: 26 }}>© {new Date().getFullYear()} Wedding Tales · מזכרת לכל החיים</p>
+                    <p style={{ fontSize: 13, color: 'rgba(243,233,210,0.68)', marginTop: 26 }}>© {new Date().getFullYear()} Wedding Tales · מזכרת לכל החיים</p>
                 </div>
             </section>
 
@@ -538,7 +539,9 @@ export default function LandingPage() {
                 details > summary::-webkit-details-marker { display: none; }
                 .shell { max-width: 1160px; margin: 0 auto; padding-inline: clamp(18px, 4vw, 48px); }
                 .hairline { height: 1px; background: linear-gradient(90deg, transparent, #c9a44e 20%, #c9a44e 80%, transparent); opacity: 0.55; margin: clamp(40px, 7vw, 84px) 0 clamp(28px, 4vw, 48px); }
-                .overline { font-size: 12.5px; font-weight: 700; letter-spacing: 0.22em; margin: 0 0 14px; }
+                .overline { font-size: 13px; font-weight: 700; letter-spacing: 0.22em; margin: 0 0 14px; }
+                .heroPrice { font-size: 14px; color: #6b5836; margin: 16px 2px 0; font-weight: 600; transition-delay: 200ms; }
+                :focus-visible { outline: 2px solid #b8893d; outline-offset: 3px; border-radius: 4px; }
 
                 /* Scroll reveal */
                 .obs { opacity: 0; transform: translateY(22px); transition: opacity 0.8s cubic-bezier(0.22,1,0.36,1), transform 0.8s cubic-bezier(0.22,1,0.36,1); }
@@ -642,7 +645,7 @@ export default function LandingPage() {
                 /* FAQ */
                 .faqItem { border-bottom: 1px solid rgba(168,132,58,0.3); }
                 .faqItem summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 2px; font-size: 17.5px; font-weight: 700; color: #1c1712; }
-                .faqItem p { font-size: 14.5px; font-weight: 300; color: #574733; line-height: 1.8; padding: 0 2px 18px; margin: 0; max-width: 560px; }
+                .faqItem p { font-size: 15px; font-weight: 400; color: #574733; line-height: 1.8; padding: 0 2px 18px; margin: 0; max-width: 560px; }
 
                 /* FINALE */
                 .finale { background-color: #171310; color: #f3e9d2; padding: clamp(64px, 10vw, 120px) 0; margin-top: clamp(48px, 8vw, 96px); }

@@ -10,13 +10,14 @@ function siteOrigin() {
 
 export async function generateMetadata() {
     const origin = siteOrigin()
-    const title = 'כל האורחים מברכים. אתם מקבלים ספר | Wedding Tales'
-    const description = 'האורחים סורקים QR, כותבים ברכה ומעלים תמונה בזמן האירוע — ואתם מקבלים ספר מודפס ודיגיטלי לכל החיים. דפדפו בספרים אמיתיים של לקוחות ונסו להוסיף ברכה בעצמכם.'
+    const title = 'הערב יעבור. הספר יישאר | Wedding Tales — ספרי ברכות'
+    const description = 'האורחים סורקים QR וכותבים מהלב בזמן האירוע — ואתם מקבלים ספר כריכה קשה וספר דיגיטלי לכל החיים. דפדפו בספרים אמיתיים של לקוחות. 1,290 ₪ הכול כלול.'
     const ogImage = `${origin}/og/landing-portfolio.png`
     return {
         metadataBase: new URL(origin),
         title,
         description,
+        alternates: { canonical: `${origin}/landing` },
         openGraph: {
             title,
             description,
