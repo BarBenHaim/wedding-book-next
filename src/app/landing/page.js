@@ -13,10 +13,10 @@ import { adminDb } from '@/lib/firebaseAdmin'
 
 export const revalidate = 300 // seconds — refresh the live design every 5 min
 
-// Default demo wedding (Dor & Shaked) — used when no landing config
+// Default demo wedding (Mai & Maor) — used when no landing config
 // doc exists yet. The super-admin can point the demo at any wedding
 // from /admin/landing; the choice lives in `site_config/landing`.
-const DEFAULT_DEMO_WEDDING_ID = 'rOPkVWbwurT4UjKCR5hg'
+const DEFAULT_DEMO_WEDDING_ID = '9bGnCaCuJvPwRg7CqaAJlGepQxx1'
 
 // Only the fields the demo consumes, JSON-sanitized. Deliberately NO
 // timestamps (not serializable as props) and no owner/contact fields.

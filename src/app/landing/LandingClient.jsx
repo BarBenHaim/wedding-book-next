@@ -21,6 +21,7 @@
 //   wedding rOPkVWbwurT4UjKCR5hg (דור ושקד)
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Assistant, Heebo } from 'next/font/google'
 import HTMLFlipBook from 'react-pageflip'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
@@ -596,6 +597,15 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
     // Reading ribbon (scroll progress) + sticky CTA visibility + hero
     // parallax — one rAF-throttled scroll listener drives all three.
     const [ctaVisible, setCtaVisible] = useState(false)
+    // Portal target for the sticky CTA. Rendering the CTA under
+    // document.body via createPortal guarantees no transformed ancestor
+    // (a .obs entrance transition, an animation, a stacking context
+    // opened by contain/filter/backdrop-filter anywhere in the tree)
+    // can re-parent position:fixed away from the viewport. This was the
+    // "sometimes jumps to the middle" bug — a mid-page transform on
+    // an ancestor briefly turned .stickyCta into an absolute-in-parent.
+    const [portalReady, setPortalReady] = useState(false)
+    useEffect(() => { setPortalReady(true) }, [])
     const heroRef = useRef(null)
     const ribbonRef = useRef(null)
     useEffect(() => {
@@ -664,7 +674,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
     const scrollTo = id => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
     return (
-        <div dir='rtl' className={assistant.className} style={{ minHeight: '100vh', background: '#f8f2e7', color: '#1c1712', overflowX: 'hidden' }}>
+        <div dir='rtl' className={assistant.className} style={{ minHeight: '100vh', background: '#f8f2e7', color: '#1c1712', overflowX: 'hidden', paddingBottom: 'calc(72px + env(safe-area-inset-bottom, 0px))' }}>
 
             {/* Reading ribbon — gold progress bar, the book's bookmark */}
             <div className='ribbon' aria-hidden><span ref={ribbonRef} className='ribbonFill' /></div>
@@ -827,7 +837,13 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                                 <button onClick={() => flip('next')} aria-label='הבא' className='navBtn'><ChevronLeft size={20} /></button>
                             </div>
                             <p className={`${gveretLevin.className} handnote`} style={{ textAlign: 'center', color: '#8a6d45' }}>
-                                {liveWedding ? 'הספר של דור ושקד — הפריסט האמיתי, חי מהמערכת' : 'העיצוב האמיתי של ספרי הלקוחות'}
+                                {liveWedding ? `הספר של ${(() => {
+                                    const b = (liveWedding.brideNameHe || liveWedding.brideName || '').trim()
+                                    const g = (liveWedding.groomNameHe || liveWedding.groomName || '').trim()
+                                    const c = (liveWedding.celebrantNameHe || liveWedding.celebrantName || '').trim()
+                                    if (b && g) return `${b} ו${g}`
+                                    return c || b || g || 'הזוג'
+                                })()} — הפריסט האמיתי, חי מהמערכת` : 'העיצוב האמיתי של ספרי הלקוחות'}
                             </p>
                         </div>
                         <GuestFormReplica
@@ -929,13 +945,17 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                 </div>
             </section>
 
-            {/* ═══════════ STICKY CTA — appears past the hero ═══════════ */}
-            <div className={`stickyCta ${ctaVisible ? 'on' : ''}`} role='complementary' aria-label='יצירת קשר'>
-                <span className='stickyTxt'><strong>ספר ברכות מהאירוע שלכם</strong> · 1,290 ₪ הכול כלול</span>
-                <a href={WA} target='_blank' rel='noopener noreferrer' className='btn btnGold stickyBtn'>
-                    <WaIcon /> דברו איתנו
-                </a>
-            </div>
+            {/* ═══════════ STICKY CTA — portalled to <body> so no
+                transformed ancestor can re-parent it mid-page. */}
+            {portalReady && createPortal(
+                <div className={`stickyCta ${ctaVisible ? 'on' : ''}`} role='complementary' aria-label='יצירת קשר' dir='rtl'>
+                    <span className='stickyTxt'><strong>ספר ברכות מהאירוע שלכם</strong> · 1,290 ₪ הכול כלול</span>
+                    <a href={WA} target='_blank' rel='noopener noreferrer' className='btn btnGold stickyBtn'>
+                        <WaIcon /> דברו איתנו
+                    </a>
+                </div>,
+                document.body,
+            )}
 
             <style jsx global>{`
                 .landing-flip { margin: 0 auto; }
@@ -1085,8 +1105,12 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                 .finaleT em { font-style: normal; color: #e2c377; }
 
                 /* STICKY CTA */
-                .stickyCta { position: fixed; bottom: 0; inset-inline: 0; z-index: 50; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 10px clamp(14px, 4vw, 28px) calc(10px + env(safe-area-inset-bottom, 0px)); background: rgba(23,19,16,0.92); backdrop-filter: blur(10px); border-top: 1px solid rgba(226,195,119,0.35); transform: translateY(110%); transition: transform 0.35s cubic-bezier(0.22,1,0.36,1); }
-                .stickyCta.on { transform: translateY(0); }
+                /* Sticky CTA is portalled to <body> (see createPortal above)
+                   so it never sits inside a transformed ancestor. Kept as
+                   global CSS (via <style jsx global>) so the portalled node
+                   still picks up the rules. */
+                .stickyCta { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 10px clamp(14px, 4vw, 28px) calc(10px + env(safe-area-inset-bottom, 0px)); background: rgba(23,19,16,0.92); backdrop-filter: blur(10px); border-top: 1px solid rgba(226,195,119,0.35); transform: translateY(110%); transition: transform 0.35s cubic-bezier(0.22,1,0.36,1); will-change: transform; pointer-events: none; }
+                .stickyCta.on { transform: translateY(0); pointer-events: auto; }
                 .stickyTxt { font-size: 13.5px; color: rgba(243,233,210,0.9); font-weight: 400; }
                 .stickyTxt strong { font-weight: 700; }
                 .stickyBtn { padding: 11px 22px; font-size: 14px; flex-shrink: 0; }
