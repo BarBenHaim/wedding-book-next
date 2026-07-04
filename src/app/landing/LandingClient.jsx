@@ -30,7 +30,7 @@ import { buildGuestPageTheme } from '@/lib/guestPageTheme'
 import heMessages from '@/i18n/messages/he.json'
 import { normalizeBlessing } from '@/lib/normalizeText'
 import { gveretLevin, notoHebrew } from '@/app/fonts'
-import { Camera, Check, ChevronLeft, ChevronRight, ChevronDown, BookOpen, X, ExternalLink, Sparkles } from 'lucide-react'
+import { Camera, Check, ChevronLeft, ChevronRight, ChevronDown, BookOpen, Sparkles } from 'lucide-react'
 
 const assistant = Assistant({ subsets: ['hebrew', 'latin'], weight: ['300', '400', '600', '700'] })
 // Display face — Heebo Black for the big statements (replaced Frank Ruhl
@@ -154,7 +154,6 @@ function Folio({ n, label, dark = false }) {
 
 // ─── One art-directed chapter per book ───────────────────────────────
 function Chapter({ book }) {
-    const [live, setLive] = useState(false)
     const frames = useMemo(() => [coverSrc(book), ...spreadSrcs(book)], [book])
     const ink = book.theme === 'ink'
     const blush = book.theme === 'blush'
@@ -206,19 +205,6 @@ function Chapter({ book }) {
                             ”{book.quote}“
                             <cite className={assistant.className}>{book.quoteBy}</cite>
                         </blockquote>
-                        {/* Live-book actions only when the chapter has a
-                            token + wedding id (admin-added chapters may
-                            not have issued a landing link yet). */}
-                        {Boolean(book.token && book.weddingId) && (
-                            <div className='chActions'>
-                                <button onClick={() => setLive(v => !v)} className='btn btnSolid' style={ink ? { background: '#e2c377', color: '#1a1208' } : undefined}>
-                                    {live ? <><X size={16} /> סגירת הספר</> : <><BookOpen size={16} /> לדפדף בספר — כאן</>}
-                                </button>
-                                <a href={`/b/${book.token}`} target='_blank' rel='noopener noreferrer' className='btn btnGhost' style={ink ? { color: '#e9dab3', borderColor: 'rgba(233,218,179,0.5)' } : undefined}>
-                                    <ExternalLink size={15} /> מסך מלא
-                                </a>
-                            </div>
-                        )}
                     </div>
                 </div>
 
@@ -229,19 +215,6 @@ function Chapter({ book }) {
                         <img key={src} src={src} alt={`כפולה ${i + 1} מתוך הספר של ${book.title}`} loading='lazy' className='frame' />
                     ))}
                 </div>
-
-                {/* Live embed — the ACTUAL digital book */}
-                {live && (
-                    <div className='embedWrap'>
-                        <iframe
-                            src={`/wedding/${book.weddingId}/book/${book.token}?embed=1`}
-                            title={`ספר הברכות של ${book.title}`}
-                            style={{ display: 'block', width: '100%', height: 'min(80vh, 680px)', border: 'none' }}
-                            loading='lazy'
-                            allowFullScreen
-                        />
-                    </div>
-                )}
             </div>
         </section>
     )
