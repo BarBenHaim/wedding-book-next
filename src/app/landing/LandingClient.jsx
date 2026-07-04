@@ -38,7 +38,10 @@ const WA = 'https://wa.link/0sesxc'
 
 // ─── The three real books, presented as chapters ─────────────────────
 // Order follows the owner's brief: Noam → Jerry → Dor & Shaked.
-const CHAPTERS = [
+// This is the built-in DEFAULT set — the super-admin can override the
+// whole list from /admin/landing (saved to site_config/landing and
+// passed down by the server page as the `chapters` prop).
+export const DEFAULT_CHAPTERS = [
     {
         slug: 'bar-mitzvah',
         chapter: 'פרק ראשון',
@@ -88,6 +91,14 @@ const CHAPTERS = [
         theme: 'blush',
     },
 ]
+
+// Image resolution — explicit URLs (set in /admin/landing for new
+// projects) win; otherwise the chapter's built-in static image set.
+const coverSrc = b => b.coverUrl || `/imgs/portfolio/${b.slug}/cover.webp`
+const spreadSrcs = b =>
+    Array.isArray(b.spreadUrls) && b.spreadUrls.length > 0
+        ? b.spreadUrls
+        : Array.from({ length: b.spreads || 0 }, (_, i) => `/imgs/portfolio/${b.slug}/spread-${i + 1}.webp`)
 
 // Marquee strip — one continuous ribbon of real spreads from all three
 // books (duplicated in the DOM for a seamless CSS loop).
@@ -140,10 +151,7 @@ function Folio({ n, label, dark = false }) {
 // ─── One art-directed chapter per book ───────────────────────────────
 function Chapter({ book }) {
     const [live, setLive] = useState(false)
-    const frames = useMemo(
-        () => [`/imgs/portfolio/${book.slug}/cover.webp`, ...Array.from({ length: book.spreads }, (_, i) => `/imgs/portfolio/${book.slug}/spread-${i + 1}.webp`)],
-        [book]
-    )
+    const frames = useMemo(() => [coverSrc(book), ...spreadSrcs(book)], [book])
     const ink = book.theme === 'ink'
     const blush = book.theme === 'blush'
 
@@ -194,14 +202,19 @@ function Chapter({ book }) {
                             ”{book.quote}“
                             <cite className={assistant.className}>{book.quoteBy}</cite>
                         </blockquote>
-                        <div className='chActions'>
-                            <button onClick={() => setLive(v => !v)} className='btn btnSolid' style={ink ? { background: '#e2c377', color: '#1a1208' } : undefined}>
-                                {live ? <><X size={16} /> סגירת הספר</> : <><BookOpen size={16} /> לדפדף בספר — כאן</>}
-                            </button>
-                            <a href={`/b/${book.token}`} target='_blank' rel='noopener noreferrer' className='btn btnGhost' style={ink ? { color: '#e9dab3', borderColor: 'rgba(233,218,179,0.5)' } : undefined}>
-                                <ExternalLink size={15} /> מסך מלא
-                            </a>
-                        </div>
+                        {/* Live-book actions only when the chapter has a
+                            token + wedding id (admin-added chapters may
+                            not have issued a landing link yet). */}
+                        {Boolean(book.token && book.weddingId) && (
+                            <div className='chActions'>
+                                <button onClick={() => setLive(v => !v)} className='btn btnSolid' style={ink ? { background: '#e2c377', color: '#1a1208' } : undefined}>
+                                    {live ? <><X size={16} /> סגירת הספר</> : <><BookOpen size={16} /> לדפדף בספר — כאן</>}
+                                </button>
+                                <a href={`/b/${book.token}`} target='_blank' rel='noopener noreferrer' className='btn btnGhost' style={ink ? { color: '#e9dab3', borderColor: 'rgba(233,218,179,0.5)' } : undefined}>
+                                    <ExternalLink size={15} /> מסך מלא
+                                </a>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -507,7 +520,30 @@ function GuestFormReplica({ wedding, form, setForm, photo, onPickPhoto, fileRef,
     )
 }
 
-export default function LandingClient({ liveWedding = null }) {
+export default function LandingClient({ liveWedding = null, chapters: chaptersProp = null }) {
+    // Showcased projects — admin-managed list when one is saved,
+    // otherwise the built-in trio. Hero covers + the marquee ribbon
+    // derive from the ACTIVE list so swapped projects flow everywhere.
+    const chapters = Array.isArray(chaptersProp) && chaptersProp.length > 0 ? chaptersProp : DEFAULT_CHAPTERS
+    const heroCovers = useMemo(() => {
+        if (!chaptersProp) {
+            // Built-in composition: wedding cover largest, then bar
+            // mitzvah, then birthday — preserved exactly.
+            return [
+                '/imgs/portfolio/wedding/cover.webp',
+                '/imgs/portfolio/bar-mitzvah/cover.webp',
+                '/imgs/portfolio/birthday/cover.webp',
+            ]
+        }
+        const covers = chapters.map(coverSrc)
+        while (covers.length < 3) covers.push(covers[covers.length - 1] || '/imgs/portfolio/wedding/cover.webp')
+        return covers.slice(0, 3)
+    }, [chaptersProp, chapters])
+    const marquee = useMemo(() => {
+        if (!chaptersProp) return MARQUEE
+        const all = chapters.flatMap(spreadSrcs)
+        return all.length > 0 ? all.slice(0, 10) : MARQUEE
+    }, [chaptersProp, chapters])
     // ── LIVE design sync ─────────────────────────────────────────────
     // `liveWedding` arrives from the SERVER (app/landing/page.js reads
     // Dor & Shaked's wedding doc with the Admin SDK, ISR-revalidated
@@ -669,15 +705,15 @@ export default function LandingClient({ liveWedding = null }) {
                         </p>
                     </div>
 
-                    {/* Fan of the three real covers, parallax drift */}
+                    {/* Fan of real covers (from the active chapter set), parallax drift */}
                     <div className='heroArt' aria-hidden>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src='/imgs/portfolio/wedding/cover.webp' alt='' className='ha ha1' fetchPriority='high' onClick={() => scrollTo('chapters')} />
+                        <img src={heroCovers[0]} alt='' className='ha ha1' fetchPriority='high' onClick={() => scrollTo('chapters')} />
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src='/imgs/portfolio/bar-mitzvah/cover.webp' alt='' className='ha ha2' loading='lazy' onClick={() => scrollTo('chapters')} />
+                        <img src={heroCovers[1]} alt='' className='ha ha2' loading='lazy' onClick={() => scrollTo('chapters')} />
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src='/imgs/portfolio/birthday/cover.webp' alt='' className='ha ha3' loading='lazy' onClick={() => scrollTo('chapters')} />
-                        <p className={`${gveretLevin.className} handnote haNote`}>שלושה ספרים אמיתיים של לקוחות ↓</p>
+                        <img src={heroCovers[2]} alt='' className='ha ha3' loading='lazy' onClick={() => scrollTo('chapters')} />
+                        <p className={`${gveretLevin.className} handnote haNote`}>ספרים אמיתיים של לקוחות ↓</p>
                     </div>
                 </div>
                 <span className='vertCaption' aria-hidden>מהדורה אישית · קיץ 2026</span>
@@ -686,9 +722,9 @@ export default function LandingClient({ liveWedding = null }) {
             {/* ═══════════ MARQUEE — a ribbon of real spreads ═══════════ */}
             <section className='marquee' aria-label='עמודים אמיתיים מתוך ספרי לקוחות'>
                 <div className='marqueeTrack'>
-                    {[...MARQUEE, ...MARQUEE].map((src, i) => (
+                    {[...marquee, ...marquee].map((src, i) => (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img key={`${src}-${i}`} src={src} alt='' loading='lazy' className='mFrame' aria-hidden={i >= MARQUEE.length} />
+                        <img key={`${src}-${i}`} src={src} alt='' loading='lazy' className='mFrame' aria-hidden={i >= marquee.length} />
                     ))}
                 </div>
                 <p className={`${gveretLevin.className} handnote`} style={{ textAlign: 'center', color: '#8a6d45', marginTop: 14 }}>
@@ -749,7 +785,7 @@ export default function LandingClient({ liveWedding = null }) {
                         </p>
                     </div>
                 </div>
-                {CHAPTERS.map(b => <Chapter key={b.slug} book={b} />)}
+                {chapters.map((b, i) => <Chapter key={`${b.slug}-${b.weddingId || i}`} book={b} />)}
             </div>
 
             {/* ═══════════ TRY IT ═══════════ */}
@@ -858,7 +894,7 @@ export default function LandingClient({ liveWedding = null }) {
                         ”לא תיארנו כמה פספסנו עד שראינו את הספר. בכינו, צחקנו, והרגשנו כאילו חזרנו לחתונה שוב.“
                     </p>
                     <p className='testiBy'>
-                        שקד · התחתנה במרץ 2026 · <a href={`/b/${CHAPTERS[2].token}`} target='_blank' rel='noopener noreferrer' style={{ color: '#a8843a', display: 'inline-block', padding: '12px 6px', margin: '-12px -6px' }}>הספר שלה בפרק השלישי</a>
+                        שקד · התחתנה במרץ 2026 · <a href={`/b/${DEFAULT_CHAPTERS[2].token}`} target='_blank' rel='noopener noreferrer' style={{ color: '#a8843a', display: 'inline-block', padding: '12px 6px', margin: '-12px -6px' }}>הספר שלה בפרק השלישי</a>
                     </p>
                 </div>
             </section>

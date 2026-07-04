@@ -13,6 +13,7 @@ import {
     ChevronRight, Eye, Link2, Mail, Shield, HardDrive, RefreshCw,
     AlertTriangle, Copy, Clock, Printer, Package, Truck, UserPlus,
     Pencil, Save, PartyPopper, Wand2, BarChart3, QrCode, Phone, Wallet,
+    Newspaper,
 } from 'lucide-react'
 import {
     EVENT_TYPE_ORDER,
@@ -2205,6 +2206,19 @@ function AdminDashboardContent() {
                             }}
                         >
                             <Wand2 size={14} /> סטודיו עיצוב
+                        </a>
+                        <a
+                            href='/admin/landing'
+                            title='ניהול דף הנחיתה — פרויקטים מוצגים ורענון מיידי'
+                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
+                            style={{
+                                background: '#ffffff',
+                                border: '1px solid rgba(212,184,103,0.30)',
+                                color: '#7a6a52',
+                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
+                            }}
+                        >
+                            <Newspaper size={14} style={{ color: '#c9a44e' }} /> דף נחיתה
                         </a>
                         <a
                             href='/admin/analytics'

@@ -13,9 +13,10 @@ import { adminDb } from '@/lib/firebaseAdmin'
 
 export const revalidate = 300 // seconds — refresh the live design every 5 min
 
-// The wedding whose LIVE design drives the interactive demo — Dor &
-// Shaked (the wedding chapter on the page).
-const DEMO_WEDDING_ID = 'rOPkVWbwurT4UjKCR5hg'
+// Default demo wedding (Dor & Shaked) — used when no landing config
+// doc exists yet. The super-admin can point the demo at any wedding
+// from /admin/landing; the choice lives in `site_config/landing`.
+const DEFAULT_DEMO_WEDDING_ID = 'rOPkVWbwurT4UjKCR5hg'
 
 // Only the fields the demo consumes, JSON-sanitized. Deliberately NO
 // timestamps (not serializable as props) and no owner/contact fields.
@@ -29,9 +30,22 @@ const KEEP_FIELDS = [
     'blessingMaxChars', 'locale',
 ]
 
-async function fetchLiveWedding() {
+// Landing config saved from /admin/landing — demo wedding override +
+// custom chapters. Null-safe: missing doc → built-in defaults.
+async function fetchLandingConfig() {
     try {
-        const snap = await adminDb.collection('weddings').doc(DEMO_WEDDING_ID).get()
+        const snap = await adminDb.collection('site_config').doc('landing').get()
+        if (!snap.exists) return null
+        return JSON.parse(JSON.stringify(snap.data() || {}))
+    } catch (err) {
+        console.warn('[landing] config fetch failed:', err?.message || err)
+        return null
+    }
+}
+
+async function fetchLiveWedding(weddingId) {
+    try {
+        const snap = await adminDb.collection('weddings').doc(weddingId).get()
         if (!snap.exists) return null
         const data = snap.data() || {}
         const out = {}
@@ -48,6 +62,9 @@ async function fetchLiveWedding() {
 }
 
 export default async function LandingPage() {
-    const liveWedding = await fetchLiveWedding()
-    return <LandingClient liveWedding={liveWedding} />
+    const config = await fetchLandingConfig()
+    const demoId = config?.demoWeddingId || DEFAULT_DEMO_WEDDING_ID
+    const liveWedding = await fetchLiveWedding(demoId)
+    const chapters = Array.isArray(config?.chapters) && config.chapters.length > 0 ? config.chapters : null
+    return <LandingClient liveWedding={liveWedding} chapters={chapters} />
 }
