@@ -861,6 +861,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                             <span className={`${frankRuhl.className} priceN`}>1,290</span>
                             <span className={`${frankRuhl.className} priceCur`}>₪</span>
                         </div>
+                        <p className={`${gveretLevin.className} priceAccent`}>מחיר אחד. אין תוספות. אין הפתעות.</p>
                         <p className='priceNote'>מהקמת העמוד ועד הספר המודפס אצלכם בבית — הכול בפנים:</p>
                         <ol className='inclList'>
                             {[
@@ -908,8 +909,9 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                         {FAQ.map((f, i) => (
                             <details key={i} className='faqItem'>
                                 <summary>
-                                    <span className={frankRuhl.className}>{f.q}</span>
-                                    <ChevronDown size={18} color='#a8843a' style={{ flexShrink: 0 }} />
+                                    <span className={`${frankRuhl.className} faqN`} aria-hidden>{String(i + 1).padStart(2, '0')}</span>
+                                    <span className={`${frankRuhl.className} faqQ`}>{f.q}</span>
+                                    <span className='faqChev' aria-hidden><ChevronDown size={15} /></span>
                                 </summary>
                                 <p>{f.a}</p>
                             </details>
@@ -930,7 +932,8 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                     <a href={WA} target='_blank' rel='noopener noreferrer' className='btn btnGold big' style={{ maxWidth: 400, marginInline: 'auto', marginTop: 26 }}>
                         <WaIcon /> דברו איתנו בוואטסאפ
                     </a>
-                    <p style={{ fontSize: 13, color: 'rgba(243,233,210,0.68)', marginTop: 26 }}>© {new Date().getFullYear()} Wedding Tales · מזכרת לכל החיים</p>
+                    <p className={gveretLevin.className} style={{ fontSize: 19, color: 'rgba(243,233,210,0.75)', marginTop: 16 }}>כותבים לנו — ועונים לכם אישית</p>
+                    <p style={{ fontSize: 13, color: 'rgba(243,233,210,0.68)', marginTop: 20 }}>© {new Date().getFullYear()} Wedding Tales · מזכרת לכל החיים</p>
                 </div>
             </section>
 
@@ -1007,8 +1010,8 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                 .statBand { background-color: #171310; color: #f3e9d2; padding: clamp(34px, 5vw, 54px) 0; }
                 .statRow { display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
                 .stat { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; min-width: 90px; }
-                .statN { font-size: clamp(30px, 5.4vw, 48px); font-weight: 700; color: #e2c377; line-height: 1; }
-                .statL { font-size: 13px; color: rgba(243,233,210,0.72); letter-spacing: 0.06em; }
+                .statN { font-size: clamp(32px, 5.6vw, 50px); font-weight: 700; color: #e2c377; line-height: 1; font-variant-numeric: tabular-nums; }
+                .statL { font-size: 11.5px; font-weight: 700; color: rgba(243,233,210,0.66); letter-spacing: 0.22em; margin-top: 3px; }
 
                 /* HOW */
                 .how { padding: clamp(20px, 4vw, 56px) 0 clamp(20px, 3vw, 40px); }
@@ -1040,7 +1043,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                 .pull { font-size: clamp(18px, 2.8vw, 23px); font-weight: 600; font-style: italic; line-height: 1.65; margin: 0 0 22px; padding: 0; }
                 .pull cite { display: block; font-size: 12.5px; font-style: normal; font-weight: 600; letter-spacing: 0.1em; opacity: 0.65; margin-top: 10px; }
                 .chActions { display: flex; gap: 10px; flex-wrap: wrap; }
-                .filmstrip { display: flex; gap: 14px; overflow-x: auto; padding: clamp(20px, 3vw, 34px) 4px 14px; scroll-snap-type: x mandatory; scrollbar-width: thin; scrollbar-color: #c9a44e transparent; }
+                .filmstrip { display: flex; gap: 14px; overflow-x: auto; padding: clamp(20px, 3vw, 34px) 4px 14px; scroll-snap-type: x mandatory; scrollbar-width: thin; scrollbar-color: #c9a44e transparent; overscroll-behavior-x: contain; }
                 .filmstrip::-webkit-scrollbar { height: 5px; }
                 .filmstrip::-webkit-scrollbar-thumb { background: #c9a44e; border-radius: 3px; }
                 .frame { height: clamp(210px, 30vw, 320px); width: auto; border-radius: 8px; flex-shrink: 0; scroll-snap-align: center; background: #fff; box-shadow: 0 22px 46px -20px rgba(60,44,20,0.5), 0 0 0 1px rgba(180,148,90,0.3); transition: transform 0.28s ease, box-shadow 0.28s ease; }
@@ -1059,12 +1062,13 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                 .priceBand { background-color: #171310; color: #f3e9d2; padding: clamp(56px, 9vw, 110px) 0; margin-top: clamp(48px, 8vw, 96px); }
                 .priceGrid { display: grid; grid-template-columns: 1fr; gap: 38px; align-items: center; }
                 .priceLine { display: flex; align-items: baseline; gap: 12px; }
-                .priceN { font-size: clamp(84px, 15vw, 150px); font-weight: 700; line-height: 0.95; color: #f3e9d2; letter-spacing: -0.02em; }
+                .priceN { font-size: clamp(84px, 15vw, 150px); font-weight: 700; line-height: 0.95; color: #f3e9d2; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
                 .priceCur { font-size: clamp(30px, 5vw, 48px); color: #cfa860; font-weight: 700; }
+                .priceAccent { font-size: clamp(18px, 3vw, 22px); color: #e2c377; margin: 10px 0 0; }
                 .priceNote { font-size: 15.5px; font-weight: 300; color: rgba(243,233,210,0.75); line-height: 1.75; margin: 16px 0 8px; max-width: 380px; }
-                .inclList { list-style: none; margin: 0; padding: 0; max-width: 420px; }
-                .inclList li { display: flex; gap: 16px; align-items: baseline; padding: 13px 2px; border-bottom: 1px solid rgba(226,195,119,0.22); font-size: 15.5px; font-weight: 300; color: rgba(243,233,210,0.9); }
-                .inclN { font-size: 13px; font-weight: 700; color: #cfa860; letter-spacing: 0.14em; }
+                .inclList { list-style: none; margin: 0; padding: 0; max-width: 440px; }
+                .inclList li { display: flex; gap: 18px; align-items: baseline; padding: 14px 2px; border-bottom: 1px solid rgba(226,195,119,0.22); font-size: 16px; font-weight: 300; color: rgba(243,233,210,0.92); line-height: 1.6; }
+                .inclN { font-size: 24px; font-weight: 700; color: #cfa860; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; min-width: 34px; line-height: 1; transform: translateY(2px); }
                 .priceFig { margin: 0; }
                 .priceFig img { width: 100%; border-radius: 10px; box-shadow: 0 34px 70px -26px rgba(0,0,0,0.7), 0 0 0 1px rgba(207,168,96,0.4); }
                 .priceFig figcaption { font-size: 17px; color: rgba(243,233,210,0.65); margin-top: 12px; text-align: center; }
@@ -1074,10 +1078,14 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                 .testiQ { font-size: clamp(21px, 3.6vw, 30px); font-weight: 600; font-style: italic; line-height: 1.7; color: #3a2f1e; margin: 0; }
                 .testiBy { font-size: 13px; color: #8a744d; margin-top: 16px; font-weight: 600; }
 
-                /* FAQ */
-                .faqItem { border-bottom: 1px solid rgba(168,132,58,0.3); }
-                .faqItem summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 2px; font-size: 17.5px; font-weight: 700; color: #1c1712; }
-                .faqItem p { font-size: 15px; font-weight: 400; color: #574733; line-height: 1.8; padding: 0 2px 18px; margin: 0; max-width: 560px; }
+                /* FAQ — a designed conversation, not a list of boxes */
+                .faqItem { border-bottom: 1px solid rgba(168,132,58,0.28); }
+                .faqItem summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 14px; padding: 20px 2px; }
+                .faqN { font-size: 13px; font-weight: 700; color: #b8935a; letter-spacing: 0.12em; font-variant-numeric: tabular-nums; flex-shrink: 0; transform: translateY(-1px); }
+                .faqQ { flex: 1; font-size: clamp(18px, 2.6vw, 21px); font-weight: 700; color: #1c1712; line-height: 1.4; letter-spacing: -0.01em; }
+                .faqChev { flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; border: 1px solid #cfae6e; color: #a8843a; display: flex; align-items: center; justify-content: center; align-self: center; transition: transform 0.25s ease, background 0.25s ease; }
+                details[open] .faqChev { transform: rotate(180deg); background: rgba(201,164,78,0.14); }
+                .faqItem p { font-size: 15.5px; font-weight: 400; color: #574733; line-height: 1.85; padding: 2px 2px 20px; margin: 0 30px 0 0; max-width: 520px; border-inline-start: 2px solid rgba(201,164,78,0.45); padding-inline-start: 16px; }
 
                 /* FINALE */
                 .finale { background-color: #171310; color: #f3e9d2; padding: clamp(64px, 10vw, 120px) 0 clamp(84px, 12vw, 140px); margin-top: clamp(48px, 8vw, 96px); }
