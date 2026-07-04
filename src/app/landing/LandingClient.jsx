@@ -23,15 +23,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Assistant, Heebo } from 'next/font/google'
-import HTMLFlipBook from 'react-pageflip'
-import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
-import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
-import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 import { buildGuestPageTheme } from '@/lib/guestPageTheme'
 import heMessages from '@/i18n/messages/he.json'
 import { normalizeBlessing } from '@/lib/normalizeText'
-import { gveretLevin, notoHebrew } from '@/app/fonts'
-import { Camera, Check, ChevronLeft, ChevronRight, ChevronDown, BookOpen, Sparkles } from 'lucide-react'
+import { gveretLevin } from '@/app/fonts'
+import { Camera, Check, ChevronDown, BookOpen, Sparkles } from 'lucide-react'
 
 const assistant = Assistant({ subsets: ['hebrew', 'latin'], weight: ['300', '400', '600', '700'] })
 // Display face — Heebo Black for the big statements (replaced Frank Ruhl
@@ -116,17 +112,6 @@ const MARQUEE = [
     '/imgs/portfolio/birthday/spread-2.webp',
     '/imgs/portfolio/wedding/spread-1.webp',
     '/imgs/portfolio/bar-mitzvah/spread-5.webp',
-]
-
-const SAMPLE = [
-    { id: 's1', name: 'דנה', text: 'סבא יקר, אין מילים לתאר כמה אנחנו אוהבים אותך. שתמיד תהיה בריא ושמח, ותמשיך להאיר לכולנו את הדרך.', imageUrl: '/imgs/img1.jpg' },
-    { id: 's2', name: 'Yossi & Michal', text: 'Your stories and your smile light up every room. Here’s to many more years of laughter together — we love you!', imageUrl: '/imgs/img2.jpg' },
-    { id: 's3', name: 'משפחת לוי', text: 'תודה על כל הארוחות, הצחוקים והחוכמה. אתם הלב הפועם של המשפחה שלנו, ואנחנו אסירי תודה על כל רגע.', imageUrl: '/imgs/img3.jpg' },
-    { id: 's4', name: 'נועה', text: 'לאדם הכי טוב שאני מכירה — שתמשיך לרקוד, לשיר ולחבק חזק. אוהבת אותך עד הירח ובחזרה.', imageUrl: '/imgs/img4.jpg' },
-    { id: 's5', name: 'Daniel', text: 'To the one who taught me everything about kindness and patience — so grateful for you, today and always.', imageUrl: '/imgs/img5.jpg' },
-    { id: 's6', name: 'רוני וגיל', text: 'כל רגע איתכם הוא מתנה. שתהיה לכם שנה מלאה בבריאות, אושר ונחת מכל מי שאוהב אתכם.', imageUrl: '/imgs/img6.jpg' },
-    { id: 's7', name: 'סבתא תקווה', text: 'ביחד כבר שנים רבות והלב עוד מלא. תודה על כל האהבה — אוהבת אתכם תמיד.', imageUrl: '/imgs/img7.jpg' },
-    { id: 's8', name: 'אורי', text: 'פשוט תודה. על הכל. אתם הגיבורים שלי, היום ותמיד.', imageUrl: '/imgs/img8.jpg' },
 ]
 
 const FAQ = [
@@ -531,43 +516,6 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
     // minutes, no client fetch, no flicker. When the server fetch
     // fails we fall back to a hand-copied snapshot of the same design.
 
-    // Interior pages — the wedding's actual book design via the same
-    // resolver the viewer uses (bookDesign → coverDesign fallback).
-    const styleSettings = useMemo(() => {
-        const live = liveWedding ? resolveInteriorDesign(liveWedding) : null
-        if (live) return { ...defaultStyle, ...live, locale: 'he' }
-        return {
-            ...defaultStyle,
-            template: 'classic',
-            backgroundColor: '#ffffff',
-            texture: 'https://firebasestorage.googleapis.com/v0/b/wedding-memories-maker.firebasestorage.app/o/studio%2Fbackgrounds%2Fbg_eq13lu7iui7i.svg?alt=media&token=5d074117-daea-423e-97cb-b6de6c1aa4ac',
-            fontClass: notoHebrew.className,
-            fontColor: '#402d11',
-            fontSizePercent: 2.7,
-            locale: 'he',
-        }
-    }, [liveWedding])
-    // Cover — their real coverDesign (incl. the real cover photo) when
-    // available; generic branded cover otherwise.
-    const coverStyle = useMemo(() => {
-        if (liveWedding?.coverDesign) return { ...defaultStyle, ...liveWedding.coverDesign }
-        return {
-            ...styleSettings,
-            coverImage: '/imgs/Cover%20img.jpg',
-            coverTitle: 'ספר הברכות',
-            coverSubtitle: 'הרגעים היפים שלכם — לתמיד',
-            coverTextPosition: 'bc',
-            coverTextBg: 'rgba(0,0,0,0.30)',
-            coverTextColor: '#ffffff',
-        }
-    }, [liveWedding, styleSettings])
-    // Real wedding doc → BookCoverTemplate renders the real title
-    // (names, date) exactly like the production book.
-    const sampleWedding = liveWedding || { eventType: 'wedding', customTitle: 'ספר הברכות', locale: 'he' }
-
-    const [extra, setExtra] = useState([])
-    const pages = useMemo(() => [...SAMPLE, ...extra], [extra])
-
     // Scroll-reveal: .obs elements get .in when they enter the viewport.
     useEffect(() => {
         const els = document.querySelectorAll('.obs')
@@ -626,27 +574,6 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
         return () => { window.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf) }
     }, [])
 
-    const wrapRef = useRef(null)
-    const [size, setSize] = useState(320)
-    useEffect(() => {
-        const measure = () => {
-            const w = wrapRef.current?.clientWidth || 340
-            setSize(Math.max(240, Math.min(420, Math.floor(w))))
-        }
-        measure()
-        window.addEventListener('resize', measure)
-        return () => window.removeEventListener('resize', measure)
-    }, [])
-
-    const flipRef = useRef(null)
-    const flip = dir => {
-        try {
-            const pf = flipRef.current?.pageFlip?.()
-            if (!pf) return
-            dir === 'next' ? pf.flipNext() : pf.flipPrev()
-        } catch { /* ignore */ }
-    }
-
     const [form, setForm] = useState({ name: '', text: '' })
     const [photo, setPhoto] = useState(null)
     const [added, setAdded] = useState(false)
@@ -658,17 +585,16 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
         if (photo?.url) URL.revokeObjectURL(photo.url)
         setPhoto({ url: URL.createObjectURL(f) })
     }
+    // Demo submit — no network. The form clears and shows a brief
+    // "added" confirmation so the interaction feels real; nothing else
+    // needs to happen now that the flipbook preview is gone.
     const addBlessing = () => {
         const text = normalizeBlessing(form.text)
         if (!text && !photo) return
-        const entry = { id: `u${Date.now()}`, name: form.name.trim() || 'אורח/ת', text, imageUrl: photo?.url || null }
-        const nextIndex = pages.length + 1
-        setExtra(prev => [...prev, entry])
         setForm({ name: '', text: '' })
         setPhoto(null)
         setAdded(true)
         setTimeout(() => setAdded(false), 3000)
-        setTimeout(() => { try { flipRef.current?.pageFlip?.()?.flip(nextIndex) } catch { /* ignore */ } }, 260)
     }
 
     const scrollTo = id => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -798,54 +724,16 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                         <p className='overline' style={{ color: '#a8843a' }}>נסו בעצמכם</p>
                         <h2 className={`${heeboDisplay.className} sectionTitle`}>ככה זה מרגיש לאורחים שלכם</h2>
                         <p className='sectionSub'>
-                            משמאל — עמוד הברכות האמיתי של דור ושקד, אחד לאחד: אותו רקע, אותו כרטיס, אותם טקסטים.
-                            כתבו ברכה, צרפו תמונה — ותראו אותה נכנסת לספר שלהם, בפריסט החי מהמערכת. הדגמה בלבד, שום דבר לא נשמר.
+                            {liveWedding ? `זה בדיוק העמוד שאורחיהם של ${(() => {
+                                const b = (liveWedding.brideNameHe || liveWedding.brideName || '').trim()
+                                const g = (liveWedding.groomNameHe || liveWedding.groomName || '').trim()
+                                const c = (liveWedding.celebrantNameHe || liveWedding.celebrantName || '').trim()
+                                if (b && g) return `${b} ו${g}`
+                                return c || b || g || 'הזוג'
+                            })()} רואים כשסורקים את ה-QR — אחד לאחד, אותו רקע, אותו כרטיס, אותם טקסטים. כתבו ברכה, צרפו תמונה — הדגמה בלבד, שום דבר לא נשמר.` : 'זה בדיוק העמוד שהאורחים שלכם רואים כשסורקים את ה-QR — אותו רקע, אותו כרטיס, אותם טקסטים. כתבו ברכה, צרפו תמונה — הדגמה בלבד, שום דבר לא נשמר.'}
                         </p>
                     </div>
-                    <div className='demoGrid obs'>
-                        <div>
-                            <div ref={wrapRef} style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-                                <div className='flipShadow' style={{ width: size, height: size }}>
-                                    <HTMLFlipBook
-                                        key={`flip-${pages.length}-${size}`}
-                                        ref={flipRef}
-                                        width={size}
-                                        height={size}
-                                        size='fixed'
-                                        usePortrait
-                                        showCover
-                                        mobileScrollSupport
-                                        drawShadow
-                                        maxShadowOpacity={0.3}
-                                        useMouseEvents
-                                        flippingTime={700}
-                                        className='landing-flip'
-                                    >
-                                        <div style={{ width: size, height: size, background: '#fff' }}>
-                                            <BookCoverTemplate wedding={sampleWedding} styleSettings={coverStyle} scaledWidth={size} scaledHeight={size} />
-                                        </div>
-                                        {pages.map(entry => (
-                                            <div key={entry.id} style={{ width: size, height: size, background: '#fff' }}>
-                                                <BookPageTemplate entry={entry} styleSettings={styleSettings} scaledWidth={size} scaledHeight={size} />
-                                            </div>
-                                        ))}
-                                    </HTMLFlipBook>
-                                </div>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 16 }}>
-                                <button onClick={() => flip('prev')} aria-label='הקודם' className='navBtn'><ChevronRight size={20} /></button>
-                                <button onClick={() => flip('next')} aria-label='הבא' className='navBtn'><ChevronLeft size={20} /></button>
-                            </div>
-                            <p className={`${gveretLevin.className} handnote`} style={{ textAlign: 'center', color: '#8a6d45' }}>
-                                {liveWedding ? `הספר של ${(() => {
-                                    const b = (liveWedding.brideNameHe || liveWedding.brideName || '').trim()
-                                    const g = (liveWedding.groomNameHe || liveWedding.groomName || '').trim()
-                                    const c = (liveWedding.celebrantNameHe || liveWedding.celebrantName || '').trim()
-                                    if (b && g) return `${b} ו${g}`
-                                    return c || b || g || 'הזוג'
-                                })()} — הפריסט האמיתי, חי מהמערכת` : 'העיצוב האמיתי של ספרי הלקוחות'}
-                            </p>
-                        </div>
+                    <div className='demoSolo obs'>
                         <GuestFormReplica
                             wedding={liveWedding}
                             form={form}
@@ -891,7 +779,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                     <figure className='priceFig obs' aria-hidden>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src='/imgs/portfolio/wedding/spread-2.webp' alt='' loading='lazy' />
-                        <figcaption className={gveretLevin.className}>עמודים אמיתיים, מתוך הספר של דור ושקד</figcaption>
+                        <figcaption className={gveretLevin.className}>עמודים אמיתיים, מתוך ספרי הלקוחות</figcaption>
                     </figure>
                 </div>
             </section>
@@ -958,7 +846,6 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
             )}
 
             <style jsx global>{`
-                .landing-flip { margin: 0 auto; }
                 details > summary::-webkit-details-marker { display: none; }
                 .shell { max-width: 1160px; margin: 0 auto; padding-inline: clamp(18px, 4vw, 48px); }
                 .hairline { height: 1px; background: linear-gradient(90deg, transparent, #c9a44e 20%, #c9a44e 80%, transparent); opacity: 0.55; margin: clamp(40px, 7vw, 84px) 0 clamp(28px, 4vw, 48px); }
@@ -987,7 +874,6 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                 .btnSolid { background: #1c1712; color: #f0e2bd; box-shadow: 0 16px 34px -16px rgba(28,23,18,0.55); }
                 .btnGold { background: linear-gradient(180deg, #e2c377, #b8893d); color: #1a1208; box-shadow: 0 18px 40px -14px rgba(211,180,106,0.5); }
                 .btnGhost { background: transparent; color: #6b5836; border: 1px solid #c9a44e; }
-                .navBtn { width: 46px; height: 46px; border-radius: 50%; border: 1px solid #c9a44e; background: transparent; color: #a8843a; display: flex; align-items: center; justify-content: center; cursor: pointer; }
                 .field { width: 100%; box-sizing: border-box; border: none; border-bottom: 1px solid #c9a44e; border-radius: 0; padding: 13px 4px; font-size: 15.5px; color: #3a2f1e; background: transparent; outline: none; font-family: inherit; }
                 .field::placeholder { color: #a08c62; }
 
@@ -1064,11 +950,14 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
 
                 /* DEMO */
                 .demo { padding-bottom: clamp(20px, 3vw, 40px); }
-                .demoGrid { display: grid; grid-template-columns: 1fr; gap: 34px; align-items: center; }
+                /* Post-flipbook-removal: the section is just the guest-form
+                   replica. Cap its width and centre it so it doesn't stretch
+                   full-page on desktop and stays visually anchored. */
+                .demoSolo { display: flex; justify-content: center; }
+                .demoSolo > * { width: 100%; max-width: 460px; }
                 /* The guest-page replica — a framed cutout of the real
                    guest form, backgrounds and all. */
                 .replicaPage { display: flex; justify-content: center; border-radius: 18px; overflow: hidden; padding: 30px 18px 26px; border: 1px solid rgba(180,148,90,0.35); box-shadow: 0 30px 64px -30px rgba(60,44,20,0.45), 0 0 0 1px rgba(255,255,255,0.25) inset; }
-                .flipShadow { border-radius: 10px; overflow: hidden; box-shadow: 0 34px 80px -30px rgba(60,44,20,0.6), 0 0 0 1px rgba(180,148,90,0.3); }
 
                 /* PRICE + INCLUDED */
                 .priceBand { background-color: #171310; color: #f3e9d2; padding: clamp(56px, 9vw, 110px) 0; margin-top: clamp(48px, 8vw, 96px); }
@@ -1125,7 +1014,6 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                     .chGrid { grid-template-columns: 5fr 6fr; gap: clamp(30px, 5vw, 70px); }
                     .chapter:nth-of-type(even) .chGrid { direction: ltr; }
                     .chapter:nth-of-type(even) .chGrid > * { direction: rtl; }
-                    .demoGrid { grid-template-columns: 1fr 1fr; }
                     .priceGrid { grid-template-columns: 6fr 5fr; }
                 }
                 @media (max-width: 560px) {
