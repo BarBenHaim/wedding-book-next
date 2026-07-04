@@ -25,7 +25,11 @@ import { Assistant } from 'next/font/google'
 import HTMLFlipBook from 'react-pageflip'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
-import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebaseClient'
+import { buildGuestPageTheme } from '@/lib/guestPageTheme'
+import heMessages from '@/i18n/messages/he.json'
 import { normalizeBlessing } from '@/lib/normalizeText'
 import { frankRuhl, gveretLevin, notoHebrew } from '@/app/fonts'
 import { Camera, Check, ChevronLeft, ChevronRight, ChevronDown, BookOpen, X, ExternalLink, Sparkles } from 'lucide-react'
@@ -33,6 +37,12 @@ import { Camera, Check, ChevronLeft, ChevronRight, ChevronDown, BookOpen, X, Ext
 const assistant = Assistant({ subsets: ['hebrew', 'latin'], weight: ['300', '400', '600', '700'] })
 
 const WA = 'https://wa.link/0sesxc'
+
+// The wedding whose LIVE design drives the interactive demo — Dor &
+// Shaked (the wedding chapter below). Book preset + guest-page design
+// are read from this doc at runtime, so whatever the studio assigns
+// them is exactly what the landing demos.
+const DEMO_WEDDING_ID = 'rOPkVWbwurT4UjKCR5hg'
 
 // ─── The three real books, presented as chapters ─────────────────────
 // Order follows the owner's brief: Noam → Jerry → Dor & Shaked.
@@ -228,31 +238,339 @@ function Chapter({ book }) {
     )
 }
 
+// ─── Guest-form replica ──────────────────────────────────────────────
+// A faithful, non-submitting copy of the REAL guest blessing form —
+// the same palette module the production page uses
+// (lib/guestPageTheme), the same background, card, inputs and button,
+// driven by the same wedding-doc fields (eventType / designVariant /
+// guestDesign / names / custom form copy). What visitors see here IS
+// the page their guests get. Submissions stay local: the blessing
+// drops into the demo book on the right, nothing is saved.
+function GuestFormReplica({ wedding, form, setForm, photo, onPickPhoto, fileRef, onSubmit, added }) {
+    const eventType = wedding?.eventType || 'wedding'
+    const { theme, isPoker, isRomantic } = buildGuestPageTheme({
+        eventType,
+        designVariant: wedding?.designVariant || '',
+        guestDesign: wedding?.guestDesign || null,
+    })
+    const tp = heMessages.photo
+
+    // Headline — same resolution order as the real page: Hebrew-script
+    // names first, then the original fields, then the generic default.
+    const bride = (wedding?.brideNameHe || wedding?.brideName || '').trim()
+    const groom = (wedding?.groomNameHe || wedding?.groomName || '').trim()
+    const celebrant = (wedding?.celebrantNameHe || wedding?.celebrantName || '').trim()
+    let pageTitle = tp.pageTitleWedding
+    if (isRomantic) pageTitle = tp.pageTitleRomantic
+    else if (eventType === 'wedding') {
+        if (bride && groom) pageTitle = tp.pageTitleWithCouple.replace('{first}', bride).replace('{second}', groom)
+        else if (bride || groom) pageTitle = tp.pageTitleWithName.replace('{name}', bride || groom)
+    } else if (celebrant) pageTitle = tp.pageTitleWithName.replace('{name}', celebrant)
+
+    // Form copy — the couple's admin overrides win, then the variant
+    // copy, then the default — exactly like PhotoApp.
+    const nameLabel = (wedding?.customNameLabel || '').trim() || (isRomantic ? tp.nameLabelRomantic : tp.nameLabel)
+    const namePlaceholder = (wedding?.customNamePlaceholder || '').trim() || (isRomantic ? tp.namePlaceholderRomantic : tp.namePlaceholder)
+    const blessingLabel = (wedding?.customBlessingLabel || '').trim() || (isRomantic ? tp.blessingLabelRomantic : tp.blessingLabel)
+    const blessingPlaceholder = (wedding?.customBlessingPlaceholder || '').trim() || (isRomantic ? tp.blessingPlaceholderRomantic : tp.blessingPlaceholder)
+    const subtitle = isRomantic ? tp.pageSubtitleRomantic : tp.pageSubtitle
+    const maxChars = Number(wedding?.blessingMaxChars) || 210
+
+    return (
+        <div
+            className='replicaPage'
+            style={{
+                backgroundColor: theme.pageBg,
+                backgroundImage: theme.pageBgImage,
+                backgroundSize: theme.pageBgSize,
+                backgroundPosition: theme.pageBgPosition,
+                backgroundRepeat: theme.pageBgRepeat,
+            }}
+        >
+            <div style={{ width: '100%', maxWidth: '26rem', position: 'relative', zIndex: 1 }}>
+                {/* ── Title block — same ornaments as the real page ── */}
+                <div style={{ textAlign: 'center', marginBottom: 26, position: 'relative' }}>
+                    {isRomantic && (
+                        <div
+                            aria-hidden
+                            style={{
+                                position: 'absolute',
+                                inset: -30,
+                                background: [
+                                    'radial-gradient(ellipse 65% 55% at 32% 38%, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 70%)',
+                                    'radial-gradient(ellipse 70% 45% at 68% 60%, rgba(0,0,0,0.50) 0%, rgba(0,0,0,0) 70%)',
+                                    'radial-gradient(ellipse 55% 50% at 50% 25%, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 70%)',
+                                ].join(', '),
+                                filter: 'blur(10px)',
+                                zIndex: 0,
+                                pointerEvents: 'none',
+                            }}
+                        />
+                    )}
+                    {theme.showCrown && (
+                        <svg viewBox='0 0 64 28' style={{ width: 58, height: 26, margin: '0 auto 6px' }} fill={theme.accentColor}>
+                            <path d='M4 22 L8 9 L16 17 L24 6 L32 14 L40 6 L48 17 L56 9 L60 22 Z' />
+                            <rect x='4' y='23' width='56' height='3.5' rx='0.5' />
+                            <circle cx='32' cy='12' r='1.7' fill='#7d1414' />
+                        </svg>
+                    )}
+                    {!isRomantic && (
+                        <svg viewBox='0 0 24 24' style={{ width: 20, height: 20, margin: '0 auto 14px', display: 'block' }} fill={theme.accentColor}>
+                            <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                        </svg>
+                    )}
+                    <h2
+                        style={{
+                            color: isPoker ? undefined : theme.titleColor,
+                            fontSize: isRomantic ? 34 : 26,
+                            fontWeight: 700,
+                            lineHeight: 1.15,
+                            margin: '0 0 8px',
+                            position: 'relative',
+                            zIndex: 1,
+                            ...(isPoker
+                                ? {
+                                      backgroundImage: 'linear-gradient(180deg, #fde9b3 0%, #d4af37 50%, #a8843a 100%)',
+                                      WebkitBackgroundClip: 'text',
+                                      backgroundClip: 'text',
+                                      WebkitTextFillColor: 'transparent',
+                                      color: 'transparent',
+                                  }
+                                : {}),
+                            ...(isRomantic ? { textShadow: '0 1px 6px rgba(0,0,0,0.45)' } : {}),
+                        }}
+                    >
+                        {pageTitle}
+                    </h2>
+                    <p
+                        style={{
+                            color: theme.subtitleColor,
+                            fontSize: 13.5,
+                            lineHeight: 1.6,
+                            margin: 0,
+                            position: 'relative',
+                            zIndex: 1,
+                            ...(isRomantic ? { textShadow: '0 1px 5px rgba(0,0,0,0.4)' } : {}),
+                        }}
+                    >
+                        {subtitle}
+                    </p>
+                </div>
+
+                {/* ── Form card — 1:1 with the production card ── */}
+                <div
+                    style={{
+                        borderRadius: 22,
+                        padding: '20px',
+                        background: theme.cardBg,
+                        backgroundSize: isRomantic ? '100% 100%' : undefined,
+                        boxShadow: theme.cardShadow,
+                        border: theme.cardBorder,
+                        overflow: isRomantic ? 'visible' : 'hidden',
+                        position: 'relative',
+                    }}
+                >
+                    <div style={{ position: 'relative', zIndex: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                            <span style={{ color: theme.cardLabelColor, fontSize: 14, fontWeight: 700 }}>{nameLabel}</span>
+                            <svg viewBox='0 0 24 24' style={{ width: 20, height: 20, flexShrink: 0 }} fill='none' stroke={isRomantic ? theme.cardLabelColor : theme.accentColor} strokeWidth={1.8}>
+                                <path strokeLinecap='round' strokeLinejoin='round' d='M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z' />
+                            </svg>
+                        </div>
+                        <input
+                            value={form.name}
+                            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                            placeholder={namePlaceholder}
+                            maxLength={40}
+                            style={{
+                                width: '100%',
+                                boxSizing: 'border-box',
+                                borderRadius: 12,
+                                outline: 'none',
+                                background: theme.inputBg,
+                                border: `1px solid ${theme.inputBorder}`,
+                                padding: '12px 16px',
+                                color: theme.inputTextColor,
+                                fontSize: 16,
+                                fontFamily: 'inherit',
+                            }}
+                            onFocus={e => (e.currentTarget.style.borderColor = theme.inputFocusBorder)}
+                            onBlur={e => (e.currentTarget.style.borderColor = theme.inputBorder)}
+                        />
+                    </div>
+
+                    {/* Divider — heart (spade on poker), same as production */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, margin: '20px 0' }}>
+                        <span style={{ display: 'block', height: 1, flex: 1, background: `linear-gradient(to left, transparent, ${theme.dividerLine}, transparent)` }} />
+                        <svg viewBox='0 0 24 24' style={{ width: 12, height: 12, flexShrink: 0 }} fill={theme.accentColor}>
+                            {isPoker ? (
+                                <path d='M12 2 C 14.5 5.5, 19 8, 19 13 C 19 16, 16.5 18, 14 17.4 L 14.8 21 L 9.2 21 L 10 17.4 C 7.5 18, 5 16, 5 13 C 5 8, 9.5 5.5, 12 2 Z' />
+                            ) : (
+                                <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                            )}
+                        </svg>
+                        <span style={{ display: 'block', height: 1, flex: 1, background: `linear-gradient(to right, transparent, ${theme.dividerLine}, transparent)` }} />
+                    </div>
+
+                    <div style={{ position: 'relative', zIndex: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                            <span style={{ color: theme.cardLabelColor, fontSize: 14, fontWeight: 700 }}>{blessingLabel}</span>
+                            <span style={{ color: theme.cardCounterColor, fontSize: 12 }}>
+                                {tp.charCount.replace('{used}', String(form.text.length)).replace('{max}', String(maxChars))}
+                            </span>
+                        </div>
+                        <textarea
+                            value={form.text}
+                            onChange={e => setForm(f => ({ ...f, text: e.target.value.slice(0, maxChars) }))}
+                            placeholder={blessingPlaceholder}
+                            rows={4}
+                            style={{
+                                width: '100%',
+                                boxSizing: 'border-box',
+                                borderRadius: 12,
+                                outline: 'none',
+                                resize: 'none',
+                                background: theme.inputBg,
+                                border: `1px solid ${theme.inputBorder}`,
+                                padding: '12px 16px',
+                                color: theme.inputTextColor,
+                                fontSize: 16,
+                                lineHeight: 1.6,
+                                fontFamily: 'inherit',
+                            }}
+                            onFocus={e => (e.currentTarget.style.borderColor = theme.inputFocusBorder)}
+                            onBlur={e => (e.currentTarget.style.borderColor = theme.inputBorder)}
+                        />
+                    </div>
+                </div>
+
+                {/* Photo + submit — production button styling (gradient +
+                    shadow from the theme), local-only behavior. */}
+                <input ref={fileRef} type='file' accept='image/*' onChange={onPickPhoto} style={{ display: 'none' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
+                    <button
+                        type='button'
+                        onClick={() => fileRef.current?.click()}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            padding: '10px 18px',
+                            borderRadius: 999,
+                            fontSize: 13.5,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            background: 'transparent',
+                            color: isRomantic || isPoker ? theme.titleColor : theme.cardLabelColor,
+                            border: `1px solid ${theme.inputBorder}`,
+                            fontFamily: 'inherit',
+                            textShadow: isRomantic ? '0 1px 4px rgba(0,0,0,0.4)' : 'none',
+                        }}
+                    >
+                        <Camera size={15} /> {photo ? 'החלפת תמונה' : 'הוספת תמונה'}
+                    </button>
+                    {photo && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={photo.url} alt='' style={{ width: 42, height: 42, borderRadius: 9, objectFit: 'cover', border: `1px solid ${theme.inputBorder}` }} />
+                    )}
+                </div>
+                <button
+                    type='button'
+                    onClick={onSubmit}
+                    style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 9,
+                        width: '100%',
+                        marginTop: 14,
+                        padding: '15px 26px',
+                        borderRadius: 999,
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: 16,
+                        fontWeight: 700,
+                        color: '#ffffff',
+                        background: theme.buttonGradient,
+                        boxShadow: theme.buttonShadow,
+                        fontFamily: 'inherit',
+                    }}
+                >
+                    {added ? <><Check size={17} /> נוספה לספר! דפדפו</> : <><Sparkles size={17} /> הוסיפו לספר</>}
+                </button>
+                <p
+                    style={{
+                        textAlign: 'center',
+                        fontSize: 11.5,
+                        marginTop: 12,
+                        marginBottom: 0,
+                        color: theme.trustText,
+                        textShadow: isRomantic ? '0 1px 4px rgba(0,0,0,0.35)' : 'none',
+                    }}
+                >
+                    הדגמה בלבד — שום דבר לא נשמר
+                </p>
+            </div>
+        </div>
+    )
+}
+
 export default function LandingPage() {
-    // Demo book renders with the SAME design the portfolio books use in
-    // the studio (white page + studio texture + Noto Serif Hebrew + ink
-    // #402d11 at 2.7%). The texture URL is the stable Firebase Storage
-    // asset the real books reference.
-    const styleSettings = useMemo(() => ({
-        ...defaultStyle,
-        template: 'classic',
-        backgroundColor: '#ffffff',
-        texture: 'https://firebasestorage.googleapis.com/v0/b/wedding-memories-maker.firebasestorage.app/o/studio%2Fbackgrounds%2Fbg_eq13lu7iui7i.svg?alt=media&token=5d074117-daea-423e-97cb-b6de6c1aa4ac',
-        fontClass: notoHebrew.className,
-        fontColor: '#402d11',
-        fontSizePercent: 2.7,
-        locale: 'he',
-    }), [])
-    const coverStyle = useMemo(() => ({
-        ...styleSettings,
-        coverImage: '/imgs/Cover%20img.jpg',
-        coverTitle: 'ספר הברכות',
-        coverSubtitle: 'הרגעים היפים שלכם — לתמיד',
-        coverTextPosition: 'bc',
-        coverTextBg: 'rgba(0,0,0,0.30)',
-        coverTextColor: '#ffffff',
-    }), [styleSettings])
-    const sampleWedding = { eventType: 'birthday', customTitle: 'ספר הברכות', locale: 'he' }
+    // ── LIVE design sync ─────────────────────────────────────────────
+    // The demo book + the guest-form replica render with the REAL,
+    // CURRENT design of Dor & Shaked's wedding, read at runtime from
+    // the same Firestore doc the production pages read. Change their
+    // preset in the studio → the landing follows on the next load.
+    // Until the doc arrives (or if the fetch fails) we fall back to a
+    // hand-copied snapshot of that design so the section never renders
+    // empty or unstyled.
+    const [liveWedding, setLiveWedding] = useState(null)
+    useEffect(() => {
+        let cancelled = false
+        ;(async () => {
+            try {
+                const snap = await getDoc(doc(db, 'weddings', DEMO_WEDDING_ID))
+                if (!cancelled && snap.exists()) setLiveWedding(snap.data())
+            } catch (err) {
+                console.warn('[landing] live design fetch failed:', err?.message || err)
+            }
+        })()
+        return () => { cancelled = true }
+    }, [])
+
+    // Interior pages — the wedding's actual book design via the same
+    // resolver the viewer uses (bookDesign → coverDesign fallback).
+    const styleSettings = useMemo(() => {
+        const live = liveWedding ? resolveInteriorDesign(liveWedding) : null
+        if (live) return { ...defaultStyle, ...live, locale: 'he' }
+        return {
+            ...defaultStyle,
+            template: 'classic',
+            backgroundColor: '#ffffff',
+            texture: 'https://firebasestorage.googleapis.com/v0/b/wedding-memories-maker.firebasestorage.app/o/studio%2Fbackgrounds%2Fbg_eq13lu7iui7i.svg?alt=media&token=5d074117-daea-423e-97cb-b6de6c1aa4ac',
+            fontClass: notoHebrew.className,
+            fontColor: '#402d11',
+            fontSizePercent: 2.7,
+            locale: 'he',
+        }
+    }, [liveWedding])
+    // Cover — their real coverDesign (incl. the real cover photo) when
+    // available; generic branded cover otherwise.
+    const coverStyle = useMemo(() => {
+        if (liveWedding?.coverDesign) return { ...defaultStyle, ...liveWedding.coverDesign }
+        return {
+            ...styleSettings,
+            coverImage: '/imgs/Cover%20img.jpg',
+            coverTitle: 'ספר הברכות',
+            coverSubtitle: 'הרגעים היפים שלכם — לתמיד',
+            coverTextPosition: 'bc',
+            coverTextBg: 'rgba(0,0,0,0.30)',
+            coverTextColor: '#ffffff',
+        }
+    }, [liveWedding, styleSettings])
+    // Real wedding doc → BookCoverTemplate renders the real title
+    // (names, date) exactly like the production book.
+    const sampleWedding = liveWedding || { eventType: 'wedding', customTitle: 'ספר הברכות', locale: 'he' }
 
     const [extra, setExtra] = useState([])
     const pages = useMemo(() => [...SAMPLE, ...extra], [extra])
@@ -462,7 +780,10 @@ export default function LandingPage() {
                     <div className='sectionHead obs'>
                         <p className='overline' style={{ color: '#a8843a' }}>נסו בעצמכם</p>
                         <h2 className={`${frankRuhl.className} sectionTitle`}>ככה זה מרגיש לאורחים שלכם</h2>
-                        <p className='sectionSub'>כתבו ברכה, צרפו תמונה — ותראו אותה נכנסת לספר. הדגמה בלבד, שום דבר לא נשמר.</p>
+                        <p className='sectionSub'>
+                            משמאל — עמוד הברכות האמיתי של דור ושקד, אחד לאחד: אותו רקע, אותו כרטיס, אותם טקסטים.
+                            כתבו ברכה, צרפו תמונה — ותראו אותה נכנסת לספר שלהם, בפריסט החי מהמערכת. הדגמה בלבד, שום דבר לא נשמר.
+                        </p>
                     </div>
                     <div className='demoGrid obs'>
                         <div>
@@ -498,22 +819,20 @@ export default function LandingPage() {
                                 <button onClick={() => flip('prev')} aria-label='הקודם' className='navBtn'><ChevronRight size={20} /></button>
                                 <button onClick={() => flip('next')} aria-label='הבא' className='navBtn'><ChevronLeft size={20} /></button>
                             </div>
+                            <p className={`${gveretLevin.className} handnote`} style={{ textAlign: 'center', color: '#8a6d45' }}>
+                                {liveWedding ? 'הספר של דור ושקד — הפריסט האמיתי, חי מהמערכת' : 'העיצוב האמיתי של ספרי הלקוחות'}
+                            </p>
                         </div>
-                        <div className='demoForm'>
-                            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder='השם שלכם' maxLength={40} className='field' />
-                            <textarea value={form.text} onChange={e => setForm(f => ({ ...f, text: e.target.value.slice(0, 300) }))} placeholder='כתבו ברכה מכל הלב…' rows={4} className='field' style={{ resize: 'vertical', lineHeight: 1.6, marginTop: 10 }} />
-                            <input ref={fileRef} type='file' accept='image/*' onChange={onPickPhoto} style={{ display: 'none' }} />
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
-                                <button onClick={() => fileRef.current?.click()} className='btn btnGhost sm'><Camera size={16} /> {photo ? 'החלפת תמונה' : 'הוספת תמונה'}</button>
-                                {photo && (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={photo.url} alt='' style={{ width: 42, height: 42, borderRadius: 9, objectFit: 'cover', border: '1px solid #d3bd8a' }} />
-                                )}
-                            </div>
-                            <button onClick={addBlessing} className='btn btnSolid' style={{ width: '100%', marginTop: 14 }}>
-                                {added ? <><Check size={17} /> נוספה לספר! דפדפו</> : <><Sparkles size={17} /> הוסיפו לספר</>}
-                            </button>
-                        </div>
+                        <GuestFormReplica
+                            wedding={liveWedding}
+                            form={form}
+                            setForm={setForm}
+                            photo={photo}
+                            onPickPhoto={onPickPhoto}
+                            fileRef={fileRef}
+                            onSubmit={addBlessing}
+                            added={added}
+                        />
                     </div>
                 </div>
             </section>
@@ -716,6 +1035,9 @@ export default function LandingPage() {
                 /* DEMO */
                 .demo { padding-bottom: clamp(20px, 3vw, 40px); }
                 .demoGrid { display: grid; grid-template-columns: 1fr; gap: 34px; align-items: center; }
+                /* The guest-page replica — a framed cutout of the real
+                   guest form, backgrounds and all. */
+                .replicaPage { display: flex; justify-content: center; border-radius: 18px; overflow: hidden; padding: 30px 18px 26px; border: 1px solid rgba(180,148,90,0.35); box-shadow: 0 30px 64px -30px rgba(60,44,20,0.45), 0 0 0 1px rgba(255,255,255,0.25) inset; }
                 .flipShadow { border-radius: 10px; overflow: hidden; box-shadow: 0 34px 80px -30px rgba(60,44,20,0.6), 0 0 0 1px rgba(180,148,90,0.3); }
 
                 /* PRICE + INCLUDED */
