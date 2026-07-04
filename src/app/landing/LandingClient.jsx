@@ -21,7 +21,7 @@
 //   wedding rOPkVWbwurT4UjKCR5hg (דור ושקד)
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Assistant } from 'next/font/google'
+import { Assistant, Heebo } from 'next/font/google'
 import HTMLFlipBook from 'react-pageflip'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
@@ -29,10 +29,14 @@ import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/v
 import { buildGuestPageTheme } from '@/lib/guestPageTheme'
 import heMessages from '@/i18n/messages/he.json'
 import { normalizeBlessing } from '@/lib/normalizeText'
-import { frankRuhl, gveretLevin, notoHebrew } from '@/app/fonts'
+import { gveretLevin, notoHebrew } from '@/app/fonts'
 import { Camera, Check, ChevronLeft, ChevronRight, ChevronDown, BookOpen, X, ExternalLink, Sparkles } from 'lucide-react'
 
 const assistant = Assistant({ subsets: ['hebrew', 'latin'], weight: ['300', '400', '600', '700'] })
+// Display face — Heebo Black for the big statements (replaced Frank Ruhl
+// per Bar's request, spring 2026). Local instance so we get the 900
+// weight without touching the app-wide fonts.js registry.
+const heeboDisplay = Heebo({ subsets: ['hebrew', 'latin'], weight: ['700', '900'] })
 
 const WA = 'https://wa.link/0sesxc'
 
@@ -170,7 +174,7 @@ function Chapter({ book }) {
             {(ink || blush) && <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN, pointerEvents: 'none' }} />}
 
             {/* Ghost chapter numeral bleeding off the margin */}
-            <span className={`${frankRuhl.className} ghostN`} aria-hidden style={{ color: ink ? 'rgba(226,195,119,0.07)' : 'rgba(168,132,58,0.09)' }}>
+            <span className={`${heeboDisplay.className} ghostN`} aria-hidden style={{ color: ink ? 'rgba(226,195,119,0.07)' : 'rgba(168,132,58,0.09)' }}>
                 {book.n}
             </span>
 
@@ -193,12 +197,12 @@ function Chapter({ book }) {
                         <p className='overline' style={{ color: ink ? '#cfa860' : '#a8843a' }}>
                             {book.chapter} · {book.badge} · {book.date}
                         </p>
-                        <h3 className={`${frankRuhl.className} chTitle`}>{book.title}</h3>
+                        <h3 className={`${heeboDisplay.className} chTitle`}>{book.title}</h3>
                         <p className='chStory'>{book.story}</p>
                         <ul className='statList' style={{ borderColor: ink ? 'rgba(207,168,96,0.35)' : 'rgba(168,132,58,0.35)' }}>
                             {book.stats.map((s, i) => <li key={i}>{s}</li>)}
                         </ul>
-                        <blockquote className={`${frankRuhl.className} pull`} style={{ color: ink ? '#e9dab3' : '#4a3a25' }}>
+                        <blockquote className={`${heeboDisplay.className} pull`} style={{ color: ink ? '#e9dab3' : '#4a3a25' }}>
                             ”{book.quote}“
                             <cite className={assistant.className}>{book.quoteBy}</cite>
                         </blockquote>
@@ -601,6 +605,21 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
         return () => io.disconnect()
     }, [])
 
+    // Hide the global Header + Footer on this route — same pattern as
+    // /wedding/[id]/book/[token] — so the landing is fully immersive.
+    useEffect(() => {
+        const header = document.querySelector('body > header')
+        const footer = document.querySelector('body > footer')
+        const prevHeader = header?.style.display
+        const prevFooter = footer?.style.display
+        if (header) header.style.display = 'none'
+        if (footer) footer.style.display = 'none'
+        return () => {
+            if (header) header.style.display = prevHeader || ''
+            if (footer) footer.style.display = prevFooter || ''
+        }
+    }, [])
+
     // Reading ribbon (scroll progress) + sticky CTA visibility + hero
     // parallax — one rAF-throttled scroll listener drives all three.
     const [ctaVisible, setCtaVisible] = useState(false)
@@ -683,7 +702,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                 <div className='shell heroGrid'>
                     <div className='heroText'>
                         <p className='overline obs' style={{ color: '#a8843a' }}>Wedding Tales · ספרי ברכות מאירועים אמיתיים</p>
-                        <h1 className={`${frankRuhl.className} heroTitle obs`}>
+                        <h1 className={`${heeboDisplay.className} heroTitle obs`}>
                             את הספר הזה
                             <br />
                             <em>כותבים האורחים שלכם.</em>
@@ -741,7 +760,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                         ['4', 'שבועות עד ספר בבית'],
                     ].map(([n, l], i) => (
                         <div key={i} className='stat'>
-                            <span className={`${frankRuhl.className} statN`}>{n}</span>
+                            <span className={`${heeboDisplay.className} statN`}>{n}</span>
                             <span className='statL'>{l}</span>
                         </div>
                     ))}
@@ -759,8 +778,8 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                             ['03', 'נשאר לתמיד', 'ספר דיגיטלי עוד באותו לילה. ספר כריכה קשה על נייר ארכיב — עד הבית.'],
                         ].map(([n, t, d], i) => (
                             <div key={i} className='howItem obs' style={{ transitionDelay: `${i * 90}ms` }}>
-                                <span className={`${frankRuhl.className} howN`}>{n}</span>
-                                <h3 className={`${frankRuhl.className} howT`}>{t}</h3>
+                                <span className={`${heeboDisplay.className} howN`}>{n}</span>
+                                <h3 className={`${heeboDisplay.className} howT`}>{t}</h3>
                                 <p className='howD'>{d}</p>
                             </div>
                         ))}
@@ -774,7 +793,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                     <div className='hairline' />
                     <div className='sectionHead obs'>
                         <p className='overline' style={{ color: '#a8843a' }}>תוכן העניינים</p>
-                        <h2 className={`${frankRuhl.className} sectionTitle`}>
+                        <h2 className={`${heeboDisplay.className} sectionTitle`}>
                             שלושה אירועים.
                             <br />
                             <em>שלושה ספרים אמיתיים.</em>
@@ -794,7 +813,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                     <div className='hairline' />
                     <div className='sectionHead obs'>
                         <p className='overline' style={{ color: '#a8843a' }}>נסו בעצמכם</p>
-                        <h2 className={`${frankRuhl.className} sectionTitle`}>ככה זה מרגיש לאורחים שלכם</h2>
+                        <h2 className={`${heeboDisplay.className} sectionTitle`}>ככה זה מרגיש לאורחים שלכם</h2>
                         <p className='sectionSub'>
                             משמאל — עמוד הברכות האמיתי של דור ושקד, אחד לאחד: אותו רקע, אותו כרטיס, אותם טקסטים.
                             כתבו ברכה, צרפו תמונה — ותראו אותה נכנסת לספר שלהם, בפריסט החי מהמערכת. הדגמה בלבד, שום דבר לא נשמר.
@@ -858,8 +877,8 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                     <div className='obs'>
                         <p className='overline' style={{ color: '#cfa860' }}>מחיר אחד. אפס אותיות קטנות.</p>
                         <div className='priceLine'>
-                            <span className={`${frankRuhl.className} priceN`}>1,290</span>
-                            <span className={`${frankRuhl.className} priceCur`}>₪</span>
+                            <span className={`${heeboDisplay.className} priceN`}>1,290</span>
+                            <span className={`${heeboDisplay.className} priceCur`}>₪</span>
                         </div>
                         <p className={`${gveretLevin.className} priceAccent`}>מחיר אחד. אין תוספות. אין הפתעות.</p>
                         <p className='priceNote'>מהקמת העמוד ועד הספר המודפס אצלכם בבית — הכול בפנים:</p>
@@ -871,7 +890,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                                 'ספר כריכה קשה על נייר ארכיב — עד הבית',
                             ].map((t, i) => (
                                 <li key={i}>
-                                    <span className={`${frankRuhl.className} inclN`}>{String(i + 1).padStart(2, '0')}</span>
+                                    <span className={`${heeboDisplay.className} inclN`}>{String(i + 1).padStart(2, '0')}</span>
                                     <span>{t}</span>
                                 </li>
                             ))}
@@ -891,7 +910,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
             {/* ═══════════ TESTIMONIAL — one, real ═══════════ */}
             <section className='testi'>
                 <div className='shell obs' style={{ textAlign: 'center', maxWidth: 720 }}>
-                    <p className={`${frankRuhl.className} testiQ`}>
+                    <p className={`${heeboDisplay.className} testiQ`}>
                         ”לא תיארנו כמה פספסנו עד שראינו את הספר. בכינו, צחקנו, והרגשנו כאילו חזרנו לחתונה שוב.“
                     </p>
                     <p className='testiBy'>
@@ -904,13 +923,13 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
             <section className='faq'>
                 <div className='shell' style={{ maxWidth: 680 }}>
                     <div className='hairline' />
-                    <h2 className={`${frankRuhl.className} sectionTitle obs`} style={{ textAlign: 'center' }}>שאלות ששואלים אותנו</h2>
+                    <h2 className={`${heeboDisplay.className} sectionTitle obs`} style={{ textAlign: 'center' }}>שאלות ששואלים אותנו</h2>
                     <div className='obs'>
                         {FAQ.map((f, i) => (
                             <details key={i} className='faqItem'>
                                 <summary>
-                                    <span className={`${frankRuhl.className} faqN`} aria-hidden>{String(i + 1).padStart(2, '0')}</span>
-                                    <span className={`${frankRuhl.className} faqQ`}>{f.q}</span>
+                                    <span className={`${heeboDisplay.className} faqN`} aria-hidden>{String(i + 1).padStart(2, '0')}</span>
+                                    <span className={`${heeboDisplay.className} faqQ`}>{f.q}</span>
                                     <span className='faqChev' aria-hidden><ChevronDown size={15} /></span>
                                 </summary>
                                 <p>{f.a}</p>
@@ -924,7 +943,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
             <section className='finale' style={{ backgroundImage: GRAIN }}>
                 <div className='shell obs' style={{ textAlign: 'center' }}>
                     <p className={`${gveretLevin.className}`} style={{ fontSize: 20, color: 'rgba(243,233,210,0.7)', margin: '0 0 10px' }}>— הכריכה האחורית —</p>
-                    <h2 className={`${frankRuhl.className} finaleT`}>
+                    <h2 className={`${heeboDisplay.className} finaleT`}>
                         האירוע הבא שלכם
                         <br />
                         <em>שווה ספר.</em>
@@ -984,7 +1003,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                 .heroFrame { position: absolute; inset: clamp(10px, 1.6vw, 22px); border: 1px solid rgba(201,164,78,0.45); border-radius: 3px; pointer-events: none; }
                 .heroFrame::after { content: ''; position: absolute; inset: 5px; border: 1px solid rgba(201,164,78,0.22); border-radius: 2px; }
                 .heroGrid { display: grid; grid-template-columns: 1fr; gap: 40px; align-items: center; position: relative; }
-                .heroTitle { font-size: clamp(44px, 9.6vw, 102px); font-weight: 700; line-height: 1.06; margin: 0; letter-spacing: -0.01em; }
+                .heroTitle { font-size: clamp(44px, 9.6vw, 102px); font-weight: 900; line-height: 1.06; margin: 0; letter-spacing: -0.02em; }
                 .heroTitle em { font-style: normal; background: linear-gradient(100deg, #8a6320, #c9a44e 45%, #e8cf8f 60%, #b8893d); -webkit-background-clip: text; background-clip: text; color: transparent; }
                 .heroSub { font-size: clamp(16px, 2.4vw, 19px); font-weight: 300; color: #574733; line-height: 1.8; margin: 22px 0 0; max-width: 460px; }
                 .heroSub, .heroCtas { transition-delay: 140ms; }
@@ -1030,17 +1049,17 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                 /* CHAPTER */
                 .chapter { position: relative; padding: clamp(48px, 8vw, 104px) 0; overflow: hidden; }
                 .chapterInner { position: relative; }
-                .ghostN { position: absolute; top: clamp(-30px, -3vw, -14px); inset-inline-end: -0.06em; font-size: clamp(180px, 30vw, 380px); font-weight: 700; line-height: 1; pointer-events: none; user-select: none; }
+                .ghostN { position: absolute; top: clamp(-30px, -3vw, -14px); inset-inline-end: -0.06em; font-size: clamp(180px, 30vw, 380px); font-weight: 900; line-height: 1; pointer-events: none; user-select: none; }
                 .chGrid { display: grid; grid-template-columns: 1fr; gap: 30px; align-items: center; position: relative; }
                 .chCoverWrap { max-width: 460px; }
                 .chCoverStack { position: relative; }
                 .chCoverBack { position: absolute; inset: 0; border-radius: 6px; transform: rotate(2.4deg) translate(6px, 8px); box-shadow: 0 24px 50px -26px rgba(50,36,16,0.5); }
                 .chCoverImg { position: relative; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; box-shadow: 0 40px 90px -34px rgba(50,36,16,0.65), 0 0 0 1px rgba(180,148,90,0.35); }
-                .chTitle { font-size: clamp(38px, 6.8vw, 64px); font-weight: 700; line-height: 1.05; margin: 0 0 12px; }
+                .chTitle { font-size: clamp(38px, 6.8vw, 64px); font-weight: 900; line-height: 1.05; margin: 0 0 12px; letter-spacing: -0.02em; }
                 .chStory { font-size: clamp(15px, 2.1vw, 16.5px); font-weight: 300; line-height: 1.85; margin: 0 0 18px; max-width: 480px; opacity: 0.92; }
                 .statList { list-style: none; display: flex; flex-wrap: wrap; gap: 0 18px; padding: 12px 0; margin: 0 0 18px; border-top: 1px solid; border-bottom: 1px solid; font-size: 13.5px; letter-spacing: 0.04em; }
                 .statList li + li::before { content: '·'; margin-inline-end: 18px; opacity: 0.5; }
-                .pull { font-size: clamp(18px, 2.8vw, 23px); font-weight: 600; font-style: italic; line-height: 1.65; margin: 0 0 22px; padding: 0; }
+                .pull { font-size: clamp(18px, 2.8vw, 23px); font-weight: 600; line-height: 1.65; margin: 0 0 22px; padding: 0; }
                 .pull cite { display: block; font-size: 12.5px; font-style: normal; font-weight: 600; letter-spacing: 0.1em; opacity: 0.65; margin-top: 10px; }
                 .chActions { display: flex; gap: 10px; flex-wrap: wrap; }
                 .filmstrip { display: flex; gap: 14px; overflow-x: auto; padding: clamp(20px, 3vw, 34px) 4px 14px; scroll-snap-type: x mandatory; scrollbar-width: thin; scrollbar-color: #c9a44e transparent; overscroll-behavior-x: contain; }
@@ -1062,7 +1081,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                 .priceBand { background-color: #171310; color: #f3e9d2; padding: clamp(56px, 9vw, 110px) 0; margin-top: clamp(48px, 8vw, 96px); }
                 .priceGrid { display: grid; grid-template-columns: 1fr; gap: 38px; align-items: center; }
                 .priceLine { display: flex; align-items: baseline; gap: 12px; }
-                .priceN { font-size: clamp(84px, 15vw, 150px); font-weight: 700; line-height: 0.95; color: #f3e9d2; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+                .priceN { font-size: clamp(84px, 15vw, 150px); font-weight: 900; line-height: 0.95; color: #f3e9d2; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
                 .priceCur { font-size: clamp(30px, 5vw, 48px); color: #cfa860; font-weight: 700; }
                 .priceAccent { font-size: clamp(18px, 3vw, 22px); color: #e2c377; margin: 10px 0 0; }
                 .priceNote { font-size: 15.5px; font-weight: 300; color: rgba(243,233,210,0.75); line-height: 1.75; margin: 16px 0 8px; max-width: 380px; }
@@ -1075,7 +1094,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
 
                 /* TESTIMONIAL */
                 .testi { padding: clamp(56px, 9vw, 100px) 0 clamp(20px, 3vw, 30px); }
-                .testiQ { font-size: clamp(21px, 3.6vw, 30px); font-weight: 600; font-style: italic; line-height: 1.7; color: #3a2f1e; margin: 0; }
+                .testiQ { font-size: clamp(21px, 3.6vw, 30px); font-weight: 700; line-height: 1.7; color: #3a2f1e; margin: 0; }
                 .testiBy { font-size: 13px; color: #8a744d; margin-top: 16px; font-weight: 600; }
 
                 /* FAQ — a designed conversation, not a list of boxes */
@@ -1089,7 +1108,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
 
                 /* FINALE */
                 .finale { background-color: #171310; color: #f3e9d2; padding: clamp(64px, 10vw, 120px) 0 clamp(84px, 12vw, 140px); margin-top: clamp(48px, 8vw, 96px); }
-                .finaleT { font-size: clamp(34px, 7vw, 64px); font-weight: 700; line-height: 1.12; margin: 0; }
+                .finaleT { font-size: clamp(34px, 7vw, 64px); font-weight: 900; line-height: 1.12; margin: 0; letter-spacing: -0.02em; }
                 .finaleT em { font-style: normal; color: #e2c377; }
 
                 /* STICKY CTA */
