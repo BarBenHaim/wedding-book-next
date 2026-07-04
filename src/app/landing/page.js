@@ -2,19 +2,23 @@
 
 // /landing — the marketing landing page (app.weddingtales.co.il/landing).
 //
-// v3, spring 2026 — editorial/luxe redesign. Magazine-grade composition:
-// massive Frank Ruhl display type, asymmetric CSS grid, paper-grain ivory
-// alternating with ink bands, 1px gold hairlines, scroll-reveal +
-// hero parallax (rAF, reduced-motion aware), handwritten accents in
-// Gveret Levin (the same font family used for real book blessings).
+// v4, summer 2026 — "the page IS a book". The whole landing reads like
+// the object it sells: a gold reading-ribbon tracks scroll progress,
+// the three real customer books are presented as CHAPTERS (פרק ראשון /
+// שני / שלישי) with art-directed spreads, page-number folios mark the
+// sections, and handwritten margin notes use Gveret Levin — the same
+// face real guests' blessings render in. Conversion layer: hero CTA
+// pair, per-chapter live-book embeds, an interactive "write a blessing"
+// demo, a single-price statement, and a sticky WhatsApp bar that
+// appears once the reader is past the hero (mobile + desktop pill).
 //
 // All content is REAL: three live customer books (dedicated landing
-// tokens, issuedBy:'landing-page' in digitalTokensIssuedAt — revoke there
-// without touching the family links), real spread screenshots curated by
-// hand, real event dates, and pull-quotes transcribed from actual
-// blessings visible in the captured spreads. No fabricated testimonials.
-//   wedding rOPkVWbwurT4UjKCR5hg (שקד ודור) · birthday 6175 (ג'רי) ·
-//   bar mitzvah 5483 (נועם)
+// tokens, issuedBy:'landing-page' in digitalTokensIssuedAt — revoke
+// there without touching the family links), real spread screenshots,
+// real event dates, and pull-quotes transcribed from actual blessings
+// visible in the captured spreads. No fabricated testimonials.
+//   bar mitzvah 5483 (נועם) · birthday 6175 (ג׳רי) ·
+//   wedding rOPkVWbwurT4UjKCR5hg (דור ושקד)
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Assistant } from 'next/font/google'
@@ -26,54 +30,74 @@ import { normalizeBlessing } from '@/lib/normalizeText'
 import { frankRuhl, gveretLevin, notoHebrew } from '@/app/fonts'
 import { Camera, Check, ChevronLeft, ChevronRight, ChevronDown, BookOpen, X, ExternalLink, Sparkles } from 'lucide-react'
 
-// Editorial body face — pairs with Frank Ruhl display.
 const assistant = Assistant({ subsets: ['hebrew', 'latin'], weight: ['300', '400', '600', '700'] })
 
 const WA = 'https://wa.link/0sesxc'
 
-// ─── The three real books ────────────────────────────────────────────
-// Pull-quotes are transcribed from blessings visible in the captured
-// spreads — real guests, real words.
-const PORTFOLIO = [
-    {
-        slug: 'wedding',
-        badge: 'חתונה',
-        title: 'שקד ודור',
-        date: 'אפריל 2026',
-        stats: ['24 ברכות', '24 תמונות', 'ערב אחד'],
-        quote: 'מאחלים לכם חיים מלאים באושר, חוויות טובות והמון חברים מסביב',
-        quoteBy: 'משפחת ביבי, מתוך הספר',
-        weddingId: 'rOPkVWbwurT4UjKCR5hg',
-        token: '529b8a86-ca5d-4944-8178-c75c0420095d',
-        spreads: 5,
-        theme: 'ivory',
-    },
+// ─── The three real books, presented as chapters ─────────────────────
+// Order follows the owner's brief: Noam → Jerry → Dor & Shaked.
+const CHAPTERS = [
     {
         slug: 'bar-mitzvah',
+        chapter: 'פרק ראשון',
+        n: '01',
         badge: 'בר מצווה',
         title: 'נועם',
         date: 'יוני 2026',
-        stats: ['45 ברכות', '45 תמונות', 'החברים מהשכבה ועד סבא וסבתא'],
+        story: 'ארבעים וחמישה חברים מהשכבה, המדריכים מהתנועה, הדודים, סבא וסבתא — כולם נכנסו לספר אחד. הטלפונים יתחלפו והתמונות יתפזרו; הספר הזה יחכה על המדף גם כשנועם יתגייס.',
+        stats: ['45 ברכות', '45 תמונות', 'מהשכבה ועד סבא וסבתא'],
         quote: 'מזל טוב! תמשיך להיות חבר טוב שלא מוותר על טורניר או משחק כדורגל',
         quoteBy: 'לידור, חבר — מתוך הספר',
         weddingId: '5483',
         token: '0b02382b-7d8e-40a8-804b-1c5bdd31c1ae',
         spreads: 5,
-        theme: 'ink',
+        theme: 'ivory',
     },
     {
         slug: 'birthday',
+        chapter: 'פרק שני',
+        n: '02',
         badge: 'יום הולדת 90',
         title: 'ג׳רי',
         date: 'יוני 2026',
+        story: 'משפחה על פני שתי יבשות, ברכות בעברית ובאנגלית, ותשעים שנות חיים שנפגשו על אותו נייר. הנכדים כתבו מעבר לים, החברים כתבו מהשולחן — ולג׳רי נשאר ספר שמחזיק את כולם.',
         stats: ['31 ברכות', 'משפחה משתי יבשות', 'עברית ואנגלית'],
         quote: 'Nine decades of living honestly and faithfully — truly a lifetime to be admired',
         quoteBy: 'David, מתוך הספר',
         weddingId: '6175',
         token: 'a319b00d-7ed2-48cf-b88b-d41a98f35e05',
         spreads: 3,
+        theme: 'ink',
+    },
+    {
+        slug: 'wedding',
+        chapter: 'פרק שלישי',
+        n: '03',
+        badge: 'חתונה',
+        title: 'דור ושקד',
+        date: 'אפריל 2026',
+        story: 'בין החופה לריקודים, האורחים כתבו להם ספר שלם. למחרת בבוקר, כשהאולם כבר עמד ריק, הערב כולו חיכה להם — כתוב, מצולם, ומסודר לפי האנשים שהם הכי אוהבים.',
+        stats: ['24 ברכות', '24 תמונות', 'ערב אחד'],
+        quote: 'מאחלים לכם חיים מלאים באושר, חוויות טובות והמון חברים מסביב',
+        quoteBy: 'משפחת ביבי, מתוך הספר',
+        weddingId: 'rOPkVWbwurT4UjKCR5hg',
+        token: '529b8a86-ca5d-4944-8178-c75c0420095d',
+        spreads: 5,
         theme: 'blush',
     },
+]
+
+// Marquee strip — one continuous ribbon of real spreads from all three
+// books (duplicated in the DOM for a seamless CSS loop).
+const MARQUEE = [
+    '/imgs/portfolio/bar-mitzvah/spread-1.webp',
+    '/imgs/portfolio/wedding/spread-2.webp',
+    '/imgs/portfolio/birthday/spread-1.webp',
+    '/imgs/portfolio/bar-mitzvah/spread-3.webp',
+    '/imgs/portfolio/wedding/spread-4.webp',
+    '/imgs/portfolio/birthday/spread-2.webp',
+    '/imgs/portfolio/wedding/spread-1.webp',
+    '/imgs/portfolio/bar-mitzvah/spread-5.webp',
 ]
 
 const SAMPLE = [
@@ -99,8 +123,20 @@ const FAQ = [
 // Paper-grain overlay (SVG turbulence, data URI — no network).
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E")`
 
-// ─── One art-directed section per book ───────────────────────────────
-function BookStory({ book, index }) {
+// Small folio marker — "page number" chrome that carries the book
+// metaphor through the scroll. Purely decorative (aria-hidden).
+function Folio({ n, label, dark = false }) {
+    return (
+        <div className='folio' aria-hidden style={{ color: dark ? 'rgba(226,195,119,0.85)' : '#a8843a' }}>
+            <span className='folioRule' style={{ background: dark ? 'rgba(226,195,119,0.4)' : 'rgba(168,132,58,0.4)' }} />
+            <span className='folioTxt'>עמ׳ {n} · {label}</span>
+            <span className='folioRule' style={{ background: dark ? 'rgba(226,195,119,0.4)' : 'rgba(168,132,58,0.4)' }} />
+        </div>
+    )
+}
+
+// ─── One art-directed chapter per book ───────────────────────────────
+function Chapter({ book }) {
     const [live, setLive] = useState(false)
     const frames = useMemo(
         () => [`/imgs/portfolio/${book.slug}/cover.webp`, ...Array.from({ length: book.spreads }, (_, i) => `/imgs/portfolio/${book.slug}/spread-${i + 1}.webp`)],
@@ -111,34 +147,44 @@ function BookStory({ book, index }) {
 
     return (
         <section
-            className={`bookStory obs ${ink ? 'inkband' : ''}`}
+            className='chapter obs'
             style={{
                 background: ink
                     ? 'linear-gradient(180deg, #191410 0%, #14100b 100%)'
                     : blush
-                        ? 'linear-gradient(180deg, #f6ebe2 0%, #f3e3d8 100%)'
+                        ? 'linear-gradient(180deg, #f6ebe2 0%, #f2e2d6 100%)'
                         : 'transparent',
                 color: ink ? '#f3e9d2' : '#1c1712',
-                padding: ink || blush ? 'clamp(56px, 9vw, 110px) 0' : 'clamp(30px, 5vw, 60px) 0',
-                position: 'relative',
             }}
         >
             {(ink || blush) && <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN, pointerEvents: 'none' }} />}
-            <div className='shell'>
-                <div className={`storyGrid ${index % 2 ? 'flip' : ''}`}>
-                    {/* Cover — the object itself */}
-                    <div className='storyCover obs'>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={frames[0]} alt={`הכריכה של ${book.title}`} loading='lazy' className='coverImg' />
-                        <p className={`${gveretLevin.className} handnote`} style={{ color: ink ? 'rgba(243,233,210,0.75)' : '#8a6d45' }}>
+
+            {/* Ghost chapter numeral bleeding off the margin */}
+            <span className={`${frankRuhl.className} ghostN`} aria-hidden style={{ color: ink ? 'rgba(226,195,119,0.07)' : 'rgba(168,132,58,0.09)' }}>
+                {book.n}
+            </span>
+
+            <div className='shell chapterInner'>
+                <div className='chGrid'>
+                    {/* The object itself — cover with a stacked "back cover" */}
+                    <div className='chCoverWrap obs'>
+                        <div className='chCoverStack'>
+                            <span className='chCoverBack' aria-hidden style={{ background: ink ? '#26200f' : '#e4d3ae' }} />
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={frames[0]} alt={`הכריכה של ${book.title}`} loading='lazy' className='chCoverImg' />
+                        </div>
+                        <p className={`${gveretLevin.className} handnote`} style={{ color: ink ? 'rgba(243,233,210,0.72)' : '#8a6d45', textAlign: 'center' }}>
                             הספר של {book.title} · {book.date}
                         </p>
                     </div>
 
-                    {/* Text column */}
-                    <div className='storyText'>
-                        <p className='overline' style={{ color: ink ? '#cfa860' : '#a8843a' }}>{book.badge} · {book.date}</p>
-                        <h3 className={`${frankRuhl.className} storyTitle`}>{book.title}</h3>
+                    {/* Chapter text */}
+                    <div className='chText'>
+                        <p className='overline' style={{ color: ink ? '#cfa860' : '#a8843a' }}>
+                            {book.chapter} · {book.badge} · {book.date}
+                        </p>
+                        <h3 className={`${frankRuhl.className} chTitle`}>{book.title}</h3>
+                        <p className='chStory'>{book.story}</p>
                         <ul className='statList' style={{ borderColor: ink ? 'rgba(207,168,96,0.35)' : 'rgba(168,132,58,0.35)' }}>
                             {book.stats.map((s, i) => <li key={i}>{s}</li>)}
                         </ul>
@@ -146,7 +192,7 @@ function BookStory({ book, index }) {
                             ”{book.quote}“
                             <cite className={assistant.className}>{book.quoteBy}</cite>
                         </blockquote>
-                        <div className='storyActions'>
+                        <div className='chActions'>
                             <button onClick={() => setLive(v => !v)} className='btn btnSolid' style={ink ? { background: '#e2c377', color: '#1a1208' } : undefined}>
                                 {live ? <><X size={16} /> סגירת הספר</> : <><BookOpen size={16} /> לדפדף בספר — כאן</>}
                             </button>
@@ -157,7 +203,7 @@ function BookStory({ book, index }) {
                     </div>
                 </div>
 
-                {/* Filmstrip — the real spreads */}
+                {/* The real spreads — drag/scroll filmstrip */}
                 <div className='filmstrip' aria-label={`עמודים מתוך הספר של ${book.title}`}>
                     {frames.slice(1).map((src, i) => (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -183,11 +229,10 @@ function BookStory({ book, index }) {
 }
 
 export default function LandingPage() {
-    // The demo book renders with the SAME design the three portfolio books
-    // are configured with in the studio (verified against each wedding's
-    // bookDesign in Firestore AND the live render: white page + studio
-    // texture + Noto Serif Hebrew + ink #402d11 at 2.7%). The texture URL is
-    // a stable Firebase Storage link — the same asset the real books use.
+    // Demo book renders with the SAME design the portfolio books use in
+    // the studio (white page + studio texture + Noto Serif Hebrew + ink
+    // #402d11 at 2.7%). The texture URL is the stable Firebase Storage
+    // asset the real books reference.
     const styleSettings = useMemo(() => ({
         ...defaultStyle,
         template: 'classic',
@@ -223,17 +268,25 @@ export default function LandingPage() {
         return () => io.disconnect()
     }, [])
 
-    // Hero parallax — covers drift at different speeds (rAF-throttled).
+    // Reading ribbon (scroll progress) + sticky CTA visibility + hero
+    // parallax — one rAF-throttled scroll listener drives all three.
+    const [ctaVisible, setCtaVisible] = useState(false)
     const heroRef = useRef(null)
+    const ribbonRef = useRef(null)
     useEffect(() => {
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-        const el = heroRef.current
-        if (!el) return
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
         let raf = 0
         const onScroll = () => {
             cancelAnimationFrame(raf)
-            raf = requestAnimationFrame(() => el.style.setProperty('--py', String(Math.min(window.scrollY, 720))))
+            raf = requestAnimationFrame(() => {
+                const doc = document.documentElement
+                const max = Math.max(1, doc.scrollHeight - window.innerHeight)
+                if (ribbonRef.current) ribbonRef.current.style.transform = `scaleX(${Math.min(1, window.scrollY / max)})`
+                setCtaVisible(window.scrollY > window.innerHeight * 0.85)
+                if (!reduced && heroRef.current) heroRef.current.style.setProperty('--py', String(Math.min(window.scrollY, 720)))
+            })
         }
+        onScroll()
         window.addEventListener('scroll', onScroll, { passive: true })
         return () => { window.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf) }
     }, [])
@@ -286,53 +339,67 @@ export default function LandingPage() {
     const scrollTo = id => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
     return (
-        <div dir='rtl' className={assistant.className} style={{ minHeight: '100vh', background: '#faf5eb', color: '#1c1712', overflowX: 'hidden' }}>
+        <div dir='rtl' className={assistant.className} style={{ minHeight: '100vh', background: '#f8f2e7', color: '#1c1712', overflowX: 'hidden' }}>
 
-            {/* ═══════════ HERO — editorial, ivory, diagonal overlap ═══════════ */}
+            {/* Reading ribbon — gold progress bar, the book's bookmark */}
+            <div className='ribbon' aria-hidden><span ref={ribbonRef} className='ribbonFill' /></div>
+
+            {/* ═══════════ HERO — the cover of this "book" ═══════════ */}
             <header ref={heroRef} className='hero' style={{ backgroundImage: GRAIN }}>
+                <div className='heroFrame' aria-hidden />
                 <div className='shell heroGrid'>
                     <div className='heroText'>
-                        <p className='overline obs' style={{ color: '#a8843a' }}>ספרי ברכות בעבודה אישית · Wedding Tales</p>
+                        <p className='overline obs' style={{ color: '#a8843a' }}>Wedding Tales · ספרי ברכות מאירועים אמיתיים</p>
                         <h1 className={`${frankRuhl.className} heroTitle obs`}>
-                            הערב יעבור.
+                            את הספר הזה
                             <br />
-                            <em>הספר יישאר.</em>
+                            <em>כותבים האורחים שלכם.</em>
                         </h1>
                         <p className='heroSub obs'>
-                            האורחים סורקים, מצלמים וכותבים מהלב — בזמן האירוע.
-                            אצלכם נשאר ספר בכריכה קשה, מלא באנשים שאתם אוהבים.
+                            QR על השולחן, תמונה מהטלפון וכמה מילים מהלב — ובבוקר שאחרי
+                            יש לכם ספר. כזה שפותחים בסלון גם בעוד עשרים שנה.
                         </p>
                         <div className='heroCtas obs'>
-                            <button onClick={() => scrollTo('portfolio')} className='btn btnSolid big'>
+                            <button onClick={() => scrollTo('chapters')} className='btn btnSolid big'>
                                 <BookOpen size={18} /> דפדפו בספרים אמיתיים
                             </button>
                             <a href={WA} target='_blank' rel='noopener noreferrer' className='btn btnGhost big'>
                                 <WaIcon /> דברו איתנו
                             </a>
                         </div>
-                        <p className='heroPrice obs'>1,290 ₪ · מחיר אחד, הכול כלול · <a href='#pricing' onClick={e => { e.preventDefault(); scrollTo('pricing') }} style={{ color: '#a8843a' }}>מה בדיוק מקבלים ←</a></p>
+                        <p className='heroPrice obs'>
+                            1,290 ₪ · מחיר אחד, הכול כלול · ספר דיגיטלי עוד באותו ערב · <a href='#pricing' onClick={e => { e.preventDefault(); scrollTo('pricing') }} style={{ color: '#a8843a' }}>מה מקבלים ←</a>
+                        </p>
                     </div>
 
-                    {/* Overlapping covers, parallax drift */}
+                    {/* Fan of the three real covers, parallax drift */}
                     <div className='heroArt' aria-hidden>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src='/imgs/portfolio/wedding/cover.webp' alt='' className='ha ha1' fetchPriority='high' onClick={() => scrollTo('portfolio')} />
+                        <img src='/imgs/portfolio/wedding/cover.webp' alt='' className='ha ha1' fetchPriority='high' onClick={() => scrollTo('chapters')} />
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src='/imgs/portfolio/bar-mitzvah/cover.webp' alt='' className='ha ha2' loading='lazy' onClick={() => scrollTo('portfolio')} />
+                        <img src='/imgs/portfolio/bar-mitzvah/cover.webp' alt='' className='ha ha2' loading='lazy' onClick={() => scrollTo('chapters')} />
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src='/imgs/portfolio/birthday/cover.webp' alt='' className='ha ha3' loading='lazy' onClick={() => scrollTo('portfolio')} />
-                        <p className={`${gveretLevin.className} handnote haNote`}>ספרים אמיתיים של לקוחות ↓</p>
+                        <img src='/imgs/portfolio/birthday/cover.webp' alt='' className='ha ha3' loading='lazy' onClick={() => scrollTo('chapters')} />
+                        <p className={`${gveretLevin.className} handnote haNote`}>שלושה ספרים אמיתיים של לקוחות ↓</p>
                     </div>
                 </div>
-
-                {/* Vertical editorial caption */}
-                <span className='vertCaption' aria-hidden>מהדורה אישית · אביב 2026</span>
+                <span className='vertCaption' aria-hidden>מהדורה אישית · קיץ 2026</span>
             </header>
 
+            {/* ═══════════ MARQUEE — a ribbon of real spreads ═══════════ */}
+            <section className='marquee' aria-label='עמודים אמיתיים מתוך ספרי לקוחות'>
+                <div className='marqueeTrack'>
+                    {[...MARQUEE, ...MARQUEE].map((src, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img key={`${src}-${i}`} src={src} alt='' loading='lazy' className='mFrame' aria-hidden={i >= MARQUEE.length} />
+                    ))}
+                </div>
+                <p className={`${gveretLevin.className} handnote`} style={{ textAlign: 'center', color: '#8a6d45', marginTop: 14 }}>
+                    עמודים אמיתיים, מתוך הספרים שתפגשו עוד רגע
+                </p>
+            </section>
+
             {/* ═══════════ STAT BAND — ink ═══════════ */}
-            {/* Numbers: 60+ events is real (migrated customer base); blessings
-                count is an order-of-magnitude estimate — swap when analytics
-                aggregation lands. */}
             <section className='statBand' style={{ backgroundImage: GRAIN }}>
                 <div className='shell statRow obs'>
                     {[
@@ -348,14 +415,15 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            {/* ═══════════ HOW — three numbered editorial beats ═══════════ */}
+            {/* ═══════════ HOW — three beats ═══════════ */}
             <section className='how'>
                 <div className='shell'>
+                    <Folio n='02' label='איך זה עובד' />
                     <div className='howGrid'>
                         {[
-                            ['01', 'סורקים', 'קוד QR על השולחן פותח עמוד אישי. בלי אפליקציה, בלי הרשמה — גם סבתא מסתדרת.'],
-                            ['02', 'מברכים', 'תמונה מהטלפון וכמה מילים מהלב. דקה אחת, באמצע הריקודים.'],
-                            ['03', 'נשאר לתמיד', 'ספר דיגיטלי עוד באותו ערב. ספר כריכה קשה — אצלכם בבית.'],
+                            ['01', 'סורקים', 'קוד QR על השולחן פותח עמוד אישי בדפדפן. בלי אפליקציה, בלי הרשמה — מהנכד ועד סבתא.'],
+                            ['02', 'כותבים', 'תמונה מהערב וכמה מילים מהלב. דקה אחת, באמצע הריקודים.'],
+                            ['03', 'נשאר לתמיד', 'ספר דיגיטלי עוד באותו לילה. ספר כריכה קשה על נייר ארכיב — עד הבית.'],
                         ].map(([n, t, d], i) => (
                             <div key={i} className='howItem obs' style={{ transitionDelay: `${i * 90}ms` }}>
                                 <span className={`${frankRuhl.className} howN`}>{n}</span>
@@ -367,23 +435,24 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            {/* ═══════════ PORTFOLIO ═══════════ */}
-            <div id='portfolio' style={{ scrollMarginTop: 8 }}>
+            {/* ═══════════ CHAPTERS — the three real books ═══════════ */}
+            <div id='chapters' style={{ scrollMarginTop: 8 }}>
                 <div className='shell'>
                     <div className='hairline' />
                     <div className='sectionHead obs'>
-                        <p className='overline' style={{ color: '#a8843a' }}>מהארכיון</p>
+                        <p className='overline' style={{ color: '#a8843a' }}>תוכן העניינים</p>
                         <h2 className={`${frankRuhl.className} sectionTitle`}>
-                            שלושה ספרים. שלושה סיפורים.
+                            שלושה אירועים.
                             <br />
-                            <em>הכול אמיתי.</em>
+                            <em>שלושה ספרים אמיתיים.</em>
                         </h2>
                         <p className='sectionSub'>
-                            לא הדמיות — הברכות והתמונות שהאורחים באמת העלו. דפדפו כאן, או פתחו את הספר המלא.
+                            בלי הדמיות ובלי סטוק. כל ברכה, תמונה ועמוד שתראו כאן הועלו על ידי
+                            אורחים אמיתיים — ואפשר לפתוח ולדפדף בספר המלא.
                         </p>
                     </div>
                 </div>
-                {PORTFOLIO.map((b, i) => <BookStory key={b.slug} book={b} index={i} />)}
+                {CHAPTERS.map(b => <Chapter key={b.slug} book={b} />)}
             </div>
 
             {/* ═══════════ TRY IT ═══════════ */}
@@ -392,7 +461,7 @@ export default function LandingPage() {
                     <div className='hairline' />
                     <div className='sectionHead obs'>
                         <p className='overline' style={{ color: '#a8843a' }}>נסו בעצמכם</p>
-                        <h2 className={`${frankRuhl.className} sectionTitle`}>ככה זה מרגיש לאורחים</h2>
+                        <h2 className={`${frankRuhl.className} sectionTitle`}>ככה זה מרגיש לאורחים שלכם</h2>
                         <p className='sectionSub'>כתבו ברכה, צרפו תמונה — ותראו אותה נכנסת לספר. הדגמה בלבד, שום דבר לא נשמר.</p>
                     </div>
                     <div className='demoGrid obs'>
@@ -449,16 +518,17 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            {/* ═══════════ INCLUDED — numbered, no cards ═══════════ */}
-            <section className='included'>
-                <div className='shell'>
-                    <div className='hairline' />
-                    <div className='inclGrid'>
-                        <div className='obs'>
-                            <p className='overline' style={{ color: '#a8843a' }}>מה כלול</p>
-                            <h2 className={`${frankRuhl.className} sectionTitle`}>הכול. <em>באמת.</em></h2>
+            {/* ═══════════ PRICE + INCLUDED — one conversion block ═══════════ */}
+            <section id='pricing' className='priceBand' style={{ backgroundImage: GRAIN, scrollMarginTop: 8 }}>
+                <div className='shell priceGrid'>
+                    <div className='obs'>
+                        <p className='overline' style={{ color: '#cfa860' }}>מחיר אחד. אפס אותיות קטנות.</p>
+                        <div className='priceLine'>
+                            <span className={`${frankRuhl.className} priceN`}>1,290</span>
+                            <span className={`${frankRuhl.className} priceCur`}>₪</span>
                         </div>
-                        <ol className='inclList obs'>
+                        <p className='priceNote'>מהקמת העמוד ועד הספר המודפס אצלכם בבית — הכול בפנים:</p>
+                        <ol className='inclList'>
                             {[
                                 'עמוד אישי מעוצב + QR לאירוע',
                                 'מערכת ניהול — אתם בוחרים מה נכנס ואיך זה נראה',
@@ -471,28 +541,14 @@ export default function LandingPage() {
                                 </li>
                             ))}
                         </ol>
-                    </div>
-                </div>
-            </section>
-
-            {/* ═══════════ PRICE — a graphic statement on ink ═══════════ */}
-            <section id='pricing' className='priceBand' style={{ backgroundImage: GRAIN, scrollMarginTop: 8 }}>
-                <div className='shell priceGrid'>
-                    <div className='obs'>
-                        <p className='overline' style={{ color: '#cfa860' }}>מחיר אחד. בלי הפתעות.</p>
-                        <div className='priceLine'>
-                            <span className={`${frankRuhl.className} priceN`}>1,290</span>
-                            <span className={`${frankRuhl.className} priceCur`}>₪</span>
-                        </div>
-                        <p className='priceNote'>הכול כלול — מהקמת העמוד ועד הספר המודפס אצלכם בבית.</p>
-                        <a href={WA} target='_blank' rel='noopener noreferrer' className='btn btnGold big' style={{ maxWidth: 380 }}>
+                        <a href={WA} target='_blank' rel='noopener noreferrer' className='btn btnGold big' style={{ maxWidth: 380, marginTop: 26 }}>
                             <WaIcon /> אני רוצה ספר כזה — דברו איתי
                         </a>
                     </div>
                     <figure className='priceFig obs' aria-hidden>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src='/imgs/portfolio/wedding/spread-2.webp' alt='' loading='lazy' />
-                        <figcaption className={gveretLevin.className}>עמודים אמיתיים, מתוך הספר של שקד ודור</figcaption>
+                        <figcaption className={gveretLevin.className}>עמודים אמיתיים, מתוך הספר של דור ושקד</figcaption>
                     </figure>
                 </div>
             </section>
@@ -504,12 +560,12 @@ export default function LandingPage() {
                         ”לא תיארנו כמה פספסנו עד שראינו את הספר. בכינו, צחקנו, והרגשנו כאילו חזרנו לחתונה שוב.“
                     </p>
                     <p className='testiBy'>
-                        שקד · התחתנה במרץ 2026 · <a href={`/b/${PORTFOLIO[0].token}`} target='_blank' rel='noopener noreferrer' style={{ color: '#a8843a', display: 'inline-block', padding: '12px 6px', margin: '-12px -6px' }}>הספר שלה למעלה</a>
+                        שקד · התחתנה במרץ 2026 · <a href={`/b/${CHAPTERS[2].token}`} target='_blank' rel='noopener noreferrer' style={{ color: '#a8843a', display: 'inline-block', padding: '12px 6px', margin: '-12px -6px' }}>הספר שלה בפרק השלישי</a>
                     </p>
                 </div>
             </section>
 
-            {/* ═══════════ FAQ — conversational ═══════════ */}
+            {/* ═══════════ FAQ ═══════════ */}
             <section className='faq'>
                 <div className='shell' style={{ maxWidth: 680 }}>
                     <div className='hairline' />
@@ -528,13 +584,14 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            {/* ═══════════ FINAL CTA ═══════════ */}
+            {/* ═══════════ FINAL CTA — the back cover ═══════════ */}
             <section className='finale' style={{ backgroundImage: GRAIN }}>
                 <div className='shell obs' style={{ textAlign: 'center' }}>
+                    <p className={`${gveretLevin.className}`} style={{ fontSize: 20, color: 'rgba(243,233,210,0.7)', margin: '0 0 10px' }}>— הכריכה האחורית —</p>
                     <h2 className={`${frankRuhl.className} finaleT`}>
-                        רוצים ספר כזה
+                        האירוע הבא שלכם
                         <br />
-                        <em>מהאירוע שלכם?</em>
+                        <em>שווה ספר.</em>
                     </h2>
                     <a href={WA} target='_blank' rel='noopener noreferrer' className='btn btnGold big' style={{ maxWidth: 400, marginInline: 'auto', marginTop: 26 }}>
                         <WaIcon /> דברו איתנו בוואטסאפ
@@ -542,6 +599,14 @@ export default function LandingPage() {
                     <p style={{ fontSize: 13, color: 'rgba(243,233,210,0.68)', marginTop: 26 }}>© {new Date().getFullYear()} Wedding Tales · מזכרת לכל החיים</p>
                 </div>
             </section>
+
+            {/* ═══════════ STICKY CTA — appears past the hero ═══════════ */}
+            <div className={`stickyCta ${ctaVisible ? 'on' : ''}`} role='complementary' aria-label='יצירת קשר'>
+                <span className='stickyTxt'><strong>ספר ברכות מהאירוע שלכם</strong> · 1,290 ₪ הכול כלול</span>
+                <a href={WA} target='_blank' rel='noopener noreferrer' className='btn btnGold stickyBtn'>
+                    <WaIcon /> דברו איתנו
+                </a>
+            </div>
 
             <style jsx global>{`
                 .landing-flip { margin: 0 auto; }
@@ -551,6 +616,15 @@ export default function LandingPage() {
                 .overline { font-size: 13px; font-weight: 700; letter-spacing: 0.22em; margin: 0 0 14px; }
                 .heroPrice { font-size: 14px; color: #6b5836; margin: 16px 2px 0; font-weight: 600; transition-delay: 200ms; }
                 :focus-visible { outline: 2px solid #b8893d; outline-offset: 3px; border-radius: 4px; }
+
+                /* Reading ribbon — scroll progress as a gold bookmark */
+                .ribbon { position: fixed; top: 0; inset-inline: 0; height: 3px; z-index: 60; background: rgba(201,164,78,0.14); }
+                .ribbonFill { display: block; height: 100%; width: 100%; transform: scaleX(0); transform-origin: right; background: linear-gradient(90deg, #b8893d, #e2c377); }
+
+                /* Folio — decorative "page number" chrome */
+                .folio { display: flex; align-items: center; gap: 14px; margin: clamp(36px, 6vw, 70px) 0 clamp(22px, 3vw, 36px); }
+                .folioRule { height: 1px; flex: 1; }
+                .folioTxt { font-size: 11.5px; font-weight: 700; letter-spacing: 0.26em; white-space: nowrap; }
 
                 /* Scroll reveal */
                 .obs { opacity: 0; transform: translateY(22px); transition: opacity 0.8s cubic-bezier(0.22,1,0.36,1), transform 0.8s cubic-bezier(0.22,1,0.36,1); }
@@ -568,12 +642,14 @@ export default function LandingPage() {
                 .field { width: 100%; box-sizing: border-box; border: none; border-bottom: 1px solid #c9a44e; border-radius: 0; padding: 13px 4px; font-size: 15.5px; color: #3a2f1e; background: transparent; outline: none; font-family: inherit; }
                 .field::placeholder { color: #a08c62; }
 
-                /* HERO */
-                .hero { position: relative; padding: clamp(48px, 8vw, 110px) 0 clamp(40px, 6vw, 90px); overflow: hidden; }
-                .heroGrid { display: grid; grid-template-columns: 1fr; gap: 40px; align-items: center; }
-                .heroTitle { font-size: clamp(46px, 10vw, 108px); font-weight: 700; line-height: 1.04; margin: 0; letter-spacing: -0.01em; }
-                .heroTitle em { font-style: normal; color: #b8893d; }
-                .heroSub { font-size: clamp(16px, 2.4vw, 19px); font-weight: 300; color: #574733; line-height: 1.8; margin: 22px 0 0; max-width: 440px; }
+                /* HERO — framed like a hard cover */
+                .hero { position: relative; padding: clamp(52px, 8vw, 112px) 0 clamp(44px, 6vw, 92px); overflow: hidden; }
+                .heroFrame { position: absolute; inset: clamp(10px, 1.6vw, 22px); border: 1px solid rgba(201,164,78,0.45); border-radius: 3px; pointer-events: none; }
+                .heroFrame::after { content: ''; position: absolute; inset: 5px; border: 1px solid rgba(201,164,78,0.22); border-radius: 2px; }
+                .heroGrid { display: grid; grid-template-columns: 1fr; gap: 40px; align-items: center; position: relative; }
+                .heroTitle { font-size: clamp(44px, 9.6vw, 102px); font-weight: 700; line-height: 1.06; margin: 0; letter-spacing: -0.01em; }
+                .heroTitle em { font-style: normal; background: linear-gradient(100deg, #8a6320, #c9a44e 45%, #e8cf8f 60%, #b8893d); -webkit-background-clip: text; background-clip: text; color: transparent; }
+                .heroSub { font-size: clamp(16px, 2.4vw, 19px); font-weight: 300; color: #574733; line-height: 1.8; margin: 22px 0 0; max-width: 460px; }
                 .heroSub, .heroCtas { transition-delay: 140ms; }
                 .heroCtas { display: flex; flex-direction: column; gap: 10px; margin-top: 30px; max-width: 380px; }
                 .heroArt { position: relative; height: clamp(300px, 56vw, 470px); }
@@ -584,7 +660,14 @@ export default function LandingPage() {
                 .ha3 { width: clamp(120px, 23vw, 195px); inset-inline-start: 30%; top: 56%; transform: rotate(-2deg) translateY(calc(var(--py, 0) * -0.17px)); z-index: 4; }
                 .haNote { position: absolute; bottom: -4%; inset-inline-start: 8%; font-size: 19px; color: #8a6d45; margin: 0; transform: rotate(-3deg); }
                 .handnote { font-size: 18px; margin: 12px 4px 0; }
-                .vertCaption { position: absolute; top: 120px; inset-inline-end: 14px; writing-mode: vertical-rl; font-size: 11px; letter-spacing: 0.34em; color: #b09a6b; display: none; }
+                .vertCaption { position: absolute; top: 120px; inset-inline-end: 26px; writing-mode: vertical-rl; font-size: 11px; letter-spacing: 0.34em; color: #b09a6b; display: none; }
+
+                /* MARQUEE — seamless ribbon of real spreads */
+                .marquee { padding: clamp(26px, 4vw, 44px) 0 clamp(30px, 4vw, 48px); overflow: hidden; }
+                .marqueeTrack { display: flex; gap: 16px; width: max-content; animation: marquee 48s linear infinite; }
+                .marquee:hover .marqueeTrack { animation-play-state: paused; }
+                .mFrame { height: clamp(120px, 17vw, 190px); width: auto; border-radius: 7px; background: #fff; box-shadow: 0 18px 38px -18px rgba(60,44,20,0.45), 0 0 0 1px rgba(180,148,90,0.3); }
+                @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(50%); } }
 
                 /* STAT BAND */
                 .statBand { background-color: #171310; color: #f3e9d2; padding: clamp(34px, 5vw, 54px) 0; }
@@ -594,7 +677,7 @@ export default function LandingPage() {
                 .statL { font-size: 13px; color: rgba(243,233,210,0.72); letter-spacing: 0.06em; }
 
                 /* HOW */
-                .how { padding: clamp(48px, 8vw, 100px) 0 clamp(20px, 3vw, 40px); }
+                .how { padding: clamp(20px, 4vw, 56px) 0 clamp(20px, 3vw, 40px); }
                 .howGrid { display: grid; grid-template-columns: 1fr; gap: 34px; }
                 .howItem { border-top: 1px solid rgba(168,132,58,0.4); padding-top: 18px; }
                 .howN { font-size: 15px; color: #a8843a; letter-spacing: 0.18em; font-weight: 700; }
@@ -607,16 +690,22 @@ export default function LandingPage() {
                 .sectionTitle em { font-style: normal; color: #b8893d; }
                 .sectionSub { font-size: 15.5px; font-weight: 300; color: #574733; line-height: 1.75; margin: 14px 0 0; }
 
-                /* BOOK STORY */
-                .storyGrid { display: grid; grid-template-columns: 1fr; gap: 30px; align-items: center; }
-                .storyCover { max-width: 460px; }
-                .coverImg { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; box-shadow: 0 40px 90px -34px rgba(50,36,16,0.65), 0 0 0 1px rgba(180,148,90,0.35); }
-                .storyTitle { font-size: clamp(36px, 6.4vw, 60px); font-weight: 700; line-height: 1.05; margin: 0 0 14px; }
+                /* CHAPTER */
+                .chapter { position: relative; padding: clamp(48px, 8vw, 104px) 0; overflow: hidden; }
+                .chapterInner { position: relative; }
+                .ghostN { position: absolute; top: clamp(-30px, -3vw, -14px); inset-inline-end: -0.06em; font-size: clamp(180px, 30vw, 380px); font-weight: 700; line-height: 1; pointer-events: none; user-select: none; }
+                .chGrid { display: grid; grid-template-columns: 1fr; gap: 30px; align-items: center; position: relative; }
+                .chCoverWrap { max-width: 460px; }
+                .chCoverStack { position: relative; }
+                .chCoverBack { position: absolute; inset: 0; border-radius: 6px; transform: rotate(2.4deg) translate(6px, 8px); box-shadow: 0 24px 50px -26px rgba(50,36,16,0.5); }
+                .chCoverImg { position: relative; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; box-shadow: 0 40px 90px -34px rgba(50,36,16,0.65), 0 0 0 1px rgba(180,148,90,0.35); }
+                .chTitle { font-size: clamp(38px, 6.8vw, 64px); font-weight: 700; line-height: 1.05; margin: 0 0 12px; }
+                .chStory { font-size: clamp(15px, 2.1vw, 16.5px); font-weight: 300; line-height: 1.85; margin: 0 0 18px; max-width: 480px; opacity: 0.92; }
                 .statList { list-style: none; display: flex; flex-wrap: wrap; gap: 0 18px; padding: 12px 0; margin: 0 0 18px; border-top: 1px solid; border-bottom: 1px solid; font-size: 13.5px; letter-spacing: 0.04em; }
                 .statList li + li::before { content: '·'; margin-inline-end: 18px; opacity: 0.5; }
                 .pull { font-size: clamp(18px, 2.8vw, 23px); font-weight: 600; font-style: italic; line-height: 1.65; margin: 0 0 22px; padding: 0; }
                 .pull cite { display: block; font-size: 12.5px; font-style: normal; font-weight: 600; letter-spacing: 0.1em; opacity: 0.65; margin-top: 10px; }
-                .storyActions { display: flex; gap: 10px; flex-wrap: wrap; }
+                .chActions { display: flex; gap: 10px; flex-wrap: wrap; }
                 .filmstrip { display: flex; gap: 14px; overflow-x: auto; padding: clamp(20px, 3vw, 34px) 4px 14px; scroll-snap-type: x mandatory; scrollbar-width: thin; scrollbar-color: #c9a44e transparent; }
                 .filmstrip::-webkit-scrollbar { height: 5px; }
                 .filmstrip::-webkit-scrollbar-thumb { background: #c9a44e; border-radius: 3px; }
@@ -629,19 +718,16 @@ export default function LandingPage() {
                 .demoGrid { display: grid; grid-template-columns: 1fr; gap: 34px; align-items: center; }
                 .flipShadow { border-radius: 10px; overflow: hidden; box-shadow: 0 34px 80px -30px rgba(60,44,20,0.6), 0 0 0 1px rgba(180,148,90,0.3); }
 
-                /* INCLUDED */
-                .inclGrid { display: grid; grid-template-columns: 1fr; gap: 26px; }
-                .inclList { list-style: none; margin: 0; padding: 0; }
-                .inclList li { display: flex; gap: 18px; align-items: baseline; padding: 17px 2px; border-bottom: 1px solid rgba(168,132,58,0.3); font-size: 16px; font-weight: 400; color: #3a2f1e; }
-                .inclN { font-size: 14px; font-weight: 700; color: #a8843a; letter-spacing: 0.14em; }
-
-                /* PRICE BAND */
+                /* PRICE + INCLUDED */
                 .priceBand { background-color: #171310; color: #f3e9d2; padding: clamp(56px, 9vw, 110px) 0; margin-top: clamp(48px, 8vw, 96px); }
                 .priceGrid { display: grid; grid-template-columns: 1fr; gap: 38px; align-items: center; }
                 .priceLine { display: flex; align-items: baseline; gap: 12px; }
                 .priceN { font-size: clamp(84px, 15vw, 150px); font-weight: 700; line-height: 0.95; color: #f3e9d2; letter-spacing: -0.02em; }
                 .priceCur { font-size: clamp(30px, 5vw, 48px); color: #cfa860; font-weight: 700; }
-                .priceNote { font-size: 15.5px; font-weight: 300; color: rgba(243,233,210,0.75); line-height: 1.75; margin: 16px 0 26px; max-width: 380px; }
+                .priceNote { font-size: 15.5px; font-weight: 300; color: rgba(243,233,210,0.75); line-height: 1.75; margin: 16px 0 8px; max-width: 380px; }
+                .inclList { list-style: none; margin: 0; padding: 0; max-width: 420px; }
+                .inclList li { display: flex; gap: 16px; align-items: baseline; padding: 13px 2px; border-bottom: 1px solid rgba(226,195,119,0.22); font-size: 15.5px; font-weight: 300; color: rgba(243,233,210,0.9); }
+                .inclN { font-size: 13px; font-weight: 700; color: #cfa860; letter-spacing: 0.14em; }
                 .priceFig { margin: 0; }
                 .priceFig img { width: 100%; border-radius: 10px; box-shadow: 0 34px 70px -26px rgba(0,0,0,0.7), 0 0 0 1px rgba(207,168,96,0.4); }
                 .priceFig figcaption { font-size: 17px; color: rgba(243,233,210,0.65); margin-top: 12px; text-align: center; }
@@ -657,9 +743,16 @@ export default function LandingPage() {
                 .faqItem p { font-size: 15px; font-weight: 400; color: #574733; line-height: 1.8; padding: 0 2px 18px; margin: 0; max-width: 560px; }
 
                 /* FINALE */
-                .finale { background-color: #171310; color: #f3e9d2; padding: clamp(64px, 10vw, 120px) 0; margin-top: clamp(48px, 8vw, 96px); }
+                .finale { background-color: #171310; color: #f3e9d2; padding: clamp(64px, 10vw, 120px) 0 clamp(84px, 12vw, 140px); margin-top: clamp(48px, 8vw, 96px); }
                 .finaleT { font-size: clamp(34px, 7vw, 64px); font-weight: 700; line-height: 1.12; margin: 0; }
                 .finaleT em { font-style: normal; color: #e2c377; }
+
+                /* STICKY CTA */
+                .stickyCta { position: fixed; bottom: 0; inset-inline: 0; z-index: 50; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 10px clamp(14px, 4vw, 28px) calc(10px + env(safe-area-inset-bottom, 0px)); background: rgba(23,19,16,0.92); backdrop-filter: blur(10px); border-top: 1px solid rgba(226,195,119,0.35); transform: translateY(110%); transition: transform 0.35s cubic-bezier(0.22,1,0.36,1); }
+                .stickyCta.on { transform: translateY(0); }
+                .stickyTxt { font-size: 13.5px; color: rgba(243,233,210,0.9); font-weight: 400; }
+                .stickyTxt strong { font-weight: 700; }
+                .stickyBtn { padding: 11px 22px; font-size: 14px; flex-shrink: 0; }
 
                 /* ≥ 760px — the editorial grid opens up */
                 @media (min-width: 760px) {
@@ -668,16 +761,20 @@ export default function LandingPage() {
                     .heroCtas .btn { width: auto; flex: 1; }
                     .vertCaption { display: block; }
                     .howGrid { grid-template-columns: repeat(3, 1fr); }
-                    .storyGrid { grid-template-columns: 5fr 6fr; gap: clamp(30px, 5vw, 70px); }
-                    .storyGrid.flip { direction: ltr; }
-                    .storyGrid.flip > * { direction: rtl; }
+                    .chGrid { grid-template-columns: 5fr 6fr; gap: clamp(30px, 5vw, 70px); }
+                    .chapter:nth-of-type(even) .chGrid { direction: ltr; }
+                    .chapter:nth-of-type(even) .chGrid > * { direction: rtl; }
                     .demoGrid { grid-template-columns: 1fr 1fr; }
-                    .inclGrid { grid-template-columns: 4fr 7fr; }
                     .priceGrid { grid-template-columns: 6fr 5fr; }
+                }
+                @media (max-width: 560px) {
+                    .stickyTxt { display: none; }
+                    .stickyBtn { width: 100%; justify-content: center; }
                 }
                 @media (prefers-reduced-motion: reduce) {
                     .obs { opacity: 1; transform: none; transition: none; }
-                    .ha, .frame, .btn { transition: none; }
+                    .ha, .frame, .btn, .stickyCta { transition: none; }
+                    .marqueeTrack { animation: none; flex-wrap: wrap; width: auto; }
                 }
             `}</style>
         </div>
