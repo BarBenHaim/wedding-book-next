@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { listPresets, resolvePreset, BUILTIN_PRESETS } from '@/lib/studioPresets'
+import { listPresets, resolvePreset, filterPresetsByEventType, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 
@@ -53,21 +53,25 @@ function useWidth() {
     return [ref, w]
 }
 
-export default function CoupleDesignPicker({ activeDesign, onSelect, title = 'בחרו עיצוב לספר', hint }) {
-    const [presets, setPresets] = useState(BUILTIN_PRESETS)
+// `eventType` — the wedding's event type ('wedding' | 'bar_mitzvah' |
+// ...). When provided, the gallery shows ONLY presets tagged for that
+// type plus generic (untagged) presets — a bar mitzvah doesn't wade
+// through wedding designs and vice versa.
+export default function CoupleDesignPicker({ activeDesign, onSelect, title = 'בחרו עיצוב לספר', hint, eventType = null }) {
+    const [presets, setPresets] = useState(() => filterPresetsByEventType(BUILTIN_PRESETS, eventType))
     const [savingKey, setSavingKey] = useState(null)
     const [save, setSave] = useState('') // '' | 'saved' | 'error'
     const [gridRef, gridW] = useWidth()
 
     useEffect(() => {
         let cancelled = false
-        listPresets().then(list => {
+        listPresets({ eventType }).then(list => {
             if (!cancelled && Array.isArray(list) && list.length > 0) setPresets(list)
         })
         return () => {
             cancelled = true
         }
-    }, [])
+    }, [eventType])
 
     // 2 columns on phones, 3 from sm up. Tile pixel size derived from the
     // measured grid width so previews match what's actually on screen.

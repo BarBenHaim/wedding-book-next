@@ -351,12 +351,15 @@ function PortalApp({ onLocaleDiscovered }) {
                         )}
                     </div>
 
-                    {/* בחירת עיצוב — נֵיטיב; הספר שלמעלה מתרענן מיד */}
+                    {/* בחירת עיצוב — נֵיטיב; הספר שלמעלה מתרענן מיד.
+                        eventType מסנן את הגלריה — בר מצווה רואה רק
+                        תבניות של בר מצווה + תבניות כלליות. */}
                     <CoupleDesignPicker
                         activeDesign={bookDesign}
                         onSelect={handleSelectDesign}
                         title='בחרו עיצוב לספר'
                         hint='בחרו עיצוב — הספר שלמעלה יתעדכן מיד.'
+                        eventType={eventType}
                     />
 
                     

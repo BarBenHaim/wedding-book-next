@@ -214,6 +214,9 @@ export default function DesignControls({
     saveStatus = 'idle',
     weddingId,
     locale,
+    // The wedding's event type — filters the preset gallery so this
+    // wedding only sees presets tagged for its type (+ generic ones).
+    eventType = null,
 }) {
     const [activePreset, setActivePreset] = useState(null)
     const [uploadingCover, setUploadingCover] = useState(false)
@@ -270,13 +273,17 @@ export default function DesignControls({
     // server returns the right set per role.
     useEffect(() => {
         let cancelled = false
-        listPresets({ includePrivate: isAdmin }).then(list => {
+        // eventType keeps this wedding's gallery scoped to its own
+        // presets (+ generic ones) — a bar mitzvah doesn't scroll
+        // through wedding designs. Applies to admin too: this panel
+        // shows a specific wedding, so it shows that wedding's set.
+        listPresets({ includePrivate: isAdmin, eventType }).then(list => {
             if (!cancelled && Array.isArray(list) && list.length > 0) setPresets(list)
         })
         return () => {
             cancelled = true
         }
-    }, [isAdmin])
+    }, [isAdmin, eventType])
 
     // Apply a preset to the wedding's design doc. The picker holds
     // storage-shape presets (with fontKey / frameId); resolvePreset

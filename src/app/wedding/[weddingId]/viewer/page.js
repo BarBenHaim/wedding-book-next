@@ -20,7 +20,7 @@ import { expandBookPages } from '@/lib/bookPages'
 import PrintOrderModal from '@/components/PrintOrderModal/PrintOrderModal'
 import { getEntries } from '../../../../lib/classifyMedia'
 import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
-import { listPresets, resolvePreset, BUILTIN_PRESETS } from '@/lib/studioPresets'
+import { listPresets, resolvePreset, filterPresetsByEventType, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import { BOOK_FORMATS, resolveFormatConfig } from '@/lib/bookFormats'
 import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
@@ -636,6 +636,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                     <MobilePresetStrip
                         styleSettings={styleSettings}
                         onApply={vals => handleStyleChange(vals)}
+                        eventType={weddingDoc?.eventType}
                     />
                 )}
 
@@ -655,6 +656,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                             saveStatus={saveStatus}
                             weddingId={weddingId}
                             locale={locale}
+                            eventType={weddingDoc?.eventType}
                         />
                     </div>
                 </aside>
@@ -1111,16 +1113,19 @@ function BookViewerInner({ onLocaleDiscovered }) {
 // photo placement, small enough that four tiles fit across an iPhone
 // SE without scrolling. More than four overflow horizontally with a
 // scroll-snap row (thumb-friendly).
-function MobilePresetStrip({ styleSettings, onApply }) {
-    const [presets, setPresets] = useState(BUILTIN_PRESETS)
+// `eventType` filters the strip to presets tagged for this wedding's
+// event type + generic (untagged) ones — same rule as every other
+// couple-facing gallery.
+function MobilePresetStrip({ styleSettings, onApply, eventType }) {
+    const [presets, setPresets] = useState(() => filterPresetsByEventType(BUILTIN_PRESETS, eventType))
 
     useEffect(() => {
         let cancelled = false
-        listPresets().then(list => {
+        listPresets({ eventType }).then(list => {
             if (!cancelled && Array.isArray(list) && list.length > 0) setPresets(list)
         })
         return () => { cancelled = true }
-    }, [])
+    }, [eventType])
 
     // Identify which preset is currently active by signature-matching
     // the wedding's styleSettings against each preset's resolved

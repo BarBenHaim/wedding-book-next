@@ -144,6 +144,12 @@ export const FONTS_REGISTRY = {
 
 export const FONT_IDS = Object.keys(FONTS_REGISTRY)
 
+// ── Event-type targeting ─────────────────────────────────────────────
+// Pure logic lives in presetFilters.js (unit-testable, no Firebase
+// imports); re-exported here so UI code keeps a single import point.
+import { presetMatchesEventType, filterPresetsByEventType } from './presetFilters'
+export { presetMatchesEventType, filterPresetsByEventType }
+
 // ── BUILTIN PRESETS ──────────────────────────────────────────────────
 // The 8 system presets that have shipped to couples since spring 2026.
 // Stored in Firestore as ownerType:'system' (read-only in the Studio).
@@ -324,6 +330,14 @@ export function resolvePreset(preset) {
     if (fontEntry) values.fontClass = fontEntry.font.className
     if (latinFontEntry) values.fontClassLatin = latinFontEntry.font.className
     if (nameFontEntry) values.nameFontClass = nameFontEntry.font.className
+    // Split-related keys are ALWAYS present (with explicit defaults) in
+    // the resolved output. The viewer applies presets by MERGING into
+    // the wedding's existing styleSettings — if a preset simply omitted
+    // these keys, the previous preset's autoSplit / blessingTemplate
+    // would survive the switch and "haunt" the new design.
+    values.autoSplit = rest.autoSplit === true
+    values.splitThreshold = Number.isFinite(rest.splitThreshold) ? rest.splitThreshold : 240
+    values.blessingTemplate = rest.blessingTemplate ?? null
     return { ...preset, values }
 }
 
@@ -347,7 +361,11 @@ const COLLECTION = 'studio_presets'
 // they NEVER appear in the gallery. Super-admin's /admin/studio and
 // the admin-detected branch of DesignControls pass `true` to see
 // their private presets.
-export async function listPresets({ includePrivate = false } = {}) {
+//
+// `eventType` — when set (e.g. 'bar_mitzvah'), only presets tagged
+// with that event type OR untagged (generic) presets are returned.
+// See presetMatchesEventType above. Omit for admin surfaces.
+export async function listPresets({ includePrivate = false, eventType = null } = {}) {
     try {
         const [snap, vis] = await Promise.all([
             getDocs(query(collection(db, COLLECTION), orderBy('createdAt', 'asc'))),
@@ -355,15 +373,18 @@ export async function listPresets({ includePrivate = false } = {}) {
         ])
         const hidden = new Set(vis.hiddenPresetIds)
         const filterPrivate = preset => includePrivate || !preset.isPrivate
+        const filterEvent = preset => presetMatchesEventType(preset, eventType)
         if (snap.empty) {
             return BUILTIN_PRESETS
                 .filter(p => !hidden.has(p.id))
                 .filter(filterPrivate)
+                .filter(filterEvent)
         }
         const docs = snap.docs
             .map(d => ({ id: d.id, ...d.data() }))
             .filter(d => !hidden.has(d.id))
             .filter(filterPrivate)
+            .filter(filterEvent)
         // Sort: system first, then studio (most-recent updatedAt first).
         const system = docs.filter(d => d.ownerType === 'system')
         const studio = docs
@@ -375,7 +396,7 @@ export async function listPresets({ includePrivate = false } = {}) {
         return [...system, ...studio]
     } catch (err) {
         console.warn('[studioPresets] listPresets failed, using hardcoded fallback:', err?.message || err)
-        return BUILTIN_PRESETS
+        return filterPresetsByEventType(BUILTIN_PRESETS, eventType)
     }
 }
 

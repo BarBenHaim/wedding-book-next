@@ -21,9 +21,11 @@
 //   - BookPageTemplate → at display time (safety net for legacy entries)
 //   - wedding/[id]/admin/page.js → when the couple edits an entry
 //
-// The function is a no-op for null/undefined/empty/non-string input.
+// Returns '' for null/undefined/empty/non-string input — a blessing is
+// text or it's nothing. (The old `return text || ''` leaked truthy
+// non-strings like a bare number straight through to the renderer.)
 export function normalizeBlessing(text) {
-    if (!text || typeof text !== 'string') return text || ''
+    if (typeof text !== 'string' || !text) return ''
     // \s in JS already matches: space, tab, CR, LF, FF, VT, and Unicode
     // whitespace including NBSP ( ) and the various exotic spaces.
     // One pass collapses everything down to a single space.

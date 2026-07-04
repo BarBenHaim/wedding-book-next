@@ -35,6 +35,7 @@ import {
     FONT_IDS, FRAME_IDS,
 } from '@/lib/studioPresets'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import { EVENT_TYPE_ORDER, getEventConfig } from '@/lib/eventTypes'
 
 // ── Mock blessings at the three lengths the photo form supports ──
 // Calibrated to read naturally in Hebrew at each length, not just hit
@@ -307,6 +308,30 @@ function StudioContent() {
         if (!draft) return
         setDraft(prev => ({ ...prev, isPrivate: !prev.isPrivate }))
     }
+    // Toggle a single event-type tag on the draft (root-level
+    // `eventTypes: string[]` — NOT inside values). Empty array (or
+    // missing) = generic preset, shown for every event type. The
+    // couple-facing pickers filter on this via presetMatchesEventType.
+    const toggleEventType = typeId => {
+        if (!draft) return
+        setDraft(prev => {
+            const cur = Array.isArray(prev.eventTypes) ? prev.eventTypes : []
+            const next = cur.includes(typeId)
+                ? cur.filter(t => t !== typeId)
+                : [...cur, typeId]
+            return { ...prev, eventTypes: next }
+        })
+    }
+    const clearEventTypes = () => {
+        if (!draft) return
+        setDraft(prev => ({ ...prev, eventTypes: [] }))
+    }
+
+    // Preview mode: regular page (name+text+photo) vs a blessing-only
+    // page (no photo) — the page the auto-split produces and the one
+    // `blessingTemplate` styles. Lets the admin SEE the blessing-page
+    // layout they picked without leaving the studio.
+    const [previewBlessingOnly, setPreviewBlessingOnly] = useState(false)
 
     // Mock entry passed to the renderer. `text` swaps with the length
     // toggle; everything else stays fixed.
@@ -315,9 +340,9 @@ function StudioContent() {
             id: 'studio-mock',
             name: MOCK_NAME,
             text: MOCK_BLESSINGS[blessingLength],
-            imageUrl: previewPhoto || MOCK_PHOTO,
+            imageUrl: previewBlessingOnly ? null : previewPhoto || MOCK_PHOTO,
         }),
-        [blessingLength, previewPhoto]
+        [blessingLength, previewPhoto, previewBlessingOnly]
     )
 
     const showToast = (type, message) => {
@@ -553,6 +578,8 @@ function StudioContent() {
                             hasCustomPhoto={!!previewPhoto}
                             onPickPhoto={() => previewPhotoInputRef.current?.click()}
                             onClearPhoto={() => setPreviewPhoto(null)}
+                            blessingOnly={previewBlessingOnly}
+                            onToggleBlessingOnly={() => setPreviewBlessingOnly(v => !v)}
                         />
                         {/* Hidden file input owned by the parent so its
                             value survives PreviewPanel re-mounts (e.g.
@@ -573,6 +600,8 @@ function StudioContent() {
                             editable={editable}
                             onValuesChange={updateValues}
                             onImageStyleChange={updateImageStyle}
+                            onToggleEventType={toggleEventType}
+                            onClearEventTypes={clearEventTypes}
                             backgrounds={backgrounds}
                             uploadStatus={uploadStatus}
                             onUploadBackground={handleUploadBackground}
@@ -858,12 +887,21 @@ function PresetGroup({ label, sublabel, presets, activeId, onSelect, badge }) {
                                     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.40)',
                                 }}
                             />
-                            <span
-                                className={`flex-1 text-right text-[12.5px] truncate ${
-                                    activeId === p.id ? 'text-[#1a1410] font-bold' : 'text-[#5a4d3a] font-semibold'
-                                }`}
-                            >
-                                {p.name || p.id}
+                            <span className='flex-1 min-w-0 text-right'>
+                                <span
+                                    className={`block text-[12.5px] truncate ${
+                                        activeId === p.id ? 'text-[#1a1410] font-bold' : 'text-[#5a4d3a] font-semibold'
+                                    }`}
+                                >
+                                    {p.name || p.id}
+                                </span>
+                                {/* Event-type tags — which galleries this
+                                    preset appears in. No tags = generic. */}
+                                {Array.isArray(p.eventTypes) && p.eventTypes.length > 0 && (
+                                    <span className='block text-[9.5px] text-[#b8a37e] truncate'>
+                                        {p.eventTypes.map(t => getEventConfig(t).label).join(' · ')}
+                                    </span>
+                                )}
                             </span>
                             {badge === 'system' && (
                                 <Crown size={10} className='text-[#a8843a] shrink-0' />
@@ -883,6 +921,7 @@ function PresetGroup({ label, sublabel, presets, activeId, onSelect, badge }) {
 function PreviewPanel({
     preset, styleSettings, entry, blessingLength, onBlessingLengthChange, previewSize,
     hasCustomPhoto, onPickPhoto, onClearPhoto,
+    blessingOnly, onToggleBlessingOnly,
 }) {
     return (
         <main
@@ -936,6 +975,26 @@ function PreviewPanel({
                             <Upload size={11} /> תמונה אמיתית
                         </>
                     )}
+                </button>
+
+                {/* Blessing-page preview toggle — renders the mock entry
+                    WITHOUT a photo, i.e. exactly the page the auto-split
+                    (or a photo-less guest) produces. This is where the
+                    preset's `blessingTemplate` shows its effect. */}
+                <button
+                    type='button'
+                    onClick={onToggleBlessingOnly}
+                    title='תצוגת עמוד ברכה (ללא תמונה) — כך ייראה עמוד הברכה בפיצול'
+                    className='inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-[11.5px] font-bold transition-all shrink-0'
+                    style={{
+                        background: blessingOnly
+                            ? 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)'
+                            : '#ffffff',
+                        border: `1px solid ${blessingOnly ? '#b8893d' : '#ead9b3'}`,
+                        color: blessingOnly ? '#ffffff' : '#7a6a52',
+                    }}
+                >
+                    <Layers size={11} /> עמוד ברכה
                 </button>
 
                 {/* Length toggle — 30 / 100 / 210 chars. Sets the mock
@@ -1013,10 +1072,12 @@ function PreviewPanel({
 // onValuesChange / onImageStyleChange callbacks.
 function PropertiesPanel({
     draft, editable, onValuesChange, onImageStyleChange,
+    onToggleEventType, onClearEventTypes,
     backgrounds, uploadStatus, onUploadBackground, onDeleteBackground,
 }) {
     const isSystem = draft?.ownerType === 'system'
     const v = draft?.values || {}
+    const draftEventTypes = Array.isArray(draft?.eventTypes) ? draft.eventTypes : []
 
     return (
         <aside
@@ -1049,6 +1110,18 @@ function PropertiesPanel({
                     </div>
                 ) : (
                     <div className='p-4 space-y-4'>
+                        {/* Event-type targeting — which event types see
+                            this preset in their gallery. Nothing
+                            selected = generic (shows for everyone).
+                            Stored on the preset ROOT (eventTypes), not
+                            in values — it's metadata, not style. */}
+                        <PropertyEventTypesEdit
+                            selected={draftEventTypes}
+                            disabled={!editable}
+                            onToggle={onToggleEventType}
+                            onClear={onClearEventTypes}
+                        />
+
                         {/* Renderer / template — kept read-only even
                             for studio presets. Switching renderers
                             mid-edit invalidates many style fields and
@@ -1153,6 +1226,20 @@ function PropertiesPanel({
                                 onChange={n => onValuesChange({ splitThreshold: n })}
                             />
                         )}
+
+                        {/* Blessing-page layout — a SEPARATE template for
+                            blessing-only pages: the text page the auto-split
+                            produces, and entries that came without a photo.
+                            'כמו הספר' (null) keeps the pre-feature behavior
+                            (same template everywhere). Preview it with the
+                            "עמוד ברכה" toggle in the center panel. */}
+                        <PropertyTemplatePicker
+                            label='פריסת עמוד הברכה'
+                            value={v.blessingTemplate ?? null}
+                            disabled={!editable}
+                            onChange={t => onValuesChange({ blessingTemplate: t })}
+                            hint='חל על עמוד הברכה בפיצול ועל ברכות שהגיעו בלי תמונה. "כמו הספר" = אותה פריסה כמו שאר העמודים.'
+                        />
 
                         <PropertyWeightPicker
                             label='משקל פונט'
@@ -1993,6 +2080,98 @@ function PropertyToggle({ label, value, disabled, onChange, onLabel = 'דלוק'
                     )
                 })}
             </div>
+        </div>
+    )
+}
+
+// ── Blessing-page template picker ────────────────────────────────────
+// The active renderers BookPageTemplate dispatches on. `null` = "כמו
+// הספר" (inherit the preset's main template — the pre-feature
+// behavior). Labels mirror the system-preset names so the admin
+// recognizes each layout instantly.
+const TEMPLATE_OPTIONS = [
+    { value: null, label: 'כמו הספר' },
+    { value: 'classic', label: 'קלאסי' },
+    { value: 'polaroid', label: 'פולארויד' },
+    { value: 'scrapbook', label: 'סקראפבוק' },
+    { value: 'notebook', label: 'מחברת' },
+    { value: 'collage', label: 'קולאז׳' },
+]
+
+function PropertyTemplatePicker({ label, value, disabled, onChange, hint }) {
+    return (
+        <div>
+            <PropertyHeader icon={Layers} label={label} />
+            <div className='flex flex-wrap gap-1 rounded-lg p-1' style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}>
+                {TEMPLATE_OPTIONS.map(opt => {
+                    const active = (value ?? null) === opt.value
+                    return (
+                        <button
+                            key={String(opt.value)}
+                            type='button'
+                            onClick={() => !disabled && onChange(opt.value)}
+                            disabled={disabled}
+                            className={`px-2.5 py-1 rounded-md text-[11px] transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                                active ? 'text-white shadow-sm font-bold' : 'text-[#7a6a52] hover:bg-white'
+                            }`}
+                            style={{ ...(active && { background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }) }}
+                        >
+                            {opt.label}
+                        </button>
+                    )
+                })}
+            </div>
+            {hint && <p className='text-[10px] text-[#c4b9a4] mt-1.5 leading-relaxed'>{hint}</p>}
+        </div>
+    )
+}
+
+// ── Event-type tags editor ───────────────────────────────────────────
+// Multi-select chips for the preset's ROOT `eventTypes` array. Empty
+// selection = generic preset (visible for every event type) — that's
+// also the backward-compat default for presets created before this
+// feature. Labels come from the shared eventTypes catalogue so the
+// studio speaks the same names as the admin wedding form.
+function PropertyEventTypesEdit({ selected, disabled, onToggle, onClear }) {
+    const isGeneric = selected.length === 0
+    return (
+        <div>
+            <PropertyHeader icon={Crown} label='שיוך לסוג אירוע' />
+            <div className='flex flex-wrap gap-1 rounded-lg p-1' style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}>
+                <button
+                    type='button'
+                    onClick={() => !disabled && onClear()}
+                    disabled={disabled}
+                    className={`px-2.5 py-1 rounded-md text-[11px] transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                        isGeneric ? 'text-white shadow-sm font-bold' : 'text-[#7a6a52] hover:bg-white'
+                    }`}
+                    style={{ ...(isGeneric && { background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }) }}
+                >
+                    כל האירועים
+                </button>
+                {EVENT_TYPE_ORDER.map(typeId => {
+                    const active = selected.includes(typeId)
+                    return (
+                        <button
+                            key={typeId}
+                            type='button'
+                            onClick={() => !disabled && onToggle(typeId)}
+                            disabled={disabled}
+                            className={`px-2.5 py-1 rounded-md text-[11px] transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                                active ? 'text-white shadow-sm font-bold' : 'text-[#7a6a52] hover:bg-white'
+                            }`}
+                            style={{ ...(active && { background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }) }}
+                        >
+                            {getEventConfig(typeId).label}
+                        </button>
+                    )
+                })}
+            </div>
+            <p className='text-[10px] text-[#c4b9a4] mt-1.5 leading-relaxed'>
+                {isGeneric
+                    ? 'התבנית מוצגת לכל סוגי האירועים. בחר סוגים כדי להציג אותה רק להם.'
+                    : 'התבנית תוצג רק לאירועים מהסוגים שנבחרו (אפשר לבחור כמה).'}
+            </p>
         </div>
     )
 }

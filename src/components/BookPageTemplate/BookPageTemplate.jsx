@@ -1,6 +1,7 @@
 'use client'
 
 import { getBlessingText } from '@/lib/normalizeText'
+import { resolveActiveTemplate } from '@/lib/presetFilters'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
 import EntryPhoto from '../EntryPhoto/EntryPhoto'
@@ -51,11 +52,28 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
         )
     }
 
-    const passThrough = { entry, styleSettings, scaledWidth, scaledHeight }
-    if (styleSettings?.template === 'polaroid') return <PolaroidPageLayout {...passThrough} />
-    if (styleSettings?.template === 'scrapbook') return <ScrapbookPageLayout {...passThrough} />
-    if (styleSettings?.template === 'notebook') return <NotebookPageLayout {...passThrough} />
-    if (styleSettings?.template === 'collage') return <CollagePageLayout {...passThrough} />
+    // ── Blessing-page template override ──────────────────────────────
+    // `styleSettings.blessingTemplate` lets the studio pick a SEPARATE
+    // layout for blessing-only pages — i.e. the text page of an
+    // auto-split entry (_split === 'text') and any entry that has no
+    // photo at all. The photo page / combined pages keep the book's
+    // main `template`. Unset (or 'inherit') → same template everywhere,
+    // exactly the pre-feature behavior. Logic in presetFilters.js.
+    const activeTemplate = resolveActiveTemplate(entry, styleSettings)
+
+    const passThrough = {
+        entry,
+        styleSettings:
+            activeTemplate === styleSettings?.template
+                ? styleSettings
+                : { ...styleSettings, template: activeTemplate },
+        scaledWidth,
+        scaledHeight,
+    }
+    if (activeTemplate === 'polaroid') return <PolaroidPageLayout {...passThrough} />
+    if (activeTemplate === 'scrapbook') return <ScrapbookPageLayout {...passThrough} />
+    if (activeTemplate === 'notebook') return <NotebookPageLayout {...passThrough} />
+    if (activeTemplate === 'collage') return <CollagePageLayout {...passThrough} />
 
     // ── Classic layout (default) ─────────────────────────────────────────
     // getBlessingText collapses whitespace to one line by default, but if

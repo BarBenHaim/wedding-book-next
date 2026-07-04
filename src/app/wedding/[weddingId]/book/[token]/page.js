@@ -39,7 +39,7 @@ import { expandBookPages } from '@/lib/bookPages'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
 import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
-import { listPresets, resolvePreset, BUILTIN_PRESETS } from '@/lib/studioPresets'
+import { listPresets, resolvePreset, filterPresetsByEventType, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
@@ -587,15 +587,17 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
 
     // Live preset list for the bottom picker. listPresets falls back
     // to BUILTIN_PRESETS on any Firestore error, so the strip is
-    // never empty.
-    const [presets, setPresets] = useState(BUILTIN_PRESETS)
+    // never empty. Scoped to the wedding's eventType — this gallery
+    // shows only presets tagged for the event's type + generic ones.
+    const [presets, setPresets] = useState(() => filterPresetsByEventType(BUILTIN_PRESETS, wedding?.eventType))
     useEffect(() => {
         let cancelled = false
-        listPresets().then(list => {
+        listPresets({ eventType: wedding?.eventType }).then(list => {
             if (!cancelled && Array.isArray(list) && list.length > 0) setPresets(list)
         })
         return () => { cancelled = true }
-    }, [])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [wedding?.eventType])
 
     // Apply a preset AND persist it as the couple's chosen book design.
     //

@@ -310,6 +310,13 @@ export function buildDescription(data = {}, locale = 'he') {
  * Which optional fields does the admin UI need to expose for a given event type?
  */
 export function fieldsForType(rawType) {
+    // An EXPLICIT but unrecognized type (e.g. a future type written to
+    // Firestore before this build knew about it) gets the generic
+    // celebrant fields — safer than assuming bride/groom. Missing/empty
+    // rawType still normalizes to 'wedding' for backward compat.
+    if (rawType && !Object.prototype.hasOwnProperty.call(EVENT_TYPES, rawType)) {
+        return ['celebrantName', 'weddingDate']
+    }
     const type = normalizeEventType(rawType)
     if (type === 'wedding') return ['brideName', 'groomName', 'weddingDate']
     if (type === 'birthday') return ['celebrantName', 'age', 'weddingDate']
