@@ -1378,7 +1378,18 @@ function FunnelView({ stats, loading }) {
         return <p className='text-xs text-[#a89378]'>אין נתונים זמינים.</p>
     }
 
-    const { scans = 0, uniqueScans = 0, startedBlessing = 0, submitted = 0, recentScans = [] } = stats
+    const { scans = 0, uniqueScans = 0, startedBlessing = 0, submitted = 0, sentSuccess = 0, sentError = 0, recentErrors = [], recentScans = [] } = stats
+
+    // Event chrome for the recent-activity feed — one dot color + label
+    // per funnel event, errors in red with their message inline.
+    const EVENT_META = {
+        scan: { label: 'סריקה', color: '#AA8840' },
+        start_blessing: { label: 'התחיל ברכה', color: '#d4b867' },
+        form_submit: { label: 'שלח טופס', color: '#c9a44e' },
+        photo_upload: { label: 'העלה תמונה', color: '#8ea7c9' },
+        blessing_sent_success: { label: 'ברכה נקלטה ✓', color: '#7da76a' },
+        blessing_sent_error: { label: 'שליחה נכשלה ✗', color: '#c43b3b' },
+    }
 
     // Percentages relative to scans (the top of the funnel). When scans
     // is 0 we show "—" instead of NaN%.
@@ -1410,6 +1421,30 @@ function FunnelView({ stats, loading }) {
                 </div>
             ))}
 
+            {/* בקרת העלאות — did submits actually make it into the book? */}
+            <div className='mt-4 pt-4 border-t border-[#f0e8d4]'>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-2'>בקרת העלאות</p>
+                <div className='flex flex-wrap items-center gap-2'>
+                    <span className='text-[11.5px] font-bold px-2.5 py-1 rounded-full' style={{ background: 'rgba(125,167,106,0.12)', color: '#4e7a3f', border: '1px solid rgba(125,167,106,0.35)' }}>
+                        ✓ נקלטו בהצלחה {sentSuccess}
+                    </span>
+                    <span className='text-[11.5px] font-bold px-2.5 py-1 rounded-full' style={sentError > 0 ? { background: 'rgba(196,59,59,0.10)', color: '#a02c2c', border: '1px solid rgba(196,59,59,0.30)' } : { background: '#f6f1e4', color: '#a89378', border: '1px solid #ead9b3' }}>
+                        ✗ נכשלו {sentError}
+                    </span>
+                </div>
+                {recentErrors.length > 0 && (
+                    <div className='mt-2.5 space-y-1'>
+                        {recentErrors.slice(0, 5).map((e, i) => (
+                            <div key={i} className='text-[10.5px] leading-relaxed rounded-lg px-2.5 py-1.5' style={{ background: 'rgba(196,59,59,0.06)', border: '1px solid rgba(196,59,59,0.18)', color: '#7a3a3a' }}>
+                                <span className='font-mono text-[#a89378]'>{e.createdAt ? new Date(e.createdAt).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                                {' · '}
+                                {e.meta || 'שגיאה ללא פירוט'}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             {/* Recent activity */}
             {recentScans.length > 0 && (
                 <div className='mt-5 pt-4 border-t border-[#f0e8d4]'>
@@ -1429,10 +1464,13 @@ function FunnelView({ stats, loading }) {
                                 <div key={i} className='flex items-center gap-2 text-[11px] text-[#7a6a52] py-1'>
                                     <span
                                         className='w-1.5 h-1.5 rounded-full flex-shrink-0'
-                                        style={{ background: s.event === 'scan' ? '#AA8840' : '#7da76a' }}
+                                        style={{ background: EVENT_META[s.event]?.color || '#a89378' }}
                                     />
                                     <span className='font-mono text-[10px] text-[#a89378] flex-shrink-0'>{when}</span>
-                                    <span className='truncate'>{s.event === 'scan' ? 'סריקה' : 'התחיל ברכה'} · {device}</span>
+                                    <span className='truncate' title={s.meta || ''}>
+                                        {EVENT_META[s.event]?.label || s.event} · {device}
+                                        {s.event === 'blessing_sent_error' && s.meta ? ` · ${s.meta}` : ''}
+                                    </span>
                                 </div>
                             )
                         })}

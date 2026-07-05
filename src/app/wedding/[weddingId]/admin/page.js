@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { getEntries } from '../../../../lib/classifyMedia'
 import { useParams } from 'next/navigation'
-import { doc, updateDoc, deleteDoc, writeBatch, collection, addDoc } from 'firebase/firestore'
+import { doc, updateDoc, deleteDoc, writeBatch, collection, addDoc, getDocs, query, orderBy, limit } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../../../../lib/firebaseClient'
 import { getBlessingText, normalizeBlessing, formatBlessingSmart } from '../../../../lib/normalizeText'
@@ -15,6 +15,15 @@ import { Heebo } from 'next/font/google'
 const heebo = Heebo({ subsets: ['hebrew'], weight: ['400', '700', '900'] })
 
 const ITEMS_PER_PAGE = 12
+
+// "4.7.2026 · 21:35" — the full upload moment of an entry. Managers
+// asked to see WHEN each blessing arrived, not just the date.
+const fmtUploadedAt = ts => {
+    const sec = ts?.seconds ?? (typeof ts?.toDate === 'function' ? Math.floor(ts.toDate().getTime() / 1000) : null)
+    if (!sec) return ''
+    const d = new Date(sec * 1000)
+    return `${d.toLocaleDateString('he-IL')} · ${d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}`
+}
 
 // Icons
 const TrashIcon = () => (
@@ -81,6 +90,43 @@ export default function AdminDashboard() {
     // Pagination — `showAll` disables it so the owner can drag-reorder
     // across the WHOLE list (otherwise drag only works inside the current
     // 12-item page and you can't move an entry to another page).
+    // ── בקרת העלאות ──────────────────────────────────────────────────
+    // Reads the wedding's funnel events (owner-readable per Firestore
+    // rules) and surfaces how many guest submissions succeeded/failed,
+    // plus the latest error. Fails silently (strip hides) when the
+    // viewer isn't the owner or the read is unavailable.
+    const [uploadHealth, setUploadHealth] = useState(null)
+    useEffect(() => {
+        if (!weddingId) return
+        let cancelled = false
+        ;(async () => {
+            try {
+                const snap = await getDocs(query(collection(db, 'weddings', weddingId, 'scans'), orderBy('createdAt', 'desc'), limit(500)))
+                if (cancelled) return
+                let success = 0
+                let failed = 0
+                let lastError = null
+                for (const d of snap.docs) {
+                    const ev = d.data()
+                    if (ev.event === 'blessing_sent_success') success++
+                    else if (ev.event === 'blessing_sent_error') {
+                        failed++
+                        if (!lastError) {
+                            lastError = {
+                                meta: typeof ev.meta === 'string' ? ev.meta : '',
+                                seconds: ev.createdAt?.seconds || null,
+                            }
+                        }
+                    }
+                }
+                setUploadHealth({ success, failed, lastError })
+            } catch {
+                /* not the owner / offline — hide the strip */
+            }
+        })()
+        return () => { cancelled = true }
+    }, [weddingId])
+
     const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE)
     const startIdx = (currentPage - 1) * ITEMS_PER_PAGE
     const paginatedEntries = entries.slice(startIdx, startIdx + ITEMS_PER_PAGE)
@@ -304,6 +350,26 @@ export default function AdminDashboard() {
                         <p className='text-base text-gray-500'>
                             <span className='font-bold text-[#AA8840]'>{entries.length}</span> רגעים שנאספו
                         </p>
+                        {/* בקרת העלאות — הצלחות/כשלונות של שליחות אורחים */}
+                        {uploadHealth && (uploadHealth.success > 0 || uploadHealth.failed > 0) && (
+                            <div className='flex flex-wrap items-center gap-2 mt-2.5'>
+                                <span className='inline-flex items-center gap-1 text-[11.5px] font-bold px-2.5 py-1 rounded-full' style={{ background: 'rgba(125,167,106,0.12)', color: '#4e7a3f', border: '1px solid rgba(125,167,106,0.35)' }}>
+                                    ✓ {uploadHealth.success} שליחות הצליחו
+                                </span>
+                                {uploadHealth.failed > 0 ? (
+                                    <span
+                                        className='inline-flex items-center gap-1 text-[11.5px] font-bold px-2.5 py-1 rounded-full'
+                                        style={{ background: 'rgba(196,59,59,0.10)', color: '#a02c2c', border: '1px solid rgba(196,59,59,0.30)' }}
+                                        title={uploadHealth.lastError?.meta || ''}
+                                    >
+                                        ✗ {uploadHealth.failed} נכשלו
+                                        {uploadHealth.lastError?.seconds ? ` · אחרונה: ${fmtUploadedAt({ seconds: uploadHealth.lastError.seconds })}` : ''}
+                                    </span>
+                                ) : (
+                                    <span className='text-[11px] text-gray-400'>אין שליחות שנכשלו</span>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {entries.length > 0 && (
@@ -417,6 +483,9 @@ export default function AdminDashboard() {
                                                             <div className='flex-1 min-w-0'>
                                                                 <div className='font-bold text-sm text-gray-900 truncate'>{entry.name || 'אורח/ת'}</div>
                                                                 <div className='text-xs text-gray-500 truncate'>{entry.text || (entry.imageUrl ? 'ברכה עם תמונה' : '')}</div>
+                                                                {entry.timestamp?.seconds && (
+                                                                    <div className='text-[10px] text-gray-400 mt-0.5'>הועלתה {fmtUploadedAt(entry.timestamp)}</div>
+                                                                )}
                                                             </div>
                                                             {/* Quick "to top" for big jumps */}
                                                             <button
@@ -545,8 +614,8 @@ export default function AdminDashboard() {
                                                                                 {entry.name || 'אורח אנונימי'}
                                                                             </h3>
                                                                             {entry.timestamp?.seconds && (
-                                                                                <span className='text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5'>
-                                                                                    {new Date(entry.timestamp.seconds * 1000).toLocaleDateString('he-IL')}
+                                                                                <span className='text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5' title='מועד העלאת הברכה'>
+                                                                                    {fmtUploadedAt(entry.timestamp)}
                                                                                 </span>
                                                                             )}
                                                                         </div>

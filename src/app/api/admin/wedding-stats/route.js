@@ -62,6 +62,12 @@ export async function GET(req) {
 
         let scans = 0
         let startedBlessing = 0
+        // Upload health — blessing_sent_success / blessing_sent_error
+        // events logged by the guest form. Errors keep their meta (the
+        // client-side error message) so the admin can see WHY.
+        let sentSuccess = 0
+        let sentError = 0
+        const recentErrors = []
         const ipsScan = new Set()
         const recentScans = []
         const hourBuckets = new Map() // ISO hour → count
@@ -80,6 +86,16 @@ export async function GET(req) {
                 }
             } else if (d.event === 'start_blessing') {
                 startedBlessing++
+            } else if (d.event === 'blessing_sent_success') {
+                sentSuccess++
+            } else if (d.event === 'blessing_sent_error') {
+                sentError++
+                if (recentErrors.length < 8) {
+                    recentErrors.push({
+                        meta: typeof d.meta === 'string' ? d.meta.slice(0, 200) : '',
+                        createdAt: ts ? ts.toISOString() : null,
+                    })
+                }
             }
             if (recentScans.length < 50) {
                 recentScans.push({
@@ -87,6 +103,7 @@ export async function GET(req) {
                     ip: d.ip || '',
                     userAgent: d.userAgent || '',
                     referer: d.referer || '',
+                    meta: typeof d.meta === 'string' ? d.meta.slice(0, 200) : '',
                     createdAt: ts ? ts.toISOString() : null,
                 })
             }
@@ -125,6 +142,9 @@ export async function GET(req) {
             uniqueScans: ipsScan.size,
             startedBlessing,
             submitted,
+            sentSuccess,
+            sentError,
+            recentErrors,
             recentScans,
             hourly,
         })
