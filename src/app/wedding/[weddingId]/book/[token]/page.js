@@ -64,6 +64,14 @@ export default function DigitalEditionPage() {
         let cancelled = false
         ;(async () => {
             try {
+                // Fire BOTH reads together — entries are public per the
+                // Firestore rules, so they don't need to wait for token
+                // validation. Overlapping the two round-trips shaves a
+                // full network hop off the load. The wedding doc lands
+                // first (it's tiny) → setWedding immediately so the
+                // loading screen can show the book's REAL cover while
+                // the entries are still on the wire.
+                const entriesPromise = getEntries(weddingId).catch(() => [])
                 const wSnap = await getDoc(doc(db, 'weddings', weddingId))
                 if (cancelled) return
                 if (!wSnap.exists()) {
@@ -78,7 +86,7 @@ export default function DigitalEditionPage() {
                 }
                 setLocale(normalizeLocale(w.locale))
                 setWedding(w)
-                const list = await getEntries(weddingId)
+                const list = await entriesPromise
                 if (cancelled) return
                 // Render entry photos straight from their stored Firebase
                 // URLs — exactly like the viewer and the portal, which load
@@ -172,12 +180,10 @@ export default function DigitalEditionPage() {
         if (typeof window === 'undefined') return
         if (!entries || entries.length === 0) return
         const preloaders = []
-        for (const e of entries) {
-            if (!e.imageUrl) continue
+        const warm = (e, priority) => {
             try {
                 const img = new window.Image()
-                // 'low' priority so foreground work isn't blocked.
-                img.fetchPriority = 'low'
+                img.fetchPriority = priority
                 img.decoding = 'async'
                 img.src = e.imageUrl
                 preloaders.push(img)
@@ -185,8 +191,18 @@ export default function DigitalEditionPage() {
                 /* ignore — some browsers may not support all hints */
             }
         }
-        // Clear refs on unmount so the browser can GC if needed.
+        // Two waves: the photos the reader hits FIRST (the front of the
+        // book = the END of the entries array, since the flipbook opens
+        // on the FrontCover and reads backward through the reversed
+        // list) warm immediately; the rest wait ~1.4s so they don't
+        // compete with the flipbook's initial paint for bandwidth.
+        const withPhotos = entries.filter(e => e.imageUrl)
+        const firstWave = withPhotos.slice(-6)
+        const restWave = withPhotos.slice(0, -6)
+        firstWave.forEach(e => warm(e, 'auto'))
+        const t = setTimeout(() => restWave.forEach(e => warm(e, 'low')), 1400)
         return () => {
+            clearTimeout(t)
             preloaders.length = 0
         }
     }, [entries])
@@ -227,7 +243,7 @@ export default function DigitalEditionPage() {
                 }
             `}</style>
             <div className='digital-book-root'>
-                {status === 'loading' && <LoadingScreen />}
+                {status === 'loading' && <LoadingScreen wedding={wedding} />}
                 {status === 'invalid' && <InvalidScreen />}
                 {status === 'ready' && wedding && (
                     <BookViewer wedding={wedding} entries={entries} weddingId={weddingId} token={token} embed={embed} />
@@ -238,7 +254,23 @@ export default function DigitalEditionPage() {
 }
 
 // ─── Loading ─────────────────────────────────────────────────────────────
-function LoadingScreen() {
+// Two modes:
+//   • wedding present (doc arrived, entries still loading) → the book's
+//     REAL front cover — BookCoverTemplate with the owner's coverDesign
+//     — floating with a soft gold glow and a shine sweep. Rendering the
+//     cover here also warms its image, so the flipbook's opening page
+//     paints instantly when the book mounts.
+//   • no wedding yet (first ~200ms) → the original mini-book animation.
+function LoadingScreen({ wedding = null }) {
+    const [coverSize] = useState(() =>
+        typeof window === 'undefined'
+            ? 280
+            : Math.max(220, Math.min(330, Math.floor(Math.min(window.innerWidth * 0.72, window.innerHeight * 0.44))))
+    )
+    const coverStyle = useMemo(
+        () => ({ ...defaultStyle, ...(wedding?.coverDesign || wedding?.book?.designSettings || {}) }),
+        [wedding]
+    )
     return (
         <div
             className='min-h-screen flex items-center justify-center relative overflow-hidden'
@@ -272,6 +304,76 @@ function LoadingScreen() {
                 Pure CSS + a single SVG ornament. Reads as luxurious
                 without being heavy. */}
             <div className='relative z-10 flex flex-col items-center gap-7'>
+                {wedding ? (
+                    /* ── The book's real cover, floating ── */
+                    <div
+                        className='relative'
+                        style={{ width: coverSize, height: coverSize, animation: 'loaderCoverFloat 4.4s ease-in-out infinite' }}
+                    >
+                        {/* Breathing gold halo behind the cover */}
+                        <div
+                            aria-hidden
+                            style={{
+                                position: 'absolute',
+                                inset: -26,
+                                borderRadius: 24,
+                                background: 'radial-gradient(ellipse at 50% 45%, rgba(201,164,78,0.28) 0%, rgba(201,164,78,0.0) 70%)',
+                                animation: 'loaderGlow 3.2s ease-in-out infinite',
+                                pointerEvents: 'none',
+                            }}
+                        />
+                        <div
+                            className='relative'
+                            style={{
+                                width: '100%',
+                                height: '100%',
+                                borderRadius: 10,
+                                overflow: 'hidden',
+                                border: '1px solid rgba(201,164,78,0.40)',
+                                boxShadow: '0 34px 70px -22px rgba(0,0,0,0.65), 0 0 44px rgba(201,164,78,0.22), inset 0 1px 0 rgba(255,255,255,0.12)',
+                                animation: 'loaderCoverIn 650ms cubic-bezier(0.2, 0.8, 0.2, 1) both',
+                            }}
+                        >
+                            <BookCoverTemplate
+                                wedding={wedding}
+                                styleSettings={coverStyle}
+                                scaledWidth={coverSize}
+                                scaledHeight={coverSize}
+                            />
+                            {/* Shine sweep — a soft light band crossing the
+                                cover every few seconds, like tilting a real
+                                hardcover under a lamp. */}
+                            <div
+                                aria-hidden
+                                style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    background:
+                                        'linear-gradient(115deg, transparent 32%, rgba(255,255,255,0.26) 46%, rgba(255,255,255,0.07) 54%, transparent 68%)',
+                                    transform: 'translateX(-130%)',
+                                    animation: 'loaderShine 2.8s ease-in-out infinite',
+                                    animationDelay: '0.5s',
+                                    pointerEvents: 'none',
+                                }}
+                            />
+                        </div>
+                        {/* Ground shadow that breathes with the float */}
+                        <div
+                            aria-hidden
+                            style={{
+                                position: 'absolute',
+                                left: '10%',
+                                right: '10%',
+                                bottom: -22,
+                                height: 22,
+                                borderRadius: '50%',
+                                background: 'radial-gradient(ellipse, rgba(0,0,0,0.5) 0%, transparent 70%)',
+                                filter: 'blur(7px)',
+                                animation: 'loaderShadow 4.4s ease-in-out infinite',
+                            }}
+                        />
+                    </div>
+                ) : (
                 <div
                     className='relative'
                     style={{
@@ -333,6 +435,7 @@ function LoadingScreen() {
                         <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                     </svg>
                 </div>
+                )}
 
                 {/* Three-dot rhythm + caption */}
                 <div className='flex flex-col items-center gap-3'>
@@ -389,6 +492,27 @@ function LoadingScreen() {
                 @keyframes loaderFloat {
                     0%, 100% { transform: translateY(0) translateX(0); }
                     50% { transform: translateY(-30px) translateX(8px); }
+                }
+                @keyframes loaderCoverFloat {
+                    0%, 100% { transform: translateY(0) rotateZ(-0.6deg); }
+                    50% { transform: translateY(-10px) rotateZ(0.6deg); }
+                }
+                @keyframes loaderCoverIn {
+                    from { opacity: 0; transform: scale(0.9) translateY(16px); }
+                    to { opacity: 1; transform: scale(1) translateY(0); }
+                }
+                @keyframes loaderShine {
+                    0% { transform: translateX(-130%); }
+                    55% { transform: translateX(130%); }
+                    100% { transform: translateX(130%); }
+                }
+                @keyframes loaderGlow {
+                    0%, 100% { opacity: 0.55; transform: scale(0.97); }
+                    50% { opacity: 1; transform: scale(1.03); }
+                }
+                @keyframes loaderShadow {
+                    0%, 100% { transform: scaleX(1); opacity: 0.85; }
+                    50% { transform: scaleX(0.88); opacity: 0.55; }
                 }
             `}</style>
         </div>
