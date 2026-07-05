@@ -3,6 +3,7 @@ import {
     presetMatchesEventType,
     filterPresetsByEventType,
     resolveActiveTemplate,
+    adoptSurfaceKeepCover,
 } from '../src/lib/presetFilters'
 
 // ── Event-type targeting ─────────────────────────────────────────────
@@ -99,5 +100,61 @@ describe('resolveActiveTemplate', () => {
         const s = { template: 'polaroid', blessingTemplate: 'notebook' }
         expect(resolveActiveTemplate({ text: '   ', imageUrl: null }, s)).toBe('polaroid')
         expect(resolveActiveTemplate({}, s)).toBe('polaroid')
+    })
+})
+
+// ── Cover-preserving design adoption ─────────────────────────────────
+
+describe('adoptSurfaceKeepCover', () => {
+    const ownerCover = {
+        backgroundColor: '#f7f1e3',
+        texture: '/textures/tex9.png',
+        coverImage: 'https://storage/cover.jpg',
+        coverImageScale: 1.35,
+        coverImageX: 12,
+        coverImageY: -4,
+        coverTitle: 'דור ושקד',
+        coverSubtitle: 'ספר הברכות',
+        coverTextPosition: 'bc',
+        coverTextBg: 'rgba(0,0,0,0.3)',
+        coverTextColor: '#ffffff',
+    }
+    const preset = {
+        backgroundColor: '#ffffff',
+        texture: '/textures/tex5.png',
+        fontClass: 'font-x',
+        imageStyle: { width: 75, height: 65 },
+        template: 'polaroid',
+    }
+
+    it('adopts the surface look but keeps EVERY cover-specific field', () => {
+        const out = adoptSurfaceKeepCover(ownerCover, preset)
+        // surface adopted
+        expect(out.backgroundColor).toBe('#ffffff')
+        expect(out.texture).toBe('/textures/tex5.png')
+        expect(out.fontClass).toBe('font-x')
+        // cover fields preserved — the "shrinking cover" regression guard
+        expect(out.coverImage).toBe(ownerCover.coverImage)
+        expect(out.coverImageScale).toBe(1.35)
+        expect(out.coverImageX).toBe(12)
+        expect(out.coverImageY).toBe(-4)
+        expect(out.coverTitle).toBe('דור ושקד')
+        expect(out.coverSubtitle).toBe('ספר הברכות')
+        expect(out.coverTextPosition).toBe('bc')
+        expect(out.coverTextBg).toBe('rgba(0,0,0,0.3)')
+        expect(out.coverTextColor).toBe('#ffffff')
+    })
+
+    it('no existing cover → the design passes through untouched', () => {
+        expect(adoptSurfaceKeepCover(null, preset)).toEqual(preset)
+        expect(adoptSurfaceKeepCover({}, preset)).toEqual(preset)
+    })
+
+    it('does not mutate its inputs', () => {
+        const cover = { ...ownerCover }
+        const design = { ...preset }
+        adoptSurfaceKeepCover(cover, design)
+        expect(cover).toEqual(ownerCover)
+        expect(design).toEqual(preset)
     })
 })
