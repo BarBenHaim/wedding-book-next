@@ -1,5 +1,6 @@
 // src/app/layout.tsx
 import './globals.css'
+import Script from 'next/script'
 import Header from '@/components/Header/Header'
 import {
     geistSans,
@@ -45,6 +46,17 @@ export default function RootLayout({ children }) {
           ${cormorant.variable} ${playfairSC.variable}
           `}
             >
+                {/* Microsoft Clarity — session recordings + heatmaps,
+                    site-wide. next/script with afterInteractive loads it
+                    async right after hydration (the App Router equivalent
+                    of the docs' <head> snippet) without blocking paint. */}
+                <Script id='ms-clarity' strategy='afterInteractive'>
+                    {`(function(c,l,a,r,i,t,y){
+                        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+                        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+                    })(window, document, "clarity", "script", "xhmexj42pw");`}
+                </Script>
                 <Header />
                 {children}
                 <Footer />
