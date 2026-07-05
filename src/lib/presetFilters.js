@@ -42,21 +42,3 @@ export function resolveActiveTemplate(entry, styleSettings) {
     const isBlessingOnlyPage = !entry?.imageUrl && Boolean((entry?.text || '').trim())
     return isBlessingOnlyPage ? override : mainTemplate
 }
-
-// ── Cover-preserving design adoption ─────────────────────────────────
-// When a couple picks a book preset from the digital link, the COVER
-// should adopt the preset's surface look (background, fonts, palette)
-// while keeping every cover-specific field the owner designed: the
-// uploaded photo, its scale/position, title, subtitle, text placement,
-// cover frame/texture/overlay. Wholesale replacement was the "cover
-// photo suddenly shrinks / cover breaks when switching designs" bug —
-// it wiped coverImageScale, coverTitle & friends on every preset pick.
-// Used identically by the client (live preview) and the server
-// (/api/digital-edition/set-design) so what you see is what persists.
-export function adoptSurfaceKeepCover(existingCover, design) {
-    const next = { ...(design || {}) }
-    for (const [k, v] of Object.entries(existingCover || {})) {
-        if (k.startsWith('cover')) next[k] = v
-    }
-    return next
-}

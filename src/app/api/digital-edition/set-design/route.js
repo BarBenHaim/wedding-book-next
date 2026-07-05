@@ -4,7 +4,6 @@ export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { adminDb } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
-import { adoptSurfaceKeepCover } from '@/lib/presetFilters'
 
 // POST /api/digital-edition/set-design
 //
@@ -19,11 +18,10 @@ import { adoptSurfaceKeepCover } from '@/lib/presetFilters'
 //     We trust the CLIENT to resolve (it owns the preset registry +
 //     next/font classNames); the server's job is auth + a sanity cap.
 //
-// Writes wedding.bookDesign (interior) + wedding.coverDesign (surface
-// look only — every cover-specific field the owner designed, from the
-// cover photo and its scale to the title placement, is preserved) and
-// records source + timestamp so the admin can see that the couple set
-// it themselves.
+// Writes wedding.bookDesign (interior) + wedding.coverDesign (cover,
+// preserving any uploaded coverImage) so the whole book adopts the
+// look — and records source + timestamp so the admin can see that the
+// couple set it themselves.
 
 const MAX_DESIGN_BYTES = 8000
 
@@ -61,13 +59,10 @@ export async function POST(req) {
             return NextResponse.json({ error: 'Invalid token' }, { status: 403 })
         }
 
-        // Cover adopts the preset's surface look; every cover* field
-        // the owner designed survives. Replacing them wholesale was the
-        // "cover photo shrinks / cover breaks after switching designs"
-        // bug — it wiped coverImageScale, coverTitle & friends on every
-        // preset pick. Same helper as the client's live preview.
+        // Cover adopts the same look but keeps any uploaded cover image.
         const existingCover = isPlainObject(data.coverDesign) ? data.coverDesign : {}
-        const coverDesign = adoptSurfaceKeepCover(existingCover, design)
+        const coverDesign = { ...design }
+        if (existingCover.coverImage) coverDesign.coverImage = existingCover.coverImage
 
         await ref.set(
             {

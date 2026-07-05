@@ -40,7 +40,6 @@ import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
 import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 import { listPresets, resolvePreset, filterPresetsByEventType, BUILTIN_PRESETS } from '@/lib/studioPresets'
-import { adoptSurfaceKeepCover } from '@/lib/presetFilters'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
@@ -418,7 +417,7 @@ function InvalidScreen() {
 // ─── Main book viewer ───────────────────────────────────────────────────
 function BookViewer({ wedding, entries, weddingId, token, embed }) {
     const flipRef = useRef(null)
-    const [page, setPage] = useState(null) // flipbook page index — set by onInit/onFlip
+    const [page, setPage] = useState(0)
     // Skip the landing/welcome screen — the user opted to drop the
     // "you've reached the digital book of…" intro and jump straight
     // into the flipbook. The landing component is still defined below
@@ -571,27 +570,6 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
         [entries, styleSettings.autoSplit, styleSettings.splitThreshold, pageSize.isPortrait]
     )
 
-    // ── Reading-position continuity ─────────────────────────────────
-    // The flipbook remounts when the PHYSICAL page count changes (a
-    // preset with different auto-split settings, or rotating between
-    // the 1-up and 2-up layouts) — that's what its key encodes. A bare
-    // remount snaps back to the FrontCover, which is exactly the
-    // "switching designs reloads the book and starts over" bug. We
-    // track the live page index in a ref and, on remount, map the
-    // reader's distance-from-the-front onto the new count so they stay
-    // on the same spot in the story. Presets with identical split
-    // settings don't remount at all — styles restyle in place.
-    const pageIndexRef = useRef(null)
-    const prevLenRef = useRef(bookPages.length)
-    let startIndex = bookPages.length + 1 // default: open on the FrontCover
-    if (pageIndexRef.current != null) {
-        const fromFront = prevLenRef.current + 1 - pageIndexRef.current
-        startIndex = Math.min(bookPages.length + 1, Math.max(0, bookPages.length + 1 - fromFront))
-    }
-    useEffect(() => {
-        prevLenRef.current = bookPages.length
-    }, [bookPages.length])
-
     // ── Cover style — pinned to the wedding owner's choice ─────────
     // The front cover (BookCoverTemplate, with the couple's names) is
     // the wedding owner's territory: their design from /viewer should
@@ -618,7 +596,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
             if (!cancelled && Array.isArray(list) && list.length > 0) setPresets(list)
         })
         return () => { cancelled = true }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [wedding?.eventType])
 
     // Apply a preset AND persist it as the couple's chosen book design.
@@ -634,12 +612,11 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
         const resolved = resolvePreset(preset).values || {}
         const merged = { ...defaultStyle, ...resolved }
         setStyleSettings(merged)
-        // Cover adopts the preset's SURFACE look only — every
-        // cover-specific field (photo, scale/position, title, subtitle,
-        // text placement) stays exactly as the owner designed it.
-        // Mirrors the server-side merge in set-design so the live
-        // preview and the persisted doc agree. See adoptSurfaceKeepCover.
-        setCoverStyleSettings(prev => adoptSurfaceKeepCover(prev, merged))
+        // Cover adopts the same look, but keep any uploaded cover image.
+        setCoverStyleSettings(prev => ({
+            ...merged,
+            ...(prev?.coverImage ? { coverImage: prev.coverImage } : {}),
+        }))
         if (!token) return
         try {
             setDesignSave('saving')
@@ -658,19 +635,13 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
         }
     }
 
-    // Physical leaves in the flipbook: BackCover + every rendered page
-    // (incl. auto-split text/photo pages and spread-alignment leaves) +
-    // FrontCover. Counting raw entries here undercounted whenever the
-    // smart split expanded an entry into two pages — the "page counter
-    // is wrong" bug.
-    const totalPages = bookPages.length + 2
+    const totalPages = entries.length + 2
 
-    // RTL flipbook: children run BackCover(0) → pages → FrontCover(N+1)
-    // and the reader OPENS on the FrontCover, flipping toward index 0.
-    // "Next" in reading order therefore calls flipPrev (lower index).
-    // The counter shows the reader's position from the front:
-    // totalPages - pageIndex → 1 on the FrontCover, totalPages on the
-    // BackCover.
+    // Hebrew "descending" flow: user opens on page #totalPages and
+    // flipping forward reduces the count toward 1. Visual "next"
+    // therefore calls flipPrev (lower index) and "prev" calls
+    // flipNext (higher index). Counter below stays at page+1, which
+    // displays totalPages at the start and 1 at the end.
     function next() { flipRef.current?.pageFlip().flipPrev() }
     function prev() { flipRef.current?.pageFlip().flipNext() }
     function fullscreen() {
@@ -1008,13 +979,13 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                             height={pageSize.h}
                             size='fixed'
                             showCover={true}
-                            // First mount: opens on the LAST array
-                            // index (FrontCover). After a remount caused
-                            // by a page-count change (preset switch /
-                            // rotation), startIndex restores the
-                            // reader's position instead of snapping
-                            // back to the cover.
-                            startPage={startIndex}
+                            // Open on the LAST array index (FrontCover —
+                            // see page-order comment further down).
+                            // Combined with the swapped prev/next
+                            // helpers below this means the user lands
+                            // on page #totalPages and counts down to
+                            // page 1 as they flip "next".
+                            startPage={bookPages.length + 1}
                             usePortrait={pageSize.isPortrait}
                             mobileScrollSupport={true}
                             // drawShadow=false matches /viewer — the
@@ -1035,14 +1006,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                             swipeDistance={pageSize.isPortrait ? 18 : 30}
                             maxShadowOpacity={0.4}
                             useMouseEvents={true}
-                            onFlip={e => { pageIndexRef.current = e.data; setPage(e.data) }}
-                            onInit={e => {
-                                // Fires on every (re)mount with the real
-                                // landing page — keeps the counter honest
-                                // from the very first paint.
-                                const p = e?.data?.page
-                                if (typeof p === 'number') { pageIndexRef.current = p; setPage(p) }
-                            }}
+                            onFlip={e => setPage(e.data)}
                         >
                             {/* Page order matches /viewer EXACTLY:
                                 BackCover (decorative artwork) first,
@@ -1142,7 +1106,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                             letterSpacing: '0.12em',
                         }}
                     >
-                        <span style={{ fontWeight: 600 }}>{page == null ? 1 : Math.min(totalPages, Math.max(1, totalPages - page))}</span>
+                        <span style={{ fontWeight: 600 }}>{Math.max(1, totalPages - page)}</span>
                         <span style={{ opacity: 0.4, margin: '0 6px' }}>/</span>
                         <span style={{ opacity: 0.7 }}>{totalPages}</span>
                     </span>
