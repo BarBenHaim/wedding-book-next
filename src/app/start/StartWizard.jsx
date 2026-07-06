@@ -97,8 +97,8 @@ function BookPreview({ data, presetValues, mode = 'cover' }) {
         const pct = x => (PAGE * (Number(x) || 0)) / 100
         const imgW = PAGE * ((Number(v.imageStyle?.width) || 80) / 100)
         const imgH = imgW * 0.75 // the book's 4:3 photo lock
-        const textSize = Math.max(11, pct(v.fontSizePercent ?? 3))
-        const nameSize = Math.max(10, pct(v.nameFontSizePercent ?? (v.fontSizePercent ? v.fontSizePercent * 0.7 : 2.1)))
+        const textSize = pct(v.fontSizePercent ?? 3)
+        const nameSize = pct(v.nameFontSizePercent ?? (v.fontSizePercent ? v.fontSizePercent * 0.7 : 2.1))
         const bodyFont = v.fontClass || frankRuhl.className
         return (
             <div className='pp'>
@@ -122,6 +122,9 @@ function BookPreview({ data, presetValues, mode = 'cover' }) {
                             fontSize: nameSize,
                             fontWeight: v.nameFontWeight ?? v.fontWeight,
                             color: v.nameColor ?? v.fontColor ?? '#3a2d1a',
+                            marginTop: pct(v.nameMarginTop ?? 2),
+                            marginBottom: pct(v.nameMarginBottom ?? 1),
+                            maxWidth: '60%',
                         }}
                     >
                         משפחת לוי
@@ -138,7 +141,7 @@ function BookPreview({ data, presetValues, mode = 'cover' }) {
                             marginBottom: pct(v.imageMarginBottom ?? 2),
                         }}
                     />
-                    <div className='ppTextWrap' style={{ maxWidth: `${v.textMaxWidth ?? 85}%` }}>
+                    <div className='ppTextWrap' style={{ maxWidth: `${v.textMaxWidth ?? 85}%`, marginTop: pct(v.textMarginTop ?? 0) }}>
                         <p
                             className={bodyFont}
                             style={{
@@ -159,7 +162,7 @@ function BookPreview({ data, presetValues, mode = 'cover' }) {
                     .ppPage {
                         position: relative; width: 290px; aspect-ratio: 1 / 1; overflow: hidden;
                         box-sizing: border-box; text-align: center;
-                        display: flex; flex-direction: column; align-items: center; justify-content: center;
+                        display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
                         box-shadow: 0 24px 48px -18px rgba(48, 34, 12, 0.45), 0 4px 14px rgba(48, 34, 12, 0.16);
                         animation: ppFloat 5.5s ease-in-out infinite, ppIn 0.5s cubic-bezier(0.22, 1, 0.36, 1);
                     }
@@ -204,7 +207,7 @@ function BookPreview({ data, presetValues, mode = 'cover' }) {
             <style jsx>{`
                 .bp { display: flex; flex-direction: column; align-items: center; gap: 10px; }
                 .bpBook {
-                    position: relative; width: 235px; aspect-ratio: 3 / 4.15;
+                    position: relative; width: 244px; aspect-ratio: 1 / 1;
                     transform: perspective(1100px) rotateY(13deg) rotateX(3deg);
                     transform-style: preserve-3d;
                     animation: bpFloat 5.5s ease-in-out infinite, bpIn 0.55s cubic-bezier(0.22, 1, 0.36, 1);
@@ -223,7 +226,7 @@ function BookPreview({ data, presetValues, mode = 'cover' }) {
                     justify-content: center; text-align: center; padding: 22px 16px; gap: 8px;
                 }
                 .bpKicker { font-size: 10px; letter-spacing: 0.28em; color: rgba(90, 70, 35, 0.75); font-weight: 600; }
-                .bpTitle { margin: 0; font-size: 27px; line-height: 1.25; color: #332612; font-weight: 700; word-break: break-word; }
+                .bpTitle { margin: 0; font-size: 24px; line-height: 1.25; color: #332612; font-weight: 700; word-break: break-word; }
                 .bpRule { width: 44px; height: 1px; background: linear-gradient(90deg, transparent, var(--acc, #aa8840), transparent); }
                 .bpSub { font-size: 12px; color: rgba(90, 70, 35, 0.85); letter-spacing: 0.12em; }
                 .bpDate { font-size: 11px; color: rgba(90, 70, 35, 0.6); margin-top: 2px; }
@@ -262,16 +265,16 @@ function CoversFan() {
             ))}
             <span className='fanCaption'>ספרים אמיתיים שנפתחו אצלנו 💛</span>
             <style jsx>{`
-                .fan { position: relative; width: 288px; height: 166px; margin: 2px auto 0; }
+                .fan { position: relative; width: 288px; height: 140px; margin: 2px auto 0; }
                 .fanImg {
-                    position: absolute; top: 10px; width: 102px; aspect-ratio: 3 / 4.1; object-fit: cover;
+                    position: absolute; top: 12px; width: 96px; aspect-ratio: 1 / 1; object-fit: cover;
                     border-radius: 9px; border: 3px solid #fff;
                     box-shadow: 0 16px 30px -14px rgba(60, 44, 20, 0.5);
                     animation: fanIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) both, fanFloat 5s ease-in-out infinite;
                 }
-                .f0 { left: 2px; transform: rotate(-9deg); animation-delay: 0.05s, 0.8s; }
-                .f1 { left: 93px; top: 0; z-index: 2; transform: rotate(0deg) scale(1.06); animation-delay: 0.15s, 0s; }
-                .f2 { left: 184px; transform: rotate(9deg); animation-delay: 0.25s, 1.6s; }
+                .f0 { left: 4px; transform: rotate(-9deg); animation-delay: 0.05s, 0.8s; }
+                .f1 { left: 96px; top: 2px; z-index: 2; transform: rotate(0deg) scale(1.08); animation-delay: 0.15s, 0s; }
+                .f2 { left: 188px; transform: rotate(9deg); animation-delay: 0.25s, 1.6s; }
                 .fanCaption {
                     position: absolute; bottom: -6px; left: 0; right: 0; text-align: center;
                     font-size: 11.5px; color: #8a6f45; font-weight: 600;
@@ -1047,6 +1050,12 @@ export default function StartWizard() {
                 }
                 .field input:focus { border-color: var(--acc); box-shadow: 0 0 0 4px var(--accSoft); transform: translateY(-1px); }
                 .field em { font-style: normal; font-size: 12px; color: #a02c2c; animation: errShake 0.4s ease; }
+                .field input[type='date'] {
+                    appearance: none; -webkit-appearance: none; display: block;
+                    width: 100%; max-width: 100%; min-width: 0; min-height: 49px;
+                    direction: ltr; text-align: right; font-size: 15px;
+                }
+                .field input[type='date']::-webkit-date-and-time-value { text-align: right; }
 
                 .presetGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
                 .skel {

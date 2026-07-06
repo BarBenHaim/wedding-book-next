@@ -60,6 +60,17 @@ export async function uploadQueuedEntry(entry) {
         }
 
         await updateEntry(entry.id, { status: 'done', lastError: null })
+
+        // Owner push notification — fire-and-forget; a failure here must
+        // never affect the guest's upload.
+        try {
+            fetch('/api/notify-blessing', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ weddingId: entry.weddingId, name: entry.name || '' }),
+            }).catch(() => {})
+        } catch { /* noop */ }
+
         return true
     } catch (err) {
         const msg = err?.message || String(err)
