@@ -24,7 +24,7 @@ import { adminDb as db, adminAuth } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { generateSlug } from '@/lib/generateSlug'
 import { isSuperAdmin } from '@/lib/superAdmin'
-import { validateNewEvent, buildWeddingDoc, eventDisplayTitle, MAX_FREE_EVENTS } from '@/lib/onboarding'
+import { validateNewEvent, buildWeddingDoc, eventDisplayTitle, FREE_EVENT_LIMIT, MAX_EVENTS_PER_USER, isFreePlan } from '@/lib/onboarding'
 
 const MAX_DESIGN_BYTES = 8000
 
@@ -67,16 +67,19 @@ export async function POST(req) {
             design = body.design
         }
 
-        // ── 3. Free-tier cap (super admins exempt) ───────────────────
+        // ── 3. Event cap (super admins exempt): a FREE account (every
+        //       owned event is plan:'free') opens one event; any paid
+        //       package on the account unlocks up to MAX_EVENTS_PER_USER.
         const mine = await db.collection('weddings').where('ownerId', '==', uid).get()
-        if (mine.size >= MAX_FREE_EVENTS && !isSuperAdmin(email)) {
-            return NextResponse.json(
-                {
-                    error: 'limit',
-                    message: `אפשר לפתוח עד ${MAX_FREE_EVENTS} אירועים בחשבון חינמי. דברו איתנו ונשמח להרחיב 💛`,
-                },
-                { status: 403 },
-            )
+        if (!isSuperAdmin(email)) {
+            const freeAccount = mine.docs.every(d => isFreePlan(d.data()))
+            const limit = freeAccount ? FREE_EVENT_LIMIT : MAX_EVENTS_PER_USER
+            if (mine.size >= limit) {
+                const message = freeAccount
+                    ? 'בחשבון החינמי פותחים ספר אחד 🙂 חבילת הבסיס פותחת עד 3 אירועים — דברו איתנו בוואטסאפ'
+                    : `אפשר עד ${MAX_EVENTS_PER_USER} אירועים בחשבון — דברו איתנו ונשמח להרחיב 💛`
+                return NextResponse.json({ error: 'limit', message }, { status: 403 })
+            }
         }
 
         // ── 4. Slug + no-login viewer token (same mechanism as the

@@ -16,7 +16,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import QRCode from 'react-qr-code'
 import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
@@ -341,6 +340,15 @@ export default function StartWizard() {
             try { localStorage.setItem('weddingId', json.weddingId) } catch {}
             setCreated(json)
             setStep(4)
+            // Inside the mobile app's WebView (/onboard) — tell the app the
+            // account+event exist so it can bounce back to native sign-in
+            // with the email prefilled. No-op in a regular browser.
+            try {
+                window.ReactNativeWebView?.postMessage(JSON.stringify({
+                    type: 'wt_onboarding_done',
+                    email: (u?.email || account.email || '').toLowerCase(),
+                }))
+            } catch {}
         } finally {
             setBusy(false)
         }
@@ -614,7 +622,7 @@ export default function StartWizard() {
                             <button className='cta big' type='submit' disabled={busy}>
                                 {busy ? 'פותחים את הספר…' : 'פתחו את הספר שלי 🎉'}
                             </button>
-                            <p className='trust'>✓ חינם לגמרי&nbsp;&nbsp;·&nbsp;&nbsp;✓ בלי כרטיס אשראי&nbsp;&nbsp;·&nbsp;&nbsp;✓ מוכן תוך דקה</p>
+                            <p className='trust'>✓ אירוע אחד במתנה&nbsp;&nbsp;·&nbsp;&nbsp;✓ בלי כרטיס אשראי&nbsp;&nbsp;·&nbsp;&nbsp;✓ מוכן תוך דקה</p>
                         </form>
                     )}
 
@@ -622,14 +630,16 @@ export default function StartWizard() {
                         <div className='card doneCard'>
                             <Confetti />
                             <h1 className='h1'>🎉 מזל טוב! הספר באוויר</h1>
-                            <p className='sub'>שלחו לאורחים את הקישור או הציבו את ה-QR באירוע — כל ברכה נכנסת לספר ברגע שהיא נכתבת.</p>
+                            <p className='sub'>שלחו לאורחים את הקישור — כל ברכה נכנסת לספר ברגע שהיא נכתבת.</p>
 
                             <div className='doneGrid'>
-                                <div className='qrBox'>
-                                    <div className='qrInner'>
-                                        <QRCode value={created.links?.guest || ''} size={148} fgColor='#241c10' bgColor='transparent' />
-                                    </div>
-                                    <span>סרקו לכתיבת ברכה</span>
+                                <div className='qrBox qrLocked'>
+                                    <span className='lockEmoji'>✨</span>
+                                    <b className='lockTitle'>עמדת QR מעוצבת לאולם</b>
+                                    <span className='lockSub'>קובץ מוכן להדפסה והצבה באירוע, כריכה בעיצוב אישי ועד 3 אירועים — בחבילת הבסיס</span>
+                                    <a className='lockCta' href='https://wa.link/0sesxc' target='_blank' rel='noopener noreferrer'>
+                                        לשדרוג — דברו איתנו 💬
+                                    </a>
                                 </div>
 
                                 <div className='linksBox'>
@@ -826,6 +836,19 @@ export default function StartWizard() {
                 }
                 .qrInner { background: #fff; padding: 6px; border-radius: 10px; }
                 .qrBox span { font-size: 12.5px; color: #8a6f45; font-weight: 700; }
+                .qrBox.qrLocked {
+                    border-style: dashed; border-color: rgba(184, 137, 61, 0.55);
+                    background: linear-gradient(180deg, #fffdf6, #fbf3e2);
+                    max-width: 240px; margin-inline: auto; gap: 6px; justify-content: center;
+                }
+                .lockEmoji { font-size: 30px; line-height: 1; }
+                .lockTitle { font-size: 15px; color: #4c3b21; }
+                .lockSub { font-size: 12px !important; font-weight: 500 !important; line-height: 1.6; }
+                .lockCta {
+                    margin-top: 4px; background: linear-gradient(180deg, #d3b46a, #b8893d); color: #fff;
+                    text-decoration: none; padding: 10px 16px; border-radius: 12px; font-weight: 800; font-size: 13px;
+                    box-shadow: 0 10px 20px -10px rgba(170, 136, 64, 0.6);
+                }
                 .linksBox { display: flex; flex-direction: column; gap: 10px; }
                 .linkRow {
                     display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: right;

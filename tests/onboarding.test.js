@@ -5,7 +5,9 @@ import {
     eventDisplayTitle,
     cleanName,
     PUBLIC_EVENT_TYPES,
-    MAX_FREE_EVENTS,
+    FREE_EVENT_LIMIT,
+    MAX_EVENTS_PER_USER,
+    isFreePlan,
 } from '../src/lib/onboarding'
 
 describe('cleanName', () => {
@@ -103,10 +105,17 @@ describe('eventDisplayTitle', () => {
     })
 })
 
-describe('constants', () => {
-    it('public types are the four mainstream ones; cap is small', () => {
+describe('plan model', () => {
+    it('public types are the four mainstream ones; free opens one event, paid up to three', () => {
         expect(PUBLIC_EVENT_TYPES).toEqual(['wedding', 'bar_mitzvah', 'bat_mitzvah', 'birthday'])
-        expect(MAX_FREE_EVENTS).toBeGreaterThanOrEqual(1)
-        expect(MAX_FREE_EVENTS).toBeLessThanOrEqual(10)
+        expect(FREE_EVENT_LIMIT).toBe(1)
+        expect(MAX_EVENTS_PER_USER).toBe(3)
+    })
+
+    it('isFreePlan: only explicit plan:free is free — legacy paying docs have no plan field', () => {
+        expect(isFreePlan({ plan: 'free' })).toBe(true)
+        expect(isFreePlan({})).toBe(false)
+        expect(isFreePlan({ plan: 'basic' })).toBe(false)
+        expect(isFreePlan(null)).toBe(false)
     })
 })

@@ -17,10 +17,16 @@ export const EVENT_TYPE_META = {
 const THEME_IDS = ['gold', 'pink', 'blue']
 const DEFAULT_THEME = { wedding: 'gold', birthday: 'pink', bar_mitzvah: 'blue', bat_mitzvah: 'blue' }
 
-// Free self-serve accounts can open up to this many events. Guards the
-// Firestore bill against abuse; a real customer who hits it is a GOOD
-// problem (talk to them, raise it per-account).
-export const MAX_FREE_EVENTS = 3
+// Plan model: the free tier opens ONE event; the paid packages unlock
+// up to MAX_EVENTS_PER_USER on the same account. A user counts as free
+// while EVERY event they own carries plan:'free' — legacy paying
+// customers have no plan field at all, so they resolve as paid.
+export const FREE_EVENT_LIMIT = 1
+export const MAX_EVENTS_PER_USER = 3
+
+export function isFreePlan(w) {
+    return ((w && w.plan) || '') === 'free'
+}
 
 const NAME_MAX = 40
 
