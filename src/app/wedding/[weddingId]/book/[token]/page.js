@@ -262,19 +262,33 @@ export default function DigitalEditionPage() {
 //     paints instantly when the book mounts.
 //   • no wedding yet (first ~200ms) → the original mini-book animation.
 function LoadingScreen({ wedding = null }) {
+    // Cover size now scales down harder on short viewports: 190px min was
+    // 220 — the older floor let the cover + shadow + caption stack push
+    // past the visible area on small phones with the URL bar showing,
+    // and combined with the container's overflow-hidden the whole top
+    // half of the loader visibly clipped. Tighter min-clamp + a smaller
+    // fraction of the viewport keep everything inside the screen even on
+    // an iPhone SE-ish 375×540 usable area.
     const [coverSize] = useState(() =>
         typeof window === 'undefined'
-            ? 280
-            : Math.max(220, Math.min(330, Math.floor(Math.min(window.innerWidth * 0.72, window.innerHeight * 0.44))))
+            ? 260
+            : Math.max(190, Math.min(320, Math.floor(Math.min(window.innerWidth * 0.66, window.innerHeight * 0.4))))
     )
     const coverStyle = useMemo(
         () => ({ ...defaultStyle, ...(wedding?.coverDesign || wedding?.book?.designSettings || {}) }),
         [wedding]
     )
     return (
+        // 100dvh (dynamic viewport) so the iOS URL bar toggling doesn't
+        // push content off-screen; overflow-hidden dropped so the
+        // decorative shadow can't clip the cover mid-way.
         <div
-            className='min-h-screen flex items-center justify-center relative overflow-hidden'
-            style={{ background: 'radial-gradient(ellipse at 50% 30%, #2a1f17 0%, #14100c 100%)' }}
+            className='flex items-center justify-center relative'
+            style={{
+                minHeight: '100dvh',
+                padding: '24px 16px calc(24px + env(safe-area-inset-bottom, 0px))',
+                background: 'radial-gradient(ellipse at 50% 30%, #2a1f17 0%, #14100c 100%)',
+            }}
         >
             {/* Slow gold particles drifting up — same vibe as the
                 landing/flipbook background but quieter (8 dots, low
