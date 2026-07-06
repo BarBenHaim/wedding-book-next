@@ -164,6 +164,10 @@ export async function POST(req) {
         לניהול האירוע →
       </a>
     </div>
+    <p style="font-size:12.5px;color:#7a6a52;text-align:center;margin:14px 0 0;">
+      📲 טיפ: את הברכות הכי כיף לראות נכנסות בזמן אמת — <a href="${base}/app" style="color:#aa8840;font-weight:700;">באפליקציה שלנו</a>.
+      ויש שאלה? פשוט השיבו למייל הזה.
+    </p>
   </div>
   <div style="background:#fdf9ef;padding:14px 24px;border-top:1px solid rgba(170,136,64,0.2);text-align:center;color:#9a8665;font-size:11px;">
     באהבה, צוות Wedding Tales — Your moments, forever

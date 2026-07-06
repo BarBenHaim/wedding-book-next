@@ -2737,6 +2737,19 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                         )}
                     </div>
                 )}
+
+                {/* Viral footer — every guest at this event is a future
+                    celebrant. Quiet, tasteful, and the single cheapest
+                    growth channel the product has. */}
+                <a
+                    href='/start?utm_source=guest_page'
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    className='block text-center mt-8 mb-1'
+                    style={{ fontSize: 12, color: theme.subtitleColor, opacity: 0.8, textDecoration: 'none' }}
+                >
+                    נוצר עם 💛 Wedding Tales — פתחו ספר לאירוע שלכם, חינם
+                </a>
             </div>
         </div>
     )

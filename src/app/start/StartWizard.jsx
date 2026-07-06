@@ -45,6 +45,9 @@ const AUTO_THEME = { wedding: 'gold', birthday: 'pink', bar_mitzvah: 'blue', bat
 const STEP_LABELS = ['סוג האירוע', 'הפרטים', 'העיצוב', 'יוצאים לדרך']
 const DEFAULT_COVER = { backgroundColor: '#f7f1e3', texture: '/textures/tex9.png' }
 const WA = 'https://wa.link/0sesxc'
+// Paste a Grow/Meshulam/PayPlus payment-page URL to turn the upsell
+// into self-serve checkout; empty = WhatsApp conversation.
+const PAY_LINK_BASIS = ''
 
 // Wizard-wide accent per event type — flows into every control.
 const ACCENTS = {
@@ -885,7 +888,9 @@ export default function StartWizard() {
 
                             <p className='quietUp'>
                                 רוצים גם עמדת QR מעוצבת לאולם וכריכה אישית?{' '}
-                                <a href={WA} target='_blank' rel='noopener noreferrer'>חבילת הבסיס — דברו איתנו</a>
+                                <a href={PAY_LINK_BASIS || WA} target='_blank' rel='noopener noreferrer'>
+                                    {PAY_LINK_BASIS ? 'חבילת הבסיס — לרכישה מאובטחת 💳' : 'חבילת הבסיס — דברו איתנו'}
+                                </a>
                             </p>
                         </div>
                     )}
