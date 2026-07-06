@@ -34,10 +34,10 @@ import {
     browserLocalPersistence,
     signOut,
 } from 'firebase/auth'
-import { auth, db } from '@/lib/firebaseClient'
+import { auth } from '@/lib/firebaseClient'
 import { setExpiryWeek } from '@/lib/sessionExpiry'
-import { collection, getDocs, query, where } from 'firebase/firestore'
 import { listPresets, resolvePreset } from '@/lib/studioPresets'
+import { THEME_COLORS, THEME_COLOR_ORDER } from '@/lib/eventTypes'
 import { PUBLIC_EVENT_TYPES, EVENT_TYPE_META, validateNewEvent, eventDisplayTitle } from '@/lib/onboarding'
 import { frankRuhl } from '@/app/fonts'
 
@@ -70,77 +70,12 @@ function prettyDate(iso) {
     }
 }
 
-function weddingTitle(w) {
-    if (w.customTitle) return w.customTitle
-    if ((w.eventType || 'wedding') === 'wedding') {
-        const a = (w.brideNameHe || w.brideName || '').trim()
-        const b = (w.groomNameHe || w.groomName || '').trim()
-        if (a || b) return [a, b].filter(Boolean).join(' & ')
-    }
-    return (w.celebrantNameHe || w.celebrantName || '').trim() || 'האירוע שלי'
-}
-
 // ── Live book preview ────────────────────────────────────────────────
-function BookPreview({ data, presetValues, mode = 'cover' }) {
+function BookPreview({ data, presetValues }) {
     const v = presetValues || DEFAULT_COVER
     const title = eventDisplayTitle(data)
     const meta = data.eventType ? EVENT_TYPE_META[data.eventType] : null
     const titleFont = v.nameFontClass || v.fontClass || frankRuhl.className
-
-    // Interior page — a floating SQUARE spread page: sample photo +
-    // blessing, re-skinned live by the chosen preset (bg, texture, font).
-    if (mode === 'page') {
-        const textFont = v.fontClass || frankRuhl.className
-        return (
-            <div className='pp'>
-                <div className='ppPage' key={(v.__id || 'default') + '-page'} style={{ background: v.backgroundColor || '#fffdf6' }}>
-                    {v.texture ? <img src={v.texture} alt='' className='ppTex' /> : null}
-                    <div className='ppFrame' />
-                    <div className='ppPhoto'>
-                        <img src='/imgs/portfolio/wedding/cover.webp' alt='' />
-                    </div>
-                    <p className={`ppText ${textFont}`}>
-                        ”איזה אושר לחגוג איתכם! מאחלים לכם חיים של צחוק, אהבה והמון רגעים קטנים ומתוקים“
-                    </p>
-                    <span className='ppName'>— משפחת לוי</span>
-                    <span className='ppNum'>12</span>
-                    <div className='ppShine' />
-                </div>
-                <div className='ppShadow' />
-                <style jsx>{`
-                    .pp { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-                    .ppPage {
-                        position: relative; width: 258px; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden;
-                        box-shadow: 0 24px 48px -18px rgba(48, 34, 12, 0.45), 0 4px 14px rgba(48, 34, 12, 0.16);
-                        display: flex; flex-direction: column; align-items: center; justify-content: center;
-                        gap: 10px; padding: 20px 18px;
-                        animation: ppFloat 5.5s ease-in-out infinite, ppIn 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-                    }
-                    .ppTex { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.55; }
-                    .ppFrame { position: absolute; inset: 9px; border: 1px solid var(--acc, rgba(170, 136, 64, 0.5)); opacity: 0.5; border-radius: 7px; pointer-events: none; }
-                    .ppPhoto {
-                        position: relative; width: 58%; aspect-ratio: 4 / 3.4; background: #fff;
-                        padding: 5px 5px 14px; border-radius: 4px; transform: rotate(-2.2deg);
-                        box-shadow: 0 10px 22px -10px rgba(48, 34, 12, 0.45);
-                    }
-                    .ppPhoto img { width: 100%; height: 100%; object-fit: cover; border-radius: 2px; }
-                    .ppText { position: relative; margin: 0; font-size: 13px; line-height: 1.75; color: #3a2d1a; text-align: center; max-width: 92%; }
-                    .ppName { position: relative; font-size: 11.5px; color: #7a6548; font-weight: 600; }
-                    .ppNum { position: absolute; bottom: 7px; font-size: 9.5px; color: rgba(90, 70, 35, 0.5); letter-spacing: 0.2em; }
-                    .ppShine {
-                        position: absolute; inset: 0; pointer-events: none;
-                        background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.35) 46%, transparent 60%);
-                        transform: translateX(-120%); animation: ppSweep 0.9s ease 0.15s forwards;
-                    }
-                    .ppShadow { width: 210px; height: 16px; border-radius: 50%; background: radial-gradient(closest-side, rgba(48, 34, 12, 0.22), transparent); }
-                    @keyframes ppFloat { 0%, 100% { translate: 0 0; } 50% { translate: 0 -7px; } }
-                    @keyframes ppIn { from { opacity: 0; scale: 0.94; } to { opacity: 1; scale: 1; } }
-                    @keyframes ppSweep { to { transform: translateX(120%); } }
-                `}</style>
-            </div>
-        )
-    }
-
     return (
         <div className='bp'>
             <div className='bpBook' key={v.__id || 'default'}>
@@ -298,22 +233,7 @@ export default function StartWizard() {
     const [fieldErrs, setFieldErrs] = useState({})
     const [created, setCreated] = useState(null)
     const [copied, setCopied] = useState('')
-    const [maxStep, setMaxStep] = useState(0)
-    const [myEvents, setMyEvents] = useState(null)
     const stepRef = useRef(null)
-
-    useEffect(() => { setMaxStep(m => Math.max(m, step)) }, [step])
-
-    async function loadMyEvents(u) {
-        try {
-            const snap = await getDocs(query(collection(db, 'weddings'), where('ownerId', '==', u.uid)))
-            const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-            rows.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
-            setMyEvents(rows)
-        } catch {
-            setMyEvents([])
-        }
-    }
 
     useEffect(() => onAuthStateChanged(auth, u => { setUser(u); setAuthReady(true) }), [])
 
@@ -467,7 +387,6 @@ export default function StartWizard() {
                     setStep(json.errors.eventType ? 0 : 1)
                 }
                 setErr(json?.message || 'משהו השתבש — נסו שוב עוד רגע')
-                if (res.status === 403 && json?.error === 'limit' && u) loadMyEvents(u)
                 return
             }
             try { localStorage.setItem('weddingId', json.weddingId) } catch {}
@@ -509,21 +428,13 @@ export default function StartWizard() {
                 </Link>
                 {step < 4 && (
                     <div className='steps' aria-label='התקדמות'>
-                        <i className='track' />
-                        <i className='bar' style={{ width: `calc((100% - 76px) * ${step / 3})` }} />
                         {STEP_LABELS.map((l, i) => (
-                            <button
-                                type='button'
-                                key={l}
-                                className={`stepDot ${i === step ? 'cur' : ''} ${i < step ? 'done' : ''}`}
-                                disabled={i > maxStep}
-                                onClick={() => { if (i <= maxStep) { setErr(''); setStep(i) } }}
-                                aria-label={`שלב ${i + 1}: ${l}`}
-                            >
+                            <div key={l} className={`stepDot ${i === step ? 'cur' : ''} ${i < step ? 'done' : ''}`}>
                                 <span className='dot'>{i < step ? '✓' : i + 1}</span>
                                 <span className='dotLabel'>{l}</span>
-                            </button>
+                            </div>
                         ))}
+                        <i className='bar' style={{ width: `${(step / 3) * 100}%` }} />
                     </div>
                 )}
                 {step > 0 && step < 4 && (
@@ -534,8 +445,8 @@ export default function StartWizard() {
             <main className={`body ${showPreview ? 'withSide' : 'noSide'}`} ref={stepRef}>
                 {showPreview && (
                     <aside className='previewCol'>
-                        <BookPreview data={data} presetValues={previewValues} mode={step === 2 ? 'page' : 'cover'} />
-                        <p className='previewHint'>{step === 1 ? 'הספר נבנה תוך כדי שאתם כותבים ✍️' : step === 2 ? 'ככה נראה עמוד ברכה בעיצוב שבחרתם' : 'זה הספר שלכם — עוד צעד אחד'}</p>
+                        <BookPreview data={data} presetValues={previewValues} />
+                        <p className='previewHint'>{step === 1 ? 'הספר נבנה תוך כדי שאתם כותבים ✍️' : step === 2 ? 'טעימה חיה מהעיצוב שבחרתם' : 'זה הספר שלכם — עוד צעד אחד'}</p>
                     </aside>
                 )}
 
@@ -637,6 +548,25 @@ export default function StartWizard() {
                                 />
                                 {fieldErrs.weddingDate && <em>{fieldErrs.weddingDate}</em>}
                             </label>
+
+                            <div className='field'>
+                                <span>צבע דף האורחים</span>
+                                <div className='swatches'>
+                                    {THEME_COLOR_ORDER.map(id => (
+                                        <button
+                                            type='button'
+                                            key={id}
+                                            className={`swatch ${themeId === id ? 'sel' : ''}`}
+                                            style={{ background: THEME_COLORS[id].swatch }}
+                                            onClick={() => setData(d => ({ ...d, themeColor: id }))}
+                                            aria-label={THEME_COLORS[id].label}
+                                        >
+                                            {themeId === id ? '✓' : ''}
+                                        </button>
+                                    ))}
+                                    <span className='swatchName'>{THEME_COLORS[themeId]?.label}</span>
+                                </div>
+                            </div>
 
                             <button className='cta' type='submit'>ממשיכים לעיצוב ←</button>
                         </form>
@@ -758,22 +688,6 @@ export default function StartWizard() {
 
                             {err && <div className='errBox'>{err}</div>}
 
-                            {Array.isArray(myEvents) && myEvents.length > 0 && (
-                                <div className='mineBox'>
-                                    <b className='mineTitle'>האירועים שכבר בחשבון שלכם</b>
-                                    {myEvents.map(w => (
-                                        <div className='mineRow' key={w.id}>
-                                            <div className='mineInfo'>
-                                                <b>{weddingTitle(w)}</b>
-                                                <span>{EVENT_TYPE_META[w.eventType]?.label || 'אירוע'}{w.weddingDate ? ` · ${prettyDate(typeof w.weddingDate === 'string' ? w.weddingDate : '')}` : ''}</span>
-                                            </div>
-                                            <a className='mineGo' href={`/wedding/${w.id}/portal`}>כניסה ←</a>
-                                        </div>
-                                    ))}
-                                    <Link className='mineAll' href='/my'>לניהול כל האירועים שלי</Link>
-                                </div>
-                            )}
-
                             <button className='cta big' type='submit' disabled={busy}>
                                 {busy ? 'פותחים את הספר…' : 'פתחו את הספר שלי 🎉'}
                             </button>
@@ -857,37 +771,19 @@ export default function StartWizard() {
                     transition: background 0.15s ease;
                 }
                 .back:hover { background: rgba(201, 164, 78, 0.12); }
-                .steps { position: relative; display: flex; gap: 24px; padding-bottom: 4px; }
-                .track {
-                    position: absolute; top: 19px; inset-inline-start: 38px; inset-inline-end: 38px; height: 3px;
-                    background: rgba(170, 136, 64, 0.16); border-radius: 3px;
-                }
-                .bar {
-                    position: absolute; top: 19px; inset-inline-start: 38px; height: 3px;
-                    background: linear-gradient(90deg, var(--accB), var(--acc)); border-radius: 3px;
-                    box-shadow: 0 0 10px var(--accSoft);
-                    transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-                }
-                .stepDot {
-                    position: relative; z-index: 1;
-                    display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 64px;
-                    background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit;
-                }
-                .stepDot:disabled { cursor: default; }
+                .steps { position: relative; display: flex; gap: 26px; padding-bottom: 6px; }
+                .stepDot { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 54px; }
                 .dot {
-                    width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
-                    font-size: 15.5px; font-weight: 800; color: #8a6f45;
-                    background: #fff; border: 2px solid rgba(170, 136, 64, 0.35);
-                    box-shadow: 0 3px 8px -4px rgba(60, 44, 20, 0.3);
+                    width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+                    font-size: 12px; font-weight: 700; color: #8a6f45;
+                    background: #fff; border: 1.5px solid rgba(170, 136, 64, 0.35);
                     transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
                 }
-                .stepDot:not(:disabled):hover .dot { transform: translateY(-2px) scale(1.06); border-color: var(--acc); }
-                .stepDot.cur .dot { background: linear-gradient(180deg, var(--accB), var(--acc)); color: #fff; border-color: transparent; box-shadow: 0 8px 18px -7px var(--acc); transform: scale(1.18); }
+                .stepDot.cur .dot { background: linear-gradient(180deg, var(--accB), var(--acc)); color: #fff; border-color: transparent; box-shadow: 0 6px 14px -6px var(--acc); transform: scale(1.15); }
                 .stepDot.done .dot { background: var(--accSoft); color: var(--acc); border-color: transparent; }
-                .stepDot:disabled .dot { opacity: 0.55; box-shadow: none; }
-                .dotLabel { font-size: 11.5px; color: #8a6f45; font-weight: 600; }
-                .stepDot.cur .dotLabel { color: #5c451f; font-weight: 800; }
-                .stepDot:disabled .dotLabel { opacity: 0.55; }
+                .dotLabel { font-size: 11px; color: #8a6f45; }
+                .stepDot.cur .dotLabel { color: #5c451f; font-weight: 700; }
+                .bar { position: absolute; bottom: 0; inset-inline-start: 0; height: 2px; background: linear-gradient(90deg, var(--accB), var(--acc)); border-radius: 2px; transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
 
                 .body {
                     position: relative; z-index: 2; display: grid; grid-template-columns: 1fr;
@@ -969,7 +865,6 @@ export default function StartWizard() {
                 .field > span { font-size: 13.5px; font-weight: 700; color: #4c3b21; }
                 .opt { font-weight: 400; color: #9a8665; }
                 .field input {
-                    box-sizing: border-box; max-width: 100%; min-width: 0;
                     border: 1.5px solid rgba(170, 136, 64, 0.28); background: #fff; border-radius: 13px;
                     padding: 12px 14px; font-size: 16px; color: #241c10; outline: none; width: 100%;
                     transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
@@ -977,6 +872,16 @@ export default function StartWizard() {
                 }
                 .field input:focus { border-color: var(--acc); box-shadow: 0 0 0 4px var(--accSoft); transform: translateY(-1px); }
                 .field em { font-style: normal; font-size: 12px; color: #a02c2c; animation: errShake 0.4s ease; }
+
+                .swatches { display: flex; align-items: center; gap: 10px; }
+                .swatch {
+                    width: 34px; height: 34px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.9);
+                    outline: 1.5px solid rgba(60, 44, 20, 0.15); cursor: pointer; color: #fff; font-weight: 800;
+                    display: grid; place-items: center; transition: transform 0.18s cubic-bezier(0.22, 1.4, 0.36, 1), outline-color 0.15s ease;
+                }
+                .swatch:hover { transform: scale(1.14); }
+                .swatch.sel { outline: 2.5px solid var(--acc); transform: scale(1.16); }
+                .swatchName { font-size: 13px; color: #8a6f45; }
 
                 .presetGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
                 .skel {
@@ -1030,27 +935,6 @@ export default function StartWizard() {
                     30%, 50%, 70% { transform: translateX(-3px); }
                     40%, 60% { transform: translateX(3px); }
                 }
-
-                .mineBox {
-                    background: #fffdf6; border: 1px solid rgba(201, 164, 78, 0.35); border-radius: 16px;
-                    padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; text-align: right;
-                    animation: riseIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-                }
-                .mineTitle { font-size: 13.5px; color: #4c3b21; }
-                .mineRow {
-                    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-                    background: #fff; border: 1px solid rgba(201, 164, 78, 0.22); border-radius: 12px; padding: 10px 13px;
-                }
-                .mineInfo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-                .mineInfo b { font-size: 14.5px; color: #241c10; }
-                .mineInfo span { font-size: 11.5px; color: #9a8665; }
-                .mineGo {
-                    flex-shrink: 0; text-decoration: none; font-size: 13px; font-weight: 800; color: #fff;
-                    background: linear-gradient(180deg, var(--accB), var(--acc)); padding: 8px 14px; border-radius: 10px;
-                    box-shadow: 0 8px 16px -8px var(--acc); transition: transform 0.14s ease;
-                }
-                .mineGo:hover { transform: translateY(-1px); }
-                .mineAll { text-align: center; font-size: 12.5px; color: var(--acc); font-weight: 700; }
 
                 .cta {
                     position: relative; overflow: hidden;
