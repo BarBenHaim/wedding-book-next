@@ -1,17 +1,25 @@
 'use client'
 
-// StartWizard — the self-serve "open your blessing book" experience.
+// StartWizard v2 — the self-serve "open your blessing book" experience,
+// designed to feel like a gift being unwrapped rather than a form.
 //
-// Four playful steps with a LIVE book preview that builds itself as you
-// type: (1) event type → (2) names + date + palette → (3) real studio
-// presets filtered to the event type → (4) account → confetti + QR.
+//   • Real portfolio covers fan out on the opening screen — proof, not
+//     promises. (Same images the landing page uses.)
+//   • The accent color of the WHOLE wizard follows the chosen event
+//     type (wedding gold, bar mitzvah blue, bat mitzvah rose, birthday
+//     coral) via CSS variables — buttons, rings, dots, frames.
+//   • A live 3D book builds itself as you type; presets re-skin it.
+//   • Micro-interactions everywhere: staggered card entrances, shine
+//     sweeps on CTAs, popping selection badges, skeleton shimmer while
+//     presets load, a gentle shake on errors, confetti on success.
+//   • Success screen leads with SHARING (WhatsApp + link) — never with
+//     an upsell; the packages get one quiet line at the bottom.
+//   • The server seeds a welcome blessing, so the book is born with a
+//     first page — "הברכה הראשונה כבר בפנים".
 //
-// Design notes:
-//   • The preview is the product demo: names render on the cover the
-//     moment they're typed, the cover re-skins when a preset is tapped.
-//   • Writes go through /api/onboarding/create-event (Admin SDK) — the
-//     client only authenticates and describes the event.
-//   • Session cookie via /api/login so the portal works immediately.
+// Logic is unchanged from v1: auth (signup/login/already-in), session
+// cookie via /api/login, create-event API, postMessage to the mobile
+// app's WebView on completion.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -36,6 +44,22 @@ import { frankRuhl } from '@/app/fonts'
 const AUTO_THEME = { wedding: 'gold', birthday: 'pink', bar_mitzvah: 'blue', bat_mitzvah: 'blue' }
 const STEP_LABELS = ['סוג האירוע', 'הפרטים', 'העיצוב', 'יוצאים לדרך']
 const DEFAULT_COVER = { backgroundColor: '#f7f1e3', texture: '/textures/tex9.png' }
+const WA = 'https://wa.link/0sesxc'
+
+// Wizard-wide accent per event type — flows into every control.
+const ACCENTS = {
+    wedding: { a: '#b8893d', b: '#d9bc72', soft: 'rgba(201, 164, 78, 0.16)' },
+    bar_mitzvah: { a: '#3f68a6', b: '#7397cb', soft: 'rgba(63, 104, 166, 0.14)' },
+    bat_mitzvah: { a: '#b25e8c', b: '#d996ba', soft: 'rgba(178, 94, 140, 0.14)' },
+    birthday: { a: '#c26b38', b: '#e5a069', soft: 'rgba(194, 107, 56, 0.14)' },
+}
+
+// Real books from the portfolio (same assets as the landing page).
+const PORTFOLIO = [
+    { src: '/imgs/portfolio/bar-mitzvah/cover.webp', alt: 'הספר של נועם — בר מצווה' },
+    { src: '/imgs/portfolio/wedding/cover.webp', alt: 'הספר של שקד ודור — חתונה' },
+    { src: '/imgs/portfolio/birthday/cover.webp', alt: 'הספר של ג׳רי — יום הולדת 90' },
+]
 
 function prettyDate(iso) {
     if (!iso) return ''
@@ -47,13 +71,13 @@ function prettyDate(iso) {
 }
 
 // ── Live book preview ────────────────────────────────────────────────
-function BookPreview({ data, presetValues, compact }) {
+function BookPreview({ data, presetValues }) {
     const v = presetValues || DEFAULT_COVER
     const title = eventDisplayTitle(data)
     const meta = data.eventType ? EVENT_TYPE_META[data.eventType] : null
     const titleFont = v.nameFontClass || v.fontClass || frankRuhl.className
     return (
-        <div className={`bp ${compact ? 'bpCompact' : ''}`}>
+        <div className='bp'>
             <div className='bpBook' key={v.__id || 'default'}>
                 <div className='bpCover' style={{ background: v.backgroundColor || '#f7f1e3' }}>
                     {v.texture ? <img src={v.texture} alt='' className='bpTex' /> : null}
@@ -79,29 +103,24 @@ function BookPreview({ data, presetValues, compact }) {
                     transform-style: preserve-3d;
                     animation: bpFloat 5.5s ease-in-out infinite, bpIn 0.55s cubic-bezier(0.22, 1, 0.36, 1);
                 }
-                .bpCompact .bpBook { width: 150px; }
                 .bpCover {
                     position: absolute; inset: 0; border-radius: 14px 5px 5px 14px; overflow: hidden;
                     box-shadow: 0 24px 48px -18px rgba(48, 34, 12, 0.45), 0 4px 14px rgba(48, 34, 12, 0.18);
                 }
                 .bpTex { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.55; }
                 .bpFrame {
-                    position: absolute; inset: 10px; border: 1px solid rgba(170, 136, 64, 0.55);
-                    border-radius: 9px; pointer-events: none;
+                    position: absolute; inset: 10px; border: 1px solid var(--acc, rgba(170, 136, 64, 0.55));
+                    opacity: 0.65; border-radius: 9px; pointer-events: none;
                 }
                 .bpInner {
                     position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
                     justify-content: center; text-align: center; padding: 22px 16px; gap: 8px;
                 }
                 .bpKicker { font-size: 10px; letter-spacing: 0.28em; color: rgba(90, 70, 35, 0.75); font-weight: 600; }
-                .bpCompact .bpKicker { font-size: 8px; }
                 .bpTitle { margin: 0; font-size: 27px; line-height: 1.25; color: #332612; font-weight: 700; word-break: break-word; }
-                .bpCompact .bpTitle { font-size: 17px; }
-                .bpRule { width: 44px; height: 1px; background: linear-gradient(90deg, transparent, #aa8840, transparent); }
+                .bpRule { width: 44px; height: 1px; background: linear-gradient(90deg, transparent, var(--acc, #aa8840), transparent); }
                 .bpSub { font-size: 12px; color: rgba(90, 70, 35, 0.85); letter-spacing: 0.12em; }
-                .bpCompact .bpSub { font-size: 9px; }
                 .bpDate { font-size: 11px; color: rgba(90, 70, 35, 0.6); margin-top: 2px; }
-                .bpCompact .bpDate { font-size: 8.5px; }
                 .bpShine {
                     position: absolute; inset: 0; pointer-events: none;
                     background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.35) 46%, transparent 60%);
@@ -120,10 +139,39 @@ function BookPreview({ data, presetValues, compact }) {
                     width: 200px; height: 16px; border-radius: 50%;
                     background: radial-gradient(closest-side, rgba(48, 34, 12, 0.22), transparent);
                 }
-                .bpCompact .bpShadow { width: 120px; height: 10px; }
                 @keyframes bpFloat { 0%, 100% { translate: 0 0; } 50% { translate: 0 -7px; } }
                 @keyframes bpIn { from { opacity: 0; scale: 0.94; } to { opacity: 1; scale: 1; } }
                 @keyframes bpSweep { to { transform: translateX(120%); } }
+            `}</style>
+        </div>
+    )
+}
+
+// ── Real covers, fanned like a hand of treasures ─────────────────────
+function CoversFan() {
+    return (
+        <div className='fan' aria-hidden='true'>
+            {PORTFOLIO.map((p, i) => (
+                <img key={p.src} src={p.src} alt={p.alt} loading='lazy' className={`fanImg f${i}`} />
+            ))}
+            <span className='fanCaption'>ספרים אמיתיים שנפתחו אצלנו 💛</span>
+            <style jsx>{`
+                .fan { position: relative; width: 288px; height: 166px; margin: 2px auto 0; }
+                .fanImg {
+                    position: absolute; top: 10px; width: 102px; aspect-ratio: 3 / 4.1; object-fit: cover;
+                    border-radius: 9px; border: 3px solid #fff;
+                    box-shadow: 0 16px 30px -14px rgba(60, 44, 20, 0.5);
+                    animation: fanIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) both, fanFloat 5s ease-in-out infinite;
+                }
+                .f0 { left: 2px; transform: rotate(-9deg); animation-delay: 0.05s, 0.8s; }
+                .f1 { left: 93px; top: 0; z-index: 2; transform: rotate(0deg) scale(1.06); animation-delay: 0.15s, 0s; }
+                .f2 { left: 184px; transform: rotate(9deg); animation-delay: 0.25s, 1.6s; }
+                .fanCaption {
+                    position: absolute; bottom: -6px; left: 0; right: 0; text-align: center;
+                    font-size: 11.5px; color: #8a6f45; font-weight: 600;
+                }
+                @keyframes fanIn { from { opacity: 0; transform: translateY(18px) rotate(0deg) scale(0.9); } }
+                @keyframes fanFloat { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
             `}</style>
         </div>
     )
@@ -200,8 +248,10 @@ export default function StartWizard() {
         return () => { live = false }
     }, [step, data.eventType])
 
+    const mountedRef = useRef(false)
     useEffect(() => {
-        stepRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+        if (!mountedRef.current) { mountedRef.current = true; return }
+        try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {}
     }, [step])
 
     const selectedPreset = useMemo(
@@ -220,11 +270,13 @@ export default function StartWizard() {
 
     const themeId = data.themeColor || AUTO_THEME[data.eventType] || 'gold'
     const meta = data.eventType ? EVENT_TYPE_META[data.eventType] : null
+    const accent = ACCENTS[data.eventType] || ACCENTS.wedding
+    const bothNames = data.eventType === 'wedding' && data.brideName.trim() && data.groomName.trim()
 
     function pickType(t) {
         setData(d => ({ ...d, eventType: t }))
         setFieldErrs({})
-        setTimeout(() => setStep(1), 240)
+        setTimeout(() => setStep(1), 260)
     }
 
     function next1(e) {
@@ -363,10 +415,12 @@ export default function StartWizard() {
     }
 
     const showPreview = step >= 1 && step <= 3
+    const doneTitle = created ? eventDisplayTitle({ ...data, eventType: data.eventType }) : ''
 
     return (
-        <div className='wiz' dir='rtl'>
+        <div className='wiz' dir='rtl' style={{ '--acc': accent.a, '--accB': accent.b, '--accSoft': accent.soft }}>
             <div className='orb orbA' /><div className='orb orbB' />
+            <i className='spark s1' /><i className='spark s2' /><i className='spark s3' /><i className='spark s4' /><i className='spark s5' />
 
             <header className='top'>
                 <Link href='/landing' className='logoLink' aria-label='Wedding Tales'>
@@ -391,29 +445,36 @@ export default function StartWizard() {
             <main className={`body ${showPreview ? 'withSide' : 'noSide'}`} ref={stepRef}>
                 {showPreview && (
                     <aside className='previewCol'>
-                        <BookPreview data={data} presetValues={previewValues} compact={false} />
+                        <BookPreview data={data} presetValues={previewValues} />
                         <p className='previewHint'>{step === 1 ? 'הספר נבנה תוך כדי שאתם כותבים ✍️' : step === 2 ? 'טעימה חיה מהעיצוב שבחרתם' : 'זה הספר שלכם — עוד צעד אחד'}</p>
                     </aside>
                 )}
 
                 <section className='formCol' key={step}>
                     {step === 0 && (
-                        <div className='card'>
-                            <h1 className='h1'>איזה אירוע חוגגים? 🎉</h1>
-                            <p className='sub'>פותחים ספר ברכות דיגיטלי בחינם — האורחים כותבים ומעלים תמונות, אתם מתרגשים.</p>
+                        <div className='card hero'>
+                            <p className='overline'>Wedding Tales · ספרי ברכות מאירועים אמיתיים</p>
+                            <h1 className='h1'>האורחים כותבים.<br /><em>אתם מקבלים ספר.</em></h1>
+                            <p className='sub'>עמוד ברכות לאורחים, ספר דיגיטלי חי — והכול מוכן בדקה אחת, בחינם. איזה אירוע חוגגים?</p>
+
                             <div className='typeGrid'>
-                                {PUBLIC_EVENT_TYPES.map(t => (
+                                {PUBLIC_EVENT_TYPES.map((t, i) => (
                                     <button
                                         key={t}
                                         className={`typeCard ${data.eventType === t ? 'sel' : ''}`}
+                                        style={{ animationDelay: `${0.08 + i * 0.07}s`, '--tA': ACCENTS[t].a, '--tB': ACCENTS[t].b }}
                                         onClick={() => pickType(t)}
                                     >
-                                        <span className='typeEmoji'>{EVENT_TYPE_META[t].emoji}</span>
+                                        <span className='typeMedal'>{EVENT_TYPE_META[t].emoji}</span>
                                         <span className='typeLabel'>{EVENT_TYPE_META[t].label}</span>
                                         <span className='typeBlurb'>{EVENT_TYPE_META[t].blurb}</span>
                                     </button>
                                 ))}
                             </div>
+
+                            <CoversFan />
+
+                            <p className='trust'>✓ אירוע ראשון במתנה&nbsp;&nbsp;·&nbsp;&nbsp;✓ בלי כרטיס אשראי&nbsp;&nbsp;·&nbsp;&nbsp;✓ מוכן תוך דקה</p>
                             <p className='loginLine'>
                                 כבר יש לכם ספר? <Link href='/login'>כניסה לחשבון</Link>
                             </p>
@@ -438,7 +499,7 @@ export default function StartWizard() {
                                         />
                                         {fieldErrs.brideName && <em>{fieldErrs.brideName}</em>}
                                     </label>
-                                    <span className='amp'>&</span>
+                                    <span className={`amp ${bothNames ? 'ampOn' : ''}`}>&</span>
                                     <label className='field'>
                                         <span>שם החתן</span>
                                         <input
@@ -514,9 +575,15 @@ export default function StartWizard() {
                     {step === 2 && (
                         <div className='card'>
                             <h1 className='h1'>🎨 איזה עיצוב מדבר אליכם?</h1>
-                            <p className='sub'>אלה העיצובים האמיתיים מהסטודיו שלנו, מותאמים ל{meta?.label}. אפשר להחליף מתי שרוצים.</p>
+                            <p className='sub'>העיצובים האמיתיים מהסטודיו שלנו, מותאמים ל{meta?.label}. מקישים — והספר משמאל מתחלף.</p>
 
-                            {presets === null && <div className='loading'>טוענים עיצובים…</div>}
+                            {presets === null && (
+                                <div className='presetGrid'>
+                                    {[0, 1, 2, 3].map(i => (
+                                        <div key={i} className='skel' style={{ animationDelay: `${i * 0.12}s` }} />
+                                    ))}
+                                </div>
+                            )}
 
                             {Array.isArray(presets) && (
                                 <div className='presetGrid'>
@@ -524,6 +591,7 @@ export default function StartWizard() {
                                         className={`presetCard ${presetId === null ? 'sel' : ''}`}
                                         onClick={() => setPresetId(null)}
                                     >
+                                        {presetId === null && <span className='pBadge'>✓</span>}
                                         <span className='pSwatch' style={{ background: DEFAULT_COVER.backgroundColor }}>
                                             <img src={DEFAULT_COVER.texture} alt='' />
                                             <b className={frankRuhl.className}>א</b>
@@ -539,12 +607,13 @@ export default function StartWizard() {
                                                 className={`presetCard ${presetId === p.id ? 'sel' : ''}`}
                                                 onClick={() => setPresetId(p.id)}
                                             >
+                                                {presetId === p.id && <span className='pBadge'>✓</span>}
                                                 <span className='pSwatch' style={{ background: v.backgroundColor || '#fff' }}>
                                                     {v.texture ? <img src={v.texture} alt='' /> : null}
                                                     <b className={frankRuhl.className}>א</b>
                                                 </span>
                                                 <span className='pName'>{p.name || 'עיצוב'}</span>
-                                                {presetId === p.id ? <span className='pTag sel'>נבחר ✓</span> : <span className='pTag'>הקישו לתצוגה</span>}
+                                                <span className='pTag'>{presetId === p.id ? 'נבחר' : 'הקישו לתצוגה'}</span>
                                             </button>
                                         )
                                     })}
@@ -622,59 +691,48 @@ export default function StartWizard() {
                             <button className='cta big' type='submit' disabled={busy}>
                                 {busy ? 'פותחים את הספר…' : 'פתחו את הספר שלי 🎉'}
                             </button>
-                            <p className='trust'>✓ אירוע אחד במתנה&nbsp;&nbsp;·&nbsp;&nbsp;✓ בלי כרטיס אשראי&nbsp;&nbsp;·&nbsp;&nbsp;✓ מוכן תוך דקה</p>
+                            <p className='trust'>✓ אירוע ראשון במתנה&nbsp;&nbsp;·&nbsp;&nbsp;✓ בלי כרטיס אשראי&nbsp;&nbsp;·&nbsp;&nbsp;✓ מוכן תוך דקה</p>
                         </form>
                     )}
 
                     {step === 4 && created && (
                         <div className='card doneCard'>
                             <Confetti />
-                            <h1 className='h1'>🎉 מזל טוב! הספר באוויר</h1>
-                            <p className='sub'>שלחו לאורחים את הקישור — כל ברכה נכנסת לספר ברגע שהיא נכתבת.</p>
+                            <h1 className='h1'>🎉 מזל טוב! הספר של {doneTitle} באוויר</h1>
+                            <p className='sub'>הברכה הראשונה כבר מחכה בפנים — מעכשיו הבמה של האורחים. שלחו להם את הקישור וצפו בספר מתמלא.</p>
 
-                            <div className='doneGrid'>
-                                <div className='qrBox qrLocked'>
-                                    <span className='lockEmoji'>✨</span>
-                                    <b className='lockTitle'>עמדת QR מעוצבת לאולם</b>
-                                    <span className='lockSub'>קובץ מוכן להדפסה והצבה באירוע, כריכה בעיצוב אישי ועד 3 אירועים — בחבילת הבסיס</span>
-                                    <a className='lockCta' href='https://wa.link/0sesxc' target='_blank' rel='noopener noreferrer'>
-                                        לשדרוג — דברו איתנו 💬
-                                    </a>
-                                </div>
+                            <a
+                                className='waBig'
+                                href={`https://wa.me/?text=${encodeURIComponent('כותבים לנו ברכה לספר? 💛 ' + (created.links?.guest || ''))}`}
+                                target='_blank'
+                                rel='noopener noreferrer'
+                            >
+                                שתפו עם האורחים בוואטסאפ 💬
+                            </a>
 
-                                <div className='linksBox'>
-                                    <div className='linkRow'>
-                                        <div>
-                                            <b>🔗 קישור לאורחים</b>
-                                            <span dir='ltr'>{created.links?.guest}</span>
-                                        </div>
-                                        <button onClick={() => copy('guest', created.links?.guest)}>{copied === 'guest' ? 'הועתק ✓' : 'העתקה'}</button>
-                                    </div>
-                                    <div className='linkRow'>
-                                        <div>
-                                            <b>📖 הספר הדיגיטלי</b>
-                                            <span dir='ltr'>{created.links?.book}</span>
-                                        </div>
-                                        <button onClick={() => copy('book', created.links?.book)}>{copied === 'book' ? 'הועתק ✓' : 'העתקה'}</button>
-                                    </div>
-                                    <a
-                                        className='waBtn'
-                                        href={`https://wa.me/?text=${encodeURIComponent('כותבים לנו ברכה לספר? 💛 ' + (created.links?.guest || ''))}`}
-                                        target='_blank'
-                                        rel='noopener noreferrer'
-                                    >
-                                        שיתוף בוואטסאפ 💬
-                                    </a>
+                            <div className='linkRow'>
+                                <div>
+                                    <b>🔗 הקישור לאורחים</b>
+                                    <span dir='ltr'>{created.links?.guest}</span>
                                 </div>
+                                <button onClick={() => copy('guest', created.links?.guest)}>{copied === 'guest' ? 'הועתק ✓' : 'העתקה'}</button>
                             </div>
 
-                            <div className='doneCtas'>
-                                <button className='cta big' onClick={() => router.push(`/wedding/${created.weddingId}/portal`)}>
+                            <div className='rowBtns'>
+                                <a className='ghost half' href={created.links?.book} target='_blank' rel='noopener noreferrer'>
+                                    📖 הציצו בספר
+                                </a>
+                                <button className='cta half' onClick={() => router.push(`/wedding/${created.weddingId}/portal`)}>
                                     לניהול האירוע ←
                                 </button>
-                                <Link className='ghost' href='/my'>לכל האירועים שלי</Link>
                             </div>
-                            <p className='trust'>שלחנו לכם את כל הקישורים גם למייל 📫</p>
+
+                            <Link className='myLink' href='/my'>לכל האירועים שלי</Link>
+
+                            <p className='quietUp'>
+                                רוצים גם עמדת QR מעוצבת לאולם וכריכה אישית?{' '}
+                                <a href={WA} target='_blank' rel='noopener noreferrer'>חבילת הבסיס — דברו איתנו</a>
+                            </p>
                         </div>
                     )}
                 </section>
@@ -684,15 +742,23 @@ export default function StartWizard() {
                 .wiz {
                     min-height: 100dvh; position: relative; overflow: hidden;
                     background:
-                        radial-gradient(900px 500px at 85% -80px, rgba(201, 164, 78, 0.14), transparent 60%),
+                        radial-gradient(900px 500px at 85% -80px, var(--accSoft), transparent 60%),
                         radial-gradient(700px 420px at -60px 105%, rgba(201, 164, 78, 0.1), transparent 60%),
                         linear-gradient(180deg, #fdfaf2 0%, #faf5e9 55%, #f6efdf 100%);
                     color: #241c10;
                     font-family: var(--font-assistant), 'Assistant', 'Heebo', system-ui, sans-serif;
+                    transition: background 0.6s ease;
                 }
-                .orb { position: absolute; border-radius: 50%; filter: blur(70px); pointer-events: none; }
-                .orbA { width: 340px; height: 340px; background: rgba(211, 182, 101, 0.22); top: -120px; inset-inline-start: -80px; }
-                .orbB { width: 420px; height: 420px; background: rgba(233, 163, 176, 0.12); bottom: -180px; inset-inline-end: -120px; }
+                .orb { position: absolute; border-radius: 50%; filter: blur(70px); pointer-events: none; transition: background 0.6s ease; }
+                .orbA { width: 340px; height: 340px; background: var(--accSoft); top: -120px; inset-inline-start: -80px; }
+                .orbB { width: 420px; height: 420px; background: rgba(233, 163, 176, 0.1); bottom: -180px; inset-inline-end: -120px; }
+                .spark { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--accB); opacity: 0.4; pointer-events: none; animation: sparkFloat 7s ease-in-out infinite; }
+                .s1 { top: 18%; inset-inline-start: 8%; animation-delay: 0s; }
+                .s2 { top: 32%; inset-inline-end: 12%; animation-delay: 1.4s; width: 4px; height: 4px; }
+                .s3 { top: 64%; inset-inline-start: 16%; animation-delay: 2.8s; width: 3px; height: 3px; }
+                .s4 { top: 76%; inset-inline-end: 22%; animation-delay: 2s; }
+                .s5 { top: 48%; inset-inline-start: 46%; animation-delay: 3.6s; width: 3px; height: 3px; }
+                @keyframes sparkFloat { 0%, 100% { translate: 0 0; opacity: 0.25; } 50% { translate: 0 -16px; opacity: 0.55; } }
 
                 .top {
                     position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center;
@@ -701,21 +767,23 @@ export default function StartWizard() {
                 .logo { height: 44px; width: auto; }
                 .back {
                     position: absolute; inset-inline-start: 18px; top: 26px; background: none; border: 0;
-                    color: #8a6f45; font-size: 14px; cursor: pointer; padding: 8px;
+                    color: #8a6f45; font-size: 14px; cursor: pointer; padding: 8px; border-radius: 10px;
+                    transition: background 0.15s ease;
                 }
+                .back:hover { background: rgba(201, 164, 78, 0.12); }
                 .steps { position: relative; display: flex; gap: 26px; padding-bottom: 6px; }
                 .stepDot { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 54px; }
                 .dot {
                     width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
                     font-size: 12px; font-weight: 700; color: #8a6f45;
                     background: #fff; border: 1.5px solid rgba(170, 136, 64, 0.35);
-                    transition: all 0.25s ease;
+                    transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
                 }
-                .stepDot.cur .dot { background: linear-gradient(180deg, #d3b46a, #b8893d); color: #fff; border-color: transparent; box-shadow: 0 6px 14px -6px rgba(170, 136, 64, 0.7); transform: scale(1.12); }
-                .stepDot.done .dot { background: rgba(170, 136, 64, 0.14); color: #8a6f45; }
+                .stepDot.cur .dot { background: linear-gradient(180deg, var(--accB), var(--acc)); color: #fff; border-color: transparent; box-shadow: 0 6px 14px -6px var(--acc); transform: scale(1.15); }
+                .stepDot.done .dot { background: var(--accSoft); color: var(--acc); border-color: transparent; }
                 .dotLabel { font-size: 11px; color: #8a6f45; }
                 .stepDot.cur .dotLabel { color: #5c451f; font-weight: 700; }
-                .bar { position: absolute; bottom: 0; inset-inline-start: 0; height: 2px; background: linear-gradient(90deg, #d3b46a, #b8893d); border-radius: 2px; transition: width 0.4s ease; }
+                .bar { position: absolute; bottom: 0; inset-inline-start: 0; height: 2px; background: linear-gradient(90deg, var(--accB), var(--acc)); border-radius: 2px; transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
 
                 .body {
                     position: relative; z-index: 2; display: grid; grid-template-columns: 1fr;
@@ -723,42 +791,74 @@ export default function StartWizard() {
                 }
                 .previewCol { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 8px; }
                 .previewHint { font-size: 12.5px; color: #8a6f45; margin: 0; }
-                .formCol { animation: stepIn 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
-                @keyframes stepIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+                .formCol { animation: stepIn 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
+                @keyframes stepIn { from { opacity: 0; transform: translateY(18px) scale(0.99); } to { opacity: 1; transform: none; } }
 
                 @media (min-width: 920px) {
                     .body.withSide { grid-template-columns: 1fr 380px; gap: 40px; padding-top: 26px; align-items: start; }
-                    .body.noSide { max-width: 700px; padding-top: 26px; }
+                    .body.noSide { max-width: 760px; padding-top: 18px; }
                     .previewCol { order: 2; position: sticky; top: 96px; }
                     .formCol { order: 1; }
                 }
 
                 .card {
-                    background: rgba(255, 255, 255, 0.82); backdrop-filter: blur(10px);
-                    border: 1px solid rgba(201, 164, 78, 0.25); border-radius: 22px;
-                    padding: 26px 22px 24px; box-shadow: 0 20px 50px -30px rgba(60, 44, 20, 0.35);
+                    background: rgba(255, 255, 255, 0.84); backdrop-filter: blur(12px);
+                    border: 1px solid rgba(201, 164, 78, 0.25); border-radius: 24px;
+                    padding: 26px 22px 24px; box-shadow: 0 24px 60px -34px rgba(60, 44, 20, 0.4);
                     display: flex; flex-direction: column; gap: 16px;
+                    position: relative;
                 }
-                .h1 { margin: 0; font-size: clamp(22px, 4.6vw, 30px); font-weight: 800; letter-spacing: -0.01em; }
+                .card > * { animation: riseIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+                .card > *:nth-child(1) { animation-delay: 0.03s; }
+                .card > *:nth-child(2) { animation-delay: 0.08s; }
+                .card > *:nth-child(3) { animation-delay: 0.13s; }
+                .card > *:nth-child(4) { animation-delay: 0.18s; }
+                .card > *:nth-child(5) { animation-delay: 0.23s; }
+                .card > *:nth-child(6) { animation-delay: 0.28s; }
+                .card > *:nth-child(7) { animation-delay: 0.33s; }
+                .card > *:nth-child(8) { animation-delay: 0.38s; }
+                @keyframes riseIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+                .hero { text-align: center; }
+                .overline { margin: 0; font-size: 11.5px; letter-spacing: 0.16em; color: var(--acc); font-weight: 700; }
+                .h1 { margin: 0; font-size: clamp(23px, 4.8vw, 32px); font-weight: 800; letter-spacing: -0.01em; line-height: 1.3; }
+                .hero .h1 em {
+                    font-style: normal;
+                    background: linear-gradient(92deg, var(--acc), var(--accB) 55%, var(--acc));
+                    -webkit-background-clip: text; background-clip: text; color: transparent;
+                }
                 .sub { margin: -6px 0 2px; font-size: 14.5px; line-height: 1.7; color: #6d5a3d; }
 
                 .typeGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+                @media (min-width: 640px) { .typeGrid { grid-template-columns: repeat(4, 1fr); } }
                 .typeCard {
-                    display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
-                    padding: 20px 12px 16px; border-radius: 18px; cursor: pointer;
+                    display: flex; flex-direction: column; align-items: center; gap: 7px; text-align: center;
+                    padding: 18px 10px 14px; border-radius: 18px; cursor: pointer;
                     background: #fff; border: 1.5px solid rgba(201, 164, 78, 0.22);
-                    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+                    transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.18s ease, border-color 0.18s ease;
+                    animation: riseIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
                 }
-                .typeCard:hover { transform: translateY(-3px); box-shadow: 0 14px 30px -18px rgba(60, 44, 20, 0.4); border-color: rgba(201, 164, 78, 0.5); }
-                .typeCard.sel { border-color: #b8893d; background: linear-gradient(180deg, #fffdf6, #fbf3e2); transform: translateY(-3px) scale(1.02); box-shadow: 0 16px 32px -18px rgba(170, 136, 64, 0.55); }
-                .typeEmoji { font-size: 34px; line-height: 1; }
-                .typeLabel { font-size: 16.5px; font-weight: 800; }
-                .typeBlurb { font-size: 12px; color: #8a6f45; line-height: 1.5; }
-                .loginLine { margin: 4px 0 0; text-align: center; font-size: 13px; color: #8a6f45; }
-                .loginLine :global(a) { color: #a8843a; font-weight: 700; }
+                .typeCard:hover { transform: translateY(-4px) rotate(-0.5deg); box-shadow: 0 16px 32px -18px rgba(60, 44, 20, 0.45); border-color: var(--tA); }
+                .typeCard:active { transform: scale(0.97); }
+                .typeCard.sel { border-color: var(--tA); background: linear-gradient(180deg, #fffdf6, #fbf3e2); transform: translateY(-4px) scale(1.03); box-shadow: 0 18px 34px -18px var(--tA); }
+                .typeMedal {
+                    width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; font-size: 26px;
+                    background: linear-gradient(135deg, var(--tB), var(--tA));
+                    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.5), 0 8px 16px -8px var(--tA);
+                    transition: transform 0.2s ease;
+                }
+                .typeCard:hover .typeMedal { transform: scale(1.08) rotate(6deg); }
+                .typeCard.sel .typeMedal { animation: medalPop 0.4s cubic-bezier(0.22, 1.6, 0.36, 1); }
+                @keyframes medalPop { 50% { transform: scale(1.22); } }
+                .typeLabel { font-size: 15.5px; font-weight: 800; }
+                .typeBlurb { font-size: 11.5px; color: #8a6f45; line-height: 1.5; }
+                .loginLine { margin: 0; text-align: center; font-size: 13px; color: #8a6f45; }
+                .loginLine :global(a) { color: var(--acc); font-weight: 700; }
 
                 .row2 { display: flex; gap: 10px; align-items: flex-start; }
-                .amp { font-size: 22px; color: #b8893d; font-weight: 700; padding-top: 34px; }
+                .amp { font-size: 22px; color: var(--acc); font-weight: 700; padding-top: 34px; transition: transform 0.2s ease; }
+                .amp.ampOn { animation: ampPop 0.5s cubic-bezier(0.22, 1.6, 0.36, 1); }
+                @keyframes ampPop { 40% { transform: scale(1.5) rotate(8deg); } }
                 .field { display: flex; flex-direction: column; gap: 6px; flex: 1; }
                 .field.grow { flex: 2; }
                 .ageField { max-width: 130px; }
@@ -767,30 +867,47 @@ export default function StartWizard() {
                 .field input {
                     border: 1.5px solid rgba(170, 136, 64, 0.28); background: #fff; border-radius: 13px;
                     padding: 12px 14px; font-size: 16px; color: #241c10; outline: none; width: 100%;
-                    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+                    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
                     font-family: inherit;
                 }
-                .field input:focus { border-color: #b8893d; box-shadow: 0 0 0 3px rgba(184, 137, 61, 0.15); }
-                .field em { font-style: normal; font-size: 12px; color: #a02c2c; }
+                .field input:focus { border-color: var(--acc); box-shadow: 0 0 0 4px var(--accSoft); transform: translateY(-1px); }
+                .field em { font-style: normal; font-size: 12px; color: #a02c2c; animation: errShake 0.4s ease; }
 
                 .swatches { display: flex; align-items: center; gap: 10px; }
                 .swatch {
                     width: 34px; height: 34px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.9);
                     outline: 1.5px solid rgba(60, 44, 20, 0.15); cursor: pointer; color: #fff; font-weight: 800;
-                    display: grid; place-items: center; transition: transform 0.15s ease, outline-color 0.15s ease;
+                    display: grid; place-items: center; transition: transform 0.18s cubic-bezier(0.22, 1.4, 0.36, 1), outline-color 0.15s ease;
                 }
-                .swatch:hover { transform: scale(1.1); }
-                .swatch.sel { outline: 2px solid #b8893d; transform: scale(1.12); }
+                .swatch:hover { transform: scale(1.14); }
+                .swatch.sel { outline: 2.5px solid var(--acc); transform: scale(1.16); }
                 .swatchName { font-size: 13px; color: #8a6f45; }
 
                 .presetGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+                .skel {
+                    aspect-ratio: 3 / 4.4; border-radius: 15px;
+                    background: linear-gradient(100deg, #f3ead6 40%, #faf5e9 50%, #f3ead6 60%);
+                    background-size: 220% 100%;
+                    animation: shimmer 1.3s ease-in-out infinite;
+                }
+                @keyframes shimmer { from { background-position: 130% 0; } to { background-position: -30% 0; } }
                 .presetCard {
+                    position: relative;
                     display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 8px 10px;
                     background: #fff; border: 1.5px solid rgba(201, 164, 78, 0.2); border-radius: 15px; cursor: pointer;
-                    transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+                    transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.16s ease, box-shadow 0.16s ease;
                 }
-                .presetCard:hover { transform: translateY(-3px); box-shadow: 0 12px 26px -16px rgba(60, 44, 20, 0.4); }
-                .presetCard.sel { border-color: #b8893d; box-shadow: 0 12px 28px -14px rgba(170, 136, 64, 0.55); transform: translateY(-3px); }
+                .presetCard:hover { transform: translateY(-4px); box-shadow: 0 14px 28px -16px rgba(60, 44, 20, 0.45); }
+                .presetCard:active { transform: scale(0.97); }
+                .presetCard.sel { border-color: var(--acc); box-shadow: 0 14px 30px -14px var(--acc); transform: translateY(-4px); }
+                .pBadge {
+                    position: absolute; top: -8px; inset-inline-start: -8px; z-index: 2;
+                    width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+                    background: linear-gradient(180deg, var(--accB), var(--acc)); color: #fff; font-weight: 800; font-size: 13px;
+                    box-shadow: 0 6px 12px -5px var(--acc);
+                    animation: badgePop 0.35s cubic-bezier(0.22, 1.6, 0.36, 1);
+                }
+                @keyframes badgePop { from { transform: scale(0); } }
                 .pSwatch {
                     position: relative; width: 100%; aspect-ratio: 3/3.6; border-radius: 10px; overflow: hidden;
                     display: grid; place-items: center; border: 1px solid rgba(60, 44, 20, 0.1);
@@ -799,12 +916,10 @@ export default function StartWizard() {
                 .pSwatch b { position: relative; font-size: 30px; color: #332612; font-weight: 700; }
                 .pName { font-size: 12.5px; font-weight: 700; color: #4c3b21; }
                 .pTag { font-size: 10.5px; color: #9a8665; }
-                .pTag.sel { color: #7c6027; font-weight: 700; }
-                .loading { text-align: center; color: #8a6f45; font-size: 14px; padding: 22px 0; }
 
                 .meBox { background: #fffdf6; border: 1px solid rgba(201, 164, 78, 0.3); border-radius: 14px; padding: 14px 16px; font-size: 14.5px; }
                 .meBox p { margin: 0 0 6px; }
-                .linkBtn { background: none; border: 0; color: #a8843a; font-weight: 700; font-size: 13.5px; cursor: pointer; padding: 2px 0; text-align: right; font-family: inherit; }
+                .linkBtn { background: none; border: 0; color: var(--acc); font-weight: 700; font-size: 13.5px; cursor: pointer; padding: 2px 0; text-align: right; font-family: inherit; }
                 .pwWrap { position: relative; }
                 .pwWrap input { padding-inline-end: 44px; }
                 .pwEye { position: absolute; inset-inline-end: 8px; top: 50%; transform: translateY(-50%); background: none; border: 0; font-size: 17px; cursor: pointer; }
@@ -812,44 +927,46 @@ export default function StartWizard() {
                 .errBox {
                     background: rgba(196, 59, 59, 0.08); border: 1px solid rgba(196, 59, 59, 0.25);
                     color: #8f2626; border-radius: 12px; padding: 11px 14px; font-size: 13.5px; line-height: 1.6;
+                    animation: errShake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+                }
+                @keyframes errShake {
+                    10%, 90% { transform: translateX(-1px); }
+                    20%, 80% { transform: translateX(2px); }
+                    30%, 50%, 70% { transform: translateX(-3px); }
+                    40%, 60% { transform: translateX(3px); }
                 }
 
                 .cta {
+                    position: relative; overflow: hidden;
                     margin-top: 4px; border: 0; cursor: pointer; border-radius: 15px; padding: 14px 20px;
                     font-size: 16px; font-weight: 800; color: #fff; font-family: inherit;
-                    background: linear-gradient(180deg, #d3b46a, #b8893d);
-                    box-shadow: 0 14px 28px -12px rgba(170, 136, 64, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.35);
-                    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+                    background: linear-gradient(180deg, var(--accB), var(--acc));
+                    box-shadow: 0 14px 28px -12px var(--acc), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+                    transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.16s ease, filter 0.16s ease;
+                }
+                .cta::after {
+                    content: ''; position: absolute; inset: 0;
+                    background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.4) 50%, transparent 68%);
+                    transform: translateX(160%);
                 }
                 .cta:hover { transform: translateY(-2px); filter: brightness(1.04); }
-                .cta:active { transform: scale(0.985); }
+                .cta:hover::after { animation: ctaShine 0.75s ease; }
+                @keyframes ctaShine { from { transform: translateX(160%); } to { transform: translateX(-160%); } }
+                .cta:active { transform: scale(0.975); }
                 .cta:disabled { opacity: 0.65; cursor: default; transform: none; }
                 .cta.big { padding: 16px 22px; font-size: 17px; }
                 .trust { margin: 2px 0 0; text-align: center; font-size: 12px; color: #8a6f45; }
 
                 .doneCard { text-align: center; }
-                .doneGrid { display: grid; grid-template-columns: 1fr; gap: 14px; }
-                @media (min-width: 640px) { .doneGrid { grid-template-columns: auto 1fr; align-items: start; } }
-                .qrBox {
-                    display: flex; flex-direction: column; align-items: center; gap: 8px;
-                    background: #fff; border: 1px solid rgba(201, 164, 78, 0.3); border-radius: 18px; padding: 16px;
+                .waBig {
+                    display: block; text-align: center; text-decoration: none;
+                    background: linear-gradient(180deg, #35c471, #1f9b53); color: #fff;
+                    border-radius: 15px; padding: 16px 20px; font-weight: 800; font-size: 16.5px;
+                    box-shadow: 0 14px 30px -12px rgba(31, 155, 83, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+                    transition: transform 0.16s ease, filter 0.16s ease;
                 }
-                .qrInner { background: #fff; padding: 6px; border-radius: 10px; }
-                .qrBox span { font-size: 12.5px; color: #8a6f45; font-weight: 700; }
-                .qrBox.qrLocked {
-                    border-style: dashed; border-color: rgba(184, 137, 61, 0.55);
-                    background: linear-gradient(180deg, #fffdf6, #fbf3e2);
-                    max-width: 240px; margin-inline: auto; gap: 6px; justify-content: center;
-                }
-                .lockEmoji { font-size: 30px; line-height: 1; }
-                .lockTitle { font-size: 15px; color: #4c3b21; }
-                .lockSub { font-size: 12px !important; font-weight: 500 !important; line-height: 1.6; }
-                .lockCta {
-                    margin-top: 4px; background: linear-gradient(180deg, #d3b46a, #b8893d); color: #fff;
-                    text-decoration: none; padding: 10px 16px; border-radius: 12px; font-weight: 800; font-size: 13px;
-                    box-shadow: 0 10px 20px -10px rgba(170, 136, 64, 0.6);
-                }
-                .linksBox { display: flex; flex-direction: column; gap: 10px; }
+                .waBig:hover { transform: translateY(-2px); filter: brightness(1.05); }
+                .waBig:active { transform: scale(0.98); }
                 .linkRow {
                     display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: right;
                     background: #fff; border: 1px solid rgba(201, 164, 78, 0.25); border-radius: 14px; padding: 11px 14px;
@@ -860,16 +977,22 @@ export default function StartWizard() {
                 .linkRow button {
                     flex-shrink: 0; border: 1.5px solid rgba(170, 136, 64, 0.4); background: #fffdf6; color: #7c6027;
                     border-radius: 10px; padding: 8px 13px; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit;
+                    transition: transform 0.14s ease;
                 }
-                .waBtn {
-                    display: block; text-align: center; background: #eafff1; border: 1.5px solid rgba(37, 160, 90, 0.35);
-                    color: #1c7a44; border-radius: 14px; padding: 11px; font-weight: 800; font-size: 14px; text-decoration: none;
-                }
-                .doneCtas { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+                .linkRow button:active { transform: scale(0.95); }
+                .rowBtns { display: flex; gap: 10px; }
+                .rowBtns .half { flex: 1; margin-top: 0; }
                 .ghost {
-                    text-align: center; padding: 12px; border-radius: 14px; border: 1.5px solid rgba(170, 136, 64, 0.35);
+                    display: grid; place-items: center;
+                    text-align: center; padding: 13px 12px; border-radius: 15px; border: 1.5px solid rgba(170, 136, 64, 0.35);
                     color: #7c6027; font-weight: 700; font-size: 14.5px; text-decoration: none; background: rgba(255, 255, 255, 0.6);
+                    transition: transform 0.16s ease, box-shadow 0.16s ease;
                 }
+                .ghost:hover { transform: translateY(-2px); box-shadow: 0 10px 22px -14px rgba(60, 44, 20, 0.4); }
+                .myLink { font-size: 13px; color: #8a6f45; font-weight: 700; text-decoration: none; }
+                .myLink:hover { color: var(--acc); }
+                .quietUp { margin: 2px 0 0; font-size: 12.5px; color: #9a8665; }
+                .quietUp a { color: var(--acc); font-weight: 700; }
             `}</style>
         </div>
     )

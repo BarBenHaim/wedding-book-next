@@ -108,6 +108,22 @@ export async function POST(req) {
         }
         await ref.set(doc)
 
+        // ── 4b. Seed a welcome blessing so the book is never born empty:
+        //        the first page greets the couple, shows guests what a
+        //        blessing looks like, and is deletable from the admin.
+        try {
+            await ref.collection('entries').add({
+                name: 'צוות Wedding Tales',
+                text: `מזל טוב! 🎉 הספר של ${eventDisplayTitle(check.value)} נפתח הרגע — וזו הברכה הראשונה בו. מכאן הבמה של האורחים: שתפו איתם את הקישור, וצפו בספר מתמלא במילים טובות ובתמונות מהלב. באהבה, צוות Wedding Tales ✨`,
+                imageUrl: null,
+                timestamp: FieldValue.serverTimestamp(),
+                orderIndex: null,
+                seeded: true,
+            })
+        } catch (seedErr) {
+            console.warn('[onboarding] welcome blessing seed failed (non-fatal):', seedErr?.message || seedErr)
+        }
+
         const base = (process.env.NEXT_PUBLIC_BASE_URL || 'https://app.weddingtales.co.il').replace(/\/$/, '')
         const links = {
             guest: `${base}/w/${slug}?go=photo`,
