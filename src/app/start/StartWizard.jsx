@@ -380,7 +380,7 @@ export default function StartWizard() {
                 )}
             </header>
 
-            <main className={`body ${showPreview ? 'withSide' : 'noSide'}`} ref={stepRef}>
+            <main className='body' ref={stepRef}>
                 {showPreview && (
                     <aside className='previewCol'>
                         <BookPreview data={data} presetValues={previewValues} compact={false} />
@@ -717,9 +717,8 @@ export default function StartWizard() {
                 @keyframes stepIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 
                 @media (min-width: 920px) {
-                    .body.withSide { grid-template-columns: 1fr 380px; gap: 40px; padding-top: 26px; align-items: start; }
-                    .body.noSide { max-width: 700px; padding-top: 26px; }
-                    .previewCol { order: 2; position: sticky; top: 96px; }
+                    .body { grid-template-columns: 1fr 380px; gap: 40px; padding-top: 26px; align-items: start; }
+                    .previewCol { order: 2; position: sticky; top: 30px; }
                     .formCol { order: 1; }
                 }
 
