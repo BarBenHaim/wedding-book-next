@@ -87,52 +87,93 @@ function BookPreview({ data, presetValues, mode = 'cover' }) {
     const meta = data.eventType ? EVENT_TYPE_META[data.eventType] : null
     const titleFont = v.nameFontClass || v.fontClass || frankRuhl.className
 
-    // Interior page — a floating SQUARE spread page: sample photo +
-    // blessing, re-skinned live by the chosen preset (bg, texture, font).
+    // Interior page — a 1:1 replica of the studio's CLASSIC page
+    // template: guest name on top, the 4:3-locked photo (preset width,
+    // radius, margins), then the blessing text — square page with the
+    // preset's background, texture, frame and fonts. Sizes follow the
+    // template's percent system with small legibility floors.
     if (mode === 'page') {
-        const textFont = v.fontClass || frankRuhl.className
+        const PAGE = 290
+        const pct = x => (PAGE * (Number(x) || 0)) / 100
+        const imgW = PAGE * ((Number(v.imageStyle?.width) || 80) / 100)
+        const imgH = imgW * 0.75 // the book's 4:3 photo lock
+        const textSize = Math.max(11, pct(v.fontSizePercent ?? 3))
+        const nameSize = Math.max(10, pct(v.nameFontSizePercent ?? (v.fontSizePercent ? v.fontSizePercent * 0.7 : 2.1)))
+        const bodyFont = v.fontClass || frankRuhl.className
         return (
             <div className='pp'>
-                <div className='ppPage' key={(v.__id || 'default') + '-page'} style={{ background: v.backgroundColor || '#fffdf6' }}>
-                    {v.texture ? <img src={v.texture} alt='' className='ppTex' /> : null}
-                    <div className='ppFrame' />
-                    <div className='ppPhoto'>
-                        <img src='/imgs/portfolio/wedding/cover.webp' alt='' />
+                <div
+                    className='ppPage'
+                    key={(v.__id || 'default') + '-page'}
+                    style={{
+                        backgroundColor: v.backgroundColor || '#fffdf6',
+                        backgroundImage: v.texture ? `url(${v.texture})` : 'none',
+                        backgroundRepeat: 'repeat',
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        borderRadius: pct(v.borderRadius || 0),
+                        padding: pct(v.pagePadding ?? 4),
+                    }}
+                >
+                    {v.frame ? <img src={v.frame} alt='' className='ppFrameImg' /> : null}
+                    <div
+                        className={`ppName ${v.nameFontClass || bodyFont}`}
+                        style={{
+                            fontSize: nameSize,
+                            fontWeight: v.nameFontWeight ?? v.fontWeight,
+                            color: v.nameColor ?? v.fontColor ?? '#3a2d1a',
+                        }}
+                    >
+                        משפחת לוי
                     </div>
-                    <p className={`ppText ${textFont}`}>
-                        ”איזה אושר לחגוג איתכם! מאחלים לכם חיים של צחוק, אהבה והמון רגעים קטנים ומתוקים“
-                    </p>
-                    <span className='ppName'>— משפחת לוי</span>
-                    <span className='ppNum'>12</span>
+                    <img
+                        src='/imgs/img3.jpg'
+                        alt=''
+                        className='ppPhoto'
+                        style={{
+                            width: imgW,
+                            height: imgH,
+                            borderRadius: v.imageStyle?.borderRadius ?? '12px',
+                            marginTop: pct(v.imageMarginTop ?? 2),
+                            marginBottom: pct(v.imageMarginBottom ?? 2),
+                        }}
+                    />
+                    <div className='ppTextWrap' style={{ maxWidth: `${v.textMaxWidth ?? 85}%` }}>
+                        <p
+                            className={bodyFont}
+                            style={{
+                                fontSize: textSize,
+                                fontWeight: v.fontWeight,
+                                color: v.fontColor ?? '#3a2d1a',
+                                lineHeight: v.textLineHeight ?? 1.5,
+                            }}
+                        >
+                            מזל טוב! מאחלים לכם חיים של אושר, צחוק ואהבה. היה ערב בלתי נשכח 💛
+                        </p>
+                    </div>
                     <div className='ppShine' />
                 </div>
                 <div className='ppShadow' />
                 <style jsx>{`
                     .pp { display: flex; flex-direction: column; align-items: center; gap: 10px; }
                     .ppPage {
-                        position: relative; width: 258px; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden;
-                        box-shadow: 0 24px 48px -18px rgba(48, 34, 12, 0.45), 0 4px 14px rgba(48, 34, 12, 0.16);
+                        position: relative; width: 290px; aspect-ratio: 1 / 1; overflow: hidden;
+                        box-sizing: border-box; text-align: center;
                         display: flex; flex-direction: column; align-items: center; justify-content: center;
-                        gap: 10px; padding: 20px 18px;
+                        box-shadow: 0 24px 48px -18px rgba(48, 34, 12, 0.45), 0 4px 14px rgba(48, 34, 12, 0.16);
                         animation: ppFloat 5.5s ease-in-out infinite, ppIn 0.5s cubic-bezier(0.22, 1, 0.36, 1);
                     }
-                    .ppTex { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.55; }
-                    .ppFrame { position: absolute; inset: 9px; border: 1px solid var(--acc, rgba(170, 136, 64, 0.5)); opacity: 0.5; border-radius: 7px; pointer-events: none; }
-                    .ppPhoto {
-                        position: relative; width: 58%; aspect-ratio: 4 / 3.4; background: #fff;
-                        padding: 5px 5px 14px; border-radius: 4px; transform: rotate(-2.2deg);
-                        box-shadow: 0 10px 22px -10px rgba(48, 34, 12, 0.45);
-                    }
-                    .ppPhoto img { width: 100%; height: 100%; object-fit: cover; border-radius: 2px; }
-                    .ppText { position: relative; margin: 0; font-size: 13px; line-height: 1.75; color: #3a2d1a; text-align: center; max-width: 92%; }
-                    .ppName { position: relative; font-size: 11.5px; color: #7a6548; font-weight: 600; }
-                    .ppNum { position: absolute; bottom: 7px; font-size: 9.5px; color: rgba(90, 70, 35, 0.5); letter-spacing: 0.2em; }
+                    .ppFrameImg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; z-index: 10; }
+                    .ppName { position: relative; z-index: 5; opacity: 0.85; max-width: 60%; word-wrap: break-word; }
+                    .ppPhoto { position: relative; z-index: 5; object-fit: cover; display: block; }
+                    .ppTextWrap { position: relative; z-index: 5; }
+                    .ppTextWrap p { margin: 0; white-space: pre-line; word-wrap: break-word; }
                     .ppShine {
-                        position: absolute; inset: 0; pointer-events: none;
+                        position: absolute; inset: 0; pointer-events: none; z-index: 12;
                         background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.35) 46%, transparent 60%);
                         transform: translateX(-120%); animation: ppSweep 0.9s ease 0.15s forwards;
                     }
-                    .ppShadow { width: 210px; height: 16px; border-radius: 50%; background: radial-gradient(closest-side, rgba(48, 34, 12, 0.22), transparent); }
+                    .ppShadow { width: 220px; height: 16px; border-radius: 50%; background: radial-gradient(closest-side, rgba(48, 34, 12, 0.22), transparent); }
                     @keyframes ppFloat { 0%, 100% { translate: 0 0; } 50% { translate: 0 -7px; } }
                     @keyframes ppIn { from { opacity: 0; scale: 0.94; } to { opacity: 1; scale: 1; } }
                     @keyframes ppSweep { to { transform: translateX(120%); } }
@@ -300,6 +341,19 @@ export default function StartWizard() {
     const [copied, setCopied] = useState('')
     const [maxStep, setMaxStep] = useState(0)
     const [myEvents, setMyEvents] = useState(null)
+    // Inside the mobile app's WebView (/onboard) the web portal is the
+    // wrong destination — everything closes back into the native app.
+    const [inApp, setInApp] = useState(false)
+    useEffect(() => { setInApp(typeof window !== 'undefined' && !!window.ReactNativeWebView) }, [])
+
+    function notifyApp() {
+        try {
+            window.ReactNativeWebView?.postMessage(JSON.stringify({
+                type: 'wt_onboarding_done',
+                email: (user?.email || account.email || '').toLowerCase(),
+            }))
+        } catch {}
+    }
     const stepRef = useRef(null)
 
     useEffect(() => { setMaxStep(m => Math.max(m, step)) }, [step])
@@ -509,8 +563,6 @@ export default function StartWizard() {
                 </Link>
                 {step < 4 && (
                     <div className='steps' aria-label='התקדמות'>
-                        <i className='track' />
-                        <i className='bar' style={{ width: `calc((100% - 76px) * ${step / 3})` }} />
                         {STEP_LABELS.map((l, i) => (
                             <button
                                 type='button'
@@ -767,10 +819,16 @@ export default function StartWizard() {
                                                 <b>{weddingTitle(w)}</b>
                                                 <span>{EVENT_TYPE_META[w.eventType]?.label || 'אירוע'}{w.weddingDate ? ` · ${prettyDate(typeof w.weddingDate === 'string' ? w.weddingDate : '')}` : ''}</span>
                                             </div>
-                                            <a className='mineGo' href={`/wedding/${w.id}/portal`}>כניסה ←</a>
+                                            {!inApp && <a className='mineGo' href={`/wedding/${w.id}/portal`}>כניסה ←</a>}
                                         </div>
                                     ))}
-                                    <Link className='mineAll' href='/my'>לניהול כל האירועים שלי</Link>
+                                    {inApp ? (
+                                        <button type='button' className='cta' onClick={notifyApp}>
+                                            ממשיכים באפליקציה — האירועים שם ←
+                                        </button>
+                                    ) : (
+                                        <Link className='mineAll' href='/my'>לניהול כל האירועים שלי</Link>
+                                    )}
                                 </div>
                             )}
 
@@ -804,16 +862,23 @@ export default function StartWizard() {
                                 <button onClick={() => copy('guest', created.links?.guest)}>{copied === 'guest' ? 'הועתק ✓' : 'העתקה'}</button>
                             </div>
 
-                            <div className='rowBtns'>
-                                <a className='ghost half' href={created.links?.book} target='_blank' rel='noopener noreferrer'>
-                                    📖 הציצו בספר
-                                </a>
-                                <button className='cta half' onClick={() => router.push(`/wedding/${created.weddingId}/portal`)}>
-                                    לניהול האירוע ←
+                            {inApp ? (
+                                <button className='cta big' onClick={notifyApp}>
+                                    ממשיכים באפליקציה ←
                                 </button>
-                            </div>
-
-                            <Link className='myLink' href='/my'>לכל האירועים שלי</Link>
+                            ) : (
+                                <>
+                                    <div className='rowBtns'>
+                                        <a className='ghost half' href={created.links?.book} target='_blank' rel='noopener noreferrer'>
+                                            📖 הציצו בספר
+                                        </a>
+                                        <button className='cta half' onClick={() => router.push(`/wedding/${created.weddingId}/portal`)}>
+                                            לניהול האירוע ←
+                                        </button>
+                                    </div>
+                                    <Link className='myLink' href='/my'>לכל האירועים שלי</Link>
+                                </>
+                            )}
 
                             <p className='quietUp'>
                                 רוצים גם עמדת QR מעוצבת לאולם וכריכה אישית?{' '}
@@ -857,35 +922,40 @@ export default function StartWizard() {
                     transition: background 0.15s ease;
                 }
                 .back:hover { background: rgba(201, 164, 78, 0.12); }
-                .steps { position: relative; display: flex; gap: 24px; padding-bottom: 4px; }
-                .track {
-                    position: absolute; top: 19px; inset-inline-start: 38px; inset-inline-end: 38px; height: 3px;
-                    background: rgba(170, 136, 64, 0.16); border-radius: 3px;
-                }
-                .bar {
-                    position: absolute; top: 19px; inset-inline-start: 38px; height: 3px;
-                    background: linear-gradient(90deg, var(--accB), var(--acc)); border-radius: 3px;
-                    box-shadow: 0 0 10px var(--accSoft);
-                    transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-                }
+                .steps { position: relative; display: flex; gap: 22px; padding: 8px 4px 4px; }
                 .stepDot {
-                    position: relative; z-index: 1;
-                    display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 64px;
+                    position: relative;
+                    display: flex; flex-direction: column; align-items: center; gap: 6px; width: 74px;
                     background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit;
                 }
                 .stepDot:disabled { cursor: default; }
+                /* connector between each pair of dots — sits UNDER the circles */
+                .stepDot + .stepDot::before,
+                .stepDot + .stepDot::after {
+                    content: ''; position: absolute; top: 17px; inset-inline-end: calc(50% + 17px);
+                    width: 62px; height: 3px; border-radius: 3px;
+                }
+                .stepDot + .stepDot::before { background: rgba(170, 136, 64, 0.18); }
+                .stepDot + .stepDot::after {
+                    background: linear-gradient(90deg, var(--accB), var(--acc));
+                    transform: scaleX(0); transform-origin: 100% 50%;
+                    transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+                }
+                .stepDot.cur + .stepDot::after { transform: scaleX(0); }
+                .stepDot.cur::after, .stepDot.done::after { transform: scaleX(1); }
                 .dot {
+                    position: relative; z-index: 2;
                     width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
-                    font-size: 15.5px; font-weight: 800; color: #8a6f45;
+                    font-size: 15px; font-weight: 800; line-height: 1; color: #8a6f45;
                     background: #fff; border: 2px solid rgba(170, 136, 64, 0.35);
                     box-shadow: 0 3px 8px -4px rgba(60, 44, 20, 0.3);
                     transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
                 }
-                .stepDot:not(:disabled):hover .dot { transform: translateY(-2px) scale(1.06); border-color: var(--acc); }
-                .stepDot.cur .dot { background: linear-gradient(180deg, var(--accB), var(--acc)); color: #fff; border-color: transparent; box-shadow: 0 8px 18px -7px var(--acc); transform: scale(1.18); }
+                .stepDot:not(:disabled):hover .dot { transform: scale(1.06); border-color: var(--acc); }
+                .stepDot.cur .dot { background: linear-gradient(180deg, var(--accB), var(--acc)); color: #fff; border-color: transparent; box-shadow: 0 8px 18px -7px var(--acc); transform: scale(1.1); }
                 .stepDot.done .dot { background: var(--accSoft); color: var(--acc); border-color: transparent; }
                 .stepDot:disabled .dot { opacity: 0.55; box-shadow: none; }
-                .dotLabel { font-size: 11.5px; color: #8a6f45; font-weight: 600; }
+                .dotLabel { position: relative; z-index: 2; font-size: 11.5px; color: #8a6f45; font-weight: 600; white-space: nowrap; }
                 .stepDot.cur .dotLabel { color: #5c451f; font-weight: 800; }
                 .stepDot:disabled .dotLabel { opacity: 0.55; }
 
