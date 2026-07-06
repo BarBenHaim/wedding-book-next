@@ -78,9 +78,15 @@ export default function LoginPage() {
             const q = query(
                 collection(db, 'weddings'),
                 where('ownerId', '==', user.uid),
-                limit(1)
+                limit(2)
             )
             const snap = await getDocs(q)
+            // More than one event → the events hub; exactly one → straight
+            // to its portal (the classic single-wedding flow).
+            if (snap.size > 1) {
+                router.push('/my')
+                return
+            }
             if (!snap.empty) {
                 weddingId = snap.docs[0].id
             }

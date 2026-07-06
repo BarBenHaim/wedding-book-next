@@ -621,12 +621,12 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                             יש לכם ספר. כזה שפותחים בסלון גם בעוד עשרים שנה.
                         </p>
                         <div className='heroCtas obs'>
-                            <button onClick={() => scrollTo('chapters')} className='btn btnSolid big'>
+                            <a href='/start' className='btn btnGold big'>
+                                פתחו ספר ברכות בחינם 🎉
+                            </a>
+                            <button onClick={() => scrollTo('chapters')} className='btn btnGhost big'>
                                 <BookOpen size={18} /> דפדפו בספרים אמיתיים
                             </button>
-                            <a href={WA} target='_blank' rel='noopener noreferrer' className='btn btnGhost big'>
-                                <WaIcon /> דברו איתנו
-                            </a>
                         </div>
                         <p className='heroPrice obs'>
                             1,290 ₪ · מחיר אחד, הכול כלול · ספר דיגיטלי עוד באותו ערב · <a href='#pricing' onClick={e => { e.preventDefault(); scrollTo('pricing') }} style={{ color: '#a8843a' }}>מה מקבלים ←</a>
@@ -837,9 +837,9 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                 transformed ancestor can re-parent it mid-page. */}
             {portalReady && createPortal(
                 <div className={`stickyCta ${ctaVisible ? 'on' : ''}`} role='complementary' aria-label='יצירת קשר' dir='rtl'>
-                    <span className='stickyTxt'><strong>ספר ברכות מהאירוע שלכם</strong> · 1,290 ₪ הכול כלול</span>
-                    <a href={WA} target='_blank' rel='noopener noreferrer' className='btn btnGold stickyBtn'>
-                        <WaIcon /> דברו איתנו
+                    <span className='stickyTxt'><strong>ספר ברכות מהאירוע שלכם</strong> · מתחילים בחינם</span>
+                    <a href='/start' className='btn btnGold stickyBtn'>
+                        פתחו ספר בחינם ←
                     </a>
                 </div>,
                 document.body,

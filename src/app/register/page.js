@@ -3,12 +3,12 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
-// דף ההרשמה חסום — הגישה למערכת היא רק דרך רכישה ב-WooCommerce
+// ההרשמה עברה לאשף פתיחת האירוע — /start (self-serve, חינם).
 export default function RegisterPage() {
     const router = useRouter()
 
     useEffect(() => {
-        router.replace('/login')
+        router.replace('/start')
     }, [router])
 
     return (
