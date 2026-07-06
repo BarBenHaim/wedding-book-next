@@ -166,7 +166,7 @@ export default function Header() {
     // Funnel pages are immersive — no site chrome. The wizard (/start)
     // and the events hub (/my) carry their own branded headers, and the
     // mobile app embeds /start in a WebView where a nav bar is noise.
-    if (pathname === '/start' || pathname === '/my') return null
+    if (pathname === '/start' || pathname === '/my' || pathname === '/app') return null
 
     return (
         <>
