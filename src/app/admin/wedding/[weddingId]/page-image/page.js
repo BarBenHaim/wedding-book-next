@@ -106,7 +106,7 @@ function PageImageContent() {
     })()
 
     // Interior pages, with smart auto-split honored (matches the book/viewer).
-    const bookPages = expandBookPages(entries, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold })
+    const bookPages = expandBookPages(entries, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold, entriesPerPage: styleSettings.entriesPerPage })
 
     // total = front cover + interior pages + back cover.
     const total = bookPages.length + 2

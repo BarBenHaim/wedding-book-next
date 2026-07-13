@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { listPresets, resolvePreset, filterPresetsByEventType, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
-import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import { applyPresetClean } from '@/lib/bookDesignSchema'
 
 // Couple-facing book-design picker. A curated gallery of presets, each
 // rendered as a real mini <BookPageTemplate /> so the couple chooses by
@@ -80,8 +80,9 @@ export default function CoupleDesignPicker({ activeDesign, onSelect, title = 'ב
     const tileSize = gridW > 0 ? Math.floor((gridW - GAP * (cols - 1)) / cols) : 0
 
     async function pick(preset) {
-        // JSON round-trip drops any leftover `undefined` values — Firestore rejects them.
-        const merged = JSON.parse(JSON.stringify({ ...defaultStyle, ...(resolvePreset(preset).values || {}) }))
+        // FULL RESET over the canonical schema (see bookDesignSchema.js) —
+        // deterministic result for every wedding, JSON-safe for Firestore.
+        const merged = applyPresetClean(resolvePreset(preset).values)
         try {
             setSavingKey(preset.id || preset.name)
             setSave('')
@@ -107,7 +108,7 @@ export default function CoupleDesignPicker({ activeDesign, onSelect, title = 'ב
             <div ref={gridRef} className='grid grid-cols-2 sm:grid-cols-3 gap-2.5'>
                 {presets.map(preset => {
                     const key = preset.id || preset.name
-                    const previewStyle = { ...defaultStyle, ...(resolvePreset(preset).values || {}) }
+                    const previewStyle = applyPresetClean(resolvePreset(preset).values)
                     const isActive = sameDesign(previewStyle, activeDesign)
                     const isSaving = savingKey === key
                     return (

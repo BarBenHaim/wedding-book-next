@@ -19,7 +19,12 @@ const DEFAULT_SPLIT_THRESHOLD = 240 // blessing chars beyond which we split (wit
  * @param {object} [opts]
  * @param {boolean} [opts.autoSplit=false]
  * @param {number}  [opts.splitThreshold=240]
- * @returns {Array} page objects (carry `_split: 'text' | 'photo'` on split pages)
+ * @param {1|2}     [opts.entriesPerPage=1] — 2 = duo pages (two blessings
+ *                  share one page; see DuoPageLayout). Duo ignores autoSplit:
+ *                  the two features answer opposite goals (duo compresses,
+ *                  split expands), so composition picks ONE.
+ * @returns {Array} page objects (carry `_split: 'text' | 'photo'` on split
+ *                  pages, `_duo: [a, b?]` on duo pages)
  */
 export function expandBookPages(entries, opts = {}) {
     const list = Array.isArray(entries) ? entries : []
@@ -34,10 +39,26 @@ export function expandBookPages(entries, opts = {}) {
     // the 2-up landscape flipbook — leave it off for single-page / print.
     const padToSpread = opts.padToSpread === true
 
-    if (!autoSplit) return list.map(e => ({ ...e }))
-
     let padN = 0
     const divider = () => ({ id: `__divider_${padN++}`, _divider: true })
+
+    // ── Duo composition — two blessings per page ─────────────────────
+    // Entries pair up in order; an odd tail renders as a duo page with
+    // a single (centered) block. Each duo page is ONE physical page, so
+    // padToSpread only needs to even out the total count.
+    if (opts.entriesPerPage === 2) {
+        const pages = []
+        for (let i = 0; i < list.length; i += 2) {
+            const pair = [list[i], list[i + 1]]
+                .filter(Boolean)
+                .map(e => ({ ...e }))
+            pages.push({ id: `__duo_${list[i]?.id || i}`, _duo: pair })
+        }
+        if (padToSpread && pages.length % 2 === 1) pages.push(divider())
+        return pages
+    }
+
+    if (!autoSplit) return list.map(e => ({ ...e }))
 
     const pages = []
     for (const e of list) {

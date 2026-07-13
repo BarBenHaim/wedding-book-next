@@ -23,6 +23,7 @@ import {
 } from '@/lib/studioPresets'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import { applyPresetClean } from '@/lib/bookDesignSchema'
 
 // ── Mini preview helpers ─────────────────────────────────────────────
 // Each preset tile renders an actual <BookPageTemplate /> at a small
@@ -287,13 +288,18 @@ export default function DesignControls({
 
     // Apply a preset to the wedding's design doc. The picker holds
     // storage-shape presets (with fontKey / frameId); resolvePreset
-    // expands those to runtime values (fontClass / frame URL) so the
-    // shape onChange receives is identical to what the old hardcoded
-    // PRESETS array used to pass.
+    // expands those to runtime values (fontClass / frame URL).
+    //
+    // applyPresetClean makes the apply a FULL RESET over the canonical
+    // schema: every key the templates read is explicitly present, so
+    // nothing survives from the previous preset or from manual tweaks
+    // (the "text stayed right-aligned from the old preset" bug). The
+    // caller's `{ ...settings, ...updated }` merge then overwrites all
+    // canonical keys — deterministic on every wedding, every device.
     const applyPreset = preset => {
         const resolved = resolvePreset(preset)
         setActivePreset(resolved.id || resolved.name)
-        onChange(resolved.values)
+        onChange(applyPresetClean(resolved.values))
     }
 
     // Live backgrounds list — pulled on mount, includes uploaded

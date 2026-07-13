@@ -4,11 +4,12 @@ import { getBlessingText } from '@/lib/normalizeText'
 import { resolveActiveTemplate } from '@/lib/presetFilters'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
-import EntryPhoto from '../EntryPhoto/EntryPhoto'
+import FramedPhoto from '../FramedPhoto/FramedPhoto'
 import PolaroidPageLayout from '../PolaroidPageLayout/PolaroidPageLayout'
 import ScrapbookPageLayout from '../ScrapbookPageLayout/ScrapbookPageLayout'
 import NotebookPageLayout from '../NotebookPageLayout/NotebookPageLayout'
 import CollagePageLayout from '../CollagePageLayout/CollagePageLayout'
+import DuoPageLayout from '../DuoPageLayout/DuoPageLayout'
 
 export default function BookPageTemplate({ entry, styleSettings, scaledWidth, scaledHeight }) {
     // ── Layout dispatcher ────────────────────────────────────────────────
@@ -49,6 +50,21 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                     <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                 </svg>
             </div>
+        )
+    }
+
+    // ── Duo composition — two blessings on one page ──────────────────
+    // Produced by expandBookPages when the preset's composition layer
+    // sets entriesPerPage: 2. Renders on the same page surface with an
+    // ornament divider between the two blocks (see DuoPageLayout).
+    if (entry?._duo) {
+        return (
+            <DuoPageLayout
+                entry={entry}
+                styleSettings={styleSettings}
+                scaledWidth={scaledWidth}
+                scaledHeight={scaledHeight}
+            />
         )
     }
 
@@ -216,21 +232,23 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
             {hasImage && (() => {
                 // On a dedicated split photo page, show the photo large so it
                 // fills the page nicely (it's the only thing there). Otherwise
-                // use the preset's image width.
+                // use the preset's image width. The preset's photoFrame (layer
+                // 4 — mats / gold rings, see src/lib/photoFrames.js) wraps the
+                // photo without changing its footprint on the page.
                 const isSplitPhoto = entry?._split === 'photo'
                 const baseW = styleSettings.imageStyle?.width ?? 80
                 const slotW = w(isSplitPhoto ? Math.max(90, baseW) : baseW)
-                const slotH = slotW * 0.75 // 4:3 lock
                 return (
-                    <EntryPhoto
+                    <FramedPhoto
                         src={entry.imageUrl}
-                        maxWidth={slotW}
-                        maxHeight={slotH}
+                        slotW={slotW}
+                        frameId={styleSettings.photoFrame}
+                        frameUrl={styleSettings.photoFrameUrl}
+                        frameInset={styleSettings.photoFrameInset}
                         objectPosition={entry.photoPosition || 'center'}
                         rotation={entry.photoRotation || 0}
-                        className='relative'
+                        photoRadius={styleSettings.imageStyle?.borderRadius ?? '12px'}
                         style={{
-                            borderRadius: styleSettings.imageStyle?.borderRadius ?? '12px',
                             marginTop: onlyOne ? 0 : h(styleSettings.imageMarginTop ?? 2),
                             marginBottom: onlyOne ? 0 : h(styleSettings.imageMarginBottom ?? 2),
                             alignSelf:
@@ -240,6 +258,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                                     ? 'flex-end'
                                     : 'center',
                             zIndex: 5,
+                            position: 'relative',
                         }}
                     />
                 )

@@ -141,7 +141,7 @@ function AlbumeExportContent() {
                 // up to the 24 minimum), so the common case is one click.
                 // Account for smart auto-split (a long blessing becomes 2 pages).
                 const _bd = wSnap.data()?.bookDesign || wSnap.data()?.book?.designSettings || {}
-                const _needed = expandBookPages(list, { autoSplit: _bd.autoSplit, splitThreshold: _bd.splitThreshold }).length
+                const _needed = expandBookPages(list, { autoSplit: _bd.autoSplit, splitThreshold: _bd.splitThreshold, entriesPerPage: _bd.entriesPerPage }).length
                 setPageCount(Math.max(MIN_PAGES, Math.min(MAX_PAGES, _needed)))
                 setLoadStatus('ready')
             } catch (err) {
@@ -168,7 +168,7 @@ function AlbumeExportContent() {
 
     // Expand entries into the actual page sequence (smart auto-split honored
     // from the book design) — the print must match the displayed book.
-    const bookPages = expandBookPages(entries, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold })
+    const bookPages = expandBookPages(entries, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold, entriesPerPage: styleSettings.entriesPerPage })
     const slotsNeeded = bookPages.length
     const willPad = slotsNeeded < pageCount
     const willTrim = slotsNeeded > pageCount

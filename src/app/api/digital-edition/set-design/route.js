@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { adminDb } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adoptSurfaceKeepCover } from '@/lib/presetFilters'
+import { applyPresetClean } from '@/lib/bookDesignSchema'
 
 // POST /api/digital-edition/set-design
 //
@@ -61,17 +62,24 @@ export async function POST(req) {
             return NextResponse.json({ error: 'Invalid token' }, { status: 403 })
         }
 
+        // Server-side canonicalization — the persisted design ALWAYS
+        // carries every canonical key (see bookDesignSchema.js), no
+        // matter which client version or code path sent it. This is
+        // the guarantee that the same preset renders the same for
+        // every user on every device.
+        const cleanDesign = applyPresetClean(design)
+
         // Cover adopts the preset's surface look; every cover* field
         // the owner designed survives. Replacing them wholesale was the
         // "cover photo shrinks / cover breaks after switching designs"
         // bug — it wiped coverImageScale, coverTitle & friends on every
         // preset pick. Same helper as the client's live preview.
         const existingCover = isPlainObject(data.coverDesign) ? data.coverDesign : {}
-        const coverDesign = adoptSurfaceKeepCover(existingCover, design)
+        const coverDesign = adoptSurfaceKeepCover(existingCover, cleanDesign)
 
         await ref.set(
             {
-                bookDesign: design,
+                bookDesign: cleanDesign,
                 coverDesign,
                 bookDesignSource: 'digital-link',
                 bookDesignUpdatedAt: FieldValue.serverTimestamp(),

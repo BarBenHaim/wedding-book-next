@@ -85,6 +85,10 @@ export async function POST(req) {
             case 'deleteUploadedBackground':
                 return NextResponse.json(await deleteUploadedBackground(body))
 
+            // ─── Uploaded photo frames (Firestore + Storage) ─────────
+            case 'deleteUploadedPhotoFrame':
+                return NextResponse.json(await deleteUploadedPhotoFrame(body))
+
             default:
                 return NextResponse.json({ error: `Unknown op: ${op}` }, { status: 400 })
         }
@@ -167,6 +171,20 @@ async function deleteUploadedBackground({ id, storagePath }) {
             // Best-effort — the doc is already gone, file lingering is
             // harmless since the doc was the discoverability layer.
             console.warn('[studio API] storage delete failed:', err?.message || err)
+        }
+    }
+    return { ok: true, id }
+}
+
+async function deleteUploadedPhotoFrame({ id, storagePath }) {
+    if (!id) throw new Error('deleteUploadedPhotoFrame: missing id')
+    await adminDb.collection('studio_photo_frames').doc(id).delete()
+    if (storagePath && String(storagePath).startsWith('studio/photo-frames/')) {
+        try {
+            const bucket = adminStorage.bucket()
+            await bucket.file(storagePath).delete({ ignoreNotFound: true })
+        } catch (err) {
+            console.warn('[studio API] frame storage delete failed:', err?.message || err)
         }
     }
     return { ok: true, id }

@@ -36,6 +36,10 @@ import {
 } from '@/lib/studioPresets'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 import { EVENT_TYPE_ORDER, getEventConfig } from '@/lib/eventTypes'
+import { PHOTO_FRAMES } from '@/lib/photoFrames'
+import { uploadPhotoFrameAsset, listPhotoFrameAssets, deletePhotoFrameAsset } from '@/lib/studioPresets'
+import FramedPhoto from '@/components/FramedPhoto/FramedPhoto'
+import { applyPresetClean } from '@/lib/bookDesignSchema'
 
 // ── Mock blessings at the three lengths the photo form supports ──
 // Calibrated to read naturally in Hebrew at each length, not just hit
@@ -334,16 +338,32 @@ function StudioContent() {
     const [previewBlessingOnly, setPreviewBlessingOnly] = useState(false)
 
     // Mock entry passed to the renderer. `text` swaps with the length
-    // toggle; everything else stays fixed.
-    const mockEntry = useMemo(
-        () => ({
+    // toggle; everything else stays fixed. When the draft's composition
+    // layer says two-per-page, the preview becomes a real duo page so
+    // the admin sees exactly what the book will render.
+    const mockEntry = useMemo(() => {
+        const base = {
             id: 'studio-mock',
             name: MOCK_NAME,
             text: MOCK_BLESSINGS[blessingLength],
             imageUrl: previewBlessingOnly ? null : previewPhoto || MOCK_PHOTO,
-        }),
-        [blessingLength, previewPhoto, previewBlessingOnly]
-    )
+        }
+        if (draft?.values?.entriesPerPage === 2) {
+            return {
+                id: 'studio-mock-duo',
+                _duo: [
+                    base,
+                    {
+                        id: 'studio-mock-2',
+                        name: 'משפחת כהן',
+                        text: 'איזה אירוע מהמם! מאחלים המון אושר ושמחה, היה כיף להיות חלק מהערב הזה 💛',
+                        imageUrl: previewBlessingOnly ? null : previewPhoto || MOCK_PHOTO,
+                    },
+                ],
+            }
+        }
+        return base
+    }, [blessingLength, previewPhoto, previewBlessingOnly, draft?.values?.entriesPerPage])
 
     const showToast = (type, message) => {
         setToast({ type, message })
@@ -365,6 +385,25 @@ function StudioContent() {
         setPresets(prev => [...prev, clone])
         setActiveId(clone.id)
         showToast('info', 'נוצר עותק לעריכה — שמור כדי לשמר')
+    }
+
+    // ── Guided preset builder ("פריסט חדש") ──────────────────────────
+    // The wizard walks the four architecture layers in order —
+    // composition → surface → typography → photo frame — with a live
+    // page preview, then drops a fully-formed draft into the editor
+    // for fine-tuning + save. applyPresetClean guarantees the draft
+    // carries every canonical key from birth.
+    const [wizardOpen, setWizardOpen] = useState(false)
+    const handleWizardCreate = ({ name, values }) => {
+        const fresh = clonePresetForEdit(
+            { name: name || 'פריסט חדש', values: applyPresetClean(values) },
+            { uid: auth.currentUser?.uid },
+        )
+        fresh.name = name || 'פריסט חדש' // clone suffixes "— עותק"; keep the wizard's name
+        setPresets(prev => [...prev, fresh])
+        setActiveId(fresh.id)
+        setWizardOpen(false)
+        showToast('info', 'הפריסט נוצר — כוונן פרטים ושמור כדי לשמר')
     }
 
     // Save the current draft. If the draft has never been saved (no
@@ -485,8 +524,29 @@ function StudioContent() {
                         </div>
                     </div>
 
-                    <SeedStatusChip seedStatus={seedStatus} />
+                    <div className='flex items-center gap-2'>
+                        <button
+                            onClick={() => setWizardOpen(true)}
+                            className='flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-bold text-white transition-all hover:brightness-105 active:scale-[0.98]'
+                            style={{
+                                background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                boxShadow: '0 6px 16px -6px rgba(170,136,64,0.55)',
+                            }}
+                        >
+                            <Wand2 className='w-4 h-4' />
+                            פריסט חדש
+                        </button>
+                        <SeedStatusChip seedStatus={seedStatus} />
+                    </div>
                 </div>
+
+                {wizardOpen && (
+                    <PresetWizard
+                        backgrounds={backgrounds}
+                        onClose={() => setWizardOpen(false)}
+                        onCreate={handleWizardCreate}
+                    />
+                )}
 
                 {/* Action bar — name input + save/clone/revert/delete.
                     Hidden when nothing is loaded; shows different
@@ -1205,13 +1265,31 @@ function PropertiesPanel({
                             onChange={n => onValuesChange({ fontMinFactor: n })}
                         />
 
+                        {/* Composition: two blessings per page — an elegantly
+                            divided duo page (DuoPageLayout). Mutually exclusive
+                            with auto-split (duo compresses, split expands), so
+                            turning it on ignores the split settings. */}
+                        <PropertyToggle
+                            label='שתי ברכות בעמוד'
+                            value={v.entriesPerPage === 2}
+                            disabled={!editable}
+                            onChange={b => onValuesChange({ entriesPerPage: b ? 2 : 1 })}
+                            onLabel='זוג בעמוד'
+                            offLabel='ברכה לעמוד'
+                        />
+                        {v.entriesPerPage === 2 && (
+                            <p className='text-[10.5px] leading-relaxed -mt-1' style={{ color: '#a89378' }}>
+                                שתי ברכות חולקות עמוד עם קו עיטור ביניהן. הפיצול האוטומטי לא פעיל במצב הזה.
+                            </p>
+                        )}
+
                         {/* Smart auto-split: a long blessing + photo becomes a
                             blessing-only page (centered, roomy) followed by a
                             photo-only page; short blessings stay combined. */}
                         <PropertyToggle
                             label='פיצול אוטומטי: ברכה ארוכה לעמוד נפרד'
                             value={v.autoSplit}
-                            disabled={!editable}
+                            disabled={!editable || v.entriesPerPage === 2}
                             onChange={b => onValuesChange({ autoSplit: b })}
                         />
                         {v.autoSplit && (
@@ -1433,6 +1511,20 @@ function PropertiesPanel({
                             onChange={n =>
                                 onImageStyleChange({ borderRadius: n })
                             }
+                        />
+
+                        {/* Photo frame — a decorative treatment drawn AROUND
+                            the photo (mats / gold rings; layer 4 of the preset
+                            architecture). Code-drawn, so it prints losslessly.
+                            The framed photo keeps the same footprint the width
+                            slider defines. */}
+                        <PropertyPhotoFramePicker
+                            label='מסגרת לתמונה'
+                            frameId={v.photoFrame ?? null}
+                            frameUrl={v.photoFrameUrl ?? null}
+                            frameInset={v.photoFrameInset}
+                            disabled={!editable}
+                            onChange={patch => onValuesChange(patch)}
                         />
 
                         {/* Gap between image and blessing text. % of
@@ -1913,6 +2005,472 @@ function PropertySlider({ icon: Icon, label, value, min, max, step, unit, disabl
 // icon makes the coupling visible without offering an unlock toggle:
 // the WYSIWYG capture pipeline depends on a 4:3 image throughout, so
 // allowing arbitrary aspect here would silently break print fidelity.
+// ── PresetWizard — the guided preset builder ─────────────────────────
+// One decision per step, in the order of the preset architecture:
+//
+//   1. קומפוזיציה — how blessings become pages (classic / duo / split)
+//   2. משטח       — the page background (gallery + color)
+//   3. טיפוגרפיה  — the font + size feel
+//   4. תמונה      — the photo frame (built-in / uploaded overlay)
+//
+// A live BookPageTemplate preview re-renders after every choice, so
+// building a preset feels like composing a page, not filling a form.
+// "יצירה" drops a complete draft (canonical keys included) into the
+// regular editor for fine-tuning + save.
+const WIZ_STEPS = ['קומפוזיציה', 'משטח', 'טיפוגרפיה', 'תמונה']
+
+const WIZ_COMPOSITIONS = [
+    {
+        id: 'classic',
+        title: 'קלאסי',
+        desc: 'שם, תמונה וברכה — עמוד לכל ברכה',
+        patch: { entriesPerPage: 1, autoSplit: false },
+    },
+    {
+        id: 'duo',
+        title: 'זוגי',
+        desc: 'שתי ברכות בעמוד עם קו עיטור ביניהן',
+        patch: { entriesPerPage: 2, autoSplit: false },
+    },
+    {
+        id: 'split',
+        title: 'פיצול',
+        desc: 'ברכה ארוכה בעמוד משלה, התמונה בעמוד שאחריה',
+        patch: { entriesPerPage: 1, autoSplit: true, splitThreshold: 240 },
+    },
+]
+
+const WIZ_SIZES = [
+    { id: 'fine', label: 'עדין', fontSizePercent: 2.6 },
+    { id: 'classic', label: 'קלאסי', fontSizePercent: 3 },
+    { id: 'bold', label: 'נוכח', fontSizePercent: 3.6 },
+]
+
+function PresetWizard({ backgrounds, onClose, onCreate }) {
+    const [step, setStep] = useState(0)
+    const [name, setName] = useState('')
+    const [composition, setComposition] = useState('classic')
+    const [values, setValues] = useState(() => applyPresetClean({}))
+    const patch = p => setValues(prev => applyPresetClean({ ...prev, ...p }))
+
+    // Live preview entry follows the composition choice.
+    const previewEntry = useMemo(() => {
+        const base = { id: 'wiz', name: MOCK_NAME, text: MOCK_BLESSINGS[100], imageUrl: MOCK_PHOTO }
+        if (values.entriesPerPage === 2) {
+            return {
+                id: 'wiz-duo',
+                _duo: [base, { id: 'wiz2', name: 'משפחת כהן', text: MOCK_BLESSINGS[30], imageUrl: MOCK_PHOTO }],
+            }
+        }
+        return base
+    }, [values.entriesPerPage])
+
+    const resolvedPreview = useMemo(
+        () => resolvePreset({ id: '__wiz', values }).values || values,
+        [values],
+    )
+
+    return (
+        <div
+            className='fixed inset-0 z-[90] flex items-center justify-center p-3 sm:p-6'
+            style={{ background: 'rgba(24,17,8,0.55)', backdropFilter: 'blur(4px)' }}
+            onClick={onClose}
+        >
+            <div
+                className='w-full max-w-3xl rounded-2xl overflow-hidden flex flex-col'
+                style={{ background: '#fdfaf3', maxHeight: '92vh', boxShadow: '0 40px 80px -30px rgba(0,0,0,0.5)' }}
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Header — step trail */}
+                <div className='flex items-center justify-between px-5 py-3.5' style={{ borderBottom: '1px solid rgba(212,184,103,0.3)' }}>
+                    <div className='flex items-center gap-2'>
+                        <Wand2 className='w-4 h-4' style={{ color: '#b8893d' }} />
+                        <span className='text-[14px] font-bold' style={{ color: '#3a2d1a' }}>פריסט חדש</span>
+                    </div>
+                    <div className='flex items-center gap-1.5'>
+                        {WIZ_STEPS.map((label, i) => (
+                            <button
+                                key={label}
+                                onClick={() => i < step && setStep(i)}
+                                className='flex items-center gap-1.5'
+                                style={{ cursor: i < step ? 'pointer' : 'default' }}
+                            >
+                                <span
+                                    className='w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold'
+                                    style={{
+                                        background: i === step ? '#b8893d' : i < step ? '#e7d6ac' : '#f1e8d4',
+                                        color: i === step ? '#fff' : '#8a6d30',
+                                    }}
+                                >
+                                    {i < step ? '✓' : i + 1}
+                                </span>
+                                <span className='hidden sm:inline text-[11px] font-semibold' style={{ color: i === step ? '#8a6d30' : '#b3a284' }}>
+                                    {label}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                    <button onClick={onClose} className='p-1.5 rounded-lg hover:bg-black/5'>
+                        <X className='w-4 h-4' style={{ color: '#8a6f45' }} />
+                    </button>
+                </div>
+
+                <div className='flex-1 overflow-y-auto grid sm:grid-cols-[280px_1fr]'>
+                    {/* Live preview — always visible, re-skins per choice */}
+                    <div className='flex flex-col items-center justify-center gap-2 p-4' style={{ background: '#f4ecd9' }}>
+                        <div
+                            className='shrink-0'
+                            style={{ width: 240, height: 240, borderRadius: 4, overflow: 'hidden', background: '#fff', boxShadow: '0 20px 45px -20px rgba(0,0,0,0.35)' }}
+                        >
+                            <BookPageTemplate entry={previewEntry} styleSettings={resolvedPreview} scaledWidth={240} scaledHeight={240} />
+                        </div>
+                        <span className='text-[10.5px]' style={{ color: '#a89378' }}>תצוגה חיה — מתעדכנת עם כל בחירה</span>
+                    </div>
+
+                    {/* Step content */}
+                    <div className='p-5 space-y-4'>
+                        {step === 0 && (
+                            <>
+                                <h3 className='text-[15px] font-bold' style={{ color: '#3a2d1a' }}>איך הברכות יושבות על העמוד?</h3>
+                                <div className='space-y-2'>
+                                    {WIZ_COMPOSITIONS.map(c => (
+                                        <button
+                                            key={c.id}
+                                            onClick={() => { setComposition(c.id); patch(c.patch) }}
+                                            className={`w-full text-right rounded-xl px-4 py-3 border transition-all ${
+                                                composition === c.id ? 'bg-white shadow-sm' : 'bg-white/50 hover:bg-white'
+                                            }`}
+                                            style={{ borderColor: composition === c.id ? '#b8893d' : 'rgba(212,184,103,0.35)', borderWidth: composition === c.id ? 2 : 1 }}
+                                        >
+                                            <div className='text-[13.5px] font-bold' style={{ color: '#3a2d1a' }}>{c.title}</div>
+                                            <div className='text-[11.5px] mt-0.5' style={{ color: '#8a6f45' }}>{c.desc}</div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+
+                        {step === 1 && (
+                            <>
+                                <h3 className='text-[15px] font-bold' style={{ color: '#3a2d1a' }}>המשטח של העמוד</h3>
+                                <div className='grid grid-cols-4 gap-2'>
+                                    <button
+                                        onClick={() => patch({ backgroundUrl: null, texture: null })}
+                                        className={`aspect-square rounded-lg border-2 transition-all ${!values.backgroundUrl && !values.texture ? '' : 'opacity-70 hover:opacity-100'}`}
+                                        style={{ background: values.backgroundColor || '#fff', borderColor: !values.backgroundUrl && !values.texture ? '#b8893d' : 'rgba(212,184,103,0.35)' }}
+                                        title='צבע חלק'
+                                    >
+                                        <span className='text-[9.5px]' style={{ color: '#8a6f45' }}>חלק</span>
+                                    </button>
+                                    {(backgrounds || []).slice(0, 15).map(bg => (
+                                        <button
+                                            key={bg.id}
+                                            onClick={() => patch({ backgroundUrl: bg.src })}
+                                            className={`aspect-square rounded-lg border-2 bg-cover bg-center transition-all ${values.backgroundUrl === bg.src ? '' : 'opacity-80 hover:opacity-100'}`}
+                                            style={{ backgroundImage: `url(${bg.src})`, borderColor: values.backgroundUrl === bg.src ? '#b8893d' : 'rgba(212,184,103,0.35)' }}
+                                            title={bg.label}
+                                        />
+                                    ))}
+                                </div>
+                                <div className='flex items-center justify-between pt-1'>
+                                    <span className='text-[12px] font-semibold' style={{ color: '#7a6a52' }}>צבע רקע</span>
+                                    <input
+                                        type='color'
+                                        value={values.backgroundColor || '#ffffff'}
+                                        onChange={e => patch({ backgroundColor: e.target.value })}
+                                        className='w-9 h-9 rounded-lg border cursor-pointer'
+                                        style={{ borderColor: 'rgba(212,184,103,0.4)' }}
+                                    />
+                                </div>
+                            </>
+                        )}
+
+                        {step === 2 && (
+                            <>
+                                <h3 className='text-[15px] font-bold' style={{ color: '#3a2d1a' }}>הקול הטיפוגרפי</h3>
+                                <div className='space-y-2'>
+                                    {Object.values(FONTS_REGISTRY).map(f => {
+                                        const active = values.fontKey === f.id
+                                        return (
+                                            <button
+                                                key={f.id}
+                                                onClick={() => patch({ fontKey: f.id })}
+                                                className={`w-full flex items-center justify-between rounded-xl px-4 py-2.5 border transition-all ${active ? 'bg-white shadow-sm' : 'bg-white/50 hover:bg-white'}`}
+                                                style={{ borderColor: active ? '#b8893d' : 'rgba(212,184,103,0.35)', borderWidth: active ? 2 : 1 }}
+                                            >
+                                                <span className='text-[11px]' style={{ color: '#a89378' }}>{f.label}</span>
+                                                <span className={`${f.font.className} text-[17px]`} style={{ color: '#3a2d1a' }}>ברכה מכל הלב</span>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                                <div>
+                                    <span className='block text-[12px] font-semibold mb-1.5' style={{ color: '#7a6a52' }}>גודל הכתב</span>
+                                    <div className='flex gap-2'>
+                                        {WIZ_SIZES.map(sz => (
+                                            <button
+                                                key={sz.id}
+                                                onClick={() => patch({ fontSizePercent: sz.fontSizePercent })}
+                                                className='flex-1 rounded-lg py-2 text-[12px] font-bold border transition-all'
+                                                style={{
+                                                    borderColor: values.fontSizePercent === sz.fontSizePercent ? '#b8893d' : 'rgba(212,184,103,0.35)',
+                                                    background: values.fontSizePercent === sz.fontSizePercent ? '#fff' : 'rgba(255,255,255,0.5)',
+                                                    color: '#5a4426',
+                                                }}
+                                            >
+                                                {sz.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className='flex items-center justify-between'>
+                                    <span className='text-[12px] font-semibold' style={{ color: '#7a6a52' }}>צבע הכתב</span>
+                                    <input
+                                        type='color'
+                                        value={values.fontColor || '#000000'}
+                                        onChange={e => patch({ fontColor: e.target.value })}
+                                        className='w-9 h-9 rounded-lg border cursor-pointer'
+                                        style={{ borderColor: 'rgba(212,184,103,0.4)' }}
+                                    />
+                                </div>
+                            </>
+                        )}
+
+                        {step === 3 && (
+                            <>
+                                <h3 className='text-[15px] font-bold' style={{ color: '#3a2d1a' }}>המסגרת של התמונה</h3>
+                                <PropertyPhotoFramePicker
+                                    label='בחרו מסגרת'
+                                    frameId={values.photoFrame ?? null}
+                                    frameUrl={values.photoFrameUrl ?? null}
+                                    frameInset={values.photoFrameInset}
+                                    disabled={false}
+                                    onChange={p => patch(p)}
+                                />
+                                <div>
+                                    <span className='block text-[12px] font-semibold mb-1.5' style={{ color: '#7a6a52' }}>שם הפריסט</span>
+                                    <input
+                                        value={name}
+                                        onChange={e => setName(e.target.value)}
+                                        placeholder='למשל: זהב קלאסי — זוגי'
+                                        className='w-full rounded-xl px-4 py-2.5 text-[13.5px] outline-none'
+                                        style={{ background: '#fff', border: '1.5px solid rgba(212,184,103,0.45)', color: '#3a2d1a' }}
+                                    />
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className='flex items-center justify-between px-5 py-3.5' style={{ borderTop: '1px solid rgba(212,184,103,0.3)' }}>
+                    <button
+                        onClick={() => (step === 0 ? onClose() : setStep(s => s - 1))}
+                        className='px-4 py-2 rounded-xl text-[12.5px] font-bold hover:bg-black/5'
+                        style={{ color: '#8a6f45' }}
+                    >
+                        {step === 0 ? 'ביטול' : '→ חזרה'}
+                    </button>
+                    {step < WIZ_STEPS.length - 1 ? (
+                        <button
+                            onClick={() => setStep(s => s + 1)}
+                            className='px-6 py-2.5 rounded-xl text-[13px] font-bold text-white transition-all hover:brightness-105 active:scale-[0.98]'
+                            style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', boxShadow: '0 6px 16px -6px rgba(170,136,64,0.55)' }}
+                        >
+                            ממשיכים ←
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => onCreate({ name: name.trim(), values })}
+                            className='px-6 py-2.5 rounded-xl text-[13px] font-bold text-white transition-all hover:brightness-105 active:scale-[0.98]'
+                            style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', boxShadow: '0 6px 16px -6px rgba(170,136,64,0.55)' }}
+                        >
+                            יצירת הפריסט ✨
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// Photo-frame picker — visual chips rendered by the REAL frame engine
+// (FramedPhoto in placeholder mode), so what you pick is exactly what
+// the book prints. Three groups: none, the built-in artful frames, and
+// uploaded overlay artwork (PNG/SVG with a transparent window) with an
+// upload tile + per-frame delete. Selecting an overlay reveals the
+// window-inset slider.
+function PropertyPhotoFramePicker({ label, frameId, frameUrl, frameInset, disabled, onChange }) {
+    const [uploaded, setUploaded] = useState([])
+    const [uploading, setUploading] = useState(false)
+    const [uploadErr, setUploadErr] = useState('')
+    const fileRef = useRef(null)
+
+    useEffect(() => {
+        let cancelled = false
+        listPhotoFrameAssets().then(list => {
+            if (!cancelled) setUploaded(Array.isArray(list) ? list : [])
+        })
+        return () => { cancelled = true }
+    }, [])
+
+    async function handleUpload(e) {
+        const file = e.target.files?.[0]
+        e.target.value = ''
+        if (!file || disabled) return
+        setUploadErr('')
+        setUploading(true)
+        try {
+            const added = await uploadPhotoFrameAsset(file, { uid: auth.currentUser?.uid })
+            setUploaded(prev => [added, ...prev])
+            onChange({ photoFrame: null, photoFrameUrl: added.url })
+        } catch (err) {
+            setUploadErr(err?.message || 'ההעלאה נכשלה')
+        } finally {
+            setUploading(false)
+        }
+    }
+
+    async function handleDelete(item) {
+        if (!confirm(`למחוק את המסגרת "${item.label}"?`)) return
+        try {
+            await deletePhotoFrameAsset(item.id, item.storagePath)
+            setUploaded(prev => prev.filter(x => x.id !== item.id))
+            if (frameUrl === item.url) onChange({ photoFrame: null, photoFrameUrl: null })
+        } catch (err) {
+            alert('המחיקה נכשלה: ' + (err?.message || err))
+        }
+    }
+
+    const chipCls = active =>
+        `flex flex-col items-center gap-1 rounded-md px-1 py-1.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+            active ? 'bg-white shadow-sm ring-2 ring-[#b8893d]' : 'hover:bg-white/70'
+        }`
+
+    return (
+        <div>
+            <PropertyHeader icon={Palette} label={label} />
+            <div
+                className='grid grid-cols-3 gap-1.5 rounded-lg p-1.5'
+                style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}
+            >
+                {/* none */}
+                <button
+                    type='button'
+                    onClick={() => !disabled && onChange({ photoFrame: null, photoFrameUrl: null })}
+                    disabled={disabled}
+                    className={chipCls(!frameId && !frameUrl)}
+                >
+                    <span className='flex items-center justify-center' style={{ width: 56, height: 52 }}>
+                        <FramedPhoto placeholder slotW={44} frameId={null} />
+                    </span>
+                    <span className='text-[9.5px] leading-tight text-center' style={{ color: '#7a6a52' }}>בלי מסגרת</span>
+                </button>
+
+                {/* built-ins — drawn by the real engine */}
+                {PHOTO_FRAMES.map(f => {
+                    const active = !frameUrl && frameId === f.id
+                    return (
+                        <button
+                            key={f.id}
+                            type='button'
+                            onClick={() => !disabled && onChange({ photoFrame: f.id, photoFrameUrl: null })}
+                            disabled={disabled}
+                            title={f.label}
+                            className={chipCls(active)}
+                        >
+                            <span className='flex items-center justify-center overflow-hidden' style={{ width: 56, height: 52 }}>
+                                <FramedPhoto placeholder slotW={46} frameId={f.id} />
+                            </span>
+                            <span className='text-[9.5px] leading-tight text-center' style={{ color: active ? '#8a6d30' : '#7a6a52' }}>
+                                {f.label}
+                            </span>
+                        </button>
+                    )
+                })}
+
+                {/* uploaded overlays */}
+                {uploaded.map(item => {
+                    const active = frameUrl === item.url
+                    return (
+                        <div key={item.id} className='relative group'>
+                            <button
+                                type='button'
+                                onClick={() => !disabled && onChange({ photoFrame: null, photoFrameUrl: item.url })}
+                                disabled={disabled}
+                                title={item.label}
+                                className={`w-full ${chipCls(active)}`}
+                            >
+                                <span className='flex items-center justify-center' style={{ width: 56, height: 52 }}>
+                                    <span style={{ position: 'relative', width: 46, height: 36 }}>
+                                        <span
+                                            style={{
+                                                position: 'absolute', inset: 4, borderRadius: 2,
+                                                background: 'linear-gradient(135deg, #d8cdbb 0%, #b9ab93 100%)',
+                                            }}
+                                        />
+                                        <img src={item.url} alt='' style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill' }} />
+                                    </span>
+                                </span>
+                                <span className='text-[9.5px] leading-tight text-center truncate w-full' style={{ color: active ? '#8a6d30' : '#7a6a52' }}>
+                                    {item.label}
+                                </span>
+                            </button>
+                            {!disabled && (
+                                <button
+                                    type='button'
+                                    onClick={() => handleDelete(item)}
+                                    className='absolute -top-1 -end-1 w-4.5 h-4.5 rounded-full bg-white border border-gray-300 text-red-500 text-[10px] leading-none opacity-0 group-hover:opacity-100 transition-opacity shadow px-1'
+                                    title='מחיקת מסגרת'
+                                >
+                                    ×
+                                </button>
+                            )}
+                        </div>
+                    )
+                })}
+
+                {/* upload tile */}
+                <button
+                    type='button'
+                    onClick={() => !disabled && !uploading && fileRef.current?.click()}
+                    disabled={disabled || uploading}
+                    className='flex flex-col items-center justify-center gap-1 rounded-md px-1 py-1.5 border border-dashed transition-all hover:bg-white/70 disabled:opacity-50'
+                    style={{ borderColor: '#d3b46a', minHeight: 74 }}
+                >
+                    {uploading ? (
+                        <Loader2 className='w-4 h-4 animate-spin' style={{ color: '#b8893d' }} />
+                    ) : (
+                        <Upload className='w-4 h-4' style={{ color: '#b8893d' }} />
+                    )}
+                    <span className='text-[9.5px] text-center leading-tight' style={{ color: '#8a6d30' }}>
+                        {uploading ? 'מעלה…' : 'העלאת מסגרת (PNG שקוף)'}
+                    </span>
+                </button>
+            </div>
+            <input ref={fileRef} type='file' accept='image/png,image/webp,image/svg+xml' className='hidden' onChange={handleUpload} />
+            {uploadErr && <p className='text-[10px] mt-1' style={{ color: '#b3402e' }}>{uploadErr}</p>}
+
+            {/* Overlay window inset — how far the photo tucks under the artwork */}
+            {frameUrl && (
+                <div className='mt-2'>
+                    <PropertySlider
+                        icon={Frame}
+                        label='עומק חלון המסגרת'
+                        value={Number.isFinite(frameInset) ? frameInset : 6}
+                        min={0}
+                        max={16}
+                        step={0.5}
+                        unit='%'
+                        disabled={disabled}
+                        onChange={n => onChange({ photoFrameInset: n })}
+                    />
+                </div>
+            )}
+        </div>
+    )
+}
+
 function PropertyImageSize({ imageStyle, disabled, onChange }) {
     const width = imageStyle?.width ?? 90
     const height = imageStyle?.height ?? Math.round(width * 0.75) // 4:3

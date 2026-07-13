@@ -41,6 +41,7 @@ import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCo
 import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 import { listPresets, resolvePreset, filterPresetsByEventType, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import { adoptSurfaceKeepCover } from '@/lib/presetFilters'
+import { applyPresetClean } from '@/lib/bookDesignSchema'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
@@ -677,13 +678,16 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
     //   2. wedding.coverDesign — pre-split docs that only had this
     //   3. wedding.book?.designSettings — very old docs
     //   4. defaultStyle — virgin wedding
-    const [styleSettings, setStyleSettings] = useState(() => ({
-        ...defaultStyle,
+    // Canonical fill (applyPresetClean): a stored design that predates
+    // the schema — or was written by an older merge path — gets every
+    // missing key from the canonical defaults, so legacy docs render
+    // with the SAME margins/photo width/alignment as fresh ones.
+    const [styleSettings, setStyleSettings] = useState(() =>
         // Interior pages: bookDesign, else coverDesign WITHOUT its imageStyle
         // (the cover's photo size shrinks interior photos and leaves a gap —
         // see resolveInteriorDesign).
-        ...(resolveInteriorDesign(wedding) || {}),
-    }))
+        applyPresetClean(resolveInteriorDesign(wedding))
+    )
 
     // The actual page sequence the book renders — entries expanded by the
     // smart auto-split (a long blessing → its own text page + photo page).
@@ -701,12 +705,13 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
         () => expandBookPages([...entries].reverse(), {
             autoSplit: styleSettings.autoSplit,
             splitThreshold: styleSettings.splitThreshold,
+            entriesPerPage: styleSettings.entriesPerPage,
             // Keep split text+photo pairs facing on one spread — but only in
             // the 2-up desktop view. On mobile (single page) there are no
             // spreads, so no divider leaves are added.
             padToSpread: !pageSize.isPortrait,
         }),
-        [entries, styleSettings.autoSplit, styleSettings.splitThreshold, pageSize.isPortrait]
+        [entries, styleSettings.autoSplit, styleSettings.splitThreshold, styleSettings.entriesPerPage, pageSize.isPortrait]
     )
 
     // ── Reading-position continuity ─────────────────────────────────
@@ -770,7 +775,9 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
     // that ships to production.
     const applyPreset = async preset => {
         const resolved = resolvePreset(preset).values || {}
-        const merged = { ...defaultStyle, ...resolved }
+        // FULL RESET over the canonical schema — nothing survives from
+        // the previous design (see bookDesignSchema.js).
+        const merged = applyPresetClean(resolved)
         setStyleSettings(merged)
         // Cover adopts the preset's SURFACE look only — every
         // cover-specific field (photo, scale/position, title, subtitle,

@@ -20,6 +20,7 @@ import { expandBookPages } from '@/lib/bookPages'
 import PrintOrderModal from '@/components/PrintOrderModal/PrintOrderModal'
 import { getEntries } from '../../../../lib/classifyMedia'
 import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import { applyPresetClean } from '@/lib/bookDesignSchema'
 import { listPresets, resolvePreset, filterPresetsByEventType, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import { BOOK_FORMATS, resolveFormatConfig } from '@/lib/bookFormats'
 import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
@@ -99,8 +100,8 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // ones stay combined. `pages` is already in flip order, and the split
     // keeps each blessing's two pages adjacent, so order stays correct.
     const displayPages = useMemo(
-        () => expandBookPages(pages, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold }),
-        [pages, styleSettings.autoSplit, styleSettings.splitThreshold]
+        () => expandBookPages(pages, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold, entriesPerPage: styleSettings.entriesPerPage }),
+        [pages, styleSettings.autoSplit, styleSettings.splitThreshold, styleSettings.entriesPerPage]
     )
     // Cover-only style merged with locale, used by BookCoverTemplate
     // so dir/RTL behavior matches the body without leaking the book's
@@ -210,7 +211,10 @@ function BookViewerInner({ onLocaleDiscovered }) {
                     const savedBook = resolveInteriorDesign(firestoreData)
                     const savedCover = firestoreData.coverDesign || firestoreData.bookDesign
                     if (savedBook) {
-                        setStyleSettings({ ...defaultStyle, ...savedBook })
+                        // Canonical fill — legacy/partial designs get every
+                        // missing key from the canonical defaults, so the
+                        // interior renders identically on every device.
+                        setStyleSettings(applyPresetClean(savedBook))
                     } else if (typeof window !== 'undefined') {
                         const savedStyle = localStorage.getItem('bookStyle')
                         if (savedStyle) setStyleSettings(JSON.parse(savedStyle))

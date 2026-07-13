@@ -25,6 +25,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { generateSlug } from '@/lib/generateSlug'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { validateNewEvent, buildWeddingDoc, eventDisplayTitle, FREE_EVENT_LIMIT, MAX_EVENTS_PER_USER, isFreePlan } from '@/lib/onboarding'
+import { applyPresetClean } from '@/lib/bookDesignSchema'
 
 const MAX_DESIGN_BYTES = 8000
 
@@ -101,8 +102,12 @@ export async function POST(req) {
             ],
         }
         if (design) {
-            doc.bookDesign = design
-            doc.coverDesign = design // new event — no owner cover to preserve yet
+            // Canonicalize before persisting (see bookDesignSchema.js) —
+            // whatever client sent this (web wizard, mobile app, older
+            // build), the stored design carries every canonical key.
+            const cleanDesign = applyPresetClean(design)
+            doc.bookDesign = cleanDesign
+            doc.coverDesign = cleanDesign // new event — no owner cover to preserve yet
             doc.bookDesignSource = 'onboarding'
             doc.bookDesignUpdatedAt = FieldValue.serverTimestamp()
         }

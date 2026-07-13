@@ -652,6 +652,79 @@ export async function deleteStudioBackground(id, storagePath) {
     return true
 }
 
+// ── Studio photo frames (uploaded overlays) ─────────────────────────
+// PNG/SVG artwork with a TRANSPARENT WINDOW that dresses the photo
+// slot (see src/lib/photoFrames.js + FramedPhoto). Stored in Firestore
+// `studio_photo_frames`, files under `studio/photo-frames/`. Unlike
+// page backgrounds these must keep their alpha channel, so raster
+// uploads compress PNG-to-PNG — never JPEG.
+
+const PHOTO_FRAMES_COLLECTION = 'studio_photo_frames'
+
+export async function uploadPhotoFrameAsset(file, { uid, label = '' } = {}) {
+    if (!file) throw new Error('uploadPhotoFrameAsset: missing file')
+    const okTypes = ['image/png', 'image/webp', 'image/svg+xml']
+    if (!okTypes.includes(file.type)) {
+        throw new Error('מסגרת חייבת רקע שקוף — רק PNG, WebP או SVG')
+    }
+    if (file.size > 4 * 1024 * 1024) {
+        throw new Error('הקובץ גדול מדי — מקסימום 4MB')
+    }
+
+    const isSvg = file.type === 'image/svg+xml'
+    let payload = file
+    if (!isSvg) {
+        // Best-effort downscale, PNG-to-PNG so the window stays clear.
+        try {
+            const { default: imageCompression } = await import('browser-image-compression')
+            const out = await imageCompression(file, {
+                maxSizeMB: 1.6,
+                maxWidthOrHeight: 1800,
+                useWebWorker: true,
+                fileType: 'image/png',
+            })
+            if (out.size < file.size) payload = out
+        } catch (err) {
+            console.warn('[studioPresets] frame compression skipped:', err?.message || err)
+        }
+    }
+
+    const ext = isSvg ? 'svg' : payload.type === 'image/webp' ? 'webp' : 'png'
+    const id = newPresetId().replace('studio_', 'pframe_')
+    const storagePath = `studio/photo-frames/${id}.${ext}`
+    const fileRef = storageRef(storage, storagePath)
+    await uploadBytes(fileRef, payload, { contentType: payload.type || 'image/png' })
+    const url = await getDownloadURL(fileRef)
+
+    const docData = {
+        url,
+        storagePath,
+        label: label || file.name?.replace(/\.[^.]+$/, '') || 'מסגרת מותאמת',
+        uploadedBy: uid || 'unknown',
+        createdAt: new Date(),
+    }
+    await setDoc(doc(db, PHOTO_FRAMES_COLLECTION, id), docData)
+    return { id, ...docData }
+}
+
+export async function listPhotoFrameAssets() {
+    try {
+        const snap = await getDocs(
+            query(collection(db, PHOTO_FRAMES_COLLECTION), orderBy('createdAt', 'desc')),
+        )
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    } catch (err) {
+        console.warn('[studioPresets] listPhotoFrameAssets failed:', err?.message || err)
+        return []
+    }
+}
+
+export async function deletePhotoFrameAsset(id, storagePath) {
+    if (!id) throw new Error('deletePhotoFrameAsset: missing id')
+    await callStudioApi('deleteUploadedPhotoFrame', { id, storagePath })
+    return true
+}
+
 // ── Visibility / soft-hide ───────────────────────────────────────────
 // Static backgrounds (curated, ship in code) and seeded system
 // presets can't be "hard-deleted" the way uploaded ones can — they're
