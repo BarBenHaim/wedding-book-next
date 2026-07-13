@@ -40,6 +40,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore'
 import { listPresets, resolvePreset } from '@/lib/studioPresets'
 import { PUBLIC_EVENT_TYPES, EVENT_TYPE_META, validateNewEvent, eventDisplayTitle } from '@/lib/onboarding'
 import { frankRuhl } from '@/app/fonts'
+import { EVENT_ICON } from './EventTypeIcons'
 
 const AUTO_THEME = { wedding: 'gold', birthday: 'pink', bar_mitzvah: 'blue', bat_mitzvah: 'blue' }
 const STEP_LABELS = ['סוג האירוע', 'הפרטים', 'העיצוב', 'יוצאים לדרך']
@@ -600,31 +601,62 @@ export default function StartWizard() {
                 <section className='formCol' key={step}>
                     {step === 0 && (
                         <div className='card hero'>
-                            <p className='overline'>Wedding Tales · ספרי ברכות מאירועים אמיתיים</p>
-                            <h1 className='h1'>האורחים כותבים.<br /><em>אתם מקבלים ספר.</em></h1>
-                            <p className='sub'>עמוד ברכות לאורחים, ספר דיגיטלי חי — והכול מוכן בדקה אחת, בחינם. איזה אירוע חוגגים?</p>
+                            {/* Eyebrow row — gold hairlines flanking the tagline, ported
+                                verbatim from the mobile create/index.tsx design. */}
+                            <div className='eyebrowRow'>
+                                <span className='eyebrowLine' />
+                                <span className='eyebrowText'>Wedding Tales — ספרי ברכות מאירועים אמיתיים</span>
+                                <span className='eyebrowLine' />
+                            </div>
+                            <p className='ornament'>— ✦ —</p>
+
+                            <h1 className='h1 heroH1'>
+                                <span className='h1LineA'>האורחים כותבים.</span>
+                                <span className='h1LineB'>אתם מקבלים ספר.</span>
+                            </h1>
+                            <p className='sub sub0'>עמוד ברכות לאורחים, ספר דיגיטלי חי — והכול מוכן בדקה אחת, בחינם.</p>
+                            <p className='sub0Ask'>איזה אירוע חוגגים?</p>
 
                             <div className='typeGrid'>
-                                {PUBLIC_EVENT_TYPES.map((t, i) => (
-                                    <button
-                                        key={t}
-                                        className={`typeCard ${data.eventType === t ? 'sel' : ''}`}
-                                        style={{ animationDelay: `${0.08 + i * 0.07}s`, '--tA': ACCENTS[t].a, '--tB': ACCENTS[t].b }}
-                                        onClick={() => pickType(t)}
-                                    >
-                                        <span className='typeMedal'>{EVENT_TYPE_META[t].emoji}</span>
-                                        <span className='typeLabel'>{EVENT_TYPE_META[t].label}</span>
-                                        <span className='typeBlurb'>{EVENT_TYPE_META[t].blurb}</span>
-                                    </button>
-                                ))}
+                                {PUBLIC_EVENT_TYPES.map((t, i) => {
+                                    const Icon = EVENT_ICON[t]
+                                    return (
+                                        <button
+                                            key={t}
+                                            className={`typeCard ${data.eventType === t ? 'sel' : ''}`}
+                                            style={{ animationDelay: `${0.08 + i * 0.07}s`, '--tA': ACCENTS[t].a, '--tB': ACCENTS[t].b }}
+                                            onClick={() => pickType(t)}
+                                        >
+                                            <span className='typeMedal'>{Icon ? <Icon size={44} /> : EVENT_TYPE_META[t].emoji}</span>
+                                            <span className='typeLabel'>{EVENT_TYPE_META[t].label}</span>
+                                            <span className='typeBlurb'>{EVENT_TYPE_META[t].blurb}</span>
+                                        </button>
+                                    )
+                                })}
                             </div>
 
                             <CoversFan />
 
-                            <p className='trust'>✓ אירוע ראשון במתנה&nbsp;&nbsp;·&nbsp;&nbsp;✓ בלי כרטיס אשראי&nbsp;&nbsp;·&nbsp;&nbsp;✓ מוכן תוך דקה</p>
-                            <p className='loginLine'>
-                                כבר יש לכם ספר? <Link href='/login'>כניסה לחשבון</Link>
-                            </p>
+                            {/* Trust row — 3 checkmark items with gold verticals between,
+                                same layout as the mobile hero. */}
+                            <div className='trustRow' aria-label='מה מקבלים'>
+                                {['אירוע ראשון במתנה', 'בלי כרטיסי אשראי', 'מוכן תוך דקה'].map((label, i) => (
+                                    <span key={label} className='trustGroup'>
+                                        {i > 0 && <span className='trustDivider' aria-hidden='true' />}
+                                        <span className='trustItem'>
+                                            <svg viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='currentColor' strokeWidth='2' aria-hidden='true'>
+                                                <circle cx='12' cy='12' r='9' opacity='0.35' />
+                                                <path d='M8 12.5l3 3 5-6' strokeLinecap='round' strokeLinejoin='round' />
+                                            </svg>
+                                            <span>{label}</span>
+                                        </span>
+                                    </span>
+                                ))}
+                            </div>
+
+                            <Link href='/login' className='loginPill' aria-label='כניסה לחשבון'>
+                                כניסה לחשבון  ‹
+                            </Link>
                         </div>
                     )}
 
@@ -1011,6 +1043,39 @@ export default function StartWizard() {
                 }
                 .sub { margin: -6px 0 2px; font-size: 14.5px; line-height: 1.7; color: #6d5a3d; }
 
+                /* Hero (Step 0) — mobile create/index.tsx design port. */
+                .eyebrowRow { display: flex; align-items: center; justify-content: center; gap: 10px; margin: -4px 0 0; }
+                .eyebrowLine { width: 26px; height: 1px; background: rgba(170, 136, 64, 0.55); }
+                .eyebrowText { font-size: 11.5px; font-weight: 600; color: #8a6f45; letter-spacing: 0.01em; }
+                .ornament { margin: 4px 0 6px; font-size: 10px; color: #b8893d; letter-spacing: 0.16em; text-align: center; }
+                .heroH1 { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
+                .heroH1 .h1LineA { color: #3b2a14; }
+                .heroH1 .h1LineB {
+                    background: linear-gradient(92deg, var(--acc), var(--accB) 55%, var(--acc));
+                    -webkit-background-clip: text; background-clip: text; color: transparent;
+                }
+                .sub0 { margin: 6px auto 0; max-width: 440px; padding-inline: 6px; }
+                .sub0Ask { margin: 2px 0 0; font-size: 13.5px; font-weight: 700; color: #5f4f33; }
+
+                /* Trust row — 3 checkmark items separated by gold verticals. */
+                .trustRow { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; color: #5f4f33; }
+                .trustGroup { display: inline-flex; align-items: center; gap: 10px; }
+                .trustItem { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+                .trustItem svg { color: var(--acc); flex-shrink: 0; }
+                .trustDivider { width: 1px; height: 14px; background: rgba(170, 136, 64, 0.35); }
+
+                /* Gradient pill "כניסה לחשבון" — the mobile loginCta. */
+                .loginPill {
+                    align-self: center; margin-top: 4px; padding: 14px 26px; border-radius: 999px;
+                    background: linear-gradient(180deg, var(--accB), var(--acc));
+                    color: #fff; font-weight: 700; font-size: 15.5px; letter-spacing: 0.2px;
+                    text-decoration: none; border: 1px solid rgba(255, 255, 255, 0.55);
+                    box-shadow: 0 12px 28px -12px var(--acc), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+                    transition: transform 0.15s ease, box-shadow 0.2s ease;
+                }
+                .loginPill:hover { transform: translateY(-2px); box-shadow: 0 16px 32px -12px var(--acc), inset 0 1px 0 rgba(255, 255, 255, 0.4); }
+                .loginPill:active { transform: scale(0.97); }
+
                 .typeGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
                 @media (min-width: 640px) { .typeGrid { grid-template-columns: repeat(4, 1fr); } }
                 .typeCard {
@@ -1024,9 +1089,10 @@ export default function StartWizard() {
                 .typeCard:active { transform: scale(0.97); }
                 .typeCard.sel { border-color: var(--tA); background: linear-gradient(180deg, #fffdf6, #fbf3e2); transform: translateY(-4px) scale(1.03); box-shadow: 0 18px 34px -18px var(--tA); }
                 .typeMedal {
-                    width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; font-size: 26px;
-                    background: linear-gradient(135deg, var(--tB), var(--tA));
-                    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.5), 0 8px 16px -8px var(--tA);
+                    width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center;
+                    background: radial-gradient(circle at 32% 28%, #fffdf6 0%, #f6ead0 70%, #ecdcb3 100%);
+                    border: 1px solid rgba(201, 164, 78, 0.35);
+                    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.75), 0 10px 20px -10px rgba(184, 137, 61, 0.42);
                     transition: transform 0.2s ease;
                 }
                 .typeCard:hover .typeMedal { transform: scale(1.08) rotate(6deg); }
