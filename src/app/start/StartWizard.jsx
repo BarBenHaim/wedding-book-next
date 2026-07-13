@@ -40,7 +40,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore'
 import { listPresets, resolvePreset } from '@/lib/studioPresets'
 import { PUBLIC_EVENT_TYPES, EVENT_TYPE_META, validateNewEvent, eventDisplayTitle } from '@/lib/onboarding'
 import { frankRuhl } from '@/app/fonts'
-import { EVENT_ICON } from './EventTypeIcons'
+import { EVENT_ICON, EVENT_PNG_ICON, WTMonogram, OpenBook } from './EventTypeIcons'
 
 const AUTO_THEME = { wedding: 'gold', birthday: 'pink', bar_mitzvah: 'blue', bat_mitzvah: 'blue' }
 const STEP_LABELS = ['סוג האירוע', 'הפרטים', 'העיצוב', 'יוצאים לדרך']
@@ -561,11 +561,18 @@ export default function StartWizard() {
 
     return (
         <div className='wiz' dir='rtl' style={{ '--acc': accent.a, '--accB': accent.b, '--accSoft': accent.soft }}>
+            {/* The mobile bg_app.png / Container_BG.png stationery photo,
+                copied to public/start-assets/. Fixed-attachment so it stays
+                put while the wizard scrolls, low-opacity veil above to keep
+                text legible. Matches the mobile create screen 1:1. */}
+            <div className='pageBg' aria-hidden='true' />
+            <div className='pageVeil' aria-hidden='true' />
             <div className='orb orbA' /><div className='orb orbB' />
             <i className='spark s1' /><i className='spark s2' /><i className='spark s3' /><i className='spark s4' /><i className='spark s5' />
 
             <header className='top'>
                 <Link href='/landing' className='logoLink' aria-label='Wedding Tales'>
+                    <span className='monoWrap'><WTMonogram size={44} /></span>
                     <img src='/logo-wt.png' alt='Wedding Tales' className='logo' />
                 </Link>
                 {step < 4 && (
@@ -619,7 +626,7 @@ export default function StartWizard() {
 
                             <div className='typeGrid'>
                                 {PUBLIC_EVENT_TYPES.map((t, i) => {
-                                    const Icon = EVENT_ICON[t]
+                                    const iconUrl = EVENT_PNG_ICON[t]
                                     return (
                                         <button
                                             key={t}
@@ -627,7 +634,13 @@ export default function StartWizard() {
                                             style={{ animationDelay: `${0.08 + i * 0.07}s`, '--tA': ACCENTS[t].a, '--tB': ACCENTS[t].b }}
                                             onClick={() => pickType(t)}
                                         >
-                                            <span className='typeMedal'>{Icon ? <Icon size={44} /> : EVENT_TYPE_META[t].emoji}</span>
+                                            {/* Container_BG.png — the mobile stationery card art */}
+                                            <span className='typeCardBg' aria-hidden='true' />
+                                            <span className='typeMedal'>
+                                                {iconUrl
+                                                    ? <img src={iconUrl} alt='' className='typeIconPng' />
+                                                    : EVENT_TYPE_META[t].emoji}
+                                            </span>
                                             <span className='typeLabel'>{EVENT_TYPE_META[t].label}</span>
                                             <span className='typeBlurb'>{EVENT_TYPE_META[t].blurb}</span>
                                         </button>
@@ -635,7 +648,12 @@ export default function StartWizard() {
                                 })}
                             </div>
 
-                            <CoversFan />
+                            {/* Open-book illustration sits behind the covers fan
+                                just like the mobile Page1 composition. */}
+                            <div className='fanStage'>
+                                <div className='openBook' aria-hidden='true'><OpenBook width={280} /></div>
+                                <CoversFan />
+                            </div>
 
                             {/* Trust row — 3 checkmark items with gold verticals between,
                                 same layout as the mobile hero. */}
@@ -940,6 +958,21 @@ export default function StartWizard() {
                     font-family: var(--font-assistant), 'Assistant', 'Heebo', system-ui, sans-serif;
                     transition: background 0.6s ease;
                 }
+                /* bg_app.png — the mobile Page1 stationery photo, fixed
+                   underneath everything. The veil above softens it to
+                   the same warmth the mobile app renders on top of the
+                   ImageBackground. */
+                .pageBg {
+                    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+                    background: #fdfaf2 url('/start-assets/bg_app.png') center/cover no-repeat;
+                    opacity: 0.9;
+                }
+                .pageVeil {
+                    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+                    background: linear-gradient(180deg, rgba(253,250,242,0.35) 0%, rgba(253,250,242,0.5) 60%, rgba(246,239,223,0.65) 100%);
+                }
+                .monoWrap { display: inline-flex; align-items: center; justify-content: center; margin-inline-end: 6px; }
+                .logoLink { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
                 .orb { position: absolute; border-radius: 50%; filter: blur(70px); pointer-events: none; transition: background 0.6s ease; }
                 .orbA { width: 340px; height: 340px; background: var(--accSoft); top: -120px; inset-inline-start: -80px; }
                 .orbB { width: 420px; height: 420px; background: rgba(233, 163, 176, 0.1); bottom: -180px; inset-inline-end: -120px; }
@@ -1089,12 +1122,36 @@ export default function StartWizard() {
                 .typeCard:active { transform: scale(0.97); }
                 .typeCard.sel { border-color: var(--tA); background: linear-gradient(180deg, #fffdf6, #fbf3e2); transform: translateY(-4px) scale(1.03); box-shadow: 0 18px 34px -18px var(--tA); }
                 .typeMedal {
-                    width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center;
-                    background: radial-gradient(circle at 32% 28%, #fffdf6 0%, #f6ead0 70%, #ecdcb3 100%);
-                    border: 1px solid rgba(201, 164, 78, 0.35);
-                    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.75), 0 10px 20px -10px rgba(184, 137, 61, 0.42);
+                    width: 82px; height: 82px; display: grid; place-items: center;
                     transition: transform 0.2s ease;
+                    position: relative; z-index: 1;
                 }
+                .typeIconPng {
+                    width: 100%; height: 100%; object-fit: contain;
+                    filter: drop-shadow(0 6px 12px rgba(184, 137, 61, 0.35));
+                }
+                /* Container_BG.png — the mobile stationery card art, sits
+                   behind each tile's content as a texture layer. */
+                .typeCardBg {
+                    position: absolute; inset: 0; z-index: 0; border-radius: 18px;
+                    background: url('/start-assets/Container_BG.png') center/100% 100% no-repeat;
+                    opacity: 0.85; pointer-events: none;
+                }
+                .typeLabel, .typeBlurb { position: relative; z-index: 1; }
+                .typeCard { position: relative; overflow: hidden; }
+
+                /* Fan stage — the OpenBook illustration sits behind the covers
+                   fan, exactly like the mobile Page1 layout. */
+                .fanStage {
+                    position: relative;
+                    display: flex; flex-direction: column; align-items: center; justify-content: center;
+                    padding: 12px 0 4px;
+                }
+                .openBook {
+                    position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+                    opacity: 0.85; pointer-events: none; z-index: 0;
+                }
+                .fanStage :global(.fan) { position: relative; z-index: 1; }
                 .typeCard:hover .typeMedal { transform: scale(1.08) rotate(6deg); }
                 .typeCard.sel .typeMedal { animation: medalPop 0.4s cubic-bezier(0.22, 1.6, 0.36, 1); }
                 @keyframes medalPop { 50% { transform: scale(1.22); } }
