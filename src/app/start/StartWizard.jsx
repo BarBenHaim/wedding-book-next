@@ -40,7 +40,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore'
 import { listPresets, resolvePreset } from '@/lib/studioPresets'
 import { PUBLIC_EVENT_TYPES, EVENT_TYPE_META, validateNewEvent, eventDisplayTitle } from '@/lib/onboarding'
 import { frankRuhl } from '@/app/fonts'
-import { EVENT_ICON, EVENT_PNG_ICON, WTMonogram, OpenBook } from './EventTypeIcons'
+import { EVENT_PNG_ICON } from './EventTypeIcons'
 
 const AUTO_THEME = { wedding: 'gold', birthday: 'pink', bar_mitzvah: 'blue', bat_mitzvah: 'blue' }
 const STEP_LABELS = ['סוג האירוע', 'הפרטים', 'העיצוב', 'יוצאים לדרך']
@@ -353,6 +353,22 @@ export default function StartWizard() {
     const [inApp, setInApp] = useState(false)
     useEffect(() => { setInApp(typeof window !== 'undefined' && !!window.ReactNativeWebView) }, [])
 
+    // Hide the app-shell Header + Footer while /start is mounted — the
+    // mobile create screen has no site nav; the whole viewport is the
+    // wizard. Same pattern as LandingClient uses on /landing.
+    useEffect(() => {
+        const header = document.querySelector('body > header')
+        const footer = document.querySelector('body > footer')
+        const ph = header?.style.display
+        const pf = footer?.style.display
+        if (header) header.style.display = 'none'
+        if (footer) footer.style.display = 'none'
+        return () => {
+            if (header) header.style.display = ph || ''
+            if (footer) footer.style.display = pf || ''
+        }
+    }, [])
+
     function notifyApp() {
         try {
             window.ReactNativeWebView?.postMessage(JSON.stringify({
@@ -571,10 +587,13 @@ export default function StartWizard() {
             <i className='spark s1' /><i className='spark s2' /><i className='spark s3' /><i className='spark s4' /><i className='spark s5' />
 
             <header className='top'>
-                <Link href='/landing' className='logoLink' aria-label='Wedding Tales'>
-                    <span className='monoWrap'><WTMonogram size={44} /></span>
-                    <img src='/logo-wt.png' alt='Wedding Tales' className='logo' />
-                </Link>
+                {/* Mobile parity: no logo on step 0, only shown for the inner
+                    steps. Matches the mobile create/index.tsx top bar rule. */}
+                {step > 0 && (
+                    <Link href='/landing' className='logoLink' aria-label='Wedding Tales'>
+                        <img src='/logo-wt.png' alt='Wedding Tales' className='logo' />
+                    </Link>
+                )}
                 {step < 4 && (
                     <div className='steps' aria-label='התקדמות'>
                         {STEP_LABELS.map((l, i) => (
@@ -607,7 +626,7 @@ export default function StartWizard() {
 
                 <section className='formCol' key={step}>
                     {step === 0 && (
-                        <div className='card hero'>
+                        <div className='hero'>
                             {/* Eyebrow row — gold hairlines flanking the tagline, ported
                                 verbatim from the mobile create/index.tsx design. */}
                             <div className='eyebrowRow'>
@@ -648,12 +667,7 @@ export default function StartWizard() {
                                 })}
                             </div>
 
-                            {/* Open-book illustration sits behind the covers fan
-                                just like the mobile Page1 composition. */}
-                            <div className='fanStage'>
-                                <div className='openBook' aria-hidden='true'><OpenBook width={280} /></div>
-                                <CoversFan />
-                            </div>
+                            <CoversFan />
 
                             {/* Trust row — 3 checkmark items with gold verticals between,
                                 same layout as the mobile hero. */}
@@ -964,7 +978,7 @@ export default function StartWizard() {
                    ImageBackground. */
                 .pageBg {
                     position: fixed; inset: 0; z-index: 0; pointer-events: none;
-                    background: #fdfaf2 url('/start-assets/bg_app.png') center/cover no-repeat;
+                    background: #fdfaf2 url('/start-assets/bg_app.jpg') center/cover no-repeat;
                     opacity: 0.9;
                 }
                 .pageVeil {
@@ -1066,7 +1080,21 @@ export default function StartWizard() {
                 .card > *:nth-child(8) { animation-delay: 0.38s; }
                 @keyframes riseIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
-                .hero { text-align: center; }
+                /* Step 0 hero — no card wrapper, sits directly on the
+                   bg_app photo, matching the mobile create screen where
+                   hero0 is a flex column on the ImageBackground. Tight
+                   spacing so the whole flow fits on one mobile screen
+                   like the mobile app does. */
+                .hero {
+                    text-align: center;
+                    display: flex; flex-direction: column; align-items: stretch;
+                    gap: 10px; padding: 0 4px;
+                    background: transparent; border: 0; box-shadow: none;
+                    animation: none;
+                }
+                .hero > * { animation: none; }
+                .hero :global(.fan) { margin-top: -6px; height: 118px; }
+                .hero :global(.fan .fanImg) { width: 78px; }
                 .overline { margin: 0; font-size: 11.5px; letter-spacing: 0.16em; color: var(--acc); font-weight: 700; }
                 .h1 { margin: 0; font-size: clamp(23px, 4.8vw, 32px); font-weight: 800; letter-spacing: -0.01em; line-height: 1.3; }
                 .hero .h1 em {
