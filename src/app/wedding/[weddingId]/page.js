@@ -78,31 +78,6 @@ function GuestLanding({ weddingId, onLocaleDiscovered }) {
         )
     }
 
-    // ── Elegant resolve state ──
-    // While Firestore answers we show a single breathing heart on the
-    // soft ivory wash instead of flashing an empty layout with default
-    // copy. Typical fetch is <1s, so this reads as a deliberate
-    // "curtain" moment rather than a spinner.
-    if (exists === null) {
-        return (
-            <div
-                className='min-h-[calc(100vh-4rem)] flex items-center justify-center'
-                style={{ background: 'linear-gradient(180deg, #ffffff 0%, #faf6ee 60%, #f4ecdc 100%)' }}
-                dir={dirFor(locale)}
-            >
-                <svg
-                    viewBox='0 0 24 24'
-                    className='w-6 h-6'
-                    fill='#c9a44e'
-                    style={{ animation: 'heartBeat 1.4s ease-in-out infinite' }}
-                    aria-hidden='true'
-                >
-                    <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
-                </svg>
-            </div>
-        )
-    }
-
     // Resolve copy + palette (color) independently.
     // - copy comes from the event type (cfg) IN THE CHOSEN LOCALE
     // - palette comes from themeColor override, falling back to the type's default
@@ -119,48 +94,17 @@ function GuestLanding({ weddingId, onLocaleDiscovered }) {
             style={{ background: palette.bgGradient }}
             dir={dirFor(locale)}
         >
-            {/* ── Floating gold dust — four barely-there particles that
-                give the hero air a sense of depth. Deterministic
-                positions (no hydration drift), aria-hidden, and frozen
-                by the global prefers-reduced-motion rules. ── */}
-            <div className='absolute inset-0 pointer-events-none' aria-hidden='true'>
-                {[
-                    { left: '14%', top: '22%', size: 5, delay: '0s', dur: '7s' },
-                    { left: '82%', top: '30%', size: 4, delay: '1.6s', dur: '8.5s' },
-                    { left: '24%', top: '72%', size: 3, delay: '3s', dur: '7.5s' },
-                    { left: '74%', top: '78%', size: 5, delay: '0.8s', dur: '9s' },
-                ].map((p, i) => (
-                    <span
-                        key={i}
-                        className='absolute rounded-full'
-                        style={{
-                            left: p.left,
-                            top: p.top,
-                            width: p.size,
-                            height: p.size,
-                            background: palette.accent,
-                            opacity: 0.35,
-                            filter: 'blur(0.5px)',
-                            animation: `dustFloat ${p.dur} ease-in-out ${p.delay} infinite`,
-                        }}
-                    />
-                ))}
-            </div>
-
             {/* ── Content ── */}
-            <div className='relative z-10 flex flex-col items-center text-center max-w-[400px] w-full'>
+            <div className='relative z-10 flex flex-col items-center text-center animate-scaleIn max-w-[400px] w-full'>
                 {/* Label */}
-                <p
-                    className='text-[15px] font-semibold tracking-[1px] mb-2 animate-riseIn'
-                    style={{ color: palette.label }}
-                >
+                <p className='text-[15px] font-semibold tracking-[1px] mb-2' style={{ color: palette.label }}>
                     {subtitle}
                 </p>
 
                 {/* Title — shape depends on event type */}
                 {title.kind === 'names' ? (
                     <h1
-                        className='text-[2.85rem] sm:text-[3.1rem] font-extrabold leading-[1.15] mb-1.5 animate-riseIn delay-1'
+                        className='text-[2.85rem] sm:text-[3.1rem] font-extrabold leading-[1.15] mb-1.5'
                         style={{ color: palette.name }}
                     >
                         {title.left}
@@ -180,7 +124,7 @@ function GuestLanding({ weddingId, onLocaleDiscovered }) {
                     </h1>
                 ) : title.kind === 'single' ? (
                     <h1
-                        className='text-[2.4rem] sm:text-[2.7rem] font-extrabold leading-[1.15] mb-1.5 animate-riseIn delay-1'
+                        className='text-[2.4rem] sm:text-[2.7rem] font-extrabold leading-[1.15] mb-1.5'
                         style={{ color: palette.name }}
                     >
                         {title.text}
@@ -189,39 +133,18 @@ function GuestLanding({ weddingId, onLocaleDiscovered }) {
                     <div className='h-14 mb-2' />
                 )}
 
-                {/* Ornamental flourish — hairline + diamond, the same
-                    stationery language the blessing form speaks. Ties
-                    the two pages into one continuous experience. */}
-                <div className='flex items-center justify-center gap-2 mt-4 animate-bloomIn delay-2' aria-hidden='true'>
-                    <span
-                        className='block h-px w-14'
-                        style={{ background: `linear-gradient(to left, transparent, ${palette.accent}, transparent)` }}
-                    />
-                    <span className='inline-block w-1.5 h-1.5 rotate-45' style={{ background: palette.accent }} />
-                    <span
-                        className='block h-px w-14'
-                        style={{ background: `linear-gradient(to right, transparent, ${palette.accent}, transparent)` }}
-                    />
-                </div>
-
                 {/* Description */}
-                <p
-                    className='text-[15px] leading-[1.8] mt-5 mb-8 max-w-[300px] whitespace-pre-line animate-riseIn delay-3'
-                    style={{ color: palette.description }}
-                >
+                <p className='text-[15px] leading-[1.8] mt-5 mb-8 max-w-[300px] whitespace-pre-line' style={{ color: palette.description }}>
                     {description}
                 </p>
 
-                {/* CTA Button with marble texture — breathing halo keeps
-                    it alive, shimmer sweeps on hover, chevron leans
-                    forward. The one action on the page, treated like it. */}
+                {/* CTA Button with marble texture */}
                 <Link
                     href={`/wedding/${weddingId}/photo`}
-                    className='group relative overflow-hidden rounded-full transition-transform duration-300 hover:-translate-y-[2px] active:scale-[0.98] animate-riseIn delay-4'
+                    className='group relative overflow-hidden rounded-full transition-all duration-300 hover:-translate-y-[2px]'
                     style={{
                         boxShadow: '0 8px 30px rgba(100,80,50,0.15), 0 2px 6px rgba(0,0,0,0.05)',
                         textDecoration: 'none',
-                        animation: 'riseIn 0.7s var(--ease-out-soft) 0.44s forwards, haloBreath 3.6s ease-in-out 1.4s infinite',
                     }}
                 >
                     {/* Marble texture background */}
@@ -253,37 +176,22 @@ function GuestLanding({ weddingId, onLocaleDiscovered }) {
                     />
 
                     <span
-                        className='relative z-10 flex items-center justify-center gap-2 px-12 py-4 text-[17px] font-bold'
+                        className='relative z-10 block px-12 py-4 text-[17px] font-bold'
                         style={{ color: palette.name }}
                     >
                         {cfg.ctaLabel}
-                        {/* Forward chevron — flips in RTL, leans into the
-                            reading direction on hover. */}
-                        <svg
-                            viewBox='0 0 24 24'
-                            className='w-[15px] h-[15px] rtl:rotate-180 transition-transform duration-300 group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5'
-                            fill='none'
-                            stroke='currentColor'
-                            strokeWidth={2.6}
-                            aria-hidden='true'
-                        >
-                            <path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
-                        </svg>
                     </span>
                 </Link>
 
                 {/* Edit-your-own panel — only shows if THIS device already sent
                     a blessing. Sits below the "add a blessing" CTA so it's an
                     add-on, never a replacement. */}
-                <div className='w-full mt-8 animate-riseIn delay-5'>
+                <div className='w-full mt-8'>
                     <MySubmissions weddingId={weddingId} locale={locale} />
                 </div>
 
                 {/* Footer */}
-                <p
-                    className='mt-10 text-[10px] tracking-[2px] uppercase animate-riseIn delay-6'
-                    style={{ color: palette.footer }}
-                >
+                <p className='mt-10 text-[10px] tracking-[2px] uppercase' style={{ color: palette.footer }}>
                     {cfg.footer}
                 </p>
             </div>

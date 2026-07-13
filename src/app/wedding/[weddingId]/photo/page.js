@@ -742,18 +742,6 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     const isTextDone = text.trim().length > 0
     const isPhotoDone = !!photoUrl
 
-    // One-time glow pulse the moment the form becomes submittable —
-    // a quiet "you're done, this is the button" signal that replaces
-    // any need for progress chrome.
-    const formReady = isTextDone && isPhotoDone
-    const [justReady, setJustReady] = useState(false)
-    useEffect(() => {
-        if (!formReady) return
-        setJustReady(true)
-        const id = setTimeout(() => setJustReady(false), 950)
-        return () => clearTimeout(id)
-    }, [formReady])
-
     // Poker reverses the user's path: snap the table first, then write
     // the roast. Everything else keeps the original blessing → photo
     // order. `textStep` / `photoStep` are the ordinal step number
@@ -981,7 +969,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                     backgroundAttachment: 'fixed',
                 }}
             >
-                <div className='relative z-10 w-full max-w-[24rem]'>
+                <div className='relative z-10 w-full max-w-[24rem] animate-scaleIn'>
                     {/* Monogram block removed — replaced by the
                         small gold heart in the title block below.
                         Keeping the SVG dead-stripped via the `false`
@@ -1057,14 +1045,9 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                     {/* ── Title block — small gold heart, then
                         two lines of title separated by an ornamental
                         flourish line, then the subtitle. ── */}
-                    {/* Small gold heart cap — blooms in, then gives one
-                        soft heartbeat as the page settles. */}
-                    <div className='flex justify-center mb-1 animate-bloomIn'>
-                        <svg
-                            viewBox='0 0 24 24'
-                            className='w-[12px] h-[12px] animate-heartBeat'
-                            fill={md.accentColor}
-                        >
+                    {/* Small gold heart cap */}
+                    <div className='flex justify-center mb-1'>
+                        <svg viewBox='0 0 24 24' className='w-[12px] h-[12px]' fill={md.accentColor}>
                             <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                         </svg>
                     </div>
@@ -1086,7 +1069,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                         return (
                             <div className='text-center'>
                                 <h1
-                                    className='font-bold leading-[1.15] animate-riseIn'
+                                    className='font-bold leading-[1.15]'
                                     style={{ color: md.titleColor, fontSize: '26px', letterSpacing: '-0.005em' }}
                                 >
                                     {t('momentEyebrow')}
@@ -1097,7 +1080,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                             with a small diamond at the
                                             centre. Repeats below the
                                             second line for symmetry. */}
-                                        <div className='flex items-center justify-center gap-2 my-1.5 animate-bloomIn delay-1'>
+                                        <div className='flex items-center justify-center gap-2 my-1.5'>
                                             <span
                                                 className='block h-px w-12'
                                                 style={{
@@ -1118,7 +1101,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                             />
                                         </div>
                                         <h1
-                                            className='font-bold leading-[1.15] animate-riseIn delay-1'
+                                            className='font-bold leading-[1.15]'
                                             style={{ color: md.titleColor, fontSize: '26px', letterSpacing: '-0.005em' }}
                                         >
                                             {namesPart}
@@ -1129,7 +1112,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                         )
                     })()}
                     <p
-                        className='text-center leading-snug animate-riseIn delay-2'
+                        className='text-center leading-snug'
                         style={{ color: md.subtitleColor, fontSize: '12px', maxWidth: 270, margin: '4px auto 0' }}
                     >
                         {formCopy?.momentSubtitle || t('momentSubtitle')}
@@ -1150,7 +1133,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                         backdrop instead of looking like a hard
                         white tile pasted on top. */}
                     <div
-                        className='rounded-[20px] px-4 pt-7 pb-4 relative mt-9 animate-riseIn delay-3'
+                        className='rounded-[20px] px-4 pt-7 pb-4 relative mt-9'
                         style={{
                             background: md.cardBg,
                             border: `1px solid ${md.cardBorder}`,
@@ -1223,26 +1206,16 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 value={name}
                                 onChange={e => setName(e.target.value)}
                                 placeholder={formCopy?.namePlaceholder || ''}
-                                className='w-full rounded-xl outline-none'
+                                className='w-full rounded-xl outline-none transition'
                                 style={{
                                     background: md.inputBg,
                                     border: `1px solid ${md.inputBorder}`,
                                     padding: '10px 14px',
                                     color: md.inputTextColor,
                                     fontSize: '16px',
-                                    transition: 'border-color 0.25s ease, box-shadow 0.25s ease',
                                 }}
-                                onFocus={e => {
-                                    e.currentTarget.style.borderColor = md.inputFocusBorder
-                                    // Soft gold halo — color-mix keeps it in the
-                                    // theme's accent; unsupported browsers simply
-                                    // skip the shadow (border still responds).
-                                    e.currentTarget.style.boxShadow = `0 0 0 4px color-mix(in srgb, ${md.inputFocusBorder} 16%, transparent)`
-                                }}
-                                onBlur={e => {
-                                    e.currentTarget.style.borderColor = md.inputBorder
-                                    e.currentTarget.style.boxShadow = 'none'
-                                }}
+                                onFocus={e => (e.currentTarget.style.borderColor = md.inputFocusBorder)}
+                                onBlur={e => (e.currentTarget.style.borderColor = md.inputBorder)}
                             />
                         </div>
 
@@ -1273,7 +1246,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 onChange={e => setText(e.target.value)}
                                 placeholder={formCopy?.blessingPlaceholder || ''}
                                 maxLength={maxChars}
-                                className='w-full rounded-xl outline-none resize-none leading-snug'
+                                className='w-full rounded-xl outline-none transition resize-none leading-snug'
                                 style={{
                                     background: md.inputBg,
                                     border: `1px solid ${md.inputBorder}`,
@@ -1281,16 +1254,9 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                     color: md.inputTextColor,
                                     fontSize: '16px',
                                     height: '64px',
-                                    transition: 'border-color 0.25s ease, box-shadow 0.25s ease',
                                 }}
-                                onFocus={e => {
-                                    e.currentTarget.style.borderColor = md.inputFocusBorder
-                                    e.currentTarget.style.boxShadow = `0 0 0 4px color-mix(in srgb, ${md.inputFocusBorder} 16%, transparent)`
-                                }}
-                                onBlur={e => {
-                                    e.currentTarget.style.borderColor = md.inputBorder
-                                    e.currentTarget.style.boxShadow = 'none'
-                                }}
+                                onFocus={e => (e.currentTarget.style.borderColor = md.inputFocusBorder)}
+                                onBlur={e => (e.currentTarget.style.borderColor = md.inputBorder)}
                             />
                             <div className='flex items-center justify-between gap-2 mt-1'>
                                 <BlessingAssist
@@ -1307,21 +1273,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                         text: md.inputTextColor,
                                     }}
                                 />
-                                {/* Counter appears only once the guest is
-                                    halfway to the limit — before that it's
-                                    noise, after that it's guidance. */}
-                                <span
-                                    style={{
-                                        color:
-                                            text.length >= maxChars
-                                                ? '#c14a4a'
-                                                : md.cardCounterColor,
-                                        fontSize: '10.5px',
-                                        opacity: text.length > maxChars * 0.5 ? 1 : 0,
-                                        transition: 'opacity 0.35s ease, color 0.35s ease',
-                                    }}
-                                    aria-hidden={text.length <= maxChars * 0.5}
-                                >
+                                <span style={{ color: md.cardCounterColor, fontSize: '10.5px' }}>
                                     {text.length}/{maxChars}
                                 </span>
                             </div>
@@ -1388,19 +1340,16 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 border: `1px dashed ${md.wellBorder}`,
                             }}
                         >
-                            {/* Empty state — the copy says "tap to upload",
-                                so the WHOLE well is the tap target: a label
-                                wired to the hidden gallery input below.
-                                Icon floats gently to invite the tap. */}
+                            {/* Empty state — top: image-with-arrow
+                                icon + sparkles + bold CTA + light
+                                subtitle. Bottom: two pill buttons
+                                (camera / gallery) inside the well. */}
                             {!photoUrl && !cameraOpen && (
-                                <label
-                                    htmlFor='moment-photo-input'
-                                    className='absolute inset-0 flex flex-col items-center justify-center gap-1 px-4 text-center cursor-pointer transition-transform duration-200 active:scale-[0.985]'
-                                >
+                                <div className='absolute inset-0 flex flex-col items-center justify-center gap-1 px-4 text-center'>
                                     {/* Top — sparkle-flanked icon +
                                         bold CTA + soft subtitle. */}
                                     <div className='flex flex-col items-center gap-1'>
-                                        <div className='relative' style={{ animation: 'float 3.2s ease-in-out infinite' }}>
+                                        <div className='relative'>
                                             {!mdHasCircle && (
                                                 <>
                                                     <svg
@@ -1463,12 +1412,12 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                         </div>
                                     </div>
 
-                                </label>
+                                </div>
                             )}
 
                             {/* Live camera */}
                             {cameraOpen && (
-                                <div className='absolute inset-0 bg-black animate-fadeIn'>
+                                <div className='absolute inset-0 bg-black'>
                                     <video
                                         ref={liveVideoRef}
                                         autoPlay
@@ -1476,19 +1425,10 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                         muted
                                         className={`w-full h-full object-cover ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
                                     />
-                                    {/* Bottom scrim — keeps the controls
-                                        legible over any scene. */}
-                                    <div
-                                        className='absolute bottom-0 left-0 w-full h-20 pointer-events-none'
-                                        style={{
-                                            background: 'linear-gradient(to top, rgba(0,0,0,0.55), transparent)',
-                                        }}
-                                    />
-                                    <div className='absolute bottom-3.5 left-0 w-full flex justify-center items-center gap-8'>
+                                    <div className='absolute bottom-4 left-0 w-full flex justify-center items-center gap-8'>
                                         <button
                                             onClick={() => setCameraOpen(false)}
-                                            aria-label='close camera'
-                                            className='w-10 h-10 rounded-full bg-white/15 backdrop-blur-md border border-white/25 text-white flex items-center justify-center transition-transform active:scale-90'
+                                            className='w-10 h-10 rounded-full bg-white/20 backdrop-blur text-white flex items-center justify-center'
                                         >
                                             <svg
                                                 viewBox='0 0 24 24'
@@ -1504,23 +1444,17 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                                 />
                                             </svg>
                                         </button>
-                                        {/* Shutter — outer ring stays, inner
-                                            disc springs on press like a real
-                                            camera button. */}
                                         <button
                                             onClick={takePhoto}
-                                            aria-label='take photo'
-                                            className='group w-16 h-16 rounded-full border-[3.5px] border-white/90 flex items-center justify-center transition-transform active:scale-95'
-                                            style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.35)' }}
+                                            className='w-16 h-16 rounded-full border-4 border-white/80 flex items-center justify-center'
                                         >
-                                            <div className='w-12 h-12 bg-white rounded-full transition-transform duration-150 group-active:scale-[0.82]' />
+                                            <div className='w-12 h-12 bg-white rounded-full' />
                                         </button>
                                         <button
                                             onClick={() =>
                                                 setCameraFacing(prev => (prev === 'user' ? 'environment' : 'user'))
                                             }
-                                            aria-label='flip camera'
-                                            className='w-10 h-10 rounded-full bg-white/15 backdrop-blur-md border border-white/25 text-white flex items-center justify-center transition-transform active:scale-90 active:rotate-180 duration-300'
+                                            className='w-10 h-10 rounded-full bg-white/20 backdrop-blur text-white flex items-center justify-center'
                                         >
                                             <svg
                                                 viewBox='0 0 24 24'
@@ -1562,51 +1496,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 on the sides are fine; preview
                                 matches what lands in the book. */}
                             {photoUrl && !isUpload && !cameraOpen && (
-                                <img
-                                    src={photoUrl}
-                                    className='w-full h-full object-contain animate-fadeIn'
-                                    alt='Preview'
-                                />
-                            )}
-
-                            {/* Replace chip — floats on the photo itself
-                                (glassy blur) instead of a full-width
-                                button row below. One small control,
-                                exactly where the eye already is. */}
-                            {photoUrl && !cameraOpen && (
-                                <button
-                                    type='button'
-                                    onClick={() => {
-                                        setPhotoUrl('')
-                                        setPhotoBlob(null)
-                                        setIsUpload(false)
-                                    }}
-                                    className='absolute top-2 end-2 z-10 inline-flex items-center gap-1.5 rounded-full backdrop-blur-md transition-transform active:scale-95'
-                                    style={{
-                                        background: 'rgba(20,16,12,0.55)',
-                                        border: '1px solid rgba(255,255,255,0.25)',
-                                        color: '#fff',
-                                        padding: '6px 12px',
-                                        fontSize: '11.5px',
-                                        fontWeight: 600,
-                                        boxShadow: '0 4px 14px -4px rgba(0,0,0,0.4)',
-                                    }}
-                                >
-                                    <svg
-                                        viewBox='0 0 24 24'
-                                        className='w-[12px] h-[12px]'
-                                        fill='none'
-                                        stroke='currentColor'
-                                        strokeWidth={2}
-                                    >
-                                        <path
-                                            strokeLinecap='round'
-                                            strokeLinejoin='round'
-                                            d='M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99'
-                                        />
-                                    </svg>
-                                    {t('replacePhoto')}
-                                </button>
+                                <img src={photoUrl} className='w-full h-full object-contain' alt='Preview' />
                             )}
                         </div>
 
@@ -1623,7 +1513,6 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                     </svg>
                                     <span>{formCopy?.momentChooseGallery || t('momentChooseGallery')}</span>
                                     <input
-                                        id='moment-photo-input'
                                         type='file'
                                         accept='image/*'
                                         className='hidden'
@@ -1689,9 +1578,26 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                             the empty state so the upload zone is one
                             self-contained block. */}
 
-                        {/* Replace-photo control now lives as a glassy
-                            chip ON the photo itself (see the well above)
-                            — one less full-width button in the flow. */}
+                        {/* ── Replace photo (when one's already loaded) ── */}
+                        {photoUrl && !cameraOpen && (
+                            <button
+                                onClick={() => {
+                                    setPhotoUrl('')
+                                    setPhotoBlob(null)
+                                    setIsUpload(false)
+                                }}
+                                className='w-full mt-2 rounded-lg text-[12.5px]'
+                                style={{
+                                    background: '#ffffff',
+                                    border: `1px solid ${md.inputBorder}`,
+                                    color: '#9a8665',
+                                    padding: '7px 12px',
+                                    fontWeight: 600,
+                                }}
+                            >
+                                {t('replacePhoto')}
+                            </button>
+                        )}
 
                         {/* "Required" note removed — the red asterisk
                             in the section header carries that meaning
@@ -1733,20 +1639,10 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                         disabled-opacity dimming, ever — only
                         cursor + active-scale change when it can't
                         be submitted yet. ── */}
-                    {/* Ready-glow wrapper — the one-time pulse lives on
-                        this pill-shaped div (NOT on the button) so the
-                        painted button artwork keeps its unclipped edge. */}
-                    <div
-                        className='mt-3'
-                        style={{
-                            borderRadius: 9999,
-                            animation: justReady ? 'readyPulse 0.95s ease-out' : 'none',
-                        }}
-                    >
                     <button
                         onClick={onSubmit}
                         disabled={submitting || !text.trim() || !photoUrl}
-                        className='w-full font-bold transition-transform duration-200 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-[0.99] relative'
+                        className='w-full mt-3 font-bold transition-transform duration-200 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-[0.99] relative'
                         style={{
                             background: mdButtonBg,
                             border: 'none',
@@ -1773,64 +1669,6 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                             <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                         </svg>
                     </button>
-                    </div>
-
-                    {/* ── Sending moment — full-screen veil while the
-                        upload confirms (up to ~5s on venue Wi-Fi).
-                        Turns the technical wait into a quiet, branded
-                        beat: blurred ivory veil, one beating heart,
-                        three breathing dots. ── */}
-                    {submitting && (
-                        <div
-                            className='fixed inset-0 z-[90] flex flex-col items-center justify-center animate-fadeIn'
-                            style={{
-                                background: 'rgba(251,246,236,0.82)',
-                                backdropFilter: 'blur(10px)',
-                                WebkitBackdropFilter: 'blur(10px)',
-                            }}
-                            role='status'
-                            aria-live='polite'
-                        >
-                            <div
-                                className='flex items-center justify-center rounded-full mb-5'
-                                style={{
-                                    width: 74,
-                                    height: 74,
-                                    background: '#fff',
-                                    border: `1px solid ${md.cardBorder}`,
-                                    boxShadow: '0 18px 44px -18px rgba(170,136,64,0.45)',
-                                }}
-                            >
-                                <svg
-                                    viewBox='0 0 24 24'
-                                    className='w-8 h-8'
-                                    fill={md.accentColor}
-                                    style={{ animation: 'heartBeat 1.3s ease-in-out infinite' }}
-                                >
-                                    <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
-                                </svg>
-                            </div>
-                            <p
-                                className='font-bold mb-1'
-                                style={{ color: md.titleColor, fontSize: '18px', letterSpacing: '-0.005em' }}
-                            >
-                                {t('sendingTitle')}
-                            </p>
-                            <p style={{ color: md.subtitleColor, fontSize: '13px' }}>{t('sendingSub')}</p>
-                            <div className='flex items-center gap-1.5 mt-4' aria-hidden='true'>
-                                {[0, 1, 2].map(i => (
-                                    <span
-                                        key={i}
-                                        className='w-1.5 h-1.5 rounded-full'
-                                        style={{
-                                            background: md.accentColor,
-                                            animation: `dotPulse 1.2s ease-in-out ${i * 0.18}s infinite`,
-                                        }}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    )}
 
                     {/* Trust line — clock icon to emphasise "less
                         than a minute" rather than security. */}

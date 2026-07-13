@@ -104,13 +104,12 @@ export default function MySubmissions({ weddingId, locale = 'he', style }) {
                 width: '100%',
                 maxWidth: 460,
                 margin: '0 auto',
-                background: 'rgba(255,255,255,0.78)',
-                border: '1px solid rgba(212,184,103,0.30)',
-                borderRadius: 20,
+                background: 'rgba(255,255,255,0.74)',
+                border: '1px solid #e7dcc5',
+                borderRadius: 16,
                 padding: '16px 16px 18px',
-                boxShadow: '0 18px 40px -24px rgba(170,136,64,0.35), 0 2px 8px -2px rgba(120,96,60,0.06)',
-                backdropFilter: 'blur(6px)',
-                WebkitBackdropFilter: 'blur(6px)',
+                boxShadow: '0 4px 18px rgba(120,96,60,0.08)',
+                backdropFilter: 'blur(2px)',
                 textAlign: rtl ? 'right' : 'left',
                 ...style,
             }}
@@ -128,9 +127,8 @@ export default function MySubmissions({ weddingId, locale = 'he', style }) {
                             gap: 11,
                             background: '#fffdf8',
                             border: '1px solid #efe6d4',
-                            borderRadius: 14,
+                            borderRadius: 12,
                             padding: 10,
-                            transition: 'box-shadow 0.25s ease, border-color 0.25s ease',
                         }}
                     >
                         {it.imageUrl && (
@@ -138,15 +136,7 @@ export default function MySubmissions({ weddingId, locale = 'he', style }) {
                             <img
                                 src={it.imageUrl}
                                 alt=''
-                                style={{
-                                    width: 52,
-                                    height: 52,
-                                    objectFit: 'cover',
-                                    borderRadius: 10,
-                                    flexShrink: 0,
-                                    border: '1px solid rgba(212,184,103,0.35)',
-                                    boxShadow: '0 2px 8px -2px rgba(120,96,60,0.25)',
-                                }}
+                                style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 9, flexShrink: 0 }}
                             />
                         )}
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -171,34 +161,16 @@ export default function MySubmissions({ weddingId, locale = 'he', style }) {
                             href={`/wedding/${weddingId}/edit/${it.id}`}
                             style={{
                                 flexShrink: 0,
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 5,
                                 fontSize: 13,
                                 fontWeight: 600,
                                 color: '#fff',
-                                background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
-                                borderRadius: 999,
-                                padding: '8px 15px',
+                                background: '#c9a44e',
+                                borderRadius: 9,
+                                padding: '8px 16px',
                                 textDecoration: 'none',
                                 alignSelf: 'center',
-                                boxShadow: '0 6px 16px -6px rgba(170,136,64,0.55), inset 0 1px 0 rgba(255,255,255,0.25)',
                             }}
                         >
-                            <svg
-                                viewBox='0 0 24 24'
-                                style={{ width: 12, height: 12 }}
-                                fill='none'
-                                stroke='currentColor'
-                                strokeWidth={2}
-                                aria-hidden='true'
-                            >
-                                <path
-                                    strokeLinecap='round'
-                                    strokeLinejoin='round'
-                                    d='M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13L2.25 21.75l.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.862 4.487Z'
-                                />
-                            </svg>
                             {t.edit}
                         </Link>
                     </div>

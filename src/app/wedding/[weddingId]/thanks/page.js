@@ -223,10 +223,7 @@ function ThanksApp() {
                 ].join(', '),
             }}
         >
-            {/* One-time gold-petal drift — the "you did it" moment. */}
-            <Confetti />
-
-            <div className='relative z-10 w-full max-w-[26rem]'>
+            <div className='relative z-10 w-full max-w-[26rem] animate-scaleIn'>
                 {/* ── Status pill — small chip at the very top showing
                     upload progress. Three visibility tiers:
                       • verified ✓        — Firestore confirmed the write
@@ -240,7 +237,7 @@ function ThanksApp() {
                     guest, so they leave with confidence (or know to
                     keep the page open). */}
                 {(verified || status !== 'done') && (
-                    <div className='flex justify-center mb-6 animate-riseIn'>
+                    <div className='flex justify-center mb-6'>
                         <StatusBadge
                             status={status}
                             pendingCount={pendingCount}
@@ -273,39 +270,18 @@ function ThanksApp() {
                     </div>
                 )}
 
-                {/* ── Celebration block — the heart blooms into a soft
-                    gold medallion and gives one heartbeat; title and
-                    body settle in beneath it. ── */}
+                {/* ── Celebration block ── */}
                 <div className='text-center mb-7'>
-                    <div
-                        className='mx-auto mb-4 flex items-center justify-center rounded-full animate-bloomIn'
-                        style={{
-                            width: 64,
-                            height: 64,
-                            background: '#ffffff',
-                            border: '1px solid rgba(212,184,103,0.35)',
-                            boxShadow:
-                                '0 18px 40px -18px rgba(170,136,64,0.45), inset 0 1px 0 rgba(255,255,255,0.8)',
-                        }}
-                    >
-                        <svg
-                            viewBox='0 0 24 24'
-                            className='w-[26px] h-[26px] animate-heartBeat'
-                            fill='#c9a44e'
-                        >
-                            <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
-                        </svg>
-                    </div>
+                    <svg viewBox='0 0 24 24' className='w-[22px] h-[22px] mx-auto mb-3.5' fill='#c9a44e'>
+                        <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                    </svg>
                     <h1
-                        className='font-bold mb-2 leading-[1.15] animate-riseIn delay-1'
+                        className='font-bold mb-2 leading-[1.15]'
                         style={{ color: '#1a1410', fontSize: '28px', letterSpacing: '-0.01em' }}
                     >
                         {t('savedHeading')}
                     </h1>
-                    <p
-                        className='leading-relaxed animate-riseIn delay-2'
-                        style={{ color: '#7a6a52', fontSize: '14px', maxWidth: 340, margin: '0 auto' }}
-                    >
+                    <p className='leading-relaxed' style={{ color: '#7a6a52', fontSize: '14px', maxWidth: 340, margin: '0 auto' }}>
                         {t('savedBody')}
                     </p>
                 </div>
@@ -315,18 +291,14 @@ function ThanksApp() {
                     a real book page, and let them flip through the existing
                     designs. Read-only — never changes the actual book. Only
                     appears when we have an entry id (skips legacy bookmarks). */}
-                {entryId && verified && (
-                    <div className='animate-riseIn delay-3'>
-                        <BookPagePreview weddingId={weddingId} entryId={entryId} locale={locale} />
-                    </div>
-                )}
+                {entryId && verified && <BookPagePreview weddingId={weddingId} entryId={entryId} locale={locale} />}
 
                 {/* ── Pitch card — soft sales hook for the guest who just
                     enjoyed the experience and might want it for their own
                     event. Pure white card, same shadow + border treatment
                     as the form cards on the create-blessing flow. */}
                 <div
-                    className='bg-white rounded-[22px] p-6 mb-5 text-center animate-riseIn delay-4'
+                    className='bg-white rounded-[22px] p-6 mb-5 text-center'
                     style={{
                         boxShadow:
                             '0 24px 50px -28px rgba(170,136,64,0.28), 0 4px 12px -4px rgba(170,136,64,0.10)',
@@ -378,7 +350,7 @@ function ThanksApp() {
                         href='https://wa.link/z4a85t'
                         target='_blank'
                         rel='noopener noreferrer'
-                        className='w-full rounded-2xl text-white font-bold transition-all duration-300 flex items-center justify-center gap-2.5 active:scale-[0.99] hover:-translate-y-0.5'
+                        className='w-full rounded-2xl text-white font-bold transition-all duration-300 flex items-center justify-center gap-2.5 active:scale-[0.99]'
                         style={{
                             background: 'linear-gradient(180deg, #25D366 0%, #128C7E 100%)',
                             boxShadow:
@@ -398,7 +370,7 @@ function ThanksApp() {
 
                 {/* Wedding Tales mark at the very bottom — small, gentle
                     reminder of the brand without competing with the CTA. */}
-                <div className='flex justify-center mt-2 animate-riseIn delay-5'>
+                <div className='flex justify-center mt-2'>
                     <img src='/logo-wt.png' alt='Wedding Tales' className='h-7 w-auto opacity-50' />
                 </div>
             </div>
@@ -445,53 +417,6 @@ function ThanksApp() {
                     animation: fadeIn 1s ease-out;
                 }
             `}</style>
-        </div>
-    )
-}
-
-// ── Celebration confetti ────────────────────────────────────────────
-// Fourteen gold + dusty-pink petals drift down ONCE when the page
-// opens (fill:both → they vanish when done, never loop, never block
-// taps). Deterministic layout — no Math.random at render time, so
-// SSR and client agree. The global prefers-reduced-motion rules stop
-// the animation entirely, leaving the petals invisible (base opacity
-// 0), which is exactly the calm fallback we want.
-const PETALS = [
-    { left: '6%', size: 7, delay: 0.1, dur: 5.2, color: '#c9a44e', round: '50% 0 50% 0' },
-    { left: '14%', size: 5, delay: 1.3, dur: 6.0, color: '#d8a4a4', round: '50%' },
-    { left: '22%', size: 8, delay: 0.6, dur: 5.6, color: '#e8d9a8', round: '50% 0 50% 0' },
-    { left: '30%', size: 5, delay: 2.1, dur: 6.4, color: '#c9a44e', round: '50%' },
-    { left: '38%', size: 6, delay: 0.2, dur: 5.0, color: '#d8a4a4', round: '50% 0 50% 0' },
-    { left: '47%', size: 8, delay: 1.7, dur: 6.2, color: '#c9a44e', round: '50%' },
-    { left: '55%', size: 5, delay: 0.9, dur: 5.4, color: '#e8d9a8', round: '50% 0 50% 0' },
-    { left: '63%', size: 7, delay: 2.4, dur: 6.6, color: '#d8a4a4', round: '50%' },
-    { left: '71%', size: 5, delay: 0.4, dur: 5.8, color: '#c9a44e', round: '50% 0 50% 0' },
-    { left: '79%', size: 8, delay: 1.1, dur: 5.2, color: '#e8d9a8', round: '50%' },
-    { left: '86%', size: 5, delay: 1.9, dur: 6.0, color: '#c9a44e', round: '50% 0 50% 0' },
-    { left: '93%', size: 6, delay: 0.7, dur: 5.6, color: '#d8a4a4', round: '50%' },
-    { left: '42%', size: 4, delay: 2.8, dur: 6.8, color: '#e8d9a8', round: '50%' },
-    { left: '59%', size: 4, delay: 3.2, dur: 6.4, color: '#c9a44e', round: '50% 0 50% 0' },
-]
-
-function Confetti() {
-    return (
-        <div className='absolute inset-0 pointer-events-none overflow-hidden' aria-hidden='true'>
-            {PETALS.map((p, i) => (
-                <span
-                    key={i}
-                    className='absolute'
-                    style={{
-                        left: p.left,
-                        top: 0,
-                        width: p.size,
-                        height: p.size * 1.4,
-                        background: p.color,
-                        borderRadius: p.round,
-                        opacity: 0,
-                        animation: `petalFall ${p.dur}s linear ${p.delay}s 1 both`,
-                    }}
-                />
-            ))}
         </div>
     )
 }
