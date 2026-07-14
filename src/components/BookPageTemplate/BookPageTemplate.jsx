@@ -294,4 +294,22 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                     <p
                         className={blessingDir === 'ltr' && styleSettings.fontClassLatin ? styleSettings.fontClassLatin : styleSettings.fontClass}
                         style={{
-                         
+                            fontSize: h((styleSettings.fontSizePercent ?? 3) * fontFitFactor),
+                            // See fontWeight comment on the name block above —
+                            // same fallback chain. The body text uses fontWeight
+                            // directly (no body-specific override field).
+                            fontWeight: styleSettings.fontWeight,
+                            color: styleSettings.fontColor,
+                            lineHeight: styleSettings.textLineHeight ?? 1.5,
+                            whiteSpace: 'pre-line',
+                            wordWrap: 'break-word',
+                        }}
+                    >
+                        {cleanText}
+                    </p>
+                </div>
+            )}
+            </div>
+        </div>
+    )
+}
