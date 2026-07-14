@@ -147,19 +147,12 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
 
     const elementsCount = [hasName, hasText, hasImage].filter(Boolean).length
     const onlyOne = elementsCount === 1
-    // Center the content block vertically when the page has a single element
-    // OR no photo at all (e.g. a blessing-only page produced by the smart
-    // auto-split layout) — so a stand-alone blessing sits centered and roomy
-    // instead of clinging to the top.
-    const centerBlock = onlyOne || !hasImage
 
     const { w, h } = pageScale(scaledWidth, scaledHeight)
 
     return (
         <div
-            className={`relative flex flex-col items-center text-center box-border overflow-hidden ${
-                centerBlock ? 'justify-center' : ''
-            }`}
+            className='relative flex flex-col items-center text-center box-border overflow-hidden'
             style={{
                 width: '100%',
                 height: '100%',
@@ -184,6 +177,28 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 />
             )}
 
+            {/* Content column — name → photo → text as ONE group, vertically
+                BALANCED via auto block-margins. When the content is shorter
+                than the page it centers exactly (the classic stationery
+                look every preset used to get from accumulated margins in
+                the pre-canonical era); when it's taller, auto margins
+                collapse to 0 and the group tops out gracefully — the name
+                is never clipped, only the overflow at the bottom. One
+                mechanism, no special cases: this replaces the old
+                `centerBlock` branch (which centered ONLY photo-less pages)
+                and fixes the "content floats high / dead space below"
+                mispositioning that appeared once presets stopped
+                inheriting stale margins. */}
+            <div
+                className='flex flex-col items-center'
+                style={{
+                    width: '100%',
+                    minHeight: 0,
+                    marginTop: 'auto',
+                    marginBottom: 'auto',
+                    position: 'relative',
+                }}
+            >
             {/* שם האורח — honors nameFontClass (independent font for
                 the guest name) when set; falls back to the body
                 fontClass so legacy weddings render unchanged. */}
@@ -279,21 +294,4 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                     <p
                         className={blessingDir === 'ltr' && styleSettings.fontClassLatin ? styleSettings.fontClassLatin : styleSettings.fontClass}
                         style={{
-                            fontSize: h((styleSettings.fontSizePercent ?? 3) * fontFitFactor),
-                            // See fontWeight comment on the name block above —
-                            // same fallback chain. The body text uses fontWeight
-                            // directly (no body-specific override field).
-                            fontWeight: styleSettings.fontWeight,
-                            color: styleSettings.fontColor,
-                            lineHeight: styleSettings.textLineHeight ?? 1.5,
-                            whiteSpace: 'pre-line',
-                            wordWrap: 'break-word',
-                        }}
-                    >
-                        {cleanText}
-                    </p>
-                </div>
-            )}
-        </div>
-    )
-}
+                         
