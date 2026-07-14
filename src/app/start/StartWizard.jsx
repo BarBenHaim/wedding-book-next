@@ -356,6 +356,9 @@ export default function StartWizard() {
     // Hide the app-shell Header + Footer while /start is mounted — the
     // mobile create screen has no site nav; the whole viewport is the
     // wizard. Same pattern as LandingClient uses on /landing.
+    // Also lock html + body to the dynamic viewport height and clip
+    // scroll so the wizard sits inside one screen the way the mobile
+    // create flow does. Restored on unmount.
     useEffect(() => {
         const header = document.querySelector('body > header')
         const footer = document.querySelector('body > footer')
@@ -363,9 +366,25 @@ export default function StartWizard() {
         const pf = footer?.style.display
         if (header) header.style.display = 'none'
         if (footer) footer.style.display = 'none'
+        const html = document.documentElement
+        const body = document.body
+        const prev = {
+            htmlOverflow: html.style.overflow,
+            bodyOverflow: body.style.overflow,
+            htmlHeight: html.style.height,
+            bodyHeight: body.style.height,
+        }
+        html.style.overflow = 'hidden'
+        body.style.overflow = 'hidden'
+        html.style.height = '100dvh'
+        body.style.height = '100dvh'
         return () => {
             if (header) header.style.display = ph || ''
             if (footer) footer.style.display = pf || ''
+            html.style.overflow = prev.htmlOverflow
+            body.style.overflow = prev.bodyOverflow
+            html.style.height = prev.htmlHeight
+            body.style.height = prev.bodyHeight
         }
     }, [])
 
@@ -963,7 +982,8 @@ export default function StartWizard() {
 
             <style jsx>{`
                 .wiz {
-                    min-height: 100dvh; position: relative; overflow: hidden;
+                    height: 100dvh; position: relative; overflow: hidden;
+                    display: flex; flex-direction: column;
                     background:
                         radial-gradient(900px 500px at 85% -80px, var(--accSoft), transparent 60%),
                         radial-gradient(700px 420px at -60px 105%, rgba(201, 164, 78, 0.1), transparent 60%),
@@ -1048,8 +1068,12 @@ export default function StartWizard() {
 
                 .body {
                     position: relative; z-index: 2; display: grid; grid-template-columns: 1fr;
-                    gap: 10px; max-width: 1040px; margin: 0 auto; padding: 10px 18px 60px;
+                    gap: 10px; max-width: 1040px; margin: 0 auto; padding: 6px 18px 12px;
+                    flex: 1 1 auto; min-height: 0; width: 100%; box-sizing: border-box;
+                    overflow-y: auto;
                 }
+                /* Keep the wizard column laid out even when it flexes short. */
+                .formCol { min-height: 0; }
                 .previewCol { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 8px; }
                 .previewHint { font-size: 12.5px; color: #8a6f45; margin: 0; }
                 .formCol { animation: stepIn 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
@@ -1095,6 +1119,39 @@ export default function StartWizard() {
                 .hero > * { animation: none; }
                 .hero :global(.fan) { margin-top: -6px; height: 118px; }
                 .hero :global(.fan .fanImg) { width: 78px; }
+
+                /* Short-viewport progressive shrink so the wizard always
+                   fits within one screen — matches the "no vertical scroll"
+                   look of the mobile create flow. Rules stack from tallest
+                   to shortest so the tighter rule wins. */
+                @media (max-height: 820px) {
+                    .hero { gap: 8px; }
+                    .heroH1 { gap: 2px; }
+                    .heroH1 .h1LineA, .heroH1 .h1LineB { font-size: clamp(22px, 4.2vw, 28px); line-height: 1.2; }
+                    .sub0 { font-size: 13.5px; margin-top: 4px; }
+                    .typeMedal { width: 66px; height: 66px; }
+                    .typeCard { padding: 12px 8px 10px; gap: 4px; }
+                    .typeLabel { font-size: 14.5px; }
+                    .typeBlurb { font-size: 11px; }
+                    .hero :global(.fan) { height: 100px; }
+                    .hero :global(.fan .fanImg) { width: 68px; }
+                    .loginPill { padding: 12px 22px; font-size: 14.5px; }
+                }
+                @media (max-height: 720px) {
+                    .eyebrowRow, .ornament { display: none; }
+                    .heroH1 .h1LineA, .heroH1 .h1LineB { font-size: clamp(20px, 3.6vw, 24px); }
+                    .typeMedal { width: 54px; height: 54px; }
+                    .typeCard { padding: 10px 6px 8px; }
+                    .typeBlurb { display: none; }
+                    .hero :global(.fan) { height: 82px; margin-top: -10px; }
+                    .hero :global(.fan .fanImg) { width: 58px; }
+                    .fanCaption, .hero :global(.fanCaption) { font-size: 10px; }
+                    .top { padding: 12px 18px 4px; }
+                }
+                @media (max-height: 640px) {
+                    .hero :global(.fan) { display: none; }
+                    .sub0Ask { display: none; }
+                }
                 .overline { margin: 0; font-size: 11.5px; letter-spacing: 0.16em; color: var(--acc); font-weight: 700; }
                 .h1 { margin: 0; font-size: clamp(23px, 4.8vw, 32px); font-weight: 800; letter-spacing: -0.01em; line-height: 1.3; }
                 .hero .h1 em {

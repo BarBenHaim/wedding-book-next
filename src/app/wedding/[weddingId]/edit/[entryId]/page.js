@@ -19,6 +19,7 @@ import { db } from '@/lib/firebaseClient'
 import imageCompression from 'browser-image-compression'
 import { normalizeLocale } from '@/i18n/locales'
 import { updateSubmissionMeta } from '@/lib/mySubmissions'
+import BookLoader from '@/components/BookLoader/BookLoader'
 
 const COMPRESS = { maxSizeMB: 1.5, maxWidthOrHeight: 2560, initialQuality: 0.92, useWebWorker: true }
 
@@ -216,7 +217,7 @@ export default function EditBlessingPage() {
     )
 
     if (status === 'loading') {
-        return shell(<div style={{ textAlign: 'center', color: '#9a8763', paddingTop: 60 }}>{t.loading}</div>)
+        return shell(<div className='flex justify-center py-8'><BookLoader fullScreen={false} size={190} /></div>)
     }
 
     if (status === 'notfound' || status === 'error') {

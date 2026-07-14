@@ -43,3 +43,9 @@ next-env.d.ts
 # scratch / temp syntax-check files (created in-session; OneDrive blocks unlink)
 _chk.cjs
 _chk*.cjs
+
+# vitest temp configs — vitest writes a compiled copy of vitest.config.mjs
+# next to it on every run and normally deletes it on exit; when the run
+# happens through the OneDrive mount the unlink is blocked, so the husks
+# pile up. Never commit them.
+vitest.config.mjs.timestamp-*

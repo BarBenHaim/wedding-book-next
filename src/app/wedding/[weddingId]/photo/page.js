@@ -16,6 +16,7 @@ import { logEvent } from '@/lib/logEvent'
 import BlessingAssist from '@/components/BlessingAssist/BlessingAssist'
 import { recordSubmission } from '@/lib/mySubmissions'
 import MySubmissions from '@/components/MySubmissions/MySubmissions'
+import BookLoader from '@/components/BookLoader/BookLoader'
 
 // ── Image compression settings ──
 // Targeted at the highest-resolution book layout (notebook at 75% page
@@ -174,20 +175,9 @@ export default function TextPage() {
     }, [weddingId])
 
     if (!loaded) {
-        // Neutral centered spinner — no theme yet, so we render on
-        // a plain white page until the doc tells us which design to
-        // use. Typical fetch is well under a second, so no fake delay.
-        return (
-            <div className='min-h-screen flex items-center justify-center bg-white'>
-                <div
-                    className='w-8 h-8 rounded-full animate-spin'
-                    style={{
-                        border: '2.5px solid #ead9b3',
-                        borderTopColor: '#c9a44e',
-                    }}
-                />
-            </div>
-        )
+        // Same brand book-loader as the route-level loading.js, so the
+        // route → fetch handoff is seamless (no spinner-swap flash).
+        return <BookLoader label='עוד רגע…' />
     }
 
     return (

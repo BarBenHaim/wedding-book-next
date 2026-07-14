@@ -6,6 +6,7 @@ import { collection, query, where, getDocs, limit } from 'firebase/firestore'
 import { db } from '../../../lib/firebaseClient'
 import { getMessages } from '@/i18n/getMessages'
 import { dirFor } from '@/i18n/locales'
+import BookLoader from '@/components/BookLoader/BookLoader'
 
 // The not-found state on /w/[slug] doesn't have a wedding doc to read
 // locale from (the slug failed to resolve). We default to Hebrew rather
@@ -73,9 +74,5 @@ export default function SlugRedirect() {
         )
     }
 
-    return (
-        <div className='flex min-h-screen items-center justify-center bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da]'>
-            <div className='animate-spin rounded-full h-10 w-10 border-[3px] border-[#AA8840]/20 border-t-[#AA8840]'></div>
-        </div>
-    )
+    return <BookLoader />
 }

@@ -11,6 +11,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import EntryPhoto from '@/components/EntryPhoto/EntryPhoto'
 import { Heebo } from 'next/font/google'
+import BookLoader from '@/components/BookLoader/BookLoader'
 
 const heebo = Heebo({ subsets: ['hebrew'], weight: ['400', '700', '900'] })
 
@@ -320,11 +321,7 @@ export default function AdminDashboard() {
     }
 
     if (loading) {
-        return (
-            <div className='flex h-screen items-center justify-center bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da]'>
-                <div className='animate-spin rounded-full h-10 w-10 border-[3px] border-[#AA8840]/20 border-t-[#AA8840]'></div>
-            </div>
-        )
+        return <BookLoader />
     }
 
     return (

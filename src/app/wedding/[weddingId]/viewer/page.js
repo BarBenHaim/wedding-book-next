@@ -26,6 +26,7 @@ import { BOOK_FORMATS, resolveFormatConfig } from '@/lib/bookFormats'
 import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
+import BookLoader from '@/components/BookLoader/BookLoader'
 
 // --- הגדרות דפוס (LULU COMPLIANT) ---
 //
@@ -577,19 +578,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [autoExportFormat, loading, designLoading, exportConfig])
 
-    if (loading || designLoading) return (
-        <div className='flex h-[calc(100vh-64px)] items-center justify-center bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da]'>
-            <div className='flex flex-col items-center gap-6'>
-                <div className='flex items-center justify-center'>
-                    <div className='animate-spin rounded-full h-12 w-12 border-[3px] border-[#AA8840]/20 border-t-[#c9a44e] shadow-lg shadow-[#AA8840]/10' />
-                </div>
-                <div className='text-center'>
-                    <p className='text-sm text-gray-600 font-bold tracking-wide'>{t('loadingCover')}</p>
-                    <p className='text-xs text-gray-400 mt-2'>{t('oneMoment')}</p>
-                </div>
-            </div>
-        </div>
-    )
+    if (loading || designLoading) return <BookLoader label={t('loadingCover')} />
 
     const hasCover = styleSettings.coverTitle || styleSettings.coverImage
 
@@ -1070,7 +1059,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
 
                         {exportStatus === 'generating' && (
                             <div className='flex flex-col items-center gap-4'>
-                                <div className='animate-spin rounded-full h-10 w-10 border-[3px] border-[#AA8840]/20 border-t-[#c9a44e]' />
+                                <BookLoader fullScreen={false} size={150} />
                                 <p className='text-sm text-gray-700'>{exportMessage}</p>
                             </div>
                         )}

@@ -17,6 +17,7 @@ import { db } from '@/lib/firebaseClient'
 import { NextIntlClientProvider, useTranslations } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
+import BookLoader from '@/components/BookLoader/BookLoader'
 
 export default function GalleryPage() {
     const { weddingId } = useParams()
@@ -189,11 +190,8 @@ function GalleryApp({ eventType, entries, loading }) {
                 </p>
 
                 {loading && (
-                    <div
-                        className='text-center py-12'
-                        style={{ color: palette.subtitleColor, fontSize: '14px' }}
-                    >
-                        טוען...
+                    <div className='flex justify-center py-12'>
+                        <BookLoader fullScreen={false} size={180} />
                     </div>
                 )}
 

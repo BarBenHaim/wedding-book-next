@@ -21,6 +21,7 @@ import { he } from 'date-fns/locale/he'
 import { enUS } from 'date-fns/locale/en-US'
 import { es as esLocale } from 'date-fns/locale/es'
 import { it as itLocale } from 'date-fns/locale/it'
+import BookLoader from '@/components/BookLoader/BookLoader'
 registerLocale('he', he)
 registerLocale('en', enUS)
 registerLocale('es', esLocale)
@@ -347,7 +348,9 @@ function PortalApp({ onLocaleDiscovered }) {
                                 </div>
                             </>
                         ) : (
-                            <p className='text-xs text-gray-400 text-center py-8'>טוען את הספר...</p>
+                            <div className='flex justify-center py-8'>
+                                <BookLoader fullScreen={false} size={190} label='טוען את הספר…' />
+                            </div>
                         )}
                     </div>
 

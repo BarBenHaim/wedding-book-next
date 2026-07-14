@@ -29,6 +29,7 @@ import {
     BarChart3, MousePointerClick, PenLine, ImagePlus,
     CheckCircle2, BookOpen, Lock, RefreshCcw, Sparkles,
 } from 'lucide-react'
+import BookLoader from '@/components/BookLoader/BookLoader'
 
 const EVENT_LABEL = {
     wedding: 'החתונה',
@@ -87,11 +88,7 @@ export default function StatsPage() {
     }, [data])
 
     if (status === 'loading') {
-        return (
-            <div className='min-h-screen flex items-center justify-center' style={{ background: '#f8f4ec' }}>
-                <p className='text-[#7a6a52] text-[14px]'>טוען...</p>
-            </div>
-        )
+        return <BookLoader />
     }
     if (status === 'invalid') {
         return (
