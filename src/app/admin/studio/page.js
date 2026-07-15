@@ -1390,6 +1390,24 @@ function PropertiesPanel({
                             hint='צובע רק את שם האורח. אם לא מוגדר — משתמש בצבע גוף הברכה.'
                         />
 
+                        {/* Page padding — the base inset every element
+                            sits inside. THIS is the "why doesn't 0 touch
+                            the edge" answer: margins are measured from
+                            the padded box, so 0% here + 0% margin =
+                            literally the page edge. */}
+                        <PropertySlider
+                            icon={Frame}
+                            label='ריפוד עמוד (מסגרת פנימית)'
+                            value={v.pagePadding ?? 4}
+                            min={0}
+                            max={12}
+                            step={0.5}
+                            unit='%'
+                            disabled={!editable}
+                            onChange={n => onValuesChange({ pagePadding: n })}
+                            hint='המרווח הבסיסי מכל קצוות העמוד. 0 = התוכן יכול לגעת בקצה.'
+                        />
+
                         <PropertySlider
                             icon={Type}
                             label='ריווח שם מלמעלה'
@@ -1400,6 +1418,18 @@ function PropertiesPanel({
                             unit='%'
                             disabled={!editable}
                             onChange={n => onValuesChange({ nameMarginTop: n })}
+                        />
+
+                        <PropertySlider
+                            icon={Type}
+                            label='ריווח שם מלמטה'
+                            value={v.nameMarginBottom ?? 1}
+                            min={0}
+                            max={20}
+                            step={0.5}
+                            unit='%'
+                            disabled={!editable}
+                            onChange={n => onValuesChange({ nameMarginBottom: n })}
                         />
 
                         {/* Collage-only — name is positioned absolutely
@@ -1497,6 +1527,18 @@ function PropertiesPanel({
                             unit='%'
                             disabled={!editable}
                             onChange={n => onValuesChange({ imageMarginTop: n })}
+                        />
+
+                        <PropertySlider
+                            icon={ImageIcon}
+                            label='ריווח תמונה מלמטה'
+                            value={v.imageMarginBottom ?? 2}
+                            min={0}
+                            max={20}
+                            step={0.5}
+                            unit='%'
+                            disabled={!editable}
+                            onChange={n => onValuesChange({ imageMarginBottom: n })}
                         />
 
                         <PropertySlider

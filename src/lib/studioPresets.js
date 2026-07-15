@@ -26,6 +26,7 @@ import {
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { getAuth } from 'firebase/auth'
 import { db, storage, app as firebaseApp } from './firebaseClient'
+import { applyPresetClean } from './bookDesignSchema'
 
 // ── Server-routed studio writes ──────────────────────────────────────
 // The studio's mutating ops (save preset, delete preset, hide static
@@ -419,10 +420,19 @@ function newPresetId() {
 // seedBuiltinPresetsIfMissing will re-create it.
 export async function savePreset(preset, { uid, asNew = false } = {}) {
     if (!preset) throw new Error('savePreset: missing preset')
+    // WYSIWYG guarantee ("once and for all"): every preset leaves the
+    // studio COMPLETE — canonical defaults filled for any key the
+    // author didn't touch (see bookDesignSchema.js). A complete preset
+    // renders identically in the studio preview, the /start wizard,
+    // the couple's gallery, the viewer, the book and the print
+    // pipeline, because nothing is left for per-surface fallbacks.
+    const normalized = preset.values
+        ? { ...preset, values: applyPresetClean(preset.values) }
+        : preset
     // Server-routed (Admin SDK) — see callStudioApi above for
     // rationale. The server fills in createdBy / timestamps and
     // returns the merged doc.
-    const { preset: saved } = await callStudioApi('savePreset', { preset, asNew })
+    const { preset: saved } = await callStudioApi('savePreset', { preset: normalized, asNew })
     return saved
 }
 

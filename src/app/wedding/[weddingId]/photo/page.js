@@ -1060,7 +1060,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                             <div className='text-center'>
                                 <h1
                                     className='font-bold leading-[1.15]'
-                                    style={{ color: md.titleColor, fontSize: '26px', letterSpacing: '-0.005em' }}
+                                    style={{ color: md.titleColor, fontSize: '36px', letterSpacing: '-0.005em' }}
                                 >
                                     {t('momentEyebrow')}
                                 </h1>
@@ -1092,7 +1092,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                         </div>
                                         <h1
                                             className='font-bold leading-[1.15]'
-                                            style={{ color: md.titleColor, fontSize: '26px', letterSpacing: '-0.005em' }}
+                                            style={{ color: md.titleColor, fontSize: '36px', letterSpacing: '-0.005em' }}
                                         >
                                             {namesPart}
                                         </h1>
