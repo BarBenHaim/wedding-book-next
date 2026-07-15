@@ -41,6 +41,7 @@ import { listPresets, resolvePreset } from '@/lib/studioPresets'
 import { PUBLIC_EVENT_TYPES, EVENT_TYPE_META, validateNewEvent, eventDisplayTitle } from '@/lib/onboarding'
 import { frankRuhl } from '@/app/fonts'
 import { EVENT_PNG_ICON } from './EventTypeIcons'
+import { bakeCoverPhoto } from '@/lib/coverPhotoBake'
 
 const AUTO_THEME = { wedding: 'gold', birthday: 'pink', bar_mitzvah: 'blue', bat_mitzvah: 'blue' }
 const STEP_LABELS = ['סוג האירוע', 'הפרטים', 'העיצוב', 'יוצאים לדרך']
@@ -194,6 +195,10 @@ function BookPreview({ data, presetValues, mode = 'cover' }) {
             <div className='bpBook' key={v.__id || 'default'}>
                 <div className='bpCover' style={{ background: v.backgroundColor || '#f7f1e3' }}>
                     {v.texture ? <img src={v.texture} alt='' className='bpTex' /> : null}
+                    {/* Wizard-uploaded celebrant photo — the PNG already
+                        carries its alpha fade, so it just melts into the
+                        cover exactly like the real BookCoverTemplate will. */}
+                    {data.coverPhoto ? <img src={data.coverPhoto} alt='' className='bpPhoto' /> : null}
                     <div className='bpFrame' />
                     <div className='bpInner'>
                         <span className='bpKicker'>{meta ? meta.label : 'האירוע שלכם'}</span>
@@ -221,6 +226,12 @@ function BookPreview({ data, presetValues, mode = 'cover' }) {
                     box-shadow: 0 24px 48px -18px rgba(48, 34, 12, 0.45), 0 4px 14px rgba(48, 34, 12, 0.18);
                 }
                 .bpTex { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.55; }
+                .bpPhoto {
+                    position: absolute; top: 56%; left: 50%;
+                    transform: translate(-50%, -50%);
+                    width: 88%; height: 88%; object-fit: contain;
+                    z-index: 1; pointer-events: none;
+                }
                 .bpFrame {
                     position: absolute; inset: 10px; border: 1px solid var(--acc, rgba(170, 136, 64, 0.55));
                     opacity: 0.65; border-radius: 9px; pointer-events: none;
@@ -335,6 +346,7 @@ export default function StartWizard() {
     const [step, setStep] = useState(0)
     const [data, setData] = useState({
         eventType: null, brideName: '', groomName: '', celebrantName: '', age: '', weddingDate: '', themeColor: null,
+        coverPhoto: '', // baked (alpha-faded) data-URL PNG — see lib/coverPhotoBake.js
     })
     const [presets, setPresets] = useState(null) // null = loading, [] = none
     const [presetId, setPresetId] = useState(null)
@@ -342,6 +354,7 @@ export default function StartWizard() {
     const [user, setUser] = useState(null)
     const [authReady, setAuthReady] = useState(false)
     const [busy, setBusy] = useState(false)
+    const [coverBusy, setCoverBusy] = useState(false)
     const [err, setErr] = useState('')
     const [fieldErrs, setFieldErrs] = useState({})
     const [created, setCreated] = useState(null)
@@ -554,7 +567,7 @@ export default function StartWizard() {
             const res = await fetch('/api/onboarding/create-event', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ ...payload, design }),
+                body: JSON.stringify({ ...payload, design, coverPhoto: data.coverPhoto || undefined }),
             })
             const json = await res.json().catch(() => ({}))
             if (!res.ok) {
@@ -580,6 +593,27 @@ export default function StartWizard() {
             } catch {}
         } finally {
             setBusy(false)
+        }
+    }
+
+    // ── Optional cover photo (step 1) ─────────────────────────────
+    // The file is baked client-side into an alpha-faded PNG (see
+    // lib/coverPhotoBake.js) so the live preview AND the real cover
+    // render the exact same blended asset.
+    async function onCoverFile(e) {
+        const f = e.target.files?.[0]
+        e.target.value = '' // let the user re-pick the same file
+        if (!f) return
+        if (!/^image\//.test(f.type || '')) { setErr('אפשר להעלות רק קובץ תמונה'); return }
+        setCoverBusy(true)
+        setErr('')
+        try {
+            const baked = await bakeCoverPhoto(f)
+            setData(d => ({ ...d, coverPhoto: baked }))
+        } catch {
+            setErr('לא הצלחנו לעבד את התמונה — נסו תמונה אחרת')
+        } finally {
+            setCoverBusy(false)
         }
     }
 
@@ -779,7 +813,54 @@ export default function StartWizard() {
                                 {fieldErrs.weddingDate && <em>{fieldErrs.weddingDate}</em>}
                             </label>
 
+                            <label className='field'>
+                                <span>תמונה לכריכה <b className='opt'>(לא חובה — תשתלב במרכז הכריכה)</b></span>
+                                <div className='coverUp'>
+                                    {data.coverPhoto ? (
+                                        <>
+                                            <span className='coverThumb' style={{ backgroundImage: `url(${data.coverPhoto})` }} aria-hidden='true' />
+                                            <span className='coverTxt'>מהמם! התמונה תשתלב בפייד עדין — רואים בתצוגה 🙂</span>
+                                            <button type='button' className='coverBtn' onClick={() => setData(d => ({ ...d, coverPhoto: '' }))}>
+                                                הסרה
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className='coverTxt'>
+                                                {coverBusy ? 'משלבים את התמונה…' : 'תמונה של החוגגים — נשלב אותה במרכז הכריכה'}
+                                            </span>
+                                            <label className='coverBtn'>
+                                                {coverBusy ? 'רגע…' : 'בחירת תמונה'}
+                                                <input type='file' accept='image/*' onChange={onCoverFile} hidden disabled={coverBusy} />
+                                            </label>
+                                        </>
+                                    )}
+                                </div>
+                            </label>
+
                             <button className='cta' type='submit'>ממשיכים לעיצוב ←</button>
+
+                            <style jsx>{`
+                                .coverUp {
+                                    display: flex; align-items: center; gap: 10px;
+                                    padding: 10px 12px; border: 1.5px dashed rgba(170, 136, 64, 0.45);
+                                    border-radius: 12px; background: rgba(255, 253, 246, 0.65);
+                                }
+                                .coverThumb {
+                                    width: 46px; height: 46px; border-radius: 50%; flex: 0 0 auto;
+                                    background-size: cover; background-position: center;
+                                    background-color: #efe6d2;
+                                    box-shadow: 0 2px 8px rgba(60, 44, 20, 0.25);
+                                }
+                                .coverTxt { flex: 1; font-size: 12.5px; color: #7a6647; text-align: right; }
+                                .coverBtn {
+                                    flex: 0 0 auto; font-size: 12.5px; font-weight: 700; color: #6d5220;
+                                    background: linear-gradient(180deg, #f4e7c8, #e8d5a8);
+                                    border: 1px solid rgba(170, 136, 64, 0.5); border-radius: 999px;
+                                    padding: 7px 14px; cursor: pointer;
+                                }
+                                .coverBtn:hover { filter: brightness(1.04); }
+                            `}</style>
                         </form>
                     )}
 

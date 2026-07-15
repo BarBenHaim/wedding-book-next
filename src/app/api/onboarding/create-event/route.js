@@ -11,16 +11,20 @@ export const runtime = 'nodejs'
 // here with the Admin SDK after verifying the token.
 //
 // Body: { eventType, brideName?, groomName?, celebrantName?, age?,
-//         weddingDate?, themeColor?, ownerName?, design? }
+//         weddingDate?, themeColor?, ownerName?, design?, coverPhoto? }
 //   - design: optional resolved style object the client computed from a
 //     studio preset (same trust model as /api/digital-edition/set-design:
 //     the client owns the preset registry + next/font classNames, the
 //     server does auth + a sanity cap).
+//   - coverPhoto: optional data-URL PNG the wizard baked (photo with a
+//     transparent fade at the edges — see lib/coverPhotoBake.js). Too
+//     big for Firestore, so it's uploaded to Storage here and only its
+//     download URL lands on coverDesign.coverImage.
 
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import nodemailer from 'nodemailer'
-import { adminDb as db, adminAuth } from '@/lib/firebaseAdmin'
+import { adminDb as db, adminAuth, adminStorage } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { generateSlug } from '@/lib/generateSlug'
 import { isSuperAdmin } from '@/lib/superAdmin'
@@ -68,6 +72,23 @@ export async function POST(req) {
             design = body.design
         }
 
+        // Optional baked cover photo (data-URL PNG/JPEG, alpha-faded edges).
+        let coverPhotoBuffer = null
+        let coverPhotoMime = 'image/png'
+        if (body.coverPhoto !== undefined && body.coverPhoto !== null && body.coverPhoto !== '') {
+            const m = typeof body.coverPhoto === 'string'
+                ? body.coverPhoto.match(/^data:(image\/(?:png|jpeg));base64,([A-Za-z0-9+/=]+)$/)
+                : null
+            if (!m) {
+                return NextResponse.json({ error: 'validation', message: 'תמונת כריכה לא תקינה' }, { status: 400 })
+            }
+            coverPhotoBuffer = Buffer.from(m[2], 'base64')
+            coverPhotoMime = m[1]
+            if (coverPhotoBuffer.length > 2 * 1024 * 1024) {
+                return NextResponse.json({ error: 'validation', message: 'תמונת הכריכה גדולה מדי' }, { status: 413 })
+            }
+        }
+
         // ── 3. Event cap (super admins exempt): a FREE account (every
         //       owned event is plan:'free') opens one event; any paid
         //       package on the account unlocks up to MAX_EVENTS_PER_USER.
@@ -110,6 +131,39 @@ export async function POST(req) {
             doc.coverDesign = cleanDesign // new event — no owner cover to preserve yet
             doc.bookDesignSource = 'onboarding'
             doc.bookDesignUpdatedAt = FieldValue.serverTimestamp()
+        }
+
+        // ── 4a. Wizard cover photo → Storage → coverDesign.coverImage.
+        //        The PNG carries its own alpha fade (baked client-side),
+        //        so it blends into ANY cover background — screen, PDF and
+        //        print all render the same pixels. Non-fatal on failure:
+        //        the event is still born, just without the photo.
+        if (coverPhotoBuffer) {
+            try {
+                const ext = coverPhotoMime === 'image/jpeg' ? 'jpg' : 'png'
+                const path = `weddings/${ref.id}/cover-wizard.${ext}`
+                const downloadToken = crypto.randomUUID()
+                const bucket = adminStorage.bucket()
+                await bucket.file(path).save(coverPhotoBuffer, {
+                    contentType: coverPhotoMime,
+                    metadata: { metadata: { firebaseStorageDownloadTokens: downloadToken } },
+                })
+                const coverUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media&token=${downloadToken}`
+                // Compose like a designed cover: photo big in the middle,
+                // slightly below center; title block moves to the top so
+                // it never sits on the face. All knobs the owner can
+                // still fine-tune later in the cover designer.
+                doc.coverDesign = {
+                    ...(doc.coverDesign || {}),
+                    coverImage: coverUrl,
+                    coverImageX: 50,
+                    coverImageY: 56,
+                    coverImageScale: 115,
+                    coverTextPosition: 'tc',
+                }
+            } catch (coverErr) {
+                console.warn('[onboarding] cover photo upload failed (non-fatal):', coverErr?.message || coverErr)
+            }
         }
         await ref.set(doc)
 
