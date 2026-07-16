@@ -38,6 +38,8 @@ import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 import { EVENT_TYPE_ORDER, getEventConfig } from '@/lib/eventTypes'
 import { PHOTO_FRAMES } from '@/lib/photoFrames'
 import { uploadPhotoFrameAsset, listPhotoFrameAssets, deletePhotoFrameAsset } from '@/lib/studioPresets'
+import { listDefaultCovers, uploadDefaultCover, clearDefaultCover } from '@/lib/studioPresets'
+import { PUBLIC_EVENT_TYPES, EVENT_TYPE_META } from '@/lib/onboarding'
 import FramedPhoto from '@/components/FramedPhoto/FramedPhoto'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
 
@@ -626,6 +628,7 @@ function StudioContent() {
                                 }
                             }}
                         />
+                        <DefaultCoversPanel />
                     </div>
                     <div className={tabClass(mobileTab === 'preview')}>
                         <PreviewPanel
@@ -862,6 +865,132 @@ function SeedStatusChip({ seedStatus }) {
 }
 
 // ── Left rail: preset list, system first then studio ─────────────────
+// ── Default cover artwork per event type ─────────────────────────────
+// Super-admin uploads a designed cover for each event type; every NEW
+// event of that type is born with it (create-event sets it as
+// coverDesign.coverTexture — the full-bleed cover background). The
+// celebrant photo from the /start wizard fades in ON TOP of it.
+function DefaultCoversPanel() {
+    const [covers, setCovers] = useState(null)
+    const [busyType, setBusyType] = useState(null)
+    const [coversErr, setCoversErr] = useState('')
+
+    useEffect(() => {
+        listDefaultCovers().then(setCovers).catch(() => setCovers({}))
+    }, [])
+
+    async function onPick(type, file) {
+        if (!file) return
+        setBusyType(type)
+        setCoversErr('')
+        try {
+            const entry = await uploadDefaultCover(type, file, { uid: auth.currentUser?.uid })
+            setCovers(c => ({ ...(c || {}), [type]: entry }))
+        } catch (e) {
+            setCoversErr(e?.message || 'ההעלאה נכשלה')
+        } finally {
+            setBusyType(null)
+        }
+    }
+
+    async function onClear(type) {
+        setBusyType(type)
+        setCoversErr('')
+        try {
+            await clearDefaultCover(type)
+            setCovers(c => ({ ...(c || {}), [type]: null }))
+        } catch (e) {
+            setCoversErr(e?.message || 'המחיקה נכשלה')
+        } finally {
+            setBusyType(null)
+        }
+    }
+
+    return (
+        <div
+            className='mt-4 rounded-2xl p-4'
+            style={{ background: '#ffffff', border: '1px solid rgba(212,184,103,0.22)', boxShadow: '0 4px 10px -6px rgba(170,136,64,0.2)' }}
+        >
+            <h3 className='text-[13.5px] font-bold' style={{ color: '#5c4a2f' }}>
+                כריכת ברירת מחדל לכל סוג אירוע
+            </h3>
+            <p className='mt-0.5 mb-3' style={{ color: '#a89378', fontSize: '11.5px', lineHeight: 1.5 }}>
+                כל ספר חדש נולד עם הכריכה של הסוג שלו. תמונת החוגגים מהאשף משתלבת מעליה בפייד.
+            </p>
+            {coversErr && (
+                <p className='mb-2 text-[11.5px] font-bold' style={{ color: '#b3401f' }}>{coversErr}</p>
+            )}
+            <div className='grid grid-cols-2 gap-2.5'>
+                {PUBLIC_EVENT_TYPES.map(type => {
+                    const meta = EVENT_TYPE_META[type] || {}
+                    const entry = covers?.[type]
+                    const busy = busyType === type
+                    return (
+                        <div
+                            key={type}
+                            className='rounded-xl overflow-hidden'
+                            style={{ border: '1px solid rgba(212,184,103,0.35)', background: '#fbf6ec' }}
+                        >
+                            <div
+                                className='relative w-full'
+                                style={{
+                                    aspectRatio: '1 / 1',
+                                    backgroundImage: entry?.url ? `url(${entry.url})` : 'none',
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                }}
+                            >
+                                {!entry?.url && (
+                                    <span className='absolute inset-0 flex items-center justify-center text-[11px]' style={{ color: '#b3a184' }}>
+                                        {covers === null ? 'טוען…' : 'אין כריכה'}
+                                    </span>
+                                )}
+                                {busy && (
+                                    <span className='absolute inset-0 flex items-center justify-center bg-white/60'>
+                                        <Loader2 className='w-5 h-5 animate-spin' style={{ color: '#b8893d' }} />
+                                    </span>
+                                )}
+                            </div>
+                            <div className='flex items-center justify-between px-2 py-1.5'>
+                                <span className='text-[11.5px] font-bold' style={{ color: '#5c4a2f' }}>
+                                    {meta.emoji} {meta.label || type}
+                                </span>
+                                <span className='flex items-center gap-1'>
+                                    <label
+                                        className='cursor-pointer text-[11px] font-bold px-2 py-1 rounded-lg'
+                                        style={{ background: 'linear-gradient(180deg,#f4e7c8,#e8d5a8)', color: '#6d5220', border: '1px solid rgba(170,136,64,0.5)' }}
+                                    >
+                                        {entry?.url ? 'החלפה' : 'העלאה'}
+                                        <input
+                                            type='file'
+                                            accept='image/*'
+                                            hidden
+                                            disabled={busy}
+                                            onChange={e => { onPick(type, e.target.files?.[0]); e.target.value = '' }}
+                                        />
+                                    </label>
+                                    {entry?.url && (
+                                        <button
+                                            type='button'
+                                            className='text-[11px] px-1.5 py-1 rounded-lg hover:bg-black/5'
+                                            style={{ color: '#a3541f' }}
+                                            disabled={busy}
+                                            onClick={() => onClear(type)}
+                                            title='הסרת ברירת המחדל'
+                                        >
+                                            <Trash2 className='w-3.5 h-3.5' />
+                                        </button>
+                                    )}
+                                </span>
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
 function PresetListPanel({ presets, activeId, onSelect }) {
     const system = presets.filter(p => p.ownerType === 'system')
     const studio = presets.filter(p => p.ownerType === 'studio')

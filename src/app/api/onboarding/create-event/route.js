@@ -133,6 +133,25 @@ export async function POST(req) {
             doc.bookDesignUpdatedAt = FieldValue.serverTimestamp()
         }
 
+        // ── 4a-pre. Studio default cover for this event type ─────────
+        //    (studio_config/default_covers, managed by the super-admin
+        //    in the design studio). Applied as coverDesign.coverTexture
+        //    — the full-bleed cover background — so every new book is
+        //    born dressed. A preset that explicitly set its own cover
+        //    surface wins; the default only fills the gap.
+        try {
+            const dcSnap = await db.collection('studio_config').doc('default_covers').get()
+            const dc = dcSnap.exists ? dcSnap.data()?.[check.value.eventType] : null
+            if (dc?.url) {
+                const cd = doc.coverDesign || {}
+                if (!cd.coverTexture && !cd.backgroundUrl) {
+                    doc.coverDesign = { ...cd, coverTexture: dc.url }
+                }
+            }
+        } catch (dcErr) {
+            console.warn('[onboarding] default cover lookup failed (non-fatal):', dcErr?.message || dcErr)
+        }
+
         // ── 4a. Wizard cover photo → Storage → coverDesign.coverImage.
         //        The PNG carries its own alpha fade (baked client-side),
         //        so it blends into ANY cover background — screen, PDF and

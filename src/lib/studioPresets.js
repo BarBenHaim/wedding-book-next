@@ -662,6 +662,74 @@ export async function deleteStudioBackground(id, storagePath) {
     return true
 }
 
+// ── Default covers per event type ───────────────────────────────────
+// Studio-managed cover ARTWORK applied to every newly-created event of
+// that type (create-event sets it as coverDesign.coverTexture — the
+// full-bleed cover background). The celebrant photo from the wizard
+// (coverDesign.coverImage, alpha-faded) composes ON TOP of it, so the
+// two features stack into a designed cover out of the box.
+// Doc: studio_config/default_covers → { [eventType]: { url, storagePath, ... } }
+
+const DEFAULT_COVERS_DOC_PATH = ['studio_config', 'default_covers']
+
+export async function listDefaultCovers() {
+    const snap = await getDoc(doc(db, ...DEFAULT_COVERS_DOC_PATH))
+    return snap.exists() ? snap.data() || {} : {}
+}
+
+export async function uploadDefaultCover(eventType, file, { uid } = {}) {
+    if (!eventType) throw new Error('uploadDefaultCover: missing eventType')
+    if (!file) throw new Error('uploadDefaultCover: missing file')
+    if (!UPLOAD_LIMITS.allowedTypes.includes(file.type)) {
+        throw new Error('פורמט לא נתמך — רק JPG, PNG, WebP או SVG')
+    }
+    if (file.size > UPLOAD_LIMITS.maxFileMB * 1024 * 1024) {
+        throw new Error(`הקובץ גדול מדי — מקסימום ${UPLOAD_LIMITS.maxFileMB}MB`)
+    }
+
+    // Compress rasters like page backgrounds (JPEG, print-grade edge).
+    let compressed = file
+    if (file.type !== 'image/svg+xml') {
+        try {
+            const { default: imageCompression } = await import('browser-image-compression')
+            const out = await imageCompression(file, {
+                maxSizeMB: 1.5,
+                maxWidthOrHeight: 2560,
+                initialQuality: 0.92,
+                useWebWorker: true,
+                fileType: 'image/jpeg',
+            })
+            if (out.size < file.size) compressed = out
+        } catch (err) {
+            console.warn('[studioPresets] cover compression skipped:', err?.message || err)
+        }
+    }
+
+    // Unique path per upload (timestamp) so the CDN/browser cache never
+    // serves a stale cover after a replace. The previous file becomes an
+    // orphan — acceptable at this scale.
+    const ext = file.type === 'image/svg+xml' ? 'svg' : compressed.type === 'image/png' ? 'png' : 'jpg'
+    const storagePath = `studio/default-covers/${eventType}_${Date.now()}.${ext}`
+    const ref = storageRef(storage, storagePath)
+    await uploadBytes(ref, compressed, { contentType: compressed.type || 'image/jpeg' })
+    const url = await getDownloadURL(ref)
+
+    const entry = {
+        url,
+        storagePath,
+        uploadedBy: uid || 'unknown',
+        updatedAt: new Date().toISOString(),
+    }
+    await setDoc(doc(db, ...DEFAULT_COVERS_DOC_PATH), { [eventType]: entry }, { merge: true })
+    return entry
+}
+
+export async function clearDefaultCover(eventType) {
+    if (!eventType) throw new Error('clearDefaultCover: missing eventType')
+    await setDoc(doc(db, ...DEFAULT_COVERS_DOC_PATH), { [eventType]: null }, { merge: true })
+    return true
+}
+
 // ── Studio photo frames (uploaded overlays) ─────────────────────────
 // PNG/SVG artwork with a TRANSPARENT WINDOW that dresses the photo
 // slot (see src/lib/photoFrames.js + FramedPhoto). Stored in Firestore
