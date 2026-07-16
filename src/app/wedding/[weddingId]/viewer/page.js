@@ -357,19 +357,17 @@ function BookViewerInner({ onLocaleDiscovered }) {
                 const field = target === 'cover' ? 'coverDesign' : 'bookDesign'
                 const payload = { [field]: sanitize(settingsToSave) }
                 if (target === 'book') {
-                    // LIVE LINK bookkeeping — if the saved interior matches
-                    // a studio preset's signature, (re)link the wedding to
-                    // it; otherwise this is a custom design → detach, so
-                    // future studio edits won't override the owner's work.
-                    const match = (Array.isArray(livePresets) ? livePresets : []).find(p => {
-                        const v = resolvePreset(p).values || {}
-                        return (
-                            v.backgroundColor === settingsToSave.backgroundColor &&
-                            v.fontClass === settingsToSave.fontClass &&
-                            v.texture === settingsToSave.texture &&
-                            v.template === settingsToSave.template
-                        )
-                    })
+                    // LIVE LINK bookkeeping — link ONLY on full canonical
+                    // equality with a preset (i.e. a pure preset pick).
+                    // Any owner tweak — even one slider — breaks equality
+                    // and detaches, so studio edits never override work a
+                    // couple did on purpose. (A loose signature match here
+                    // would have re-linked margin-tweaked designs and wiped
+                    // the tweaks on the next studio edit.)
+                    const savedCanon = JSON.stringify(applyPresetClean(settingsToSave))
+                    const match = (Array.isArray(livePresets) ? livePresets : []).find(
+                        p => JSON.stringify(applyPresetClean(resolvePreset(p).values || {})) === savedCanon
+                    )
                     payload.bookDesignPresetId = match?.id || null
                 }
                 await setDoc(
