@@ -567,7 +567,14 @@ export default function StartWizard() {
             const res = await fetch('/api/onboarding/create-event', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ ...payload, design, coverPhoto: data.coverPhoto || undefined }),
+                body: JSON.stringify({
+                    ...payload,
+                    design,
+                    coverPhoto: data.coverPhoto || undefined,
+                    // Live preset link — the newborn book follows this studio
+                    // preset's current values until the owner customizes.
+                    presetId: presetId || undefined,
+                }),
             })
             const json = await res.json().catch(() => ({}))
             if (!res.ok) {

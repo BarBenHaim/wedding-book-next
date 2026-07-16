@@ -495,8 +495,26 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
             if (!cancelled && Array.isArray(list) && list.length > 0) setPresets(list)
         })
         return () => { cancelled = true }
-         
+
     }, [wedding?.eventType])
+
+    // ── LIVE PRESET LINK ─────────────────────────────────────────────
+    // If this book is linked to a studio preset (bookDesignPresetId),
+    // render the preset's CURRENT values — not the snapshot stored at
+    // apply time. This is what makes a studio edit propagate to every
+    // linked book ("what you see in the studio is what every real book
+    // shows"). The stored snapshot remains the fallback when the preset
+    // was deleted. A pick made in THIS session wins over the link.
+    const userPickedRef = useRef(false)
+    useEffect(() => {
+        if (userPickedRef.current) return
+        const linkedId = wedding?.bookDesignPresetId
+        if (!linkedId || !Array.isArray(presets) || presets.length === 0) return
+        const linked = presets.find(p => p.id === linkedId)
+        if (!linked) return
+        const live = applyPresetClean(resolvePreset(linked).values || {})
+        setStyleSettings(prev => (JSON.stringify(prev) === JSON.stringify(live) ? prev : live))
+    }, [presets, wedding?.bookDesignPresetId])
 
     // Apply a preset AND persist it as the couple's chosen book design.
     //
@@ -512,6 +530,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
         // FULL RESET over the canonical schema — nothing survives from
         // the previous design (see bookDesignSchema.js).
         const merged = applyPresetClean(resolved)
+        userPickedRef.current = true // stop the live-link effect from overriding this session's pick
         setStyleSettings(merged)
         // Cover adopts the preset's SURFACE look only — every
         // cover-specific field (photo, scale/position, title, subtitle,
@@ -525,7 +544,9 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
             const res = await fetch('/api/digital-edition/set-design', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ weddingId, token, design: merged }),
+                // presetId records the LIVE LINK — this book will follow
+                // the preset's current studio values from now on.
+                body: JSON.stringify({ weddingId, token, design: merged, presetId: preset?.id || null }),
             })
             if (!res.ok) throw new Error('save failed')
             setDesignSave('saved')

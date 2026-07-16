@@ -131,6 +131,11 @@ export async function POST(req) {
             doc.coverDesign = cleanDesign // new event — no owner cover to preserve yet
             doc.bookDesignSource = 'onboarding'
             doc.bookDesignUpdatedAt = FieldValue.serverTimestamp()
+            // Live preset link — render surfaces will follow the preset's
+            // CURRENT studio values (snapshot above is the fallback).
+            if (typeof body.presetId === 'string' && body.presetId.length > 0 && body.presetId.length < 120) {
+                doc.bookDesignPresetId = body.presetId
+            }
         }
 
         // ── 4a-pre. Studio default cover for this event type ─────────

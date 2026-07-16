@@ -72,7 +72,7 @@ describe('applyPresetClean', () => {
         const d = CANONICAL_STYLE_DEFAULTS
         expect(d.fontSizePercent).toBe(3)
         expect(d.textAlign).toBe('center')
-        expect(d.nameMarginTop).toBe(2)
+        expect(d.nameMarginTop).toBe(1) // tightened (user feedback: pages started too low)
         expect(d.nameMarginBottom).toBe(1)
         expect(d.imageMarginTop).toBe(2)
         expect(d.imageMarginBottom).toBe(2)

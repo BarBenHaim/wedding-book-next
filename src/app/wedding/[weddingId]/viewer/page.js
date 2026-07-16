@@ -89,6 +89,26 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // brideName/groomName/celebrantName when no custom cover content
     // is set. Mirrors the pattern in /book/[token]/page.js.
     const [weddingDoc, setWeddingDoc] = useState(null)
+    // LIVE PRESET LINK — when the wedding is linked to a studio preset
+    // (bookDesignPresetId), the interior follows the preset's CURRENT
+    // values, so studio edits show up here immediately. A manual edit
+    // in this session detaches (userTouchedDesignRef + save clears it).
+    const [livePresets, setLivePresets] = useState(null)
+    const userTouchedDesignRef = useRef(false)
+    useEffect(() => {
+        let cancelled = false
+        listPresets({}).then(list => { if (!cancelled && Array.isArray(list)) setLivePresets(list) }).catch(() => {})
+        return () => { cancelled = true }
+    }, [])
+    useEffect(() => {
+        if (userTouchedDesignRef.current) return
+        const linkedId = weddingDoc?.bookDesignPresetId
+        if (!linkedId || !Array.isArray(livePresets)) return
+        const linked = livePresets.find(p => p.id === linkedId)
+        if (!linked) return
+        const live = applyPresetClean(resolvePreset(linked).values || {})
+        setStyleSettings(prev => (JSON.stringify(prev) === JSON.stringify(live) ? prev : live))
+    }, [livePresets, weddingDoc])
     // Inject the wedding's locale into styleSettings so BookPageTemplate
     // and the page layouts (Notebook, Collage) can read it and set their
     // own dir + use the right logical CSS resolution. MUST be declared
@@ -335,9 +355,26 @@ function BookViewerInner({ onLocaleDiscovered }) {
                     }
                 }
                 const field = target === 'cover' ? 'coverDesign' : 'bookDesign'
+                const payload = { [field]: sanitize(settingsToSave) }
+                if (target === 'book') {
+                    // LIVE LINK bookkeeping — if the saved interior matches
+                    // a studio preset's signature, (re)link the wedding to
+                    // it; otherwise this is a custom design → detach, so
+                    // future studio edits won't override the owner's work.
+                    const match = (Array.isArray(livePresets) ? livePresets : []).find(p => {
+                        const v = resolvePreset(p).values || {}
+                        return (
+                            v.backgroundColor === settingsToSave.backgroundColor &&
+                            v.fontClass === settingsToSave.fontClass &&
+                            v.texture === settingsToSave.texture &&
+                            v.template === settingsToSave.template
+                        )
+                    })
+                    payload.bookDesignPresetId = match?.id || null
+                }
                 await setDoc(
                     doc(db, 'weddings', weddingId),
-                    { [field]: sanitize(settingsToSave) },
+                    payload,
                     { merge: true }
                 )
                 setSaveStatus('saved')
@@ -347,7 +384,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                 setSaveStatus('idle')
             }
         }, 800)
-    }, [weddingId, migrateCoverImageIfNeeded])
+    }, [weddingId, migrateCoverImageIfNeeded, livePresets])
 
     // handleStyleChange routes updates by mode: cover edits flow into
     // coverStyleSettings + Firestore.coverDesign; book edits into
@@ -359,6 +396,10 @@ function BookViewerInner({ onLocaleDiscovered }) {
             setCoverStyleSettings(newSettings)
             saveDesign(newSettings, 'cover')
         } else {
+            // The owner is actively shaping the interior — stop the
+            // live-link effect from overriding their in-session work.
+            // The save below re-links or detaches by signature.
+            userTouchedDesignRef.current = true
             const newSettings = { ...styleSettings, ...updated }
             setStyleSettings(newSettings)
             saveDesign(newSettings, 'book')

@@ -77,10 +77,21 @@ export async function POST(req) {
         const existingCover = isPlainObject(data.coverDesign) ? data.coverDesign : {}
         const coverDesign = adoptSurfaceKeepCover(existingCover, cleanDesign)
 
+        // Live preset link: when the design came from picking a studio
+        // preset, remember WHICH one. Surfaces that render the book
+        // prefer the preset's CURRENT values over this snapshot — so a
+        // preset edit in the studio propagates to every linked book
+        // instantly. A custom (non-preset) design clears the link.
+        const presetId =
+            typeof body.presetId === 'string' && body.presetId.length > 0 && body.presetId.length < 120
+                ? body.presetId
+                : null
+
         await ref.set(
             {
                 bookDesign: cleanDesign,
                 coverDesign,
+                bookDesignPresetId: presetId,
                 bookDesignSource: 'digital-link',
                 bookDesignUpdatedAt: FieldValue.serverTimestamp(),
             },
