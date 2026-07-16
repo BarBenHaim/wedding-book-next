@@ -32,6 +32,7 @@ import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
 import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import { applyPresetClean } from '@/lib/bookDesignSchema'
 import { expandBookPages } from '@/lib/bookPages'
 import { Printer, Lock, Loader2, AlertTriangle, ArrowLeft, Download } from 'lucide-react'
 
@@ -96,8 +97,9 @@ function PageImageContent() {
     }, [weddingId])
 
     const locale = wedding?.locale || 'he'
-    // Interior pages — same source the viewer/book uses.
-    const styleSettings = (() => ({ ...defaultStyle, ...(resolveInteriorDesign(wedding) || {}), locale }))()
+    // Interior pages — same source AND same canonical fill the
+    // viewer/book use, so the downloaded page-image matches the screen.
+    const styleSettings = (() => ({ ...applyPresetClean(resolveInteriorDesign(wedding)), locale }))()
     // Covers — same source the viewer's front cover uses (incl. background
     // image + scale the owner set), so the download matches what's on screen.
     const coverDesign = (() => {

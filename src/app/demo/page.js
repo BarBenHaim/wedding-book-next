@@ -18,6 +18,7 @@ import HTMLFlipBook from 'react-pageflip'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import { applyPresetClean } from '@/lib/bookDesignSchema'
 import { resolvePreset, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import { normalizeBlessing } from '@/lib/normalizeText'
 import { QrCode, PenLine, BookHeart, Sparkles, Globe, Printer, Smartphone, Camera, Check, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -43,7 +44,7 @@ export default function DemoPage() {
     const styleSettings = useMemo(() => {
         const preset = BUILTIN_PRESETS.find(p => /פרחי גן|פסטורלי|שמפניה/.test(p.name)) || BUILTIN_PRESETS[0]
         const rp = preset ? resolvePreset(preset).values : {}
-        return { ...defaultStyle, ...rp, locale: 'he' }
+        return { ...applyPresetClean(rp), locale: 'he' }
     }, [])
     const coverStyle = useMemo(() => ({
         ...styleSettings,

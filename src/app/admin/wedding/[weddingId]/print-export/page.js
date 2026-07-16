@@ -59,6 +59,7 @@ import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import { applyPresetClean } from '@/lib/bookDesignSchema'
 import {
     Printer, Lock, CheckCircle2, Loader2, AlertTriangle,
     ArrowLeft, FileArchive, Info,
@@ -224,7 +225,9 @@ function PrintExportContent() {
 
     const styleSettings = (() => {
         const fromWedding = wedding?.bookDesign || wedding?.book?.designSettings || {}
-        return { ...defaultStyle, ...fromWedding }
+        // Canonical fill — identical to the viewer/book resolution, so
+        // the print pages match the on-screen book.
+        return applyPresetClean(fromWedding)
     })()
     const coverDesign = (() => {
         const c = wedding?.coverDesign || {}

@@ -1158,7 +1158,10 @@ function MobilePresetStrip({ styleSettings, onApply, eventType }) {
                     const presetKey = preset.id || preset.name
                     const isActive = activeKey === presetKey
                     const resolved = resolvePreset(preset).values || {}
-                    const previewStyle = { ...defaultStyle, ...resolved }
+                    // Canonical fill — the tile must promise EXACTLY what
+                    // applying the preset will deliver (same resolution as
+                    // the interior render).
+                    const previewStyle = applyPresetClean(resolved)
                     return (
                         <button
                             key={presetKey}

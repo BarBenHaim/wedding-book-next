@@ -1152,7 +1152,10 @@ function PresetStrip({ presets, activeStyle, onApply }) {
                 {presets.map(preset => {
                     const presetKey = preset.id || preset.name
                     const resolved = resolvePreset(preset).values || {}
-                    const previewStyle = { ...defaultStyle, ...resolved }
+                    // Canonical fill — the tile must promise EXACTLY what
+                    // applying the preset will deliver (same resolution as
+                    // the interior render above).
+                    const previewStyle = applyPresetClean(resolved)
                     // Stable signature compare — the active styleSettings
                     // is merged from the preset's values + defaults, so
                     // object identity won't match. A handful of tell-tale

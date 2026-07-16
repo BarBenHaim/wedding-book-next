@@ -77,7 +77,11 @@ export const CANONICAL_STYLE_DEFAULTS = {
     imageAlign: 'center', // 'left' | 'center' | 'right'
 
     // ── Name block ───────────────────────────────────────────────────
-    nameMarginTop: 2, // % of page height
+    // nameMarginTop 1 (was 2): the name hugs the top of the page —
+    // user feedback was that pages "start too low". pagePadding still
+    // provides the base 4% breathing room; authors who want more air
+    // have the studio slider.
+    nameMarginTop: 1, // % of page height
     nameMarginBottom: 1,
     nameMaxWidth: 60, // % of page width
 

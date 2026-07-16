@@ -39,6 +39,7 @@ import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import { applyPresetClean } from '@/lib/bookDesignSchema'
 import { expandBookPages } from '@/lib/bookPages'
 import {
     Printer, Lock, CheckCircle2, Loader2, AlertTriangle,
@@ -145,7 +146,9 @@ function PicabookExportContent() {
 
     const styleSettings = (() => {
         const fromWedding = wedding?.bookDesign || wedding?.book?.designSettings || {}
-        return { ...defaultStyle, ...fromWedding }
+        // Canonical fill — identical to the viewer/book resolution, so
+        // the print export matches the on-screen book pixel-for-pixel.
+        return applyPresetClean(fromWedding)
     })()
     // Cover design — mirror /viewer: coverDesign, else bookDesign, over defaults,
     // with the event locale so BookCoverTemplate builds the title correctly.

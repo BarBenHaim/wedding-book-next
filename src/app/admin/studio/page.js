@@ -269,19 +269,17 @@ function StudioContent() {
     // Resolve the DRAFT (not the persisted preset) to the runtime
     // shape so the preview reflects unsaved edits live.
     //
-    // CRITICAL — merge with `defaultStyle` exactly the way the viewer
-    // does (`{ ...defaultStyle, ...firestoreData.coverDesign }`). The
-    // viewer's render path always sees defaultStyle's baseline fields
-    // (e.g. `pagePadding: 0`, `imageStyle: { width: 90, ... }`)
-    // because of that merge. If the studio preview renders the raw
-    // preset values without the same merge, BookPageTemplate's `??`
-    // fallbacks kick in (pagePadding → 4, etc) and the same preset
-    // looks DIFFERENT in studio vs in the actual book — the bug the
-    // user hit when their nameMarginTop edits "didn't show right" in
-    // the wedding viewer.
+    // CRITICAL — canonical fill, EXACTLY like the surfaces that render
+    // the real thing: the viewer and the digital book both run stored
+    // designs through applyPresetClean (canonical defaults for every
+    // missing key). The old `{ ...defaultStyle, ... }` merge here fed
+    // the preview DIFFERENT baselines (imageStyle width 90, pagePadding
+    // 0) than the book's canonical ones (80, 4) — so a legacy preset
+    // with missing keys looked tight and high in the studio but padded
+    // and lower in the real book. One truth now: canonical everywhere.
     const resolvedStyle = useMemo(() => {
         if (!draft) return null
-        return { ...defaultStyle, ...resolvePreset(draft).values }
+        return applyPresetClean(resolvePreset(draft).values)
     }, [draft])
 
     // Helpers for the properties panel — apply a partial values patch
@@ -1540,7 +1538,7 @@ function PropertiesPanel({
                         <PropertySlider
                             icon={Type}
                             label='ריווח שם מלמעלה'
-                            value={v.nameMarginTop ?? 2}
+                            value={v.nameMarginTop ?? 1}
                             min={0}
                             max={20}
                             step={0.5}

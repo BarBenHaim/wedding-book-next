@@ -209,7 +209,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         // the blessing copy.
                         color: styleSettings.nameColor ?? styleSettings.fontColor,
                         opacity: 0.85,
-                        marginTop: onlyOne ? 0 : h(styleSettings.nameMarginTop ?? 2),
+                        marginTop: onlyOne ? 0 : h(styleSettings.nameMarginTop ?? 1),
                         marginBottom: onlyOne ? 0 : h(styleSettings.nameMarginBottom ?? 1),
                         direction: nameDir,
                         textAlign: resolvedNameAlign,

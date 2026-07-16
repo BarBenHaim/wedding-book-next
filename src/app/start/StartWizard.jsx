@@ -127,7 +127,7 @@ function BookPreview({ data, presetValues, mode = 'cover' }) {
                             fontSize: nameSize,
                             fontWeight: v.nameFontWeight ?? v.fontWeight,
                             color: v.nameColor ?? v.fontColor ?? '#3a2d1a',
-                            marginTop: pct(v.nameMarginTop ?? 2),
+                            marginTop: pct(v.nameMarginTop ?? 1),
                             marginBottom: pct(v.nameMarginBottom ?? 1),
                             maxWidth: '60%',
                         }}
