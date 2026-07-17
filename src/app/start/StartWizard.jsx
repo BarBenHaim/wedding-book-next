@@ -195,9 +195,6 @@ function BookPreview({ data, presetValues, mode = 'cover' }) {
             <div className='bpBook' key={v.__id || 'default'}>
                 <div className='bpCover' style={{ background: v.backgroundColor || '#f7f1e3' }}>
                     {v.texture ? <img src={v.texture} alt='' className='bpTex' /> : null}
-                    {/* Wizard-uploaded celebrant photo — the PNG already
-                        carries its alpha fade, so it just melts into the
-                        cover exactly like the real BookCoverTemplate will. */}
                     {data.coverPhoto ? <img src={data.coverPhoto} alt='' className='bpPhoto' /> : null}
                     <div className='bpFrame' />
                     <div className='bpInner'>
@@ -571,8 +568,6 @@ export default function StartWizard() {
                     ...payload,
                     design,
                     coverPhoto: data.coverPhoto || undefined,
-                    // Live preset link — the newborn book follows this studio
-                    // preset's current values until the owner customizes.
                     presetId: presetId || undefined,
                 }),
             })
@@ -604,12 +599,11 @@ export default function StartWizard() {
     }
 
     // ── Optional cover photo (step 1) ─────────────────────────────
-    // The file is baked client-side into an alpha-faded PNG (see
-    // lib/coverPhotoBake.js) so the live preview AND the real cover
-    // render the exact same blended asset.
+    // Baked client-side into an alpha-faded PNG (lib/coverPhotoBake.js)
+    // so the live preview AND the real cover render the same blend.
     async function onCoverFile(e) {
         const f = e.target.files?.[0]
-        e.target.value = '' // let the user re-pick the same file
+        e.target.value = ''
         if (!f) return
         if (!/^image\//.test(f.type || '')) { setErr('אפשר להעלות רק קובץ תמונה'); return }
         setCoverBusy(true)
@@ -846,28 +840,6 @@ export default function StartWizard() {
                             </label>
 
                             <button className='cta' type='submit'>ממשיכים לעיצוב ←</button>
-
-                            <style jsx>{`
-                                .coverUp {
-                                    display: flex; align-items: center; gap: 10px;
-                                    padding: 10px 12px; border: 1.5px dashed rgba(170, 136, 64, 0.45);
-                                    border-radius: 12px; background: rgba(255, 253, 246, 0.65);
-                                }
-                                .coverThumb {
-                                    width: 46px; height: 46px; border-radius: 50%; flex: 0 0 auto;
-                                    background-size: cover; background-position: center;
-                                    background-color: #efe6d2;
-                                    box-shadow: 0 2px 8px rgba(60, 44, 20, 0.25);
-                                }
-                                .coverTxt { flex: 1; font-size: 12.5px; color: #7a6647; text-align: right; }
-                                .coverBtn {
-                                    flex: 0 0 auto; font-size: 12.5px; font-weight: 700; color: #6d5220;
-                                    background: linear-gradient(180deg, #f4e7c8, #e8d5a8);
-                                    border: 1px solid rgba(170, 136, 64, 0.5); border-radius: 999px;
-                                    padding: 7px 14px; cursor: pointer;
-                                }
-                                .coverBtn:hover { filter: brightness(1.04); }
-                            `}</style>
                         </form>
                     )}
 
@@ -1489,6 +1461,25 @@ export default function StartWizard() {
                 .myLink:hover { color: var(--acc); }
                 .quietUp { margin: 2px 0 0; font-size: 12.5px; color: #9a8665; }
                 .quietUp a { color: var(--acc); font-weight: 700; }
+                .coverUp {
+                    display: flex; align-items: center; gap: 10px;
+                    padding: 10px 12px; border: 1.5px dashed rgba(170, 136, 64, 0.45);
+                    border-radius: 12px; background: rgba(255, 253, 246, 0.65);
+                }
+                .coverThumb {
+                    width: 46px; height: 46px; border-radius: 50%; flex: 0 0 auto;
+                    background-size: cover; background-position: center;
+                    background-color: #efe6d2;
+                    box-shadow: 0 2px 8px rgba(60, 44, 20, 0.25);
+                }
+                .coverTxt { flex: 1; font-size: 12.5px; color: #7a6647; text-align: right; }
+                .coverBtn {
+                    flex: 0 0 auto; font-size: 12.5px; font-weight: 700; color: #6d5220;
+                    background: linear-gradient(180deg, #f4e7c8, #e8d5a8);
+                    border: 1px solid rgba(170, 136, 64, 0.5); border-radius: 999px;
+                    padding: 7px 14px; cursor: pointer;
+                }
+                .coverBtn:hover { filter: brightness(1.04); }
             `}</style>
         </div>
     )
