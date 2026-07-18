@@ -8,6 +8,17 @@ const nextConfig = {
     eslint: {
         ignoreDuringBuilds: true,
     },
+    // /_next/image optimizer — the MOBILE APP routes guest photos through
+    // it (see wedding-tales-mobile src/lib/img.ts) so 4MB uploads arrive
+    // as ~30KB webp thumbs. Firebase Storage hosts the uploads; our own
+    // domain covers /api/book-photo proxy URLs passed absolutely.
+    images: {
+        qualities: [72, 75],
+        remotePatterns: [
+            { protocol: 'https', hostname: 'firebasestorage.googleapis.com' },
+            { protocol: 'https', hostname: 'app.weddingtales.co.il' },
+        ],
+    },
     // Bundle the Hebrew TTF into any serverless function that reads it
     // (src/lib/ogImage.js → /api/og/[weddingId]). On Vercel, files in
     // /public are served via the CDN but NOT auto-included in the
