@@ -1137,13 +1137,22 @@ function PresetStrip({ presets, activeStyle, onApply }) {
     // a preset preview, not just a colored square.
     const TILE = 130
     return (
-        <div
-            className='relative z-10 pb-5 pt-2'
-            style={{
-                background:
-                    'linear-gradient(180deg, transparent 0%, rgba(245,234,210,0.55) 30%, rgba(245,234,210,0.85) 100%)',
-            }}
-        >
+        <div className='relative z-10 px-3 pb-4 pt-1'>
+            {/* Glass-cream capsule — the strip lives in its OWN fitted
+                container that blends with the book artwork, instead of a
+                bare gradient floating on the page. */}
+            <div
+                style={{
+                    background: 'rgba(253,248,238,0.9)',
+                    border: '1px solid rgba(201,164,78,0.38)',
+                    borderRadius: 22,
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                    boxShadow: '0 10px 34px -12px rgba(45,30,16,0.35), inset 0 1px 0 rgba(255,255,255,0.7)',
+                    paddingTop: 10,
+                    paddingBottom: 4,
+                }}
+            >
             {/* Section caption — quiet, centered, makes the row's
                 purpose obvious without screaming at the reader. */}
             <p
@@ -1251,6 +1260,7 @@ function PresetStrip({ presets, activeStyle, onApply }) {
                         </button>
                     )
                 })}
+                </div>
             </div>
         </div>
     )
