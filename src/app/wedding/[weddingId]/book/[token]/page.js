@@ -931,8 +931,10 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                             // enough to trigger a page turn — the
                             // default 30px requires a more deliberate
                             // drag.
-                            flippingTime={pageSize.isPortrait ? 900 : 1100}
-                            swipeDistance={pageSize.isPortrait ? 18 : 30}
+                            // Snappier, more "responsive-book" feel (owner feedback):
+                            // shorter turn + an even lighter thumb gesture on phones.
+                            flippingTime={pageSize.isPortrait ? 700 : 900}
+                            swipeDistance={pageSize.isPortrait ? 14 : 26}
                             maxShadowOpacity={0.4}
                             useMouseEvents={true}
                             onFlip={e => { pageIndexRef.current = e.data; setPage(e.data) }}

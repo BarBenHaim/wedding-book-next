@@ -112,13 +112,12 @@ export default function BookCoverTemplate({ wedding, styleSettings, scaledWidth,
     // NOTHING on the cover yet (no image, no title, no subtitle). Once
     // they add any of the three, the fallback disappears entirely so
     // the user's own content owns the cover.
-    const hasUserContent =
-        styleSettings.coverImage ||
-        styleSettings.coverTitle ||
-        styleSettings.coverSubtitle
-    const defaults = hasUserContent ? null : buildDefaultCoverContent(wedding)
-    const effectiveTitle = styleSettings.coverTitle || defaults?.coverTitle || ''
-    const effectiveSubtitle = styleSettings.coverSubtitle || defaults?.coverSubtitle || ''
+    // NO default text on the front cover — ever (owner decision, 2026-07).
+    // The event-type default cover art carries the cover by itself; text
+    // renders ONLY if the owner explicitly typed a title/subtitle in the
+    // cover designer. buildDefaultCoverContent stays for reference/reuse.
+    const effectiveTitle = styleSettings.coverTitle || ''
+    const effectiveSubtitle = styleSettings.coverSubtitle || ''
 
     const coverFontSize = ((styleSettings.coverFontSizePercent || 3) / 100) * scaledWidth
     const imgX = styleSettings.coverImageX || 50

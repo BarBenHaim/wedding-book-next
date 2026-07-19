@@ -1060,7 +1060,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                             <div className='text-center'>
                                 <h1
                                     className='font-bold leading-[1.15]'
-                                    style={{ color: md.titleColor, fontSize: '36px', letterSpacing: '-0.005em' }}
+                                    style={{ color: md.titleColor, fontSize: 'clamp(24px, 4.4vh, 36px)', letterSpacing: '-0.005em' }}
                                 >
                                     {t('momentEyebrow')}
                                 </h1>
@@ -1092,7 +1092,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                         </div>
                                         <h1
                                             className='font-bold leading-[1.15]'
-                                            style={{ color: md.titleColor, fontSize: '36px', letterSpacing: '-0.005em' }}
+                                            style={{ color: md.titleColor, fontSize: 'clamp(24px, 4.4vh, 36px)', letterSpacing: '-0.005em' }}
                                         >
                                             {namesPart}
                                         </h1>
@@ -1854,7 +1854,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                               // 3-stop gradient gives the
                                               // letters a subtle highlight
                                               // band, like polished brass.
-                                              fontSize: '36px',
+                                              fontSize: 'clamp(24px, 4.4vh, 36px)',
                                               letterSpacing: '-0.02em',
                                               backgroundImage:
                                                   'linear-gradient(180deg, #fde9b3 0%, #d4af37 50%, #a8843a 100%)',
