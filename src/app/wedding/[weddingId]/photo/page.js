@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { doc, getDoc } from 'firebase/firestore'
-import { db } from '../../../../lib/firebaseClient'
+import { onAuthStateChanged } from 'firebase/auth'
+import { db, auth } from '../../../../lib/firebaseClient'
+import { isSuperAdmin } from '@/lib/superAdmin'
 import { buildGuestPageTheme } from '@/lib/guestPageTheme'
 import Cropper from 'react-easy-crop'
 import imageCompression from 'browser-image-compression'
@@ -73,6 +75,18 @@ export default function TextPage() {
     const [recipients, setRecipients] = useState({ bride: '', groom: '', celebrant: '' })
     // Per-event max blessing length (admin-settable, 210 default, up to 1200).
     const [maxChars, setMaxChars] = useState(210)
+    // Super-admin privilege: when the signed-in browser user is a super
+    // admin, the composer allows up to 2600 characters on ANY book.
+    // Guests keep the per-event limit — this only raises the ceiling
+    // for the admin's own session (state kept separate so the wedding-
+    // doc fetch below can never race/overwrite it).
+    const [adminWriter, setAdminWriter] = useState(false)
+    useEffect(() => {
+        const unsub = onAuthStateChanged(auth, u => {
+            setAdminWriter(!!(u?.email && isSuperAdmin(u.email)))
+        })
+        return unsub
+    }, [])
     // Per-event admin overrides for every piece of guest-facing copy
     // on the photo page. Empty strings → fall back to the i18n default
     // in PhotoApp. The block splits cleanly into two groups:
@@ -182,7 +196,7 @@ export default function TextPage() {
 
     return (
         <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
-            <PhotoApp eventType={eventType} designVariant={designVariant} recipients={recipients} formCopy={formCopy} guestDesign={guestDesign} maxChars={maxChars} locale={locale} />
+            <PhotoApp eventType={eventType} designVariant={designVariant} recipients={recipients} formCopy={formCopy} guestDesign={guestDesign} maxChars={adminWriter ? Math.max(maxChars, 2600) : maxChars} locale={locale} />
         </NextIntlClientProvider>
     )
 }

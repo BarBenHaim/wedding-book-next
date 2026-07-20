@@ -22,7 +22,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const NAME_MAX = 120
-const TEXT_MAX = 2000 // generous server cap; the client enforces the per-event blessingMaxChars
+const TEXT_MAX = 2600 // generous server cap (matches the super-admin composer ceiling); the client enforces the per-event blessingMaxChars
 const IMAGE_MAX_BYTES = 8 * 1024 * 1024
 
 function bad(status, error) {
