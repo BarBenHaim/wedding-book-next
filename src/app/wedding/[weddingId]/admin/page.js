@@ -3,9 +3,12 @@
 import { useEffect, useState, useRef } from 'react'
 import { getEntries } from '../../../../lib/classifyMedia'
 import { useParams } from 'next/navigation'
-import { doc, updateDoc, deleteDoc, writeBatch, collection, addDoc, getDocs, query, orderBy, limit } from 'firebase/firestore'
+import { doc, updateDoc, deleteDoc, writeBatch, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage } from '../../../../lib/firebaseClient'
+import { db, storage, auth } from '../../../../lib/firebaseClient'
+import { onAuthStateChanged } from 'firebase/auth'
+import { isSuperAdmin } from '@/lib/superAdmin'
+import imageCompression from 'browser-image-compression'
 import { getBlessingText, normalizeBlessing, formatBlessingSmart } from '../../../../lib/normalizeText'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
@@ -289,6 +292,57 @@ export default function AdminDashboard() {
         await persistOrder(sorted)
     }
 
+    // ── Super-admin: bulk PHOTO-ALBUM upload ─────────────────────────
+    // Turns this event into a designed photo book with zero blessings:
+    // every selected photo becomes a photo-only entry (empty name, no
+    // text) — BookPageTemplate renders those as clean, centered full-
+    // photo pages, and the whole existing book/viewer/print pipeline
+    // just works. Ordering follows the selection order.
+    const albumInputRef = useRef(null)
+    const [albumUpload, setAlbumUpload] = useState(null) // {done,total}|null
+    const [adminUser, setAdminUser] = useState(false)
+    useEffect(() => {
+        const unsub = onAuthStateChanged(auth, u => setAdminUser(!!(u?.email && isSuperAdmin(u.email))))
+        return unsub
+    }, [])
+
+    async function handleAlbumFiles(e) {
+        const files = [...(e.target.files || [])]
+        e.target.value = ''
+        if (!files.length) return
+        const baseOrder = entries.reduce((m, x) => Math.max(m, Number(x.orderIndex) || 0), 0) + 1
+        setAlbumUpload({ done: 0, total: files.length })
+        const added = []
+        for (let i = 0; i < files.length; i++) {
+            try {
+                const compressed = await imageCompression(files[i], {
+                    maxWidthOrHeight: 1600,
+                    maxSizeMB: 0.7,
+                    useWebWorker: true,
+                })
+                const filename = `album-${Date.now()}-${i}.jpg`
+                const photoRef = storageRef(storage, `weddings/${weddingId}/${filename}`)
+                await uploadBytes(photoRef, compressed)
+                const imageUrl = await getDownloadURL(photoRef)
+                const docData = {
+                    name: '',
+                    text: null,
+                    imageUrl,
+                    timestamp: serverTimestamp(),
+                    orderIndex: baseOrder + i,
+                }
+                const ref = await addDoc(collection(db, 'weddings', weddingId, 'entries'), docData)
+                added.push({ id: ref.id, ...docData, timestamp: null })
+            } catch (err) {
+                console.error('[album] upload failed for file', i, err)
+            }
+            setAlbumUpload({ done: i + 1, total: files.length })
+        }
+        if (added.length) setEntries(prev => [...prev, ...added])
+        setAlbumUpload(null)
+        if (added.length < files.length) alert(`הועלו ${added.length} מתוך ${files.length} תמונות (חלק נכשלו — נסו שוב)`)
+    }
+
     function triggerImageReplace(entryId) {
         replaceTargetId.current = entryId
         fileInputRef.current?.click()
@@ -337,6 +391,30 @@ export default function AdminDashboard() {
                     className='hidden'
                     onChange={handleImageFileChange}
                 />
+
+                {/* Super-admin: bulk album upload (photo book, no blessings) */}
+                <input
+                    ref={albumInputRef}
+                    type='file'
+                    accept='image/*'
+                    multiple
+                    className='hidden'
+                    onChange={handleAlbumFiles}
+                />
+                {adminUser && (
+                    <div className='mb-5 flex justify-center'>
+                        <button
+                            onClick={() => albumInputRef.current?.click()}
+                            disabled={!!albumUpload}
+                            className='px-6 py-3 rounded-full font-bold text-[#241a0d] shadow-lg transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-70'
+                            style={{ background: 'linear-gradient(180deg,#eed9a4,#c9a44e 55%,#a8843a)' }}
+                        >
+                            {albumUpload
+                                ? `מעלה תמונות… ${albumUpload.done}/${albumUpload.total}`
+                                : '📸 העלאת אלבום תמונות — ספר ללא ברכות (סופר־אדמין)'}
+                        </button>
+                    </div>
+                )}
 
                 {/* Header */}
                 <div className='max-w-4xl mx-auto mb-6 md:mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6 pb-5 border-b border-[#AA8840]/15'>
