@@ -288,6 +288,11 @@ export async function runAutomations() {
     const out = []
     for (const d of snap.docs) {
         const a = { id: d.id, ...d.data() }
+        // Journey pruned (owner decision 2026-07): the ONLY automatic email
+        // is the welcome-links message right after setup. Legacy automations
+        // that may still be seeded in Firestore are skipped here — a code-
+        // level kill switch that holds regardless of DB state.
+        if (a.name !== 'ברוכים הבאים — מיד אחרי ההקמה') continue
         const t = await adminDb.collection(COL.templates).doc(a.templateId).get()
         if (!t.exists) continue
         const template = t.data()
@@ -339,6 +344,23 @@ export const TEMPLATE_VARIABLES = [
 
 // Default journey templates — seeded on demand from the admin UI.
 export const DEFAULT_TEMPLATES = [
+    {
+        name: 'ברוכים הבאים — הקישורים שלכם',
+        subject: 'הקישורים לספר הברכות שלכם 💛',
+        body: `שלום {{coupleName}},
+
+איזה כיף שאתם איתנו! הנה שני הקישורים שלכם:
+
+<b>לינק להעלאת ברכה לספר</b> (לשתף עם האורחים):
+{{guestLink}}
+
+<b>לינק לצפייה בספר הברכות</b> שמתעדכן בזמן אמת:
+{{bookLink}}
+
+כל שאלה — תרגישו בנוח פשוט להשיב למייל הזה.
+שיהיה המון מזל טוב!!! 💛
+צוות Wedding Tales`,
+    },
     {
         name: 'הבוקר שאחרי — הספר מלא (חינמיים → הדפסה)',
         subject: 'איזה ערב 🎉 ספר הברכות שלכם מחכה',
@@ -472,11 +494,11 @@ export async function waRecipients(template, segment) {
 // Active by default: they only fire for weddings matching the trigger on
 // a given day, so turning them on never back-blasts existing customers.
 export const DEFAULT_AUTOMATIONS = [
-    { name: 'הקמה — יומיים אחרי הרכישה', templateName: 'הקמה — יום-יומיים אחרי הרכישה', trigger: { type: 'afterPurchase', offsetDays: 2 }, active: true },
-    { name: 'תזכורת שיתוף — 14 יום לפני', templateName: 'תזכורת שיתוף — שבועיים לפני', trigger: { type: 'beforeWedding', offsetDays: 14 }, active: true },
-    { name: 'תזכורת שיתוף — 3 ימים לפני', templateName: 'תזכורת שיתוף — שבועיים לפני', trigger: { type: 'beforeWedding', offsetDays: 3 }, active: true },
-    { name: 'תזכורת זנב — 3 ימים אחרי', templateName: 'תזכורת זנב — כמה ימים אחרי', trigger: { type: 'afterWedding', offsetDays: 3 }, active: true },
-    { name: 'הספר מוכן — 10 ימים אחרי', templateName: 'הספר מוכן', trigger: { type: 'afterWedding', offsetDays: 10 }, active: true },
+    // The whole journey was pruned (owner decision 2026-07): customers get
+    // exactly ONE automatic email — the welcome message with their two
+    // links — on the day their event is created. Everything else is
+    // manual-send only from the admin emails screen.
+    { name: 'ברוכים הבאים — מיד אחרי ההקמה', templateName: 'ברוכים הבאים — הקישורים שלכם', trigger: { type: 'afterPurchase', offsetDays: 0 }, active: true },
 ]
 
 // ─── Test send ───────────────────────────────────────────────────────
