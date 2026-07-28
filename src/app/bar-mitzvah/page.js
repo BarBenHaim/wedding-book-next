@@ -5,6 +5,10 @@
 // יפה בוואטסאפ (תמונה + כותרת + תיאור) היא קריטית לקליק.
 //
 // כל מה שמשתנה עסקית מרוכז ב-CONFIG למטה — מחיר, קישורים, דמו.
+// חלק המחירים והתשלום מרונדר בקומפוננטת client (BarMitzvahPricingClient)
+// כי הוא צריך state לבחירת חבילה + תוספות + חישוב total חי.
+
+import BarMitzvahPricingClient from './BarMitzvahPricingClient'
 
 const CONFIG = {
     // מחיר החבילה כפי שמופיע בחנות (מוצר 5480). לעדכון — שנו רק כאן.
@@ -209,36 +213,22 @@ export default function BarMitzvahPage() {
                 </section>
             )}
 
-            {/* ═══ Package + Price ═══ */}
-            <section className='mx-auto max-w-5xl px-5 py-14'>
-                <div className='grid items-center gap-8 rounded-3xl border border-[#AA8840]/25 bg-white p-7 shadow-xl shadow-blue-900/5 sm:grid-cols-2 sm:p-10'>
-                    <div>
-                        <h2 className='text-2xl font-[800] text-[#1a2540] sm:text-3xl'>מה מקבלים בחבילה?</h2>
-                        <ul className='mt-5 space-y-3'>
-                            {PACKAGE_ITEMS.map((item) => (
-                                <li key={item} className='flex items-start gap-2 text-[#49577a]'>
-                                    <span className='mt-0.5 font-bold text-[#AA8840]'>✓</span>
-                                    <span>{item}</span>
-                                </li>
-                            ))}
-                        </ul>
-                        <div className='mt-7 flex items-end gap-3'>
-                            <span className='text-4xl font-[800] text-[#1a2540]'>₪{CONFIG.price}</span>
-                            <span className='pb-1.5 text-sm text-[#49577a]'>{CONFIG.priceNote}</span>
-                        </div>
-                        <div className='mt-6 flex flex-wrap gap-3'>
-                            <a
-                                href={CONFIG.checkout}
-                                className='inline-block rounded-2xl bg-gradient-to-b from-[#d3b46a] to-[#b8893d] px-7 py-3.5 font-bold text-white shadow-lg shadow-yellow-700/20 transition hover:scale-[1.02]'>
-                                לשריון תאריך והזמנה ←
-                            </a>
-                            <WhatsAppButton secondary>יש לי שאלה</WhatsAppButton>
-                        </div>
-                        <p className='mt-4 text-xs text-[#49577a]/70'>
-                            כדי להבטיח את איכות ההדפסה והשירות, אנחנו מקבלים מספר מוגבל של אירועים בכל חודש.
-                        </p>
-                    </div>
-                    <img src={CONFIG.img.cover} alt='כריכת ספר ברכות' className='w-full rounded-3xl object-cover shadow-lg' />
+            {/* ═══ Package + Price (interactive) ═══ */}
+            <BarMitzvahPricingClient whatsappUrl={CONFIG.whatsapp} />
+
+            {/* ═══ What's included — a quiet reminder under the pricing ═══ */}
+            <section className='mx-auto max-w-3xl px-5 pb-6 -mt-4'>
+                <div className='rounded-2xl border border-[#2b4a7a]/10 bg-white/70 p-5 text-center'>
+                    <p className='text-sm font-bold text-[#1a2540]'>בכל חבילה כלול:</p>
+                    <ul className='mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[13px] text-[#49577a]'>
+                        {PACKAGE_ITEMS.map((item, i) => (
+                            <li key={item} className='inline-flex items-center gap-1.5'>
+                                <span className='text-[#AA8840]'>✓</span>
+                                <span>{item}</span>
+                                {i < PACKAGE_ITEMS.length - 1 && <span className='text-[#2b4a7a]/25'>·</span>}
+                            </li>
+                        ))}
+                    </ul>
                 </div>
             </section>
 
