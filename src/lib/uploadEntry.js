@@ -51,7 +51,7 @@ export async function uploadQueuedEntry(entry) {
         const existing = await getDoc(docRef).catch(() => null)
         if (!existing || !existing.exists()) {
             await setDoc(docRef, {
-                name: entry.name || 'אורח אנונימי',
+                name: entry.name || '', // no anonymous fallback — empty stays empty
                 text: entry.text || null,
                 imageUrl: imageUrl || null,
                 timestamp: serverTimestamp(),

@@ -1137,7 +1137,7 @@ function PresetStrip({ presets, activeStyle, onApply }) {
     // a preset preview, not just a colored square.
     const TILE = 130
     return (
-        <div className='relative z-10 px-3 pb-4 pt-1'>
+        <div className='relative z-10 px-0 sm:px-3 pb-2 sm:pb-4 pt-1'>
             {/* Glass-cream capsule — the strip lives in its OWN fitted
                 container that blends with the book artwork, instead of a
                 bare gradient floating on the page. */}

@@ -234,7 +234,7 @@ function GalleryApp({ eventType, entries, loading }) {
                                         className='font-bold mb-1'
                                         style={{ color: palette.labelColor, fontSize: '15px' }}
                                     >
-                                        {e.name || 'אנונימי'}
+                                        {e.name || ''}
                                     </div>
                                     {/* Match the book: render the blessing exactly as
                                         typed when the admin set preserveLineBreaks on

@@ -56,7 +56,9 @@ export async function POST(req) {
     if (!snap.exists) return bad(404, 'not-found')
 
     const update = {}
-    if (typeof body.name === 'string') update.name = body.name.trim().slice(0, NAME_MAX) || 'אורח אנונימי'
+    // No anonymous fallback (owner decision): empty name stays empty —
+    // the book simply renders no name line.
+    if (typeof body.name === 'string') update.name = body.name.trim().slice(0, NAME_MAX)
     if (typeof body.text === 'string') update.text = body.text.slice(0, TEXT_MAX) || null
 
     // ── Photo ─────────────────────────────────────────────────────────

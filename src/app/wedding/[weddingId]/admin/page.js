@@ -686,7 +686,7 @@ export default function AdminDashboard() {
                                                                         {/* Name + date */}
                                                                         <div className='flex justify-between items-start gap-2 mb-1.5'>
                                                                             <h3 className='text-[15px] font-bold text-gray-900 truncate'>
-                                                                                {entry.name || 'אורח אנונימי'}
+                                                                                {entry.name || ''}
                                                                             </h3>
                                                                             {entry.timestamp?.seconds && (
                                                                                 <span className='text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5' title='מועד העלאת הברכה'>

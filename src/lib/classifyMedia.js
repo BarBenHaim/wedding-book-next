@@ -23,7 +23,7 @@ export async function saveEntry(weddingId, entry) {
         }
 
         await addDoc(collection(db, 'weddings', weddingId, 'entries'), {
-            name: entry.name || 'אורח אנונימי',
+            name: entry.name || '', // no anonymous fallback
             text: entry.text || null,
             imageUrl,
             timestamp: serverTimestamp(),
