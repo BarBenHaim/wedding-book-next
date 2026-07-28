@@ -471,6 +471,9 @@ function EventTypeEditor({ wedding, onSave }) {
         amountPaid: w.amountPaid ?? '',
         currency: w.currency || 'ILS',
         blessingMaxChars: w.blessingMaxChars || 210,
+        // Customer contact (phone doubles as the /portal login credential).
+        ownerPhone: w.ownerPhone || '',
+        ownerEmail: w.ownerEmail || '',
     })
 
     const [draft, setDraft] = useState(() => buildDraft(wedding))
@@ -530,6 +533,8 @@ function EventTypeEditor({ wedding, onSave }) {
         patch.customMomentSecurityNote = draft.customMomentSecurityNote
         // Super-admin private notes.
         patch.adminNotes = draft.adminNotes
+        patch.ownerPhone = draft.ownerPhone
+        patch.ownerEmail = draft.ownerEmail
         // Amount paid — '' clears it; otherwise the API coerces to a number.
         patch.amountPaid = draft.amountPaid === '' ? null : draft.amountPaid
         patch.currency = draft.currency
@@ -583,6 +588,31 @@ function EventTypeEditor({ wedding, onSave }) {
                     <option value={1200}>מקסימלי — 1200 תווים</option>
                 </select>
                 <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>ככל שהמגבלה גבוהה יותר, הטקסט בספר יוקטן אוטומטית כדי להישאר קריא לצד התמונה.</p>
+            </div>
+
+            {/* Customer contact — the mobile number is ALSO the customer's
+                /portal login credential, so keeping it correct matters. */}
+            <div className='mb-3'>
+                <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>טלפון נייד של הלקוח (משמש לכניסה ב-/portal)</label>
+                <input
+                    type='tel'
+                    dir='ltr'
+                    value={draft.ownerPhone}
+                    onChange={e => set('ownerPhone', e.target.value)}
+                    placeholder='0521234567'
+                    className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                />
+            </div>
+            <div className='mb-3'>
+                <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>אימייל הלקוח</label>
+                <input
+                    type='email'
+                    dir='ltr'
+                    value={draft.ownerEmail}
+                    onChange={e => set('ownerEmail', e.target.value)}
+                    placeholder='name@example.com'
+                    className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                />
             </div>
 
             {/* Amount paid — auto-captured from the order, editable here so

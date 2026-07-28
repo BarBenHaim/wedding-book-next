@@ -166,6 +166,9 @@ export async function PATCH(req) {
             // without replacing the whole design.
             'bookDesign',
             'brideName', 'brideNameHe', 'groomName', 'groomNameHe',
+            // Customer contact — the super-admin can set/fix the owner's
+            // mobile (also the /portal phone-login credential) and email.
+            'ownerPhone', 'ownerEmail',
         ]
         const clean = {}
 
@@ -175,6 +178,12 @@ export async function PATCH(req) {
 
             if (key === 'eventType') {
                 clean[key] = normalizeEventType(v)
+                continue
+            }
+
+            if (key === 'ownerEmail') {
+                const t = typeof v === 'string' ? v.trim().toLowerCase() : ''
+                clean[key] = t || null
                 continue
             }
 
