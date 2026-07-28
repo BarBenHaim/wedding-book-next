@@ -336,12 +336,19 @@ function StudioContent() {
     // `blessingTemplate` styles. Lets the admin SEE the blessing-page
     // layout they picked without leaving the studio.
     const [previewBlessingOnly, setPreviewBlessingOnly] = useState(false)
+    const [previewAlbum, setPreviewAlbum] = useState(false)
 
     // Mock entry passed to the renderer. `text` swaps with the length
     // toggle; everything else stays fixed. When the draft's composition
     // layer says two-per-page, the preview becomes a real duo page so
     // the admin sees exactly what the book will render.
     const mockEntry = useMemo(() => {
+        // Album preview: a PHOTO-ONLY page (no name, no text) — exactly what
+        // the bulk photo-album upload produces. Lets the admin design a pure
+        // photo book: photo size (uncropped via photoFit) + background.
+        if (previewAlbum) {
+            return { id: 'studio-mock-album', name: '', text: null, imageUrl: previewPhoto || MOCK_PHOTO }
+        }
         const base = {
             id: 'studio-mock',
             name: MOCK_NAME,
@@ -363,7 +370,7 @@ function StudioContent() {
             }
         }
         return base
-    }, [blessingLength, previewPhoto, previewBlessingOnly, draft?.values?.entriesPerPage])
+    }, [blessingLength, previewPhoto, previewBlessingOnly, previewAlbum, draft?.values?.entriesPerPage])
 
     const showToast = (type, message) => {
         setToast({ type, message })
@@ -641,6 +648,8 @@ function StudioContent() {
                             onClearPhoto={() => setPreviewPhoto(null)}
                             blessingOnly={previewBlessingOnly}
                             onToggleBlessingOnly={() => setPreviewBlessingOnly(v => !v)}
+                            albumOnly={previewAlbum}
+                            onToggleAlbum={() => setPreviewAlbum(v => !v)}
                         />
                         {/* Hidden file input owned by the parent so its
                             value survives PreviewPanel re-mounts (e.g.
@@ -1109,6 +1118,7 @@ function PreviewPanel({
     preset, styleSettings, entry, blessingLength, onBlessingLengthChange, previewSize,
     hasCustomPhoto, onPickPhoto, onClearPhoto,
     blessingOnly, onToggleBlessingOnly,
+    albumOnly, onToggleAlbum,
 }) {
     return (
         <main
@@ -1182,6 +1192,24 @@ function PreviewPanel({
                     }}
                 >
                     <Layers size={11} /> עמוד ברכה
+                </button>
+
+                {/* Album preview toggle — a photo-only page (no name/text),
+                    for designing pure photo books. */}
+                <button
+                    type='button'
+                    onClick={onToggleAlbum}
+                    title='תצוגת עמוד אלבום — תמונה בלבד, ללא שם וללא ברכה'
+                    className='inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-[11.5px] font-bold transition-all shrink-0'
+                    style={{
+                        background: albumOnly
+                            ? 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)'
+                            : '#ffffff',
+                        border: `1px solid ${albumOnly ? '#b8893d' : '#ead9b3'}`,
+                        color: albumOnly ? '#ffffff' : '#7a6a52',
+                    }}
+                >
+                    <ImageIcon size={11} /> עמוד אלבום
                 </button>
 
                 {/* Length toggle — 30 / 100 / 210 chars. Sets the mock
@@ -1641,6 +1669,32 @@ function PropertiesPanel({
                                 })
                             }
                         />
+
+                        {/* Photo fit — album mode: the photo is NEVER
+                            cropped ('contain'); default keeps the uniform
+                            4:3 cover crop. */}
+                        <div>
+                            <div className='text-[11.5px] font-bold text-[#7a6a52] mb-1.5'>התאמת תמונה</div>
+                            <div className='flex rounded-lg overflow-hidden' style={{ border: '1px solid #ead9b3' }}>
+                                {[
+                                    { v: 'cover', label: 'מילוי (4:3)' },
+                                    { v: 'contain', label: 'ללא חיתוך — אלבום' },
+                                ].map((o, i) => (
+                                    <button
+                                        key={o.v}
+                                        type='button'
+                                        disabled={!editable}
+                                        onClick={() => onValuesChange({ photoFit: o.v })}
+                                        className={`flex-1 px-2 py-1.5 text-[11.5px] font-bold transition-all ${i > 0 ? 'border-r border-[#ead9b3]' : ''}`}
+                                        style={(v.photoFit ?? 'cover') === o.v
+                                            ? { background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', color: '#fff' }
+                                            : { background: '#fff', color: '#7a6a52' }}
+                                    >
+                                        {o.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
 
                         {/* "From where the image starts" — gap above
                             the photo. % of page height. */}

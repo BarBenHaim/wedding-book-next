@@ -80,6 +80,7 @@ describe('applyPresetClean', () => {
         expect(d.textLineHeight).toBe(1.5)
         expect(d.pagePadding).toBe(4)
         expect(d.imageStyle.width).toBe(80)
+        expect(d.photoFit).toBe('cover') // album mode flips to 'contain'
         expect(d.autoSplit).toBe(false)
         expect(d.splitThreshold).toBe(240)
     })

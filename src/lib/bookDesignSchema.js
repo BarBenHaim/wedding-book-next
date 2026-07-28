@@ -87,6 +87,9 @@ export const CANONICAL_STYLE_DEFAULTS = {
 
     // ── Photo block (4:3-locked slot) ────────────────────────────────
     imageStyle: { width: 80, borderRadius: '12px' },
+    // 'cover' (default) crops into the uniform 4:3 slot; 'contain' NEVER
+    // crops — the photo-album mode (books of photos, no blessings).
+    photoFit: 'cover',
     imageMarginTop: 2,
     imageMarginBottom: 2,
     photoFrame: null, // built-in frame id from PHOTO_FRAMES (null = none)

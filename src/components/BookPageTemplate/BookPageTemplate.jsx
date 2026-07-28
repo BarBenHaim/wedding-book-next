@@ -244,6 +244,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 return (
                     <FramedPhoto
                         src={entry.imageUrl}
+                        fit={styleSettings.photoFit ?? 'cover'}
                         slotW={slotW}
                         frameId={styleSettings.photoFrame}
                         frameUrl={styleSettings.photoFrameUrl}

@@ -58,6 +58,7 @@ export default function FramedPhoto({
     objectPosition = 'center',
     rotation = 0,
     photoRadius = '12px', // bare-photo fallback radius
+    fit = 'cover', // 'contain' = album mode, never crop (taller slot)
     style = {},
     placeholder = false, // picker previews: a gradient block instead of <img>
 }) {
@@ -114,8 +115,9 @@ export default function FramedPhoto({
         return (
             <EntryPhoto
                 src={src}
+                fit={fit}
                 maxWidth={slotW}
-                maxHeight={slotW * 0.75}
+                maxHeight={slotW * (fit === 'contain' ? 1.15 : 0.75)}
                 objectPosition={objectPosition}
                 rotation={rotation}
                 className='relative'

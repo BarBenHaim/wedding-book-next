@@ -40,6 +40,9 @@ export default function EntryPhoto({
     // admin "rotate photo" control (entry.photoRotation) for guests who
     // uploaded a sideways/upside-down photo. Defaults to 0.
     rotation = 0,
+    // 'cover' (default) fills+crops the slot; 'contain' letterboxes the
+    // full photo — no pixel ever cropped (photo-album mode).
+    fit = 'cover',
 }) {
     // The slot is ALWAYS maxWidth×maxHeight in layout (a wrapper reserves
     // it) so rotating the photo never shifts the text/name below it. The
@@ -83,7 +86,7 @@ export default function EntryPhoto({
                     left: '50%',
                     width: imgW,
                     height: imgH,
-                    objectFit: 'cover',
+                    objectFit: fit,
                     objectPosition,
                     transform: `translate(-50%, -50%) rotate(${rot}deg)`,
                     transformOrigin: 'center center',
