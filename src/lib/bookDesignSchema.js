@@ -90,6 +90,10 @@ export const CANONICAL_STYLE_DEFAULTS = {
     // 'cover' (default) crops into the uniform 4:3 slot; 'contain' NEVER
     // crops — the photo-album mode (books of photos, no blessings).
     photoFit: 'cover',
+    // 'uniform' (default) = one page per photo, as-is. 'smart' = the album
+    // composition engine: pages arranged by each photo's measured aspect
+    // (landscape full-width, portrait pairs side-by-side, nothing cropped).
+    photoLayout: 'uniform',
     imageMarginTop: 2,
     imageMarginBottom: 2,
     photoFrame: null, // built-in frame id from PHOTO_FRAMES (null = none)

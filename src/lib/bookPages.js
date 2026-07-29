@@ -42,6 +42,55 @@ export function expandBookPages(entries, opts = {}) {
     let padN = 0
     const divider = () => ({ id: `__divider_${padN++}`, _divider: true })
 
+    // ── Smart photo layout (albums) ──────────────────────────────────
+    // photoLayout 'smart': photo-only entries compose by their measured
+    // aspect (imgAspect, captured at upload). Landscape → a full-width
+    // page of its own; two consecutive portraits → ONE side-by-side pair
+    // page (nothing cropped — two verticals fill a square page naturally);
+    // a lone portrait → a tall centered page; square → classic centered.
+    // Entries WITH text/name flow through untouched. Pair order flips on
+    // every pair (deterministic rhythm) so spreads feel designed, not
+    // templated. Photos without a stored aspect keep today's behavior.
+    if (opts.photoLayout === 'smart') {
+        const out = []
+        const isPhotoOnly = e => Boolean(e?.imageUrl) && !(e?.text || '').trim() && !(e?.name || '').trim()
+        const aspectOf = e => (Number(e?.imgAspect) > 0 ? Number(e.imgAspect) : null)
+        const kindOf = e => {
+            const a = aspectOf(e)
+            if (!a) return 'unknown'
+            if (a < 0.9) return 'portrait'
+            if (a > 1.15) return 'landscape'
+            return 'square'
+        }
+        let flip = false
+        let i = 0
+        while (i < list.length) {
+            const e = list[i]
+            if (!isPhotoOnly(e)) { out.push({ ...e }); i++; continue }
+            const k = kindOf(e)
+            // No stored aspect (legacy photo) → true passthrough, exactly
+            // today's behavior — no composition guess.
+            if (k === 'unknown') { out.push({ ...e }); i++; continue }
+            if (k === 'portrait') {
+                const next = list[i + 1]
+                if (next && isPhotoOnly(next) && kindOf(next) === 'portrait') {
+                    const pair = (flip ? [next, e] : [e, next]).map(x => ({ ...x }))
+                    flip = !flip
+                    out.push({ id: `__pair_${e.id || i}`, _photoPair: pair })
+                    i += 2
+                    continue
+                }
+                out.push({ ...e, _photo: 'tall' })
+                i++
+                continue
+            }
+            out.push({ ...e, _photo: k === 'landscape' ? 'wide' : 'square' })
+            i++
+        }
+        if (padToSpread && out.length % 2 === 1) out.push(divider())
+        return out
+    }
+
     // ── Duo composition — two blessings per page ─────────────────────
     // Entries pair up in order; an odd tail renders as a duo page with
     // a single (centered) block. Each duo page is ONE physical page, so

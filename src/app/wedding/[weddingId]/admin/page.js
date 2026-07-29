@@ -320,6 +320,15 @@ export default function AdminDashboard() {
                     maxSizeMB: 0.7,
                     useWebWorker: true,
                 })
+                // Measure the photo once, at upload — the smart album
+                // layout composes pages by this stored aspect without
+                // ever having to load the image again.
+                let imgAspect = null
+                try {
+                    const bmp = await createImageBitmap(compressed)
+                    if (bmp.width > 0 && bmp.height > 0) imgAspect = Math.round((bmp.width / bmp.height) * 1000) / 1000
+                    bmp.close?.()
+                } catch { /* aspect stays null → uniform behavior */ }
                 const filename = `album-${Date.now()}-${i}.jpg`
                 const photoRef = storageRef(storage, `weddings/${weddingId}/${filename}`)
                 await uploadBytes(photoRef, compressed)
@@ -328,6 +337,7 @@ export default function AdminDashboard() {
                     name: '',
                     text: null,
                     imageUrl,
+                    imgAspect,
                     timestamp: serverTimestamp(),
                     orderIndex: baseOrder + i,
                 }

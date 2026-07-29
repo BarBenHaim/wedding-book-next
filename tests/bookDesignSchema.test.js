@@ -81,6 +81,7 @@ describe('applyPresetClean', () => {
         expect(d.pagePadding).toBe(4)
         expect(d.imageStyle.width).toBe(80)
         expect(d.photoFit).toBe('cover') // album mode flips to 'contain'
+        expect(d.photoLayout).toBe('uniform') // 'smart' = aspect-aware album pages
         expect(d.autoSplit).toBe(false)
         expect(d.splitThreshold).toBe(240)
     })

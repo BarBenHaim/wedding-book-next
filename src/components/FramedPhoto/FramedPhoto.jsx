@@ -52,6 +52,7 @@ function Corner({ size, stroke, color, rotate, pos }) {
 export default function FramedPhoto({
     src,
     slotW, // full footprint width in px (imageStyle.width resolved)
+    slotH = null, // explicit slot height (smart album: slotW / imgAspect)
     frameId = null,
     frameUrl = null,
     frameInset = 6,
@@ -117,7 +118,7 @@ export default function FramedPhoto({
                 src={src}
                 fit={fit}
                 maxWidth={slotW}
-                maxHeight={slotW * (fit === 'contain' ? 1.15 : 0.75)}
+                maxHeight={slotH ?? slotW * (fit === 'contain' ? 1.15 : 0.75)}
                 objectPosition={objectPosition}
                 rotation={rotation}
                 className='relative'

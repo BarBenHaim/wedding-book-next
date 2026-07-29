@@ -132,7 +132,7 @@ function PicabookExportContent() {
                 // Default to enough pages to hold every blessing (rounded up to
                 // the even 24 minimum). Account for smart auto-split.
                 const _bd = wSnap.data()?.bookDesign || wSnap.data()?.book?.designSettings || {}
-                const _needed = expandBookPages(list, { autoSplit: _bd.autoSplit, splitThreshold: _bd.splitThreshold, entriesPerPage: _bd.entriesPerPage }).length
+                const _needed = expandBookPages(list, { autoSplit: _bd.autoSplit, splitThreshold: _bd.splitThreshold, entriesPerPage: _bd.entriesPerPage, photoLayout: _bd.photoLayout }).length
                 const _even = _needed % 2 === 0 ? _needed : _needed + 1
                 setPageCount(Math.max(MIN_PAGES, Math.min(MAX_PAGES, _even)))
                 setLoadStatus('ready')
@@ -157,7 +157,7 @@ function PicabookExportContent() {
         return { ...defaultStyle, ...c, locale: wedding?.locale || 'he' }
     })()
 
-    const bookPages = expandBookPages(entries, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold, entriesPerPage: styleSettings.entriesPerPage })
+    const bookPages = expandBookPages(entries, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold, entriesPerPage: styleSettings.entriesPerPage, photoLayout: styleSettings.photoLayout })
     const slotsNeeded = bookPages.length
     const willPad = slotsNeeded < pageCount
     const willTrim = slotsNeeded > pageCount

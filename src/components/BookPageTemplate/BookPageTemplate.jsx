@@ -158,6 +158,55 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
 
     const { w, h } = pageScale(scaledWidth, scaledHeight)
 
+    // ── Smart-album pair page: two PORTRAIT photos side by side ──────
+    // Each column sizes to its own aspect (contain — zero crop) inside
+    // the page surface. Produced by bookPages photoLayout 'smart'.
+    if (entry?._photoPair) {
+        const pad = w(styleSettings.pagePadding ?? 4)
+        const gap = w(3)
+        const colW = (scaledWidth - pad * 2 - gap) / 2
+        const maxColH = scaledHeight - pad * 2
+        return (
+            <div
+                className='relative flex items-center box-border overflow-hidden'
+                style={{
+                    width: '100%',
+                    height: '100%',
+                    // inline (not the utility class) — the spacing-contract
+                    // guard reserves that class for centerBlock alone.
+                    justifyContent: 'center',
+                    backgroundColor: styleSettings.backgroundColor,
+                    backgroundImage: surfaceUrl ? `url(${surfaceUrl})` : 'none',
+                    backgroundRepeat: 'repeat',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    padding: pad,
+                    gap,
+                }}
+            >
+                {entry._photoPair.map(p => {
+                    const a = Number(p?.imgAspect) > 0 ? Number(p.imgAspect) : 0.75
+                    let cw = colW
+                    let ch = cw / a
+                    if (ch > maxColH) { ch = maxColH; cw = ch * a }
+                    return (
+                        <FramedPhoto
+                            key={p.id}
+                            src={p.imageUrl}
+                            fit='contain'
+                            slotW={cw}
+                            slotH={ch}
+                            objectPosition={p.photoPosition || 'center'}
+                            rotation={p.photoRotation || 0}
+                            photoRadius={styleSettings.imageStyle?.borderRadius ?? '12px'}
+                            style={{ zIndex: 5, position: 'relative' }}
+                        />
+                    )
+                })}
+            </div>
+        )
+    }
+
     return (
         <div
             className={`relative flex flex-col items-center text-center box-border overflow-hidden ${
@@ -240,12 +289,24 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 // photo without changing its footprint on the page.
                 const isSplitPhoto = entry?._split === 'photo'
                 const baseW = styleSettings.imageStyle?.width ?? 80
-                const slotW = w(isSplitPhoto ? Math.max(90, baseW) : baseW)
+                // Smart-album sizing: with a measured aspect + contain, the
+                // slot follows the photo EXACTLY (no crop, no letterbox).
+                // Wide pages start bigger; too-tall slots shrink to fit.
+                const photoFit = styleSettings.photoFit ?? 'cover'
+                const aspect = Number(entry?.imgAspect) > 0 ? Number(entry.imgAspect) : null
+                let slotW = w(isSplitPhoto || entry?._photo === 'wide' ? Math.max(90, baseW) : baseW)
+                let slotH = null
+                if (photoFit === 'contain' && aspect) {
+                    const maxH = scaledHeight * (entry?._photo === 'tall' ? 0.86 : 0.8)
+                    slotH = slotW / aspect
+                    if (slotH > maxH) { slotH = maxH; slotW = slotH * aspect }
+                }
                 return (
                     <FramedPhoto
                         src={entry.imageUrl}
-                        fit={styleSettings.photoFit ?? 'cover'}
+                        fit={photoFit}
                         slotW={slotW}
+                        slotH={slotH}
                         frameId={styleSettings.photoFrame}
                         frameUrl={styleSettings.photoFrameUrl}
                         frameInset={styleSettings.photoFrameInset}

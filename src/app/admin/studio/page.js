@@ -1696,6 +1696,32 @@ function PropertiesPanel({
                             </div>
                         </div>
 
+                        {/* Album page composition — smart arranges pages
+                            by each photo's measured aspect. */}
+                        <div>
+                            <div className='text-[11.5px] font-bold text-[#7a6a52] mb-1.5'>פריסת עמודים לאלבום</div>
+                            <div className='flex rounded-lg overflow-hidden' style={{ border: '1px solid #ead9b3' }}>
+                                {[
+                                    { v: 'uniform', label: 'אחידה' },
+                                    { v: 'smart', label: 'חכמה — לפי התמונות' },
+                                ].map((o, i) => (
+                                    <button
+                                        key={o.v}
+                                        type='button'
+                                        disabled={!editable}
+                                        onClick={() => onValuesChange({ photoLayout: o.v })}
+                                        className={`flex-1 px-2 py-1.5 text-[11.5px] font-bold transition-all ${i > 0 ? 'border-r border-[#ead9b3]' : ''}`}
+                                        style={(v.photoLayout ?? 'uniform') === o.v
+                                            ? { background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', color: '#fff' }
+                                            : { background: '#fff', color: '#7a6a52' }}
+                                    >
+                                        {o.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>חכמה: רוחב = עמוד מלא · שתי תמונות אורך = עמוד זוגי · כלום לא נחתך. פועל על תמונות שהועלו דרך העלאת האלבום.</p>
+                        </div>
+
                         {/* "From where the image starts" — gap above
                             the photo. % of page height. */}
                         <PropertySlider

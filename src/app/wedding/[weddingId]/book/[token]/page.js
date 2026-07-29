@@ -440,6 +440,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
             autoSplit: styleSettings.autoSplit,
             splitThreshold: styleSettings.splitThreshold,
             entriesPerPage: styleSettings.entriesPerPage,
+            photoLayout: styleSettings.photoLayout,
             // Keep split text+photo pairs facing on one spread — but only in
             // the 2-up desktop view. On mobile (single page) there are no
             // spreads, so no divider leaves are added.

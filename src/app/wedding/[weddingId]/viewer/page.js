@@ -121,8 +121,8 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // ones stay combined. `pages` is already in flip order, and the split
     // keeps each blessing's two pages adjacent, so order stays correct.
     const displayPages = useMemo(
-        () => expandBookPages(pages, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold, entriesPerPage: styleSettings.entriesPerPage }),
-        [pages, styleSettings.autoSplit, styleSettings.splitThreshold, styleSettings.entriesPerPage]
+        () => expandBookPages(pages, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold, entriesPerPage: styleSettings.entriesPerPage, photoLayout: styleSettings.photoLayout }),
+        [pages, styleSettings.autoSplit, styleSettings.splitThreshold, styleSettings.entriesPerPage, styleSettings.photoLayout]
     )
     // Cover-only style merged with locale, used by BookCoverTemplate
     // so dir/RTL behavior matches the body without leaking the book's
