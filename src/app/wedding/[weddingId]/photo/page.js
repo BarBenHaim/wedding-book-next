@@ -121,6 +121,41 @@ export default function TextPage() {
     const [guestDesign, setGuestDesign] = useState(null)
     const [loaded, setLoaded] = useState(false)
 
+    // Personalised invite state — when the guest lands with ?g=<guestId>
+    // (via the WhatsApp shoot mode's wa.me link), we prefill their name
+    // input and show a small "היי {name} 💛" welcome. On successful
+    // submission the /photo page PATCHes the guest doc back with
+    // { wroteAt, entryId } so the owner's guests table can flip the
+    // status pill to "כתב ✓". Both fields are safely no-op when no g
+    // param is present, so existing scan/QR/share flows are untouched.
+    const [guestId, setGuestId] = useState('')
+    const [guestGreetingName, setGuestGreetingName] = useState('')
+
+    useEffect(() => {
+        if (!weddingId || typeof window === 'undefined') return
+        let cancelled = false
+        try {
+            const sp = new URLSearchParams(window.location.search)
+            const g = (sp.get('g') || '').trim()
+            if (!g) return
+            setGuestId(g)
+            ;(async () => {
+                try {
+                    const res = await fetch(
+                        `/api/guests/${encodeURIComponent(g)}/public?weddingId=${encodeURIComponent(weddingId)}`,
+                        { cache: 'no-store' },
+                    )
+                    if (!res.ok || cancelled) return
+                    const data = await res.json().catch(() => null)
+                    if (data?.name && !cancelled) setGuestGreetingName(data.name)
+                } catch {
+                    /* silent — prefill is best-effort */
+                }
+            })()
+        } catch { /* ignore */ }
+        return () => { cancelled = true }
+    }, [weddingId])
+
     useEffect(() => {
         if (!weddingId) return
         let cancelled = false
@@ -196,7 +231,32 @@ export default function TextPage() {
 
     return (
         <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
-            <PhotoApp eventType={eventType} designVariant={designVariant} recipients={recipients} formCopy={formCopy} guestDesign={guestDesign} maxChars={adminWriter ? Math.max(maxChars, 2600) : maxChars} locale={locale} />
+            {/* Personalised welcome — only rendered when the guest arrived
+                via a WhatsApp shoot-mode link (?g=<guestId>) AND the public
+                guests-API resolved a name for that id. Position:fixed at
+                the top so it lives above every layout variant (poker /
+                romantic / moment) without touching their JSX. */}
+            {guestGreetingName && (
+                <div
+                    className='fixed top-0 inset-x-0 z-40 flex justify-center pointer-events-none'
+                    dir='rtl'
+                >
+                    <div className='mt-3 max-w-[90%] bg-white/95 backdrop-blur border border-[#AA8840]/25 text-[#241a0d] rounded-full shadow-md px-4 py-1.5 text-sm font-bold'>
+                        היי {guestGreetingName} 💛
+                    </div>
+                </div>
+            )}
+            <PhotoApp
+                eventType={eventType}
+                designVariant={designVariant}
+                recipients={recipients}
+                formCopy={formCopy}
+                guestDesign={guestDesign}
+                maxChars={adminWriter ? Math.max(maxChars, 2600) : maxChars}
+                locale={locale}
+                initialName={guestGreetingName}
+                guestId={guestId}
+            />
         </NextIntlClientProvider>
     )
 }
@@ -259,7 +319,7 @@ function ChipBadge({ number, active, done, isPoker }) {
     )
 }
 
-function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign, maxChars = 210, locale = 'he' }) {
+function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign, maxChars = 210, locale = 'he', initialName = '', guestId = '' }) {
     const t = useTranslations('photo')
 
     // Resolve every form string to either the per-event admin override
@@ -342,7 +402,14 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     }
     const pageTitle = buildPageTitle()
     const [step, setStep] = useState(1) // 1: Text, 2: Photo
-    const [name, setName] = useState('')
+    const [name, setName] = useState(initialName || '')
+    // When the personalised guest name arrives after the initial render
+    // (public API roundtrip resolves a few hundred ms after mount), seed
+    // the name input — but ONLY if the guest hasn't started editing it
+    // themselves. This keeps the UX predictable: "prefill if empty".
+    useEffect(() => {
+        if (initialName) setName(prev => (prev && prev.trim() ? prev : initialName))
+    }, [initialName])
     const [text, setText] = useState('')
     const [photoUrl, setPhotoUrl] = useState('')
     const [photoBlob, setPhotoBlob] = useState(null)
@@ -370,6 +437,21 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     const liveVideoRef = useRef(null)
     const router = useRouter()
     const { weddingId } = useParams()
+
+    // When the guest arrived via a personalised WhatsApp link, flip their
+    // status pill in the owner's guests table to "כתב ✓" on submit. This
+    // is a fire-and-forget call — a failure here must never affect the
+    // guest's actual submission flow.
+    async function reportGuestWrote(entryId) {
+        if (!guestId || !weddingId || !entryId) return
+        try {
+            await fetch(`/api/guests/${encodeURIComponent(guestId)}/public`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ weddingId, entryId }),
+            })
+        } catch { /* silent */ }
+    }
 
     // Prefetch /thanks on mount so an offline router.push at submit time
     // doesn't fall through to Chrome's "no internet" error page —
@@ -691,6 +773,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
             // replacing their ability to add more from the same phone.
             recordSubmission(weddingId, { id: entry.id, name: entry.name, text: entry.text })
             logEvent(weddingId, 'blessing_sent_success')
+            reportGuestWrote(entry.id)
             router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}`)
             return
         }
@@ -706,6 +789,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
             // replacing their ability to add more from the same phone.
             recordSubmission(weddingId, { id: entry.id, name: entry.name, text: entry.text })
             logEvent(weddingId, 'blessing_sent_success')
+            reportGuestWrote(entry.id)
             router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}`)
         } catch (err) {
             console.error('[photo] direct upload also failed:', err)
