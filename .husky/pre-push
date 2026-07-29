@@ -1,0 +1,6 @@
+# Pre-push gate: the full vitest suite (41 tests, ~10 s). These lock the
+# book's spacing/parity contracts, the smart-album composition, share
+# copy and i18n — exactly the regressions that used to reach production
+# silently. A failing test blocks the push.
+
+npx vitest run

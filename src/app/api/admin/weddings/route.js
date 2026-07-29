@@ -187,6 +187,19 @@ export async function PATCH(req) {
                 continue
             }
 
+            if (key === 'ownerPhone') {
+                const t = typeof v === 'string' ? v.trim() : ''
+                clean[key] = t || null
+                // Indexed twin for the /portal phone-login lookup — lets the
+                // route use a real Firestore query instead of a full scan.
+                let n = t.replace(/[^\d+]/g, '')
+                if (n.startsWith('+')) n = n.slice(1)
+                if (n.startsWith('00')) n = n.slice(2)
+                if (n.startsWith('0')) n = '972' + n.slice(1)
+                clean.phoneNormalized = n || null
+                continue
+            }
+
             if (key === 'locale') {
                 // Coerce to a known locale; unknown/empty falls back to 'he'.
                 clean[key] = normalizeLocale(v)

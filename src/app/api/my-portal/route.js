@@ -44,18 +44,25 @@ export async function POST(req) {
     }
 
     try {
-        // Phones are stored as typed (usually 05x…) — scan and normalize
-        // server-side. Event counts are small (hundreds), so a full scan
-        // is fine and keeps us format-agnostic.
-        const snap = await adminDb.collection('weddings').get()
         const matches = []
-        snap.forEach(d => {
-            const w = d.data()
-            const owner = normalizePhone(w.ownerPhone || w.phone || '')
-            if (owner && owner === phone) {
-                matches.push({ id: d.id, title: titleOf(w), eventType: w.eventType || 'wedding' })
-            }
-        })
+        const push = (d, w) => matches.push({ id: d.id, title: titleOf(w), eventType: w.eventType || 'wedding' })
+
+        // Fast path: events saved since the phoneNormalized twin exists
+        // resolve with ONE indexed query.
+        const q = await adminDb.collection('weddings').where('phoneNormalized', '==', phone).get()
+        q.forEach(d => push(d, d.data()))
+
+        // Legacy fallback: older events stored only the raw typed phone —
+        // scan + normalize server-side (small collections; disappears as
+        // events get re-saved with the twin field).
+        if (!matches.length) {
+            const snap = await adminDb.collection('weddings').get()
+            snap.forEach(d => {
+                const w = d.data()
+                const owner = normalizePhone(w.ownerPhone || w.phone || '')
+                if (owner && owner === phone) push(d, w)
+            })
+        }
 
         if (!matches.length) {
             return NextResponse.json({ ok: false, error: 'not-found' }, { status: 404 })
