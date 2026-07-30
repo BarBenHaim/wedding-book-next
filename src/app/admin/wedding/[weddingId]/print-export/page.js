@@ -59,6 +59,7 @@ import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import { expandBookPages } from '@/lib/bookPages'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
 import {
     Printer, Lock, CheckCircle2, Loader2, AlertTriangle,
@@ -237,9 +238,22 @@ function PrintExportContent() {
     const preset = PRODUCT_PRESETS[productPreset]
     const dims = computeDims(preset)
 
-    // Every spread holds 2 entries (right + left page in RTL).
+    // THE SAME pagination the digital book uses — auto/manual splits, duo
+    // pages and the smart album all reach print identically. padToSpread
+    // (offset 0: a spread file IS the pair) guarantees a split blessing's
+    // text + photo always share one physical spread — never a page-turn
+    // between them.
+    const bookPages = expandBookPages(entries, {
+        autoSplit: styleSettings.autoSplit,
+        splitThreshold: styleSettings.splitThreshold,
+        entriesPerPage: styleSettings.entriesPerPage,
+        photoLayout: styleSettings.photoLayout,
+        padToSpread: true,
+    })
+
+    // Every spread holds 2 pages (right + left page in RTL).
     const slotsAvailable = spreadCount * 2
-    const slotsNeeded = entries.length
+    const slotsNeeded = bookPages.length
     const willPad = slotsNeeded < slotsAvailable
     const willTrim = slotsNeeded > slotsAvailable
 
@@ -282,8 +296,8 @@ function PrintExportContent() {
             const leftIdx = i * 2 + 1
             out.push({
                 kind: 'spread',
-                right: entries[rightIdx] || null,
-                left: entries[leftIdx] || null,
+                right: bookPages[rightIdx] || null,
+                left: bookPages[leftIdx] || null,
                 index: i,
             })
         }
@@ -345,7 +359,7 @@ function PrintExportContent() {
                 `File format: JPG, sRGB, ${DPI} DPI, q=0.92`,
                 `Naming: ${includeCover ? 'cover.jpg + ' : ''}001.jpg, 002.jpg, ... ${String(renderList.length).padStart(3, '0')}.jpg`,
                 ``,
-                `Entries in book: ${entries.length} · Slots filled: ${Math.min(entries.length, slotsAvailable)} / ${slotsAvailable} (${slotsAvailable - Math.min(entries.length, slotsAvailable)} blank)`,
+                `Pages in book: ${bookPages.length} (from ${entries.length} entries) · Slots filled: ${Math.min(bookPages.length, slotsAvailable)} / ${slotsAvailable} (${slotsAvailable - Math.min(bookPages.length, slotsAvailable)} blank)`,
                 ``,
                 `Trim allowance: WOW Pro may cut up to ${TRIM_TOLERANCE_MM} mm from each side during finishing.`,
                 `Recommended safe area: keep critical content (faces, text) at least ${SAFE_INSET_MM} mm from every outer edge.`,
@@ -514,7 +528,7 @@ function PrintExportContent() {
                     <div className='rounded-lg px-3 py-2.5 flex items-start gap-2' style={{ background: '#fdfaf3', border: '1px solid #f0e8d4' }}>
                         <Info size={14} className='flex-shrink-0 mt-0.5' style={{ color: '#aa8840' }} />
                         <div className='flex-1 text-[12px] text-[#3d2e1a] leading-relaxed'>
-                            יש לך <b>{entries.length}</b> ברכות. ההגדרה הנוכחית מכילה <b>{slotsAvailable}</b> מקומות ({spreadCount} spreads × 2).
+                            יש לך <b>{bookPages.length}</b> עמודים ({entries.length} ברכות אחרי פיצולים/זוגות). ההגדרה מכילה <b>{slotsAvailable}</b> מקומות ({spreadCount} spreads × 2).
                             {willPad && <span className='text-[#7a6a52]'> ‒ יוסיף {slotsAvailable - slotsNeeded} עמודים ריקים.</span>}
                             {willTrim && <span className='text-[#b32424]'> ‒ ⚠️ {slotsNeeded - slotsAvailable} ברכות לא ייכנסו! העלה את מספר העמודים.</span>}
                             {!willPad && !willTrim && <span className='text-[#4f7a3e]'> ‒ ✓ התאמה מושלמת.</span>}

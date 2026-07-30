@@ -117,6 +117,10 @@ function AlbumeExportContent() {
     const [entries, setEntries] = useState([])
     const [loadStatus, setLoadStatus] = useState('loading')
     const [pageCount, setPageCount] = useState(MIN_PAGES)
+    // Binding parity: most square albums bind page 1 ALONE facing the
+    // inner cover, so facing spreads are (2,3),(4,5)… Flip this off if a
+    // vendor's first page opens as part of the first spread.
+    const [firstPageAlone, setFirstPageAlone] = useState(true)
     const [includeCover, setIncludeCover] = useState(true)
     const [running, setRunning] = useState(false)
     const [progress, setProgress] = useState({ done: 0, total: 0, label: '' })
@@ -142,7 +146,7 @@ function AlbumeExportContent() {
                 // up to the 24 minimum), so the common case is one click.
                 // Account for smart auto-split (a long blessing becomes 2 pages).
                 const _bd = wSnap.data()?.bookDesign || wSnap.data()?.book?.designSettings || {}
-                const _needed = expandBookPages(list, { autoSplit: _bd.autoSplit, splitThreshold: _bd.splitThreshold, entriesPerPage: _bd.entriesPerPage, photoLayout: _bd.photoLayout }).length
+                const _needed = expandBookPages(list, { autoSplit: _bd.autoSplit, splitThreshold: _bd.splitThreshold, entriesPerPage: _bd.entriesPerPage, photoLayout: _bd.photoLayout, padToSpread: true, spreadOffset: 1 }).length
                 setPageCount(Math.max(MIN_PAGES, Math.min(MAX_PAGES, _needed)))
                 setLoadStatus('ready')
             } catch (err) {
@@ -172,7 +176,7 @@ function AlbumeExportContent() {
 
     // Expand entries into the actual page sequence (smart auto-split honored
     // from the book design) — the print must match the displayed book.
-    const bookPages = expandBookPages(entries, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold, entriesPerPage: styleSettings.entriesPerPage, photoLayout: styleSettings.photoLayout })
+    const bookPages = expandBookPages(entries, { autoSplit: styleSettings.autoSplit, splitThreshold: styleSettings.splitThreshold, entriesPerPage: styleSettings.entriesPerPage, photoLayout: styleSettings.photoLayout, padToSpread: true, spreadOffset: firstPageAlone ? 1 : 0 })
     const slotsNeeded = bookPages.length
     const willPad = slotsNeeded < pageCount
     const willTrim = slotsNeeded > pageCount
@@ -396,6 +400,15 @@ function AlbumeExportContent() {
                             />
                             <span className='text-[12px] text-[#7a6a52]'>= {pageCount} קבצי JPG (עמוד אחד לכל קובץ)</span>
                         </div>
+                        <label className='flex items-center gap-2 mt-2 text-[12px] text-[#7a6a52] cursor-pointer select-none'>
+                            <input
+                                type='checkbox'
+                                checked={firstPageAlone}
+                                onChange={e => setFirstPageAlone(e.target.checked)}
+                                disabled={running}
+                            />
+                            עמוד 1 עומד לבד מול הכריכה הפנימית (מיישר ברכות מפוצלות לאותה כפולה)
+                        </label>
                         <p className='text-[11px] text-[#a89378] mt-1.5'>
                             כל עמוד = 22×22 ס&quot;מ + {BLEED_MM}מ&quot;מ bleed = {FULL_PX}×{FULL_PX}px @ {DPI}dpi · התמונות נחתכות אוטומטית וממלאות מקצה לקצה ב-albume. בחר את אותו מספר עמודים ב-albume.
                         </p>

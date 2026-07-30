@@ -59,6 +59,23 @@ describe('expandBookPages photoLayout smart', () => {
         expect(out[2]._split).toBeUndefined()
     })
 
+    it('padToSpread aligns a forced pair to the spread — offset 0 (2-up files)', () => {
+        const plain = { id: 'N', name: 'גל', text: 'ברכה', imageUrl: 'u2' }
+        const split = { id: 'F', name: 'רון', text: 'טקסט', imageUrl: 'u', forceSplit: true }
+        const out = expandBookPages([plain, split], { padToSpread: true })
+        // plain(0) → divider(1) → text(2) + photo(3): the pair shares spread (2,3)
+        expect(out.map(p => p._divider ? 'pad' : (p._split || 'page'))).toEqual(['page', 'pad', 'text', 'photo'])
+    })
+
+    it('padToSpread with spreadOffset 1 (page 1 alone) shifts the alignment', () => {
+        const plain = { id: 'N', name: 'גל', text: 'ברכה', imageUrl: 'u2' }
+        const split = { id: 'F', name: 'רון', text: 'טקסט', imageUrl: 'u', forceSplit: true }
+        // Spreads are (1,2),(3,4)… — after one plain page (index 0 = page 1,
+        // alone by binding) the pair may start immediately at index 1.
+        const out = expandBookPages([plain, split], { padToSpread: true, spreadOffset: 1 })
+        expect(out.map(p => p._divider ? 'pad' : (p._split || 'page'))).toEqual(['page', 'text', 'photo'])
+    })
+
     it('uniform (default) never composes', () => {
         const out = expandBookPages([photo('P1', 0.6), photo('P2', 0.6)], {})
         expect(out).toHaveLength(2)

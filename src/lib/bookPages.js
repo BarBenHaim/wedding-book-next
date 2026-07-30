@@ -38,6 +38,13 @@ export function expandBookPages(entries, opts = {}) {
     // total interior count even so the covers stay single. Only meaningful for
     // the 2-up landscape flipbook — leave it off for single-page / print.
     const padToSpread = opts.padToSpread === true
+    // Physical-binding parity shift. 0 (default): spreads are page-pairs
+    // (0,1),(2,3)… — the flipbook and WOW's 2-up spread files. 1: page 1
+    // stands ALONE facing the inner cover (typical square print albums),
+    // so spreads are (1,2),(3,4)… and a facing pair must start on an ODD
+    // 0-based index. The exporters expose this as an operator toggle.
+    const spreadOffset = opts.spreadOffset === 1 ? 1 : 0
+    const onSpreadStart = len => (len + spreadOffset) % 2 === 0
 
     let padN = 0
     const divider = () => ({ id: `__divider_${padN++}`, _divider: true })
@@ -87,7 +94,7 @@ export function expandBookPages(entries, opts = {}) {
             out.push({ ...e, _photo: k === 'landscape' ? 'wide' : 'square' })
             i++
         }
-        if (padToSpread && out.length % 2 === 1) out.push(divider())
+        if (padToSpread && !onSpreadStart(out.length)) out.push(divider())
         return out
     }
 
@@ -103,7 +110,7 @@ export function expandBookPages(entries, opts = {}) {
                 .map(e => ({ ...e }))
             pages.push({ id: `__duo_${list[i]?.id || i}`, _duo: pair })
         }
-        if (padToSpread && pages.length % 2 === 1) pages.push(divider())
+        if (padToSpread && !onSpreadStart(pages.length)) pages.push(divider())
         return pages
     }
 
@@ -120,7 +127,7 @@ export function expandBookPages(entries, opts = {}) {
         const wantsSplit = e?.forceSplit === true || (autoSplit && textLen >= threshold)
         if (hasImage && wantsSplit) {
             // Align the pair to a fresh spread so the text + its photo face.
-            if (padToSpread && pages.length % 2 === 1) pages.push(divider())
+            if (padToSpread && !onSpreadStart(pages.length)) pages.push(divider())
             // 1) Blessing-only page — keep name + text, drop the photo so the
             //    blessing sits large and centered on its own page.
             pages.push({ ...e, imageUrl: null, _split: 'text' })
@@ -140,8 +147,8 @@ export function expandBookPages(entries, opts = {}) {
             pages.push({ ...e })
         }
     }
-    // Even interior count → complete spreads + single covers.
-    if (padToSpread && pages.length % 2 === 1) pages.push(divider())
+    // Complete spreads (respecting the binding offset) → no dangling half.
+    if (padToSpread && !onSpreadStart(pages.length)) pages.push(divider())
     return pages
 }
 
