@@ -385,10 +385,20 @@ export default function AdminDashboard() {
             await uploadBytes(photoRef, file)
             const newUrl = await getDownloadURL(photoRef)
 
+            // Aspect twin — keeps the smart/no-crop album layouts accurate
+            // for photos replaced here too.
+            let imgAspect = null
+            try {
+                const bmp = await createImageBitmap(file)
+                if (bmp.width > 0 && bmp.height > 0) imgAspect = Math.round((bmp.width / bmp.height) * 1000) / 1000
+                bmp.close?.()
+            } catch { /* best-effort */ }
+
             await updateDoc(doc(db, 'weddings', weddingId, 'entries', entryId), {
                 imageUrl: newUrl,
+                imgAspect,
             })
-            setEntries(prev => prev.map(ent => (ent.id === entryId ? { ...ent, imageUrl: newUrl } : ent)))
+            setEntries(prev => prev.map(ent => (ent.id === entryId ? { ...ent, imageUrl: newUrl, imgAspect } : ent)))
         } catch (err) {
             console.error('Error replacing image:', err)
             alert('שגיאה בהעלאת התמונה')

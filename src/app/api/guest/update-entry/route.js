@@ -17,6 +17,7 @@
 import { NextResponse } from 'next/server'
 import { adminDb, adminStorage } from '@/lib/firebaseAdmin'
 import crypto from 'crypto'
+import sharp from 'sharp'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -75,6 +76,16 @@ export async function POST(req) {
             const buffer = Buffer.from(m[2], 'base64')
             if (!buffer.length) return bad(400, 'empty-image')
             if (buffer.length > IMAGE_MAX_BYTES) return bad(413, 'image-too-large')
+
+            // Measure ONCE at write time — the smart album layout (and the
+            // no-crop adaptive slot) classify every photo by this stored
+            // aspect, whatever door the photo came in through.
+            try {
+                const meta = await sharp(buffer).metadata()
+                if (meta?.width > 0 && meta?.height > 0) {
+                    update.imgAspect = Math.round((meta.width / meta.height) * 1000) / 1000
+                }
+            } catch { /* aspect stays unset — renderer falls back gracefully */ }
 
             const bucket = adminStorage.bucket()
             // Overwrite the canonical per-entry object so Storage stays 1:1

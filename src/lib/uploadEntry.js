@@ -38,6 +38,16 @@ export async function uploadQueuedEntry(entry) {
     try {
         // ─── 1. Image upload (if needed) ─────────────────────────────────
         let imageUrl = entry.imageUrl || null
+        // Measure the photo's aspect once, before upload — stored on the
+        // entry so album layouts can classify it without loading pixels.
+        let imgAspect = entry.imgAspect ?? null
+        if (entry.image && imgAspect == null) {
+            try {
+                const bmp = await createImageBitmap(entry.image)
+                if (bmp.width > 0 && bmp.height > 0) imgAspect = Math.round((bmp.width / bmp.height) * 1000) / 1000
+                bmp.close?.()
+            } catch { /* measurement is best-effort */ }
+        }
         if (entry.image && !imageUrl) {
             imageUrl = await uploadImageWithRetry(entry.weddingId, entry.id, entry.image)
             // Persist the URL immediately so subsequent retries skip re-upload.
@@ -54,6 +64,7 @@ export async function uploadQueuedEntry(entry) {
                 name: entry.name || '', // no anonymous fallback — empty stays empty
                 text: entry.text || null,
                 imageUrl: imageUrl || null,
+                imgAspect: imgAspect ?? null,
                 timestamp: serverTimestamp(),
                 orderIndex: null,
             })
