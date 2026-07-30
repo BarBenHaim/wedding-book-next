@@ -109,6 +109,25 @@ function PicabookExportContent() {
     const [loadStatus, setLoadStatus] = useState('loading')
     const [pageCount, setPageCount] = useState(MIN_PAGES)
     const [includeCover, setIncludeCover] = useState(true)
+    // Partial export: "3", "3-5", "3-5,12,20-22" — 1-based page numbers.
+    // Empty = the whole book. Exported files keep their TRUE position
+    // number (page 7 → 007.jpg) so a re-exported page drops straight
+    // into the vendor upload as a replacement.
+    const [pagesFilter, setPagesFilter] = useState('')
+    const parsePagesFilter = (raw, max) => {
+        const t = String(raw || '').trim()
+        if (!t) return null
+        const out = new Set()
+        for (const part of t.split(',')) {
+            const m = part.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/)
+            if (!m) continue
+            const a = parseInt(m[1], 10)
+            const b = m[2] ? parseInt(m[2], 10) : a
+            for (let n = Math.min(a, b); n <= Math.max(a, b) && n <= max; n++) if (n >= 1) out.add(n)
+        }
+        return out.size ? out : null
+    }
+    const selectedPages = parsePagesFilter(pagesFilter, pageCount)
     const [running, setRunning] = useState(false)
     const [progress, setProgress] = useState({ done: 0, total: 0, label: '' })
     const [done, setDone] = useState(false)
@@ -210,6 +229,7 @@ function PicabookExportContent() {
 
         const renderList = []
         for (let i = 0; i < pageCount; i++) {
+            if (selectedPages && !selectedPages.has(i + 1)) continue
             renderList.push({ kind: 'page', entry: bookPages[i] || null, index: i })
         }
         const total = (includeCover ? 2 : 0) + renderList.length
@@ -236,7 +256,8 @@ function PicabookExportContent() {
             }
 
             for (let i = 0; i < renderList.length; i++) {
-                const num = String(i + 1).padStart(3, '0')
+                // TRUE position number — a partial export's page 7 is still 007.jpg.
+                const num = String(renderList[i].index + 1).padStart(3, '0')
                 setProgress({ done: stepIdx, total, label: `מצלם עמוד ${num}...` })
                 setRenderingItem(renderList[i])
                 await new Promise(r => setTimeout(r, 120))
@@ -258,7 +279,7 @@ function PicabookExportContent() {
                 `Files:                ${includeCover ? 'cover.jpg (front) + cover_back.jpg (back) + ' : ''}001.jpg … ${String(renderList.length).padStart(3, '0')}.jpg  (one image per page)`,
                 `Bleed note:           images include 2mm bleed each side — Picabook trims it; the page fills edge to edge.`,
                 ``,
-                `Blessings in book:    ${entries.length} · Pages exported: ${pageCount} (${Math.max(0, pageCount - slotsNeeded)} blank)`,
+                `Blessings in book:    ${entries.length} · Pages exported: ${selectedPages ? `${selectedPages.size} selected of ${pageCount}` : pageCount} (${Math.max(0, pageCount - slotsNeeded)} blank)`,
                 `Safe area:            keep faces / text at least ${SAFE_INSET_MM} mm from every edge.`,
                 ``,
                 `HOW TO ORDER ON picabook.co.il:`,
@@ -282,7 +303,7 @@ function PicabookExportContent() {
             const url = URL.createObjectURL(zipBlob)
             const safeName = (wedding?.brideNameHe || wedding?.brideName || wedding?.celebrantNameHe || wedding?.celebrantName || weddingId).replace(/[^a-zA-Z0-9א-ת_-]+/g, '_')
             a.href = url
-            a.download = `picabook-${safeName}-20x20-${pageCount}p${includeCover ? '+cover' : ''}.zip`
+            a.download = `picabook-${safeName}-20x20-${selectedPages ? `pages-${selectedPages.size}` : `${pageCount}p`}${includeCover ? '+cover' : ''}.zip`
             document.body.appendChild(a)
             a.click()
             a.remove()
@@ -388,6 +409,24 @@ function PicabookExportContent() {
                         <p className='text-[11px] text-[#a89378] mt-1.5'>
                             כל עמוד = 20×20 ס&quot;מ + {BLEED_MM}מ&quot;מ bleed = {FULL_PX}×{FULL_PX}px @ {DPI}dpi · ה-bleed נחתך אוטומטית וממלא מקצה לקצה. בחר את אותו מספר עמודים ב-Picabook.
                         </p>
+                        <div className='mt-3'>
+                            <label className='text-[12.5px] font-bold text-[#3d2e1a] block mb-1'>עמודים ספציפיים (ריק = כל הספר)</label>
+                            <input
+                                type='text'
+                                dir='ltr'
+                                value={pagesFilter}
+                                onChange={e => setPagesFilter(e.target.value)}
+                                placeholder='למשל: 3-5,12,20'
+                                disabled={running}
+                                className='w-full px-3 py-2 rounded-lg text-[13.5px] text-[#3d2e1a] outline-none text-center'
+                                style={{ background: '#fff', border: '1px solid #ead9b3' }}
+                            />
+                            <p className='text-[11px] mt-1' style={{ color: selectedPages ? '#0e9f8e' : '#a89378' }}>
+                                {selectedPages
+                                    ? `ייצוא חלקי: ${selectedPages.size} עמודים (${[...selectedPages].sort((a, b) => a - b).join(', ')}) — הקבצים ישמרו את מספרם האמיתי, מוכנים להחלפה נקודתית`
+                                    : 'טווחים ורשימות: 3-5,12 · שימושי לתיקון עמוד בודד בלי לייצא הכל מחדש'}
+                            </p>
+                        </div>
                     </div>
 
                     {/* Cover toggle */}
