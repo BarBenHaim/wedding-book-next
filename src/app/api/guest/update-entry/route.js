@@ -60,6 +60,8 @@ export async function POST(req) {
     // the book simply renders no name line.
     if (typeof body.name === 'string') update.name = body.name.trim().slice(0, NAME_MAX)
     if (typeof body.text === 'string') update.text = body.text.slice(0, TEXT_MAX) || null
+    // Per-entry manual split — blessing on one page, photo on the next.
+    if (typeof body.forceSplit === 'boolean') update.forceSplit = body.forceSplit
 
     // ── Photo ─────────────────────────────────────────────────────────
     // Priority: removeImage → replace with provided base64 → leave untouched.

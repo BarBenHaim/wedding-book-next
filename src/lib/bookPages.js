@@ -107,13 +107,18 @@ export function expandBookPages(entries, opts = {}) {
         return pages
     }
 
-    if (!autoSplit) return list.map(e => ({ ...e }))
+    // Per-entry manual split (entry.forceSplit) works even when the
+    // global autoSplit is OFF — the fast path only applies when nothing
+    // in the list asks to split (bit-identical output to the old code).
+    const anyForced = list.some(e => e?.forceSplit === true && e?.imageUrl)
+    if (!autoSplit && !anyForced) return list.map(e => ({ ...e }))
 
     const pages = []
     for (const e of list) {
         const textLen = (e?.text || '').trim().length
         const hasImage = Boolean(e?.imageUrl)
-        if (hasImage && textLen >= threshold) {
+        const wantsSplit = e?.forceSplit === true || (autoSplit && textLen >= threshold)
+        if (hasImage && wantsSplit) {
             // Align the pair to a fresh spread so the text + its photo face.
             if (padToSpread && pages.length % 2 === 1) pages.push(divider())
             // 1) Blessing-only page — keep name + text, drop the photo so the

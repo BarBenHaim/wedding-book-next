@@ -260,6 +260,19 @@ export default function AdminDashboard() {
     // Per-entry toggle: when true, the book templates render the text
     // exactly as typed (line breaks preserved). When false / missing,
     // whitespace collapses to a single flowing paragraph like before.
+    // Per-entry manual split: blessing text on its own page, the photo
+    // big on the next page — regardless of the preset's global autoSplit.
+    async function toggleForceSplit(entryId, next) {
+        if (!weddingId) return
+        try {
+            await updateDoc(doc(db, 'weddings', weddingId, 'entries', entryId), { forceSplit: next })
+            setEntries(prev => prev.map(e => (e.id === entryId ? { ...e, forceSplit: next } : e)))
+        } catch (err) {
+            console.error('Failed to toggle forceSplit', err)
+            alert('שגיאה בשמירת הגדרת הפיצול')
+        }
+    }
+
     async function togglePreserveLineBreaks(entryId, next) {
         if (!weddingId) return
         try {
@@ -786,6 +799,23 @@ export default function AdminDashboard() {
                                                                                 >
                                                                                     <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={2} className='w-4 h-4'><path strokeLinecap='round' strokeLinejoin='round' d='M3 6h18M3 12h12m-12 6h18M16 9l3 3m0 0l-3 3m3-3H9' /></svg>
                                                                                     <span>{entry.preserveLineBreaks ? 'שורות נשמרות' : 'שמור שורות'}</span>
+                                                                                </button>
+                                                                            )}
+                                                                            {/* Manual split — this blessing's text gets its own
+                                                                                page and the photo gets the next page, regardless
+                                                                                of the preset's global auto-split. */}
+                                                                            {entry.text && entry.imageUrl && (
+                                                                                <button
+                                                                                    onClick={() => toggleForceSplit(entry.id, !entry.forceSplit)}
+                                                                                    className={`flex items-center gap-1 px-2.5 py-2 text-xs font-medium rounded-lg active:scale-95 transition-all ${
+                                                                                        entry.forceSplit
+                                                                                            ? 'text-[#AA8840] bg-[#AA8840]/10 hover:bg-[#AA8840]/15'
+                                                                                            : 'text-gray-400 hover:text-[#AA8840] hover:bg-[#AA8840]/5'
+                                                                                    }`}
+                                                                                    title={entry.forceSplit ? 'הברכה מפוצלת: טקסט בעמוד, תמונה בעמוד הבא — לחץ לאחד' : 'פצל: הברכה בעמוד משלה והתמונה בעמוד הבא'}
+                                                                                >
+                                                                                    <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={2} className='w-4 h-4'><path strokeLinecap='round' strokeLinejoin='round' d='M4 4h16v7H4zM4 13h7v7H4zM13 13h7v7h-7z' /></svg>
+                                                                                    <span>{entry.forceSplit ? 'מפוצל לשניים' : 'פצל לשני עמודים'}</span>
                                                                                 </button>
                                                                             )}
                                                                             <button

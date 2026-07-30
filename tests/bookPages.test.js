@@ -46,6 +46,19 @@ describe('expandBookPages photoLayout smart', () => {
         expect(out[0].id).toBe('X')
     })
 
+    it('forceSplit splits ONE chosen blessing even with autoSplit off', () => {
+        const e = { id: 'F', name: 'רון', text: 'ברכה קצרה', imageUrl: 'u', forceSplit: true }
+        const plain = { id: 'N', name: 'גל', text: 'עוד ברכה', imageUrl: 'u2' }
+        const out = expandBookPages([e, plain], {})
+        expect(out).toHaveLength(3)
+        expect(out[0]._split).toBe('text')
+        expect(out[0].imageUrl).toBeNull()
+        expect(out[1]._split).toBe('photo')
+        expect(out[1].imageUrl).toBe('u')
+        expect(out[2].id).toBe('N')
+        expect(out[2]._split).toBeUndefined()
+    })
+
     it('uniform (default) never composes', () => {
         const out = expandBookPages([photo('P1', 0.6), photo('P2', 0.6)], {})
         expect(out).toHaveLength(2)
