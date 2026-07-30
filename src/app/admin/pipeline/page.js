@@ -139,6 +139,7 @@ function Board() {
                         </div>
                         <div>
                             <h1 className='text-xl font-bold text-[#1a1410]'>לוח הפקה</h1>
+                <a href='/admin/board' className='text-[12.5px] font-bold text-[#aa8840] underline-offset-2 hover:underline'>← לוח העבודה החדש</a>
                             <p className='text-xs text-[#a89378]'>איפה כל אירוע עומד — מבט אחד על כל ה-{weddings.length} אירועים</p>
                         </div>
                     </div>
