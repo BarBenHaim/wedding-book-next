@@ -81,8 +81,16 @@ export async function GET(req) {
                     }
                 }
 
+                const nonEmpty = o => Boolean(o && typeof o === 'object' && Object.keys(o).length)
                 return {
                     id: doc.id,
+                    // Work-board derived flags — computed HERE so the board
+                    // (and any client) never needs the heavy design objects.
+                    hasDesign: Boolean(nonEmpty(data.bookDesign) || nonEmpty(data.book?.designSettings) || data.bookDesignPresetId),
+                    hasCover: Boolean(data.coverDesign?.coverImage || data.coverDesign?.coverTexture || data.coverDesign?.texture),
+                    brideNameHe: data.brideNameHe ?? null,
+                    groomNameHe: data.groomNameHe ?? null,
+                    celebrantNameHe: data.celebrantNameHe ?? null,
                     brideName: data.brideName ?? null,
                     groomName: data.groomName ?? null,
                     weddingDate,

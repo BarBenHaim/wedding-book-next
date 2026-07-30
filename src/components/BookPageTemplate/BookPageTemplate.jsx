@@ -151,10 +151,12 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
     // (nameMarginTop / imageMarginTop / textMarginTop) are literal
     // distances from the top of the page (after pagePadding) — 0 means
     // "starts at the very top". Deterministic, preset-author-controlled.
-    // Only single-element pages and photo-less blessing pages (the
-    // auto-split text page) center vertically — the long-standing
-    // product behavior for those page kinds.
-    const centerBlock = onlyOne || !hasImage
+    // ONLY photo-less pages (blessing-text pages, the auto-split text
+    // page) center vertically. A page WITH a photo — including photo-
+    // only album/split pages — always obeys the preset's margins, so
+    // the photo lands exactly inside framed presets' photo window
+    // instead of drifting to the vertical center.
+    const centerBlock = !hasImage
 
     const { w, h } = pageScale(scaledWidth, scaledHeight)
 
@@ -184,6 +186,15 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                     gap,
                 }}
             >
+                {styleSettings.frame && (
+                    <img
+                        src={styleSettings.frame}
+                        alt=''
+                        crossOrigin='anonymous'
+                        className='absolute inset-0 w-full h-full pointer-events-none'
+                        style={{ zIndex: 10, objectFit: 'cover' }}
+                    />
+                )}
                 {entry._photoPair.map(p => {
                     const a = Number(p?.imgAspect) > 0 ? Number(p.imgAspect) : 0.75
                     let cw = colW
