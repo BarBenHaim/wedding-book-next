@@ -55,6 +55,34 @@ export default function EntryPhoto({
     const imgW = swapped ? maxHeight : maxWidth
     const imgH = swapped ? maxWidth : maxHeight
 
+    // ── html2canvas-faithful path (rotation 0 — the vast majority) ──
+    // The print exporters capture with html2canvas, which mis-renders
+    // <img object-fit:cover/contain + transform> — some photos export
+    // slightly STRETCHED. A background-image div rasterizes faithfully
+    // and is pixel-identical on screen, so it is the default render;
+    // the <img> path below remains only for rotated photos.
+    if (rot === 0) {
+        return (
+            <div
+                className={className}
+                role='img'
+                aria-label={alt}
+                style={{
+                    width: maxWidth,
+                    height: maxHeight,
+                    position: 'relative',
+                    overflow: 'hidden',
+                    display: 'block',
+                    backgroundImage: `url(${src})`,
+                    backgroundSize: fit,
+                    backgroundPosition: objectPosition,
+                    backgroundRepeat: 'no-repeat',
+                    ...style,
+                }}
+            />
+        )
+    }
+
     // Default to EAGER loading: in the digital book, lazy-loaded photos
     // would only fetch once react-pageflip brought the page into view,
     // leaving a visible delay. /book/[token] also preloads every entry
