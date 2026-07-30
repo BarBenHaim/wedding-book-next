@@ -157,6 +157,15 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
     // the photo lands exactly inside framed presets' photo window
     // instead of drifting to the vertical center.
     const centerBlock = !hasImage
+    // Layout-solo: ONLY photo-less single-element pages collapse their
+    // margins (the centered text page). A page WITH a photo keeps the
+    // preset's full geometry even when name/text are missing — the
+    // missing name renders as an invisible GHOST that still occupies
+    // its exact line + margins, so the photo lands at precisely the
+    // same y as on a fully-populated page (owner requirement: "the
+    // template must hold as if the name were there").
+    const soloLayout = onlyOne && !hasImage
+    const ghostName = hasImage && !hasName
 
     const { w, h } = pageScale(scaledWidth, scaledHeight)
 
@@ -250,7 +259,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
             {/* שם האורח — honors nameFontClass (independent font for
                 the guest name) when set; falls back to the body
                 fontClass so legacy weddings render unchanged. */}
-            {hasName && (
+            {(hasName || ghostName) && (
                 <div
                     className={styleSettings.nameFontClass || styleSettings.fontClass}
                     style={{
@@ -269,8 +278,9 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         // the blessing copy.
                         color: styleSettings.nameColor ?? styleSettings.fontColor,
                         opacity: 0.85,
-                        marginTop: onlyOne ? 0 : h(styleSettings.nameMarginTop ?? 1),
-                        marginBottom: onlyOne ? 0 : h(styleSettings.nameMarginBottom ?? 1),
+                        marginTop: soloLayout ? 0 : h(styleSettings.nameMarginTop ?? 1),
+                        marginBottom: soloLayout ? 0 : h(styleSettings.nameMarginBottom ?? 1),
+                        visibility: ghostName ? 'hidden' : undefined,
                         direction: nameDir,
                         textAlign: resolvedNameAlign,
                         maxWidth: w(styleSettings.nameMaxWidth ?? 60),
@@ -279,7 +289,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         zIndex: 5,
                     }}
                 >
-                    {entry.name}
+                    {entry.name || '\u00A0'}
                 </div>
             )}
 
@@ -325,8 +335,8 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         rotation={entry.photoRotation || 0}
                         photoRadius={styleSettings.imageStyle?.borderRadius ?? '12px'}
                         style={{
-                            marginTop: onlyOne ? 0 : h(styleSettings.imageMarginTop ?? 2),
-                            marginBottom: onlyOne ? 0 : h(styleSettings.imageMarginBottom ?? 2),
+                            marginTop: soloLayout ? 0 : h(styleSettings.imageMarginTop ?? 2),
+                            marginBottom: soloLayout ? 0 : h(styleSettings.imageMarginBottom ?? 2),
                             alignSelf:
                                 styleSettings.imageAlign === 'left'
                                     ? 'flex-start'
@@ -345,7 +355,7 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 <div
                     style={{
                         maxWidth: w(styleSettings.textMaxWidth ?? 85),
-                        marginTop: onlyOne ? 0 : h(styleSettings.textMarginTop ?? 0),
+                        marginTop: soloLayout ? 0 : h(styleSettings.textMarginTop ?? 0),
                         direction: blessingDir,
                         textAlign: resolvedTextAlign,
                         position: 'relative',
