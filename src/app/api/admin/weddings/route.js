@@ -173,6 +173,11 @@ export async function PATCH(req) {
             // surgically reset stray fields (e.g. a stuck fontWeight:700)
             // without replacing the whole design.
             'bookDesign',
+            // "Don't crop photos" (album mode). Kept OUTSIDE bookDesign on
+            // purpose: every preset pick rewrites bookDesign wholesale, so a
+            // photoFit stored in there would be silently reset. Overlaid onto
+            // the resolved design by withNoCropOverride().
+            'noPhotoCrop',
             'brideName', 'brideNameHe', 'groomName', 'groomNameHe',
             // Customer contact — the super-admin can set/fix the owner's
             // mobile (also the /portal phone-login credential) and email.
@@ -258,6 +263,13 @@ export async function PATCH(req) {
                 // bad payload can't bloat the doc.
                 clean[key] =
                     v && typeof v === 'object' && !Array.isArray(v) && JSON.stringify(v).length < 6000 ? v : null
+                continue
+            }
+
+            if (key === 'noPhotoCrop') {
+                // Strictly boolean — anything else means "off", so a stray
+                // payload can never leave a book in album mode by accident.
+                clean[key] = v === true
                 continue
             }
 

@@ -35,6 +35,7 @@ import { getBlessingText } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
 import EntryPhoto from '../EntryPhoto/EntryPhoto'
+import useNoCropSlot from '@/lib/photoSlot'
 
 const GOLD = '#aa8840'
 
@@ -82,8 +83,18 @@ export default function PolaroidPageLayout({ entry, styleSettings, scaledWidth, 
     // ornaments — total polaroid width = photoWidth + 2*matSide =
     // w(62) + 2*w(2.5) = w(67), leaving ~w(13) margin to the page
     // padding on each side.
-    const photoWidth = w(62)
-    const photoHeight = photoWidth * 0.75 // 4:3 — never violated
+    // 4:3 by default — never violated. With the wedding's no-crop toggle
+    // on, the slot follows the photo's real aspect instead (the polaroid
+    // mat hugs it, so a portrait photo yields a portrait polaroid) and
+    // maxHeight stops a tall photo from crowding out the blessing.
+    const photoSlot = useNoCropSlot({
+        styleSettings,
+        entry,
+        width: w(62),
+        maxHeight: scaledHeight * (hasText ? 0.5 : hasName ? 0.7 : 0.82),
+    })
+    const photoWidth = photoSlot.width
+    const photoHeight = photoSlot.height
     const matSide = w(2.5)
     const matBottom = w(7)
 
@@ -164,6 +175,7 @@ export default function PolaroidPageLayout({ entry, styleSettings, scaledWidth, 
                         portrait shot lands a portrait polaroid. */}
                     <EntryPhoto
                         src={entry.imageUrl}
+                        fit={photoSlot.fit}
                         maxWidth={photoWidth}
                         maxHeight={photoHeight}
                         objectPosition={entry.photoPosition || 'center'}

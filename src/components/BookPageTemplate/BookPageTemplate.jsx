@@ -204,25 +204,22 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                         style={{ zIndex: 10, objectFit: 'cover' }}
                     />
                 )}
-                {entry._photoPair.map(p => {
-                    const a = Number(p?.imgAspect) > 0 ? Number(p.imgAspect) : 0.75
-                    let cw = colW
-                    let ch = cw / a
-                    if (ch > maxColH) { ch = maxColH; cw = ch * a }
-                    return (
-                        <FramedPhoto
-                            key={p.id}
-                            src={p.imageUrl}
-                            fit='contain'
-                            slotW={cw}
-                            slotH={ch}
-                            objectPosition={p.photoPosition || 'center'}
-                            rotation={p.photoRotation || 0}
-                            photoRadius={styleSettings.imageStyle?.borderRadius ?? '12px'}
-                            style={{ zIndex: 5, position: 'relative' }}
-                        />
-                    )
-                })}
+                {entry._photoPair.map(p => (
+                    <FramedPhoto
+                        key={p.id}
+                        src={p.imageUrl}
+                        fit='contain'
+                        slotW={colW}
+                        // Legacy pair photos (no stored aspect) get measured
+                        // by FramedPhoto rather than assuming 3:4.
+                        aspect={Number(p?.imgAspect) > 0 ? Number(p.imgAspect) : null}
+                        maxSlotH={maxColH}
+                        objectPosition={p.photoPosition || 'center'}
+                        rotation={p.photoRotation || 0}
+                        photoRadius={styleSettings.imageStyle?.borderRadius ?? '12px'}
+                        style={{ zIndex: 5, position: 'relative' }}
+                    />
+                ))}
             </div>
         )
     }
@@ -314,20 +311,25 @@ export default function BookPageTemplate({ entry, styleSettings, scaledWidth, sc
                 // slot follows the photo EXACTLY (no crop, no letterbox).
                 // Wide pages start bigger; too-tall slots shrink to fit.
                 const photoFit = styleSettings.photoFit ?? 'cover'
-                const aspect = Number(entry?.imgAspect) > 0 ? Number(entry.imgAspect) : null
-                let slotW = w(isSplitPhoto || entry?._photo === 'wide' ? Math.max(90, baseW) : baseW)
-                let slotH = null
-                if (photoFit === 'contain' && aspect) {
-                    const maxH = scaledHeight * (entry?._photo === 'tall' ? 0.86 : 0.8)
-                    slotH = slotW / aspect
-                    if (slotH > maxH) { slotH = maxH; slotW = slotH * aspect }
-                }
+                const slotW = w(isSplitPhoto || entry?._photo === 'wide' ? Math.max(90, baseW) : baseW)
+                // How tall a no-crop photo may grow. A portrait photo is
+                // ~1.33× its width, which on this near-square page would
+                // swallow the whole leaf — so the cap tightens as the page
+                // gains content. A photo-only page gives the photo nearly
+                // everything; a page that also carries a blessing keeps
+                // room for the text to stay readable at its normal size.
+                // (FramedPhoto derives the actual slot from the photo's
+                // aspect — stored, or measured for legacy entries.)
+                const maxSlotH =
+                    scaledHeight *
+                    (hasText ? 0.52 : hasName ? 0.72 : entry?._photo === 'tall' ? 0.86 : 0.8)
                 return (
                     <FramedPhoto
                         src={entry.imageUrl}
                         fit={photoFit}
                         slotW={slotW}
-                        slotH={slotH}
+                        aspect={Number(entry?.imgAspect) > 0 ? Number(entry.imgAspect) : null}
+                        maxSlotH={maxSlotH}
                         frameId={styleSettings.photoFrame}
                         frameUrl={styleSettings.photoFrameUrl}
                         frameInset={styleSettings.photoFrameInset}

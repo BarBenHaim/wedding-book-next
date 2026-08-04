@@ -218,6 +218,12 @@ export default function DesignControls({
     // The wedding's event type — filters the preset gallery so this
     // wedding only sees presets tagged for its type (+ generic ones).
     eventType = null,
+    // "Don't crop photos" — a super-admin-only, per-wedding operator
+    // setting stored OUTSIDE the design object (weddings/{id}.noPhotoCrop)
+    // so picking a preset can't silently reset it. See withNoCropOverride
+    // in viewer/defaultStyle.js.
+    noPhotoCrop = false,
+    onNoPhotoCropChange = null,
 }) {
     const [activePreset, setActivePreset] = useState(null)
     const [uploadingCover, setUploadingCover] = useState(false)
@@ -475,6 +481,56 @@ export default function DesignControls({
             <div className='flex-1 overflow-y-auto pr-0.5 pl-0.5 space-y-4 pb-10 scrollbar-hide'>
                 {mode === 'book' && (
                     <div className='space-y-4 animate-fadeIn'>
+                        {/* PHOTO CROPPING — super-admin only.
+                            The guest cropper enforces 4:3, so the book is
+                            uniformly landscape by design. Guests who upload
+                            a PORTRAIT photo straight from their camera roll
+                            (bypassing the cropper, or from before it existed)
+                            get centre-cropped — top and bottom cut off. This
+                            switch turns the whole book into album mode: every
+                            slot follows its photo's real shape, nothing is
+                            cut. Deliberately not exposed to couples — it
+                            changes the look of every page at once. */}
+                        {isAdmin && onNoPhotoCropChange && (
+                            <Card title='תמונות — חיתוך'>
+                                <button
+                                    type='button'
+                                    onClick={() => onNoPhotoCropChange(!noPhotoCrop)}
+                                    className='w-full flex items-start gap-3 text-right'
+                                >
+                                    <span
+                                        className='mt-0.5 shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-colors'
+                                        style={
+                                            noPhotoCrop
+                                                ? { background: '#AA8840', borderColor: '#AA8840' }
+                                                : { background: '#fff', borderColor: '#d6cbb6' }
+                                        }
+                                    >
+                                        {noPhotoCrop && (
+                                            <svg
+                                                className='w-3.5 h-3.5 text-white'
+                                                fill='none'
+                                                viewBox='0 0 24 24'
+                                                stroke='currentColor'
+                                                strokeWidth={3.5}
+                                            >
+                                                <path strokeLinecap='round' strokeLinejoin='round' d='M5 13l4 4L19 7' />
+                                            </svg>
+                                        )}
+                                    </span>
+                                    <span className='min-w-0'>
+                                        <span className='block text-[13px] font-bold text-gray-800 leading-snug'>
+                                            אל תחתוך תמונות
+                                        </span>
+                                        <span className='block text-[11px] text-gray-500 leading-relaxed mt-0.5'>
+                                            כל תמונה תוצג בשלמותה — תמונה לאורך תקבל מסגרת לאורך, תמונה לרוחב
+                                            מסגרת לרוחב. ברירת המחדל חותכת הכל ל־4:3 אחיד.
+                                        </span>
+                                    </span>
+                                </button>
+                            </Card>
+                        )}
+
                         {/* PRESET GALLERY — visible to ALL users.
                             Couples (non-admin) see ONLY this card; it's
                             their single point of control for the whole

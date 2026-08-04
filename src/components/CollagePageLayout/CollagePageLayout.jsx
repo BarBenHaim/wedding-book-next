@@ -22,6 +22,7 @@ import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { gveretLevin } from '@/app/fonts'
 import { pageScale } from '@/lib/pageGeometry'
 import EntryPhoto from '../EntryPhoto/EntryPhoto'
+import useNoCropSlot from '@/lib/photoSlot'
 
 const GOLD = '#aa8840'
 const GOLD_LIGHT = '#d4b867'
@@ -73,8 +74,17 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
 
     // Photo positioned absolutely so we can tilt it freely + overlap with
     // the surrounding ephemera. 4:3 always preserved.
-    const photoWidth = w(70)
-    const photoHeight = photoWidth * 0.75
+    // 4:3 by default; the wedding's no-crop toggle switches the slot to
+    // the photo's real aspect so nothing is cut off (maxHeight keeps a
+    // portrait photo from crowding out the blessing).
+    const photoSlot = useNoCropSlot({
+        styleSettings,
+        entry,
+        width: w(70),
+        maxHeight: scaledHeight * (hasText ? 0.5 : hasName ? 0.7 : 0.82),
+    })
+    const photoWidth = photoSlot.width
+    const photoHeight = photoSlot.height
     const printBorder = w(1.2)
 
     const textColor = styleSettings.fontColor || INK
@@ -135,6 +145,7 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
                     {/* Shared natural-aspect photo. */}
                     <EntryPhoto
                         src={entry.imageUrl}
+                        fit={photoSlot.fit}
                         maxWidth={photoWidth}
                         maxHeight={photoHeight}
                         objectPosition={entry.photoPosition || 'center'}

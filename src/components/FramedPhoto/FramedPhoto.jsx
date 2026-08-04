@@ -17,8 +17,11 @@
 // margins, centering — is untouched. Shared by the classic template
 // and the DuoPageLayout; plain CSS/SVG, so print renders identically.
 
+'use client'
+
 import EntryPhoto from '../EntryPhoto/EntryPhoto'
 import { photoFrameGeometry, photoOverlayGeometry } from '@/lib/photoFrames'
+import useImageAspect from '@/lib/useImageAspect'
 
 // One gold corner flourish — an L-bracket with a soft curl. Rendered
 // four times (rotated) for the 'corner-flourish' frame.
@@ -60,9 +63,47 @@ export default function FramedPhoto({
     rotation = 0,
     photoRadius = '12px', // bare-photo fallback radius
     fit = 'cover', // 'contain' = album mode, never crop (taller slot)
+    // No-crop sizing inputs. `aspect` is the entry's stored imgAspect when
+    // it has one; legacy entries pass null and the real aspect is measured
+    // from the bitmap (see useImageAspect). `maxSlotH` caps how tall a
+    // portrait photo may grow before it is scaled down to fit the page.
+    aspect = null,
+    maxSlotH = null,
     style = {},
     placeholder = false, // picker previews: a gradient block instead of <img>
 }) {
+    // ── No-crop ("album") sizing ──────────────────────────────────────
+    // With fit='contain' the photo is never cropped regardless of what we
+    // know about it. Resolving the aspect lets the SLOT match the photo,
+    // so a portrait photo gets a portrait-shaped frame instead of sitting
+    // in a 4:3 window with empty bars on both sides. Until the aspect is
+    // known (or if it never resolves) we fall back to the previous
+    // behaviour, which still shows the whole photo.
+    const noCrop = fit === 'contain'
+    // Rotation swaps which edge is "wide": a 90°/270° photo shows its
+    // stored aspect inverted, so the slot must invert too or a rotated
+    // portrait would be framed as a landscape.
+    const rot = (((Number(rotation) || 0) % 360) + 360) % 360
+    const measured = useImageAspect(placeholder ? null : src, aspect, noCrop)
+    const effAspect = measured ? (rot === 90 || rot === 270 ? 1 / measured : measured) : null
+
+    // Slot geometry: an explicit slotH from the caller always wins (the
+    // smart-album pair page computes its own column boxes). Otherwise
+    // derive it from the resolved aspect, shrinking the width when a tall
+    // photo would overflow maxSlotH so the photo stays fully on the page.
+    let boxW = slotW
+    let boxH = slotH
+    if (noCrop && boxH == null && effAspect) {
+        boxH = boxW / effAspect
+        if (Number.isFinite(maxSlotH) && maxSlotH > 0 && boxH > maxSlotH) {
+            boxH = maxSlotH
+            boxW = boxH * effAspect
+        }
+    }
+    // The window aspect handed to the frame geometry helpers. Cover keeps
+    // the 4:3 lock; contain follows the photo (or 4:3 until measured).
+    const windowAspect = noCrop && effAspect ? effAspect : 4 / 3
+
     const photoEl = (w, h, radius) =>
         placeholder ? (
             <div
@@ -76,6 +117,10 @@ export default function FramedPhoto({
         ) : (
             <EntryPhoto
                 src={src}
+                // Without this the framed + overlay modes always cropped:
+                // `fit` was honoured only on the bare path, so turning
+                // no-crop on had no effect on any preset with a photo frame.
+                fit={fit}
                 maxWidth={w}
                 maxHeight={h}
                 objectPosition={objectPosition}
@@ -87,9 +132,9 @@ export default function FramedPhoto({
 
     // ── Uploaded overlay frame — wins when present ────────────────────
     if (frameUrl) {
-        const geo = photoOverlayGeometry(slotW, frameInset)
+        const geo = photoOverlayGeometry(boxW, frameInset, windowAspect)
         return (
-            <div style={{ width: slotW, height: geo.slotH, position: 'relative', ...style }}>
+            <div style={{ width: boxW, height: geo.slotH, position: 'relative', ...style }}>
                 <div style={{ position: 'absolute', top: geo.inset, left: geo.inset }}>
                     {photoEl(geo.photoW, geo.photoH, Math.max(2, geo.inset * 0.3))}
                 </div>
@@ -109,7 +154,7 @@ export default function FramedPhoto({
         )
     }
 
-    const geo = photoFrameGeometry(frameId, slotW)
+    const geo = photoFrameGeometry(frameId, boxW, windowAspect)
 
     // ── Bare photo — unchanged classic behavior ───────────────────────
     if (!geo) {
@@ -117,8 +162,8 @@ export default function FramedPhoto({
             <EntryPhoto
                 src={src}
                 fit={fit}
-                maxWidth={slotW}
-                maxHeight={slotH ?? slotW * (fit === 'contain' ? 1.15 : 0.75)}
+                maxWidth={boxW}
+                maxHeight={boxH ?? boxW * (fit === 'contain' ? 1.15 : 0.75)}
                 objectPosition={objectPosition}
                 rotation={rotation}
                 className='relative'
@@ -180,10 +225,10 @@ export default function FramedPhoto({
                     <div
                         style={{
                             position: 'absolute',
-                            top: -Math.max(3, slotW * 0.012),
-                            left: slotW * 0.1,
-                            width: slotW * 0.2,
-                            height: Math.max(8, slotW * 0.055),
+                            top: -Math.max(3, boxW * 0.012),
+                            left: boxW * 0.1,
+                            width: boxW * 0.2,
+                            height: Math.max(8, boxW * 0.055),
                             background: ex.tapes.color,
                             transform: 'rotate(-8deg)',
                             borderRadius: 1,
@@ -194,10 +239,10 @@ export default function FramedPhoto({
                     <div
                         style={{
                             position: 'absolute',
-                            top: -Math.max(3, slotW * 0.012),
-                            right: slotW * 0.1,
-                            width: slotW * 0.2,
-                            height: Math.max(8, slotW * 0.055),
+                            top: -Math.max(3, boxW * 0.012),
+                            right: boxW * 0.1,
+                            width: boxW * 0.2,
+                            height: Math.max(8, boxW * 0.055),
                             background: ex.tapes.color,
                             transform: 'rotate(7deg)',
                             borderRadius: 1,

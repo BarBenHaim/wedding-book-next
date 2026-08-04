@@ -27,6 +27,7 @@ import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { gveretLevin } from '@/app/fonts'
 import { pageScale } from '@/lib/pageGeometry'
 import EntryPhoto from '../EntryPhoto/EntryPhoto'
+import useNoCropSlot from '@/lib/photoSlot'
 
 const GOLD = '#aa8941'
 const INK = '#1a1410'
@@ -71,8 +72,17 @@ export default function NotebookPageLayout({ entry, styleSettings, scaledWidth, 
     // a few mm short of the side edges so the inset reads as deliberate
     // "notebook page with a tipped-in photo" rather than "stretched
     // bitmap". 4:3 still enforced via height = width × 0.75.
-    const photoWidth = w(75)
-    const photoHeight = photoWidth * 0.75
+    // ...unless the wedding's no-crop toggle is on, in which case the
+    // slot takes the photo's real aspect so nothing is cut off (maxHeight
+    // keeps a portrait photo from crowding out the blessing).
+    const photoSlot = useNoCropSlot({
+        styleSettings,
+        entry,
+        width: w(75),
+        maxHeight: scaledHeight * (hasText ? 0.5 : hasName ? 0.7 : 0.82),
+    })
+    const photoWidth = photoSlot.width
+    const photoHeight = photoSlot.height
 
     // Ruled-line spacing scales with the card's text size so the lines
     // line up with the baselines of the handwritten blessing. h(7.5) per
@@ -120,6 +130,7 @@ export default function NotebookPageLayout({ entry, styleSettings, scaledWidth, 
             {hasImage && (
                 <EntryPhoto
                     src={entry.imageUrl}
+                    fit={photoSlot.fit}
                     maxWidth={photoWidth}
                     maxHeight={photoHeight}
                     objectPosition={entry.photoPosition || 'center'}

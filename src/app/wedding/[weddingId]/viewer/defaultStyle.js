@@ -40,11 +40,31 @@ export default BASE_DEFAULTS
 // cover's background / colours for a cohesive look.
 export function resolveInteriorDesign(wedding) {
     if (!wedding) return null
-    if (wedding.bookDesign) return wedding.bookDesign
-    if (wedding.coverDesign) {
-        const { imageStyle, ...rest } = wedding.coverDesign  
-        return rest
-    }
-    if (wedding.book?.designSettings) return wedding.book.designSettings
-    return null
+    const design = (() => {
+        if (wedding.bookDesign) return wedding.bookDesign
+        if (wedding.coverDesign) {
+            const { imageStyle, ...rest } = wedding.coverDesign
+            return rest
+        }
+        if (wedding.book?.designSettings) return wedding.book.designSettings
+        return null
+    })()
+    return withNoCropOverride(design, wedding)
+}
+
+// ── "Don't crop photos" — a per-wedding OPERATOR setting ─────────────
+// Lives at the wedding-doc top level (`noPhotoCrop`), NOT inside
+// bookDesign, on purpose: bookDesign is fully rewritten by
+// applyPresetClean() every time someone picks a preset, so a photoFit
+// stored there would be silently reset to 'cover' the next time the
+// couple taps a design. Keeping it outside the preset shape makes it
+// sticky — it survives every preset change — and we overlay it onto the
+// resolved design here, at the single point every surface reads.
+//
+// The overlay only ever forces 'contain'; when the flag is off/absent
+// the design passes through byte-identical, so existing books render
+// exactly as before.
+export function withNoCropOverride(design, wedding) {
+    if (wedding?.noPhotoCrop !== true) return design
+    return { ...(design || {}), photoFit: 'contain' }
 }

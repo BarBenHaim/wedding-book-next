@@ -106,9 +106,15 @@ export function resolvePhotoFrame(id) {
 
 // Concrete pixel geometry for a BUILT-IN frame at a given slot width.
 // Returns null for none/unknown — callers fall back to the bare photo.
-export function photoFrameGeometry(id, slotW) {
+// `aspect` (width / height) shapes the frame's window. Defaults to 4/3 —
+// the book's classic lock — so every existing caller keeps its exact
+// geometry (photoW / (4/3) === photoW * 0.75). No-crop ("album") mode
+// passes the photo's real aspect so the mat/ring hugs a portrait photo
+// instead of framing a 4:3 window with empty bars inside it.
+export function photoFrameGeometry(id, slotW, aspect = 4 / 3) {
     const spec = resolvePhotoFrame(id)
     if (!spec || !Number.isFinite(slotW) || slotW <= 0) return null
+    const ar = Number(aspect) > 0 ? Number(aspect) : 4 / 3
     const pct = x => (slotW * (x || 0)) / 100
 
     const matPad = pct(spec.mat?.padPct)
@@ -119,7 +125,7 @@ export function photoFrameGeometry(id, slotW) {
 
     const chrome = outerW + matPad + innerGap + innerW
     const photoW = Math.max(10, slotW - 2 * chrome)
-    const photoH = photoW * 0.75 // the book's 4:3 lock
+    const photoH = photoW / ar // 4:3 lock by default; real aspect in album mode
 
     const photoRadius = pct(spec.photoRadiusPct)
     // Arched window: the top corners become half the photo width — a
@@ -166,14 +172,16 @@ export function photoFrameGeometry(id, slotW) {
 
 // Uploaded-overlay geometry — the photo insets by `insetPct` per side
 // and the artwork stretches across the full slot (over the photo).
-export function photoOverlayGeometry(slotW, insetPct = 6) {
+export function photoOverlayGeometry(slotW, insetPct = 6, aspect = 4 / 3) {
     if (!Number.isFinite(slotW) || slotW <= 0) return null
+    const ar = Number(aspect) > 0 ? Number(aspect) : 4 / 3
     const inset = (slotW * (Number.isFinite(insetPct) ? insetPct : 6)) / 100
     const photoW = Math.max(10, slotW - 2 * inset)
+    const photoH = photoW / ar
     return {
         inset,
         photoW,
-        photoH: photoW * 0.75,
-        slotH: (slotW - 2 * inset) * 0.75 + 2 * inset,
+        photoH,
+        slotH: photoH + 2 * inset,
     }
 }

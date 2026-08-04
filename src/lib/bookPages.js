@@ -140,6 +140,11 @@ export function expandBookPages(entries, opts = {}) {
                 imageUrl: e.imageUrl,
                 photoPosition: e.photoPosition,
                 photoRotation: e.photoRotation,
+                // Carry the measured aspect too — without it a split photo
+                // page had no shape to size its slot from, so a no-crop
+                // book letterboxed exactly the pages that show the photo
+                // largest.
+                imgAspect: e.imgAspect,
                 timestamp: e.timestamp,
                 _split: 'photo',
             })

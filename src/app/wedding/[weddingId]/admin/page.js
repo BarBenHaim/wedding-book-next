@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { getEntries } from '../../../../lib/classifyMedia'
 import { useParams } from 'next/navigation'
-import { doc, updateDoc, deleteDoc, writeBatch, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, deleteDoc, writeBatch, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage, auth } from '../../../../lib/firebaseClient'
 import { onAuthStateChanged } from 'firebase/auth'
@@ -13,12 +13,40 @@ import { getBlessingText, normalizeBlessing, formatBlessingSmart } from '../../.
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import EntryPhoto from '@/components/EntryPhoto/EntryPhoto'
+import useImageAspect from '@/lib/useImageAspect'
 import { Heebo } from 'next/font/google'
 import BookLoader from '@/components/BookLoader/BookLoader'
 
 const heebo = Heebo({ subsets: ['hebrew'], weight: ['400', '700', '900'] })
 
 const ITEMS_PER_PAGE = 12
+
+// The "this is how the book will show it" preview in the framing modal.
+// Default: the 4:3 slot the book crops to. With the wedding's no-crop
+// switch on, the preview box takes the photo's own shape instead —
+// otherwise the modal would keep promising a crop the book never makes.
+const PREVIEW_MAX = 192
+function FramingPreview({ src, objectPosition, rotation, noCrop, storedAspect = null }) {
+    const aspect = useImageAspect(src, storedAspect, noCrop)
+    const rot = (((Number(rotation) || 0) % 360) + 360) % 360
+    const a = aspect ? (rot === 90 || rot === 270 ? 1 / aspect : aspect) : 4 / 3
+    let boxW = PREVIEW_MAX
+    let boxH = noCrop ? boxW / a : boxW * 0.75
+    if (boxH > PREVIEW_MAX) {
+        boxH = PREVIEW_MAX
+        boxW = boxH * a
+    }
+    return (
+        <EntryPhoto
+            src={src}
+            fit={noCrop ? 'contain' : 'cover'}
+            maxWidth={boxW}
+            maxHeight={boxH}
+            objectPosition={objectPosition}
+            rotation={rotation}
+        />
+    )
+}
 
 // "4.7.2026 · 21:35" — the full upload moment of an entry. Managers
 // asked to see WHEN each blessing arrived, not just the date.
@@ -89,6 +117,25 @@ export default function AdminDashboard() {
             setLoading(false)
         }
         fetchData()
+    }, [weddingId])
+
+    // Whether this wedding has the "don't crop photos" switch on. Read
+    // only so the framing modal's preview tells the truth: with no-crop
+    // on the book shows the WHOLE photo, so a preview locked to 4:3
+    // would show a crop that never happens. Fails silently — the
+    // preview just falls back to the default 4:3 view.
+    const [noPhotoCrop, setNoPhotoCrop] = useState(false)
+    useEffect(() => {
+        if (!weddingId) return
+        let cancelled = false
+        getDoc(doc(db, 'weddings', weddingId))
+            .then(snap => {
+                if (!cancelled && snap.exists()) setNoPhotoCrop(snap.data()?.noPhotoCrop === true)
+            })
+            .catch(() => {})
+        return () => {
+            cancelled = true
+        }
     }, [weddingId])
 
     // Pagination — `showAll` disables it so the owner can drag-reorder
@@ -938,7 +985,9 @@ export default function AdminDashboard() {
                                 <button onClick={() => setFramingId(null)} className='text-gray-400 hover:text-gray-700 text-3xl leading-none'>×</button>
                             </div>
                             <p className='text-sm text-gray-500 mb-4'>
-                                לחצו על הנקודה בתמונה שחשוב שתישאר במרכז בספר, וסובבו אם הועלתה הפוך/בצד. התצוגה המוקטנת מראה בדיוק איך זה ייראה בספר (4:3).
+                                {noPhotoCrop
+                                    ? 'סובבו אם התמונה הועלתה הפוך/בצד. באירוע הזה התמונות לא נחתכות — התמונה תוצג בספר בשלמותה, ולכן נקודת המרכוז לא משפיעה.'
+                                    : 'לחצו על הנקודה בתמונה שחשוב שתישאר במרכז בספר, וסובבו אם הועלתה הפוך/בצד. התצוגה המוקטנת מראה בדיוק איך זה ייראה בספר (4:3).'}
                             </p>
                             <div className='flex flex-col md:flex-row gap-5 items-start'>
                                 {/* Full image — click to set focal point */}
@@ -960,12 +1009,12 @@ export default function AdminDashboard() {
                                 {/* 4:3 crop preview — exactly how the book renders it (focal + rotation) */}
                                 <div className='flex-shrink-0 mx-auto md:mx-0'>
                                     <div className='rounded-lg overflow-hidden border border-gray-200 shadow-sm'>
-                                        <EntryPhoto
+                                        <FramingPreview
                                             src={fe.imageUrl}
-                                            maxWidth={192}
-                                            maxHeight={144}
+                                            storedAspect={fe.imgAspect}
                                             objectPosition={framingPos}
                                             rotation={framingRot}
+                                            noCrop={noPhotoCrop}
                                         />
                                     </div>
                                     <p className='text-xs text-gray-400 mt-2 text-center'>כך זה ייראה בספר</p>

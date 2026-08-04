@@ -23,6 +23,7 @@ import { getBlessingText } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
 import EntryPhoto from '../EntryPhoto/EntryPhoto'
+import useNoCropSlot from '@/lib/photoSlot'
 
 const GOLD = '#aa8840'
 const TAPE_GOLD = 'rgba(170,136,64,0.30)'
@@ -62,8 +63,17 @@ export default function ScrapbookPageLayout({ entry, styleSettings, scaledWidth,
     // Photo geometry — 4:3 with a thin white print border. The white
     // padding makes it look like a real printed photograph. Slight tilt
     // for the scrapbook character.
-    const photoWidth = w(60)
-    const photoHeight = photoWidth * 0.75
+    // 4:3 by default; the wedding's no-crop toggle switches the slot to
+    // the photo's real aspect so nothing is cut off (maxHeight keeps a
+    // portrait photo from crowding out the blessing).
+    const photoSlot = useNoCropSlot({
+        styleSettings,
+        entry,
+        width: w(60),
+        maxHeight: scaledHeight * (hasText ? 0.5 : hasName ? 0.7 : 0.82),
+    })
+    const photoWidth = photoSlot.width
+    const photoHeight = photoSlot.height
     const printBorder = w(1.2)
 
     const textColor = styleSettings.fontColor || '#3d2e1a'
@@ -117,6 +127,7 @@ export default function ScrapbookPageLayout({ entry, styleSettings, scaledWidth,
                     {/* Shared natural-aspect photo. */}
                     <EntryPhoto
                         src={entry.imageUrl}
+                        fit={photoSlot.fit}
                         maxWidth={photoWidth}
                         maxHeight={photoHeight}
                         objectPosition={entry.photoPosition || 'center'}

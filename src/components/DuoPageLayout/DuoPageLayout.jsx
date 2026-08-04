@@ -86,6 +86,14 @@ function DuoBlock({ entry, styleSettings, w, h, solo }) {
                 <FramedPhoto
                     src={entry.imageUrl}
                     slotW={solo ? slotW * 1.2 : slotW}
+                    // No-crop ("album") mode — note `fit` is already taken in
+                    // this file for the font-fit factor, hence the inline
+                    // read. Two blessings share this sheet, so a duo photo
+                    // gets a much tighter height cap than a solo page: the
+                    // half-page it lives in still has to hold its blessing.
+                    fit={(styleSettings.photoFit ?? 'cover') === 'contain' ? 'contain' : 'cover'}
+                    aspect={Number(entry?.imgAspect) > 0 ? Number(entry.imgAspect) : null}
+                    maxSlotH={h(solo ? (hasText ? 50 : 70) : hasText ? 26 : 36)}
                     frameId={styleSettings.photoFrame}
                     frameUrl={styleSettings.photoFrameUrl}
                     frameInset={styleSettings.photoFrameInset}

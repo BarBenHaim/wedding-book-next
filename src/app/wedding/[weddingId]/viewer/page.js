@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import HTMLFlipBook from 'react-pageflip'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { storage, db } from '@/lib/firebaseClient'
+import { storage, db, auth } from '@/lib/firebaseClient'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 // html2canvas + jsPDF are ~400 KB combined and only used by the
 // admin's "Send to Lulu" + "Download PDFs" flows — never by normal
@@ -115,7 +115,17 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // here, alongside other top-level hooks — placing it after any early
     // return below would violate the rules of hooks (different render
     // paths returned different hook counts on first vs. second render).
-    const styleWithLocale = useMemo(() => ({ ...styleSettings, locale }), [styleSettings, locale])
+    // "Don't crop photos" — the super-admin's per-wedding album switch.
+    // It is re-applied HERE, on top of whatever design is live, rather
+    // than only at load: picking a preset replaces styleSettings wholesale
+    // (applyPresetClean resets every canonical key, photoFit included), so
+    // overlaying it at the render chokepoint is what makes the setting
+    // stick through a preset change without a reload.
+    const noPhotoCrop = weddingDoc?.noPhotoCrop === true
+    const styleWithLocale = useMemo(
+        () => ({ ...styleSettings, locale, ...(noPhotoCrop ? { photoFit: 'contain' } : {}) }),
+        [styleSettings, locale, noPhotoCrop]
+    )
     // Smart auto-split pagination (optional, per-design): a long blessing +
     // photo becomes a blessing-only page followed by a photo-only page; short
     // ones stay combined. `pages` is already in flip order, and the split
@@ -383,6 +393,44 @@ function BookViewerInner({ onLocaleDiscovered }) {
             }
         }, 800)
     }, [weddingId, migrateCoverImageIfNeeded, livePresets])
+
+    // Toggle "don't crop photos" for THIS wedding. Written to the wedding
+    // doc's top level — deliberately not into bookDesign, which every
+    // preset pick overwrites.
+    //
+    // Routed through the admin API rather than a direct setDoc: the
+    // Firestore rule on /weddings/{id} allows updates only by the owning
+    // couple, and this control is super-admin-only — an admin editing a
+    // CUSTOMER's book is not that book's owner, so a client write would be
+    // rejected. The API verifies the super-admin token and writes with
+    // adminDb, which bypasses rules.
+    //
+    // Optimistic: the local doc updates first so the book re-renders
+    // instantly, and reverts if the write fails.
+    const handleNoPhotoCropChange = useCallback(
+        async next => {
+            const value = next === true
+            const prev = weddingDoc
+            setWeddingDoc(d => ({ ...(d || {}), noPhotoCrop: value }))
+            setSaveStatus('saving')
+            try {
+                const idToken = await auth.currentUser?.getIdToken()
+                const res = await fetch('/api/admin/weddings', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+                    body: JSON.stringify({ weddingId, patch: { noPhotoCrop: value } }),
+                })
+                if (!res.ok) throw new Error(`save failed (${res.status})`)
+                setSaveStatus('saved')
+                setTimeout(() => setSaveStatus('idle'), 2500)
+            } catch (err) {
+                console.error('Failed to save photo-crop setting:', err?.message || err)
+                setWeddingDoc(prev)
+                setSaveStatus('idle')
+            }
+        },
+        [weddingId, weddingDoc]
+    )
 
     // handleStyleChange routes updates by mode: cover edits flow into
     // coverStyleSettings + Firestore.coverDesign; book edits into
@@ -689,6 +737,8 @@ function BookViewerInner({ onLocaleDiscovered }) {
                             weddingId={weddingId}
                             locale={locale}
                             eventType={weddingDoc?.eventType}
+                            noPhotoCrop={noPhotoCrop}
+                            onNoPhotoCropChange={handleNoPhotoCropChange}
                         />
                     </div>
                 </aside>

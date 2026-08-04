@@ -38,7 +38,7 @@ import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
-import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import defaultStyle, { withNoCropOverride } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
 import { expandBookPages } from '@/lib/bookPages'
 import {
@@ -167,7 +167,10 @@ function PicabookExportContent() {
         const fromWedding = wedding?.bookDesign || wedding?.book?.designSettings || {}
         // Canonical fill — identical to the viewer/book resolution, so
         // the print export matches the on-screen book pixel-for-pixel.
-        return applyPresetClean(fromWedding)
+        // withNoCropOverride is part of that resolution: without it the
+        // printed book would re-crop photos the operator chose to keep
+        // whole on screen.
+        return applyPresetClean(withNoCropOverride(fromWedding, wedding))
     })()
     // Cover design — mirror /viewer: coverDesign, else bookDesign, over defaults,
     // with the event locale so BookCoverTemplate builds the title correctly.
