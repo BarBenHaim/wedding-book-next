@@ -670,6 +670,17 @@ html.js #waFloat.show,html.jsfail #waFloat{opacity:1;pointer-events:auto}
   .g-band{padding:40px 7%}
 }
 </style>
+
+<!-- Microsoft Clarity — הקלטות סשן ומפות חום. אותו פרויקט (xhmexj42pw) כמו
+     שאר האפליקציה, שם הוא מוטמע ב-src/app/layout.js. הדף הזה מוגש כקובץ
+     סטטי מ-public/ ולכן לא עובר דרך ה-layout — צריך את הסניפט כאן בנפרד. -->
+<script>
+(function(c,l,a,r,i,t,y){
+    c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+    t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+    y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+})(window, document, "clarity", "script", "xhmexj42pw");
+</script>
 </head>
 <body>
 <script>document.documentElement.classList.add("js");window.addEventListener("error",function(ev){if(ev instanceof ErrorEvent&&ev.message){document.documentElement.classList.add("jsfail")}},true);</script>
