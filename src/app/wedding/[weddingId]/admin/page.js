@@ -3,10 +3,10 @@
 import { useEffect, useState, useRef } from 'react'
 import { getEntries } from '../../../../lib/classifyMedia'
 import { useParams } from 'next/navigation'
-import { doc, getDoc, updateDoc, deleteDoc, writeBatch, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, writeBatch, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage, auth } from '../../../../lib/firebaseClient'
-import { onAuthStateChanged } from 'firebase/auth'
+import { onAuthStateChanged, getIdToken } from 'firebase/auth'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import imageCompression from 'browser-image-compression'
 import { getBlessingText, normalizeBlessing, formatBlessingSmart } from '../../../../lib/normalizeText'
@@ -104,6 +104,7 @@ export default function AdminDashboard() {
     const [framingRot, setFramingRot] = useState(0)
     const [savingFraming, setSavingFraming] = useState(false)
     const [duplicatingId, setDuplicatingId] = useState(null)
+    const [deletingId, setDeletingId] = useState(null)
     const fileInputRef = useRef(null)
     const replaceTargetId = useRef(null)
     const { weddingId } = useParams()
@@ -249,10 +250,37 @@ export default function AdminDashboard() {
         }
     }
 
+    // Delete a blessing — through the server, NOT the client SDK.
+    //
+    // firestore.rules blocks client-side deletes on entries ("entry edits
+    // go through the admin API only"), so the old deleteDoc() here was
+    // rejected — and with no catch around it the rejection was invisible:
+    // the confirm closed, nothing happened, no error. That was the
+    // "sometimes delete doesn't work" report. /api/entries/delete uses the
+    // Admin SDK and verifies the caller owns the event, so the outcome is
+    // now always either a real delete or a visible message.
     async function handleDeleteEntry(id) {
+        if (!weddingId || deletingId) return
         if (!confirm('למחוק את הברכה לצמיתות?')) return
-        await deleteDoc(doc(db, 'weddings', weddingId, 'entries', id))
-        setEntries(prev => prev.filter(e => e.id !== id))
+        setDeletingId(id)
+        try {
+            const token = await getIdToken(auth.currentUser)
+            const res = await fetch('/api/entries/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ weddingId, entryIds: [id] }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok || !data?.ok) throw new Error(data?.error || 'delete-failed')
+            // `missing` (already gone) counts as success — a retry after a
+            // flaky network must not leave a ghost card on screen.
+            setEntries(prev => prev.filter(e => e.id !== id))
+        } catch (err) {
+            console.error('Error deleting entry:', err)
+            alert('מחיקת הברכה נכשלה. נסו שוב — ואם זה חוזר, רעננו את העמוד והתחברו מחדש.')
+        } finally {
+            setDeletingId(null)
+        }
     }
 
     // Duplicate a single blessing — creates a copy right after the original
@@ -802,9 +830,21 @@ export default function AdminDashboard() {
                                                                             <p className='text-[13px] text-gray-300 italic'>ללא תוכן</p>
                                                                         )}
 
-                                                                        {/* Actions */}
+                                                                        {/* Actions
+                                                                            flex-wrap + shrink-0 are load-bearing, not cosmetic.
+                                                                            This row grows with the entry: a photo adds "תמונה",
+                                                                            text adds "שמור שורות", and text+photo together adds
+                                                                            "פצל" on top — six buttons plus the move group. On one
+                                                                            grid column (and on any phone) that is wider than the
+                                                                            card, and the card is overflow-hidden, so the LAST
+                                                                            items in RTL — מחק among them — were squeezed to a
+                                                                            sliver or clipped away entirely. That is why the trash
+                                                                            went missing exactly on the richest cards (blessing +
+                                                                            photo) while photo-only album entries kept theirs.
+                                                                            Wrapping to a second line keeps every action reachable
+                                                                            at every width. */}
                                                                         <div
-                                                                            className='flex items-center gap-1.5 mt-3 pt-2.5 border-t border-gray-50 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200'
+                                                                            className='flex flex-wrap items-center gap-1.5 mt-3 pt-2.5 border-t border-gray-50 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200 [&>button]:shrink-0'
                                                                             onMouseDown={e => e.stopPropagation()}
                                                                         >
                                                                             <button
@@ -875,12 +915,18 @@ export default function AdminDashboard() {
                                                                                     <span>{entry.forceSplit ? 'מפוצל לשניים' : 'פצל לשני עמודים'}</span>
                                                                                 </button>
                                                                             )}
+                                                                            {/* Destructive, so it carries its colour instead of
+                                                                                waiting for a hover that never happens on a phone —
+                                                                                the one action you go looking for should be the one
+                                                                                you can spot. */}
                                                                             <button
                                                                                 onClick={() => handleDeleteEntry(entry.id)}
-                                                                                className='flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg active:scale-95 transition-all'
+                                                                                disabled={deletingId === entry.id}
+                                                                                title='מחיקת הברכה מהספר'
+                                                                                className='flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg active:scale-95 transition-all disabled:opacity-50'
                                                                             >
                                                                                 <TrashIcon />
-                                                                                <span>מחק</span>
+                                                                                <span>{deletingId === entry.id ? 'מוחק…' : 'מחק'}</span>
                                                                             </button>
                                                                             <div className='mr-auto flex items-center gap-0.5'>
                                                                                 <button
