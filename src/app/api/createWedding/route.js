@@ -132,6 +132,27 @@ export async function POST(req) {
 
         console.log('💾 Wedding created →', weddingId)
 
+        // --- 7b. סגירת הליד בבוט המכירות ---
+        // הרגע שבו התשלום נקלט הוא גם הרגע שבו הבוט חייב להפסיק למכור.
+        // בלי זה, לקוח שהרגע שילם מקבל למחרת בבוקר "עוד מתלבטים?" —
+        // הדבר הכי מזיק שמשפך אוטומטי יכול לעשות. עטוף ב-try/catch
+        // כי יצירת האירוע חשובה יותר מעדכון ה-CRM ואסור שתיפול בגללו.
+        try {
+            const leadPhone = (billing?.phone || '').trim()
+            if (leadPhone) {
+                const { closeLeadOnPurchase } = await import('@/lib/salesAgent/leads')
+                await closeLeadOnPurchase({
+                    phone: leadPhone,
+                    orderId,
+                    weddingId,
+                    amount: body?.total ?? null,
+                })
+                console.log('🤝 Sales lead closed →', leadPhone)
+            }
+        } catch (leadErr) {
+            console.warn('[createWedding] closing the sales lead failed:', leadErr?.message || leadErr)
+        }
+
         // קישורים למייל — כניסה למערכת (עם פרטי גישה) + צפייה ללא-התחברות.
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://app.weddingtales.co.il'
         const loginUrl = `${baseUrl}/login`

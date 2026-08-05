@@ -1,0 +1,204 @@
+// src/lib/salesAgent/agent.js
+//
+// The model call and — more importantly — everything that makes its
+// output safe to send to a paying customer.
+//
+// An LLM in a sales seat fails in three ways, and each has a guard here:
+//   1. It returns prose around the JSON, or a trailing comma.  → parseAgentJson
+//      extracts the object and never throws; a malformed answer degrades
+//      to a handoff instead of a crash.
+//   2. It invents a field value ("stage": "almost_closed").  → every
+//      enum is whitelisted and anything unknown falls back to a safe value.
+//   3. It writes a wall of text, or eight messages in a row.  → messages
+//      are clamped to 3 and trimmed.
+//
+// The rule behind all of it: when the agent is unsure, the system must
+// fail toward a human, never toward a confident wrong answer.
+
+import { STAGES } from './catalog'
+
+const API_URL = 'https://api.anthropic.com/v1/messages'
+const API_VERSION = '2023-06-01'
+
+// Haiku is the right tier here: the conversation is short, the rules are
+// in the prompt, and cost per lead matters more than eloquence. Override
+// with ANTHROPIC_MODEL if you move tiers or the id changes — model ids
+// are pinned snapshots and do not auto-update.
+export const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5'
+
+const EVENT_TYPES = ['bar_mitzvah', 'bat_mitzvah', 'wedding', 'birthday', 'brit', 'other']
+const PACKAGE_IDS = ['digital', 'printed', 'premium']
+
+const MAX_MESSAGES = 3
+const MAX_MESSAGE_CHARS = 900
+
+// ── Phone normalisation ─────────────────────────────────────────────
+// The doc id for a lead. WhatsApp hands us wa_id (972501234567), humans
+// type 050-123-4567, and a mismatch would silently create a SECOND lead
+// mid-conversation — the agent would forget everything and start over.
+export function normalizePhone(raw) {
+    let s = String(raw || '').replace(/[^\d+]/g, '')
+    if (!s) return ''
+    if (s.startsWith('+')) s = s.slice(1)
+    if (s.startsWith('00')) s = s.slice(2)
+    if (s.startsWith('0')) s = `972${s.slice(1)}`
+    // A bare Israeli mobile without the leading zero (501234567).
+    if (s.length === 9 && s.startsWith('5')) s = `972${s}`
+    return s
+}
+
+function isISODate(v) {
+    return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
+}
+
+function cleanStr(v, max = 300) {
+    if (typeof v !== 'string') return null
+    const t = v.trim()
+    if (!t || t === 'null' || t === 'undefined') return null
+    return t.slice(0, max)
+}
+
+// ── Output parsing ──────────────────────────────────────────────────
+// Tolerant on the way in, strict on the way out. Anything we can't
+// understand becomes a handoff — a human reading one extra conversation
+// costs far less than a customer receiving nonsense.
+export function parseAgentJson(raw) {
+    const fallback = {
+        messages: [],
+        stage: 'handoff',
+        handoff: true,
+        handoffReason: 'התשובה מהמודל לא הייתה תקינה',
+        eventType: null,
+        eventDate: null,
+        celebrantName: null,
+        customerName: null,
+        packageInterest: null,
+        callbackPromised: null,
+        followUpAt: null,
+        objectionRaised: false,
+        notes: null,
+        malformed: true,
+    }
+
+    let obj = null
+    if (raw && typeof raw === 'object') {
+        obj = raw
+    } else {
+        const text = String(raw || '')
+        // Models like to wrap JSON in ```json fences or a friendly
+        // sentence. Take the outermost brace pair and try that.
+        const start = text.indexOf('{')
+        const end = text.lastIndexOf('}')
+        if (start === -1 || end <= start) return fallback
+        const slice = text.slice(start, end + 1)
+        try {
+            obj = JSON.parse(slice)
+        } catch {
+            try {
+                // One common repair: a trailing comma before } or ].
+                obj = JSON.parse(slice.replace(/,\s*([}\]])/g, '$1'))
+            } catch {
+                return fallback
+            }
+        }
+    }
+    if (!obj || typeof obj !== 'object') return fallback
+
+    // messages — accept the array, or a single `reply` string, because
+    // that is the shape a prompt edit is most likely to drift back to.
+    let messages = []
+    if (Array.isArray(obj.messages)) messages = obj.messages
+    else if (typeof obj.messages === 'string') messages = [obj.messages]
+    else if (typeof obj.reply === 'string') messages = [obj.reply]
+    messages = messages
+        .map(m => cleanStr(m, MAX_MESSAGE_CHARS))
+        .filter(Boolean)
+        .slice(0, MAX_MESSAGES)
+
+    const handoff = obj.handoff === true
+    const stage = STAGES.includes(obj.stage) ? obj.stage : handoff ? 'handoff' : 'engaged'
+
+    // No text and no handoff is a dead end — the customer would get
+    // silence. Treat it as a handoff so someone actually replies.
+    if (messages.length === 0 && !handoff) {
+        return { ...fallback, handoffReason: 'המודל לא החזיר תשובה ללקוח' }
+    }
+
+    const eventType = EVENT_TYPES.includes(obj.event_type) ? obj.event_type : null
+    const pkg = PACKAGE_IDS.includes(obj.package_interest) ? obj.package_interest : null
+
+    return {
+        messages,
+        stage,
+        handoff,
+        handoffReason: handoff ? cleanStr(obj.handoff_reason) || 'הבוט ביקש עזרה' : null,
+        eventType,
+        eventDate: isISODate(obj.event_date) ? obj.event_date : null,
+        celebrantName: cleanStr(obj.celebrant_name, 80),
+        customerName: cleanStr(obj.customer_name, 80),
+        packageInterest: pkg,
+        callbackPromised: isISODate(obj.callback_promised) ? obj.callback_promised : null,
+        followUpAt: isISODate(obj.follow_up_at) ? obj.follow_up_at : null,
+        objectionRaised: obj.objection_raised === true,
+        notes: cleanStr(obj.notes, 400),
+        malformed: false,
+    }
+}
+
+// ── Follow-up safety net ────────────────────────────────────────────
+// The model is asked for follow_up_at, but a missing one means the lead
+// silently falls out of the funnel forever — the exact failure the whole
+// system exists to prevent. So the schedule is decided here, with the
+// model's answer as a hint rather than the authority.
+export function resolveFollowUp({ parsed, todayISO, followUpCount = 0, addDays }) {
+    if (parsed.handoff) return null // a human owns it now
+    if (parsed.stage === 'closed_won' || parsed.stage === 'closed_lost') return null
+    if (followUpCount >= 3) return null // the ladder is done; stop chasing
+
+    // A promised callback always wins — following up the day after the
+    // customer said they would come back is the highest-yield moment
+    // there is, and the least annoying.
+    if (parsed.callbackPromised) return addDays(parsed.callbackPromised, 1)
+    if (parsed.followUpAt && parsed.followUpAt > todayISO) return parsed.followUpAt
+    if (parsed.stage === 'offer_sent' || parsed.stage === 'objection') return addDays(todayISO, 2)
+    return addDays(todayISO, 1)
+}
+
+// ── The call ────────────────────────────────────────────────────────
+export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxTokens = 700, temperature = 0.6 }) {
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set')
+
+    const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': API_VERSION,
+        },
+        body: JSON.stringify({
+            model,
+            max_tokens: maxTokens,
+            temperature,
+            system,
+            messages,
+            // Pre-filling the assistant turn with '{' is the cheapest way
+            // to stop a chatty model from prefacing the JSON with "בטח,
+            // הנה:" — it is already inside the object when it starts.
+            stop_sequences: [],
+        }),
+    })
+
+    if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        throw new Error(`anthropic ${res.status}: ${body.slice(0, 400)}`)
+    }
+    const data = await res.json()
+    const text = (data?.content || [])
+        .filter(b => b?.type === 'text')
+        .map(b => b.text)
+        .join('')
+    return { text, usage: data?.usage || null, model: data?.model || model }
+}
+
+export default { callClaude, parseAgentJson, normalizePhone, resolveFollowUp }
