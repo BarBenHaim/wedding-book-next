@@ -25,7 +25,12 @@
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const fetchCache = 'force-no-store'
-export const maxDuration = 60
+// 30s, not 60. The model call aborts itself at 20s (see agent.js), so
+// anything still running at 30 is stuck — and a stuck invocation holds a
+// concurrency slot that every other route on the deployment is queueing
+// for. Failing fast here is what keeps one bad conversation from taking
+// the site down with it.
+export const maxDuration = 30
 
 import { NextResponse } from 'next/server'
 import { buildSystemPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
@@ -90,9 +95,25 @@ export async function POST(req) {
 
     let parsed
     try {
-        const { text: raw, usage } = await callClaude({ system, messages })
+        const { text: raw, usage, stopReason } = await callClaude({ system, messages })
         parsed = parseAgentJson(raw)
-        if (usage) console.log('[sales-agent] usage', phone, usage.input_tokens, usage.output_tokens)
+        if (usage) console.log('[sales-agent] usage', phone, usage.input_tokens, usage.output_tokens, stopReason)
+
+        // ONE retry on unparseable output before giving up on the customer.
+        // A handoff is the safe fallback, not a good one: it pulls a human
+        // into a conversation the bot could have handled. A single retry
+        // costs a couple of agorot and recovers the common cases — a
+        // truncated answer, or a model that wrapped the JSON in prose.
+        if (parsed.malformed) {
+            console.warn('[sales-agent] unparseable output, retrying once', phone, 'stop:', stopReason)
+            const retry = await callClaude({
+                system: `${system}\n\nחשוב: התשובה הקודמת שלך לא הייתה JSON תקין. החזר עכשיו אך ורק אובייקט JSON יחיד, בלי טקסט לפניו או אחריו, ושמור על התשובה ללקוח קצרה.`,
+                messages,
+                temperature: 0.3,
+            })
+            const second = parseAgentJson(retry.text)
+            if (!second.malformed) parsed = second
+        }
     } catch (err) {
         console.error('[sales-agent] model call failed', err?.message || err)
         parsed = {

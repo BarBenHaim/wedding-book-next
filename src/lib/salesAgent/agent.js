@@ -165,32 +165,72 @@ export function resolveFollowUp({ parsed, todayISO, followUpCount = 0, addDays }
 }
 
 // ── The call ────────────────────────────────────────────────────────
-export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxTokens = 700, temperature = 0.6 }) {
+//
+// TIMEOUT_MS is not a nicety — it is what stops one slow upstream from
+// taking the whole site down.
+//
+// Without it, a hanging Anthropic request pins the serverless function
+// until Vercel's own maxDuration (up to 60s). Each pinned function holds
+// a concurrency slot, so a handful of slow calls saturate the plan's
+// limit and EVERY route on the deployment starts queueing — including
+// static-ish ones that never touch the model. We watched exactly that
+// happen during the first live test: the bot answered twice, then the
+// third call hung and within a minute unrelated routes were hanging too.
+//
+// 20s is chosen against reality: a normal reply comes back in 2-6s, so
+// anything past 20s is already a lost conversation. Better to hand that
+// one customer to a human than to queue everyone else behind it.
+const TIMEOUT_MS = Number(process.env.SALES_AGENT_TIMEOUT_MS) || 20000
+
+// 2000, not 700. The reply is Hebrew, and Hebrew costs far more tokens
+// per character than English — a normal 4-line answer plus the dozen
+// metadata fields lands close to 700. When it crosses, the model stops
+// MID-JSON, the output no longer parses, and the conversation falls to a
+// handoff. We watched that happen live on "זה יקר לי" — the objection
+// turn, which is the single moment you least want the bot to bail.
+//
+// The ceiling is not what you pay for; output tokens are billed as used.
+// A generous ceiling costs nothing and removes a whole failure mode.
+const MAX_TOKENS = Number(process.env.SALES_AGENT_MAX_TOKENS) || 2000
+
+export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxTokens = MAX_TOKENS, temperature = 0.6 }) {
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set')
 
-    const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-            'content-type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': API_VERSION,
-        },
-        body: JSON.stringify({
-            model,
-            max_tokens: maxTokens,
-            temperature,
-            system,
-            messages,
-            // Pre-filling the assistant turn with '{' is the cheapest way
-            // to stop a chatty model from prefacing the JSON with "בטח,
-            // הנה:" — it is already inside the object when it starts.
-            stop_sequences: [],
-        }),
-    })
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    let res
+    try {
+        res = await fetch(API_URL, {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+                'content-type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': API_VERSION,
+            },
+            body: JSON.stringify({
+                model,
+                max_tokens: maxTokens,
+                temperature,
+                system,
+                messages,
+            }),
+        })
+    } catch (err) {
+        // An abort surfaces as a generic AbortError; name it so the
+        // handoff message to the owner says something useful.
+        if (err?.name === 'AbortError') throw new Error(`anthropic timeout after ${TIMEOUT_MS}ms`)
+        throw err
+    } finally {
+        clearTimeout(timer)
+    }
 
     if (!res.ok) {
         const body = await res.text().catch(() => '')
+        // 401 = bad key · 429 = rate limited · 400 with credit_balance =
+        // out of credit. All three read identically from the outside
+        // ("the bot stopped answering"), so keep the upstream text.
         throw new Error(`anthropic ${res.status}: ${body.slice(0, 400)}`)
     }
     const data = await res.json()
@@ -198,7 +238,9 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
         .filter(b => b?.type === 'text')
         .map(b => b.text)
         .join('')
-    return { text, usage: data?.usage || null, model: data?.model || model }
+    // stopReason 'max_tokens' means the JSON is truncated and WILL fail to
+    // parse. Surfaced so the caller can retry instead of guessing why.
+    return { text, usage: data?.usage || null, model: data?.model || model, stopReason: data?.stop_reason || null }
 }
 
 export default { callClaude, parseAgentJson, normalizePhone, resolveFollowUp }
