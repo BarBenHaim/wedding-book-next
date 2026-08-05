@@ -38,7 +38,7 @@ import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import { expandBookPages } from '@/lib/bookPages'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
-import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import defaultStyle, { resolveInteriorDesign, withNoCropOverride } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 import { listPresets, resolvePreset, filterPresetsByEventType, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import { adoptSurfaceKeepCover } from '@/lib/presetFilters'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
@@ -421,6 +421,22 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
         // (the cover's photo size shrinks interior photos and leaves a gap —
         // see resolveInteriorDesign).
         applyPresetClean(resolveInteriorDesign(wedding))
+    )
+
+    // ── "Don't crop photos" — the super-admin's per-wedding album switch ──
+    // Re-applied HERE, on top of whatever design is live, and NOT only at
+    // load. Two things reset styleSettings wholesale after the first paint:
+    // the preset strip at the bottom (applyPreset → applyPresetClean, which
+    // resets EVERY canonical key, photoFit included) and the live-preset
+    // link effect below. Both used to silently drop the operator's switch,
+    // so the couple opening this link on their phone saw the photos crop
+    // back to 4:3 the moment they tapped a design. Overlaying at the render
+    // chokepoint — exactly like /viewer does — is what makes the setting
+    // stick through every design change without a reload.
+    const noPhotoCrop = wedding?.noPhotoCrop === true
+    const pageStyleSettings = useMemo(
+        () => withNoCropOverride(styleSettings, wedding),
+        [styleSettings, noPhotoCrop] // eslint-disable-line react-hooks/exhaustive-deps
     )
 
     // The actual page sequence the book renders — entries expanded by the
@@ -962,7 +978,11 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                                 <div key={entry.id} style={{ width: pageSize.w, height: pageSize.h, background: '#fff' }}>
                                     <BookPageTemplate
                                         entry={entry}
-                                        styleSettings={styleSettings}
+                                        /* pageStyleSettings — styleSettings
+                                           with the wedding's no-crop switch
+                                           overlaid, so a preset pick can't
+                                           reset photoFit back to 'cover'. */
+                                        styleSettings={pageStyleSettings}
                                         scaledWidth={pageSize.w}
                                         scaledHeight={pageSize.h}
                                     />
@@ -1079,7 +1099,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                 sticks across devices and into production. (Reversal of
                 the earlier "studio is the sole source of truth"
                 decision, per 2026 product request.) */}
-            {!embed && <PresetStrip presets={presets} activeStyle={styleSettings} onApply={applyPreset} />}
+            {!embed && <PresetStrip presets={presets} activeStyle={styleSettings} onApply={applyPreset} noCrop={noPhotoCrop} />}
 
             {shareToast && (
                 <div
@@ -1127,7 +1147,10 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
 // <BookPageTemplate /> at scaledWidth/Height = 200 then CSS-scaled
 // down via transform: scale(). Picking one calls onApply which
 // updates the live styleSettings in the parent.
-function PresetStrip({ presets, activeStyle, onApply }) {
+// `noCrop` — the wedding's album switch. The thumbnails must promise
+// EXACTLY what applying the preset will deliver; without it the strip
+// showed cropped 4:3 previews for a book that never crops.
+function PresetStrip({ presets, activeStyle, onApply, noCrop = false }) {
     if (!presets?.length) return null
     // Render size — internal page is 240x240, displayed thumbnail
     // is 96x96 → scale = 0.4. Big enough that the user can SEE the
@@ -1188,7 +1211,7 @@ function PresetStrip({ presets, activeStyle, onApply }) {
                     // Canonical fill — the tile must promise EXACTLY what
                     // applying the preset will deliver (same resolution as
                     // the interior render above).
-                    const previewStyle = applyPresetClean(resolved)
+                    const previewStyle = withNoCropOverride(applyPresetClean(resolved), { noPhotoCrop: noCrop })
                     // Stable signature compare — the active styleSettings
                     // is merged from the preset's values + defaults, so
                     // object identity won't match. A handful of tell-tale

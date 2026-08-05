@@ -119,6 +119,11 @@ function PortalApp({ onLocaleDiscovered }) {
     const [entries, setEntries] = useState([])
     const [bookDesign, setBookDesign] = useState(null)
     const [bookRefresh, setBookRefresh] = useState(0)
+    // "אל תחתוך תמונות" — מתג ברמת האירוע שהסופר-אדמין מדליק. יושב מחוץ
+    // לאובייקט העיצוב (weddings/{id}.noPhotoCrop), ולכן חייבים להעביר אותו
+    // לבורר במפורש — אחרת התצוגות המקדימות בגלריה נראות חתוכות 4:3 בזמן
+    // שהספר עצמו מציג את התמונות בשלמותן.
+    const [noPhotoCrop, setNoPhotoCrop] = useState(false)
 
     // Resolved event-type config — drives field labels + placeholders.
     // Now locale-aware: in English, cfg.label === 'Bar Mitzvah'.
@@ -154,6 +159,7 @@ function PortalApp({ onLocaleDiscovered }) {
 
                     // עיצוב הספר הנוכחי — לסימון הפריסט הפעיל בבורר
                     setBookDesign(data.bookDesign || data.coverDesign || null)
+                    setNoPhotoCrop(data.noPhotoCrop === true)
 
                     // טוקן לספר הדיגיטלי — אם אין, ניצור ונשמור (הבעלים מורשה לכתוב)
                     const existingToken =
@@ -363,6 +369,7 @@ function PortalApp({ onLocaleDiscovered }) {
                         title='בחרו עיצוב לספר'
                         hint='בחרו עיצוב — הספר שלמעלה יתעדכן מיד.'
                         eventType={eventType}
+                        noCrop={noPhotoCrop}
                     />
 
                     

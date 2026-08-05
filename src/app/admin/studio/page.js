@@ -1294,6 +1294,51 @@ function PropertiesPanel({
     const v = draft?.values || {}
     const draftEventTypes = Array.isArray(draft?.eventTypes) ? draft.eventTypes : []
 
+    // ── Per-mode photo values ────────────────────────────────────────
+    // Size and margins hold TWO sets of values: the flat keys are the
+    // cropped 4:3 mode, `albumPhoto` is the uncropped album mode. The
+    // photoFit toggle selects which set the sliders read and write, so
+    // tuning one mode can never move the other. Album mode INHERITS the
+    // cover values until the first slider move — that's what keeps every
+    // existing preset rendering exactly as it does today.
+    const albumMode = (v.photoFit ?? 'cover') === 'contain'
+    const album = v.albumPhoto && typeof v.albumPhoto === 'object' ? v.albumPhoto : null
+    const albumOverrideActive = albumMode && !!album && Object.keys(album).length > 0
+
+    const photoValue = (key, fallback) => {
+        const base = v[key] ?? fallback
+        if (!albumMode) return base
+        const n = Number(album?.[key])
+        return Number.isFinite(n) ? n : base
+    }
+    // Synthetic imageStyle for the size slider — the album override only
+    // carries width/height, so the rest still comes from the base.
+    const photoImageStyle = albumMode && Number.isFinite(Number(album?.imageStyle?.width))
+        ? { ...(v.imageStyle || {}), ...album.imageStyle }
+        : v.imageStyle
+
+    const setPhotoValue = patch => {
+        if (!albumMode) return onValuesChange(patch)
+        // Seeded from whatever the override already holds — the keys the
+        // user hasn't touched keep inheriting the cover values instead of
+        // being frozen at today's numbers.
+        onValuesChange({ albumPhoto: { ...(album || {}), ...patch } })
+    }
+    const setPhotoWidth = width => {
+        // Keep one decimal so 0.1% slider steps don't get rounded away.
+        const height = Math.round(width * 0.75 * 10) / 10
+        if (!albumMode) return onImageStyleChange({ width, height })
+        onValuesChange({
+            albumPhoto: {
+                ...(album || {}),
+                imageStyle: { ...(album?.imageStyle || {}), width, height },
+            },
+        })
+    }
+    // Back to inheriting the cover values — null is the ONE canonical
+    // representation of "no override" (see cleanAlbumPhoto).
+    const clearAlbumOverride = () => onValuesChange({ albumPhoto: null })
+
     return (
         <aside
             className='rounded-2xl overflow-hidden self-start lg:sticky lg:top-6 lg:max-h-[calc(100vh_-_80px)]'
@@ -1652,27 +1697,15 @@ function PropertiesPanel({
                             onDelete={onDeleteBackground}
                         />
 
-                        {/* Image size — width drives, height auto-
-                            tracks 4:3 (no unlock). Stored as
-                            imageStyle.{width,height} in % of page. */}
-                        <PropertyImageSize
-                            imageStyle={v.imageStyle}
-                            disabled={!editable}
-                            onChange={width =>
-                                onImageStyleChange({
-                                    width,
-                                    // Keep one decimal so 0.1% slider
-                                    // steps don't get rounded away —
-                                    // the user wants finer control
-                                    // than integer percentages.
-                                    height: Math.round(width * 0.75 * 10) / 10,
-                                })
-                            }
-                        />
-
                         {/* Photo fit — album mode: the photo is NEVER
                             cropped ('contain'); default keeps the uniform
-                            4:3 cover crop. */}
+                            4:3 cover crop.
+
+                            Moved ABOVE the photo sliders on purpose: it is
+                            no longer just a rendering flag, it now selects
+                            WHICH set of size/margin values the sliders
+                            below edit. The mode has to be visible before
+                            you touch them. */}
                         <div>
                             <div className='text-[11.5px] font-bold text-[#7a6a52] mb-1.5'>התאמת תמונה</div>
                             <div className='flex rounded-lg overflow-hidden' style={{ border: '1px solid #ead9b3' }}>
@@ -1695,6 +1728,51 @@ function PropertiesPanel({
                                 ))}
                             </div>
                         </div>
+
+                        {/* Which mode the three sliders below are editing.
+                            Without this banner the panel looks identical in
+                            both modes and a value edited in one silently
+                            "doesn't stick" from the other's point of view. */}
+                        <div
+                            className='rounded-lg px-2.5 py-2'
+                            style={{
+                                background: albumMode ? 'rgba(170,136,64,0.09)' : '#faf7f0',
+                                border: '1px solid rgba(212,184,103,0.35)',
+                            }}
+                        >
+                            <p className='text-[10.5px] font-bold text-[#7a6a52] leading-relaxed'>
+                                {albumMode
+                                    ? '↓ גודל וריווח — ערכים של מצב אלבום (ללא חיתוך)'
+                                    : '↓ גודל וריווח — ערכים של מצב מילוי (4:3)'}
+                            </p>
+                            <p className='text-[10px] text-[#a89378] mt-0.5 leading-relaxed'>
+                                {albumMode
+                                    ? albumOverrideActive
+                                        ? 'למצב הזה יש ערכים משלו. שינוי כאן לא נוגע במצב המילוי.'
+                                        : 'כרגע מצב זה יורש את ערכי המילוי. ברגע שתזיז סליידר, ייווצרו לו ערכים נפרדים.'
+                                    : 'למצב אלבום יש סט ערכים נפרד — עברו אליו כדי לכוון אותו.'}
+                            </p>
+                            {albumMode && albumOverrideActive && editable && (
+                                <button
+                                    type='button'
+                                    onClick={clearAlbumOverride}
+                                    className='mt-1.5 text-[10.5px] font-bold text-[#AA8840] hover:underline'
+                                >
+                                    אפס — חזרה לירושה מערכי המילוי
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Image size — width drives, height auto-
+                            tracks 4:3 (no unlock). Stored as
+                            imageStyle.{width,height} in % of page, or
+                            under albumPhoto.imageStyle in album mode. */}
+                        <PropertyImageSize
+                            imageStyle={photoImageStyle}
+                            albumMode={albumMode}
+                            disabled={!editable}
+                            onChange={setPhotoWidth}
+                        />
 
                         {/* Album page composition — smart arranges pages
                             by each photo's measured aspect. */}
@@ -1726,26 +1804,26 @@ function PropertiesPanel({
                             the photo. % of page height. */}
                         <PropertySlider
                             icon={ImageIcon}
-                            label='ריווח תמונה מלמעלה'
-                            value={v.imageMarginTop ?? 2}
+                            label={albumMode ? 'ריווח תמונה מלמעלה (אלבום)' : 'ריווח תמונה מלמעלה'}
+                            value={photoValue('imageMarginTop', 2)}
                             min={0}
                             max={20}
                             step={0.5}
                             unit='%'
                             disabled={!editable}
-                            onChange={n => onValuesChange({ imageMarginTop: n })}
+                            onChange={n => setPhotoValue({ imageMarginTop: n })}
                         />
 
                         <PropertySlider
                             icon={ImageIcon}
-                            label='ריווח תמונה מלמטה'
-                            value={v.imageMarginBottom ?? 2}
+                            label={albumMode ? 'ריווח תמונה מלמטה (אלבום)' : 'ריווח תמונה מלמטה'}
+                            value={photoValue('imageMarginBottom', 2)}
                             min={0}
                             max={20}
                             step={0.5}
                             unit='%'
                             disabled={!editable}
-                            onChange={n => onValuesChange({ imageMarginBottom: n })}
+                            onChange={n => setPhotoValue({ imageMarginBottom: n })}
                         />
 
                         <PropertySlider
@@ -2720,7 +2798,10 @@ function PropertyPhotoFramePicker({ label, frameId, frameUrl, frameInset, disabl
     )
 }
 
-function PropertyImageSize({ imageStyle, disabled, onChange }) {
+// `albumMode` — the uncropped mode. The height is NOT locked to 4:3
+// there (the slot follows each photo's own aspect), so showing a second
+// number and a lock icon would be a lie; the slider drives width only.
+function PropertyImageSize({ imageStyle, disabled, onChange, albumMode = false }) {
     const width = imageStyle?.width ?? 90
     const height = imageStyle?.height ?? Math.round(width * 0.75) // 4:3
     return (
@@ -2729,12 +2810,14 @@ function PropertyImageSize({ imageStyle, disabled, onChange }) {
                 <div className='flex items-center gap-1.5'>
                     <ImageIcon size={12} className='text-[#c9a44e]' />
                     <span className='text-[11px] font-semibold text-[#7a6a52] uppercase tracking-wider'>
-                        גודל תמונה
+                        {albumMode ? 'גודל תמונה (אלבום)' : 'גודל תמונה'}
                     </span>
-                    <Lock size={9} className='text-[#a89378]' />
+                    {!albumMode && <Lock size={9} className='text-[#a89378]' />}
                 </div>
                 <span className='text-[11px] font-mono text-[#3d3225]'>
-                    {Number(width).toFixed(1)}% × {Number(height).toFixed(1)}%
+                    {albumMode
+                        ? `רוחב ${Number(width).toFixed(1)}%`
+                        : `${Number(width).toFixed(1)}% × ${Number(height).toFixed(1)}%`}
                 </span>
             </div>
             <input
@@ -2748,8 +2831,9 @@ function PropertyImageSize({ imageStyle, disabled, onChange }) {
                 className='w-full accent-[#AA8840] disabled:opacity-50 disabled:cursor-not-allowed'
             />
             <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>
-                גובה ננעל ליחס 4:3 — אותו יחס שהמצלמה והקרופר מחייבים, כדי
-                שהתצוגה תתאים לדפוס.
+                {albumMode
+                    ? 'הגובה נקבע לפי יחס הצדדים של כל תמונה — הסליידר קובע רק את הרוחב, ושום דבר לא נחתך.'
+                    : 'גובה ננעל ליחס 4:3 — אותו יחס שהמצלמה והקרופר מחייבים, כדי שהתצוגה תתאים לדפוס.'}
             </p>
         </div>
     )

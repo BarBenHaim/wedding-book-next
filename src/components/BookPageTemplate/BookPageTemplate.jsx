@@ -4,6 +4,7 @@ import { getBlessingText } from '@/lib/normalizeText'
 import { resolveActiveTemplate } from '@/lib/presetFilters'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
+import { resolvePhotoStyle } from '@/lib/bookDesignSchema'
 import FramedPhoto from '../FramedPhoto/FramedPhoto'
 import PolaroidPageLayout from '../PolaroidPageLayout/PolaroidPageLayout'
 import ScrapbookPageLayout from '../ScrapbookPageLayout/ScrapbookPageLayout'
@@ -11,7 +12,17 @@ import NotebookPageLayout from '../NotebookPageLayout/NotebookPageLayout'
 import CollagePageLayout from '../CollagePageLayout/CollagePageLayout'
 import DuoPageLayout from '../DuoPageLayout/DuoPageLayout'
 
-export default function BookPageTemplate({ entry, styleSettings, scaledWidth, scaledHeight }) {
+export default function BookPageTemplate({ entry, styleSettings: incomingStyle, scaledWidth, scaledHeight }) {
+    // ── Album-mode photo overrides ───────────────────────────────────
+    // Resolved ONCE, here, before anything reads the design — every
+    // layout below (duo, polaroid, scrapbook, notebook, collage) and
+    // the classic renderer receive the already-resolved object, so the
+    // album-mode margins/size apply everywhere without each layout
+    // having to know the rule. Returns the SAME object when the design
+    // has no album override or the page is cropping, so the common
+    // case costs nothing and re-renders exactly as before.
+    const styleSettings = resolvePhotoStyle(incomingStyle)
+
     // ── Layout dispatcher ────────────────────────────────────────────────
     // Branch on `styleSettings.template` BEFORE any classic-template logic.
     // Keep ACTIVE templates here; retired layouts stay on disk as orphan

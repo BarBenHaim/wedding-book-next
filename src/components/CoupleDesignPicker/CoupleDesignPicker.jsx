@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { listPresets, resolvePreset, filterPresetsByEventType, BUILTIN_PRESETS } from '@/lib/studioPresets'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
+import { withNoCropOverride } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 
 // Couple-facing book-design picker. A curated gallery of presets, each
 // rendered as a real mini <BookPageTemplate /> so the couple chooses by
@@ -57,7 +58,13 @@ function useWidth() {
 // ...). When provided, the gallery shows ONLY presets tagged for that
 // type plus generic (untagged) presets — a bar mitzvah doesn't wade
 // through wedding designs and vice versa.
-export default function CoupleDesignPicker({ activeDesign, onSelect, title = 'בחרו עיצוב לספר', hint, eventType = null }) {
+//
+// `noCrop` — the wedding's "don't crop photos" switch
+// (weddings/{id}.noPhotoCrop). It lives OUTSIDE the design object on
+// purpose (see withNoCropOverride), so the tiles have to be told about
+// it explicitly; otherwise the gallery previews every design cropped to
+// 4:3 while the real book shows whole photos.
+export default function CoupleDesignPicker({ activeDesign, onSelect, title = 'בחרו עיצוב לספר', hint, eventType = null, noCrop = false }) {
     const [presets, setPresets] = useState(() => filterPresetsByEventType(BUILTIN_PRESETS, eventType))
     const [savingKey, setSavingKey] = useState(null)
     const [save, setSave] = useState('') // '' | 'saved' | 'error'
@@ -108,7 +115,9 @@ export default function CoupleDesignPicker({ activeDesign, onSelect, title = 'ב
             <div ref={gridRef} className='grid grid-cols-2 sm:grid-cols-3 gap-2.5'>
                 {presets.map(preset => {
                     const key = preset.id || preset.name
-                    const previewStyle = applyPresetClean(resolvePreset(preset).values)
+                    const previewStyle = withNoCropOverride(applyPresetClean(resolvePreset(preset).values), {
+                        noPhotoCrop: noCrop,
+                    })
                     const isActive = sameDesign(previewStyle, activeDesign)
                     const isSaving = savingKey === key
                     return (

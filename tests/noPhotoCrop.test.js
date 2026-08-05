@@ -4,6 +4,7 @@ import { measureAspect, aspectCache } from '@/lib/useImageAspect'
 import { photoFrameGeometry, photoOverlayGeometry } from '@/lib/photoFrames'
 import { expandBookPages } from '@/lib/bookPages'
 import { withNoCropOverride, resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
+import { applyPresetClean, resolvePhotoStyle, cleanAlbumPhoto } from '@/lib/bookDesignSchema'
 
 // The whole point of the toggle: existing books must render EXACTLY as
 // before unless a super-admin turns it on. Most of these tests are
@@ -43,6 +44,58 @@ describe('withNoCropOverride — the sticky per-wedding switch', () => {
     it('leaves an untoggled wedding on the classic cover behaviour', () => {
         expect(resolveInteriorDesign({ bookDesign: { photoFit: 'cover' } }).photoFit).toBe('cover')
         expect(resolveInteriorDesign({ bookDesign: {} }).photoFit).toBeUndefined()
+    })
+})
+
+// ── The regression this suite exists to pin ─────────────────────────
+// Reported summer 2026: the switch held in /viewer, but a couple opening
+// the share link on their phone and tapping a design in the preset strip
+// got cropped photos back. Cause: every surface that lets someone CHANGE
+// the design replaces styleSettings wholesale with applyPresetClean(...),
+// which resets photoFit to the canonical 'cover'. Resolving the design
+// once at load is therefore not enough — the overlay has to be re-applied
+// at the render chokepoint, after the preset.
+describe('the switch survives a design change (not just page load)', () => {
+    const wedding = { noPhotoCrop: true, bookDesign: { photoFit: 'contain', fontColor: '#000' } }
+
+    it('loads uncropped', () => {
+        expect(applyPresetClean(resolveInteriorDesign(wedding)).photoFit).toBe('contain')
+    })
+
+    it('shows the bug when a preset is applied WITHOUT the overlay', () => {
+        // What the digital-edition strip used to do on tap.
+        const afterPreset = applyPresetClean({ backgroundColor: '#fff', template: 'polaroid' })
+        expect(afterPreset.photoFit).toBe('cover') // ← the crop coming back
+    })
+
+    it('stays uncropped when the overlay is re-applied at render', () => {
+        const afterPreset = applyPresetClean({ backgroundColor: '#fff', template: 'polaroid' })
+        const rendered = withNoCropOverride(afterPreset, wedding)
+        expect(rendered.photoFit).toBe('contain')
+        // The rest of the freshly picked preset must survive untouched —
+        // the overlay only ever owns photoFit.
+        expect(rendered.template).toBe('polaroid')
+        expect(rendered.backgroundColor).toBe('#fff')
+    })
+
+    it('survives the live-preset link re-applying a studio preset', () => {
+        // bookDesignPresetId makes linked books follow the preset's CURRENT
+        // studio values; that effect also replaces styleSettings wholesale.
+        const live = applyPresetClean({ template: 'classic', imageStyle: { width: 92 } })
+        expect(withNoCropOverride(live, wedding).photoFit).toBe('contain')
+    })
+
+    it('renders preset THUMBNAILS uncropped too, so the tile matches the result', () => {
+        // A cropped tile next to an uncropped book reads as a broken preview.
+        const tile = withNoCropOverride(applyPresetClean({}), { noPhotoCrop: true })
+        expect(tile.photoFit).toBe('contain')
+    })
+
+    it('turning the switch back off re-crops immediately, with no stale design', () => {
+        // The overlay is never persisted into bookDesign — so clearing the
+        // flag is instant, not "until the next preset pick".
+        const stored = applyPresetClean({ template: 'classic' })
+        expect(withNoCropOverride(stored, { noPhotoCrop: false }).photoFit).toBe('cover')
     })
 })
 
@@ -200,5 +253,155 @@ describe('expandBookPages — split photo pages carry the aspect', () => {
             autoSplit: true,
         })
         expect(pages[1].imgAspect).toBeUndefined()
+    })
+})
+
+// ── Album-mode photo overrides ──────────────────────────────────────
+// A 4:3 crop and a whole photo need different air on the page, so size
+// + margins hold TWO sets of values: the flat keys (cropped mode) and
+// `albumPhoto` (uncropped mode). resolvePhotoStyle picks the right set
+// at render time. Every assertion about the DEFAULT path here is a
+// "nothing changed" assertion — existing presets have no albumPhoto.
+describe('resolvePhotoStyle — the per-mode photo values', () => {
+    const base = {
+        photoFit: 'cover',
+        imageMarginTop: 2,
+        imageMarginBottom: 2,
+        imageStyle: { width: 80, borderRadius: '12px' },
+        albumPhoto: { imageMarginTop: 9, imageMarginBottom: 1, imageStyle: { width: 62, height: 46.5 } },
+    }
+
+    it('is a no-op — same object identity — while the page crops', () => {
+        // Identity matters: a new object every render would defeat the
+        // memoisation the page templates rely on.
+        expect(resolvePhotoStyle(base)).toBe(base)
+        expect(resolvePhotoStyle({ ...base, photoFit: undefined })).toEqual({ ...base, photoFit: undefined })
+    })
+
+    it('is a no-op when the design carries no album override', () => {
+        const plain = { photoFit: 'contain', imageMarginTop: 2, albumPhoto: null }
+        expect(resolvePhotoStyle(plain)).toBe(plain)
+    })
+
+    it('swaps in the album margins and width once the page is uncropped', () => {
+        const out = resolvePhotoStyle({ ...base, photoFit: 'contain' })
+        expect(out.imageMarginTop).toBe(9)
+        expect(out.imageMarginBottom).toBe(1)
+        expect(out.imageStyle.width).toBe(62)
+    })
+
+    it('keeps the shared photo properties — only size and margins split', () => {
+        const out = resolvePhotoStyle({ ...base, photoFit: 'contain' })
+        // borderRadius lives on the SAME imageStyle object the override
+        // replaces width in — a shallow swap would have dropped it.
+        expect(out.imageStyle.borderRadius).toBe('12px')
+    })
+
+    it('inherits per key — an untouched album slider still follows the crop values', () => {
+        const out = resolvePhotoStyle({
+            ...base,
+            photoFit: 'contain',
+            albumPhoto: { imageMarginTop: 9 }, // bottom + width never touched
+        })
+        expect(out.imageMarginTop).toBe(9)
+        expect(out.imageMarginBottom).toBe(2)
+        expect(out.imageStyle.width).toBe(80)
+    })
+
+    it('never mutates the design it was handed', () => {
+        const design = { ...base, photoFit: 'contain' }
+        resolvePhotoStyle(design)
+        expect(design.imageMarginTop).toBe(2)
+        expect(design.imageStyle.width).toBe(80)
+    })
+
+    it('survives junk instead of throwing at render time', () => {
+        for (const bad of [null, undefined, 'nope', 42]) {
+            expect(() => resolvePhotoStyle(bad)).not.toThrow()
+        }
+        const out = resolvePhotoStyle({ photoFit: 'contain', imageMarginTop: 2, albumPhoto: { imageMarginTop: 'ten' } })
+        expect(out.imageMarginTop).toBe(2) // garbage dropped, base kept
+    })
+})
+
+describe('cleanAlbumPhoto — one canonical shape for "no override"', () => {
+    it('collapses every empty form to null', () => {
+        // Not {} — the studio compares designs by JSON to decide whether
+        // the draft is dirty, so two spellings of "nothing" would show a
+        // phantom unsaved change.
+        for (const empty of [null, undefined, {}, { imageStyle: {} }, { nope: 1 }, [], 'x']) {
+            expect(cleanAlbumPhoto(empty)).toBeNull()
+        }
+    })
+
+    it('keeps only the supported keys', () => {
+        expect(
+            cleanAlbumPhoto({
+                imageMarginTop: 9,
+                imageMarginBottom: 1,
+                imageStyle: { width: 62, height: 46.5, borderRadius: '40px' },
+                fontColor: '#f00', // not a per-mode property
+            })
+        ).toEqual({ imageMarginTop: 9, imageMarginBottom: 1, imageStyle: { width: 62, height: 46.5 } })
+    })
+
+    it('accepts 0 — a legitimate margin, not "empty"', () => {
+        expect(cleanAlbumPhoto({ imageMarginTop: 0 })).toEqual({ imageMarginTop: 0 })
+    })
+})
+
+describe('applyPresetClean — album overrides survive a preset apply', () => {
+    it('defaults to null, so every existing preset is untouched', () => {
+        expect(applyPresetClean({}).albumPhoto).toBeNull()
+        // And the flat photo keys keep their canonical values.
+        expect(applyPresetClean({}).imageMarginTop).toBe(2)
+    })
+
+    it('carries a real override through the full reset', () => {
+        const out = applyPresetClean({ albumPhoto: { imageMarginTop: 9, imageStyle: { width: 62 } } })
+        expect(out.albumPhoto).toEqual({ imageMarginTop: 9, imageStyle: { width: 62 } })
+    })
+
+    it('sanitises a malformed override rather than passing it to the renderer', () => {
+        expect(applyPresetClean({ albumPhoto: 'contain please' }).albumPhoto).toBeNull()
+        expect(applyPresetClean({ albumPhoto: { imageMarginTop: NaN } }).albumPhoto).toBeNull()
+    })
+})
+
+describe('the operator switch and the album values compose', () => {
+    // The ordering contract: withNoCropOverride runs FIRST (it decides
+    // photoFit), resolvePhotoStyle second (it branches on the result).
+    const design = applyPresetClean({
+        imageMarginTop: 2,
+        imageMarginBottom: 2,
+        imageStyle: { width: 80 },
+        albumPhoto: { imageMarginTop: 9, imageStyle: { width: 62 } },
+    })
+
+    it('a wedding flipped to album mode gets the album composition too', () => {
+        // The whole point: the operator flips ONE switch and the pages are
+        // composed for whole photos — not merely uncropped inside a layout
+        // that was tuned for 4:3 crops.
+        const rendered = resolvePhotoStyle(withNoCropOverride(design, { noPhotoCrop: true }))
+        expect(rendered.photoFit).toBe('contain')
+        expect(rendered.imageMarginTop).toBe(9)
+        expect(rendered.imageStyle.width).toBe(62)
+    })
+
+    it('a wedding with the switch off renders the crop values, override or not', () => {
+        const rendered = resolvePhotoStyle(withNoCropOverride(design, { noPhotoCrop: false }))
+        expect(rendered.photoFit).toBe('cover')
+        expect(rendered.imageMarginTop).toBe(2)
+        expect(rendered.imageStyle.width).toBe(80)
+    })
+
+    it('still holds after the couple taps a design on their phone', () => {
+        // Combines both fixes: the preset reset drops photoFit, the
+        // wedding overlay puts it back, and the album values follow.
+        const afterPreset = applyPresetClean({ template: 'polaroid', albumPhoto: { imageMarginTop: 9 } })
+        expect(afterPreset.photoFit).toBe('cover')
+        const rendered = resolvePhotoStyle(withNoCropOverride(afterPreset, { noPhotoCrop: true }))
+        expect(rendered.photoFit).toBe('contain')
+        expect(rendered.imageMarginTop).toBe(9)
     })
 })

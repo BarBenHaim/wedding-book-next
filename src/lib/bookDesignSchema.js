@@ -96,6 +96,24 @@ export const CANONICAL_STYLE_DEFAULTS = {
     photoLayout: 'uniform',
     imageMarginTop: 2,
     imageMarginBottom: 2,
+    // ── Album-mode photo overrides ───────────────────────────────────
+    // A SECOND set of photo-block values, used ONLY while the page
+    // renders uncropped (photoFit === 'contain'). null = album mode
+    // inherits the values above, which is exactly how every existing
+    // preset behaves — so this key is invisible until someone opens
+    // the studio and tunes the album mode on purpose.
+    //
+    // Why it exists: a 4:3 crop and a whole photo need different air.
+    // The crop is always the same shape, so one pair of margins centres
+    // every page. An uncropped portrait is ~1.8× taller than the same
+    // photo cropped, so margins tuned for the crop push it off-centre
+    // and a width tuned for the crop makes it tower over the blessing.
+    // Tuning one mode used to break the other; now each holds its own.
+    //
+    // Shape (all keys optional — a missing key falls back to the
+    // cover-mode value): { imageMarginTop, imageMarginBottom,
+    // imageStyle: { width, height } }.
+    albumPhoto: null,
     photoFrame: null, // built-in frame id from PHOTO_FRAMES (null = none)
     photoFrameUrl: null, // uploaded overlay PNG/SVG (wins over photoFrame)
     photoFrameInset: 6, // % of slot width the photo insets under an overlay
@@ -118,6 +136,68 @@ function isPlainObject(v) {
     return v != null && typeof v === 'object' && !Array.isArray(v)
 }
 
+// ── Album-mode photo overrides ──────────────────────────────────────
+// The photo-block keys that can hold a separate album-mode value. Kept
+// deliberately SHORT: only the properties whose right value genuinely
+// depends on whether the photo is cropped. Corner radius, frame,
+// alignment and the rest stay shared — a preset should still read as
+// one design in both modes.
+export const ALBUM_PHOTO_MARGIN_KEYS = ['imageMarginTop', 'imageMarginBottom']
+export const ALBUM_PHOTO_IMAGE_STYLE_KEYS = ['width', 'height']
+
+// Normalise whatever is stored in `albumPhoto` down to the supported
+// shape, dropping unknown keys and non-numeric values. Returns null
+// when nothing usable survives, so "no override" has exactly ONE
+// representation ({} and null can't both mean inherit — the studio's
+// dirty-check compares designs by JSON).
+export function cleanAlbumPhoto(value) {
+    if (!isPlainObject(value)) return null
+    const out = {}
+    for (const key of ALBUM_PHOTO_MARGIN_KEYS) {
+        const n = Number(value[key])
+        if (Number.isFinite(n)) out[key] = n
+    }
+    if (isPlainObject(value.imageStyle)) {
+        const style = {}
+        for (const key of ALBUM_PHOTO_IMAGE_STYLE_KEYS) {
+            const n = Number(value.imageStyle[key])
+            if (Number.isFinite(n)) style[key] = n
+        }
+        if (Object.keys(style).length > 0) out.imageStyle = style
+    }
+    return Object.keys(out).length > 0 ? out : null
+}
+
+// THE render chokepoint for album-mode overrides.
+//
+// Call this on the styleSettings a page is about to render with. When
+// the page is cropping (photoFit 'cover') or the design carries no
+// album override, the SAME object comes back — identity preserved, so
+// nothing re-renders and existing books are byte-identical.
+//
+// Note the ordering contract: this must run AFTER withNoCropOverride
+// (the per-wedding "don't crop photos" switch), because it branches on
+// the FINAL photoFit. A wedding flipped to album mode by the operator
+// therefore picks up the preset's album margins too — which is the
+// point: the operator flips one switch and the pages are composed for
+// whole photos, not just uncropped in a layout built for crops.
+export function resolvePhotoStyle(styleSettings) {
+    if (!isPlainObject(styleSettings)) return styleSettings
+    if ((styleSettings.photoFit ?? 'cover') !== 'contain') return styleSettings
+    const album = cleanAlbumPhoto(styleSettings.albumPhoto)
+    if (!album) return styleSettings
+    const out = { ...styleSettings, ...album }
+    if (album.imageStyle) {
+        // Merge one level deep — the album override only ever carries
+        // width/height, so borderRadius & friends survive from the base.
+        out.imageStyle = {
+            ...(isPlainObject(styleSettings.imageStyle) ? styleSettings.imageStyle : {}),
+            ...album.imageStyle,
+        }
+    }
+    return out
+}
+
 // Apply a preset (or fill a stored design) over the canonical schema.
 // Always returns a NEW, JSON-safe object (no undefined values — the
 // Firestore client SDK rejects them) where every canonical key exists.
@@ -138,6 +218,11 @@ export function applyPresetClean(values) {
         ...CANONICAL_STYLE_DEFAULTS.imageStyle,
         ...(isPlainObject(defined.imageStyle) ? defined.imageStyle : {}),
     }
+    // albumPhoto is NOT filled from the canonical defaults — null means
+    // "inherit the cover-mode values", and that has to survive as null
+    // or every preset would freeze today's numbers into an override.
+    // Sanitised so a malformed payload can never reach the renderer.
+    out.albumPhoto = cleanAlbumPhoto(defined.albumPhoto)
     // JSON round-trip: strips any remaining `undefined` (Firestore-safe)
     // and detaches every nested reference from the caller's object.
     return JSON.parse(JSON.stringify(out))
