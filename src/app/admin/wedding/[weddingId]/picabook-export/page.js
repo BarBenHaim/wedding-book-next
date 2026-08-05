@@ -41,6 +41,7 @@ import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCo
 import defaultStyle, { withNoCropOverride } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
 import { expandBookPages } from '@/lib/bookPages'
+import { measureAspect } from '@/lib/useImageAspect'
 import {
     Printer, Lock, CheckCircle2, Loader2, AlertTriangle,
     ArrowLeft, FileArchive, Info, ExternalLink, Check,
@@ -239,6 +240,36 @@ function PicabookExportContent() {
         setProgress({ done: 0, total, label: 'מתחיל...' })
 
         try {
+            // ── Warm the aspect cache BEFORE the first capture ────────
+            // In album mode (photoFit 'contain') the photo's slot is
+            // derived from its aspect ratio: boxH = boxW / aspect. Entries
+            // that predate the imgAspect field have no stored value, so
+            // useImageAspect measures the bitmap ASYNCHRONOUSLY and only
+            // seeds synchronously from an already-warm module cache.
+            //
+            // On screen that cache gets warmed by the book the operator
+            // just flipped through. This page never renders the book — so
+            // every legacy photo was a cache MISS, its page mounted with
+            // the fallback slot shape, and html2canvas could snapshot it
+            // before the measurement landed and resized the slot. Whether
+            // it won that race varied per photo, which is exactly the
+            // "some pages came out a different size / in a different
+            // place" symptom. Photos WITH a stored aspect were never
+            // affected, which is why only some pages were wrong.
+            //
+            // Measuring everything up front makes each page's FIRST render
+            // already correct — the race is gone rather than widened.
+            if ((styleSettings.photoFit ?? 'cover') === 'contain') {
+                const needMeasure = entries.filter(e => e.imageUrl && !(Number(e.imgAspect) > 0))
+                if (needMeasure.length > 0) {
+                    setProgress({ done: 0, total, label: `מודד ${needMeasure.length} תמונות...` })
+                    // A photo that can't be measured (CORS, 404) resolves to
+                    // null and simply keeps the fallback slot — the export
+                    // must never hang on one bad URL.
+                    await Promise.all(needMeasure.map(e => measureAspect(e.imageUrl).catch(() => null)))
+                }
+            }
+
             const JSZip = (await import('jszip')).default
             const zip = new JSZip()
             let stepIdx = 0

@@ -681,6 +681,23 @@ html.js #waFloat.show,html.jsfail #waFloat{opacity:1;pointer-events:auto}
     y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
 })(window, document, "clarity", "script", "xhmexj42pw");
 </script>
+
+<!-- Microsoft Clarity — פרויקט ייעודי לדף הנחיתה של בר המצווה (xxm76ibrzx).
+     רץ בנוסף לתג האתרי שמעליו, לא במקומו — כך שהפרויקט
+     האתרי ממשיך לראות תמונה אחת של כל התנועה.
+
+     אזהרה למי שנוגע בזה בעתיד: Clarity מתוכנן לפרויקט אחד לדף.
+     שני התגים חולקים את אותו window.clarity, ולכן הספרייה
+     שנטענת אחרונה עלולה להשתלט על ההקלטה. אם דוח אחד נראה חלקי —
+     הפתרון הוא להשאיר כאן רק אחד מהשניים. מעקב האפליקציה עצמה לא
+     תלוי בקובץ הזה בכלל — הוא יושב ב-src/app/layout.js. -->
+<script>
+(function(c,l,a,r,i,t,y){
+    c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+    t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+    y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+})(window, document, "clarity", "script", "xxm76ibrzx");
+</script>
 </head>
 <body>
 <script>document.documentElement.classList.add("js");window.addEventListener("error",function(ev){if(ev instanceof ErrorEvent&&ev.message){document.documentElement.classList.add("jsfail")}},true);</script>
