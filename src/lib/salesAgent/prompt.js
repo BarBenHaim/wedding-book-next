@@ -44,7 +44,14 @@ export function buildSystemPrompt(lead = {}, todayISO) {
     if (lead.objectionCount) known.push(`מספר ההתנגדויות עד כה: ${lead.objectionCount}`)
     if (lead.followUpCount) known.push(`כמה פולו-אפים כבר נשלחו: ${lead.followUpCount}`)
 
-    const concessionDate = addDaysISO(todayISO, CONCESSION.validDays)
+    // Hebrew, not ISO. Handing the model "2026-08-09" and letting it
+    // phrase the deadline itself produced "9 בספטמבר" — a month late —
+    // in live testing, twice. A bonus deadline a month off destroys the
+    // urgency it exists to create, and reads as misleading if the
+    // customer comes back on it. So the date is formatted here, once,
+    // and the model only has to copy it.
+    const concessionDate = formatHebrewDate(addDaysISO(todayISO, CONCESSION.validDays))
+    const todayHe = formatHebrewDate(todayISO)
 
     return `אתה נציג המכירות של ${BUSINESS.brand} בוואטסאפ. אתה מדבר עם לקוח אמיתי, בזמן אמת.
 
@@ -57,6 +64,8 @@ ${BUSINESS.product}.
 עד 4 שורות בהודעה. שאלה אחת בלבד בכל הודעה — לא שתיים.
 אימוג'י אחד לכל היותר, ורק כשהוא באמת מוסיף. בלי סלנג מאולץ, בלי קריאות התלהבות מזויפות.
 אל תפתח כל הודעה בשם הלקוח. אל תחזור על מה שהוא הרגע אמר.
+בלי Markdown. וואטסאפ לא מכירה **כוכביות כפולות** — הן יופיעו ללקוח
+כתווים. להדגשה יחידה מותר *כוכבית אחת*, ועדיף פשוט בלי.
 
 ## החבילות (המחירים כוללים מע״מ)
 ${renderPackages()}
@@ -95,7 +104,7 @@ ${FACTS.map(f => `- ${f}`).join('\n')}
 
 ## מה אתה כבר יודע על הלקוח הזה
 ${known.length ? known.join('\n') : 'שום דבר — זו ההתחלה. אל תניח כלום.'}
-היום: ${todayISO}
+היום: ${todayHe} (${todayISO})
 
 ## כללי follow_up_at — מתי לחזור אליו אם ייעלם
 - לא ענה בכלל להודעה הראשונה → מחר.
@@ -124,6 +133,17 @@ ${known.length ? known.join('\n') : 'שום דבר — זו ההתחלה. אל �
 
 "messages" הוא מערך של 1 עד 3 מחרוזות. שתי הודעות רק כשזה באמת קורא
 טוב יותר — למשל משפט קצר ואז קישור. ברירת המחדל היא הודעה אחת.`
+}
+
+const HE_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
+
+// 'YYYY-MM-DD' → '9 באוגוסט 2026'. Never let the model do this itself.
+export function formatHebrewDate(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''))
+    if (!m) return String(iso || '')
+    const month = HE_MONTHS[Number(m[2]) - 1]
+    if (!month) return iso
+    return `${Number(m[3])} ב${month} ${m[1]}`
 }
 
 // Small date helper — the agent gets dates as strings and never computes

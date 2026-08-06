@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { PACKAGES, ADDONS, STAGES, findPackage, FACTS } from '@/lib/salesAgent/catalog'
-import { buildSystemPrompt, buildFollowUpPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
+import { buildSystemPrompt, buildFollowUpPrompt, addDaysISO, formatHebrewDate } from '@/lib/salesAgent/prompt'
 import { parseAgentJson, normalizePhone, resolveFollowUp } from '@/lib/salesAgent/agent'
 // leadsCore, not leads: importing leads.js boots the Firebase Admin SDK,
 // which needs service-account credentials the test runner has no business
@@ -73,7 +73,9 @@ describe('system prompt — what actually reaches the model', () => {
     it('dates the single allowed concession instead of leaving a placeholder', () => {
         const p = buildSystemPrompt({}, today)
         expect(p).not.toContain('{DATE}')
-        expect(p).toContain('2026-08-08') // today + 3
+        // Hebrew, not ISO — the model got the month wrong when left to
+        // phrase '2026-08-08' itself. See the regression block below.
+        expect(p).toContain('8 באוגוסט 2026') // today + 3
     })
 
     it('the follow-up prompt keeps the catalog but changes the task', () => {
@@ -277,5 +279,35 @@ describe('human handoff pause', () => {
 
     it('stays quiet when the pause has no timestamp at all', () => {
         expect(isPausedForHuman({ human: true })).toBe(true)
+    })
+})
+
+// ── Regressions caught in live testing, 2026-08-05 ──────────────────
+describe('the concession deadline the model must not compute itself', () => {
+    it('renders the ISO date in Hebrew before it reaches the prompt', () => {
+        // Handed "2026-08-09", the model wrote "9 בספטמבר" — a month late —
+        // twice in production. A bonus deadline a month off destroys the
+        // urgency it exists to create.
+        expect(formatHebrewDate('2026-08-09')).toBe('9 באוגוסט 2026')
+        expect(formatHebrewDate('2026-01-01')).toBe('1 בינואר 2026')
+        expect(formatHebrewDate('2026-12-31')).toBe('31 בדצמבר 2026')
+    })
+
+    it('passes junk through instead of inventing a date', () => {
+        expect(formatHebrewDate('not-a-date')).toBe('not-a-date')
+        expect(formatHebrewDate('2026-13-01')).toBe('2026-13-01') // no 13th month
+        expect(formatHebrewDate(null)).toBe('')
+    })
+
+    it('puts the Hebrew deadline in the prompt, never the raw ISO one', () => {
+        const p = buildSystemPrompt({}, '2026-08-05')
+        expect(p).toContain('8 באוגוסט 2026') // today + 3
+        expect(p).not.toContain('{DATE}')
+    })
+
+    it('tells the agent not to emit markdown WhatsApp cannot render', () => {
+        // A reply came back with **bold**, which WhatsApp shows as literal
+        // asterisks — it uses single ones.
+        expect(buildSystemPrompt({}, '2026-08-05')).toContain('Markdown')
     })
 })
