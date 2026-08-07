@@ -183,11 +183,19 @@ export async function POST(req) {
         // conversations. Nicer typography is not worth halving the number
         // of customers the bot can talk to.
         sendText: parsed.messages.join('\n\n'),
-        // When there is an image, Make sends the PICTURE with the reply as
-        // its caption and skips the text module — one message, not two.
-        // A photo and its explanation arriving as separate bubbles reads
-        // like two different people talking.
+        // The photo, if the agent asked for one. Make sends it as a second
+        // message right after the text, gated on `hasImage`.
+        //
+        // Two bubbles rather than one photo-with-a-long-caption is
+        // deliberate: it is how a person actually sends a picture in
+        // WhatsApp — a line, then the photo — and it keeps the text
+        // module unconditional, so a bad image URL can never swallow the
+        // reply the customer was waiting for.
+        //
+        // The caption comes from the catalog, not the model. It is one
+        // factual line about what is in the frame, and it cannot drift.
         sendImage: media ? media.url : null,
+        sendImageCaption: media ? media.caption : null,
         hasImage: !!media,
         stage: parsed.stage,
         handoff: parsed.handoff,
