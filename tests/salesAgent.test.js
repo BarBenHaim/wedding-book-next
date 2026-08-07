@@ -5,7 +5,7 @@ import { parseAgentJson, normalizePhone, resolveFollowUp, sanitizeReply } from '
 // leadsCore, not leads: importing leads.js boots the Firebase Admin SDK,
 // which needs service-account credentials the test runner has no business
 // holding. The pure logic lives in leadsCore for exactly this reason.
-import { toApiMessages, trimTurns, isPausedForHuman, MAX_TURNS, HUMAN_PAUSE_HOURS } from '@/lib/salesAgent/leadsCore'
+import { toApiMessages, trimTurns, isPausedForHuman, isOwnEcho, parseOwnerCommand, MAX_TURNS, HUMAN_PAUSE_HOURS } from '@/lib/salesAgent/leadsCore'
 
 // The agent talks to paying customers with no human in the loop. These
 // tests pin the things that would be expensive to discover in production:
@@ -451,5 +451,94 @@ describe('returning leads — continuing, not restarting', () => {
         // what keeps the model from fighting it every single message.
         expect(buildSystemPrompt({}, '2026-08-05')).toContain('מקף ארוך')
         expect(buildFollowUpPrompt({}, '2026-08-05')).toContain('מקף ארוך')
+    })
+})
+
+// ── Getting out of the way ──────────────────────────────────────────
+// A sales bot that talks over its owner, or pitches packages to someone
+// who already paid, does more damage than a bot that says nothing. These
+// pin the two signals that make it stand down.
+
+describe('isOwnEcho — our voice vs a human typing', () => {
+    const withTurns = turns => ({ turns })
+
+    it('recognises the message the bot itself just sent', () => {
+        const lead = withTurns([
+            { role: 'user', text: 'כמה זה עולה?' },
+            { role: 'assistant', text: 'הספר המודפס עולה 950 שח, כולל משלוח.' },
+        ])
+        expect(isOwnEcho(lead, 'הספר המודפס עולה 950 שח, כולל משלוח.')).toBe(true)
+    })
+
+    it('ignores whitespace differences the transport introduces', () => {
+        const lead = withTurns([{ role: 'assistant', text: 'שורה ראשונה\nשורה שנייה' }])
+        expect(isOwnEcho(lead, 'שורה ראשונה שורה שנייה')).toBe(true)
+        expect(isOwnEcho(lead, '  שורה ראשונה\n\nשורה שנייה  ')).toBe(true)
+    })
+
+    it('matches the joined form of a multi-bubble reply', () => {
+        // The reply goes out as one WhatsApp message but is stored as one
+        // turn per bubble, so the echo is the join of the last few turns.
+        const lead = withTurns([
+            { role: 'user', text: 'מעניין' },
+            { role: 'assistant', text: 'הנה הדמו:' },
+            { role: 'assistant', text: 'https://app.weddingtales.co.il/demo' },
+        ])
+        expect(isOwnEcho(lead, 'הנה הדמו: https://app.weddingtales.co.il/demo')).toBe(true)
+    })
+
+    it('does NOT match something a human typed', () => {
+        const lead = withTurns([{ role: 'assistant', text: 'הספר המודפס עולה 950 שח.' }])
+        expect(isOwnEcho(lead, 'היי, מדבר לורד, אני אענה לך אישית')).toBe(false)
+    })
+
+    it('does not match an older bot message once the customer replied since', () => {
+        // Only the TRAILING run of assistant turns counts. If the customer
+        // has spoken since, a repeat of that text is a human quoting it.
+        const lead = withTurns([
+            { role: 'assistant', text: 'המחיר הוא 950 שח' },
+            { role: 'user', text: 'יקר לי' },
+        ])
+        expect(isOwnEcho(lead, 'המחיר הוא 950 שח')).toBe(false)
+    })
+
+    it('is false for an empty lead or empty text', () => {
+        expect(isOwnEcho({}, 'משהו')).toBe(false)
+        expect(isOwnEcho(withTurns([{ role: 'assistant', text: 'שלום' }]), '')).toBe(false)
+        expect(isOwnEcho(null, 'שלום')).toBe(false)
+    })
+})
+
+describe('parseOwnerCommand', () => {
+    it('reads a mute command with any phone formatting', () => {
+        for (const s of ['שקט 0501234567', 'שקט 050-123-4567', 'שקט +972 50 1234567', 'שקט  050-1234567']) {
+            const c = parseOwnerCommand(s)
+            expect(c.action, s).toBe('pause')
+            expect(normalizePhone(c.phone), s).toBe('972501234567')
+        }
+    })
+
+    it('reads resume and status', () => {
+        expect(parseOwnerCommand('בוט 0501234567').action).toBe('resume')
+        expect(parseOwnerCommand('סטטוס 0501234567').action).toBe('status')
+        expect(parseOwnerCommand('status 0501234567').action).toBe('status')
+    })
+
+    it('returns the verb with a null phone when the number is missing', () => {
+        expect(parseOwnerCommand('שקט')).toEqual({ action: 'pause', phone: null })
+    })
+
+    it('returns null for anything that is not a command', () => {
+        // This runs only on messages from the owner's own number, but it
+        // still must not turn ordinary sentences into actions.
+        expect(parseOwnerCommand('מה קורה')).toBeNull()
+        expect(parseOwnerCommand('אני רוצה לשאול על המחיר')).toBeNull()
+        expect(parseOwnerCommand('')).toBeNull()
+        expect(parseOwnerCommand(null)).toBeNull()
+    })
+
+    it('only treats the FIRST word as the verb', () => {
+        // "תשלח לו שקט" is a sentence, not an instruction to the bot.
+        expect(parseOwnerCommand('תשלח לו שקט 0501234567')).toBeNull()
     })
 })

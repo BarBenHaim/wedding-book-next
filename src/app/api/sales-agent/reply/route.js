@@ -35,12 +35,26 @@ export const maxDuration = 30
 import { NextResponse } from 'next/server'
 import { buildSystemPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, normalizePhone, resolveFollowUp } from '@/lib/salesAgent/agent'
-import { getLead, saveExchange, toApiMessages, isPausedForHuman } from '@/lib/salesAgent/leads'
+import {
+    getLead, saveExchange, toApiMessages, isPausedForHuman,
+    isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone,
+} from '@/lib/salesAgent/leads'
 import { BUSINESS, findMedia } from '@/lib/salesAgent/catalog'
 
 // What the customer sees when the machinery breaks. Deliberately honest
 // and short — no apology theatre, no invented reason.
 const FALLBACK_REPLY = 'רגע אחד, אני מעביר אותך לנציג שלנו 🙏'
+
+// What an existing customer hears. Deliberately not a sales sentence:
+// they already bought, and the only useful thing the bot can do is
+// acknowledge them and get out of the way fast.
+const CUSTOMER_REPLY = 'היי! קיבלתי את ההודעה ואני מעביר אותה ללורד, הוא יחזור אליך ממש עוד מעט 🙏'
+
+// The owner's own WhatsApp number, in 972… form. When set, messages
+// arriving FROM it are treated as commands rather than as a customer,
+// so Lord can mute the bot mid-conversation from his phone. Unset means
+// the feature is simply off.
+const OWNER_PHONE = normalizePhone(process.env.SALES_AGENT_OWNER_PHONE || '')
 
 function authorized(req) {
     const secret = process.env.SALES_AGENT_SECRET
@@ -66,13 +80,27 @@ export async function POST(req) {
         return NextResponse.json({ error: 'bad-json' }, { status: 400 })
     }
 
-    const phone = normalizePhone(body?.phone)
     const text = String(body?.text || '').trim()
+
+    // Who sent this, and to whom. On a coexistence number Meta echoes
+    // the business's OWN outgoing messages back through the same webhook,
+    // so "the sender" is not automatically the customer.
+    const businessPhone = normalizePhone(body?.businessPhone)
+    const from = normalizePhone(body?.from)
+    const to = normalizePhone(body?.to)
+    const fieldName = String(body?.field || '')
+    const outgoing =
+        (!!businessPhone && !!from && from === businessPhone) || /echo/i.test(fieldName)
+
+    // For an echo the customer is the RECIPIENT; for a normal message the
+    // sender. `body.phone` stays the fallback so the older Make mapping,
+    // which sent only that, keeps working unchanged.
+    const phone = outgoing ? to || normalizePhone(body?.phone) : normalizePhone(body?.phone) || from
     if (!phone) return NextResponse.json({ error: 'bad-phone' }, { status: 400 })
     if (!text) {
         // Stickers, reactions and media arrive with no text. Staying quiet
         // is correct — answering "לא הבנתי" to a thumbs-up is worse.
-        return NextResponse.json({ ok: true, send: [], skipped: 'empty-text' })
+        return NextResponse.json({ ok: true, send: [], sendText: '', skipped: 'empty-text' })
     }
 
     const today = todayISO()
@@ -81,13 +109,106 @@ export async function POST(req) {
         lead = await getLead(phone)
     } catch (err) {
         console.error('[sales-agent] lead read failed', err)
-        return NextResponse.json({ ok: true, send: [FALLBACK_REPLY], handoff: true, notifyOwner: ownerPing(phone, 'שגיאת מסד נתונים — הבוט לא הצליח לקרוא את הליד') })
+        return NextResponse.json({ ok: true, send: [FALLBACK_REPLY], sendText: FALLBACK_REPLY, handoff: true, notifyOwner: ownerPing(phone, 'שגיאת מסד נתונים — הבוט לא הצליח לקרוא את הליד') })
+    }
+
+    // ── Lord answered in the chat himself ────────────────────────────
+    //
+    // The single most embarrassing thing this bot can do is talk over its
+    // owner. If a message went out from the business and it is not one
+    // this bot just wrote, a human is in the conversation — so the bot
+    // steps back for 48 hours, exactly as it does after a handoff.
+    //
+    // Silence here is the whole feature: no reply, no owner ping. Lord
+    // knows he is typing.
+    if (outgoing) {
+        if (isOwnEcho(lead, text)) {
+            return NextResponse.json({ ok: true, send: [], sendText: '', skipped: 'own-echo' })
+        }
+        try {
+            await setHuman(phone, true, 'ענית בעצמך בשיחה')
+        } catch (err) {
+            console.error('[sales-agent] auto-pause failed', err)
+        }
+        return NextResponse.json({ ok: true, send: [], sendText: '', paused: true, reason: 'owner-replied' })
+    }
+
+    // ── A command from Lord's own phone ──────────────────────────────
+    // He is never a lead, so this branch also stops the bot from trying
+    // to sell a wedding book to its owner.
+    if (OWNER_PHONE && phone === OWNER_PHONE) {
+        const cmd = parseOwnerCommand(text)
+        if (!cmd) {
+            return NextResponse.json({ ok: true, send: [], sendText: '', skipped: 'owner-message' })
+        }
+        const target = normalizePhone(cmd.phone)
+        if (!target) {
+            const help = 'צריך מספר. למשל:\nשקט 0501234567\nבוט 0501234567\nסטטוס 0501234567'
+            return NextResponse.json({ ok: true, send: [help], sendText: help, skipped: 'owner-command' })
+        }
+        let reply
+        try {
+            if (cmd.action === 'pause') {
+                await setHuman(target, true, 'השתקת את הבוט מהטלפון')
+                reply = `הבוט שותק מול ${target} ל-48 שעות.`
+            } else if (cmd.action === 'resume') {
+                await setHuman(target, false)
+                reply = `הבוט חזר לטפל ב-${target}.`
+            } else {
+                const t = await getLead(target)
+                reply = t?.isNew
+                    ? `אין ליד עם המספר ${target}.`
+                    : `${target}\nשלב: ${t.stage || 'new'}\nמושתק: ${isPausedForHuman(t) ? 'כן' : 'לא'}\nמעקב: ${t.followUpAt || 'אין'}\n${t.notes || ''}`.trim()
+            }
+        } catch (err) {
+            console.error('[sales-agent] owner command failed', err)
+            reply = 'הפעולה נכשלה. נסה שוב.'
+        }
+        return NextResponse.json({ ok: true, send: [reply], sendText: reply, skipped: 'owner-command' })
     }
 
     // A human already took this conversation. The bot must not talk over
     // Lord mid-negotiation — that is the fastest way to lose a warm lead.
     if (isPausedForHuman(lead)) {
-        return NextResponse.json({ ok: true, send: [], paused: true, stage: lead.stage || 'handoff' })
+        return NextResponse.json({ ok: true, send: [], sendText: '', paused: true, stage: lead.stage || 'handoff' })
+    }
+
+    // ── Already a customer ───────────────────────────────────────────
+    //
+    // Someone who has paid is not a lead. Pitching them the packages
+    // tells them nobody here knows who they are, and the questions they
+    // actually ask — where is my book, can I still add a blessing — are
+    // support, not sales. So the bot acknowledges, pings Lord, and mutes
+    // itself.
+    //
+    // Two ways to be a customer: the bot closed them (stage), or they
+    // bought before the bot existed (a wedding with their phone on it).
+    // The second is checked only on a first message, so it costs one
+    // query per new conversation rather than one per message.
+    let customer = null
+    if (lead.stage === 'closed_won') {
+        customer = { weddingId: lead.weddingId || null, ownerName: lead.name || null }
+    } else if (lead.isNew) {
+        customer = await findCustomerByPhone(phone)
+    }
+    if (customer) {
+        try {
+            await setHuman(phone, true, 'לקוח קיים כתב')
+        } catch (err) {
+            console.error('[sales-agent] customer mute failed', err)
+        }
+        return NextResponse.json({
+            ok: true,
+            send: [CUSTOMER_REPLY],
+            sendText: CUSTOMER_REPLY,
+            handoff: true,
+            customer: true,
+            notifyOwner: ownerPing(phone, 'לקוח קיים כתב — הבוט לא מכר לו, השיחה שלך', {
+                name: customer.ownerName || lead.name,
+                stage: lead.stage,
+                lastText: text,
+            }),
+        })
     }
 
     // How long he has been gone. The prompt uses this to decide between

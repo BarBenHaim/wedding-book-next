@@ -19,12 +19,12 @@
 import { adminDb } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { normalizePhone } from './agent'
-import { isPausedForHuman, trimTurns, toApiMessages, MAX_TURNS, HUMAN_PAUSE_HOURS } from './leadsCore'
+import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerCommand, MAX_TURNS, HUMAN_PAUSE_HOURS } from './leadsCore'
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
 // importing this file boots the Admin SDK, which needs credentials.
 // Re-exported here so callers still have one import to reach for.
-export { isPausedForHuman, trimTurns, toApiMessages, MAX_TURNS, HUMAN_PAUSE_HOURS }
+export { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerCommand, MAX_TURNS, HUMAN_PAUSE_HOURS }
 
 const COLLECTION = 'sales_leads'
 
@@ -139,6 +139,45 @@ export async function dueFollowUps(todayISO, limit = 40) {
         if (out.length >= limit) break
     }
     return out
+}
+
+// ── Is this already a customer? ─────────────────────────────────────
+//
+// Someone who already bought is not a lead, and pitching them the three
+// packages is worse than saying nothing: it tells them nobody at this
+// company knows who they are. Their questions belong to a human.
+//
+// `weddings.ownerPhone` is whatever the WooCommerce billing form
+// captured, so it is stored unnormalised — '050-123-4567', '0501234567',
+// '+972501234567'. Rather than scanning the whole collection on every
+// inbound message, we ask for the handful of shapes a person actually
+// types. It misses exotic formatting, and that is an acceptable miss:
+// the fallback is the bot behaving exactly as it does today.
+//
+// Called only on a lead's FIRST message, so this is one query per new
+// conversation, not one per message.
+export async function findCustomerByPhone(rawPhone) {
+    const intl = normalizePhone(rawPhone) // 972501234567
+    if (!intl || intl.length < 11) return null
+    const local = `0${intl.slice(3)}` // 0501234567
+    const variants = [
+        intl,
+        `+${intl}`,
+        local,
+        `${local.slice(0, 3)}-${local.slice(3)}`, // 050-1234567
+        `${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6)}`, // 050-123-4567
+    ]
+    try {
+        const snap = await adminDb.collection('weddings').where('ownerPhone', 'in', variants).limit(1).get()
+        if (snap.empty) return null
+        const doc = snap.docs[0]
+        const d = doc.data() || {}
+        return { weddingId: doc.id, ownerName: d.ownerName || null, ownerEmail: d.ownerEmail || null }
+    } catch (err) {
+        // A missing index or a malformed number must never stop a reply.
+        console.warn('[salesAgent] customer lookup failed', err?.message || err)
+        return null
+    }
 }
 
 // ── The admin table ─────────────────────────────────────────────────
