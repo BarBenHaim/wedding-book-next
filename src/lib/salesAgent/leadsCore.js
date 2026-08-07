@@ -110,6 +110,8 @@ const OWNER_VERBS = [
     { action: 'pause', words: ['שקט', 'עצור', 'תפסיק', 'mute', 'stop', 'quiet'] },
     { action: 'resume', words: ['בוט', 'המשך', 'תמשיך', 'resume', 'start', 'bot'] },
     { action: 'status', words: ['סטטוס', 'מצב', 'status'] },
+    // No phone argument: the digest is about the whole pipeline.
+    { action: 'digest', words: ['דוח', 'דוח', 'סיכום', 'digest', 'report'] },
 ]
 
 export function parseOwnerCommand(text) {

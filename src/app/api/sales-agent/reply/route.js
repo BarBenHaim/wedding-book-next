@@ -37,10 +37,12 @@ import { buildSystemPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, normalizePhone, resolveFollowUp } from '@/lib/salesAgent/agent'
 import {
     getLead, saveExchange, toApiMessages, isPausedForHuman,
-    isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone,
+    isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone, listLeads,
 } from '@/lib/salesAgent/leads'
 import { BUSINESS, findMedia } from '@/lib/salesAgent/catalog'
-import { assignVariant } from '@/lib/salesAgent/experiments'
+import { assignVariant, summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
+import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
+import { buildDigest } from '@/lib/salesAgent/digest'
 
 // What the customer sees when the machinery breaks. Deliberately honest
 // and short — no apology theatre, no invented reason.
@@ -142,9 +144,22 @@ export async function POST(req) {
         if (!cmd) {
             return NextResponse.json({ ok: true, send: [], sendText: '', skipped: 'owner-message' })
         }
+        // The digest is about the whole pipeline, so it takes no number
+        // and must be handled before the "give me a number" guard.
+        if (cmd.action === 'digest') {
+            try {
+                const d = await buildOwnerDigest()
+                return NextResponse.json({ ok: true, send: [d], sendText: d, skipped: 'owner-command' })
+            } catch (err) {
+                console.error('[sales-agent] digest command failed', err)
+                const oops = 'לא הצלחתי להרכיב את הדוח כרגע.'
+                return NextResponse.json({ ok: true, send: [oops], sendText: oops, skipped: 'owner-command' })
+            }
+        }
+
         const target = normalizePhone(cmd.phone)
         if (!target) {
-            const help = 'צריך מספר. למשל:\nשקט 0501234567\nבוט 0501234567\nסטטוס 0501234567'
+            const help = 'צריך מספר. למשל:\nשקט 0501234567\nבוט 0501234567\nסטטוס 0501234567\n\nאו פשוט: דוח'
             return NextResponse.json({ ok: true, send: [help], sendText: help, skipped: 'owner-command' })
         }
         let reply
@@ -348,4 +363,34 @@ function ownerPing(phone, reason, extra = {}) {
         `הבוט מושתק לשיחה הזאת ל-48 שעות. ${BUSINESS.brand}`,
     ]
     return lines.filter(Boolean).join('\n')
+}
+
+// The same digest the scheduled job sends, on demand. Worth having as a
+// command as well as a schedule: a template takes days to get approved,
+// and "דוח" works this afternoon.
+const DIGEST_TIME_FIELDS = ['lastInboundAt', 'lastMessageAt', 'updatedAt', 'closedAt', 'humanSince', 'createdAt']
+
+async function buildOwnerDigest() {
+    const today = isoInIsrael()
+    const now = Date.now()
+    const raw = await listLeads({ limit: 500 })
+    const items = sortLeads(
+        raw.map(l => {
+            const flat = { ...l }
+            for (const f of DIGEST_TIME_FIELDS) {
+                const v = l?.[f]
+                flat[f] = v == null ? null : typeof v === 'number' ? v : typeof v?.toMillis === 'function' ? v.toMillis() : typeof v?.seconds === 'number' ? v.seconds * 1000 : null
+            }
+            const d = deriveLead(flat, { todayISO: today, nowMs: now })
+            d.createdAtMs = flat.createdAt
+            return d
+        }),
+    )
+    const d = buildDigest(items, {
+        todayISO: today,
+        nowMs: now,
+        experiments: summarizeExperiments(items),
+        gaps: summarizeGaps(items),
+    })
+    return d.hasNews ? d.text : 'הכל שקט. אין ממתינים, אין פולו-אפים להיום, ולא היו שיחות אתמול.'
 }

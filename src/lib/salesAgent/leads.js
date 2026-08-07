@@ -72,6 +72,10 @@ export async function saveExchange({ phone, incomingText, parsed, followUpAt, pr
     // Set once, on first contact. Re-writing it later would move a lead
     // between arms mid-experiment and quietly corrupt the comparison.
     if (variant && isNew) patch.variant = variant
+    // When this person first wrote. `updatedAt` moves every message, so
+    // without this the daily digest cannot tell a genuinely new lead from
+    // an old one who happened to reply yesterday.
+    if (isNew) patch.createdAt = now
 
     // Only write what we actually learned — a null from one turn must not
     // erase a name the customer gave three messages ago.
