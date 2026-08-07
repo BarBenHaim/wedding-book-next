@@ -1,0 +1,530 @@
+'use client'
+
+// /admin/sales-leads — the WhatsApp sales agent's CRM.
+//
+// This screen is built around one question: who do I talk to next?
+//
+// So it opens on the triage strip, not on the table. Every lead is
+// scored server-side into at most one bucket (needs you / ready to pay /
+// promised to come back / due a nudge), and the strip is both the answer
+// and the filter — tapping a bucket narrows the list to it. A founder
+// checking this on a phone between meetings should be able to act
+// without scrolling.
+//
+// The second thing it does is show the transcript. The agent talks to
+// customers unsupervised; the only way to trust it, or to improve the
+// prompt, is to read what it actually said. Selecting a lead opens the
+// whole conversation beside the table, with the bot's own reasoning
+// (stage, notes, handoff reason) above it.
+//
+// `sales_leads` is server-only in firestore.rules, so everything here
+// goes through /api/sales-agent/leads with a super-admin ID token.
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { onAuthStateChanged, getIdToken } from 'firebase/auth'
+import { auth } from '@/lib/firebaseClient'
+import { isSuperAdmin } from '@/lib/superAdmin'
+import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
+import {
+    Lock, Loader2, AlertTriangle, RefreshCw, Search, MessageCircle, ExternalLink,
+    ChevronRight, X, Pause, Play, BellOff, Check, XCircle, Users, Phone, Calendar,
+    Clock, TrendingUp, Wallet, Sparkles,
+} from 'lucide-react'
+import {
+    ATTENTION_BUCKETS, STAGE_META, stageMeta, eventTypeLabel, PACKAGE_LABELS, relativeHe,
+} from '@/lib/salesAgent/leadsView'
+import { formatHebrewDate } from '@/lib/salesAgent/prompt'
+
+// ─── palette (matches /admin/studio and /admin/pipeline) ──────────────
+const PAGE_BG = '#f8f4ec'
+const CARD = { background: '#fff', border: '1px solid rgba(212,184,103,0.30)', boxShadow: '0 8px 20px -16px rgba(170,136,64,0.18)' }
+const GOLD = 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)'
+
+// Tone → the three class strings a badge needs. Kept as a lookup rather
+// than interpolated because Tailwind cannot see dynamic class names.
+const TONES = {
+    slate: 'bg-slate-50 border-slate-200 text-slate-600',
+    sky: 'bg-sky-50 border-sky-200 text-sky-700',
+    indigo: 'bg-indigo-50 border-indigo-200 text-indigo-700',
+    amber: 'bg-amber-50 border-amber-200 text-amber-700',
+    orange: 'bg-orange-50 border-orange-200 text-orange-700',
+    violet: 'bg-violet-50 border-violet-200 text-violet-700',
+    emerald: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+    green: 'bg-green-50 border-green-300 text-green-800',
+    gray: 'bg-gray-50 border-gray-200 text-gray-500',
+    red: 'bg-red-50 border-red-200 text-red-700',
+}
+
+function Badge({ tone = 'slate', children, className = '' }) {
+    return (
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10.5px] font-bold whitespace-nowrap ${TONES[tone] || TONES.slate} ${className}`}>
+            {children}
+        </span>
+    )
+}
+
+const fmtTime = ms => (ms ? new Date(ms).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '')
+
+// ─── data ─────────────────────────────────────────────────────────────
+async function authedFetch(path, init = {}) {
+    const token = await getIdToken(auth.currentUser)
+    const res = await fetch(path, {
+        ...init,
+        headers: { ...(init.headers || {}), Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || data?.ok === false) throw new Error(data?.error || `HTTP ${res.status}`)
+    return data
+}
+
+// ─── the screen ───────────────────────────────────────────────────────
+function SalesLeadsContent() {
+    const [state, setState] = useState('loading')
+    const [error, setError] = useState('')
+    const [data, setData] = useState(null)
+    const [bucket, setBucket] = useState(null)
+    const [stage, setStage] = useState(null)
+    const [q, setQ] = useState('')
+    const [selected, setSelected] = useState(null) // phone
+    const [detail, setDetail] = useState(null)
+    const [detailState, setDetailState] = useState('idle')
+    const [busy, setBusy] = useState('')
+    const [refreshing, setRefreshing] = useState(false)
+    const pollRef = useRef(null)
+
+    const load = useCallback(async ({ quiet = false } = {}) => {
+        if (!quiet) setRefreshing(true)
+        try {
+            const d = await authedFetch('/api/sales-agent/leads')
+            setData(d)
+            setState('ready')
+            setError('')
+        } catch (err) {
+            setError(err.message || 'שגיאה בטעינת הלידים')
+            setState('error')
+        } finally {
+            setRefreshing(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        load()
+        // A quiet refresh every 60s. The whole point of the top strip is
+        // that it is true right now — a handoff that landed while the tab
+        // sat open is exactly the one worth catching.
+        pollRef.current = setInterval(() => load({ quiet: true }), 60000)
+        return () => clearInterval(pollRef.current)
+    }, [load])
+
+    // Fetch the transcript only when a lead is opened; the list response
+    // deliberately does not carry it.
+    useEffect(() => {
+        if (!selected) { setDetail(null); return }
+        let alive = true
+        setDetailState('loading')
+        authedFetch(`/api/sales-agent/leads?phone=${encodeURIComponent(selected)}`)
+            .then(d => { if (alive) { setDetail(d.lead); setDetailState('ready') } })
+            .catch(() => { if (alive) setDetailState('error') })
+        return () => { alive = false }
+    }, [selected])
+
+    const items = data?.items || []
+
+    const visible = useMemo(() => {
+        const needle = q.trim().toLowerCase()
+        return items.filter(l => {
+            if (bucket && l.attention !== bucket) return false
+            if (stage && l.stage !== stage) return false
+            if (!needle) return true
+            return [l.phone, l.name, l.profileName, l.celebrantName, l.notes]
+                .filter(Boolean).join(' ').toLowerCase().includes(needle)
+        })
+    }, [items, bucket, stage, q])
+
+    const act = useCallback(async (phone, kind, payload) => {
+        setBusy(`${phone}:${kind}`)
+        try {
+            if (kind === 'pause' || kind === 'resume') {
+                await authedFetch('/api/sales-agent/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, action: kind, reason: 'מהטבלה' }),
+                })
+            } else {
+                await authedFetch('/api/sales-agent/leads', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, ...payload }),
+                })
+            }
+            await load({ quiet: true })
+            if (selected === phone) {
+                const d = await authedFetch(`/api/sales-agent/leads?phone=${encodeURIComponent(phone)}`)
+                setDetail(d.lead)
+            }
+        } catch (err) {
+            alert(`הפעולה נכשלה: ${err.message}`)
+        } finally {
+            setBusy('')
+        }
+    }, [load, selected])
+
+    if (state === 'loading') {
+        return <div className='flex h-screen items-center justify-center gap-2 text-[#7a6a52]'><Loader2 size={18} className='animate-spin' /> טוען לידים...</div>
+    }
+    if (state === 'error') {
+        return (
+            <div className='flex h-screen flex-col items-center justify-center gap-3 text-[#b32424] px-6 text-center'>
+                <AlertTriangle size={28} />
+                <p className='text-[14px]'>{error}</p>
+                <button onClick={() => load()} className='px-4 py-2 rounded-lg text-[12.5px] font-bold text-[#7a6a52]' style={{ background: '#fff', border: '1px solid #ead9b3' }}>נסה שוב</button>
+            </div>
+        )
+    }
+
+    const s = data?.summary
+    const w7 = data?.window7
+
+    return (
+        <div className='min-h-screen px-4 sm:px-6 lg:px-10 py-8' dir='rtl' style={{ backgroundColor: PAGE_BG }}>
+            <div className='max-w-[1500px] mx-auto'>
+
+                {/* header */}
+                <div className='flex items-center justify-between flex-wrap gap-4 mb-5'>
+                    <div className='flex items-center gap-3'>
+                        <div className='w-12 h-12 rounded-2xl flex items-center justify-center' style={{ background: GOLD, boxShadow: '0 12px 24px -10px rgba(170,136,64,0.45)' }}>
+                            <MessageCircle size={20} className='text-white' />
+                        </div>
+                        <div>
+                            <h1 className='font-bold text-[#1a1410] text-[22px] leading-tight'>לידים מהווטסאפ</h1>
+                            <p className='text-[12px] text-[#a89378] mt-0.5'>
+                                {s?.total || 0} לידים · {s?.openLeads || 0} פתוחים · מתעדכן כל דקה
+                            </p>
+                        </div>
+                    </div>
+                    <div className='flex items-center gap-2'>
+                        <button onClick={() => load()} disabled={refreshing}
+                            className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52] disabled:opacity-50'
+                            style={{ background: '#fff', border: '1px solid #ead9b3' }}>
+                            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} /> רענן
+                        </button>
+                        <a href='/admin' className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52]' style={{ background: '#fff', border: '1px solid #ead9b3' }}>
+                            <ChevronRight size={13} /> מרכז הניהול
+                        </a>
+                    </div>
+                </div>
+
+                {/* triage — the reason this page exists */}
+                <div className='grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-3'>
+                    {ATTENTION_BUCKETS.map(b => {
+                        const n = s?.buckets?.[b.key] || 0
+                        const on = bucket === b.key
+                        return (
+                            <button key={b.key} onClick={() => setBucket(on ? null : b.key)} title={b.hint}
+                                className={`text-right rounded-2xl p-3.5 transition-all active:scale-[0.99] ${on ? 'ring-2' : ''}`}
+                                style={{ ...CARD, ...(on ? { ringColor: '#b8893d', borderColor: '#b8893d' } : null), opacity: n === 0 && !on ? 0.55 : 1 }}>
+                                <div className='flex items-center justify-between gap-2 mb-1'>
+                                    <span className='text-[12px] font-bold text-[#3d2e1a]'>{b.label}</span>
+                                    <Badge tone={n > 0 ? b.tone : 'gray'}>{n}</Badge>
+                                </div>
+                                <p className='text-[10.5px] text-[#a89378] leading-snug line-clamp-2'>{b.hint}</p>
+                            </button>
+                        )
+                    })}
+                </div>
+
+                {/* the only numbers worth a glance */}
+                <div className='grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4'>
+                    <Stat icon={Users} label='לידים ב-7 ימים' value={w7?.inWindow ?? 0} />
+                    <Stat icon={Sparkles} label='הצעות נשלחו' value={(w7?.byStage?.offer_sent || 0) + (w7?.byStage?.ready_to_pay || 0)} />
+                    <Stat icon={Check} label='נסגרו (7 ימים)' value={w7?.won ?? 0} />
+                    <Stat icon={TrendingUp} label='אחוז סגירה' value={w7?.closeRate == null ? '—' : `${w7.closeRate}%`} hint='מתוך לידים שהוכרעו' />
+                </div>
+
+                {/* filters */}
+                <div className='flex items-center gap-2 flex-wrap mb-3'>
+                    <div className='relative flex-1 min-w-[180px] max-w-[320px]'>
+                        <Search size={14} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#c4b9a4]' />
+                        <input value={q} onChange={e => setQ(e.target.value)} placeholder='חיפוש שם, טלפון או הערה'
+                            className='w-full pr-9 pl-3 py-2 rounded-lg text-[12.5px] text-[#3d2e1a] outline-none'
+                            style={{ background: '#fff', border: '1px solid #ead9b3' }} />
+                    </div>
+                    <div className='flex items-center gap-1.5 flex-wrap'>
+                        <FilterChip active={!stage} onClick={() => setStage(null)}>הכל</FilterChip>
+                        {Object.entries(STAGE_META)
+                            .sort((a, b) => a[1].order - b[1].order)
+                            .filter(([k]) => (s?.byStage?.[k] || 0) > 0 || stage === k)
+                            .map(([k, m]) => (
+                                <FilterChip key={k} active={stage === k} onClick={() => setStage(stage === k ? null : k)}>
+                                    {m.label} <span className='opacity-60'>{s?.byStage?.[k] || 0}</span>
+                                </FilterChip>
+                            ))}
+                    </div>
+                    {(bucket || stage || q) && (
+                        <button onClick={() => { setBucket(null); setStage(null); setQ('') }}
+                            className='text-[11.5px] font-bold text-[#a89378] hover:text-[#7a6a52] px-2 py-1'>נקה סינון</button>
+                    )}
+                </div>
+
+                {/* table + detail */}
+                <div className={`grid gap-4 ${selected ? 'lg:grid-cols-[1fr_420px]' : 'grid-cols-1'}`}>
+                    <div className='rounded-2xl overflow-hidden' style={CARD}>
+                        {visible.length === 0 ? (
+                            <div className='py-16 text-center'>
+                                <p className='text-[14px] font-bold text-[#7a6a52]'>אין לידים שמתאימים לסינון</p>
+                                <p className='text-[12px] text-[#a89378] mt-1'>נסה לנקות את הסינון או לחכות להודעה הבאה</p>
+                            </div>
+                        ) : (
+                            <>
+                                <div className='hidden md:grid grid-cols-[1.6fr_1fr_0.9fr_1fr_0.8fr] gap-3 px-4 py-2.5 border-b border-[#f0e8d4] text-[10.5px] uppercase tracking-widest font-semibold text-[#a89378]'
+                                    style={{ background: 'linear-gradient(180deg,#fdfaf3 0%,#fff 100%)' }}>
+                                    <span>ליד</span><span>אירוע</span><span>שלב</span><span>מעקב</span><span>פעולות</span>
+                                </div>
+                                <ul className='divide-y divide-[#f4ece0]'>
+                                    {visible.map(l => (
+                                        <LeadRow key={l.phone} lead={l} active={selected === l.phone}
+                                            onOpen={() => setSelected(selected === l.phone ? null : l.phone)}
+                                            onAct={act} busy={busy} />
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+                    </div>
+
+                    {selected && (
+                        <LeadDetail phone={selected} lead={detail} state={detailState}
+                            onClose={() => setSelected(null)} onAct={act} busy={busy} />
+                    )}
+                </div>
+
+                <p className='text-[11px] text-[#c4b9a4] mt-4 text-center'>
+                    הטבלה קוראת מ-sales_leads דרך השרת. אף דפדפן לא ניגש לאוסף הזה ישירות.
+                </p>
+            </div>
+        </div>
+    )
+}
+
+function Stat({ icon: Icon, label, value, hint }) {
+    return (
+        <div className='rounded-2xl px-3.5 py-3' style={CARD} title={hint || ''}>
+            <div className='flex items-center gap-1.5 mb-1'>
+                <Icon size={12} style={{ color: '#c9a44e' }} />
+                <span className='text-[10.5px] text-[#a89378] font-semibold'>{label}</span>
+            </div>
+            <p className='text-[20px] font-black text-[#1a1410] leading-none'>{value}</p>
+        </div>
+    )
+}
+
+function FilterChip({ active, onClick, children }) {
+    return (
+        <button onClick={onClick}
+            className={`px-2.5 py-1.5 rounded-lg text-[11.5px] font-bold transition-all ${active ? 'text-white' : 'text-[#7a6a52] hover:bg-[#fbf6ec]'}`}
+            style={active ? { background: GOLD } : { background: '#fff', border: '1px solid #ead9b3' }}>
+            {children}
+        </button>
+    )
+}
+
+// ─── one row ──────────────────────────────────────────────────────────
+function LeadRow({ lead, active, onOpen, onAct, busy }) {
+    const m = stageMeta(lead.stage)
+    const bucketMeta = ATTENTION_BUCKETS.find(b => b.key === lead.attention)
+    const isBusy = busy.startsWith(`${lead.phone}:`)
+
+    return (
+        <li className={`px-4 py-3 transition-colors ${active ? 'bg-[#fbf6ec]' : 'hover:bg-[#fdfaf3]'}`}>
+            <div className='md:grid md:grid-cols-[1.6fr_1fr_0.9fr_1fr_0.8fr] md:gap-3 md:items-center'>
+
+                {/* who */}
+                <button onClick={onOpen} className='text-right w-full min-w-0'>
+                    <div className='flex items-center gap-1.5 flex-wrap'>
+                        <span className='text-[13.5px] font-bold text-[#1a1410] truncate'>{lead.displayName}</span>
+                        {bucketMeta && <Badge tone={bucketMeta.tone}>{bucketMeta.label}</Badge>}
+                        {lead.paused && <Badge tone='gray'><Pause size={9} /> הבוט מושתק</Badge>}
+                    </div>
+                    <div className='flex items-center gap-2 mt-0.5 text-[11px] text-[#a89378]'>
+                        <span dir='ltr' className='font-mono'>{lead.phone}</span>
+                        {lead.turnCount > 0 && <span>· {lead.turnCount} הודעות</span>}
+                        {lead.silentDays != null && <span>· {relativeHe(lead.lastInboundMs)}</span>}
+                    </div>
+                    {lead.handoffReason && lead.attention === 'handoff' && (
+                        <p className='text-[11px] text-red-600 mt-1 line-clamp-1'>{lead.handoffReason}</p>
+                    )}
+                </button>
+
+                {/* event */}
+                <div className='mt-1.5 md:mt-0 text-[11.5px] text-[#5a4d3a] min-w-0'>
+                    {lead.eventType ? <span className='font-semibold'>{eventTypeLabel(lead.eventType)}</span> : <span className='text-[#c4b9a4]'>—</span>}
+                    {lead.eventDate && <div className='text-[10.5px] text-[#a89378] truncate'>{formatHebrewDate(lead.eventDate)}</div>}
+                    {lead.celebrantName && <div className='text-[10.5px] text-[#a89378] truncate'>{lead.celebrantName}</div>}
+                </div>
+
+                {/* stage */}
+                <div className='mt-1.5 md:mt-0'>
+                    <Badge tone={m.tone}>{m.label}</Badge>
+                    {lead.packageInterest && <div className='text-[10px] text-[#a89378] mt-0.5'>{PACKAGE_LABELS[lead.packageInterest] || lead.packageInterest}</div>}
+                </div>
+
+                {/* follow-up */}
+                <div className='mt-1.5 md:mt-0 text-[11px] text-[#7a6a52] min-w-0'>
+                    {lead.followUpAt ? (
+                        <span className='inline-flex items-center gap-1'><Clock size={10} /> {formatHebrewDate(lead.followUpAt)}</span>
+                    ) : <span className='text-[#c4b9a4]'>אין מעקב</span>}
+                    {lead.callbackPromised && <div className='text-[10.5px] text-violet-600'>הבטיח: {formatHebrewDate(lead.callbackPromised)}</div>}
+                    {lead.followUpCount > 0 && <div className='text-[10px] text-[#c4b9a4]'>{lead.followUpCount}/3 נשלחו</div>}
+                </div>
+
+                {/* actions */}
+                <div className='flex items-center gap-1 mt-2 md:mt-0 flex-wrap'>
+                    <a href={lead.waLink} target='_blank' rel='noreferrer'
+                        onClick={e => e.stopPropagation()}
+                        className='inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'>
+                        <ExternalLink size={11} /> ווטסאפ
+                    </a>
+                    <button onClick={onOpen}
+                        className='inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold text-[#7a6a52] hover:bg-[#fbf6ec]'
+                        style={{ border: '1px solid #ead9b3' }}>
+                        {active ? 'סגור' : 'שיחה'}
+                    </button>
+                    {isBusy && <Loader2 size={12} className='animate-spin text-[#a89378]' />}
+                </div>
+            </div>
+        </li>
+    )
+}
+
+// ─── the conversation ─────────────────────────────────────────────────
+function LeadDetail({ phone, lead, state, onClose, onAct, busy }) {
+    const scroller = useRef(null)
+    useEffect(() => {
+        if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight
+    }, [lead])
+
+    const isBusy = busy.startsWith(`${phone}:`)
+
+    return (
+        <aside className='rounded-2xl overflow-hidden self-start lg:sticky lg:top-6 flex flex-col max-h-[calc(100vh_-_48px)]' style={CARD}>
+            <div className='px-4 py-3 border-b border-[#f0e8d4] flex items-center justify-between gap-2' style={{ background: 'linear-gradient(180deg,#fdfaf3 0%,#fff 100%)' }}>
+                <div className='min-w-0'>
+                    <p className='text-[13px] font-bold text-[#1a1410] truncate'>{lead?.displayName || phone}</p>
+                    <p className='text-[11px] text-[#a89378] font-mono' dir='ltr'>{phone}</p>
+                </div>
+                <button onClick={onClose} className='p-1.5 rounded-lg hover:bg-[#fbf6ec] text-[#a89378]'><X size={15} /></button>
+            </div>
+
+            {state === 'loading' && <div className='py-12 text-center text-[#a89378] text-[12.5px]'><Loader2 size={16} className='animate-spin inline' /> טוען שיחה...</div>}
+            {state === 'error' && <div className='py-12 text-center text-[#b32424] text-[12.5px]'>לא הצלחתי לטעון את השיחה</div>}
+
+            {state === 'ready' && lead && (
+                <>
+                    {/* what the bot understood — the part worth arguing with */}
+                    <div className='px-4 py-3 border-b border-[#f0e8d4] text-[11.5px] text-[#5a4d3a] space-y-1'>
+                        {lead.notes && <p className='text-[#3d2e1a]'><span className='text-[#a89378]'>הבוט רשם: </span>{lead.notes}</p>}
+                        {lead.handoffReason && <p className='text-red-600'><span className='text-[#a89378]'>סיבת העברה: </span>{lead.handoffReason}</p>}
+                        <div className='flex items-center gap-1.5 flex-wrap pt-1'>
+                            <Badge tone={stageMeta(lead.stage).tone}>{stageMeta(lead.stage).label}</Badge>
+                            {lead.eventType && <Badge tone='sky'>{eventTypeLabel(lead.eventType)}</Badge>}
+                            {lead.eventDate && <Badge tone='slate'><Calendar size={9} /> {formatHebrewDate(lead.eventDate)}</Badge>}
+                            {lead.objectionCount > 0 && <Badge tone='orange'>{lead.objectionCount} התנגדויות</Badge>}
+                            {lead.source && <Badge tone='gray'>{lead.source}</Badge>}
+                        </div>
+                    </div>
+
+                    {/* transcript */}
+                    <div ref={scroller} className='flex-1 overflow-y-auto px-3 py-3 space-y-2' style={{ background: '#fdfaf3' }}>
+                        {(lead.turns || []).length === 0 && <p className='text-center text-[12px] text-[#c4b9a4] py-8'>אין עדיין הודעות</p>}
+                        {(lead.turns || []).map((t, i) => (
+                            <div key={i} className={`flex ${t.role === 'assistant' ? 'justify-start' : 'justify-end'}`}>
+                                <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-[12.5px] leading-relaxed whitespace-pre-wrap break-words ${
+                                    t.role === 'assistant'
+                                        ? 'bg-white text-[#3d2e1a] border border-[#f0e8d4]'
+                                        : 'bg-[#dcf8c6] text-[#1a1410]'
+                                }`}>
+                                    {t.text}
+                                    {t.at && <div className='text-[9.5px] text-[#a89378] mt-1'>{fmtTime(t.at)}</div>}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* actions */}
+                    <div className='px-3 py-3 border-t border-[#f0e8d4] flex flex-wrap gap-1.5' style={{ background: '#fff' }}>
+                        <a href={lead.waLink} target='_blank' rel='noreferrer'
+                            className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-white'
+                            style={{ background: 'linear-gradient(180deg,#3ecf6a 0%,#25a24b 100%)' }}>
+                            <ExternalLink size={12} /> פתח בווטסאפ
+                        </a>
+                        {lead.paused ? (
+                            <ActionBtn onClick={() => onAct(phone, 'resume')} disabled={isBusy} icon={Play}>החזר את הבוט</ActionBtn>
+                        ) : (
+                            <ActionBtn onClick={() => onAct(phone, 'pause')} disabled={isBusy} icon={Pause}>אני מטפל, השתק בוט</ActionBtn>
+                        )}
+                        {lead.followUpAt && (
+                            <ActionBtn onClick={() => onAct(phone, 'patch', { followUpAt: null })} disabled={isBusy} icon={BellOff}>הפסק מעקב</ActionBtn>
+                        )}
+                        {lead.stage !== 'closed_won' && (
+                            <ActionBtn onClick={() => onAct(phone, 'patch', { stage: 'closed_won' })} disabled={isBusy} icon={Wallet} tone='emerald'>שילם</ActionBtn>
+                        )}
+                        {lead.stage !== 'closed_lost' && (
+                            <ActionBtn onClick={() => onAct(phone, 'patch', { stage: 'closed_lost' })} disabled={isBusy} icon={XCircle} tone='gray'>לא רלוונטי</ActionBtn>
+                        )}
+                    </div>
+                </>
+            )}
+        </aside>
+    )
+}
+
+function ActionBtn({ onClick, disabled, icon: Icon, children, tone }) {
+    const cls = tone === 'emerald'
+        ? 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
+        : tone === 'gray'
+            ? 'text-gray-500 bg-gray-50 border-gray-200 hover:bg-gray-100'
+            : 'text-[#7a6a52] bg-white border-[#ead9b3] hover:bg-[#fbf6ec]'
+    return (
+        <button onClick={onClick} disabled={disabled}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold border transition-all disabled:opacity-50 ${cls}`}>
+            <Icon size={12} /> {children}
+        </button>
+    )
+}
+
+// ─── gate ─────────────────────────────────────────────────────────────
+function SuperAdminGate({ children }) {
+    const router = useRouter()
+    const [state, setState] = useState('checking')
+    useEffect(() => {
+        const unsub = onAuthStateChanged(auth, user => {
+            if (!user) { router.replace('/login'); return }
+            setState(isSuperAdmin(user.email) ? 'allowed' : 'denied')
+        })
+        return unsub
+    }, [router])
+
+    if (state === 'checking') return <div className='flex h-screen items-center justify-center text-[#7a6a52]'>טוען...</div>
+    if (state === 'denied') {
+        return (
+            <div className='flex h-screen flex-col items-center justify-center text-center px-6' style={{ background: PAGE_BG }}>
+                <div className='w-12 h-12 rounded-2xl flex items-center justify-center mb-4' style={{ background: GOLD, boxShadow: '0 12px 24px -10px rgba(170,136,64,0.45)' }}>
+                    <Lock size={20} className='text-white' />
+                </div>
+                <h2 className='text-[18px] font-bold text-[#1a1410] mb-1'>הגישה מוגבלת</h2>
+                <p className='text-[13px] text-[#a89378] max-w-xs leading-relaxed'>טבלת הלידים מכילה מספרי טלפון ושיחות של לקוחות, והיא זמינה רק למנהל הראשי.</p>
+            </div>
+        )
+    }
+    return children
+}
+
+export default function SalesLeadsPage() {
+    return (
+        <AdminPageWrapper>
+            <SuperAdminGate>
+                <SalesLeadsContent />
+            </SuperAdminGate>
+        </AdminPageWrapper>
+    )
+}

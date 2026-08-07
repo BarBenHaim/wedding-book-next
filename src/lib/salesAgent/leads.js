@@ -141,6 +141,51 @@ export async function dueFollowUps(todayISO, limit = 40) {
     return out
 }
 
+// ── The admin table ─────────────────────────────────────────────────
+//
+// Every lead, newest first, for the management screen.
+//
+// No `orderBy` and no server-side stage filter, on purpose. Firestore
+// would drop any document missing the ordered field — and the earliest
+// leads predate `updatedAt` — so an ordered query would silently hide
+// exactly the rows most likely to be interesting. Sorting happens in
+// memory instead, where a missing field is just an old lead.
+//
+// `turns` is stripped here rather than in the route: 24 turns × 2000
+// chars per lead is megabytes over the wire for a list nobody reads in
+// full. The transcript is fetched one lead at a time by getLead().
+export async function listLeads({ limit = 500 } = {}) {
+    const snap = await adminDb.collection(COLLECTION).limit(limit).get()
+    return snap.docs.map(doc => {
+        const { turns, ...rest } = doc.data() || {}
+        return {
+            ...rest,
+            phone: doc.id,
+            turnCount: Array.isArray(turns) ? turns.length : 0,
+        }
+    })
+}
+
+// Fields the admin screen is allowed to change by hand. A whitelist and
+// not a spread: this endpoint is reachable with the shared secret, and
+// letting it write arbitrary keys would let a leaked secret rewrite the
+// conversation history rather than merely annoy a customer.
+const ADMIN_PATCHABLE = new Set(['stage', 'followUpAt', 'notes', 'eventType', 'eventDate', 'name', 'packageInterest'])
+
+export async function adminPatchLead(phone, patch = {}) {
+    const id = normalizePhone(phone)
+    if (!id) throw new Error('bad phone')
+    const clean = { updatedAt: FieldValue.serverTimestamp() }
+    for (const [k, v] of Object.entries(patch)) {
+        if (!ADMIN_PATCHABLE.has(k)) continue
+        // undefined is rejected by Firestore; null is meaningful here
+        // (followUpAt: null is precisely how you stop the chasing).
+        clean[k] = v === undefined ? null : v
+    }
+    await ref(id).set(clean, { merge: true })
+    return id
+}
+
 // ── Closing the loop ────────────────────────────────────────────────
 // Called from the WooCommerce webhook the moment a payment lands. This
 // is what stops a paying customer from receiving "עוד מתלבטים?" the next

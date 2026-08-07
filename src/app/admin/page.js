@@ -2320,6 +2320,19 @@ function AdminDashboardContent() {
                             <Package size={14} style={{ color: '#c9a44e' }} /> לוח הפקה
                         </a>
                         <a
+                            href='/admin/sales-leads'
+                            title='לידים מהווטסאפ — מי צריך אותך עכשיו, כל השיחות והסטטוסים'
+                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
+                            style={{
+                                background: '#ffffff',
+                                border: '1px solid rgba(212,184,103,0.30)',
+                                color: '#7a6a52',
+                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
+                            }}
+                        >
+                            <MessageCircle size={14} style={{ color: '#c9a44e' }} /> לידים ווטסאפ
+                        </a>
+                        <a
                             href='/admin/guest-design'
                             title='עיצוב דף הברכה לאורחים'
                             className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
