@@ -73,6 +73,14 @@ Nothing has ever been published. Instagram is `weddingtales.il`.
 - `social/compose.js` — programmatic Hebrew overlay via satori + sharp.
   **Working, but Lord has asked to drop this approach**: he wants the
   image model to produce the picture with the caption baked in.
+- `social/imagePrompt.js` — builds the request to gpt-image-1. Refuses
+  to ask for a caption it expects to come back broken (too long, mixed
+  script, digits, more than one line) and asks for a wordless picture
+  instead. **Done, tested.**
+- `/admin/social-preview` + `/api/social/preview` — the four test
+  renders, one per request because four in a single serverless
+  invocation times out and returns nothing at all. **Built, never run**:
+  it needs `OPENAI_API_KEY` in Vercel, which is Lord's to add.
 
 **Before deleting compose.js, know what it cost to learn.** Satori does
 not implement the Unicode bidi algorithm, so Hebrew rendered fully
@@ -83,12 +91,14 @@ family name. Multi-line RTL headlines still wrap in the wrong order
 image model turns out to mangle Hebrew, this file is the fallback and
 those three lessons are why it works.
 
-**Next:** with `OPENAI_API_KEY` set, generate four test posts with real
-Hebrew headlines and show Lord before building anything else. That test
-decides the whole architecture. Then: caption writing, an approval queue
-(he approves before publish — agreed, at least for the first month), and
-a Make scenario publishing via Make's own approved IG/FB connectors, so
-no Meta App Review is needed.
+**Next:** open `/admin/social-preview`, press the button, look at the
+four pictures. If the Hebrew is clean the caption stays inside the
+image; if it breaks, the caption moves under the picture and the images
+go out wordless. That one look decides the architecture and nothing
+after it should be built before it. Then: caption writing, an approval
+queue (he approves before publish — agreed, at least for the first
+month), and a Make scenario publishing via Make's own approved IG/FB
+connectors, so no Meta App Review is needed.
 
 ---
 
