@@ -19,12 +19,12 @@
 import { adminDb } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { normalizePhone } from './agent'
-import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerCommand, MAX_TURNS, HUMAN_PAUSE_HOURS } from './leadsCore'
+import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerCommand, isTestPhone, MAX_TURNS, HUMAN_PAUSE_HOURS } from './leadsCore'
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
 // importing this file boots the Admin SDK, which needs credentials.
 // Re-exported here so callers still have one import to reach for.
-export { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerCommand, MAX_TURNS, HUMAN_PAUSE_HOURS }
+export { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerCommand, isTestPhone, MAX_TURNS, HUMAN_PAUSE_HOURS }
 
 const COLLECTION = 'sales_leads'
 
@@ -190,6 +190,25 @@ export async function findCustomerByPhone(rawPhone) {
         console.warn('[salesAgent] customer lookup failed', err?.message || err)
         return null
     }
+}
+
+// ── Deleting ────────────────────────────────────────────────────────
+//
+// A lead document holds a real person's phone number and the whole
+// conversation, so deletion is genuine data loss with no undo. It exists
+// for one honest reason: the test leads created while building this
+// agent are sitting in the same collection as real customers, dragging
+// the funnel numbers and the A/B arms toward nonsense.
+//
+// Bounded at 200 per call — enough for any cleanup, small enough that a
+// mistake is survivable.
+export async function deleteLeads(phones = []) {
+    const ids = [...new Set(phones.map(normalizePhone).filter(Boolean))].slice(0, 200)
+    if (ids.length === 0) return { deleted: 0, ids: [] }
+    const batch = adminDb.batch()
+    for (const id of ids) batch.delete(ref(id))
+    await batch.commit()
+    return { deleted: ids.length, ids }
 }
 
 // ── The admin table ─────────────────────────────────────────────────

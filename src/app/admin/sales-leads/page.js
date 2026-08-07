@@ -29,7 +29,7 @@ import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import {
     Lock, Loader2, AlertTriangle, RefreshCw, Search, MessageCircle, ExternalLink,
     ChevronRight, X, Pause, Play, BellOff, Check, XCircle, Users, Phone, Calendar,
-    Clock, TrendingUp, Wallet, Sparkles, FlaskConical,
+    Clock, TrendingUp, Wallet, Sparkles, FlaskConical, Trash2,
 } from 'lucide-react'
 import {
     ATTENTION_BUCKETS, STAGE_META, stageMeta, eventTypeLabel, PACKAGE_LABELS, relativeHe,
@@ -170,6 +170,29 @@ function SalesLeadsContent() {
         }
     }, [load, selected])
 
+    // The synthetic 9725000009xx rows created while building the agent.
+    // They inflate the funnel and pollute the A/B arms, so the button
+    // only appears while any still exist.
+    const testLeadCount = useMemo(() => items.filter(l => /^9725000009\d{2}$/.test(l.phone || '')).length, [items])
+
+    const clearTestLeads = useCallback(async () => {
+        if (!confirm(`למחוק ${testLeadCount} לידי בדיקה? אין ביטול.`)) return
+        setBusy('sweep')
+        try {
+            const r = await authedFetch('/api/sales-agent/leads', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ testOnly: true }),
+            })
+            await load({ quiet: true })
+            alert(`נמחקו ${r.deleted} לידי בדיקה.`)
+        } catch (err) {
+            alert(`המחיקה נכשלה: ${err.message}`)
+        } finally {
+            setBusy('')
+        }
+    }, [load, testLeadCount])
+
     if (state === 'loading') {
         return <div className='flex h-screen items-center justify-center gap-2 text-[#7a6a52]'><Loader2 size={18} className='animate-spin' /> טוען לידים...</div>
     }
@@ -209,6 +232,12 @@ function SalesLeadsContent() {
                             style={{ background: '#fff', border: '1px solid #ead9b3' }}>
                             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} /> רענן
                         </button>
+                        {testLeadCount > 0 && (
+                            <button onClick={clearTestLeads} disabled={busy === 'sweep'}
+                                className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 disabled:opacity-50'>
+                                <Trash2 size={13} /> מחק {testLeadCount} לידי בדיקה
+                            </button>
+                        )}
                         <a href='/admin' className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52]' style={{ background: '#fff', border: '1px solid #ead9b3' }}>
                             <ChevronRight size={13} /> מרכז הניהול
                         </a>

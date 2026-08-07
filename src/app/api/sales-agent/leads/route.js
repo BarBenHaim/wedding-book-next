@@ -25,7 +25,7 @@ import { NextResponse } from 'next/server'
 import { adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { normalizePhone } from '@/lib/salesAgent/agent'
-import { listLeads, getLead, adminPatchLead } from '@/lib/salesAgent/leads'
+import { listLeads, getLead, adminPatchLead, deleteLeads, isTestPhone } from '@/lib/salesAgent/leads'
 import { deriveLead, sortLeads, summarizeLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { STAGES } from '@/lib/salesAgent/catalog'
 import { summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
@@ -171,4 +171,47 @@ export async function PATCH(req) {
         return NextResponse.json({ error: 'write-failed' }, { status: 500 })
     }
     return NextResponse.json({ ok: true, phone, patch })
+}
+
+// DELETE /api/sales-agent/leads
+//   { phones: ["972501234567", …] }  → delete exactly those
+//   { testOnly: true }               → delete every synthetic test lead
+//
+// Real data loss with no undo, so it is super-admin only and the bulk
+// form cannot name its own targets: `testOnly` re-derives the list from
+// the phone-shape pattern server-side, which means a bad client can
+// never turn "clean the demo rows" into "clean the customers".
+export async function DELETE(req) {
+    if (!(await authorized(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    let body
+    try {
+        body = await req.json()
+    } catch {
+        return NextResponse.json({ error: 'bad-json' }, { status: 400 })
+    }
+
+    let phones = []
+    if (body?.testOnly === true) {
+        try {
+            phones = (await listLeads({ limit: 500 })).map(l => l.phone).filter(isTestPhone)
+        } catch (err) {
+            console.error('[sales-leads] test sweep failed', err)
+            return NextResponse.json({ error: 'list-failed' }, { status: 500 })
+        }
+    } else if (Array.isArray(body?.phones)) {
+        phones = body.phones
+    } else {
+        return NextResponse.json({ error: 'nothing-to-delete' }, { status: 400 })
+    }
+
+    if (phones.length === 0) return NextResponse.json({ ok: true, deleted: 0, ids: [] })
+
+    try {
+        const res = await deleteLeads(phones)
+        return NextResponse.json({ ok: true, ...res })
+    } catch (err) {
+        console.error('[sales-leads] delete failed', err)
+        return NextResponse.json({ error: 'delete-failed' }, { status: 500 })
+    }
 }

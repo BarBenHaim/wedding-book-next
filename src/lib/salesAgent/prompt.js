@@ -19,6 +19,7 @@
 
 import { BUSINESS, DEMO, PACKAGES, ADDONS, FACTS, CONCESSION, MEDIA } from './catalog'
 import { findVariant, shouldApplyOpening } from './experiments'
+import { journeyBlock, LANGUAGE_RULES } from './journey'
 
 const ils = n => `₪${Number(n).toLocaleString('he-IL')}`
 
@@ -114,7 +115,9 @@ ${Object.entries(MEDIA).map(([k, m]) => `- ${k}: ${m.when}`).join('\n')}
 למלא שקט. תמונה אחת בשיחה מספיקה ברוב המקרים, שתיים זה כבר הרבה.
 בחר את התמונה שמתאימה לסוג האירוע שלו. אין לך תמונות של ברית.
 
-${openingBlock(lead)}## מהלך המכירה — היעד שלך
+${LANGUAGE_RULES}
+${openingBlock(lead)}${journeyBlock(lead.stage || 'new')}
+## מהלך המכירה — היעד שלך
 1. הבן מה האירוע ומתי. בלי תאריך אתה עובד בחושך.
 2. שלח את קישור הדמו מוקדם. זה כלי המכירה החזק ביותר שיש לך —
    לקוח שכתב ברכה בעצמו כבר מדמיין את האירוע שלו.

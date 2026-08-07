@@ -10,6 +10,8 @@
 // (a dropped turn, a pause that never expires), so they live where a
 // test can reach them.
 
+import { normalizePhone } from './agent'
+
 const MAX_TURNS = 24 // 12 exchanges — plenty for a sale, cheap to send
 
 // How long a human handoff silences the bot. Without an expiry a single
@@ -122,6 +124,22 @@ export function parseOwnerCommand(text) {
     const digits = raw.slice(first.length).replace(/[^\d+]/g, '')
     if (digits.replace(/\D/g, '').length < 9) return { action: verb.action, phone: null }
     return { action: verb.action, phone: digits }
+}
+
+// ── The synthetic leads created while building this agent ───────────
+//
+// 972500000901, 972500000942, and so on — 972 500000 9XX. They sit in
+// the same collection as real customers, dragging the funnel numbers and
+// the A/B arms toward nonsense, so the table offers to sweep them.
+//
+// This pattern gates a bulk delete with no undo, which is why it lives
+// here rather than beside the delete call: if it can ever match a real
+// number it deletes a real customer, and that is worth a test. Israeli
+// mobiles are 05X-XXXXXXX and never land on this shape.
+const TEST_PHONE_RE = /^9725000009\d{2}$/
+
+export function isTestPhone(phone) {
+    return TEST_PHONE_RE.test(normalizePhone(phone))
 }
 
 export { MAX_TURNS, HUMAN_PAUSE_HOURS }
