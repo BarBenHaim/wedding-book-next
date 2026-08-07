@@ -156,6 +156,16 @@ export async function POST(req) {
     return NextResponse.json({
         ok: true,
         send: parsed.messages,
+        // `sendText` is the same reply as ONE string, and it is what the
+        // Make scenario should map to.
+        //
+        // Two bubbles read slightly more human, but sending them costs an
+        // Iterator plus a Sleep plus a second sendMessage — roughly double
+        // the Make operations per inbound message. On the Free plan (1,000
+        // ops/month) that is the difference between ~28 and ~55 real
+        // conversations. Nicer typography is not worth halving the number
+        // of customers the bot can talk to.
+        sendText: parsed.messages.join('\n\n'),
         stage: parsed.stage,
         handoff: parsed.handoff,
         followUpAt,
