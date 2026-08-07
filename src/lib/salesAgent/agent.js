@@ -15,7 +15,7 @@
 // The rule behind all of it: when the agent is unsure, the system must
 // fail toward a human, never toward a confident wrong answer.
 
-import { STAGES } from './catalog'
+import { STAGES, MEDIA_KEYS } from './catalog'
 
 const API_URL = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
@@ -58,6 +58,58 @@ function cleanStr(v, max = 300) {
     return t.slice(0, max)
 }
 
+// ── Making it not read like a bot ───────────────────────────────────
+//
+// The prompt already asks for all of this. This function exists because
+// asking is not the same as guaranteeing: across a few hundred messages
+// a model WILL drift back to an em dash and a decorative emoji, and the
+// one message where it does is the one the customer screenshots.
+//
+// Everything here is deterministic and content-preserving. It changes
+// punctuation and ornament, never words.
+//
+// The em dash deserves its own note. No Hebrew keyboard produces one —
+// not a single customer of this business has ever typed one — so it is
+// the loudest possible tell that nobody was actually there. In Hebrew it
+// is almost always doing a comma's job, so that is what it becomes.
+const EMOJI = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/gu
+const LEADING_ORNAMENT = /^[\s\p{Extended_Pictographic}️‍]+/u
+
+export function sanitizeReply(raw, { maxEmoji = 1 } = {}) {
+    let s = String(raw || '')
+
+    // Markdown first: WhatsApp renders none of it, so the customer would
+    // literally see the asterisks and hashes.
+    s = s.replace(/\*\*(.+?)\*\*/gs, '$1')
+    s = s.replace(/__(.+?)__/gs, '$1')
+    s = s.replace(/^#{1,6}[ \t]+/gm, '')
+    // Bullets and numbered lists read as a brochure, not a person.
+    s = s.replace(/^[ \t]*[-*•‣][ \t]+/gm, '')
+    s = s.replace(/^[ \t]*\d+[.)][ \t]+/gm, '')
+
+    // Dashes. Order matters: the spaced form is a clause break (comma),
+    // the bare form is a joiner (plain hyphen).
+    s = s.replace(/[ \t]*[—–][ \t]+/g, ', ')
+    s = s.replace(/[—–]/g, '-')
+    // The rewrite above can butt a new comma against existing punctuation.
+    s = s.replace(/,\s*([,.!?:;])/g, '$1')
+    s = s.replace(/([,.!?:;])\s*,/g, '$1')
+
+    // Ornament at the start of a message reads as a broadcast blast.
+    s = s.replace(LEADING_ORNAMENT, '')
+
+    // Emoji budget, counted across the whole message.
+    let kept = 0
+    s = s.replace(EMOJI, m => (kept++ < maxEmoji ? m : ''))
+
+    // Tidy whatever the removals left behind.
+    s = s.replace(/[ \t]{2,}/g, ' ')
+    s = s.replace(/[ \t]+([,.!?:;])/g, '$1')
+    s = s.replace(/\n[ \t]+/g, '\n')
+    s = s.replace(/\n{3,}/g, '\n\n')
+    return s.trim()
+}
+
 // ── Output parsing ──────────────────────────────────────────────────
 // Tolerant on the way in, strict on the way out. Anything we can't
 // understand becomes a handoff — a human reading one extra conversation
@@ -77,6 +129,7 @@ export function parseAgentJson(raw) {
         followUpAt: null,
         objectionRaised: false,
         notes: null,
+        image: null,
         malformed: true,
     }
 
@@ -113,6 +166,8 @@ export function parseAgentJson(raw) {
     messages = messages
         .map(m => cleanStr(m, MAX_MESSAGE_CHARS))
         .filter(Boolean)
+        .map(m => sanitizeReply(m))
+        .filter(Boolean)
         .slice(0, MAX_MESSAGES)
 
     const handoff = obj.handoff === true
@@ -141,6 +196,10 @@ export function parseAgentJson(raw) {
         followUpAt: isISODate(obj.follow_up_at) ? obj.follow_up_at : null,
         objectionRaised: obj.objection_raised === true,
         notes: cleanStr(obj.notes, 400),
+        // An image with no words is a message from nobody. The caption
+        // rides along with the picture, so requiring text here costs
+        // nothing and removes the silent-photo failure mode.
+        image: messages.length && MEDIA_KEYS.includes(obj.image) ? obj.image : null,
         malformed: false,
     }
 }
@@ -243,4 +302,4 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
     return { text, usage: data?.usage || null, model: data?.model || model, stopReason: data?.stop_reason || null }
 }
 
-export default { callClaude, parseAgentJson, normalizePhone, resolveFollowUp }
+export default { callClaude, parseAgentJson, normalizePhone, resolveFollowUp, sanitizeReply }

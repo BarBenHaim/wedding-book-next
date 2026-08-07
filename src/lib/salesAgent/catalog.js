@@ -110,6 +110,59 @@ export const FACTS = [
     'אחרי התשלום נשלח מייל עם פרטי גישה, ואנחנו יוצרים קשר בוואטסאפ להתחלת העיצוב.',
 ]
 
+// ── Images the agent is allowed to send ─────────────────────────────
+//
+// A whitelist, not a capability. The model picks a KEY; the URL is
+// resolved here. If the model could name its own URL it would sooner or
+// later name one that 404s in front of a customer, or one belonging to
+// somebody else's site — and on WhatsApp a broken image is not a broken
+// image, it is a failed send that looks like the business is falling
+// apart.
+//
+// These are real spreads from books we actually printed. That matters:
+// the single most common objection is "how does it really look", and a
+// stock mockup answers it worse than nothing.
+const ORIGIN = 'https://app.weddingtales.co.il'
+
+export const MEDIA = {
+    book_bar_mitzvah: {
+        url: `${ORIGIN}/imgs/portfolio/bar-mitzvah/cover.jpg`,
+        caption: 'ספר בר מצווה שהפקנו, כריכה קשה',
+        when: 'בר/בת מצווה, כשרוצים לראות איך הספר נראה מבחוץ',
+    },
+    pages_bar_mitzvah: {
+        url: `${ORIGIN}/imgs/portfolio/bar-mitzvah/spread-1.jpg`,
+        caption: 'ככה נראים העמודים מבפנים, ברכה ותמונה בכל עמוד',
+        when: 'בר/בת מצווה, כששואלים איך הברכות יושבות בתוך הספר',
+    },
+    book_wedding: {
+        url: `${ORIGIN}/imgs/portfolio/wedding/cover.jpg`,
+        caption: 'ספר ברכות מחתונה, כריכה קשה',
+        when: 'חתונה, מבט מבחוץ',
+    },
+    pages_wedding: {
+        url: `${ORIGIN}/imgs/portfolio/wedding/spread-1.jpg`,
+        caption: 'עמודים מתוך ספר של חתונה',
+        when: 'חתונה, מבט מבפנים',
+    },
+    book_birthday: {
+        url: `${ORIGIN}/imgs/portfolio/birthday/cover.jpg`,
+        caption: 'ספר ברכות מיום הולדת',
+        when: 'יום הולדת, מבט מבחוץ',
+    },
+    pages_birthday: {
+        url: `${ORIGIN}/imgs/portfolio/birthday/spread-1.jpg`,
+        caption: 'עמודים מתוך ספר של יום הולדת',
+        when: 'יום הולדת, מבט מבפנים',
+    },
+}
+
+export const MEDIA_KEYS = Object.keys(MEDIA)
+
+export function findMedia(key) {
+    return (typeof key === 'string' && MEDIA[key]) || null
+}
+
 // The ONLY concession the agent may offer, and only under the conditions
 // spelled out in the prompt. Everything else — percentage discounts,
 // "special price for you", invented deadlines — is forbidden.
@@ -139,6 +192,6 @@ export function findPackage(id) {
     return PACKAGES.find(p => p.id === id) || null
 }
 
-export const CATALOG = { BUSINESS, DEMO, PACKAGES, ADDONS, FACTS, CONCESSION, STAGES }
+export const CATALOG = { BUSINESS, DEMO, PACKAGES, ADDONS, FACTS, CONCESSION, STAGES, MEDIA }
 
 export default CATALOG

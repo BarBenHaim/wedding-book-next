@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { PACKAGES, ADDONS, STAGES, findPackage, FACTS } from '@/lib/salesAgent/catalog'
+import { PACKAGES, ADDONS, STAGES, findPackage, FACTS, MEDIA_KEYS, findMedia } from '@/lib/salesAgent/catalog'
 import { buildSystemPrompt, buildFollowUpPrompt, addDaysISO, formatHebrewDate } from '@/lib/salesAgent/prompt'
-import { parseAgentJson, normalizePhone, resolveFollowUp } from '@/lib/salesAgent/agent'
+import { parseAgentJson, normalizePhone, resolveFollowUp, sanitizeReply } from '@/lib/salesAgent/agent'
 // leadsCore, not leads: importing leads.js boots the Firebase Admin SDK,
 // which needs service-account credentials the test runner has no business
 // holding. The pure logic lives in leadsCore for exactly this reason.
@@ -309,5 +309,147 @@ describe('the concession deadline the model must not compute itself', () => {
         // A reply came back with **bold**, which WhatsApp shows as literal
         // asterisks — it uses single ones.
         expect(buildSystemPrompt({}, '2026-08-05')).toContain('Markdown')
+    })
+})
+
+// ── Sounding human ──────────────────────────────────────────────────
+// The prompt asks for all of this. These tests pin the half that does
+// not depend on the model complying, because across a few hundred
+// messages it eventually will not.
+
+describe('sanitizeReply — the tells that give a bot away', () => {
+    it('turns a spaced em dash into the comma it was standing in for', () => {
+        expect(sanitizeReply('הספר מגיע תוך שבועיים — כולל משלוח')).toBe('הספר מגיע תוך שבועיים, כולל משלוח')
+        expect(sanitizeReply('נשמח לעזור – בכל שאלה')).toBe('נשמח לעזור, בכל שאלה')
+    })
+
+    it('leaves real hyphens and phone numbers alone', () => {
+        expect(sanitizeReply('תתקשר ל-052-661-8184')).toBe('תתקשר ל-052-661-8184')
+        expect(sanitizeReply('בר-מצווה')).toBe('בר-מצווה')
+    })
+
+    it('never leaves an em dash behind, in any position', () => {
+        for (const s of ['א—ב', '—פתיחה', 'סוף—', 'א — ב — ג']) {
+            expect(sanitizeReply(s)).not.toMatch(/[—–]/)
+        }
+    })
+
+    it('does not stack punctuation when it rewrites a dash', () => {
+        expect(sanitizeReply('שלום, — מה שלומך?')).toBe('שלום, מה שלומך?')
+        expect(sanitizeReply('בסדר. — נתקדם')).toBe('בסדר. נתקדם')
+    })
+
+    it('keeps one emoji and drops the confetti', () => {
+        expect(sanitizeReply('מזל טוב 🎉🎊✨🥳')).toBe('מזל טוב 🎉')
+        expect(sanitizeReply('בשמחה 😊 נשמח לעזור 🙏')).toBe('בשמחה 😊 נשמח לעזור')
+    })
+
+    it('strips an emoji that opens the message', () => {
+        // Leading ornament reads as a marketing blast, not a person.
+        expect(sanitizeReply('🎉 מזל טוב!')).toBe('מזל טוב!')
+    })
+
+    it('removes markdown WhatsApp would show as literal characters', () => {
+        expect(sanitizeReply('המחיר הוא **950 שח**')).toBe('המחיר הוא 950 שח')
+        expect(sanitizeReply('## כותרת\nטקסט')).toBe('כותרת\nטקסט')
+    })
+
+    it('flattens bullet and numbered lists into plain lines', () => {
+        expect(sanitizeReply('- ספר מודפס\n- משלוח חינם')).toBe('ספר מודפס\nמשלוח חינם')
+        expect(sanitizeReply('1. ראשון\n2. שני')).toBe('ראשון\nשני')
+    })
+
+    it('is safe on empty and non-string input', () => {
+        expect(sanitizeReply('')).toBe('')
+        expect(sanitizeReply(null)).toBe('')
+        expect(sanitizeReply(undefined)).toBe('')
+    })
+
+    it('runs on every message the model returns', () => {
+        const out = parseAgentJson(JSON.stringify({
+            messages: ['הכל מוכן — נתחיל?', '🎉🎉 מעולה'],
+            stage: 'engaged',
+        }))
+        expect(out.messages[0]).toBe('הכל מוכן, נתחיל?')
+        expect(out.messages[1]).toBe('מעולה')
+    })
+})
+
+describe('images — a whitelist, not a capability', () => {
+    it('resolves every advertised key to a live-looking jpg on our own origin', () => {
+        expect(MEDIA_KEYS.length).toBeGreaterThan(0)
+        for (const key of MEDIA_KEYS) {
+            const m = findMedia(key)
+            expect(m.url).toMatch(/^https:\/\/app\.weddingtales\.co\.il\//)
+            expect(m.url).toMatch(/\.jpg$/)
+            expect(m.when).toBeTruthy()
+        }
+    })
+
+    it('accepts a key from the list', () => {
+        const out = parseAgentJson(JSON.stringify({
+            messages: ['ככה זה נראה'], stage: 'engaged', image: 'pages_bar_mitzvah',
+        }))
+        expect(out.image).toBe('pages_bar_mitzvah')
+    })
+
+    it('refuses a key the model made up', () => {
+        const out = parseAgentJson(JSON.stringify({
+            messages: ['הנה'], stage: 'engaged', image: 'book_brit',
+        }))
+        expect(out.image).toBeNull()
+    })
+
+    it('refuses a raw URL even when it points at us', () => {
+        // The whole point of the key indirection: a model that can name a
+        // URL will eventually name one that 404s in front of a customer.
+        const out = parseAgentJson(JSON.stringify({
+            messages: ['הנה'], stage: 'engaged',
+            image: 'https://app.weddingtales.co.il/imgs/portfolio/wedding/cover.jpg',
+        }))
+        expect(out.image).toBeNull()
+    })
+
+    it('drops an image that would arrive with no words', () => {
+        const out = parseAgentJson(JSON.stringify({
+            messages: [], stage: 'handoff', handoff: true, image: 'book_wedding',
+        }))
+        expect(out.image).toBeNull()
+    })
+
+    it('offers the agent the image keys and forbids inventing a URL', () => {
+        const p = buildSystemPrompt({}, '2026-08-05')
+        for (const key of MEDIA_KEYS) expect(p).toContain(key)
+        expect(p).toContain('אל תמציא כתובת תמונה')
+    })
+})
+
+describe('returning leads — continuing, not restarting', () => {
+    it('tells the agent when it has spoken to this person before', () => {
+        const p = buildSystemPrompt({ isNew: false, name: 'דנה', stage: 'offer_sent' }, '2026-08-05')
+        expect(p).toContain('זה לא לקוח חדש')
+        expect(p).toContain('דנה')
+        expect(p).toContain('offer_sent')
+    })
+
+    it('says plainly when it is a first contact', () => {
+        expect(buildSystemPrompt({ isNew: true }, '2026-08-05')).toContain('ההודעה הראשונה')
+    })
+
+    it('surfaces how long the lead has been silent', () => {
+        expect(buildSystemPrompt({ isNew: false, daysSinceLastMessage: 9 }, '2026-08-05')).toContain('עברו 9 ימים')
+    })
+
+    it('lists photos already sent so it does not repeat one', () => {
+        const p = buildSystemPrompt({ isNew: false, imagesSent: ['book_wedding'] }, '2026-08-05')
+        expect(p).toContain('book_wedding')
+        expect(p).toContain('אל תשלח את אותה תמונה שוב')
+    })
+
+    it('bans the em dash in the prompt as well as in code', () => {
+        // Belt and braces: the sanitizer is the guarantee, the prompt is
+        // what keeps the model from fighting it every single message.
+        expect(buildSystemPrompt({}, '2026-08-05')).toContain('מקף ארוך')
+        expect(buildFollowUpPrompt({}, '2026-08-05')).toContain('מקף ארוך')
     })
 })

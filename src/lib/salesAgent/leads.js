@@ -73,6 +73,9 @@ export async function saveExchange({ phone, incomingText, parsed, followUpAt, pr
     if (parsed.callbackPromised) patch.callbackPromised = parsed.callbackPromised
     if (source) patch.source = String(source).slice(0, 60)
     if (parsed.objectionRaised) patch.objectionCount = FieldValue.increment(1)
+    // Which photos this lead has already seen, so neither the prompt nor
+    // the route can send one twice.
+    if (parsed.image) patch.imagesSent = FieldValue.arrayUnion(parsed.image)
 
     // followUpAt null means "stop chasing" and must be written, not skipped.
     patch.followUpAt = followUpAt || null

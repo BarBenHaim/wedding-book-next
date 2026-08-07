@@ -36,7 +36,7 @@ import { NextResponse } from 'next/server'
 import { buildSystemPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, normalizePhone, resolveFollowUp } from '@/lib/salesAgent/agent'
 import { getLead, saveExchange, toApiMessages, isPausedForHuman } from '@/lib/salesAgent/leads'
-import { BUSINESS } from '@/lib/salesAgent/catalog'
+import { BUSINESS, findMedia } from '@/lib/salesAgent/catalog'
 
 // What the customer sees when the machinery breaks. Deliberately honest
 // and short — no apology theatre, no invented reason.
@@ -90,7 +90,14 @@ export async function POST(req) {
         return NextResponse.json({ ok: true, send: [], paused: true, stage: lead.stage || 'handoff' })
     }
 
-    const system = buildSystemPrompt(lead, today)
+    // How long he has been gone. The prompt uses this to decide between
+    // continuing a thread and reopening one; without it the agent either
+    // greets someone who wrote a minute ago or resumes mid-sentence with
+    // someone who disappeared for two weeks.
+    const lastMs = lead.lastInboundAt?.toMillis?.() || Number(lead.lastInboundAt) || 0
+    const daysSinceLastMessage = lastMs ? Math.floor((Date.now() - lastMs) / 86400000) : null
+
+    const system = buildSystemPrompt({ ...lead, daysSinceLastMessage }, today)
     const messages = toApiMessages(lead.turns, text)
 
     let parsed
@@ -123,12 +130,22 @@ export async function POST(req) {
             handoffReason: `הבוט נפל: ${String(err?.message || err).slice(0, 140)}`,
             eventType: null, eventDate: null, celebrantName: null, customerName: null,
             packageInterest: null, callbackPromised: null, followUpAt: null,
-            objectionRaised: false, notes: null, malformed: true,
+            objectionRaised: false, notes: null, image: null, malformed: true,
         }
     }
 
     // A handoff with no words leaves the customer staring at silence.
     if (parsed.handoff && parsed.messages.length === 0) parsed.messages = [FALLBACK_REPLY]
+
+    // Never send the same photo twice. The model is told which ones went
+    // out already, but the CRM is the thing that actually knows, and a
+    // repeated image is the kind of small wrongness that makes a whole
+    // conversation feel automated.
+    if (parsed.image && Array.isArray(lead.imagesSent) && lead.imagesSent.includes(parsed.image)) {
+        parsed.image = null
+    }
+    const media = parsed.image ? findMedia(parsed.image) : null
+    if (!media) parsed.image = null
 
     const followUpAt = resolveFollowUp({
         parsed,
@@ -166,6 +183,12 @@ export async function POST(req) {
         // conversations. Nicer typography is not worth halving the number
         // of customers the bot can talk to.
         sendText: parsed.messages.join('\n\n'),
+        // When there is an image, Make sends the PICTURE with the reply as
+        // its caption and skips the text module — one message, not two.
+        // A photo and its explanation arriving as separate bubbles reads
+        // like two different people talking.
+        sendImage: media ? media.url : null,
+        hasImage: !!media,
         stage: parsed.stage,
         handoff: parsed.handoff,
         followUpAt,
