@@ -28,6 +28,7 @@ import { normalizePhone } from '@/lib/salesAgent/agent'
 import { listLeads, getLead, adminPatchLead } from '@/lib/salesAgent/leads'
 import { deriveLead, sortLeads, summarizeLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { STAGES } from '@/lib/salesAgent/catalog'
+import { summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
 
 // Same door as /api/sales-agent/control: the shared secret for machines,
 // a verified super-admin ID token for a human at a browser.
@@ -119,6 +120,11 @@ export async function GET(req) {
         summary: summarizeLeads(items),
         window7: summary7,
         window30: summary30,
+        // Which opening is winning, and what the bot keeps failing at.
+        // Both computed over ALL leads, never a window: an A/B test that
+        // forgets last month has no chance of ever reaching significance.
+        experiments: summarizeExperiments(items),
+        gaps: summarizeGaps(items),
     })
 }
 

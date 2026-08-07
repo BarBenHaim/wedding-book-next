@@ -44,7 +44,7 @@ export async function getLead(rawPhone) {
  * Persist one exchange. Undefined values are stripped — the Firestore
  * client rejects them, and a half-written lead is worse than a stale one.
  */
-export async function saveExchange({ phone, incomingText, parsed, followUpAt, profileName, source }) {
+export async function saveExchange({ phone, incomingText, parsed, followUpAt, profileName, source, variant, isNew }) {
     const id = normalizePhone(phone)
     if (!id) throw new Error('bad phone')
 
@@ -59,7 +59,19 @@ export async function saveExchange({ phone, incomingText, parsed, followUpAt, pr
         updatedAt: now,
         stage: parsed.stage,
         turns: FieldValue.arrayUnion(...turns),
+        // Counted rather than derived from turns[], which is trimmed. The
+        // A/B report's headline metric is "did they write back", and that
+        // answer must survive compaction.
+        userTurns: FieldValue.increment(1),
+        // The funnel is a ladder, but `stage` only remembers the rung
+        // they are on. A lead who reached offer_sent and then went quiet
+        // reads as 'objection' forever, so the arm that got them there
+        // never gets the credit. This keeps every rung they touched.
+        stagesReached: FieldValue.arrayUnion(parsed.stage),
     }
+    // Set once, on first contact. Re-writing it later would move a lead
+    // between arms mid-experiment and quietly corrupt the comparison.
+    if (variant && isNew) patch.variant = variant
 
     // Only write what we actually learned — a null from one turn must not
     // erase a name the customer gave three messages ago.

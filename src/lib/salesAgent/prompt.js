@@ -18,6 +18,7 @@
 //    let the two answers disagree.
 
 import { BUSINESS, DEMO, PACKAGES, ADDONS, FACTS, CONCESSION, MEDIA } from './catalog'
+import { findVariant, shouldApplyOpening } from './experiments'
 
 const ils = n => `₪${Number(n).toLocaleString('he-IL')}`
 
@@ -113,7 +114,7 @@ ${Object.entries(MEDIA).map(([k, m]) => `- ${k}: ${m.when}`).join('\n')}
 למלא שקט. תמונה אחת בשיחה מספיקה ברוב המקרים, שתיים זה כבר הרבה.
 בחר את התמונה שמתאימה לסוג האירוע שלו. אין לך תמונות של ברית.
 
-## מהלך המכירה — היעד שלך
+${openingBlock(lead)}## מהלך המכירה — היעד שלך
 1. הבן מה האירוע ומתי. בלי תאריך אתה עובד בחושך.
 2. שלח את קישור הדמו מוקדם. זה כלי המכירה החזק ביותר שיש לך —
    לקוח שכתב ברכה בעצמו כבר מדמיין את האירוע שלו.
@@ -175,6 +176,21 @@ ${lead.isNew === false
 
 "messages" הוא מערך של 1 עד 3 מחרוזות. שתי הודעות רק כשזה באמת קורא
 טוב יותר — למשל משפט קצר ואז קישור. ברירת המחדל היא הודעה אחת.`
+}
+
+// The A/B arm, injected only while it is still the opening move. Adding
+// "lead with a question" to message nine would make the agent restart
+// the conversation — bad selling, and it would corrupt the arm, which
+// would then be measuring something it never actually did.
+function openingBlock(lead) {
+    if (!shouldApplyOpening(lead)) return ''
+    const v = findVariant(lead?.variant)
+    if (!v) return ''
+    return `## איך לפתוח את השיחה הזאת
+${v.directive}
+זה חל על ההודעה הראשונה שלך בלבד. מכאן והלאה תתנהג רגיל לפי מה שכתוב למטה.
+
+`
 }
 
 const HE_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']

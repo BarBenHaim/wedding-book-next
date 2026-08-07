@@ -40,6 +40,7 @@ import {
     isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone,
 } from '@/lib/salesAgent/leads'
 import { BUSINESS, findMedia } from '@/lib/salesAgent/catalog'
+import { assignVariant } from '@/lib/salesAgent/experiments'
 
 // What the customer sees when the machinery breaks. Deliberately honest
 // and short — no apology theatre, no invented reason.
@@ -218,7 +219,12 @@ export async function POST(req) {
     const lastMs = lead.lastInboundAt?.toMillis?.() || Number(lead.lastInboundAt) || 0
     const daysSinceLastMessage = lastMs ? Math.floor((Date.now() - lastMs) / 86400000) : null
 
-    const system = buildSystemPrompt({ ...lead, daysSinceLastMessage }, today)
+    // Which opening this lead is testing. Assigned from the phone number
+    // rather than drawn at random, so a retry can never move them to a
+    // different arm and quietly bias the comparison.
+    const variant = lead.variant || assignVariant(phone)
+
+    const system = buildSystemPrompt({ ...lead, daysSinceLastMessage, variant }, today)
     const messages = toApiMessages(lead.turns, text)
 
     let parsed
@@ -283,6 +289,8 @@ export async function POST(req) {
             followUpAt,
             profileName: body?.profileName,
             source: body?.source,
+            variant,
+            isNew: !!lead.isNew,
         })
     } catch (err) {
         // The reply is already written and is worth sending even if the

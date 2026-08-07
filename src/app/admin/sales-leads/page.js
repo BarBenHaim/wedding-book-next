@@ -29,7 +29,7 @@ import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import {
     Lock, Loader2, AlertTriangle, RefreshCw, Search, MessageCircle, ExternalLink,
     ChevronRight, X, Pause, Play, BellOff, Check, XCircle, Users, Phone, Calendar,
-    Clock, TrendingUp, Wallet, Sparkles,
+    Clock, TrendingUp, Wallet, Sparkles, FlaskConical,
 } from 'lucide-react'
 import {
     ATTENTION_BUCKETS, STAGE_META, stageMeta, eventTypeLabel, PACKAGE_LABELS, relativeHe,
@@ -242,6 +242,8 @@ function SalesLeadsContent() {
                     <Stat icon={TrendingUp} label='אחוז סגירה' value={w7?.closeRate == null ? '—' : `${w7.closeRate}%`} hint='מתוך לידים שהוכרעו' />
                 </div>
 
+                <Experiments data={data?.experiments} gaps={data?.gaps} />
+
                 {/* filters */}
                 <div className='flex items-center gap-2 flex-wrap mb-3'>
                     <div className='relative flex-1 min-w-[180px] max-w-[320px]'>
@@ -302,6 +304,104 @@ function SalesLeadsContent() {
                     הטבלה קוראת מ-sales_leads דרך השרת. אף דפדפן לא ניגש לאוסף הזה ישירות.
                 </p>
             </div>
+        </div>
+    )
+}
+
+// ─── what the bot is learning ─────────────────────────────────────────
+//
+// Two panels with very different half-lives. The A/B table is the slow
+// one — at a handful of leads a day it takes months to say anything, so
+// it refuses to name a winner until the gap beats the noise, and says so
+// plainly rather than showing a leaderboard that is really a coin toss.
+// The gaps list is the fast one: "this question defeated the bot four
+// times" is worth acting on the same week.
+function Experiments({ data, gaps }) {
+    const [open, setOpen] = useState(false)
+    if (!data) return null
+    const pct = v => (v == null ? '—' : `${Math.round(v * 100)}%`)
+
+    return (
+        <div className='rounded-2xl mb-4 overflow-hidden' style={CARD}>
+            <button onClick={() => setOpen(!open)} className='w-full flex items-center justify-between gap-3 px-4 py-3 text-right hover:bg-[#fdfaf3]'>
+                <div className='flex items-center gap-2'>
+                    <FlaskConical size={14} style={{ color: '#c9a44e' }} />
+                    <span className='text-[13px] font-bold text-[#1a1410]'>מה הבוט לומד</span>
+                    {data.verdict === 'winner' && <Badge tone='emerald'>יש מנצח</Badge>}
+                    {data.verdict === 'too-close' && <Badge tone='amber'>עדיין צמוד</Badge>}
+                    {data.verdict === 'collecting' && <Badge tone='slate'>אוסף נתונים</Badge>}
+                </div>
+                <ChevronRight size={14} className={`text-[#a89378] transition-transform ${open ? '-rotate-90' : 'rotate-180'}`} />
+            </button>
+
+            {open && (
+                <div className='px-4 pb-4 border-t border-[#f0e8d4] pt-3'>
+                    <p className='text-[11.5px] text-[#7a6a52] leading-relaxed mb-3'>
+                        כל ליד חדש מקבל פתיחה אחת מתוך ארבע, לצמיתות, לפי המספר שלו. אנחנו מודדים כמה מהם
+                        ענו אחרי ההודעה הראשונה, כמה הגיעו להצעה וכמה סגרו.{' '}
+                        {data.verdict === 'collecting' && data.needed > 0 && (
+                            <span className='text-[#b8893d] font-semibold'>
+                                צריך עוד כ-{data.needed} לידים לפני שיש פה משהו לקרוא.
+                            </span>
+                        )}
+                        {data.verdict === 'too-close' && (
+                            <span className='text-[#b8893d] font-semibold'>
+                                ההפרש בין המובילות עדיין קטן מהרעש. אל תחליף פתיחה על סמך זה.
+                            </span>
+                        )}
+                    </p>
+
+                    <div className='overflow-x-auto'>
+                        <table className='w-full text-[11.5px]'>
+                            <thead>
+                                <tr className='text-[10.5px] uppercase tracking-widest text-[#a89378] text-right'>
+                                    <th className='font-semibold pb-1.5'>פתיחה</th>
+                                    <th className='font-semibold pb-1.5'>לידים</th>
+                                    <th className='font-semibold pb-1.5'>ענו</th>
+                                    <th className='font-semibold pb-1.5'>הגיעו להצעה</th>
+                                    <th className='font-semibold pb-1.5'>סגרו</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {data.rows.map(r => (
+                                    <tr key={r.id} className='border-t border-[#f4ece0]'>
+                                        <td className='py-2 pl-2'>
+                                            <div className='flex items-center gap-1.5'>
+                                                <span className='font-bold text-[#3d2e1a]'>{r.label}</span>
+                                                {data.winner === r.id && <Badge tone='emerald'>מוביל</Badge>}
+                                                {!r.enough && <Badge tone='gray'>מדגם קטן</Badge>}
+                                            </div>
+                                            <div className='text-[10px] text-[#a89378] mt-0.5'>{r.hypothesis}</div>
+                                        </td>
+                                        <td className='py-2 tabular-nums text-[#5a4d3a]'>{r.leads}</td>
+                                        <td className='py-2 tabular-nums font-bold text-[#1a1410]'>{pct(r.replyRate)}</td>
+                                        <td className='py-2 tabular-nums text-[#5a4d3a]'>{pct(r.offerRate)}</td>
+                                        <td className='py-2 tabular-nums text-[#5a4d3a]'>{r.won}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {gaps?.length > 0 && (
+                        <div className='mt-4 pt-3 border-t border-[#f0e8d4]'>
+                            <p className='text-[11.5px] font-bold text-[#3d2e1a] mb-1.5'>איפה הבוט נתקע</p>
+                            <p className='text-[10.5px] text-[#a89378] mb-2'>
+                                כל פעם שהוא ביקש בן אדם. זה מה שכדאי לתקן בקטלוג או בהנחיות, וזה עובד כבר עכשיו
+                                בלי לחכות למדגם.
+                            </p>
+                            <ul className='space-y-1'>
+                                {gaps.map((g, i) => (
+                                    <li key={i} className='flex items-start gap-2 text-[11.5px]'>
+                                        <Badge tone={g.count > 2 ? 'orange' : 'slate'}>{g.count}</Badge>
+                                        <span className='text-[#5a4d3a] leading-snug'>{g.reason}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     )
 }
