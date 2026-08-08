@@ -41,6 +41,7 @@ import {
 } from '@/lib/salesAgent/leads'
 import { costOfClaudeUsage } from '@/lib/salesAgent/pricing'
 import { parseInboundBody } from '@/lib/salesAgent/inbound'
+import { resolveSource } from '@/lib/salesAgent/attribution'
 import { BUSINESS, findMedia } from '@/lib/salesAgent/catalog'
 import { assignVariant, summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
 import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
@@ -336,7 +337,16 @@ export async function POST(req) {
             parsed,
             followUpAt,
             profileName: body?.profileName,
-            source: body?.source,
+            // Read off the first message when it says where they came
+            // from — the ad DMs send people here with a prefilled opener
+            // naming the channel. Locked after that, so a later mention
+            // cannot rewrite it. See attribution.js.
+            source: resolveSource({
+                isNew: !!lead.isNew,
+                text,
+                existing: lead.source,
+                fallback: body?.source,
+            }),
             variant,
             isNew: !!lead.isNew,
         })

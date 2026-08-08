@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
 import {
     ANGLES, ANGLE_IDS, PHOTOS, EVENT_TYPES,
     planForDate, planRange, hashtagsFor, findAngle,
@@ -145,5 +147,39 @@ describe('hashtags', () => {
 
     it('degrades to the core set for an unknown type', () => {
         expect(hashtagsFor('brit')).toContain('#WeddingTales')
+    })
+})
+
+// ─── the photos have to actually be there ─────────────────────────────
+//
+// wedding/spread-4.jpg was in the rotation for weeks and does not exist:
+// the site ships spreads 3 to 5 only as .webp, and the list here assumed
+// the .jpg set matched. Nothing noticed until an image generation ran
+// against a 404 and came back as an unreadable gateway error.
+//
+// A unit test cannot check a URL, but it can check the file the URL
+// resolves to, and every one of these is served straight out of /public.
+describe('every photo in the plan exists on disk', () => {
+    const ROOT = path.join(process.cwd(), 'public')
+    const toDisk = url => path.join(ROOT, url.replace(/^https?:\/\/[^/]+/, ''))
+
+    it('has a real file behind every cover and every spread', () => {
+        const missing = []
+        for (const [type, set] of Object.entries(PHOTOS)) {
+            for (const url of [set.cover, ...set.spreads]) {
+                if (!fs.existsSync(toDisk(url))) missing.push(`${type}: ${url}`)
+            }
+        }
+        expect(missing).toEqual([])
+    })
+
+    it('covers every day of a long rotation without hitting a missing file', () => {
+        // The bug only surfaced on the days the rotation happened to
+        // land on spread-4, so checking one day would not have caught it.
+        const missing = []
+        for (const plan of planRange('2026-01-01', 90)) {
+            if (!fs.existsSync(toDisk(plan.photo))) missing.push(`${plan.date}: ${plan.photo}`)
+        }
+        expect(missing).toEqual([])
     })
 })

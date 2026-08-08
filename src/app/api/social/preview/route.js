@@ -12,6 +12,13 @@
 // rather than the whole batch, and the first picture appears while the
 // rest are still working.
 //
+// Failures come back as HTTP 200 with `ok: false`, which looks wrong and
+// is deliberate. A non-2xx from a serverless function can be replaced by
+// the platform's own gateway page, and when that happened the screen
+// showed "HTTP 502" while the real answer - a portfolio photo that did
+// not exist - was in a body nobody ever saw. The client already keys off
+// `ok`, and an error a human can read beats a correct status code.
+//
 // What comes back is a data URL rather than a stored file. These are
 // throwaway renders whose only job is to answer one question — can this
 // model write Hebrew — and writing them to storage would mean a bucket
@@ -68,7 +75,10 @@ async function generate(spec, key, signal) {
 async function edit(spec, key, signal) {
     // The source has to travel as bytes; the API will not fetch a URL.
     const src = await fetch(spec.sourceImage, { signal })
-    if (!src.ok) throw new Error(`source-image-${src.status}`)
+    // Names the file. "source-image-404" sends you looking at OpenAI;
+    // the URL sends you to the actual missing photo, which is where the
+    // bug was the one time this fired.
+    if (!src.ok) throw new Error(`התמונה לא נמצאה (${src.status}): ${spec.sourceImage}`)
     const bytes = await src.arrayBuffer()
 
     const form = new FormData()
@@ -115,10 +125,10 @@ export async function GET(req) {
         if (!res.ok) {
             const detail = body?.error?.message || `HTTP ${res.status}`
             console.error('[social/preview] openai failed', detail)
-            return NextResponse.json({ ok: false, error: 'openai-failed', detail }, { status: 502 })
+            return NextResponse.json({ ok: false, error: 'openai-failed', detail })
         }
         const b64 = body?.data?.[0]?.b64_json
-        if (!b64) return NextResponse.json({ ok: false, error: 'no-image' }, { status: 502 })
+        if (!b64) return NextResponse.json({ ok: false, error: 'no-image' })
 
         // Images are the expensive half of this system by an order of
         // magnitude, so the cost is recorded and returned with the
@@ -145,7 +155,7 @@ export async function GET(req) {
     } catch (err) {
         const reason = err?.name === 'AbortError' ? 'timeout' : String(err?.message || err)
         console.error('[social/preview] failed', reason)
-        return NextResponse.json({ ok: false, error: reason }, { status: 502 })
+        return NextResponse.json({ ok: false, error: reason })
     } finally {
         clearTimeout(timer)
     }

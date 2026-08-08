@@ -26,20 +26,30 @@
 // the composer at a URL that does not exist.
 const ORIGIN = 'https://app.weddingtales.co.il'
 
+// Only the files that actually exist as JPG. The site also ships .webp
+// versions of spreads 3 to 5, and an earlier version of this file assumed
+// the .jpg set matched - so the rotation happily pointed at
+// wedding/spread-4.jpg, which is not there. Nothing complained until an
+// image generation silently failed against a 404, which is the whole
+// argument for the test that now walks these paths on disk.
+//
+// Three photos per event type is enough for the rotation. Widening it is
+// a matter of exporting the remaining spreads as JPG and adding the
+// numbers here; the test will confirm they landed.
 export const PHOTOS = {
     bar_mitzvah: {
         cover: `${ORIGIN}/imgs/portfolio/bar-mitzvah/cover.jpg`,
-        spreads: [1, 2, 3, 4, 5].map(n => `${ORIGIN}/imgs/portfolio/bar-mitzvah/spread-${n}.jpg`),
+        spreads: [1, 2].map(n => `${ORIGIN}/imgs/portfolio/bar-mitzvah/spread-${n}.jpg`),
         label: 'בר מצווה',
     },
     wedding: {
         cover: `${ORIGIN}/imgs/portfolio/wedding/cover.jpg`,
-        spreads: [1, 2, 3, 4, 5].map(n => `${ORIGIN}/imgs/portfolio/wedding/spread-${n}.jpg`),
+        spreads: [1, 2].map(n => `${ORIGIN}/imgs/portfolio/wedding/spread-${n}.jpg`),
         label: 'חתונה',
     },
     birthday: {
         cover: `${ORIGIN}/imgs/portfolio/birthday/cover.jpg`,
-        spreads: [1, 2, 3].map(n => `${ORIGIN}/imgs/portfolio/birthday/spread-${n}.jpg`),
+        spreads: [1, 2].map(n => `${ORIGIN}/imgs/portfolio/birthday/spread-${n}.jpg`),
         label: 'יום הולדת',
     },
 }
