@@ -24,7 +24,29 @@
 // The real portfolio, by event type. Paths are public and stable; the
 // digest-style whitelist pattern is used again here so nothing can point
 // the composer at a URL that does not exist.
+import { SCENES, EVENT_TYPES as STYLED_EVENT_TYPES, findScene } from './scenes'
+
 const ORIGIN = 'https://app.weddingtales.co.il'
+
+// The real screenshot of the live guest page. Used as the source for the
+// phone scene, so the Hebrew interface in the picture is the actual
+// interface rather than something a model invented.
+export const GUEST_SCREEN = `${ORIGIN}/imgs/social/guest-screen.jpg`
+
+// Each caption angle gets the scene that argues for it. A "how it works"
+// caption over a photograph of a book on a shelf is two posts fighting
+// each other; over a phone showing the guest screen it is one post. The
+// pairing is fixed rather than random for exactly that reason.
+export const FREE_EVERY = 2
+
+const SCENE_FOR_ANGLE = {
+    real_spread: 'spread_open',
+    how_it_works: 'phone_screen',
+    participation_tip: 'event_table',
+    objection: 'flatlay',
+    moment: 'shelf_years_later',
+    season: 'handover',
+}
 
 // Only the files that actually exist as JPG. The site also ships .webp
 // versions of spreads 3 to 5, and an earlier version of this file assumed
@@ -142,6 +164,20 @@ export function planForDate(iso, { slot = 0 } = {}) {
     const mod = (a, m) => ((a % m) + m) % m
 
     const angle = ANGLES[mod(n, ANGLES.length)]
+    // How often the model gets an open brief instead of a directed
+    // scene. One in every FREE_EVERY days is its own idea: composition,
+    // palette, props, all of it. Lord asked for the freedom and he is
+    // right that it is where the model is strongest, but alternating
+    // rather than always keeps a recognisable house look on the grid —
+    // a feed where every post is a fresh idea reads as a stock account.
+    // Move this number to move the dial; 1 makes every post free.
+    const directed = findScene(SCENE_FOR_ANGLE[angle.id]) || SCENES[0]
+    const useFree = mod(n, FREE_EVERY) === 0 && !directed.needsPhoto
+    const scene = useFree ? findScene('free') : directed
+    // The event type advances once per complete pass through the angles,
+    // so the same caption never lands on the same styling until all four
+    // types have had a turn: twenty-four days before a post repeats.
+    const styledType = STYLED_EVENT_TYPES[mod(Math.floor(n / ANGLES.length), STYLED_EVENT_TYPES.length)]
     // The event type advances once per COMPLETE pass through the angles,
     // not once per day. Indexing both off the same counter looks varied
     // and is not: with 6 angles and 3 types the pair repeats every 6 days
@@ -158,9 +194,17 @@ export function planForDate(iso, { slot = 0 } = {}) {
         headline: angle.headline,
         job: angle.job,
         brief: angle.brief,
-        eventType: type,
+        // What the picture is and how it is styled. `eventType` drives
+        // the palette and props; `photoEventType` is which portfolio
+        // folder a real photograph comes from, and they are separate
+        // because there is no bat mitzvah book in the portfolio yet.
+        sceneId: scene.id,
+        sceneLabel: scene.label,
+        eventType: styledType,
+        photoEventType: type,
         eventLabel: set.label,
-        photo,
+        needsPhoto: !!scene.needsPhoto,
+        photo: scene.id === 'phone_screen' ? GUEST_SCREEN : photo,
     }
 }
 

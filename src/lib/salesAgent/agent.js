@@ -21,11 +21,25 @@ import { nextFollowUpDate } from './followupPolicy'
 const API_URL = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
 
-// Haiku is the right tier here: the conversation is short, the rules are
-// in the prompt, and cost per lead matters more than eloquence. Override
-// with ANTHROPIC_MODEL if you move tiers or the id changes — model ids
-// are pinned snapshots and do not auto-update.
-export const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5'
+// Sonnet, not Haiku. The original reasoning was that the conversation is
+// short and cost per lead matters more than eloquence, and on volume
+// that was right. It stopped being right once the agent acquired a
+// funnel to read, a journey brief to follow, an experiment arm to
+// honour and a decision about when to hand over: those are judgement,
+// and judgement is the thing tiers actually differ on. At a few
+// conversations a day the difference is cents, and the spend panel now
+// shows exactly how many.
+//
+// Override with ANTHROPIC_MODEL. Ids are pinned snapshots and do not
+// auto-update, so a newer Sonnet has to be set deliberately.
+export const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5'
+
+// If the configured id is not one the API recognises, fall back to this
+// and keep going. A mistyped or retired model id would otherwise turn
+// every single conversation into a handoff, and it is the kind of
+// failure that looks like the bot is broken rather than misconfigured -
+// which is exactly the trap someone hits when they try a newer model.
+export const FALLBACK_MODEL = 'claude-haiku-4-5'
 
 const EVENT_TYPES = ['bar_mitzvah', 'bat_mitzvah', 'wedding', 'birthday', 'brit', 'other']
 const PACKAGE_IDS = ['digital', 'printed', 'premium']
@@ -323,6 +337,13 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
 
     if (!res.ok) {
         const body = await res.text().catch(() => '')
+        // A model id the API does not know. Retry once on the fallback
+        // rather than dropping the customer: a configuration mistake
+        // should cost a slightly less capable answer, not the answer.
+        if (res.status === 404 && model !== FALLBACK_MODEL && /model/i.test(body)) {
+            console.error(`[sales-agent] unknown model ${model}, falling back to ${FALLBACK_MODEL}`)
+            return callClaude({ system, messages, model: FALLBACK_MODEL, maxTokens, temperature })
+        }
         // 401 = bad key · 429 = rate limited · 400 with credit_balance =
         // out of credit. All three read identically from the outside
         // ("the bot stopped answering"), so keep the upstream text.

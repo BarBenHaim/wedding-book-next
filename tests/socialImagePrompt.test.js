@@ -93,17 +93,27 @@ describe('buildImagePrompt', () => {
         expect(buildImagePrompt(null)).toBeNull()
     })
 
-    it('in edit mode points at the real photograph and forbids changing it', () => {
+    it('in edit mode points at the real photograph and forbids replacing it', () => {
         const r = buildImagePrompt(plan, { mode: 'edit', text: 'ככה זה נראה בסוף' })
         expect(r.sourceImage).toBe(plan.photo)
         expect(r.sourceImage).toMatch(/^https:\/\//)
-        expect(r.prompt).toMatch(/Do not alter the book/)
+        expect(r.prompt).toMatch(/Do not redraw, restyle or replace/)
     })
 
-    it('in generate mode has no source image and describes a subject', () => {
-        const r = buildImagePrompt(plan, { mode: 'generate', text: 'ככה זה נראה בסוף' })
+    it('in generate mode has no source image and states the product facts', () => {
+        const r = buildImagePrompt({ ...plan, sceneId: 'flatlay' }, { mode: 'generate', text: 'ככה זה נראה בסוף' })
         expect(r.sourceImage).toBeNull()
-        expect(r.prompt).toMatch(/guest book/)
+        // The square shape is the fact the first version of these
+        // prompts never said, and the one people recognise it by.
+        expect(r.prompt).toMatch(/SQUARE/)
+    })
+
+    it('hands over composition on a free brief but never the product facts', () => {
+        const r = buildImagePrompt({ ...plan, sceneId: 'free' }, { mode: 'generate' })
+        expect(r.prompt).toMatch(/art-directing this image/)
+        expect(r.prompt).toMatch(/avoid the obvious answer/)
+        expect(r.prompt).toMatch(/SQUARE/)
+        expect(r.prompt).toMatch(/No human faces/)
     })
 
     it('falls back to a wordless image instead of asking for bad Hebrew', () => {
@@ -113,6 +123,20 @@ describe('buildImagePrompt', () => {
         expect(r.textRejected).toBeTruthy()
         expect(r.prompt).toMatch(/no text, no lettering/)
         expect(r.prompt).not.toContain('character for character')
+    })
+
+    it('treats an explicit empty string as a request for no text', () => {
+        // Not the same as omitting it. Falsy fallback would turn this
+        // into the plan's headline and quietly put words on the one
+        // picture meant to be judged without any.
+        const r = buildImagePrompt(plan, { mode: 'generate', text: '' })
+        expect(r.text).toBeNull()
+        expect(r.prompt).toMatch(/no text, no lettering/)
+    })
+
+    it('falls back to the plan headline only when text is omitted', () => {
+        const r = buildImagePrompt(plan, { mode: 'generate' })
+        expect(r.text).toBe(plan.headline)
     })
 
     it('asks for no text at all when the plan carries no headline', () => {
@@ -162,6 +186,7 @@ describe('testBatch', () => {
         // A batch where every render is the easy case tells us nothing.
         expect(new Set(batch.map(b => b.mode)).size).toBe(2)
         expect(new Set(batch.map(b => b.size)).size).toBe(2)
+        expect(new Set(batch.map(b => b.sceneId)).size).toBeGreaterThanOrEqual(3)
         expect(batch.some(b => b.text === null)).toBe(true)
     })
 
@@ -171,9 +196,15 @@ describe('testBatch', () => {
         }
     })
 
-    it('gives every edit render a real portfolio URL', () => {
+    it('gives every edit render a real image from our own origin', () => {
+        // Either a photo of a book we printed, or the screenshot of the
+        // live guest page. Both are ours; neither is invented.
         for (const b of batch.filter(b => b.mode === 'edit')) {
-            expect(b.sourceImage).toMatch(/^https:\/\/app\.weddingtales\.co\.il\/imgs\/portfolio\//)
+            expect(b.sourceImage).toMatch(/^https:\/\/app\.weddingtales\.co\.il\/imgs\/(portfolio|social)\//)
         }
+    })
+
+    it('spreads the batch across event stylings so one look cannot pass for all', () => {
+        expect(new Set(batch.map(b => b.eventType)).size).toBeGreaterThanOrEqual(3)
     })
 })

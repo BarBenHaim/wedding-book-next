@@ -3,8 +3,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import {
     ANGLES, ANGLE_IDS, PHOTOS, EVENT_TYPES,
-    planForDate, planRange, hashtagsFor, findAngle,
+    planForDate, planRange, hashtagsFor, findAngle, GUEST_SCREEN,
 } from '@/lib/social/contentPlan'
+import { EVENT_TYPES as STYLED_EVENT_TYPES } from '@/lib/social/scenes'
 
 // The plan runs unattended for months. Its failure mode is not a crash,
 // it is a feed that quietly repeats itself, or a post pointing at an
@@ -51,7 +52,13 @@ describe('photos are real files on our own origin', () => {
     })
 
     it('never produces a photo outside the whitelist', () => {
-        const allowed = new Set(EVENT_TYPES.flatMap(t => [PHOTOS[t].cover, ...PHOTOS[t].spreads]))
+        // GUEST_SCREEN joined the whitelist when the phone scene arrived:
+        // it is a real screenshot of our own live page, served from the
+        // same origin, and it is the source the phone scene edits.
+        const allowed = new Set([
+            ...EVENT_TYPES.flatMap(t => [PHOTOS[t].cover, ...PHOTOS[t].spreads]),
+            GUEST_SCREEN,
+        ])
         for (let i = 0; i < 200; i++) {
             const iso = new Date(Date.parse('2026-01-01T12:00:00Z') + i * 86400000).toISOString().slice(0, 10)
             expect(allowed.has(planForDate(iso).photo), iso).toBe(true)
@@ -76,19 +83,56 @@ describe('rotation', () => {
         }
     })
 
-    it('uses every angle and every event type over three weeks', () => {
+    it('uses every angle and every styling over a full cycle', () => {
         // The bug this catches: a picker that technically varies but
-        // leaves the strongest angle unused for a fortnight.
+        // leaves the strongest angle unused for a fortnight. The cycle is
+        // 24 days — six angles against four event stylings — so three
+        // weeks is no longer long enough to see it all.
         const angles = new Set()
-        const types = new Set()
-        for (let i = 0; i < 21; i++) {
-            const iso = new Date(Date.parse('2026-05-04T12:00:00Z') + i * 86400000).toISOString().slice(0, 10)
-            const p = planForDate(iso)
+        const styles = new Set()
+        const photoTypes = new Set()
+        for (const p of planRange('2026-05-04', 24)) {
             angles.add(p.angleId)
-            types.add(p.eventType)
+            styles.add(p.eventType)
+            photoTypes.add(p.photoEventType)
         }
         expect(angles.size).toBe(ANGLES.length)
-        expect(types.size).toBe(EVENT_TYPES.length)
+        expect(styles.size).toBe(STYLED_EVENT_TYPES.length)
+        expect(photoTypes.size).toBe(EVENT_TYPES.length)
+    })
+
+    it('hands the model an open brief regularly, without letting it take over', () => {
+        // Lord wants the model directing its own pictures. Alternating
+        // rather than always is what keeps the grid recognisable as one
+        // brand — a feed where every post is a fresh idea reads as stock.
+        const plans = planRange('2026-05-04', 24)
+        const free = plans.filter(p => p.sceneId === 'free')
+        expect(free.length).toBeGreaterThan(0)
+        expect(free.length).toBeLessThan(plans.length)
+    })
+
+    it('never hands away the two scenes that must use a real photograph', () => {
+        // The open brief is for pictures the model invents. A spread from
+        // a book we printed, and the actual guest screen, are claims
+        // about reality — a synthesised version of either is a lie.
+        for (const p of planRange('2026-05-04', 48)) {
+            if (p.angleId === 'real_spread') expect(p.sceneId, p.date).toBe('spread_open')
+            if (p.angleId === 'how_it_works') expect(p.sceneId, p.date).toBe('phone_screen')
+        }
+    })
+
+    it('pairs each directed caption angle with a scene that argues for it', () => {
+        // A "how it works" caption over a photo of a book on a shelf is
+        // two posts fighting each other. The pairing is fixed for that
+        // reason, so a change to it should be deliberate.
+        const seen = new Map()
+        for (const p of planRange('2026-05-04', 24)) {
+            if (p.sceneId === 'free') continue
+            if (seen.has(p.angleId)) expect(seen.get(p.angleId), p.angleId).toBe(p.sceneId)
+            seen.set(p.angleId, p.sceneId)
+        }
+        expect(seen.get('how_it_works')).toBe('phone_screen')
+        expect(seen.get('real_spread')).toBe('spread_open')
     })
 
     it('spreads angle and event type on different cycles', () => {

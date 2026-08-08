@@ -39,6 +39,8 @@
 // the fallback and the three bidi lessons in its header are why it works.
 
 import { planForDate, hashtagsFor } from './contentPlan'
+import { findScene, eventStyle, PRODUCT, CRAFT, NON_NEGOTIABLE, CREATIVE_LICENCE, FREE_SCENE } from './scenes'
+import { GUEST_SCREEN } from './contentPlan'
 
 // The model. gpt-image-1 was the obvious choice and is no longer the
 // current one - gpt-image-2 supersedes it, and it is better at exactly
@@ -112,33 +114,12 @@ export function textContract(text) {
     ].join(' ')
 }
 
-// The look. Kept in one place so a change to the brand does not mean
-// editing six angle briefs, and phrased as photography direction rather
-// than as adjectives — "shallow depth of field, window light" produces a
-// consistent result where "elegant and premium" produces a different
-// stock-photo cliche every time.
-const STYLE = [
-    `Photographic, not illustrated. Natural window light from one side, soft shadows, shallow depth of field.`,
-    `Warm neutral palette: cream ${BRAND.cream}, deep brown ${BRAND.ink}, a single muted gold accent ${BRAND.gold}.`,
-    `Calm and uncluttered, generous empty space, nothing centred exactly.`,
-    `No people's faces. No confetti, no sparkles, no lens flare, no bokeh lights, no gradients behind the text.`,
-].join(' ')
-
+// Where the line of text sits. Kept out of the scene descriptions so a
+// scene can be reused for a post and for a story, which crop very
+// differently and cover different parts of the frame with app UI.
 const PLACEMENT = {
     post: `Place the line of text in the lower third, right-aligned, with clear space around it. Keep the bottom 8% of the frame empty.`,
     story: `Place the line of text in the upper-middle area, right-aligned. Keep the top 15% and bottom 20% of the frame completely empty, because the app covers them.`,
-}
-
-// What the picture is OF, per angle. Separate from the caption text on
-// purpose: the caption is the risky part and the subject is not, so they
-// are debugged independently.
-const SUBJECT = {
-    real_spread: `An open printed guest book lying flat on a table, showing two facing pages. Each page has a handwritten message beside a printed photograph.`,
-    how_it_works: `A closed hardcover guest book on a table beside a small printed card with a QR code on it. A phone rests nearby, screen off.`,
-    participation_tip: `An open guest book with a pen resting in the gutter, mid-event: a few messages already written, the rest of the page still blank.`,
-    objection: `A closed hardcover guest book photographed straight down on a clean surface, one corner of the cover catching the light.`,
-    moment: `A hardcover guest book on a shelf among ordinary household objects, years later. Domestic, lived-in, not styled.`,
-    season: `A stack of two or three hardcover guest books on a table near a window, seasonal daylight.`,
 }
 
 /**
@@ -153,18 +134,40 @@ const SUBJECT = {
 export function buildImagePrompt(plan, { size = 'post', mode = 'edit', text } = {}) {
     if (!plan) return null
     const fmt = SIZES[size] || SIZES.post
-    const line = String(text || plan.headline || '').trim()
+    // An explicitly passed `text` is used exactly as given, including an
+    // empty string, which is how a caller asks for a wordless picture.
+    // Falling back on falsiness would quietly turn "" into the plan's
+    // headline, and the one render meant to test the picture alone would
+    // come back with words on it.
+    const line = (text === undefined ? String(plan.headline || '') : String(text ?? '')).trim()
     const check = checkText(line)
 
-    const parts = []
-    if (mode === 'edit') {
+    // The scene says what the picture is; the event style says what it
+    // looks like. Both come from scenes.js so a caption angle and its
+    // picture cannot drift apart.
+    const scene = findScene(plan.sceneId) || findScene('flatlay')
+    const style = eventStyle(plan.eventType)
+
+    const parts = [`A ${fmt.aspect} image for an Instagram post.`]
+    if (scene.free && mode !== 'edit') {
+        // The open brief: the job of the post, the three facts that are
+        // not style, and the rest is the model's call.
+        parts.push(`The post has to communicate this: ${plan.job || plan.brief || 'what this product is and why it is worth keeping'}.`)
+        parts.push(`The event is a ${(plan.eventType || 'wedding').replace(/_/g, ' ')}.`)
+        parts.push(NON_NEGOTIABLE)
+        parts.push(CREATIVE_LICENCE)
+    } else if (mode === 'edit') {
+        parts.push(scene.prompt)
+        // Editing means the source is real and its content is the point.
+        // The scene prompt says what to do with it; this says what not to.
         parts.push(
-            `Add a single line of Hebrew text to this photograph of a real printed guest book. Do not alter the book, the surface, the lighting or the composition in any other way.`,
+            `Work from the supplied image. Do not redraw, restyle or replace what is already in it; add only what these instructions ask for.`,
         )
     } else {
-        parts.push(`A ${fmt.aspect} photograph for an Instagram post.`)
-        parts.push(SUBJECT[plan.angleId] || SUBJECT.real_spread)
-        parts.push(STYLE)
+        parts.push(scene.prompt)
+        parts.push(PRODUCT)
+        parts.push(style.prompt)
+        parts.push(CRAFT)
     }
     if (check.ok) {
         parts.push(textContract(line))
@@ -189,7 +192,10 @@ export function buildImagePrompt(plan, { size = 'post', mode = 'edit', text } = 
         text: check.ok ? line : null,
         textRejected: check.ok ? null : check.reason,
         angleId: plan.angleId,
+        sceneId: scene.id,
+        sceneLabel: scene.label,
         eventType: plan.eventType,
+        eventLabel: style.label,
         prompt: parts.join('\n\n'),
     }
 }
@@ -206,11 +212,21 @@ export function buildImagePrompt(plan, { size = 'post', mode = 'edit', text } = 
 export function testBatch(iso) {
     const day0 = planForDate(iso, { slot: 0 })
     const day1 = planForDate(iso, { slot: 1 })
+    // Four renders chosen to disagree: the phone scene against a real
+    // screenshot, and three generated scenes across three different event
+    // stylings, so one look cannot pass for all of them.
+    const phone = { ...day0, sceneId: 'phone_screen', eventType: 'bar_mitzvah', photo: GUEST_SCREEN }
     return [
-        buildImagePrompt(day0, { size: 'post', mode: 'edit', text: 'ככה זה נראה בסוף' }),
-        buildImagePrompt(day0, { size: 'story', mode: 'edit', text: 'הספר שנשאר' }),
-        buildImagePrompt(day1, { size: 'post', mode: 'generate', text: 'האורחים כותבים, אנחנו מדפיסים' }),
-        buildImagePrompt(day1, { size: 'post', mode: 'generate' }),
+        // Wordless on purpose: this render answers one question, which
+        // is whether the real screenshot survives being placed in a
+        // scene. A caption on top would only add a second variable.
+        buildImagePrompt(phone, { size: 'post', mode: 'edit', text: '' }),
+        buildImagePrompt({ ...day1, sceneId: 'flatlay', eventType: 'bat_mitzvah' }, { size: 'post', mode: 'generate', text: 'ככה זה נראה בסוף' }),
+        buildImagePrompt({ ...day1, sceneId: 'shelf_years_later', eventType: 'birthday' }, { size: 'story', mode: 'generate', text: 'בעוד עשרים שנה' }),
+        // Deliberately wordless: it is the one render that shows what the
+        // picture is worth on its own, with the caption living under the
+        // post where text is always safe.
+        buildImagePrompt({ ...day0, sceneId: 'free', eventType: 'wedding' }, { size: 'post', mode: 'generate', text: '' }),
     ]
 }
 
