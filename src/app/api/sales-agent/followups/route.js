@@ -1,9 +1,23 @@
 // GET/POST /api/sales-agent/followups
 //
-// The daily chase. Returns every lead that went quiet and is due today,
-// each with a follow-up message written from that specific conversation
-// — not a template. Make's daily scenario calls this once and sends what
-// comes back.
+// The daily run that actually manages the pipeline. Called by Vercel
+// cron (see vercel.json) and by Make. It does three things, in order,
+// and the order matters:
+//
+//   1. SWEEP    — find live leads that lost their next step and put them
+//                 back on the ladder, so they are picked up by step 2 in
+//                 this same run rather than tomorrow's.
+//   2. CHASE    — write a real follow-up for every lead due today, from
+//                 that specific conversation, never a template.
+//   3. ESCALATE — hand Lord the list of handoffs nobody picked up. The
+//                 bot does not resume those, ever.
+//
+// Step 1 is the one that was missing, and it is the difference between
+// an automation that follows up and one that manages conversations. The
+// ladder only ever chases leads that already have a `followUpAt`. Every
+// way a lead can lose that field - a failed write, a hand edit in the
+// admin table, a handoff that expired - was previously a lead that went
+// silent forever with nothing in any log to say so.
 //
 // ── The 24-hour rule, which decides whether any of this works ────────
 // WhatsApp only allows free-form messages inside 24 hours of the
@@ -33,9 +47,9 @@ export const maxDuration = 60
 import { NextResponse } from 'next/server'
 import { buildFollowUpPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, resolveFollowUp } from '@/lib/salesAgent/agent'
-import { dueFollowUps, markFollowUpSent, recordSpend } from '@/lib/salesAgent/leads'
-import { costOfClaudeUsage } from '@/lib/salesAgent/pricing'
-import { sendableNow, isFinalAttempt, MAX_PER_RUN } from '@/lib/salesAgent/followupPolicy'
+import { dueFollowUps, markFollowUpSent, listLeads, reviveOrphans } from '@/lib/salesAgent/leads'
+import { sendableNow, MAX_PER_RUN } from '@/lib/salesAgent/followupPolicy'
+import { findOrphans, findStaleHandoffs, handoffAlert } from '@/lib/salesAgent/sweep'
 
 const WINDOW_MS = 24 * 3600 * 1000
 
@@ -59,58 +73,75 @@ function msSince(ts) {
     return Date.now() - ms
 }
 
+// ── The sweep ───────────────────────────────────────────────────────
+//
+// One read of the whole lead table, which sounds wasteful and is not:
+// the collection is in the hundreds, `listLeads` already strips the
+// conversation turns, and the alternative is a composite index on a
+// field whose defining feature is that it is missing.
+//
+// Never throws. A sweep that fails must not stop the follow-ups that
+// were already due - that would trade a quiet leak for a loud one.
+async function sweep(today) {
+    try {
+        const all = await listLeads({ limit: 500 })
+        const orphans = findOrphans(all)
+        const stale = findStaleHandoffs(all)
+        if (orphans.length) {
+            await reviveOrphans(orphans.map(l => l.phone), today)
+        }
+        return {
+            revived: orphans.map(l => ({ phone: l.phone, name: l.name || l.profileName || null })),
+            stale,
+        }
+    } catch (err) {
+        console.error('[sales-agent/followups] sweep failed', err?.message || err)
+        return { revived: [], stale: [], error: 'sweep-failed' }
+    }
+}
+
 export async function GET(req) {
     if (!authorized(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     // ?dry=1 — compose everything and report it WITHOUT marking anything
-    // as sent. Use it on the first few days: you get to read what the bot
-    // would have written before any customer does.
-    const params = new URL(req.url).searchParams
-    const dry = params.get('dry') === '1'
+    // as sent or reviving anything. Use it on the first few days: you
+    // get to read what the bot would have written before any customer
+    // does. A dry run also ignores quiet hours, because the point of it
+    // is to look, and looking at 23:00 is fine.
+    const dry = new URL(req.url).searchParams.get('dry') === '1'
     const today = todayISO()
 
-    // Nothing goes out at 03:00, or during Shabbat. The scheduler can be
-    // pointed at this route as often as is convenient and the policy
-    // decides whether this particular moment is one a person would want
-    // to be sold to in. `force=1` exists for testing from a laptop at a
-    // reasonable hour of somebody else's night.
-    const window = sendableNow()
-    if (!window.ok && params.get('force') !== '1') {
-        return NextResponse.json({ ok: true, skipped: window.reason, date: today, count: 0, items: [] })
+    // Nothing goes out on Shabbat, or before nine, or after nine. The
+    // leads stay due - `dueFollowUps` compares with `<=` - so a skipped
+    // Saturday becomes a Sunday morning send, not a lost one.
+    const when = sendableNow()
+    if (!dry && !when.ok) {
+        return NextResponse.json({ ok: true, skipped: when.reason, date: today, count: 0, items: [] })
     }
+
+    const { revived, stale, error: sweepError } = dry
+        ? { revived: [], stale: findStaleHandoffs(await listLeads({ limit: 500 }).catch(() => [])) }
+        : await sweep(today)
 
     let leads
     try {
-        leads = await dueFollowUps(today)
+        leads = await dueFollowUps(today, MAX_PER_RUN)
     } catch (err) {
         console.error('[sales-agent/followups] query failed', err)
         return NextResponse.json({ error: 'query-failed' }, { status: 502 })
     }
 
     const items = []
-    const spends = []
-    // Capped rather than unbounded: the failure mode of a scheduled job
-    // is not sending too few, it is one bad day where everything comes
-    // due at once and each item costs a model call and a Make operation.
-    const queue = leads.slice(0, MAX_PER_RUN)
-    const deferred = leads.length - queue.length
-
-    for (const lead of queue) {
+    for (const lead of leads) {
         try {
-            const attempt = lead.followUpCount || 0
-            const isFinal = isFinalAttempt(attempt)
-            const system = buildFollowUpPrompt(lead, today, { isFinal })
+            const system = buildFollowUpPrompt(lead, today)
             // The model needs a user turn to answer; this one is an
             // instruction to the agent, never shown to the customer.
-            const { text: raw, usage, model } = await callClaude({
+            const { text: raw } = await callClaude({
                 system,
                 messages: [{ role: 'user', content: 'כתוב עכשיו את הפולו-אפ ללקוח הזה, לפי ההיסטוריה והכללים.' }],
                 maxTokens: 500,
             })
-            if (usage) {
-                const { usd } = costOfClaudeUsage(usage, model)
-                spends.push(recordSpend({ provider: 'anthropic', model, usd, usage, todayISO: today }))
-            }
             const parsed = parseAgentJson(raw)
             if (parsed.handoff || parsed.messages.length === 0) continue
 
@@ -129,9 +160,13 @@ export async function GET(req) {
                 stage: parsed.stage,
                 text,
                 withinWindow,
-                followUpNumber: attempt + 1,
-                isFinal,
+                followUpNumber: (lead.followUpCount || 0) + 1,
                 nextFollowUpAt,
+                // True when this lead only got here because the sweep
+                // caught it. Worth seeing in Make's run log: it is the
+                // one number that says whether the safety net is idle
+                // or doing daily work it should not have to.
+                recovered: revived.some(r => r.phone === lead.phone),
             })
 
             if (!dry) {
@@ -151,12 +186,24 @@ export async function GET(req) {
         }
     }
 
-    await Promise.allSettled(spends)
+    // The owner alert. `alert` is null on a clean day and the caller
+    // should send nothing at all - a daily "0 waiting" is a message you
+    // stop reading, and then you miss the day it said 3.
+    const alert = handoffAlert(stale)
 
-    // `deferred` is reported rather than swallowed. A cap that silently
-    // drops work reads as "there was nothing to do", which is the one
-    // thing this endpoint must never imply.
-    return NextResponse.json({ ok: true, dry, date: today, count: items.length, deferred, items })
+    return NextResponse.json({
+        ok: true,
+        dry,
+        date: today,
+        count: items.length,
+        items,
+        recovered: revived.length,
+        recoveredLeads: revived,
+        handoffsWaiting: stale.length,
+        alert,
+        alertPhone: alert ? (process.env.SALES_AGENT_OWNER_PHONE || null) : null,
+        ...(sweepError ? { sweepError } : {}),
+    })
 }
 
 export async function POST(req) {

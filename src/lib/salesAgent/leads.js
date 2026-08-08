@@ -416,3 +416,30 @@ export async function readSpend({ days = 30, todayISO } = {}) {
         firstActiveDay: [...byDay].reverse().find(d => (Number(d.calls) || 0) > 0)?.date || null,
     }
 }
+
+// ── Putting a forgotten lead back on the ladder ─────────────────────
+//
+// The sweep (see sweep.js) finds live leads that lost their next step.
+// Reviving one is deliberately the smallest possible write: set
+// `followUpAt` to today and let every existing rule - the ladder, the
+// quiet hours, the three-attempt ceiling, the handoff pause - apply
+// exactly as it would to any other due lead. Nothing here decides to
+// message anybody; it only puts them back in the queue that does.
+//
+// `revivedCount` is not bookkeeping for its own sake. If the sweep is
+// reviving the same leads week after week, something upstream is
+// dropping writes, and this counter is the only place that would show.
+export async function reviveOrphans(phones = [], todayISO) {
+    const ids = [...new Set(phones.map(normalizePhone).filter(Boolean))].slice(0, 100)
+    if (!ids.length || !todayISO) return { revived: 0, ids: [] }
+    const batch = adminDb.batch()
+    for (const id of ids) {
+        batch.set(ref(id), {
+            followUpAt: todayISO,
+            revivedAt: FieldValue.serverTimestamp(),
+            revivedCount: FieldValue.increment(1),
+        }, { merge: true })
+    }
+    await batch.commit()
+    return { revived: ids.length, ids }
+}
