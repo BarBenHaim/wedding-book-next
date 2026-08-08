@@ -34,6 +34,7 @@ import {
 import {
     ATTENTION_BUCKETS, STAGE_META, stageMeta, eventTypeLabel, PACKAGE_LABELS, relativeHe,
 } from '@/lib/salesAgent/leadsView'
+import { formatUsd } from '@/lib/salesAgent/pricing'
 import { formatHebrewDate } from '@/lib/salesAgent/prompt'
 
 // ─── palette (matches /admin/studio and /admin/pipeline) ──────────────
@@ -271,6 +272,8 @@ function SalesLeadsContent() {
                     <Stat icon={TrendingUp} label='אחוז סגירה' value={w7?.closeRate == null ? '—' : `${w7.closeRate}%`} hint='מתוך לידים שהוכרעו' />
                 </div>
 
+                <Spend data={data?.spend} />
+
                 <Experiments data={data?.experiments} gaps={data?.gaps} />
 
                 {/* filters */}
@@ -345,6 +348,74 @@ function SalesLeadsContent() {
 // plainly rather than showing a leaderboard that is really a coin toss.
 // The gaps list is the fast one: "this question defeated the bot four
 // times" is worth acting on the same week.
+// ─── what it costs ────────────────────────────────────────────────────
+//
+// Counted by us, not read from a provider dashboard. Two things about
+// that are stated on screen rather than left for someone to discover:
+// it covers only what this app spends, from the day the counting was
+// added, and the rates it multiplies by are hardcoded. A cost panel that
+// hides either of those is worse than no cost panel, because a number
+// with a currency symbol on it gets believed.
+function Spend({ data }) {
+    if (!data) return null
+
+    const cells = [
+        { label: 'היום', value: data.today, hint: 'מחצות שעון ישראל' },
+        { label: '7 ימים', value: data.week, hint: 'כולל היום' },
+        { label: '30 ימים', value: data.month, hint: 'כולל היום' },
+        { label: 'סה״כ', value: data.total, hint: 'מאז שהמעקב נוסף' },
+    ]
+    const peak = Math.max(...(data.byDay || []).map(d => d.usd), 0)
+
+    return (
+        <div className='rounded-2xl px-4 py-3.5 mb-4' style={CARD}>
+            <div className='flex items-center justify-between gap-3 mb-3'>
+                <div className='flex items-center gap-1.5'>
+                    <Wallet size={13} style={{ color: '#c9a44e' }} />
+                    <span className='text-[12.5px] font-bold text-[#3d2e1a]'>עלות ה-API</span>
+                </div>
+                <span className='text-[10.5px] text-[#a89378]'>
+                    {data.totalCalls ? `${data.totalCalls.toLocaleString('he-IL')} קריאות` : 'עוד לא נמדדו קריאות'}
+                    {data.totalImages ? ` · ${data.totalImages} תמונות` : ''}
+                </span>
+            </div>
+
+            <div className='grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-3'>
+                {cells.map(c => (
+                    <div key={c.label} className='rounded-xl px-3 py-2.5 bg-[#fbf7ef] border border-[#f0e3c8]' title={c.hint}>
+                        <div className='text-[10.5px] text-[#a89378] font-semibold mb-0.5'>{c.label}</div>
+                        <div className='text-[17px] font-black text-[#1a1410] leading-none' dir='ltr'>{formatUsd(c.value)}</div>
+                    </div>
+                ))}
+            </div>
+
+            {peak > 0 && (
+                <div className='flex items-end gap-[3px] h-9 mb-3' dir='ltr' title='14 הימים האחרונים'>
+                    {data.byDay.map(d => (
+                        <div key={d.date} className='flex-1 rounded-sm' title={`${d.date} · ${formatUsd(d.usd)}`}
+                            style={{
+                                height: `${Math.max(3, (d.usd / peak) * 100)}%`,
+                                background: d.usd > 0 ? GOLD : '#efe6d3',
+                            }} />
+                    ))}
+                </div>
+            )}
+
+            <div className='flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#7a6a52]'>
+                <span>שיחות: <b dir='ltr'>{formatUsd(data.anthropicTotal)}</b></span>
+                <span>תמונות: <b dir='ltr'>{formatUsd(data.openaiTotal)}</b></span>
+                <span>לליד: <b dir='ltr'>{data.perLead == null ? '—' : formatUsd(data.perLead)}</b></span>
+                <span>לסגירה: <b dir='ltr'>{data.perWon == null ? '—' : formatUsd(data.perWon)}</b></span>
+            </div>
+
+            <p className='text-[10px] text-[#b3a68d] mt-2 leading-relaxed'>
+                נמדד אצלנו לפי הטוקנים בכל קריאה, לא נשלף מהחשבון. זה מה שהאפליקציה הזאת הוציאה מאז שהמעקב נוסף, לא החשבונית —
+                כל שימוש אחר באותו מפתח לא נספר כאן. המחירונים מקובעים בקוד ונבדקו ב-{data.ratesCheckedOn}.
+            </p>
+        </div>
+    )
+}
+
 function Experiments({ data, gaps }) {
     const [open, setOpen] = useState(false)
     if (!data) return null

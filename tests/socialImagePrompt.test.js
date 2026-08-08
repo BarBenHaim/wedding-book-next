@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-    buildImagePrompt, checkText, textContract, testBatch, SIZES, MAX_TEXT_CHARS,
+    buildImagePrompt, checkText, textContract, testBatch, SIZES, MAX_TEXT_CHARS, IMAGE_MODEL,
 } from '@/lib/social/imagePrompt'
 import { planForDate } from '@/lib/social/contentPlan'
 
@@ -134,6 +134,15 @@ describe('buildImagePrompt', () => {
             const r = buildImagePrompt(plan, { size: key, text: 'הספר שנשאר' })
             expect(['1024x1024', '1024x1536', '1536x1024']).toContain(r.apiSize)
         }
+    })
+
+    it('asks for a current image model, not the superseded one', () => {
+        // gpt-image-1 was the first choice and is no longer current;
+        // gpt-image-2 is better at text inside the image, which is the
+        // only reason this approach exists at all.
+        const r = buildImagePrompt(plan, { text: 'הספר שנשאר' })
+        expect(r.model).not.toBe('gpt-image-1')
+        expect(r.model).toBe(IMAGE_MODEL)
     })
 
     it('falls back to the post format for an unknown size', () => {

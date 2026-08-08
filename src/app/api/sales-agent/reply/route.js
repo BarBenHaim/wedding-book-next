@@ -37,8 +37,9 @@ import { buildSystemPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, normalizePhone, resolveFollowUp } from '@/lib/salesAgent/agent'
 import {
     getLead, saveExchange, toApiMessages, isPausedForHuman,
-    isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone, listLeads,
+    isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone, listLeads, recordSpend,
 } from '@/lib/salesAgent/leads'
+import { costOfClaudeUsage } from '@/lib/salesAgent/pricing'
 import { parseInboundBody } from '@/lib/salesAgent/inbound'
 import { BUSINESS, findMedia } from '@/lib/salesAgent/catalog'
 import { assignVariant, summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
@@ -258,11 +259,26 @@ export async function POST(req) {
     const system = buildSystemPrompt({ ...lead, daysSinceLastMessage, variant }, today)
     const messages = toApiMessages(lead.turns, text)
 
+    // Cost bookkeeping. Fire-and-forget on purpose: the customer is
+    // waiting on this request, and a Firestore write for accounting must
+    // never be on the path between them and an answer.
+    const spends = []
+    const meter = (usage, model) => {
+        if (!usage) return
+        const { usd, known } = costOfClaudeUsage(usage, model)
+        if (!known) console.warn('[sales-agent] no price known for model', model)
+        spends.push(recordSpend({ provider: 'anthropic', model, usd, usage, todayISO: today }))
+    }
+
     let parsed
     try {
-        const { text: raw, usage, stopReason } = await callClaude({ system, messages })
+        const { text: raw, usage, model, stopReason } = await callClaude({ system, messages })
         parsed = parseAgentJson(raw)
         if (usage) console.log('[sales-agent] usage', phone, usage.input_tokens, usage.output_tokens, stopReason)
+        // Metered here rather than after the retry, because a retry is a
+        // second billed call and hiding it would make the failure look
+        // free. See pricing.js.
+        meter(usage, model)
 
         // ONE retry on unparseable output before giving up on the customer.
         // A handoff is the safe fallback, not a good one: it pulls a human
@@ -276,6 +292,7 @@ export async function POST(req) {
                 messages,
                 temperature: 0.3,
             })
+            meter(retry.usage, retry.model)
             const second = parseAgentJson(retry.text)
             if (!second.malformed) parsed = second
         }
@@ -329,6 +346,10 @@ export async function POST(req) {
         // customer. The owner ping makes the gap visible.
         console.error('[sales-agent] lead write failed', err)
     }
+
+    // Settled, not awaited earlier: the accounting rides along with the
+    // CRM write instead of adding its own round trip before it.
+    await Promise.allSettled(spends)
 
     return NextResponse.json({
         ok: true,

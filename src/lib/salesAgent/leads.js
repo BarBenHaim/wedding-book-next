@@ -20,6 +20,7 @@ import { adminDb } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { normalizePhone } from './agent'
 import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerCommand, isTestPhone, MAX_TURNS, HUMAN_PAUSE_HOURS } from './leadsCore'
+import { isoInIsrael } from './leadsView'
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
 // importing this file boots the Admin SDK, which needs credentials.
@@ -297,3 +298,121 @@ export async function setHuman(phone, human, reason = null) {
 }
 
 export const SALES_LEADS_COLLECTION = COLLECTION
+
+// ── What it costs ───────────────────────────────────────────────────
+//
+// Every model call is metered as it happens and rolled up into one
+// document per Israeli calendar day, plus a running total.
+//
+// Per-day documents rather than a query over the leads: the leads
+// collection grows without bound and "what did today cost" would become
+// a full scan of it, run every time the admin screen is opened. Thirty
+// small documents answer every window the UI asks for — today, the last
+// week, the last month — at thirty reads flat.
+//
+// The day boundary is Israel's, not UTC. A bot answering at 01:00 local
+// belongs to that morning's number, and rolling over at 02:00 or 03:00
+// would put it on the wrong day in a way nobody would ever notice was
+// wrong.
+const USAGE_COLLECTION = 'sales_usage'
+const TOTALS_DOC = '_totals'
+
+const usageRef = id => adminDb.collection(USAGE_COLLECTION).doc(id)
+
+/**
+ * Record the cost of one call.
+ *
+ * Deliberately never throws. This is bookkeeping attached to a customer
+ * conversation, and a failed write here must not cost somebody an answer
+ * — the money is the cheaper of the two things to lose.
+ */
+export async function recordSpend({ provider, model, usd, usage, images = 0, todayISO }) {
+    try {
+        const day = todayISO || isoInIsrael()
+        const u = usage || {}
+        const inc = FieldValue.increment
+        const patch = {
+            usd: inc(Number(usd) || 0),
+            calls: inc(1),
+            images: inc(Number(images) || 0),
+            inputTokens: inc(Number(u.input_tokens) || 0),
+            outputTokens: inc(Number(u.output_tokens) || 0),
+            cacheReadTokens: inc(Number(u.cache_read_input_tokens) || 0),
+            cacheWriteTokens: inc(Number(u.cache_creation_input_tokens) || 0),
+            // Kept per provider so the screen can say which half of the
+            // bill is the salesperson and which half is the pictures.
+            [`${provider}Usd`]: inc(Number(usd) || 0),
+            [`${provider}Calls`]: inc(1),
+            updatedAt: FieldValue.serverTimestamp(),
+            // Written every time on purpose: if the model is swapped, the
+            // most recent id is the one whose rates the number reflects.
+            lastModel: String(model || ''),
+        }
+        await Promise.all([
+            usageRef(day).set({ date: day, ...patch }, { merge: true }),
+            usageRef(TOTALS_DOC).set(patch, { merge: true }),
+        ])
+    } catch (err) {
+        console.error('[sales-agent] recordSpend failed', err)
+    }
+}
+
+const emptyDay = date => ({ date, usd: 0, calls: 0, images: 0, anthropicUsd: 0, openaiUsd: 0 })
+
+function daysBack(n, todayISO) {
+    const base = Date.parse(`${todayISO}T12:00:00Z`)
+    const out = []
+    for (let i = 0; i < n; i++) out.push(new Date(base - i * 86400000).toISOString().slice(0, 10))
+    return out
+}
+
+/**
+ * Spend for the windows the admin screen shows.
+ *
+ * `total` comes from the running document rather than summing the days,
+ * because the days are only kept for a month and a total that silently
+ * meant "the last 30 days" would be the most misleading number on the
+ * page.
+ */
+export async function readSpend({ days = 30, todayISO } = {}) {
+    const today = todayISO || isoInIsrael()
+    const dates = daysBack(days, today)
+    const refs = [...dates.map(usageRef), usageRef(TOTALS_DOC)]
+
+    let snaps
+    try {
+        snaps = await adminDb.getAll(...refs)
+    } catch (err) {
+        console.error('[sales-agent] readSpend failed', err)
+        return null
+    }
+
+    const totalsSnap = snaps[snaps.length - 1]
+    const byDay = dates.map((date, i) => {
+        const d = snaps[i]?.exists ? snaps[i].data() : null
+        return d ? { ...emptyDay(date), ...d, date } : emptyDay(date)
+    })
+
+    const sum = (from, to) => byDay.slice(from, to).reduce((acc, d) => acc + (Number(d.usd) || 0), 0)
+    const totals = totalsSnap?.exists ? totalsSnap.data() : null
+
+    return {
+        today: byDay[0]?.usd || 0,
+        yesterday: byDay[1]?.usd || 0,
+        week: sum(0, 7),
+        month: sum(0, 30),
+        total: Number(totals?.usd) || 0,
+        totalCalls: Number(totals?.calls) || 0,
+        totalImages: Number(totals?.images) || 0,
+        anthropicTotal: Number(totals?.anthropicUsd) || 0,
+        openaiTotal: Number(totals?.openaiUsd) || 0,
+        // Oldest first reads better as a sparkline than newest first.
+        byDay: byDay.slice(0, 14).reverse().map(d => ({ date: d.date, usd: Number(d.usd) || 0 })),
+        // The earliest day inside the window that saw any spend. Not the
+        // date tracking began — if the bot has been running longer than
+        // the window it is simply the window's edge. The screen says
+        // "since tracking started" rather than printing a date, because a
+        // date this can only sometimes know is worse than no date.
+        firstActiveDay: [...byDay].reverse().find(d => (Number(d.calls) || 0) > 0)?.date || null,
+    }
+}

@@ -47,6 +47,15 @@ last assistant turn), an existing customer writing in, and the owner
 muting it from his phone. All in `reply/route.js`, in that order, before
 the model is ever called.
 
+**Spend is metered here, not read from a dashboard.** `pricing.js` holds
+the published rates; every model call is costed from the `usage` block it
+returned and rolled into `sales_usage/{date}` plus a `_totals` document.
+That buys cost per lead and cost per closed deal, which no provider
+dashboard can give. Two things it is not, both said on screen: it counts
+only what this app spends since counting began, and the rates are
+hardcoded, so a price change makes it wrong until someone edits the file.
+`RATES_CHECKED_ON` is the honesty marker.
+
 **Admin.** `/admin/sales-leads` — triage strip, transcript, per-lead
 actions, the experiment panel, and a button that sweeps the synthetic
 `9725000009xx` test leads.
@@ -65,7 +74,7 @@ fails loudly in the wrong direction. If it is ever applied, `inbound.js`
 costs nothing - valid JSON never reaches the repair path.
 
 **Env:** `ANTHROPIC_API_KEY`, `SALES_AGENT_SECRET`, `SALES_AGENT_OWNER_PHONE`,
-`CRON_SECRET`. Secrets are Lord's to enter — do not type them into forms.
+`CRON_SECRET`, `OPENAI_API_KEY`, optional `OPENAI_IMAGE_MODEL`. Secrets are Lord's to enter — do not type them into forms.
 
 **Open:** the daily digest push needs a WhatsApp template `wt_daily_digest`
 (UTILITY, Hebrew, 4 single-line variables) because free-form business-

@@ -28,6 +28,8 @@ import { adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { testBatch } from '@/lib/social/imagePrompt'
 import { isoInIsrael } from '@/lib/salesAgent/leadsView'
+import { costOfImageUsage, formatUsd } from '@/lib/salesAgent/pricing'
+import { recordSpend } from '@/lib/salesAgent/leads'
 
 async function authorized(req) {
     const header = req.headers.get('authorization') || ''
@@ -118,6 +120,13 @@ export async function GET(req) {
         const b64 = body?.data?.[0]?.b64_json
         if (!b64) return NextResponse.json({ ok: false, error: 'no-image' }, { status: 502 })
 
+        // Images are the expensive half of this system by an order of
+        // magnitude, so the cost is recorded and returned with the
+        // picture. Seeing the price beside the render is what stops
+        // "generate a few more" from becoming a surprise on the invoice.
+        const { usd, known } = costOfImageUsage(body?.usage, spec.model)
+        await recordSpend({ provider: 'openai', model: spec.model, usd, usage: body?.usage, images: 1 })
+
         return NextResponse.json({
             ok: true,
             index: i,
@@ -129,6 +138,8 @@ export async function GET(req) {
             textRejected: spec.textRejected,
             sourceImage: spec.sourceImage,
             prompt: spec.prompt,
+            costUsd: usd,
+            costLabel: known ? formatUsd(usd) : null,
             dataUrl: `data:image/png;base64,${b64}`,
         })
     } catch (err) {

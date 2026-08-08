@@ -25,7 +25,8 @@ import { NextResponse } from 'next/server'
 import { adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { normalizePhone } from '@/lib/salesAgent/agent'
-import { listLeads, getLead, adminPatchLead, deleteLeads, isTestPhone } from '@/lib/salesAgent/leads'
+import { listLeads, getLead, adminPatchLead, deleteLeads, isTestPhone, readSpend } from '@/lib/salesAgent/leads'
+import { unitEconomics, RATES_CHECKED_ON } from '@/lib/salesAgent/pricing'
 import { deriveLead, sortLeads, summarizeLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { STAGES } from '@/lib/salesAgent/catalog'
 import { summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
@@ -111,6 +112,12 @@ export async function GET(req) {
     const summary7 = summarizeLeads(items, { sinceMs: now - 7 * 86400000 })
     const summary30 = summarizeLeads(items, { sinceMs: now - 30 * 86400000 })
 
+    // What the thing costs to run. Read alongside the leads rather than
+    // from its own endpoint so the screen shows spend and outcome in the
+    // same refresh — a cost figure that can disagree with the lead count
+    // beside it invites exactly the wrong conclusion.
+    const spend = await readSpend({ todayISO: today })
+
     return NextResponse.json({
         ok: true,
         today,
@@ -125,6 +132,18 @@ export async function GET(req) {
         // forgets last month has no chance of ever reaching significance.
         experiments: summarizeExperiments(items),
         gaps: summarizeGaps(items),
+        spend: spend && {
+            ...spend,
+            // Divided by the ALL-TIME counts, matching the all-time
+            // total. Dividing a running total by a 30-day lead count
+            // would flatter the number every month it ran.
+            ...unitEconomics({
+                usd: spend.total,
+                leads: items.length,
+                won: items.filter(i => i.stage === 'closed_won').length,
+            }),
+            ratesCheckedOn: RATES_CHECKED_ON,
+        },
     })
 }
 

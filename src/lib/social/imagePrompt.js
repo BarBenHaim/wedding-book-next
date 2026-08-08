@@ -40,12 +40,18 @@
 
 import { planForDate, hashtagsFor } from './contentPlan'
 
-// gpt-image-1's supported sizes. Instagram wants 4:5 for feed and 9:16
-// for stories; the model offers 2:3 and 3:2 and square. 1024x1536 is the
-// closest available to both, and cropping a 2:3 down to 4:5 loses less
-// than upscaling a square, so both formats are requested at 2:3 and
-// trimmed afterwards rather than asking for something the model will
-// approximate badly.
+// The model. gpt-image-1 was the obvious choice and is no longer the
+// current one - gpt-image-2 supersedes it, and it is better at exactly
+// the thing this whole approach is betting on, which is rendering text
+// inside the picture. Overridable by env so a bad result can be walked
+// back to gpt-image-1, or down to gpt-image-1-mini, without a deploy.
+export const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2'
+
+// Instagram wants 4:5 for feed and 9:16 for stories; the model offers
+// 2:3, 3:2 and square. 1024x1536 is the closest available to both, and
+// cropping a 2:3 down to 4:5 loses less than upscaling a square, so both
+// formats are requested at 2:3 and trimmed afterwards rather than asking
+// for something the model will approximate badly.
 export const SIZES = {
     post: { size: '1024x1536', aspect: '4:5', crop: { width: 1080, height: 1350 } },
     story: { size: '1024x1536', aspect: '9:16', crop: { width: 1080, height: 1920 } },
@@ -176,7 +182,7 @@ export function buildImagePrompt(plan, { size = 'post', mode = 'edit', text } = 
     return {
         mode,
         size,
-        model: 'gpt-image-1',
+        model: IMAGE_MODEL,
         apiSize: fmt.size,
         crop: fmt.crop,
         sourceImage: mode === 'edit' ? plan.photo : null,
