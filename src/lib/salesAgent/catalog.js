@@ -18,6 +18,15 @@
 
 export const BUSINESS = {
     brand: 'Wedding Tales',
+    // What the bot calls the human it is handing over to. "לורד" was
+    // hardcoded here for a while and went out to real customers, which
+    // reads exactly as unprofessional as it sounds: it is a handle, not
+    // a name a business uses about itself.
+    //
+    // Env-driven so it can be set without a deploy, and null-safe: with
+    // nothing set the copy says "מישהו מהצוות", which is true, neutral
+    // and survives somebody else answering the phone.
+    ownerName: process.env.SALES_AGENT_OWNER_NAME || null,
     product: 'ספר ברכות — האורחים סורקים QR, כותבים ברכה ומעלים תמונה, והכול נארג לספר מזכרת',
     whatsapp: 'https://wa.link/rduj2s',
     landing: 'https://app.weddingtales.co.il/lp',

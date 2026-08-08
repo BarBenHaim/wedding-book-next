@@ -90,9 +90,20 @@ export async function saveExchange({ phone, incomingText, parsed, followUpAt, pr
     if (parsed.callbackPromised) patch.callbackPromised = parsed.callbackPromised
     if (source) patch.source = String(source).slice(0, 60)
     if (parsed.objectionRaised) patch.objectionCount = FieldValue.increment(1)
-    // Which photos this lead has already seen, so neither the prompt nor
+    // Which media this lead has already seen, so neither the prompt nor
     // the route can send one twice.
-    if (parsed.image) patch.imagesSent = FieldValue.arrayUnion(parsed.image)
+    //
+    // `pendingMediaKeys` is the other half of the measurement: it holds
+    // what was just sent until they either write back within a day (a
+    // reply credited to it) or do not (cleared, credited to nothing).
+    // Without the timestamp beside it, a reply three weeks later would
+    // count as a reaction to a picture nobody remembers seeing.
+    if (parsed.image) {
+        patch.imagesSent = FieldValue.arrayUnion(parsed.image)
+        patch.mediaSent = FieldValue.arrayUnion(parsed.image)
+        patch.pendingMediaKeys = [parsed.image]
+        patch.lastMediaAt = now
+    }
 
     // followUpAt null means "stop chasing" and must be written, not skipped.
     patch.followUpAt = followUpAt || null
@@ -278,6 +289,19 @@ export async function closeLeadOnPurchase({ phone, orderId, weddingId, amount, p
     if (weddingId) patch.weddingId = String(weddingId)
     if (amount != null && Number.isFinite(Number(amount))) patch.amount = Number(amount)
     if (packageId) patch.packageInterest = packageId
+
+    // Every asset this conversation saw gets the win, not just the last
+    // one. Last-touch attribution in this funnel would hand the credit
+    // to whatever happened to be sent nearest the payment link, which is
+    // the one thing guaranteed not to have caused the sale.
+    //
+    // Read before the write, because the write does not change the list
+    // and a failure here must not block closing the lead.
+    try {
+        const seen = await mediaSeenBy(id)
+        if (seen.length) creditMediaWin(seen).catch(() => {})
+    } catch { /* attribution is never worth a lost close */ }
+
     await ref(id).set(patch, { merge: true })
     return id
 }
@@ -442,4 +466,155 @@ export async function reviveOrphans(phones = [], todayISO) {
     }
     await batch.commit()
     return { revived: ids.length, ids }
+}
+
+// ── The media library ───────────────────────────────────────────────
+//
+// Everything Lord uploads from the leads screen, plus the counters that
+// say whether it was worth uploading. One document per asset, keyed by
+// the same string the model puts in its `image` field.
+//
+// The counters live on the asset document rather than in a separate
+// stats collection because they are only ever read together with it,
+// and a FieldValue.increment on a doc we are already fetching is free
+// compared with a second collection to keep in sync.
+const MEDIA_COLLECTION = 'sales_media'
+
+const mediaRef = key => adminDb.collection(MEDIA_COLLECTION).doc(String(key))
+
+// The library is read on EVERY inbound message to build the prompt, and
+// it changes about once a week. A short cache turns that into roughly
+// one Firestore query per lambda per minute. Sixty seconds is short
+// enough that an upload feels immediate and long enough to matter.
+const MEDIA_TTL_MS = 60_000
+let mediaCache = { at: 0, items: null }
+
+export async function listMedia({ fresh = false } = {}) {
+    if (!fresh && mediaCache.items && Date.now() - mediaCache.at < MEDIA_TTL_MS) {
+        return mediaCache.items
+    }
+    try {
+        const snap = await adminDb.collection(MEDIA_COLLECTION).limit(100).get()
+        const items = snap.docs.map(d => ({ key: d.id, ...d.data() }))
+        mediaCache = { at: Date.now(), items }
+        return items
+    } catch (err) {
+        // A library that fails to load must degrade to the built-in
+        // catalog, never to a broken reply. Serving a stale list is the
+        // better failure here.
+        console.warn('[salesAgent] media list failed', err?.message || err)
+        return mediaCache.items || []
+    }
+}
+
+export async function saveMedia(item = {}) {
+    const key = String(item.key || '').trim()
+    if (!key) throw new Error('bad key')
+    const patch = {
+        key,
+        kind: item.kind === 'video' ? 'video' : 'image',
+        url: String(item.url || ''),
+        label: String(item.label || '').slice(0, 80),
+        // `when` is the only field the model reads as an instruction, so
+        // it is the one worth writing carefully: it is what decides
+        // whether the asset gets sent to the right person.
+        when: String(item.when || '').slice(0, 200),
+        caption: String(item.caption || '').slice(0, 200),
+        disabled: !!item.disabled,
+        updatedAt: FieldValue.serverTimestamp(),
+    }
+    if (item.bytes != null) patch.bytes = Number(item.bytes) || 0
+    if (item.createdAt === undefined) patch.createdAt = FieldValue.serverTimestamp()
+    await mediaRef(key).set(patch, { merge: true })
+    mediaCache = { at: 0, items: null }
+    return key
+}
+
+export async function deleteMedia(key) {
+    const id = String(key || '').trim()
+    if (!id) return null
+    await mediaRef(id).delete()
+    mediaCache = { at: 0, items: null }
+    return id
+}
+
+// ── The three counters ──────────────────────────────────────────────
+//
+// All of them swallow their errors. A miscounted send is a slightly
+// worse ranking next week; a throw here is a customer who got no reply.
+
+const bump = async (keys, field, by = 1) => {
+    const list = [...new Set((Array.isArray(keys) ? keys : [keys]).filter(Boolean))].slice(0, 20)
+    if (!list.length) return
+    try {
+        const batch = adminDb.batch()
+        for (const key of list) {
+            batch.set(mediaRef(key), { [field]: FieldValue.increment(by) }, { merge: true })
+        }
+        await batch.commit()
+    } catch (err) {
+        console.warn(`[salesAgent] media ${field} failed`, err?.message || err)
+    }
+}
+
+export const recordMediaSent = keys => bump(keys, 'sent')
+
+// Credited when they write back within a day of receiving something.
+// Not proof it was the picture that did it — nothing cheap is — but a
+// person who answers within a day of seeing a book is a different
+// person from one who does not, and that difference is the signal.
+export const creditMediaReply = keys => bump(keys, 'replied')
+
+// Credited to EVERY asset the conversation saw, not just the last one.
+// Last-touch would hand the credit to whatever happened to be sent near
+// the finish line, which in this funnel is usually the payment link.
+export const creditMediaWin = keys => bump(keys, 'won')
+
+// How long after a send a reply still counts as a reply to it.
+const REPLY_WINDOW_MS = 24 * 3600 * 1000
+
+/**
+ * Called on every inbound message, before the reply is written.
+ *
+ * Returns the keys it credited so the caller can clear them, because
+ * crediting the same reply twice would inflate exactly the asset that
+ * started a long conversation.
+ */
+export async function creditPendingMedia(lead, nowMs = Date.now()) {
+    const keys = Array.isArray(lead?.pendingMediaKeys) ? lead.pendingMediaKeys : []
+    if (!keys.length) return []
+    const at = lead.lastMediaAt?.toMillis ? lead.lastMediaAt.toMillis() : Number(lead.lastMediaAt)
+    if (!Number.isFinite(at) || nowMs - at > REPLY_WINDOW_MS) {
+        // Too late to count, but still clear it: leaving it pending
+        // means a reply three weeks from now credits a picture nobody
+        // remembers seeing.
+        await clearPendingMedia(lead.phone)
+        return []
+    }
+    await creditMediaReply(keys)
+    await clearPendingMedia(lead.phone)
+    return keys
+}
+
+async function clearPendingMedia(phone) {
+    const id = normalizePhone(phone)
+    if (!id) return
+    try {
+        await ref(id).set({ pendingMediaKeys: [] }, { merge: true })
+    } catch (err) {
+        console.warn('[salesAgent] clear pending media failed', err?.message || err)
+    }
+}
+
+/** Every asset this conversation saw — the input to win attribution. */
+export async function mediaSeenBy(phone) {
+    const id = normalizePhone(phone)
+    if (!id) return []
+    try {
+        const snap = await ref(id).get()
+        const d = snap.data() || {}
+        return [...new Set([...(d.imagesSent || []), ...(d.mediaSent || [])])]
+    } catch {
+        return []
+    }
 }

@@ -47,8 +47,10 @@ export const maxDuration = 60
 import { NextResponse } from 'next/server'
 import { buildFollowUpPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, resolveFollowUp } from '@/lib/salesAgent/agent'
-import { dueFollowUps, markFollowUpSent, listLeads, reviveOrphans } from '@/lib/salesAgent/leads'
-import { sendableNow, MAX_PER_RUN } from '@/lib/salesAgent/followupPolicy'
+import { dueFollowUps, markFollowUpSent, listLeads, reviveOrphans, listMedia, recordMediaSent } from '@/lib/salesAgent/leads'
+import { sendableNow, MAX_PER_RUN, isFinalAttempt } from '@/lib/salesAgent/followupPolicy'
+import { MEDIA } from '@/lib/salesAgent/catalog'
+import { mergeMedia, performanceNote } from '@/lib/salesAgent/mediaLibrary'
 import { findOrphans, findStaleHandoffs, handoffAlert } from '@/lib/salesAgent/sweep'
 
 const WINDOW_MS = 24 * 3600 * 1000
@@ -131,10 +133,22 @@ export async function GET(req) {
         return NextResponse.json({ error: 'query-failed' }, { status: 502 })
     }
 
+    // The same library the live conversation uses. Without it a
+    // follow-up would offer only the six built-in images while the reply
+    // route knows about a video, which reads as two different bots.
+    const custom = await listMedia()
+    const library = mergeMedia(MEDIA, custom)
+    const perf = performanceNote(Object.fromEntries(custom.map(m => [m.key, m])), library)
+
     const items = []
     for (const lead of leads) {
         try {
-            const system = buildFollowUpPrompt(lead, today)
+            // The last message is a different message. `isFinalAttempt`
+            // existed and nothing passed it, so every third follow-up was
+            // written as another nudge - and a clean goodbye gets replies
+            // that a fourth reminder never will.
+            const isFinal = isFinalAttempt(lead.followUpCount || 0)
+            const system = buildFollowUpPrompt(lead, today, { isFinal, media: library, performanceNote: perf })
             // The model needs a user turn to answer; this one is an
             // instruction to the agent, never shown to the customer.
             const { text: raw } = await callClaude({
@@ -160,6 +174,7 @@ export async function GET(req) {
                 stage: parsed.stage,
                 text,
                 withinWindow,
+                isFinal,
                 followUpNumber: (lead.followUpCount || 0) + 1,
                 nextFollowUpAt,
                 // True when this lead only got here because the sweep
@@ -168,6 +183,8 @@ export async function GET(req) {
                 // or doing daily work it should not have to.
                 recovered: revived.some(r => r.phone === lead.phone),
             })
+
+            if (parsed.image && !dry) recordMediaSent(parsed.image).catch(() => {})
 
             if (!dry) {
                 // Marked as sent when handed to Make, not after Make

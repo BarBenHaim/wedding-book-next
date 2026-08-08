@@ -21,6 +21,8 @@ import { BUSINESS, DEMO, PACKAGES, ADDONS, FACTS, CONCESSION, MEDIA } from './ca
 import { findVariant, shouldApplyOpening } from './experiments'
 import { journeyBlock, LANGUAGE_RULES } from './journey'
 import { CONVERSATION_CRAFT, readStyle, styleNote } from './conversation'
+import { SELLING_CRAFT } from './selling'
+import { mergeMedia } from './mediaLibrary'
 
 const ils = n => `₪${Number(n).toLocaleString('he-IL')}`
 
@@ -36,7 +38,11 @@ function renderPackages() {
  * @param {object} lead    the CRM record (see leads.js) — may be empty for a new lead
  * @param {string} todayISO  'YYYY-MM-DD' — the agent has no clock of its own
  */
-export function buildSystemPrompt(lead = {}, todayISO) {
+export function buildSystemPrompt(lead = {}, todayISO, { media = null, performanceNote = null } = {}) {
+    // Falling back to the built-in catalog is deliberate: a Firestore
+    // read that failed must cost the bot the uploaded extras, never the
+    // six images it has always had.
+    const library = media || mergeMedia(MEDIA, [])
     const known = []
     if (lead.name) known.push(`שם: ${lead.name}`)
     if (lead.eventType) known.push(`סוג אירוע: ${lead.eventType}`)
@@ -104,9 +110,9 @@ ${FACTS.map(f => `- ${f}`).join('\n')}
 - דמו חי לכתיבת ברכה: ${DEMO.writeBlessing}
 - דף מידע מלא: ${BUSINESS.landing}
 
-## תמונות שאתה יכול לשלוח
-שים ב-"image" את המפתח, ורק אחד מהמפתחות האלה. אל תמציא כתובת תמונה.
-${Object.entries(MEDIA).map(([k, m]) => `- ${k}: ${m.when}`).join('\n')}
+## מדיה שאתה יכול לשלוח
+שים ב-"image" את המפתח, ורק אחד מהמפתחות האלה. אל תמציא כתובת.
+${renderMedia(library)}
 
 מתי לשלוח: כששואלים "איך זה נראה", כשמתלבטים אם הספר המודפס באמת שווה
 את ההפרש, או כשמישהו נשמע ספקן לגבי האיכות. תמונה של ספר אמיתי עונה על
@@ -118,10 +124,15 @@ ${Object.entries(MEDIA).map(([k, m]) => `- ${k}: ${m.when}`).join('\n')}
 
 ${LANGUAGE_RULES}
 ${CONVERSATION_CRAFT}
+${SELLING_CRAFT}
+${performanceNote || ''}
 ${styleNote(readStyle(lead.turns)) || ''}
 ${openingBlock(lead)}${journeyBlock(lead.stage || 'new')}
 ## מהלך המכירה — היעד שלך
-1. הבן מה האירוע ומתי. בלי תאריך אתה עובד בחושך.
+0. אם הוא שאל מחיר, תגיד מחיר. עכשיו, בהודעה הזאת, לפני כל שאר הסדר
+   הזה. השלבים למטה הם מה שקורה כשאין שאלה פתוחה על השולחן.
+1. הבן מה האירוע ומתי. בלי תאריך אתה עובד בחושך, אבל זה לא תנאי
+   לענות לו על מה שהוא שאל.
 2. שלח את קישור הדמו מוקדם. זה כלי המכירה החזק ביותר שיש לך —
    לקוח שכתב ברכה בעצמו כבר מדמיין את האירוע שלו.
 3. הצג את שלוש החבילות יחד, תמיד. הדגש את המודפס.
@@ -141,7 +152,7 @@ ${openingBlock(lead)}${journeyBlock(lead.stage || 'new')}
   חשבונאית, מבקש חשבונית/זיכוי, או שואל משהו עובדתי שאין לך —
   handoff=true. אל תנסה להציל את זה לבד.
 - אתה לא ממציא שאתה אדם. אם שואלים ישירות אם אתה בוט — תגיד שאתה
-  עוזר דיגיטלי של ${BUSINESS.brand} ושאפשר לקבל את לורד לשיחה תוך רגע.
+  עוזר דיגיטלי של ${BUSINESS.brand} ושאפשר לקבל ${humanName()} לשיחה תוך רגע.
 
 ## מה אתה כבר יודע על הלקוח הזה
 ${known.length ? known.join('\n') : 'שום דבר. זו ההתחלה, אל תניח כלום.'}
@@ -174,7 +185,7 @@ ${lead.isNew === false
   "callback_promised": "YYYY-MM-DD או null",
   "follow_up_at": "YYYY-MM-DD או null",
   "handoff": false,
-  "handoff_reason": "משפט אחד ללורד — למה הוא נדרש, או null",
+  "handoff_reason": "משפט אחד לבעל העסק — למה הוא נדרש, או null",
   "objection_raised": false,
   "image": "מפתח מרשימת התמונות למעלה, או null",
   "notes": "שורה אחת לזיכרון להמשך השיחה, מה באמת חשוב כאן"
@@ -182,6 +193,24 @@ ${lead.isNew === false
 
 "messages" הוא מערך של 1 עד 3 מחרוזות. שתי הודעות רק כשזה באמת קורא
 טוב יותר — למשל משפט קצר ואז קישור. ברירת המחדל היא הודעה אחת.`
+}
+
+// One line per asset: the key the model writes back, whether it is a
+// still or a video, and — the only part that matters — when to use it.
+// `when` is what decides whether the right person gets the right thing,
+// so it is the field the upload panel makes Lord fill in.
+function renderMedia(library) {
+    const entries = Object.entries(library || {})
+    if (!entries.length) return 'אין כרגע מדיה זמינה. image=null תמיד.'
+    return entries
+        .map(([k, m]) => `- ${k}${m.kind === 'video' ? ' (סרטון)' : ''}: ${m.when || m.caption || ''}`)
+        .join('\n')
+}
+
+// The bot never says a name it was not given. With nothing configured
+// this is deliberately a role rather than a person.
+function humanName() {
+    return BUSINESS.ownerName || 'מישהו מהצוות'
 }
 
 // The A/B arm, injected only while it is still the opening move. Adding
@@ -219,7 +248,7 @@ export function addDaysISO(iso, days) {
     return d.toISOString().slice(0, 10)
 }
 
-export function buildFollowUpPrompt(lead, todayISO, { isFinal = false } = {}) {
+export function buildFollowUpPrompt(lead, todayISO, { isFinal = false, media = null, performanceNote = null } = {}) {
     // The last message is a different message, and telling the model
     // "this is the third one" is not enough — it will still write a
     // nudge. Naming it as the goodbye is what produces a goodbye, and a
@@ -232,7 +261,7 @@ export function buildFollowUpPrompt(lead, todayISO, { isFinal = false } = {}) {
 ובלי "רק רציתי לוודא". משפט או שניים, וזהו. stage="closed_lost".`
         : ''
 
-    return `${buildSystemPrompt(lead, todayISO)}
+    return `${buildSystemPrompt(lead, todayISO, { media, performanceNote })}
 
 ## המשימה עכשיו שונה
 הלקוח לא ענה. אתה כותב פולו-אפ יזום — לא תשובה.

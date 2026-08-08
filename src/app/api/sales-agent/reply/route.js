@@ -38,11 +38,14 @@ import { callClaude, parseAgentJson, normalizePhone, resolveFollowUp } from '@/l
 import {
     getLead, saveExchange, toApiMessages, isPausedForHuman,
     isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone, listLeads, recordSpend,
+    listMedia, recordMediaSent, creditPendingMedia,
 } from '@/lib/salesAgent/leads'
 import { costOfClaudeUsage } from '@/lib/salesAgent/pricing'
 import { parseInboundBody } from '@/lib/salesAgent/inbound'
 import { resolveSource } from '@/lib/salesAgent/attribution'
-import { BUSINESS, findMedia } from '@/lib/salesAgent/catalog'
+import { BUSINESS, MEDIA } from '@/lib/salesAgent/catalog'
+import { mergeMedia, performanceNote } from '@/lib/salesAgent/mediaLibrary'
+import { priceDodged, priceFallbackMessage } from '@/lib/salesAgent/selling'
 import { assignVariant, summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
 import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
@@ -54,7 +57,7 @@ const FALLBACK_REPLY = 'רגע אחד, אני מעביר אותך לנציג ש�
 // What an existing customer hears. Deliberately not a sales sentence:
 // they already bought, and the only useful thing the bot can do is
 // acknowledge them and get out of the way fast.
-const CUSTOMER_REPLY = 'היי! קיבלתי את ההודעה ואני מעביר אותה ללורד, הוא יחזור אליך ממש עוד מעט 🙏'
+const CUSTOMER_REPLY = `היי! קיבלתי את ההודעה ואני מעביר אותה ל${BUSINESS.ownerName || 'צוות'}, נחזור אליך ממש עוד מעט 🙏`
 
 // The owner's own WhatsApp number, in 972… form. When set, messages
 // arriving FROM it are treated as commands rather than as a customer,
@@ -257,7 +260,23 @@ export async function POST(req) {
     // different arm and quietly bias the comparison.
     const variant = lead.variant || assignVariant(phone)
 
-    const system = buildSystemPrompt({ ...lead, daysSinceLastMessage, variant }, today)
+    // The library Lord uploaded, on top of the six built-in images. Read
+    // through a one-minute cache, so this is roughly one Firestore query
+    // per lambda per minute rather than one per message.
+    const custom = await listMedia()
+    const library = mergeMedia(MEDIA, custom)
+    const stats = Object.fromEntries(custom.map(m => [m.key, m]))
+    const perf = performanceNote(stats, library)
+
+    // They wrote back. If something was sent to them inside the last day,
+    // that write-back is the only evidence we will ever get that it was
+    // worth sending, so it is credited before anything else can fail.
+    creditPendingMedia(lead).catch(() => {})
+
+    const system = buildSystemPrompt({ ...lead, daysSinceLastMessage, variant }, today, {
+        media: library,
+        performanceNote: perf,
+    })
     const messages = toApiMessages(lead.turns, text)
 
     // Cost bookkeeping. Fire-and-forget on purpose: the customer is
@@ -320,8 +339,24 @@ export async function POST(req) {
     if (parsed.image && Array.isArray(lead.imagesSent) && lead.imagesSent.includes(parsed.image)) {
         parsed.image = null
     }
-    const media = parsed.image ? findMedia(parsed.image) : null
+    const media = parsed.image ? library[parsed.image] || null : null
     if (!media) parsed.image = null
+
+    // ── The price guard ──────────────────────────────────────────────
+    //
+    // Somebody asked what it costs and the answer came back without a
+    // number. The prompt says not to do this in about four places; under
+    // pressure the model still does, and it is the specific failure that
+    // loses the lead, so it gets a deterministic repair rather than
+    // another paragraph of instruction.
+    //
+    // Appended as a second message rather than replacing the first: the
+    // model's sentence is usually fine, it was just missing the one
+    // thing that was asked for.
+    if (priceDodged(text, parsed.messages)) {
+        console.warn('[sales-agent] price dodged, repairing', phone)
+        parsed.messages = [...parsed.messages, priceFallbackMessage()].slice(0, 3)
+    }
 
     const followUpAt = resolveFollowUp({
         parsed,
@@ -357,6 +392,13 @@ export async function POST(req) {
         console.error('[sales-agent] lead write failed', err)
     }
 
+    // Counted here rather than when Make confirms, for the same reason
+    // follow-ups are: an ack round trip would double the Make operations
+    // per message. A send that fails downstream inflates one denominator
+    // slightly, which is a much cheaper error than halving the number of
+    // conversations the bot can afford to have.
+    if (parsed.image) recordMediaSent(parsed.image).catch(() => {})
+
     // Settled, not awaited earlier: the accounting rides along with the
     // CRM write instead of adding its own round trip before it.
     await Promise.allSettled(spends)
@@ -385,9 +427,17 @@ export async function POST(req) {
         //
         // The caption comes from the catalog, not the model. It is one
         // factual line about what is in the frame, and it cannot drift.
-        sendImage: media ? media.url : null,
-        sendImageCaption: media ? media.caption : null,
-        hasImage: !!media,
+        sendImage: media && media.kind !== 'video' ? media.url : null,
+        sendImageCaption: media && media.kind !== 'video' ? media.caption : null,
+        hasImage: !!media && media.kind !== 'video',
+        // Video is a different WhatsApp module with a different payload,
+        // so it gets its own pair of fields rather than being smuggled
+        // through sendImage. `hasVideo` is the gate for that branch in
+        // Make; when no video module exists yet these stay false and
+        // nothing changes.
+        sendVideo: media && media.kind === 'video' ? media.url : null,
+        sendVideoCaption: media && media.kind === 'video' ? media.caption : null,
+        hasVideo: !!media && media.kind === 'video',
         stage: parsed.stage,
         handoff: parsed.handoff,
         followUpAt,

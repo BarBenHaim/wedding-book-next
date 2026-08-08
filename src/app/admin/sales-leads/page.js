@@ -35,6 +35,7 @@ import {
     ATTENTION_BUCKETS, STAGE_META, stageMeta, eventTypeLabel, PACKAGE_LABELS, relativeHe,
 } from '@/lib/salesAgent/leadsView'
 import { formatUsd } from '@/lib/salesAgent/pricing'
+import SalesMediaPanel from '@/components/SalesMediaPanel/SalesMediaPanel'
 import { formatHebrewDate } from '@/lib/salesAgent/prompt'
 
 // ─── palette (matches /admin/studio) ─────────────────────────────────
@@ -275,6 +276,8 @@ function SalesLeadsContent() {
                 <Spend data={data?.spend} />
 
                 <Experiments data={data?.experiments} gaps={data?.gaps} />
+
+                <SalesMediaPanel />
 
                 {/* filters */}
                 <div className='flex items-center gap-2 flex-wrap mb-3'>

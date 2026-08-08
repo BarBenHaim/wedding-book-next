@@ -438,10 +438,39 @@ describe('images — a whitelist, not a capability', () => {
         expect(out.image).toBeNull()
     })
 
-    it('offers the agent the image keys and forbids inventing a URL', () => {
+    it('offers the agent the media keys and forbids inventing a URL', () => {
         const p = buildSystemPrompt({}, '2026-08-05')
         for (const key of MEDIA_KEYS) expect(p).toContain(key)
-        expect(p).toContain('אל תמציא כתובת תמונה')
+        expect(p).toContain('אל תמציא כתובת')
+    })
+
+    it('falls back to the built-in six when the library could not be read', () => {
+        // A Firestore hiccup must cost the bot the uploaded extras, not
+        // the images it has always had.
+        const p = buildSystemPrompt({}, '2026-08-05', { media: null })
+        for (const key of MEDIA_KEYS) expect(p).toContain(key)
+    })
+
+    it('takes an uploaded library and marks video as video', () => {
+        const p = buildSystemPrompt({}, '2026-08-05', {
+            media: { flip: { kind: 'video', when: 'כששואלים איך זה נראה', url: 'u', caption: 'c' } },
+        })
+        expect(p).toContain('flip (סרטון)')
+        expect(p).toContain('כששואלים איך זה נראה')
+    })
+
+    it('answers a price question before it qualifies anybody', () => {
+        // The failure Lord reported: asked how much, answered with a
+        // question about the event.
+        const p = buildSystemPrompt({}, '2026-08-05')
+        expect(p).toMatch(/אם הוא שאל מחיר, תגיד מחיר/)
+        expect(p).toMatch(/תגיד לו כמה זה עולה/)
+    })
+
+    it('never says the owner is called לורד', () => {
+        // It went out to real customers. It is a handle, not a name a
+        // business uses about itself.
+        expect(buildSystemPrompt({}, '2026-08-05')).not.toContain('לורד')
     })
 })
 

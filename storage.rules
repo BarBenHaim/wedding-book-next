@@ -34,6 +34,27 @@ service firebase.storage {
                 && request.resource.contentType.matches('image/.*')));
     }
 
+    // Media the bot sends on WhatsApp, uploaded from /admin/sales-leads.
+    // The file goes browser -> Storage directly because a 16 MB video
+    // through a serverless function hits the request body limit; only
+    // the resulting URL is posted to the API, which is where the real
+    // authorisation check lives (super-admin ID token).
+    //
+    // Reads are public because WhatsApp's servers fetch the URL to
+    // deliver the message, unauthenticated. Writes need a signed-in
+    // user, and the ceilings mirror WhatsApp's own limits so a file
+    // that would fail at send cannot be stored in the first place.
+    match /sales-media/{filename} {
+      allow read: if true;
+      allow create:
+        if request.auth != null
+        && ((request.resource.contentType.matches('image/.*')
+             && request.resource.size < 5 * 1024 * 1024)
+            || (request.resource.contentType.matches('video/.*')
+                && request.resource.size < 16 * 1024 * 1024));
+      allow update, delete: if false;
+    }
+
     // Anything else — admin SDK only.
     match /{path=**} {
       allow read, write: if false;
