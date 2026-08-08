@@ -20,6 +20,7 @@
 import { BUSINESS, DEMO, PACKAGES, ADDONS, FACTS, CONCESSION, MEDIA } from './catalog'
 import { findVariant, shouldApplyOpening } from './experiments'
 import { journeyBlock, LANGUAGE_RULES } from './journey'
+import { CONVERSATION_CRAFT, readStyle, styleNote } from './conversation'
 
 const ils = n => `₪${Number(n).toLocaleString('he-IL')}`
 
@@ -116,6 +117,8 @@ ${Object.entries(MEDIA).map(([k, m]) => `- ${k}: ${m.when}`).join('\n')}
 בחר את התמונה שמתאימה לסוג האירוע שלו. אין לך תמונות של ברית.
 
 ${LANGUAGE_RULES}
+${CONVERSATION_CRAFT}
+${styleNote(readStyle(lead.turns)) || ''}
 ${openingBlock(lead)}${journeyBlock(lead.stage || 'new')}
 ## מהלך המכירה — היעד שלך
 1. הבן מה האירוע ומתי. בלי תאריך אתה עובד בחושך.
