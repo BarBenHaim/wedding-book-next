@@ -54,6 +54,16 @@ actions, the experiment panel, and a button that sweeps the synthetic
 **Owner commands** from Lord's own number (needs `SALES_AGENT_OWNER_PHONE`):
 `שקט <phone>`, `בוט <phone>`, `סטטוס <phone>`, `דוח`.
 
+**Make sends broken JSON, and that is handled here.** The HTTP module
+builds the body by interpolating values into a raw string, so a newline
+or a quote in a customer's message makes it stop being JSON. That cost a
+real lead on 8 August: two-line message, 400, no reply, no alert.
+`inbound.js` repairs it by finding the known keys and taking the values
+between them verbatim. The tidier fix is `toJSON()` in Make, still not
+applied because it cannot be verified without a live message and it
+fails loudly in the wrong direction. If it is ever applied, `inbound.js`
+costs nothing - valid JSON never reaches the repair path.
+
 **Env:** `ANTHROPIC_API_KEY`, `SALES_AGENT_SECRET`, `SALES_AGENT_OWNER_PHONE`,
 `CRON_SECRET`. Secrets are Lord's to enter — do not type them into forms.
 

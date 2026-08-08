@@ -39,6 +39,7 @@ import {
     getLead, saveExchange, toApiMessages, isPausedForHuman,
     isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone, listLeads,
 } from '@/lib/salesAgent/leads'
+import { parseInboundBody } from '@/lib/salesAgent/inbound'
 import { BUSINESS, findMedia } from '@/lib/salesAgent/catalog'
 import { assignVariant, summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
 import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
@@ -76,11 +77,26 @@ function todayISO() {
 export async function POST(req) {
     if (!authorized(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    let body
-    try {
-        body = await req.json()
-    } catch {
-        return NextResponse.json({ error: 'bad-json' }, { status: 400 })
+    // Not req.json(). Make builds the body by interpolating values into a
+    // raw string, so one newline or quote in a customer's message makes it
+    // stop being JSON — and a strict parse turns that into a 400, which
+    // turns into silence for someone who asked a question. See inbound.js.
+    let body, repaired
+    {
+        const raw = await req.text().catch(() => '')
+        const parsed = parseInboundBody(raw)
+        if (!parsed.body) {
+            console.error('[sales-agent] unreadable body', parsed.reason, raw.slice(0, 200))
+            return NextResponse.json({ error: 'bad-json', reason: parsed.reason }, { status: 400 })
+        }
+        body = parsed.body
+        repaired = parsed.repaired
+    }
+    if (repaired) {
+        // Not an error — the customer is answered either way. Logged
+        // because a rising count is the signal to go fix Make's body
+        // template, and without this line nobody would ever know.
+        console.warn('[sales-agent] repaired a malformed body from Make')
     }
 
     const text = String(body?.text || '').trim()
