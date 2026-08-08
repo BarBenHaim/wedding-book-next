@@ -73,13 +73,8 @@ async function generate(spec, key, signal) {
 }
 
 async function edit(spec, key, signal) {
-    // The source has to travel as bytes; the API will not fetch a URL.
-    const src = await fetch(spec.sourceImage, { signal })
-    // Names the file. "source-image-404" sends you looking at OpenAI;
-    // the URL sends you to the actual missing photo, which is where the
-    // bug was the one time this fired.
-    if (!src.ok) throw new Error(`התמונה לא נמצאה (${src.status}): ${spec.sourceImage}`)
-    const bytes = await src.arrayBuffer()
+    const urls = spec.sourceImages?.length ? spec.sourceImages : [spec.sourceImage].filter(Boolean)
+    if (!urls.length) throw new Error('אין תמונת מקור לעריכה')
 
     const form = new FormData()
     form.append('model', spec.model)
@@ -87,7 +82,21 @@ async function edit(spec, key, signal) {
     form.append('size', spec.apiSize)
     form.append('quality', 'medium')
     form.append('n', '1')
-    form.append('image', new Blob([bytes], { type: 'image/jpeg' }), 'source.jpg')
+
+    // Several sources, not one. A reference brief sends the brand's own
+    // posters so the model can see the house style instead of reading a
+    // description of it; an ordinary edit sends the single photograph it
+    // is working on. The field name is the same either way.
+    for (let i = 0; i < urls.length; i++) {
+        // The source has to travel as bytes; the API will not fetch a URL.
+        const src = await fetch(urls[i], { signal })
+        // Names the file. "source-image-404" sends you looking at OpenAI;
+        // the URL sends you to the actual missing photo, which is where
+        // the bug was the one time this fired.
+        if (!src.ok) throw new Error(`התמונה לא נמצאה (${src.status}): ${urls[i]}`)
+        const bytes = await src.arrayBuffer()
+        form.append('image[]', new Blob([bytes], { type: 'image/jpeg' }), `source-${i + 1}.jpg`)
+    }
 
     return fetch('https://api.openai.com/v1/images/edits', {
         method: 'POST',
@@ -117,7 +126,9 @@ export async function GET(req) {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 110_000)
     try {
-        const res = spec.mode === 'edit'
+        // Both 'edit' and 'reference' post source images; only a bare
+        // 'generate' has nothing to send.
+        const res = spec.sourceImages?.length || spec.sourceImage
             ? await edit(spec, key, ctrl.signal)
             : await generate(spec, key, ctrl.signal)
 
@@ -147,6 +158,7 @@ export async function GET(req) {
             text: spec.text,
             textRejected: spec.textRejected,
             sourceImage: spec.sourceImage,
+            sourceImages: spec.sourceImages,
             prompt: spec.prompt,
             costUsd: usd,
             costLabel: known ? formatUsd(usd) : null,

@@ -41,6 +41,7 @@
 import { planForDate, hashtagsFor } from './contentPlan'
 import { findScene, eventStyle, PRODUCT, CRAFT, NON_NEGOTIABLE, CREATIVE_LICENCE, FREE_SCENE } from './scenes'
 import { GUEST_SCREEN } from './contentPlan'
+import { refsFor, posterBrief, NO_INVENTED_PEOPLE } from './brandRefs'
 
 // The model. gpt-image-1 was the obvious choice and is no longer the
 // current one - gpt-image-2 supersedes it, and it is better at exactly
@@ -139,7 +140,9 @@ export function buildImagePrompt(plan, { size = 'post', mode = 'edit', text } = 
     // Falling back on falsiness would quietly turn "" into the plan's
     // headline, and the one render meant to test the picture alone would
     // come back with words on it.
-    const line = (text === undefined ? String(plan.headline || '') : String(text ?? '')).trim()
+    const line = (text === undefined
+        ? (mode === 'reference' ? '' : String(plan.headline || ''))
+        : String(text ?? '')).trim()
     const check = checkText(line)
 
     // The scene says what the picture is; the event style says what it
@@ -149,7 +152,14 @@ export function buildImagePrompt(plan, { size = 'post', mode = 'edit', text } = 
     const style = eventStyle(plan.eventType)
 
     const parts = [`A ${fmt.aspect} image for an Instagram post.`]
-    if (scene.free && mode !== 'edit') {
+    if (mode === 'reference') {
+        // The strongest mode there is, and the one that arrived last:
+        // send the brand's own posters as input images and ask for a new
+        // one in that spirit. Words describing a design are lossy; the
+        // design itself is not.
+        parts.push(posterBrief({ eventType: plan.eventType, world: plan.world, name: plan.posterName }))
+        parts.push(NO_INVENTED_PEOPLE)
+    } else if (scene.free && mode !== 'edit') {
         // The open brief: the job of the post, the three facts that are
         // not style, and the rest is the model's call.
         parts.push(`The post has to communicate this: ${plan.job || plan.brief || 'what this product is and why it is worth keeping'}.`)
@@ -188,7 +198,12 @@ export function buildImagePrompt(plan, { size = 'post', mode = 'edit', text } = 
         model: IMAGE_MODEL,
         apiSize: fmt.size,
         crop: fmt.crop,
+        // One source for an edit, several for a reference brief. Kept as
+        // an array too so the caller never has to know which mode it is.
         sourceImage: mode === 'edit' ? plan.photo : null,
+        sourceImages: mode === 'reference'
+            ? refsFor(plan.eventType).map(r => r.url)
+            : (mode === 'edit' && plan.photo ? [plan.photo] : []),
         text: check.ok ? line : null,
         textRejected: check.ok ? null : check.reason,
         angleId: plan.angleId,
@@ -221,6 +236,9 @@ export function testBatch(iso) {
         // is whether the real screenshot survives being placed in a
         // scene. A caption on top would only add a second variable.
         buildImagePrompt(phone, { size: 'post', mode: 'edit', text: '' }),
+        // The reference brief, which is the one that decides whether any
+        // of the directed scenes are worth keeping.
+        buildImagePrompt({ ...day0, eventType: 'bat_mitzvah', world: 'a bright rooftop in Tel Aviv at golden hour' }, { size: 'post', mode: 'reference' }),
         buildImagePrompt({ ...day1, sceneId: 'flatlay', eventType: 'bat_mitzvah' }, { size: 'post', mode: 'generate', text: 'ככה זה נראה בסוף' }),
         buildImagePrompt({ ...day1, sceneId: 'shelf_years_later', eventType: 'birthday' }, { size: 'story', mode: 'generate', text: 'בעוד עשרים שנה' }),
         // Deliberately wordless: it is the one render that shows what the

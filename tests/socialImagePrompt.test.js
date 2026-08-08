@@ -178,13 +178,28 @@ describe('buildImagePrompt', () => {
 describe('testBatch', () => {
     const batch = testBatch(ISO)
 
-    it('is four renders', () => {
-        expect(batch).toHaveLength(4)
+    it('is five renders', () => {
+        // Grew by one when the reference brief arrived: that render is
+        // the one that decides whether the directed scenes earn their
+        // place at all, so it belongs in the batch that gets looked at.
+        expect(batch).toHaveLength(5)
+    })
+
+    it('includes a reference brief carrying the brand posters as inputs', () => {
+        const ref = batch.find(b => b.mode === 'reference')
+        expect(ref).toBeTruthy()
+        expect(ref.sourceImages.length).toBeGreaterThanOrEqual(2)
+        for (const u of ref.sourceImages) expect(u).toMatch(/\/imgs\/social\/refs\//)
+        // No baked caption: the poster's own design supplies the words,
+        // and a second line of text fights it.
+        expect(ref.text).toBeNull()
+        expect(ref.prompt).toMatch(/house style/)
+        expect(ref.prompt).toMatch(/never of a child/)
     })
 
     it('disagrees with itself on purpose', () => {
         // A batch where every render is the easy case tells us nothing.
-        expect(new Set(batch.map(b => b.mode)).size).toBe(2)
+        expect(new Set(batch.map(b => b.mode)).size).toBe(3)
         expect(new Set(batch.map(b => b.size)).size).toBe(2)
         expect(new Set(batch.map(b => b.sceneId)).size).toBeGreaterThanOrEqual(3)
         expect(batch.some(b => b.text === null)).toBe(true)
