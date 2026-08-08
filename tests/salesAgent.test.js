@@ -222,8 +222,29 @@ describe('resolveFollowUp — no lead falls out of the funnel', () => {
     })
 
     it('stops after the third follow-up instead of nagging forever', () => {
-        expect(run({}, 2)).toBe('2026-08-06')
+        // Still scheduled, but a week out rather than tomorrow: the
+        // ladder widens with each attempt (see followupPolicy.js), and
+        // somebody who has ignored two messages is not won by a third
+        // one the next morning.
+        expect(run({}, 2)).toBe('2026-08-12')
         expect(run({}, 3)).toBeNull()
+    })
+
+    it('widens the gap with every attempt', () => {
+        const gaps = [0, 1, 2].map(n => run({}, n))
+        expect(gaps).toEqual(['2026-08-06', '2026-08-08', '2026-08-12'])
+    })
+
+    it('chases harder when the event is close and backs off when it is far', () => {
+        const soon = run({ eventDate: '2026-08-14' })
+        const far = run({ eventDate: '2027-06-01' })
+        expect(soon).toBe('2026-08-06')
+        expect(far).toBe('2026-08-07')
+    })
+
+    it('stops entirely once the event has already happened', () => {
+        // A cheerful nudge about a guest book for last week's wedding.
+        expect(run({ eventDate: '2026-08-01' })).toBeNull()
     })
 })
 

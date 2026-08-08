@@ -216,12 +216,24 @@ export function addDaysISO(iso, days) {
     return d.toISOString().slice(0, 10)
 }
 
-export function buildFollowUpPrompt(lead, todayISO) {
+export function buildFollowUpPrompt(lead, todayISO, { isFinal = false } = {}) {
+    // The last message is a different message, and telling the model
+    // "this is the third one" is not enough — it will still write a
+    // nudge. Naming it as the goodbye is what produces a goodbye, and a
+    // clean exit gets replies that a fourth reminder never would.
+    const finalBlock = isFinal
+        ? `
+
+## זו ההודעה האחרונה שהלקוח הזה יקבל
+אל תבקש כלום ואל תנסה לסגור. סגור מעגל יפה: תודה, דלת פתוחה,
+ובלי "רק רציתי לוודא". משפט או שניים, וזהו. stage="closed_lost".`
+        : ''
+
     return `${buildSystemPrompt(lead, todayISO)}
 
 ## המשימה עכשיו שונה
 הלקוח לא ענה. אתה כותב פולו-אפ יזום — לא תשובה.
-זה הפולו-אפ מספר ${(lead.followUpCount || 0) + 1}.
+זה הפולו-אפ מספר ${(lead.followUpCount || 0) + 1}.${finalBlock}
 
 כללים לפולו-אפ:
 - התחבר למשהו ספציפי שנאמר בשיחה. "רק בודק מה קורה" זו הודעה שנמחקת.

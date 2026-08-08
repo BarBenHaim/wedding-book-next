@@ -56,6 +56,17 @@ only what this app spends since counting began, and the rates are
 hardcoded, so a price change makes it wrong until someone edits the file.
 `RATES_CHECKED_ON` is the honesty marker.
 
+**Follow-ups chase on a widening ladder, not a timer.** `followupPolicy.js`
+owns every timing decision: 1 / 3 / 7 days, floors per stage so a fresh
+quote gets air, scaled by how close the event is, and stopped dead once
+the event has passed. Three attempts, the last one explicitly written as
+a goodbye rather than a nudge. Quiet hours are Israel's: nothing before
+09:00 or after 21:00, nothing Friday afternoon, nothing on Saturday at
+all. `/api/sales-agent/followups` composes them; something external has
+to call it. Outside Meta's 24h window only an approved TEMPLATE can be
+sent - `withinWindow` on each item says which case it is, and ignoring
+that is why follow-up automations appear to work and then silently stop.
+
 **Admin.** `/admin/sales-leads` — triage strip, transcript, per-lead
 actions, the experiment panel, and a button that sweeps the synthetic
 `9725000009xx` test leads.

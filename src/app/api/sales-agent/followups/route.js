@@ -33,7 +33,9 @@ export const maxDuration = 60
 import { NextResponse } from 'next/server'
 import { buildFollowUpPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, resolveFollowUp } from '@/lib/salesAgent/agent'
-import { dueFollowUps, markFollowUpSent } from '@/lib/salesAgent/leads'
+import { dueFollowUps, markFollowUpSent, recordSpend } from '@/lib/salesAgent/leads'
+import { costOfClaudeUsage } from '@/lib/salesAgent/pricing'
+import { sendableNow, isFinalAttempt, MAX_PER_RUN } from '@/lib/salesAgent/followupPolicy'
 
 const WINDOW_MS = 24 * 3600 * 1000
 
@@ -63,8 +65,19 @@ export async function GET(req) {
     // ?dry=1 — compose everything and report it WITHOUT marking anything
     // as sent. Use it on the first few days: you get to read what the bot
     // would have written before any customer does.
-    const dry = new URL(req.url).searchParams.get('dry') === '1'
+    const params = new URL(req.url).searchParams
+    const dry = params.get('dry') === '1'
     const today = todayISO()
+
+    // Nothing goes out at 03:00, or during Shabbat. The scheduler can be
+    // pointed at this route as often as is convenient and the policy
+    // decides whether this particular moment is one a person would want
+    // to be sold to in. `force=1` exists for testing from a laptop at a
+    // reasonable hour of somebody else's night.
+    const window = sendableNow()
+    if (!window.ok && params.get('force') !== '1') {
+        return NextResponse.json({ ok: true, skipped: window.reason, date: today, count: 0, items: [] })
+    }
 
     let leads
     try {
@@ -75,16 +88,29 @@ export async function GET(req) {
     }
 
     const items = []
-    for (const lead of leads) {
+    const spends = []
+    // Capped rather than unbounded: the failure mode of a scheduled job
+    // is not sending too few, it is one bad day where everything comes
+    // due at once and each item costs a model call and a Make operation.
+    const queue = leads.slice(0, MAX_PER_RUN)
+    const deferred = leads.length - queue.length
+
+    for (const lead of queue) {
         try {
-            const system = buildFollowUpPrompt(lead, today)
+            const attempt = lead.followUpCount || 0
+            const isFinal = isFinalAttempt(attempt)
+            const system = buildFollowUpPrompt(lead, today, { isFinal })
             // The model needs a user turn to answer; this one is an
             // instruction to the agent, never shown to the customer.
-            const { text: raw } = await callClaude({
+            const { text: raw, usage, model } = await callClaude({
                 system,
                 messages: [{ role: 'user', content: 'כתוב עכשיו את הפולו-אפ ללקוח הזה, לפי ההיסטוריה והכללים.' }],
                 maxTokens: 500,
             })
+            if (usage) {
+                const { usd } = costOfClaudeUsage(usage, model)
+                spends.push(recordSpend({ provider: 'anthropic', model, usd, usage, todayISO: today }))
+            }
             const parsed = parseAgentJson(raw)
             if (parsed.handoff || parsed.messages.length === 0) continue
 
@@ -103,7 +129,8 @@ export async function GET(req) {
                 stage: parsed.stage,
                 text,
                 withinWindow,
-                followUpNumber: (lead.followUpCount || 0) + 1,
+                followUpNumber: attempt + 1,
+                isFinal,
                 nextFollowUpAt,
             })
 
@@ -124,7 +151,12 @@ export async function GET(req) {
         }
     }
 
-    return NextResponse.json({ ok: true, dry, date: today, count: items.length, items })
+    await Promise.allSettled(spends)
+
+    // `deferred` is reported rather than swallowed. A cap that silently
+    // drops work reads as "there was nothing to do", which is the one
+    // thing this endpoint must never imply.
+    return NextResponse.json({ ok: true, dry, date: today, count: items.length, deferred, items })
 }
 
 export async function POST(req) {

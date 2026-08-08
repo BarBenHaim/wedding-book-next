@@ -16,6 +16,7 @@
 // fail toward a human, never toward a confident wrong answer.
 
 import { STAGES, MEDIA_KEYS } from './catalog'
+import { nextFollowUpDate } from './followupPolicy'
 
 const API_URL = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
@@ -210,17 +211,52 @@ export function parseAgentJson(raw) {
 // system exists to prevent. So the schedule is decided here, with the
 // model's answer as a hint rather than the authority.
 export function resolveFollowUp({ parsed, todayISO, followUpCount = 0, addDays }) {
-    if (parsed.handoff) return null // a human owns it now
-    if (parsed.stage === 'closed_won' || parsed.stage === 'closed_lost') return null
-    if (followUpCount >= 3) return null // the ladder is done; stop chasing
+    // Precedence, highest first, and the order is the whole rule:
+    //
+    //   1. a date the CUSTOMER named  — they chose it, nothing beats it
+    //   2. a date the MODEL suggested — it read something from the
+    //      conversation the policy cannot see ("after the holiday")
+    //   3. the policy's ladder        — stage, attempt, event date
+    //
+    // A first version put the model above the customer, and a test that
+    // pairs a promised callback with a model suggestion caught it: the
+    // bot would have written back four days before the date the customer
+    // asked for, which is the exact behaviour that makes people stop
+    // giving you a date at all.
+    if (parsed.callbackPromised && !parsed.handoff) {
+        return nextFollowUpDate({
+            stage: parsed.stage,
+            attempt: followUpCount,
+            eventDate: parsed.eventDate,
+            todayISO,
+            callbackPromised: parsed.callbackPromised,
+            handoff: parsed.handoff,
+        })
+    }
 
-    // A promised callback always wins — following up the day after the
-    // customer said they would come back is the highest-yield moment
-    // there is, and the least annoying.
-    if (parsed.callbackPromised) return addDays(parsed.callbackPromised, 1)
-    if (parsed.followUpAt && parsed.followUpAt > todayISO) return parsed.followUpAt
-    if (parsed.stage === 'offer_sent' || parsed.stage === 'objection') return addDays(todayISO, 2)
-    return addDays(todayISO, 1)
+    if (parsed.followUpAt && parsed.followUpAt > todayISO && !parsed.handoff) {
+        const stopped = nextFollowUpDate({
+            stage: parsed.stage,
+            attempt: followUpCount,
+            eventDate: parsed.eventDate,
+            todayISO,
+            handoff: parsed.handoff,
+        }) == null
+        // ...unless the policy says to stop entirely. A model that
+        // suggests a date for a lead whose event was last week is not a
+        // reason to send that message.
+        if (!stopped) return parsed.followUpAt
+        return null
+    }
+
+    return nextFollowUpDate({
+        stage: parsed.stage,
+        attempt: followUpCount,
+        eventDate: parsed.eventDate,
+        todayISO,
+        callbackPromised: parsed.callbackPromised,
+        handoff: parsed.handoff,
+    })
 }
 
 // ── The call ────────────────────────────────────────────────────────
