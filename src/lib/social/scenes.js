@@ -38,7 +38,7 @@ export const CRAFT = [
     'One soft directional light source, as if from a nearby window. Gentle falloff, soft-edged shadows, no flash.',
     'Shot on a full-frame camera with a 50mm or 85mm lens at a wide aperture: the subject is sharp, the background falls away.',
     'Natural imperfection is welcome - a crease in the linen, an uneven shadow. Nothing looks staged for a catalogue.',
-    'No people\'s faces. No confetti, no sparkles, no lens flare, no bokeh light strings, no text overlays, no borders, no collage.',
+    'No confetti, no sparkles, no lens flare, no bokeh light strings, no text overlays, no borders.',
 ].join(' ')
 
 /**
@@ -139,7 +139,11 @@ export const SCENES = [
 // of everything it has seen.
 export const NON_NEGOTIABLE = [
     PRODUCT,
-    'No human faces anywhere in the frame. Hands are fine.',
+    // People used to be banned here too. They are not: a person at a
+    // real event is often what makes the picture, and inventing one who
+    // is nobody in particular is ordinary advertising work. Only the
+    // likeness of a real, identifiable person is out.
+    'People are welcome. They should look like real Israelis at a real event rather than stock models, and they must be nobody in particular - no public figures, no recognisable individual.',
     'No text, no lettering, no logo and no watermark unless the instructions below explicitly supply a line to render.',
 ].join(' ')
 

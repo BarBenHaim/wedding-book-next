@@ -90,27 +90,43 @@ export function posterBrief({ eventType = 'wedding', world = null, name = null }
     if (world) lines.push(`The world of this one is: ${world}.`)
     if (name) lines.push(`The large name on the poster is "${name}".`)
     lines.push(
-        'Everything else is your call - composition, colour, texture, type, how the photograph meets the background. Make it look like it was designed by a person who was excited about it.',
+        'Everything else is your call, and take that literally: composition, colour, texture, typography, illustration, collage, photography, how the subject meets the background, whether there is a border at all.',
+        'You are not filling in a template. Two posters in this set already prove the layout survives being taken somewhere completely different, so go somewhere it has not been.',
+        'Make it look like it was designed by a person who was excited about it.',
     )
     return lines.join('\n\n')
 }
 
-// ── The one thing that is not a style choice ─────────────────────────
+// ── People ──────────────────────────────────────────────────────────
 //
-// The reference posters show real customers, including children, used
-// with their families' permission. A generated poster showing an
-// invented child, posted as if it were a real bar mitzvah, is a claim
-// about a customer that is not true - and inventing children's faces for
-// marketing is not something to do casually even when it is legal.
+// An earlier version of this file refused to generate people at all,
+// and children in particular, on the grounds that a poster showing an
+// invented child published as a real bar mitzvah is a claim about a
+// customer that is not true. Lord pushed back and he is right: that
+// bundled a real concern with a much broader ban, and the broad part
+// was mine to volunteer rather than to impose.
 //
-// So generated posters carry the DESIGN without a fabricated person:
-// the photo area holds a figure seen from behind, or hands, or the
-// landscape itself. When Lord wants a poster with a face on it, the face
-// should be a real customer who agreed, exactly like these three.
-export const NO_INVENTED_PEOPLE = [
-    'Do not generate a photograph of an identifiable person, and never of a child.',
-    'Where the reference posters place a portrait, use instead: a figure seen from behind, a pair of hands, an object that carries the theme, or let the landscape fill that area.',
-    'The poster must still feel personal - the name and the world do that work.',
+// A generated person in a design mockup is ordinary advertising work.
+// Agencies have used models and stock faces for a century, and a poster
+// showing what the product looks like with SOMEBODY on it is a product
+// demonstration, not a testimonial. It is his business, his marketing,
+// and the posters are better with a face on them - which is exactly why
+// all three references have one.
+//
+// What is left is narrow and stays: do not manufacture the likeness of
+// a real, identifiable person. That is not squeamishness about the
+// technique, it is the one version of this that can actually harm
+// somebody who never agreed to it.
+//
+// The other half of the original worry was never an image problem at
+// all. "נועה מתל אביב: הספר שינה לנו את החתונה" printed under a
+// generated face is a fabricated testimonial, and it is deceptive
+// wherever the face came from. That belongs in the caption writer, and
+// it will be dealt with there.
+export const PEOPLE_DIRECTION = [
+    'People are welcome and usually make the poster better: a celebrant, a couple, a family, hands, a figure in the landscape.',
+    'They should look like real Israelis at a real event rather than stock models: natural styling, ordinary clothes, believable light on skin.',
+    'Do not depict a real, identifiable person - no public figures, and no recreation of somebody from the reference posters. The people you invent should be nobody in particular.',
 ].join(' ')
 
-export default { BRAND_REFS, REF_URLS, refsFor, posterBrief, HOUSE_STYLE, NO_INVENTED_PEOPLE }
+export default { BRAND_REFS, REF_URLS, refsFor, posterBrief, HOUSE_STYLE, PEOPLE_DIRECTION }

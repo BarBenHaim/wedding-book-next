@@ -113,7 +113,10 @@ describe('buildImagePrompt', () => {
         expect(r.prompt).toMatch(/art-directing this image/)
         expect(r.prompt).toMatch(/avoid the obvious answer/)
         expect(r.prompt).toMatch(/SQUARE/)
-        expect(r.prompt).toMatch(/No human faces/)
+        // People are allowed on a free brief too — only a real,
+        // identifiable person is out.
+        expect(r.prompt).toMatch(/People are welcome/)
+        expect(r.prompt).toMatch(/nobody in particular/)
     })
 
     it('falls back to a wordless image instead of asking for bad Hebrew', () => {
@@ -194,7 +197,11 @@ describe('testBatch', () => {
         // and a second line of text fights it.
         expect(ref.text).toBeNull()
         expect(ref.prompt).toMatch(/house style/)
-        expect(ref.prompt).toMatch(/never of a child/)
+        // People are welcome; only manufacturing a real person's
+        // likeness is out, which is the narrow version of a constraint
+        // that started far too broad.
+        expect(ref.prompt).toMatch(/People are welcome/)
+        expect(ref.prompt).toMatch(/real, identifiable person/)
     })
 
     it('disagrees with itself on purpose', () => {

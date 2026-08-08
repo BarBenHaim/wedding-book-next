@@ -41,7 +41,7 @@
 import { planForDate, hashtagsFor } from './contentPlan'
 import { findScene, eventStyle, PRODUCT, CRAFT, NON_NEGOTIABLE, CREATIVE_LICENCE, FREE_SCENE } from './scenes'
 import { GUEST_SCREEN } from './contentPlan'
-import { refsFor, posterBrief, NO_INVENTED_PEOPLE } from './brandRefs'
+import { refsFor, posterBrief, PEOPLE_DIRECTION } from './brandRefs'
 
 // The model. gpt-image-1 was the obvious choice and is no longer the
 // current one - gpt-image-2 supersedes it, and it is better at exactly
@@ -158,7 +158,7 @@ export function buildImagePrompt(plan, { size = 'post', mode = 'edit', text } = 
         // one in that spirit. Words describing a design are lossy; the
         // design itself is not.
         parts.push(posterBrief({ eventType: plan.eventType, world: plan.world, name: plan.posterName }))
-        parts.push(NO_INVENTED_PEOPLE)
+        parts.push(PEOPLE_DIRECTION)
     } else if (scene.free && mode !== 'edit') {
         // The open brief: the job of the post, the three facts that are
         // not style, and the rest is the model's call.
