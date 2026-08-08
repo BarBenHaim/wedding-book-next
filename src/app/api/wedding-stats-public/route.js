@@ -21,7 +21,7 @@
 //     entriesCount: number  // how many blessings ended up in the book
 //   }
 //
-// Why a dedicated endpoint (vs sharing /api/admin/analytics):
+// Why a dedicated endpoint (vs sharing an admin analytics endpoint):
 // the admin endpoint requires a super-admin Bearer ID token, which
 // the couple doesn't have. Putting token-gated logic on a separate
 // route keeps the admin one strictly admin-only.

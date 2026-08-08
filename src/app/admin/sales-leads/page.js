@@ -37,7 +37,7 @@ import {
 import { formatUsd } from '@/lib/salesAgent/pricing'
 import { formatHebrewDate } from '@/lib/salesAgent/prompt'
 
-// ─── palette (matches /admin/studio and /admin/pipeline) ──────────────
+// ─── palette (matches /admin/studio) ─────────────────────────────────
 const PAGE_BG = '#f8f4ec'
 const CARD = { background: '#fff', border: '1px solid rgba(212,184,103,0.30)', boxShadow: '0 8px 20px -16px rgba(170,136,64,0.18)' }
 const GOLD = 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)'

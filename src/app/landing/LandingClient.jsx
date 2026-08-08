@@ -40,7 +40,8 @@ const WA = 'https://wa.link/0sesxc'
 // ─── The three real books, presented as chapters ─────────────────────
 // Order follows the owner's brief: Noam → Jerry → Dor & Shaked.
 // This is the built-in DEFAULT set — the super-admin can override the
-// whole list from /admin/landing (saved to site_config/landing and
+// whole list from `site_config/landing` (last saved before the admin
+// editor was removed, and
 // passed down by the server page as the `chapters` prop).
 export const DEFAULT_CHAPTERS = [
     {
@@ -93,7 +94,7 @@ export const DEFAULT_CHAPTERS = [
     },
 ]
 
-// Image resolution — explicit URLs (set in /admin/landing for new
+// Image resolution — explicit URLs (set in site_config/landing for new
 // projects) win; otherwise the chapter's built-in static image set.
 const coverSrc = b => b.coverUrl || `/imgs/portfolio/${b.slug}/cover.webp`
 const spreadSrcs = b =>

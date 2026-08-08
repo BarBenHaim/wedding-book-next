@@ -164,7 +164,8 @@ export async function PATCH(req) {
             'amountPaid', 'currency',
             // Per-event max blessing length (210 default, capped 50–1200).
             'blessingMaxChars',
-            // Production pipeline stage (managed from /admin/pipeline).
+            // Production stage. The board that managed it was removed;
+            // the field is still written by the wedding editor.
             'productionStatus',
             // Guest /photo page design preset (managed from /admin/guest-design).
             'guestDesign',

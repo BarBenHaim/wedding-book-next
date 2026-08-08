@@ -15,7 +15,9 @@ export const revalidate = 300 // seconds — refresh the live design every 5 min
 
 // Default demo wedding (Mai & Maor) — used when no landing config
 // doc exists yet. The super-admin can point the demo at any wedding
-// from /admin/landing; the choice lives in `site_config/landing`.
+// The choice lives in `site_config/landing`. The admin screen that
+// wrote it was removed; the doc is still read, so the page keeps
+// rendering whatever was saved last, and changing it now means code.
 const DEFAULT_DEMO_WEDDING_ID = '9bGnCaCuJvPwRg7CqaAJlGepQxx1'
 
 // Only the fields the demo consumes, JSON-sanitized. Deliberately NO
@@ -30,7 +32,7 @@ const KEEP_FIELDS = [
     'blessingMaxChars', 'locale',
 ]
 
-// Landing config saved from /admin/landing — demo wedding override +
+// Landing config in `site_config/landing` — demo wedding override +
 // custom chapters. Null-safe: missing doc → built-in defaults.
 async function fetchLandingConfig() {
     try {

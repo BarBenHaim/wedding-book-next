@@ -49,3 +49,7 @@ _chk*.cjs
 # happens through the OneDrive mount the unlink is blocked, so the husks
 # pile up. Never commit them.
 vitest.config.mjs.timestamp-*
+
+# Screens removed from the super-admin, parked here because the
+# OneDrive mount blocks unlink. Safe to delete by hand.
+_to_delete/

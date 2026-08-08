@@ -349,9 +349,6 @@ function QrCodesContent() {
                         <a href='/admin' className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52]' style={{ background: '#fff', border: '1px solid #ead9b3' }}>
                             ← חזרה לאדמין
                         </a>
-                        <a href='/admin/analytics' className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52]' style={{ background: '#fff', border: '1px solid #ead9b3' }}>
-                            <BarChart3 size={13} /> סטטיסטיקה
-                        </a>
                     </div>
                 </div>
 
