@@ -83,6 +83,15 @@ export async function PATCH(req) {
     const snap = await ref.get()
     if (!snap.exists) return NextResponse.json({ error: 'not-found' }, { status: 404 })
 
+    // `replace` — the caller is holding the entire override and sending
+    // it whole. That is what the live editor does, and it is the only
+    // way an unpin can be expressed: removing a key from an object the
+    // server merges into is impossible to say.
+    if (body?.replace === true) {
+        await ref.set({ pageStyle: Object.keys(patch).length ? patch : null }, { merge: true })
+        return NextResponse.json({ ok: true, pageStyle: patch, overridden: overriddenKeys(patch) })
+    }
+
     // Merge over what is already pinned, and treat an explicit null as
     // "unpin this one key". Without the delete step a null would be
     // stored and then read back as a real value — `backgroundUrl: null`

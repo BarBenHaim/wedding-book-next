@@ -20,6 +20,7 @@ import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
 import { expandBookPages } from '@/lib/bookPages'
+import { entryIdsOnPage } from '@/lib/bookPageIndex'
 import PrintOrderModal from '@/components/PrintOrderModal/PrintOrderModal'
 import { getEntries } from '../../../../lib/classifyMedia'
 import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
@@ -79,6 +80,9 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // the book's design permanently, which is not something to hand the
     // couple by accident.
     const [isAdmin, setIsAdmin] = useState(false)
+    // Which page the rail is currently editing. Lives here rather than in
+    // the panel, because the click that sets it happens on the book.
+    const [editingId, setEditingId] = useState(null)
     useEffect(() => onAuthStateChanged(auth, user => setIsAdmin(isSuperAdmin(user?.email))), [])
     const [viewerSize, setViewerSize] = useState(500)
     const [isMobile, setIsMobile] = useState(false)
@@ -768,6 +772,8 @@ function BookViewerInner({ onLocaleDiscovered }) {
                             entries={pages}
                             styleSettings={styleWithLocale}
                             weddingId={weddingId}
+                            selectedId={editingId}
+                            onSelect={setEditingId}
                             onEntriesChange={applyPageStyle}
                         />
                     )}
@@ -869,16 +875,63 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                 <div className='demo-page shadow-inner'>
                                     <BookBackCoverTemplate scaledWidth={viewerSize} scaledHeight={viewerSize} />
                                 </div>
-                                {displayPages.map(entry => (
-                                    <div key={entry.id} className='demo-page border-l border-[#AA8840]/10'>
-                                        <BookPageTemplate
-                                            entry={entry}
-                                            styleSettings={styleWithLocale}
-                                            scaledWidth={viewerSize}
-                                            scaledHeight={viewerSize}
-                                        />
-                                    </div>
-                                ))}
+                                {displayPages.map(entry => {
+                                    // A page carries one blessing, two, or
+                                    // none (a blank alignment leaf). Only a
+                                    // single-blessing page is editable: two
+                                    // blessings share one surface, and
+                                    // "which one did you click" has no
+                                    // honest answer.
+                                    const owners = entryIdsOnPage(entry)
+                                    const ownerId = owners.length === 1 ? owners[0] : null
+                                    const editable = isAdmin && mode !== 'cover' && !!ownerId
+                                    const active = !!ownerId && ownerId === editingId
+                                    return (
+                                        <div key={entry.id} className={`demo-page border-l border-[#AA8840]/10 relative ${editable ? 'group' : ''}`}>
+                                            <BookPageTemplate
+                                                entry={entry}
+                                                styleSettings={styleWithLocale}
+                                                scaledWidth={viewerSize}
+                                                scaledHeight={viewerSize}
+                                            />
+                                            {/* Click-to-edit is a pill, not
+                                                the whole surface: the
+                                                flipbook turns pages on
+                                                mousedown, so swallowing
+                                                clicks across the page would
+                                                cost the operator the ability
+                                                to flip the book they are
+                                                designing. stopPropagation on
+                                                mousedown as well as click,
+                                                because react-pageflip
+                                                listens on the earlier event. */}
+                                            {editable && (
+                                                <>
+                                                    {active && (
+                                                        <div
+                                                            className='absolute inset-0 pointer-events-none'
+                                                            style={{ outline: '3px solid #AA8840', outlineOffset: '-3px', zIndex: 30 }}
+                                                        />
+                                                    )}
+                                                    <button
+                                                        onMouseDown={e => { e.stopPropagation(); e.preventDefault() }}
+                                                        onTouchStart={e => e.stopPropagation()}
+                                                        onClick={e => { e.stopPropagation(); setEditingId(active ? null : ownerId) }}
+                                                        className={`absolute top-2 left-2 px-2 py-1 rounded-lg text-[11px] font-bold transition-opacity ${active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                        style={{
+                                                            zIndex: 31,
+                                                            background: active ? '#AA8840' : 'rgba(255,255,255,0.94)',
+                                                            color: active ? '#fff' : '#7a6a52',
+                                                            border: '1px solid #ead9b3',
+                                                        }}
+                                                    >
+                                                        {active ? 'עורך' : 'ערוך עמוד'}
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    )
+                                })}
                                 <div className='demo-page shadow-inner'>
                                     <BookCoverTemplate
                                         wedding={{
