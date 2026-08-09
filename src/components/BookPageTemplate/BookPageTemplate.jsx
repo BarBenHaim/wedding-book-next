@@ -5,6 +5,7 @@ import { resolveActiveTemplate } from '@/lib/presetFilters'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
 import { resolvePhotoStyle } from '@/lib/bookDesignSchema'
+import { mergePageStyle, pageStyleOf } from '@/lib/pageStyle'
 import FramedPhoto from '../FramedPhoto/FramedPhoto'
 import PolaroidPageLayout from '../PolaroidPageLayout/PolaroidPageLayout'
 import ScrapbookPageLayout from '../ScrapbookPageLayout/ScrapbookPageLayout'
@@ -21,7 +22,19 @@ export default function BookPageTemplate({ entry, styleSettings: incomingStyle, 
     // having to know the rule. Returns the SAME object when the design
     // has no album override or the page is cropping, so the common
     // case costs nothing and re-renders exactly as before.
-    const styleSettings = resolvePhotoStyle(incomingStyle)
+    //
+    // ── Per-page overrides ───────────────────────────────────────────
+    // Merged HERE, and nowhere else. Every surface that renders a book
+    // page - the flipbook, the digital edition, the PDF exports, the
+    // print exporter, the thanks-page preview - goes through this
+    // component, so one merge is the difference between the operator's
+    // per-page work being everywhere and it being in whichever screens
+    // somebody remembered to patch.
+    //
+    // It runs BEFORE resolvePhotoStyle and AFTER the caller's own
+    // resolution, which is what lets a single page crop inside an
+    // album-mode book: the more specific instruction wins.
+    const styleSettings = resolvePhotoStyle(mergePageStyle(incomingStyle, pageStyleOf(entry)))
 
     // ── Layout dispatcher ────────────────────────────────────────────────
     // Branch on `styleSettings.template` BEFORE any classic-template logic.

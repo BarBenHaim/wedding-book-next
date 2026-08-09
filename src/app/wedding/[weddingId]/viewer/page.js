@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import HTMLFlipBook from 'react-pageflip'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage, db, auth } from '@/lib/firebaseClient'
+import { onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 // html2canvas + jsPDF are ~400 KB combined and only used by the
 // admin's "Send to Lulu" + "Download PDFs" flows — never by normal
@@ -12,6 +13,8 @@ import { doc, getDoc, setDoc } from 'firebase/firestore'
 // regular viewer load never pays for them.
 
 import DesignControls from '../../../../components/DesignControls/DesignControls'
+import PageStyleControls from '@/components/PageStyleControls/PageStyleControls'
+import { isSuperAdmin } from '@/lib/superAdmin'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
@@ -72,6 +75,11 @@ function BookViewerInner({ onLocaleDiscovered }) {
     const [loading, setLoading] = useState(true)
     const [designLoading, setDesignLoading] = useState(true)
     const [mode, setMode] = useState('book')
+    // Per-page overrides are an operator tool: they pin a page away from
+    // the book's design permanently, which is not something to hand the
+    // couple by accident.
+    const [isAdmin, setIsAdmin] = useState(false)
+    useEffect(() => onAuthStateChanged(auth, user => setIsAdmin(isSuperAdmin(user?.email))), [])
     const [viewerSize, setViewerSize] = useState(500)
     const [isMobile, setIsMobile] = useState(false)
     // styleSettings drives the page interior (BookPageTemplate).
@@ -122,6 +130,13 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // overlaying it at the render chokepoint is what makes the setting
     // stick through a preset change without a reload.
     const noPhotoCrop = weddingDoc?.noPhotoCrop === true
+    // The page picker saved an override; fold it into the entries the
+    // book is rendering from so the change is visible in the flipbook
+    // immediately rather than on the next reload.
+    const applyPageStyle = useCallback((entryId, pageStyle) => {
+        setPages(prev => prev.map(e => (e.id === entryId ? { ...e, pageStyle } : e)))
+    }, [])
+
     const styleWithLocale = useMemo(
         () => ({ ...styleSettings, locale, ...(noPhotoCrop ? { photoFit: 'contain' } : {}) }),
         [styleSettings, locale, noPhotoCrop]
@@ -740,6 +755,14 @@ function BookViewerInner({ onLocaleDiscovered }) {
                             noPhotoCrop={noPhotoCrop}
                             onNoPhotoCropChange={handleNoPhotoCropChange}
                         />
+                        {isAdmin && mode !== 'cover' && (
+                            <PageStyleControls
+                                entries={pages}
+                                styleSettings={styleWithLocale}
+                                weddingId={weddingId}
+                                onEntriesChange={applyPageStyle}
+                            />
+                        )}
                     </div>
                 </aside>
 

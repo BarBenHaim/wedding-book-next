@@ -146,6 +146,11 @@ export function expandBookPages(entries, opts = {}) {
                 // largest.
                 imgAspect: e.imgAspect,
                 timestamp: e.timestamp,
+                // The per-page design override travels with the photo
+                // half too. Without this line, splitting a page silently
+                // reverted the operator's work on exactly the half they
+                // were tuning - the photo one.
+                pageStyle: e.pageStyle,
                 _split: 'photo',
             })
         } else {
