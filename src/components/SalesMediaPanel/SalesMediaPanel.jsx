@@ -87,9 +87,9 @@ function MediaRow({ item, minSends, onDelete, busy }) {
             </div>
 
             <div className='flex items-center gap-4 shrink-0 pt-1'>
-                {item.source === 'catalog' ? (
+                {!s ? (
                     <span className='text-[10.5px] text-[#c9bda8] max-w-[110px] text-center leading-tight'>
-                        לא נמדד — קיים מלפני המדידה
+                        עוד לא נשלח לאף אחד
                     </span>
                 ) : (
                     <>

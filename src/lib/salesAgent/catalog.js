@@ -134,6 +134,40 @@ export const FACTS = [
 const ORIGIN = 'https://app.weddingtales.co.il'
 
 export const MEDIA = {
+    // ── The three that answer the questions people actually ask ─────
+    //
+    // Listed first because the model reads this list in order, and
+    // because these three are not more of the same: each answers a
+    // different hesitation, and between them they cover most of what
+    // stalls a conversation.
+    //
+    // The screen answers "is this complicated for my guests" - it is the
+    // only asset showing the product from the guest's side, on a phone,
+    // which is exactly where they will meet it.
+    //
+    // The cover answers "will it feel like ours" - a name in huge
+    // letters over a real photograph lands faster than any sentence
+    // about personalisation.
+    //
+    // The open spread answers "is the printed one worth the difference",
+    // which is the specific hesitation sitting between the cheap package
+    // and the one that pays.
+    upload_screen: {
+        url: `${ORIGIN}/imgs/portfolio/shared/upload-screen.jpg`,
+        caption: 'ככה זה נראה לאורח: סורק QR, כותב ברכה, מוסיף תמונה. בלי אפליקציה ובלי הרשמה',
+        when: 'כל אירוע, כששואלים איך זה עובד לאורחים, אם צריך אפליקציה, או חוששים שזה מסובך למבוגרים',
+    },
+    cover_personalised: {
+        url: `${ORIGIN}/imgs/portfolio/shared/cover-personalised.jpg`,
+        caption: 'כריכה אמיתית שהפקנו, עם השם והתמונה של החוגג',
+        when: 'כששואלים אם הספר מותאם אישית, איך נראית הכריכה, או רוצים לראות שזה באמת שלהם',
+    },
+    book_open_spread: {
+        url: `${ORIGIN}/imgs/portfolio/shared/book-open-spread.jpg`,
+        caption: 'ספר פתוח: כל ברכה עם התמונה של מי שכתב אותה',
+        when: 'כששואלים איך נראה הספר המוכן מבפנים, או מתלבטים אם המודפס שווה את ההפרש מהדיגיטלי',
+    },
+
     book_bar_mitzvah: {
         url: `${ORIGIN}/imgs/portfolio/bar-mitzvah/cover.jpg`,
         caption: 'ספר בר מצווה שהפקנו, כריכה קשה',

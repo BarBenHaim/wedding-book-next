@@ -64,10 +64,13 @@ export async function GET(req) {
     const byKey = Object.fromEntries(custom.map(m => [m.key, m]))
     const ranked = Object.fromEntries(rankMedia(byKey).map(r => [r.key, r]))
 
-    // Built-ins are listed too, and deliberately without stats. They
-    // predate the counters, so showing them at 0 sends would read as
-    // "these never work" rather than "these were never measured", and
-    // that is the kind of wrong number somebody acts on.
+    // Stats follow the data, not the source. The counters key off the
+    // media key and do not care whether it came from code or from an
+    // upload, so a built-in that has been sent since the counters
+    // existed has real numbers and should show them. One with no
+    // document at all shows nothing rather than a row of zeroes,
+    // because "never measured" and "never works" are different facts
+    // and only one of them should make somebody delete an asset.
     const items = Object.entries(library).map(([key, m]) => ({
         key,
         kind: m.kind,
@@ -78,7 +81,7 @@ export async function GET(req) {
         label: byKey[key]?.label || null,
         bytes: byKey[key]?.bytes || null,
         createdAt: toMs(byKey[key]?.createdAt),
-        stats: m.source === 'upload' ? (ranked[key] || null) : null,
+        stats: ranked[key] || null,
     }))
 
     // Uploads first: they are the ones he can act on. Then by score.
