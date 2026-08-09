@@ -99,6 +99,11 @@ function Choice({ options, value, onChange }) {
 }
 
 export default function PageStyleControls({ entries = [], styleSettings, weddingId, onEntriesChange }) {
+    // Collapsed by default. The rail is 380px of finite height shared
+    // with the preset gallery, and a panel this tall permanently open
+    // would cost the operator the thing they use most to buy the thing
+    // they use occasionally.
+    const [open, setOpen] = useState(false)
     const [selectedId, setSelectedId] = useState(null)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState(null)
@@ -172,12 +177,30 @@ export default function PageStyleControls({ entries = [], styleSettings, wedding
     const unpin = key => save({ [key]: null }, [key])
     const setImage = (key, value) => save({ imageStyle: { ...(draft.imageStyle || {}), [key]: value } })
 
+    const pinnedPages = useMemo(
+        () => entries.filter(e => overriddenKeys(e.pageStyle).length > 0).length,
+        [entries],
+    )
+
     return (
-        <div className='px-4 py-3 border-t border-[#f0e6d2]'>
-            <div className='flex items-center justify-between mb-2'>
-                <h3 className='text-[12.5px] font-extrabold text-[#3d2e1a]'>עיצוב עמוד בודד</h3>
-                {saving && <span className='text-[10.5px] text-gray-400'>שומר…</span>}
-            </div>
+        <div className='shrink-0 border-t border-[#f0e6d2] bg-white/90'>
+            <button
+                onClick={() => setOpen(v => !v)}
+                className='w-full flex items-center justify-between gap-2 px-4 py-2.5 text-right'
+            >
+                <span className='text-[12.5px] font-extrabold text-[#3d2e1a]'>
+                    עיצוב עמוד בודד
+                    {pinnedPages > 0 && (
+                        <span className='mr-1.5 text-[10px] font-bold px-1.5 py-px rounded' style={{ background: '#f5efe3', color: GOLD }}>
+                            {pinnedPages}
+                        </span>
+                    )}
+                </span>
+                <span className='text-[11px] text-gray-400'>{saving ? 'שומר…' : (open ? 'סגור' : 'פתח')}</span>
+            </button>
+
+            {!open ? null : (
+            <div className='px-4 pb-3 max-h-[52vh] overflow-y-auto'>
 
             {/* Page picker. A dot marks pages that already disagree with
                 the book, so you can find your own past decisions. */}
@@ -333,6 +356,8 @@ export default function PageStyleControls({ entries = [], styleSettings, wedding
                         </div>
                     </Row>
                 </>
+            )}
+            </div>
             )}
         </div>
     )

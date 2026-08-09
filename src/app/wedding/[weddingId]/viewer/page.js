@@ -755,15 +755,22 @@ function BookViewerInner({ onLocaleDiscovered }) {
                             noPhotoCrop={noPhotoCrop}
                             onNoPhotoCropChange={handleNoPhotoCropChange}
                         />
-                        {isAdmin && mode !== 'cover' && (
-                            <PageStyleControls
-                                entries={pages}
-                                styleSettings={styleWithLocale}
-                                weddingId={weddingId}
-                                onEntriesChange={applyPageStyle}
-                            />
-                        )}
                     </div>
+                    {/* Its own region at the foot of the rail, NOT a
+                        sibling inside the box above: DesignControls is
+                        h-full inside an overflow-hidden flex child, so
+                        anything stacked after it is pushed out of the
+                        clip and simply never appears. Collapsed by
+                        default so the preset gallery keeps its height
+                        until the operator actually wants a page. */}
+                    {isAdmin && mode !== 'cover' && (
+                        <PageStyleControls
+                            entries={pages}
+                            styleSettings={styleWithLocale}
+                            weddingId={weddingId}
+                            onEntriesChange={applyPageStyle}
+                        />
+                    )}
                 </aside>
 
                 <main
