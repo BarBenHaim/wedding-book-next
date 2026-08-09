@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { getEntries } from '../../../../lib/classifyMedia'
 import { useParams } from 'next/navigation'
 import { doc, getDoc, updateDoc, writeBatch, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore'
@@ -14,6 +14,8 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import EntryPhoto from '@/components/EntryPhoto/EntryPhoto'
 import useImageAspect from '@/lib/useImageAspect'
+import { buildPageIndex, pageLabel } from '@/lib/bookPageIndex'
+import { applyPresetClean } from '@/lib/bookDesignSchema'
 import { Heebo } from 'next/font/google'
 import BookLoader from '@/components/BookLoader/BookLoader'
 
@@ -126,18 +128,43 @@ export default function AdminDashboard() {
     // would show a crop that never happens. Fails silently — the
     // preview just falls back to the default 4:3 view.
     const [noPhotoCrop, setNoPhotoCrop] = useState(false)
+    // The same read now also feeds the page numbers below, which need the
+    // interior design to know where the book breaks.
+    const [weddingDoc, setWeddingDoc] = useState(null)
     useEffect(() => {
         if (!weddingId) return
         let cancelled = false
         getDoc(doc(db, 'weddings', weddingId))
             .then(snap => {
-                if (!cancelled && snap.exists()) setNoPhotoCrop(snap.data()?.noPhotoCrop === true)
+                if (cancelled || !snap.exists()) return
+                setNoPhotoCrop(snap.data()?.noPhotoCrop === true)
+                setWeddingDoc(snap.data())
             })
             .catch(() => {})
         return () => {
             cancelled = true
         }
     }, [weddingId])
+
+    // ── Which page of the printed book each blessing lands on ────────
+    //
+    // Card position is not page number, and the gap grows as the book
+    // does: a long blessing with a photo becomes two pages, a duo layout
+    // puts two on one, and spread padding inserts blank leaves. Card 14
+    // is routinely page 19, and until now the only way to find out was
+    // to open the export and count.
+    //
+    // Derived, never stored. Every reorder and every split toggle
+    // re-flows the whole book, so a saved number would be a confident
+    // lie for every entry after the edit. It is a pure function of the
+    // entries and the design, so it moves when they do.
+    const pageIndex = useMemo(() => {
+        if (!entries.length) return { byEntry: {}, totalPages: 0 }
+        const raw = weddingDoc?.bookDesign || weddingDoc?.book?.designSettings || {}
+        // Resolved the way the exporters resolve it, so a preset that
+        // switches on auto-split is reflected here too.
+        return buildPageIndex(entries, applyPresetClean(raw))
+    }, [entries, weddingDoc])
 
     // Pagination — `showAll` disables it so the owner can drag-reorder
     // across the WHOLE list (otherwise drag only works inside the current
@@ -644,8 +671,16 @@ export default function AdminDashboard() {
                                                             <div {...prov.dragHandleProps} className='cursor-grab active:cursor-grabbing text-gray-400 hover:text-[#AA8840] px-1 touch-none' title='גררו לסידור'>
                                                                 <svg className='w-5 h-5' viewBox='0 0 24 24' fill='currentColor'><circle cx='9' cy='6' r='1.6' /><circle cx='15' cy='6' r='1.6' /><circle cx='9' cy='12' r='1.6' /><circle cx='15' cy='12' r='1.6' /><circle cx='9' cy='18' r='1.6' /><circle cx='15' cy='18' r='1.6' /></svg>
                                                             </div>
-                                                            {/* Position number */}
-                                                            <div className='w-6 text-center text-xs font-extrabold text-[#AA8840] shrink-0'>{index + 1}</div>
+                                                            {/* Position in the list, and under it the printed
+                                                                page — the number that actually moves when you drag. */}
+                                                            <div className='w-9 text-center shrink-0'>
+                                                                <div className='text-xs font-extrabold text-[#AA8840]'>{index + 1}</div>
+                                                                {adminUser && pageLabel(pageIndex.byEntry[entry.id]) && (
+                                                                    <div className='text-[9.5px] font-bold text-gray-400 tabular-nums' dir='ltr' title='עמוד בספר המודפס'>
+                                                                        {pageLabel(pageIndex.byEntry[entry.id])}
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                             {/* Thumbnail */}
                                                             {entry.imageUrl ? (
                                                                 <div className='w-12 h-12 rounded-lg overflow-hidden bg-gray-50 shrink-0'>
@@ -793,8 +828,23 @@ export default function AdminDashboard() {
                                                                     <div className='p-4'>
                                                                         {/* Name + date */}
                                                                         <div className='flex justify-between items-start gap-2 mb-1.5'>
-                                                                            <h3 className='text-[15px] font-bold text-gray-900 truncate'>
-                                                                                {entry.name || ''}
+                                                                            <h3 className='text-[15px] font-bold text-gray-900 flex items-center gap-1.5 min-w-0'>
+                                                                                {/* Printed page. Super-admin only: these
+                                                                                    numbers move on every reorder, and a
+                                                                                    shifting number in front of the couple
+                                                                                    invites "put mum on page 5" for a book
+                                                                                    that is not laid out yet. */}
+                                                                                {adminUser && pageLabel(pageIndex.byEntry[entry.id]) && (
+                                                                                    <span
+                                                                                        className='shrink-0 text-[10.5px] font-extrabold px-1.5 py-0.5 rounded-md tabular-nums'
+                                                                                        style={{ background: '#f5efe3', color: '#AA8840', border: '1px solid #ead9b3' }}
+                                                                                        title={`עמוד ${pageLabel(pageIndex.byEntry[entry.id])} מתוך ${pageIndex.totalPages} בספר המודפס`}
+                                                                                        dir='ltr'
+                                                                                    >
+                                                                                        {pageLabel(pageIndex.byEntry[entry.id])}
+                                                                                    </span>
+                                                                                )}
+                                                                                <span className='truncate'>{entry.name || ''}</span>
                                                                             </h3>
                                                                             {entry.timestamp?.seconds && (
                                                                                 <span className='text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5' title='מועד העלאת הברכה'>
