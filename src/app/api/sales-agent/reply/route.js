@@ -293,7 +293,9 @@ export async function POST(req) {
     let parsed
     try {
         const { text: raw, usage, model, stopReason } = await callClaude({ system, messages })
-        parsed = parseAgentJson(raw)
+        // The merged keys, or every uploaded asset the model was just
+        // told about gets nulled at parse. See parseAgentJson.
+        parsed = parseAgentJson(raw, { mediaKeys: Object.keys(library) })
         if (usage) console.log('[sales-agent] usage', phone, usage.input_tokens, usage.output_tokens, stopReason)
         // Metered here rather than after the retry, because a retry is a
         // second billed call and hiding it would make the failure look
@@ -313,7 +315,7 @@ export async function POST(req) {
                 temperature: 0.3,
             })
             meter(retry.usage, retry.model)
-            const second = parseAgentJson(retry.text)
+            const second = parseAgentJson(retry.text, { mediaKeys: Object.keys(library) })
             if (!second.malformed) parsed = second
         }
     } catch (err) {

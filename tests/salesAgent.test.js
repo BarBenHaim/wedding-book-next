@@ -431,6 +431,23 @@ describe('images — a whitelist, not a capability', () => {
         expect(out.image).toBeNull()
     })
 
+    it('accepts an uploaded key when the caller passes the merged library', () => {
+        // The bug this pins down: the model was TOLD about uploaded
+        // media, picked one, and the parser nulled it against the static
+        // six. The picture vanished with nothing in any log.
+        const out = parseAgentJson(JSON.stringify({
+            messages: ['ככה זה נראה'], stage: 'engaged', image: 'flip_video',
+        }), { mediaKeys: ['flip_video', 'book_wedding'] })
+        expect(out.image).toBe('flip_video')
+    })
+
+    it('still rejects a key missing from the merged library', () => {
+        const out = parseAgentJson(JSON.stringify({
+            messages: ['הנה'], stage: 'engaged', image: 'made_up',
+        }), { mediaKeys: ['flip_video'] })
+        expect(out.image).toBeNull()
+    })
+
     it('drops an image that would arrive with no words', () => {
         const out = parseAgentJson(JSON.stringify({
             messages: [], stage: 'handoff', handoff: true, image: 'book_wedding',

@@ -129,7 +129,16 @@ export function sanitizeReply(raw, { maxEmoji = 1 } = {}) {
 // Tolerant on the way in, strict on the way out. Anything we can't
 // understand becomes a handoff — a human reading one extra conversation
 // costs far less than a customer receiving nonsense.
-export function parseAgentJson(raw) {
+export function parseAgentJson(raw, { mediaKeys = MEDIA_KEYS } = {}) {
+    // `mediaKeys` defaults to the six built-ins, and that default is a
+    // trap that already bit once: the reply route builds a MERGED
+    // library (catalog + everything Lord uploaded) and tells the model
+    // about all of it — so a parse that validates against the static
+    // list silently nulled every uploaded key the model ever picked.
+    // The model did its job, the upload panel did its job, and the
+    // picture vanished right here. Callers that know about uploads must
+    // pass the merged keys.
+
     const fallback = {
         messages: [],
         stage: 'handoff',
@@ -214,7 +223,7 @@ export function parseAgentJson(raw) {
         // An image with no words is a message from nobody. The caption
         // rides along with the picture, so requiring text here costs
         // nothing and removes the silent-photo failure mode.
-        image: messages.length && MEDIA_KEYS.includes(obj.image) ? obj.image : null,
+        image: messages.length && mediaKeys.includes(obj.image) ? obj.image : null,
         malformed: false,
     }
 }
@@ -341,8 +350,13 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
         // rather than dropping the customer: a configuration mistake
         // should cost a slightly less capable answer, not the answer.
         if (res.status === 404 && model !== FALLBACK_MODEL && /model/i.test(body)) {
-            console.error(`[sales-agent] unknown model ${model}, falling back to ${FALLBACK_MODEL}`)
-            return callClaude({ system, messages, model: FALLBACK_MODEL, maxTokens, temperature })
+            // Step down to sonnet first, haiku only after. The old
+            // behaviour dropped straight to haiku, which punished a
+            // typo'd ANTHROPIC_MODEL with the cheapest model in the
+            // house — silently, in front of customers.
+            const next = model !== DEFAULT_MODEL ? DEFAULT_MODEL : FALLBACK_MODEL
+            console.error(`[sales-agent] unknown model ${model}, falling back to ${next}`)
+            return callClaude({ system, messages, model: next, maxTokens, temperature })
         }
         // 401 = bad key · 429 = rate limited · 400 with credit_balance =
         // out of credit. All three read identically from the outside

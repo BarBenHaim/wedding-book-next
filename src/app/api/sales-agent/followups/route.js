@@ -156,7 +156,7 @@ export async function GET(req) {
                 messages: [{ role: 'user', content: 'כתוב עכשיו את הפולו-אפ ללקוח הזה, לפי ההיסטוריה והכללים.' }],
                 maxTokens: 500,
             })
-            const parsed = parseAgentJson(raw)
+            const parsed = parseAgentJson(raw, { mediaKeys: Object.keys(library) })
             if (parsed.handoff || parsed.messages.length === 0) continue
 
             const text = parsed.messages[0]
@@ -177,6 +177,13 @@ export async function GET(req) {
                 isFinal,
                 followUpNumber: (lead.followUpCount || 0) + 1,
                 nextFollowUpAt,
+                // The follow-up prompt allows a first image when none was
+                // ever sent; until now the route accepted the model's
+                // choice, counted it, and then returned no URL — so Make
+                // had nothing to send. Same contract as /reply.
+                sendImage: parsed.image && library[parsed.image]?.kind !== 'video' ? library[parsed.image].url : null,
+                sendImageCaption: parsed.image && library[parsed.image]?.kind !== 'video' ? library[parsed.image].caption : null,
+                hasImage: !!parsed.image && library[parsed.image]?.kind !== 'video',
                 // True when this lead only got here because the sweep
                 // caught it. Worth seeing in Make's run log: it is the
                 // one number that says whether the safety net is idle
