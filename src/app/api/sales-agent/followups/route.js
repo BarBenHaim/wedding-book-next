@@ -45,6 +45,8 @@ export const fetchCache = 'force-no-store'
 export const maxDuration = 60
 
 import { NextResponse } from 'next/server'
+import { adminAuth } from '@/lib/firebaseAdmin'
+import { isSuperAdmin } from '@/lib/superAdmin'
 import { buildFollowUpPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, resolveFollowUp } from '@/lib/salesAgent/agent'
 import { dueFollowUps, markFollowUpSent, listLeads, reviveOrphans, listMedia, recordMediaSent } from '@/lib/salesAgent/leads'
@@ -56,12 +58,24 @@ import { canSendWhatsApp, sendWhatsAppText, sendWhatsAppImage } from '@/lib/sale
 
 const WINDOW_MS = 24 * 3600 * 1000
 
-function authorized(req) {
+// Three doors, same as the digest: the cron secret for Vercel's
+// scheduler, the shared secret for Make, and a verified super-admin ID
+// token for a human at a browser. The third one exists because the
+// first two are unverifiable from the outside — when the cron 401s,
+// the only way to tell a wrong secret from a broken route used to be
+// guessing.
+async function authorized(req) {
     const auth = req.headers.get('authorization') || ''
     const cron = process.env.CRON_SECRET
     if (cron && auth === `Bearer ${cron}`) return true
     const shared = process.env.SALES_AGENT_SECRET
     if (shared && (req.headers.get('x-wt-secret') || '') === shared) return true
+    if (auth.startsWith('Bearer ')) {
+        try {
+            const decoded = await adminAuth.verifyIdToken(auth.slice(7).trim())
+            if (isSuperAdmin(decoded.email)) return true
+        } catch { /* fall through to 401 */ }
+    }
     return false
 }
 
@@ -104,7 +118,7 @@ async function sweep(today) {
 }
 
 export async function GET(req) {
-    if (!authorized(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!(await authorized(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     // ?dry=1 — compose everything and report it WITHOUT marking anything
     // as sent or reviving anything. Use it on the first few days: you
@@ -158,7 +172,13 @@ export async function GET(req) {
     const perf = performanceNote(Object.fromEntries(custom.map(m => [m.key, m])), library)
 
     const items = []
-    for (const lead of leads) {
+    // A small worker pool rather than a sequential loop: twenty-five
+    // model calls in a row is 60-90 seconds of wall time, which is the
+    // function's entire budget. Four at a time lands the same work in a
+    // quarter of it. The cap is deliberately small — each worker also
+    // sends WhatsApp messages, and hammering Meta's API from one lambda
+    // is how sends start failing for reasons that look random.
+    const processLead = async lead => {
         try {
             // The last message is a different message. `isFinalAttempt`
             // existed and nothing passed it, so every third follow-up was
@@ -174,7 +194,7 @@ export async function GET(req) {
                 maxTokens: 500,
             })
             const parsed = parseAgentJson(raw, { mediaKeys: Object.keys(library) })
-            if (parsed.handoff || parsed.messages.length === 0) continue
+            if (parsed.handoff || parsed.messages.length === 0) return
 
             const text = parsed.messages[0]
             const withinWindow = msSince(lead.lastInboundAt) < WINDOW_MS
@@ -185,7 +205,7 @@ export async function GET(req) {
                 addDays: addDaysISO,
             })
 
-            items.push({
+            const item = {
                 phone: lead.phone,
                 name: lead.name || lead.profileName || null,
                 stage: parsed.stage,
@@ -206,7 +226,8 @@ export async function GET(req) {
                 // one number that says whether the safety net is idle
                 // or doing daily work it should not have to.
                 recovered: revived.some(r => r.phone === lead.phone),
-            })
+            }
+            items.push(item)
 
             // Direct delivery. Outside the 24-hour window WhatsApp
             // rejects free-form messages and the send throws — the item
@@ -222,7 +243,7 @@ export async function GET(req) {
                     }
                     delivered = true
                 } catch (err) {
-                    items[items.length - 1].sendError = String(err?.message || err).slice(0, 160)
+                    item.sendError = String(err?.message || err).slice(0, 160)
                     console.warn('[sales-agent/followups] send failed', lead.phone, err?.message)
                 }
             }
@@ -245,6 +266,13 @@ export async function GET(req) {
             console.error('[sales-agent/followups] lead failed', lead.phone, err?.message || err)
         }
     }
+
+    const queue = [...leads]
+    await Promise.all(Array.from({ length: 4 }, async () => {
+        for (let lead = queue.shift(); lead; lead = queue.shift()) {
+            await processLead(lead)
+        }
+    }))
 
     // The owner alert. `alert` is null on a clean day and the caller
     // should send nothing at all - a daily "0 waiting" is a message you
@@ -271,6 +299,7 @@ export async function GET(req) {
         // composed only, nothing marked, nothing delivered: set
         // WHATSAPP_TOKEN + WHATSAPP_PHONE_ID or call from Make.
         delivery: dry ? 'dry' : callerDelivers ? 'make' : directSend ? 'direct' : 'none',
+        whatsappConfigured: canSendWhatsApp(),
         ...(composeOnly ? { warning: 'composed only — no delivery path; nothing was marked as sent' } : {}),
         date: today,
         count: items.length,
