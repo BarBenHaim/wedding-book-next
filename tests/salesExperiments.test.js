@@ -13,15 +13,19 @@ import { buildSystemPrompt } from '@/lib/salesAgent/prompt'
 const lead = over => ({ phone: '972500000001', variant: 'question_first', ...over })
 
 describe('variants', () => {
-    it('defines four genuinely different openings, each with a stated hypothesis', () => {
-        expect(OPENING_VARIANTS).toHaveLength(4)
+    it('defines genuinely different openings, each with a stated hypothesis', () => {
+        // Count-agnostic on purpose: the arms grew from four to seven on
+        // Lord's feedback, and the invariant worth testing is that each
+        // arm is a real, distinct approach — not how many there are.
+        expect(OPENING_VARIANTS.length).toBeGreaterThanOrEqual(4)
         for (const v of OPENING_VARIANTS) {
             expect(v.id).toBeTruthy()
             expect(v.label).toBeTruthy()
             expect(v.hypothesis, `${v.id} has no hypothesis`).toBeTruthy()
             expect(v.directive.length).toBeGreaterThan(20)
         }
-        expect(new Set(VARIANT_IDS).size).toBe(4)
+        // No duplicate ids — a dup would silently merge two arms' stats.
+        expect(new Set(VARIANT_IDS).size).toBe(VARIANT_IDS.length)
     })
 
     it('resolves a known id and refuses an unknown one', () => {
@@ -51,10 +55,12 @@ describe('assignment', () => {
             const v = assignVariant(`9725${String(1000000 + i)}`)
             counts[v] = (counts[v] || 0) + 1
         }
-        // 1000 expected per arm; anything outside 700-1300 is a bad hash.
+        // Expected N/arms per arm; ±30% is a generous band that still
+        // catches a broken hash, at any arm count.
+        const expected = 4000 / VARIANT_IDS.length
         for (const id of VARIANT_IDS) {
-            expect(counts[id], `${id} got ${counts[id]}`).toBeGreaterThan(700)
-            expect(counts[id]).toBeLessThan(1300)
+            expect(counts[id], `${id} got ${counts[id]}`).toBeGreaterThan(expected * 0.7)
+            expect(counts[id]).toBeLessThan(expected * 1.3)
         }
     })
 
@@ -143,7 +149,7 @@ describe('summary — counting', () => {
 
     it('reports every arm even when it has no leads', () => {
         const s = summarizeExperiments([])
-        expect(s.rows).toHaveLength(4)
+        expect(s.rows).toHaveLength(OPENING_VARIANTS.length)
         for (const r of s.rows) {
             expect(r.leads).toBe(0)
             expect(r.replyRate).toBeNull()
