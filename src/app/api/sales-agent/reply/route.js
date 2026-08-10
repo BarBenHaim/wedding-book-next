@@ -46,6 +46,7 @@ import { resolveSource } from '@/lib/salesAgent/attribution'
 import { BUSINESS, MEDIA } from '@/lib/salesAgent/catalog'
 import { mergeMedia, performanceNote } from '@/lib/salesAgent/mediaLibrary'
 import { priceDodged, priceFallbackMessage } from '@/lib/salesAgent/selling'
+import { mediaGuard } from '@/lib/salesAgent/mediaGuard'
 import { assignVariant, summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
 import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
@@ -341,9 +342,6 @@ export async function POST(req) {
     if (parsed.image && Array.isArray(lead.imagesSent) && lead.imagesSent.includes(parsed.image)) {
         parsed.image = null
     }
-    const media = parsed.image ? library[parsed.image] || null : null
-    if (!media) parsed.image = null
-
     // ── The price guard ──────────────────────────────────────────────
     //
     // Somebody asked what it costs and the answer came back without a
@@ -359,6 +357,32 @@ export async function POST(req) {
         console.warn('[sales-agent] price dodged, repairing', phone)
         parsed.messages = [...parsed.messages, priceFallbackMessage()].slice(0, 3)
     }
+
+    // ── The media guard ──────────────────────────────────────────────
+    //
+    // 72 model calls, zero images — including a reply that literally
+    // said "אשמח להראות לך" with image: null. The customer asked to
+    // see, or the bot promised to show, and nothing was attached. Same
+    // pathology as the price dodge: the model narrates the capability
+    // instead of using it. Same remedy: a deterministic net.
+    if (!parsed.image && !parsed.handoff && parsed.messages.length) {
+        const pick = mediaGuard({
+            incomingText: text,
+            messages: parsed.messages,
+            eventType: parsed.eventType || lead.eventType,
+            seen: [...(lead.imagesSent || []), ...(lead.mediaSent || [])],
+            library,
+        })
+        if (pick) {
+            console.log('[sales-agent] media guard attached', pick, phone)
+            parsed.image = pick
+        }
+    }
+
+    // Resolved AFTER the guard, or the guard's pick could never reach
+    // sendImage below.
+    const media = parsed.image ? library[parsed.image] || null : null
+    if (!media) parsed.image = null
 
     const followUpAt = resolveFollowUp({
         parsed,

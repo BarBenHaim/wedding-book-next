@@ -52,6 +52,7 @@ import { sendableNow, MAX_PER_RUN, isFinalAttempt } from '@/lib/salesAgent/follo
 import { MEDIA } from '@/lib/salesAgent/catalog'
 import { mergeMedia, performanceNote } from '@/lib/salesAgent/mediaLibrary'
 import { findOrphans, findStaleHandoffs, handoffAlert } from '@/lib/salesAgent/sweep'
+import { canSendWhatsApp, sendWhatsAppText, sendWhatsAppImage } from '@/lib/salesAgent/whatsapp'
 
 const WINDOW_MS = 24 * 3600 * 1000
 
@@ -112,6 +113,22 @@ export async function GET(req) {
     // is to look, and looking at 23:00 is fine.
     const dry = new URL(req.url).searchParams.get('dry') === '1'
     const today = todayISO()
+
+    // ── Who actually delivers ────────────────────────────────────────
+    //
+    // Two legitimate callers, two delivery models. Make calls with the
+    // shared secret and sends the items itself, so we mark on handoff
+    // exactly as before. Vercel's cron has no hands: it collects JSON
+    // and throws it away — so when IT calls, this route must either
+    // deliver directly (WHATSAPP_TOKEN + WHATSAPP_PHONE_ID) or compose
+    // WITHOUT marking. The bug this guards against was found built and
+    // armed: a cron that would have marked 25 leads a morning as chased
+    // while delivering nothing, invisibly, until the silence showed up
+    // in the close rate.
+    const callerDelivers = (req.headers.get('x-wt-secret') || '') === process.env.SALES_AGENT_SECRET
+        && !!process.env.SALES_AGENT_SECRET
+    const directSend = !callerDelivers && canSendWhatsApp()
+    const composeOnly = !dry && !callerDelivers && !directSend
 
     // Nothing goes out on Shabbat, or before nine, or after nine. The
     // leads stay due - `dueFollowUps` compares with `<=` - so a skipped
@@ -191,9 +208,28 @@ export async function GET(req) {
                 recovered: revived.some(r => r.phone === lead.phone),
             })
 
-            if (parsed.image && !dry) recordMediaSent(parsed.image).catch(() => {})
+            // Direct delivery. Outside the 24-hour window WhatsApp
+            // rejects free-form messages and the send throws — the item
+            // stays unmarked, stays due, and the error is recorded on
+            // the item instead of vanishing. That is the honest outcome
+            // until the wt_followup template exists.
+            let delivered = callerDelivers
+            if (directSend) {
+                try {
+                    await sendWhatsAppText(lead.phone, text)
+                    if (parsed.image && library[parsed.image]?.kind !== 'video') {
+                        await sendWhatsAppImage(lead.phone, library[parsed.image].url, library[parsed.image].caption)
+                    }
+                    delivered = true
+                } catch (err) {
+                    items[items.length - 1].sendError = String(err?.message || err).slice(0, 160)
+                    console.warn('[sales-agent/followups] send failed', lead.phone, err?.message)
+                }
+            }
 
-            if (!dry) {
+            if (parsed.image && !dry && delivered) recordMediaSent(parsed.image).catch(() => {})
+
+            if (!dry && delivered) {
                 // Marked as sent when handed to Make, not after Make
                 // confirms — an ack round-trip would double the operation
                 // cost on the Free plan. The trade-off: a Make failure
@@ -215,9 +251,27 @@ export async function GET(req) {
     // stop reading, and then you miss the day it said 3.
     const alert = handoffAlert(stale)
 
+    // On the direct path the owner alert is also ours to deliver. Lord
+    // messages his own bot often enough that the 24-hour window is
+    // usually open; when it is not, the failure lands in the log and
+    // the alert still rides the JSON for whoever reads it.
+    if (!dry && directSend && alert && process.env.SALES_AGENT_OWNER_PHONE) {
+        try {
+            await sendWhatsAppText(process.env.SALES_AGENT_OWNER_PHONE, alert)
+        } catch (err) {
+            console.warn('[sales-agent/followups] owner alert failed', err?.message)
+        }
+    }
+
     return NextResponse.json({
         ok: true,
         dry,
+        // How this run's items left the building. 'make' — the caller
+        // sends them. 'direct' — this route already sent them. 'none' —
+        // composed only, nothing marked, nothing delivered: set
+        // WHATSAPP_TOKEN + WHATSAPP_PHONE_ID or call from Make.
+        delivery: dry ? 'dry' : callerDelivers ? 'make' : directSend ? 'direct' : 'none',
+        ...(composeOnly ? { warning: 'composed only — no delivery path; nothing was marked as sent' } : {}),
         date: today,
         count: items.length,
         items,
