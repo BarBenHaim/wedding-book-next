@@ -26,6 +26,12 @@ export function canSendWhatsApp() {
 }
 
 async function post(payload) {
+    // Hard 15-second timeout. Meta's API on a restricted account can
+    // HANG rather than error, and a hanging send inside the daily run
+    // holds a worker slot until the platform kills the whole function —
+    // which is a truncated morning with no error anywhere. A timeout is
+    // an error we can log per lead; a hang is 25 leads' problem.
+    const abort = AbortSignal.timeout(15_000)
     const res = await fetch(`${GRAPH}/${process.env.WHATSAPP_PHONE_ID}/messages`, {
         method: 'POST',
         headers: {
@@ -33,6 +39,7 @@ async function post(payload) {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
+        signal: abort,
     })
     const body = await res.json().catch(() => ({}))
     if (!res.ok) {

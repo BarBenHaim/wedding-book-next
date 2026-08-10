@@ -235,7 +235,12 @@ export async function GET(req) {
             // the item instead of vanishing. That is the honest outcome
             // until the wt_followup template exists.
             let delivered = callerDelivers
-            if (directSend) {
+            // `!dry` here is not defensive styling — it was missing, and
+            // a "dry" run with the token configured really sent. Marking
+            // and counting were both correctly gated and the SEND was
+            // not, which is the worst combination: messages go out and
+            // no record anywhere says so.
+            if (directSend && !dry) {
                 try {
                     await sendWhatsAppText(lead.phone, text)
                     if (parsed.image && library[parsed.image]?.kind !== 'video') {
