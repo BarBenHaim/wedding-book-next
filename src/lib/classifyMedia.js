@@ -1,6 +1,7 @@
 import { db, storage } from './firebaseClient'
 import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { resolveEntryPhoto } from './entryPhoto'
 
 export async function saveEntry(weddingId, entry) {
     try {
@@ -40,11 +41,15 @@ export async function getEntries(weddingId) {
         const snapshot = await getDocs(collection(db, 'weddings', weddingId, 'entries'))
         let entries = snapshot.docs.map(doc => {
             const data = doc.data()
-            return {
+            // resolveEntryPhoto applies a super-admin photo replacement
+            // here rather than at render, because pagination reads
+            // imageUrl too: resolving in the template would have covered
+            // the renders and missed whether a page splits in two.
+            return resolveEntryPhoto({
                 id: doc.id,
                 ...data,
                 timestamp: data.timestamp?.toDate ? data.timestamp.toDate().getTime() : data.timestamp || null,
-            }
+            })
         })
 
         // מיון בצד הלקוח:

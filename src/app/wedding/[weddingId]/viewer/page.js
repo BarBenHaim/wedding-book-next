@@ -141,6 +141,13 @@ function BookViewerInner({ onLocaleDiscovered }) {
         setPages(prev => prev.map(e => (e.id === entryId ? { ...e, pageStyle } : e)))
     }, [])
 
+    // A photo swap changes the entry itself, not its style, so it needs
+    // a patch that can carry any field. Applied locally as well as
+    // saved: the operator is looking at the page while they change it.
+    const applyEntryPatch = useCallback((entryId, patch) => {
+        setPages(prev => prev.map(e => (e.id === entryId ? { ...e, ...patch } : e)))
+    }, [])
+
     const styleWithLocale = useMemo(
         () => ({ ...styleSettings, locale, ...(noPhotoCrop ? { photoFit: 'contain' } : {}) }),
         [styleSettings, locale, noPhotoCrop]
@@ -775,6 +782,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                             selectedId={editingId}
                             onSelect={setEditingId}
                             onEntriesChange={applyPageStyle}
+                            onEntryPatch={applyEntryPatch}
                         />
                     )}
                 </aside>

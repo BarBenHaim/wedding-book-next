@@ -27,7 +27,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getIdToken } from 'firebase/auth'
-import { auth } from '@/lib/firebaseClient'
+import { auth, storage } from '@/lib/firebaseClient'
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import imageCompression from 'browser-image-compression'
 import { PHOTO_FRAMES } from '@/lib/photoFrames'
 import { TEXTURES_REGISTRY } from '@/lib/studioPresets'
 import { buildPageIndex, pageLabel } from '@/lib/bookPageIndex'
@@ -102,10 +104,13 @@ export default function PageStyleControls({
     selectedId,
     onSelect,
     onEntriesChange,
+    onEntryPatch,
 }) {
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState(null)
     const [draft, setDraft] = useState({})
+    const [photoBusy, setPhotoBusy] = useState(false)
+    const photoInput = useRef(null)
     const timer = useRef(null)
 
     const selected = useMemo(() => entries.find(e => e.id === selectedId) || null, [entries, selectedId])
@@ -177,6 +182,86 @@ export default function PageStyleControls({
     }
     const resetAll = () => apply({})
 
+    // ── Replacing the photo ──────────────────────────────────────────
+    //
+    // The file goes browser → Storage directly and only the URL reaches
+    // the API, which keeps a multi-megabyte photo out of a serverless
+    // request body. Measured before upload so the book can letterbox it
+    // correctly on the first paint rather than after a round trip.
+    const replacePhoto = useCallback(async file => {
+        if (!file || !selected) return
+        setPhotoBusy(true)
+        setError(null)
+        try {
+            const compressed = await imageCompression(file, {
+                maxSizeMB: 4,
+                maxWidthOrHeight: 3000,
+                useWebWorker: true,
+            })
+            const aspect = await new Promise(resolve => {
+                const img = new Image()
+                const url = URL.createObjectURL(compressed)
+                img.onload = () => { resolve(img.naturalWidth / img.naturalHeight); URL.revokeObjectURL(url) }
+                img.onerror = () => { resolve(null); URL.revokeObjectURL(url) }
+                img.src = url
+            })
+
+            const path = `weddings/${weddingId}/replace_${selected.id}_${Date.now()}.jpg`
+            const snap = await uploadBytes(storageRef(storage, path), compressed, { contentType: compressed.type || 'image/jpeg' })
+            const url = await getDownloadURL(snap.ref)
+
+            const token = await getIdToken(auth.currentUser)
+            const res = await fetch('/api/entries/photo', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ weddingId, entryId: selected.id, imageUrl: url, imgAspect: aspect }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!data?.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+
+            // Mirror what resolveEntryPhoto does on the next load, so the
+            // page redraws now instead of after a refresh.
+            onEntryPatch?.(selected.id, {
+                imageUrlOverride: url,
+                imgAspectOverride: data.imgAspectOverride,
+                imageUrl: url,
+                imgAspect: data.imgAspectOverride ?? null,
+                originalImageUrl: selected.originalImageUrl || selected.imageUrl || null,
+            })
+        } catch (err) {
+            setError(err?.message || 'החלפת התמונה נכשלה')
+        } finally {
+            setPhotoBusy(false)
+            if (photoInput.current) photoInput.current.value = ''
+        }
+    }, [selected, weddingId, onEntryPatch])
+
+    const restorePhoto = useCallback(async () => {
+        if (!selected) return
+        setPhotoBusy(true)
+        try {
+            const token = await getIdToken(auth.currentUser)
+            const res = await fetch('/api/entries/photo', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ weddingId, entryId: selected.id, reset: true }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!data?.ok) throw new Error(data?.error || 'שחזור נכשל')
+            onEntryPatch?.(selected.id, {
+                imageUrlOverride: null,
+                imgAspectOverride: null,
+                imageUrl: selected.originalImageUrl || null,
+                imgAspect: null,
+                originalImageUrl: null,
+            })
+        } catch (err) {
+            setError(err?.message || 'שחזור נכשל')
+        } finally {
+            setPhotoBusy(false)
+        }
+    }, [selected, weddingId, onEntryPatch])
+
     const pinnedPages = useMemo(
         () => entries.filter(e => overriddenKeys(e.pageStyle).length > 0).length,
         [entries],
@@ -239,6 +324,39 @@ export default function PageStyleControls({
 
                 <Row label='גודל התמונה' pinned={pinned.has('imageStyle')} onUnpin={() => unpin('imageStyle')}>
                     <Slider value={effective.imageStyle?.width ?? 80} min={30} max={100} onChange={v => setImage('width', v)} suffix='%' />
+                </Row>
+
+                <Row
+                    label='התמונה בעמוד'
+                    pinned={!!selected.originalImageUrl}
+                    onUnpin={restorePhoto}
+                    hint='התמונה של האורח נשמרת תמיד — ״חזרה לספר״ מחזיר אותה'
+                >
+                    <div className='flex items-center gap-2'>
+                        {selected.imageUrl ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                                src={selected.imageUrl}
+                                alt=''
+                                className='w-12 h-12 rounded-lg object-cover shrink-0'
+                                style={{ border: '1px solid #ead9b3' }}
+                            />
+                        ) : (
+                            <div className='w-12 h-12 rounded-lg shrink-0 flex items-center justify-center text-[9px] text-gray-400'
+                                style={{ background: '#f5efe3', border: '1px solid #ead9b3' }}>
+                                בלי
+                            </div>
+                        )}
+                        <input
+                            ref={photoInput}
+                            type='file'
+                            accept='image/*'
+                            disabled={photoBusy}
+                            onChange={e => replacePhoto(e.target.files?.[0])}
+                            className='text-[11px] text-[#7a6a52] flex-1 min-w-0'
+                        />
+                    </div>
+                    {photoBusy && <p className='text-[10px] text-gray-400 mt-1'>מעלה…</p>}
                 </Row>
 
                 <Row
