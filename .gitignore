@@ -53,3 +53,6 @@ vitest.config.mjs.timestamp-*
 # Screens removed from the super-admin, parked here because the
 # OneDrive mount blocks unlink. Safe to delete by hand.
 _to_delete/
+
+# Local isolated worktrees used during feature development.
+.worktrees/
