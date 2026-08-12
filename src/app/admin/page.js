@@ -134,6 +134,8 @@ function formatDate(isoString) {
     try { return new Date(isoString).toLocaleDateString('he-IL') } catch { return isoString }
 }
 
+import { eventTypeOf, eventTypeLabel, matchesSearch, amountOf, compareByAmount, countByEventType, EVENT_TYPES } from '@/lib/adminEventsView'
+
 function coupleLabel(w) {
     if (w.brideName || w.groomName) return [w.brideName, w.groomName].filter(Boolean).join(' & ')
     if (w.celebrantName) return w.celebrantName
@@ -170,11 +172,19 @@ const EVENT_TYPE_META = {
     bat_mitzvah: { label: 'בת מצווה', bg: '#f6eefd', color: '#8a4ab8' },
     birthday: { label: 'יום הולדת', bg: '#fef6e9', color: '#b8862f' },
 }
-function EventTypeBadge({ type }) {
-    const m = EVENT_TYPE_META[normalizeEventType(type)] || EVENT_TYPE_META.wedding
+// Takes the whole wedding, not just the type string, and never guesses.
+// normalizeEventType() answers 'wedding' for MISSING as well as unknown,
+// so every unclassified event used to wear a confident and wrong badge —
+// which is worse than none, because it hides which rows still need
+// classifying. `unset` gets its own muted styling and says so.
+const UNSET_META = { label: 'לא הוגדר', bg: '#f2f0eb', color: '#8d8579' }
+function EventTypeBadge({ wedding, type }) {
+    const t = wedding ? eventTypeOf(wedding) : (EVENT_TYPE_META[type] ? type : null)
+    const m = t ? EVENT_TYPE_META[t] : UNSET_META
+    const label = wedding ? eventTypeLabel(wedding) : (m.label || UNSET_META.label)
     return (
         <span className='inline-block px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap' style={{ background: m.bg, color: m.color }}>
-            {m.label}
+            {label}
         </span>
     )
 }
@@ -1968,6 +1978,10 @@ function AdminDashboardContent() {
     // Quick status filter for the events list (doubles as a "needs attention"
     // shortcut): all | upcoming | unpaid | unprinted | noblessings.
     const [statusFilter, setStatusFilter] = useState('all')
+    // Event-type filter, independent of the status chips: "show me the
+    // bar mitzvahs" and "show me the unpaid" are different questions and
+    // combining them is the useful case.
+    const [typeFilter, setTypeFilter] = useState('all')
     const [sort, setSort] = useState({ key: 'date', dir: 'asc' })
     const [selectedWedding, setSelectedWedding] = useState(null)
     const [modal, setModal] = useState(null)
@@ -1991,13 +2005,18 @@ function AdminDashboardContent() {
     const upcomingCount = weddings.filter(w => getWeddingStatus(w.weddingDate) === 'upcoming').length
 
     // Filter + Sort
+    const typeCounts = useMemo(() => countByEventType(weddings), [weddings])
+
     const filtered = useMemo(() => {
         let list = weddings
-        const q = searchQuery.toLowerCase().trim()
-        if (q) {
-            list = list.filter(w =>
-                coupleLabel(w).toLowerCase().includes(q) || (w.ownerEmail || '').toLowerCase().includes(q) || (w.orderId || '').includes(q) || (w.id || '').includes(q)
-            )
+        // matchesSearch covers the celebrant, the Hebrew name fields, the
+        // phone (digits-only, so "052-661" works) and the type label —
+        // none of which the old four-field check could see.
+        if (searchQuery.trim()) list = list.filter(w => matchesSearch(w, searchQuery))
+        if (typeFilter !== 'all') {
+            list = typeFilter === 'unset'
+                ? list.filter(w => eventTypeOf(w) === null)
+                : list.filter(w => eventTypeOf(w) === typeFilter)
         }
         if (statusFilter && statusFilter !== 'all') {
             list = list.filter(w => {
@@ -2009,11 +2028,15 @@ function AdminDashboardContent() {
             })
         }
         return list
-    }, [weddings, searchQuery, statusFilter])
+    }, [weddings, searchQuery, statusFilter, typeFilter])
 
     const sorted = useMemo(() => {
         if (!sort.key) return filtered
         return [...filtered].sort((a, b) => {
+            // Money is its own comparator: the unpaid sink in BOTH
+            // directions, because "sort by amount" is always a question
+            // about revenue and never about which events have none.
+            if (sort.key === 'amount') return compareByAmount(a, b, sort.dir)
             let vA, vB
             if (sort.key === 'date') { vA = a.weddingDate ? new Date(a.weddingDate).getTime() : 0; vB = b.weddingDate ? new Date(b.weddingDate).getTime() : 0 }
             else if (sort.key === 'couple') { vA = coupleLabel(a).toLowerCase(); vB = coupleLabel(b).toLowerCase() }
@@ -2443,7 +2466,7 @@ function AdminDashboardContent() {
                                     type='text'
                                     value={searchQuery}
                                     onChange={e => setSearchQuery(e.target.value)}
-                                    placeholder='חיפוש לפי שם, אימייל, מזהה...'
+                                    placeholder='חיפוש: שם החוגג, זוג, טלפון, אימייל, מזהה...'
                                     className='w-full pr-10 pl-4 py-2.5 rounded-xl outline-none transition-all'
                                     style={{
                                         background: '#fdfaf3',
@@ -2466,6 +2489,33 @@ function AdminDashboardContent() {
                             </div>
                         )}
                     </div>
+
+                    {/* Event-type filter. Counts live in the chip so the
+                        row doubles as a breakdown of the whole book of
+                        business, and 'לא הוגדר' is a to-do list. */}
+                    {status === 'ok' && (
+                        <div className='px-4 sm:px-6 pt-1 pb-2 flex items-center gap-2 overflow-x-auto' dir='rtl'>
+                            {[
+                                { key: 'all', label: 'כל הסוגים' },
+                                ...EVENT_TYPES.filter(t => typeCounts[t] > 0).map(t => ({ key: t, label: EVENT_TYPE_META[t]?.label || t })),
+                                ...(typeCounts.unset > 0 ? [{ key: 'unset', label: 'לא הוגדר' }] : []),
+                            ].map(f => (
+                                <button
+                                    key={f.key}
+                                    onClick={() => setTypeFilter(f.key)}
+                                    className='shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors active:scale-95'
+                                    style={
+                                        typeFilter === f.key
+                                            ? { background: '#3d2e1a', color: '#fff', borderColor: '#3d2e1a' }
+                                            : { background: '#fff', color: '#7a6a52', borderColor: '#ead9b3' }
+                                    }
+                                >
+                                    {f.label}
+                                    <span className='opacity-60 mr-1'>{typeCounts[f.key] ?? 0}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
 
                     {/* Quick status filters — also a "needs attention" shortcut
                         (unpaid / not-printed / no-blessings). Horizontally
@@ -2595,7 +2645,7 @@ function AdminDashboardContent() {
                                         <div className='min-w-0'>
                                             <div className='flex items-center gap-2 flex-wrap'>
                                                 <span className='font-bold text-[#1a1410] text-[15px]'>{coupleLabel(w)}</span>
-                                                <EventTypeBadge type={w.eventType} />
+                                                <EventTypeBadge wedding={w} />
                                             </div>
                                             {w.ownerEmail && <div className='text-xs text-[#a89378] mt-0.5 truncate'>{w.ownerEmail}</div>}
                                         </div>
@@ -2651,7 +2701,7 @@ function AdminDashboardContent() {
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'>סטטוס</th>
                                         <SortableHeader sortKey='greetings' currentSort={sort} onSort={setSort} justify='center'><MessageCircle size={11} /> ברכות</SortableHeader>
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'><span className='flex items-center gap-1.5 justify-center'><Printer size={11} /> הדפסה</span></th>
-                                        <th className='px-6 py-4 font-semibold text-[#a89378] text-center'><span className='flex items-center gap-1.5 justify-center'><Wallet size={11} /> תשלום</span></th>
+                                        <SortableHeader sortKey='amount' currentSort={sort} onSort={setSort} justify='center'><Wallet size={11} /> תשלום</SortableHeader>
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'>פעולות</th>
                                     </tr>
                                 </thead>
@@ -2669,7 +2719,7 @@ function AdminDashboardContent() {
                                                 <div className='text-right'>
                                                     <div className='flex items-center gap-2 justify-end'>
                                                         <span className='font-semibold text-[#1a1410]'>{coupleLabel(w)}</span>
-                                                        <EventTypeBadge type={w.eventType} />
+                                                        <EventTypeBadge wedding={w} />
                                                     </div>
                                                     {w.ownerEmail && (
                                                         <div className='text-xs text-[#a89378] mt-1 flex items-center gap-2 justify-end flex-wrap'>
