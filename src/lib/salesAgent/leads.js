@@ -378,17 +378,27 @@ function deliveryError(code) {
 }
 
 function normalizedDeliveryOwnership(stored, outboundId) {
+    const hasExplicitRole = typeof stored?.deliveryRole === 'string' && !!stored.deliveryRole
     const hasExplicitAdvance = typeof stored?.advanceOnDelivery === 'boolean'
-    const advanceOnDelivery = hasExplicitAdvance
-        ? stored.advanceOnDelivery
-        : stored?.advancesFollowUp === true
-    const deliveryRole = typeof stored?.deliveryRole === 'string' && stored.deliveryRole
-        ? stored.deliveryRole
-        : stored?.advancesFollowUp === true
+    let deliveryRole
+    let advanceOnDelivery
+    if (hasExplicitRole || hasExplicitAdvance) {
+        deliveryRole = hasExplicitRole
+            ? stored.deliveryRole
+            : stored.advanceOnDelivery
+                ? 'primary'
+                : 'secondary'
+        const requestedAdvance = hasExplicitAdvance ? stored.advanceOnDelivery : deliveryRole === 'primary'
+        advanceOnDelivery = deliveryRole === 'primary' && requestedAdvance
+        if (!advanceOnDelivery && deliveryRole === 'primary') deliveryRole = 'secondary'
+    } else {
+        advanceOnDelivery = stored?.advancesFollowUp === true
+        deliveryRole = advanceOnDelivery
             ? 'primary'
             : stored?.advancesFollowUp === false
                 ? 'secondary'
                 : 'external'
+    }
     const logicalAttemptId = typeof stored?.logicalAttemptId === 'string' && stored.logicalAttemptId
         ? stored.logicalAttemptId
         : String(stored?.outboundId || outboundId)
@@ -579,7 +589,7 @@ export async function recordDeliveryEvent(event) {
                 deliveryRequestAttemptId: null,
                 updatedAt: FieldValue.serverTimestamp(),
             }
-            if (event.status === 'accepted' && stored?.advancesFollowUp && !logicalAlreadyAdvanced && ownsPending) {
+            if (event.status === 'accepted' && advanceOnDelivery && !logicalAlreadyAdvanced && ownsPending) {
                 leadPatch.deliveryPendingOutboundId = event.outboundId
                 leadPatch.deliveryPendingUntilMs = decision.pendingUntilMs
                 leadPatch.deliveryPendingAttemptId = logicalAttemptId

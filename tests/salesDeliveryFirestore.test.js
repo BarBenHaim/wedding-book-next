@@ -433,6 +433,177 @@ describe('callback-created and legacy delivery normalization', () => {
     })
 
     it.each([
+        ['absent', undefined],
+        ['false', false],
+    ])('lets explicit primary ownership outrank legacy %s through accepted pending and one verified advancement', async (_label, legacyFlag) => {
+        const outboundId = `explicit-primary-${_label}-fixture:template`
+        const stored = {
+            outboundId,
+            channel: 'make',
+            status: 'requested',
+            leadId: '41',
+            deliveryRole: 'primary',
+            advanceOnDelivery: true,
+            logicalAttemptId: `explicit-primary-${_label}-attempt`,
+            attemptNumber: 1,
+            nextFollowUpAt: '2026-08-17',
+        }
+        if (legacyFlag !== undefined) stored.advancesFollowUp = legacyFlag
+        store.set(`sales_delivery_events/${outboundId}`, stored)
+        store.set(LEAD, {
+            ...store.get(LEAD),
+            pendingDeliveryMessages: { [outboundId]: 'explicit primary fixture' },
+        })
+
+        await recordDeliveryEvent(externalEvent('accepted', {
+            eventId: `explicit-primary-${_label}-accepted`, outboundId,
+        }))
+        expect(store.get(LEAD)).toMatchObject({
+            followUpCount: 0,
+            lastDeliveryStatus: 'accepted',
+            deliveryPendingOutboundId: outboundId,
+            deliveryPendingUntilMs: Date.parse('2026-08-14T11:30:00.000Z'),
+            deliveryPendingAttemptId: `explicit-primary-${_label}-attempt`,
+        })
+
+        await recordDeliveryEvent(externalEvent('delivered', {
+            eventId: `explicit-primary-${_label}-delivered`, outboundId,
+        }))
+        await recordDeliveryEvent(externalEvent('read', {
+            eventId: `explicit-primary-${_label}-read`, outboundId,
+        }))
+
+        expect(store.get(`sales_delivery_events/${outboundId}`)).toMatchObject({
+            deliveryRole: 'primary',
+            advanceOnDelivery: true,
+            logicalAttemptId: `explicit-primary-${_label}-attempt`,
+            status: 'read',
+            followUpAdvanced: true,
+        })
+        expect(store.get(LEAD)).toMatchObject({
+            followUpCount: 1,
+            followUpAt: '2026-08-17',
+            lastDeliveryStatus: 'read',
+            deliveryPendingOutboundId: null,
+            deliveryPendingUntilMs: null,
+        })
+    })
+
+    it('derives primary ownership when explicit advanceOnDelivery is true and role is absent', async () => {
+        const outboundId = 'explicit-advance-true-fixture:template'
+        store.set(`sales_delivery_events/${outboundId}`, {
+            outboundId,
+            channel: 'make',
+            status: 'requested',
+            leadId: '41',
+            advanceOnDelivery: true,
+            advancesFollowUp: false,
+            logicalAttemptId: 'explicit-advance-true-attempt',
+            attemptNumber: 1,
+            nextFollowUpAt: '2026-08-17',
+        })
+        store.set(LEAD, {
+            ...store.get(LEAD),
+            pendingDeliveryMessages: { [outboundId]: 'explicit advance fixture' },
+        })
+
+        await recordDeliveryEvent(externalEvent('accepted', {
+            eventId: 'explicit-advance-true-accepted', outboundId,
+        }))
+        expect(store.get(`sales_delivery_events/${outboundId}`)).toMatchObject({
+            deliveryRole: 'primary',
+            advanceOnDelivery: true,
+        })
+        expect(store.get(LEAD)).toMatchObject({
+            followUpCount: 0,
+            deliveryPendingOutboundId: outboundId,
+            deliveryPendingAttemptId: 'explicit-advance-true-attempt',
+        })
+
+        await recordDeliveryEvent(externalEvent('delivered', {
+            eventId: 'explicit-advance-true-delivered', outboundId,
+        }))
+        await recordDeliveryEvent(externalEvent('read', {
+            eventId: 'explicit-advance-true-read', outboundId,
+        }))
+        expect(store.get(LEAD)).toMatchObject({ followUpCount: 1, followUpAt: '2026-08-17' })
+    })
+
+    it('derives secondary non-ownership when explicit advanceOnDelivery is false and role is absent', async () => {
+        const outboundId = 'explicit-advance-false-fixture:image'
+        store.set(`sales_delivery_events/${outboundId}`, {
+            outboundId,
+            channel: 'make',
+            status: 'requested',
+            leadId: '41',
+            advanceOnDelivery: false,
+            advancesFollowUp: true,
+            logicalAttemptId: 'explicit-advance-false-attempt',
+            attemptNumber: 1,
+        })
+        const leadBefore = structuredClone(store.get(LEAD))
+
+        await recordDeliveryEvent(externalEvent('accepted', {
+            eventId: 'explicit-advance-false-accepted', outboundId,
+        }))
+        await recordDeliveryEvent(externalEvent('delivered', {
+            eventId: 'explicit-advance-false-delivered', outboundId,
+        }))
+        await recordDeliveryEvent(externalEvent('read', {
+            eventId: 'explicit-advance-false-read', outboundId,
+        }))
+
+        expect(store.get(`sales_delivery_events/${outboundId}`)).toMatchObject({
+            deliveryRole: 'secondary',
+            advanceOnDelivery: false,
+            logicalAttemptId: 'explicit-advance-false-attempt',
+            status: 'read',
+            followUpAdvanced: false,
+        })
+        expect(store.get(LEAD)).toEqual(leadBefore)
+        expect(store.writes().filter(write => write.key === LEAD)).toEqual([])
+    })
+
+    it.each([
+        ['primary', false, 'secondary'],
+        ['secondary', true, 'secondary'],
+    ])('normalizes conflicting explicit %s/%s ownership to safe non-advancing %s metadata', async (deliveryRole, advanceOnDelivery, expectedRole) => {
+        const outboundId = `explicit-conflict-${deliveryRole}-${advanceOnDelivery}:template`
+        store.set(`sales_delivery_events/${outboundId}`, {
+            outboundId,
+            channel: 'make',
+            status: 'requested',
+            leadId: '41',
+            deliveryRole,
+            advanceOnDelivery,
+            advancesFollowUp: true,
+            logicalAttemptId: `explicit-conflict-${deliveryRole}-attempt`,
+            attemptNumber: 1,
+            nextFollowUpAt: '2026-08-17',
+        })
+        const leadBefore = structuredClone(store.get(LEAD))
+
+        await recordDeliveryEvent(externalEvent('accepted', {
+            eventId: `explicit-conflict-${deliveryRole}-accepted`, outboundId,
+        }))
+        await recordDeliveryEvent(externalEvent('delivered', {
+            eventId: `explicit-conflict-${deliveryRole}-delivered`, outboundId,
+        }))
+        await recordDeliveryEvent(externalEvent('read', {
+            eventId: `explicit-conflict-${deliveryRole}-read`, outboundId,
+        }))
+
+        expect(store.get(`sales_delivery_events/${outboundId}`)).toMatchObject({
+            deliveryRole: expectedRole,
+            advanceOnDelivery: false,
+            status: 'read',
+            followUpAdvanced: false,
+        })
+        expect(store.get(LEAD)).toEqual(leadBefore)
+        expect(store.writes().filter(write => write.key === LEAD)).toEqual([])
+    })
+
+    it.each([
         ['secondary', false],
         ['external', undefined],
     ])('backfills legacy %s metadata without ever mutating its referenced lead', async (expectedRole, legacyFlag) => {

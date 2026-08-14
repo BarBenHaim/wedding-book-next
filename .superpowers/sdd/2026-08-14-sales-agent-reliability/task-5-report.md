@@ -344,3 +344,82 @@ exit 0; only configured LF-to-CRLF working-copy notices
 ```
 
 Privacy/security remains unchanged: normalized documents and ledger claims contain stable metadata only. Callback-created identifiers do not trigger lead lookup or mutation without stored lead ownership, and no phone, secret, token, provider body, payload, transcript, call, or dial task is introduced.
+
+## Fix round 4/5 — authoritative explicit ownership precedence
+
+Status: implemented and verified after review of commit `056344238c287387c156b1dd4ee5aad4537ab70e`.
+
+### Normalization decision
+
+- `recordDeliveryEvent` now uses the normalized authoritative `advanceOnDelivery` value when an `accepted` callback claims the R2 30-minute pending window. It no longer rechecks legacy `advancesFollowUp` after normalization.
+- Explicit ownership metadata is resolved before legacy metadata. Explicit `advanceOnDelivery: true` with no role derives `primary`; explicit `false` with no role derives `secondary`. A genuinely missing delivery document remains the safe `external`/`false` default.
+- Only the coherent normalized pair `deliveryRole: 'primary'` plus `advanceOnDelivery: true` can touch lead ownership. Conflicting explicit pairs deterministically fail closed: `primary`/`false` becomes `secondary`/`false`, while a non-primary role paired with `true` retains its declared audit role but is forced to `false`. An explicit role without an advance flag derives ownership only when that role is `primary`; all other explicit roles remain non-advancing. Legacy `advancesFollowUp` is consulted only when both explicit fields are absent.
+- This ruling keeps malformed/conflicting records observable without allowing them to create pending ownership, clear another attempt, or advance cadence. Callback-created external records, secondary media, owner digest, global event-ledger behavior, and logical-attempt exactly-once fencing are unchanged.
+
+### Acceptance mapping
+
+| Review acceptance item | Named test evidence |
+|---|---|
+| Explicit `primary`/`true` outranks legacy false or absent, claims accepted pending, and advances exactly once | Both table cases named `lets explicit primary ownership outrank legacy ... through accepted pending and one verified advancement` |
+| Role absent plus explicit true derives primary and advances | `derives primary ownership when explicit advanceOnDelivery is true and role is absent` |
+| Role absent plus explicit false derives secondary and never writes the lead | `derives secondary non-ownership when explicit advanceOnDelivery is false and role is absent` |
+| Conflicting explicit role/advance pairs fail closed and never write the lead | Both table cases named `normalizes conflicting explicit ... ownership to safe non-advancing ... metadata` compare the complete lead and require zero lead writes across accepted, delivered, and read |
+| Missing-document external default and legacy fallbacks remain safe | Existing callback-created and legacy normalization tests remain in the same focused Firestore suite |
+
+### Strict TDD evidence
+
+Initial explicit-precedence RED before production changes:
+
+```text
+npx vitest run tests/salesDeliveryFirestore.test.js
+Test Files  1 failed (1)
+Tests       5 failed | 30 passed (35)
+failures: explicit primary did not claim accepted pending when legacy was absent/false; absent roles followed legacy instead of explicit advance; secondary/true advanced
+exit 1
+```
+
+Conflict-coherence RED before the safe role downgrade:
+
+```text
+npx vitest run tests/salesDeliveryFirestore.test.js
+Test Files  1 failed (1)
+Tests       1 failed | 34 passed (35)
+failure: explicit primary/false remained labelled primary instead of normalizing to non-advancing secondary
+exit 1
+```
+
+Targeted GREEN after each minimal production change ended at:
+
+```text
+npx vitest run tests/salesDeliveryFirestore.test.js
+Test Files  1 passed (1)
+Tests       35 passed (35)
+exit 0
+```
+
+### Final verification
+
+```text
+npx vitest run tests/salesDelivery.test.js tests/salesDeliveryFirestore.test.js tests/salesDeliveryRoute.test.js tests/salesWhatsApp.test.js tests/salesFollowupsRoute.test.js tests/salesFollowupPolicy.test.js tests/salesSweep.test.js tests/salesDigest.test.js tests/salesDigestRoute.test.js
+Test Files  9 passed (9)
+Tests       157 passed (157)
+exit 0
+
+npx vitest run tests/salesInboundEvents.test.js tests/salesInbound.test.js tests/salesExperiments.test.js tests/salesAgent.test.js tests/salesReplyRoute.test.js tests/salesCircuitBreaker.test.js tests/salesCircuitFirestore.test.js tests/salesConversation.test.js tests/salesAttribution.test.js tests/salesMediaGuard.test.js tests/salesMediaLibrary.test.js tests/salesSelling.test.js tests/salesLeadsView.test.js
+Test Files  13 passed (13)
+Tests       357 passed (357)
+exit 0
+
+npm test
+Test Files  42 passed (42)
+Tests       839 passed (839)
+exit 0
+
+npx eslint src/lib/salesAgent/leads.js tests/salesDeliveryFirestore.test.js
+exit 0, no diagnostics
+
+git diff --check
+exit 0; only configured LF-to-CRLF working-copy notices
+```
+
+Privacy/security remains unchanged: the normalization reads and writes operational ownership metadata only, uses non-dialable fixtures, and adds no phone, secret, token, provider body, payload, transcript, call, or dial-task surface. Existing external concerns remain Meta template approval and Task 6 callback wiring; this fix adds no new external dependency.
