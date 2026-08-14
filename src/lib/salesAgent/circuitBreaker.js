@@ -12,6 +12,7 @@ export const BREAKER_COOLDOWN_MS = 5 * 60_000
 // the fallback transaction and response transport. Individual attempts cap at
 // 16 seconds; a JSON repair receives only the remaining shared budget.
 export const INBOUND_ROUTE_DEADLINE_MS = 26_000
+export const INBOUND_HEARTBEAT_BUDGET_MS = 400
 export const FALLBACK_COMMIT_RESERVE_MS = 6_000
 export const PROVIDER_PATH_DEADLINE_MS = INBOUND_ROUTE_DEADLINE_MS - FALLBACK_COMMIT_RESERVE_MS
 export const HALF_OPEN_LEASE_MS = 23_000

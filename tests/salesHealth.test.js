@@ -96,6 +96,10 @@ describe('sales health summary', () => {
         expect(summarizeSalesHealth(healthyInput({ dueFollowUps: 1 })).followups.status).toBe('amber')
         expect(summarizeSalesHealth(healthyInput({ dueFollowUps: 25 })).followups.status).toBe('amber')
         expect(summarizeSalesHealth(healthyInput({ dueFollowUps: 26 })).followups.status).toBe('red')
+        expect(summarizeSalesHealth(healthyInput({
+            dueFollowUps: null,
+            followupsScanSaturated: true,
+        })).followups).toMatchObject({ status: 'unknown', reason: 'scan-saturated', due: null, scanSaturated: true })
     })
 
     it('returns only sanitized counts, booleans, enums, and timestamps', () => {

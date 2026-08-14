@@ -53,7 +53,7 @@ import { mediaGuard } from '@/lib/salesAgent/mediaGuard'
 import { assignVariant, summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
 import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
-import { normalizeProviderError, INBOUND_ROUTE_DEADLINE_MS, FALLBACK_COMMIT_RESERVE_MS } from '@/lib/salesAgent/circuitBreaker'
+import { normalizeProviderError, INBOUND_ROUTE_DEADLINE_MS, INBOUND_HEARTBEAT_BUDGET_MS, FALLBACK_COMMIT_RESERVE_MS } from '@/lib/salesAgent/circuitBreaker'
 
 // What the customer sees when the machinery breaks. Deliberately honest
 // and short — no apology theatre, no invented reason.
@@ -84,6 +84,20 @@ function todayISO() {
     // roll the date over at 02:00 or 03:00 Israel time and schedule
     // follow-ups a day early. Asia/Jerusalem is the business's clock.
     return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+}
+
+async function recordInboundHeartbeatBestEffort(receivedAtMs) {
+    let timeoutId
+    const timeout = new Promise(resolve => {
+        timeoutId = setTimeout(() => resolve('timeout'), INBOUND_HEARTBEAT_BUDGET_MS)
+    })
+    const write = Promise.resolve()
+        .then(() => recordInboundHeartbeat({ receivedAtMs }))
+        .then(() => 'recorded', () => 'failed')
+    const result = await Promise.race([write, timeout])
+    clearTimeout(timeoutId)
+    if (result === 'timeout') console.warn('[sales-agent] inbound heartbeat timed out')
+    if (result === 'failed') console.warn('[sales-agent] inbound heartbeat write failed')
 }
 
 export async function POST(req) {
@@ -119,12 +133,10 @@ export async function POST(req) {
 
     // This authenticated request is already the Make heartbeat. Persist a
     // timestamp only; never copy the event ID, phone, message, or payload.
-    // Await the write so a short duplicate path cannot return and freeze the
-    // serverless invocation before the heartbeat reaches Firestore. A health
-    // write failure is still non-fatal to the customer request.
-    await recordInboundHeartbeat({ receivedAtMs: Date.now() }).catch(() => {
-        console.error('[sales-agent] inbound heartbeat write failed')
-    })
+    // Give the health write a brief durability opportunity, then continue.
+    // A stalled or failed monitoring write must never delay event claiming,
+    // duplicate fencing, or the customer response.
+    await recordInboundHeartbeatBestEffort(Date.now())
 
     const text = String(body?.text || '').trim()
     const messageType = body.messageType

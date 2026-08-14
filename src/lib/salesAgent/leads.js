@@ -809,6 +809,15 @@ export async function recordDigestOutcome({ status, errorCode = null, outboundId
 // Leads due for a follow-up today. `stage` filters are applied in memory
 // because Firestore would need a composite index for the combination and
 // the daily volume here is tiny.
+function isDueFollowUpCandidate(lead) {
+    if (!lead.followUpAt) return false
+    if (lead.stage === 'closed_won' || lead.stage === 'closed_lost') return false
+    if (isPausedForHuman(lead)) return false
+    if ((lead.followUpCount || 0) >= 3) return false
+    if (['pending', 'requested'].includes(pendingFollowUpStatus(lead))) return false
+    return true
+}
+
 export async function dueFollowUps(todayISO, limit = 40) {
     const snap = await adminDb
         .collection(COLLECTION)
@@ -818,15 +827,40 @@ export async function dueFollowUps(todayISO, limit = 40) {
     const out = []
     for (const doc of snap.docs) {
         const lead = { phone: doc.id, ...doc.data() }
-        if (!lead.followUpAt) continue
-        if (lead.stage === 'closed_won' || lead.stage === 'closed_lost') continue
-        if (isPausedForHuman(lead)) continue
-        if ((lead.followUpCount || 0) >= 3) continue
-        if (['pending', 'requested'].includes(pendingFollowUpStatus(lead))) continue
+        if (!isDueFollowUpCandidate(lead)) continue
         out.push(lead)
         if (out.length >= limit) break
     }
     return out
+}
+
+// Health needs only enough information to distinguish 25 from 26 due rows,
+// and must never turn a saturated in-memory filter into a false zero. A full
+// 78-row window with fewer than 26 eligible rows therefore returns unknown.
+// No lead IDs, phone numbers, or row bodies leave this function.
+const FOLLOWUP_HEALTH_RED_COUNT = 26
+const FOLLOWUP_HEALTH_SCAN_LIMIT = FOLLOWUP_HEALTH_RED_COUNT * 3
+
+export async function readDueFollowUpHealth(todayISO) {
+    const snap = await adminDb
+        .collection(COLLECTION)
+        .where('followUpAt', '<=', todayISO)
+        .limit(FOLLOWUP_HEALTH_SCAN_LIMIT)
+        .get()
+    const docs = snap.docs || []
+    let dueFollowUps = 0
+    for (const doc of docs) {
+        const lead = { phone: doc.id, ...doc.data() }
+        if (!isDueFollowUpCandidate(lead)) continue
+        dueFollowUps += 1
+        if (dueFollowUps >= FOLLOWUP_HEALTH_RED_COUNT) break
+    }
+    const scanSaturated = docs.length >= FOLLOWUP_HEALTH_SCAN_LIMIT
+    return {
+        dueFollowUps: scanSaturated && dueFollowUps < FOLLOWUP_HEALTH_RED_COUNT ? null : dueFollowUps,
+        scanSaturated,
+        scanned: docs.length,
+    }
 }
 
 // ── Is this already a customer? ─────────────────────────────────────

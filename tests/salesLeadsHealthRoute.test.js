@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
     listLeads: vi.fn(),
     readSpend: vi.fn(),
     readSalesHealthRuntime: vi.fn(),
-    dueFollowUps: vi.fn(),
+    readDueFollowUpHealth: vi.fn(),
 }))
 
 vi.mock('@/lib/firebaseAdmin', () => ({ adminAuth: { verifyIdToken: vi.fn() } }))
@@ -17,7 +17,7 @@ vi.mock('@/lib/salesAgent/leads', () => ({
     isTestPhone: vi.fn(),
     readSpend: mocks.readSpend,
     readSalesHealthRuntime: mocks.readSalesHealthRuntime,
-    dueFollowUps: mocks.dueFollowUps,
+    readDueFollowUpHealth: mocks.readDueFollowUpHealth,
 }))
 
 let GET
@@ -28,7 +28,7 @@ beforeEach(async () => {
     process.env.SALES_AGENT_SECRET = 'health-route-secret'
     mocks.listLeads.mockResolvedValue([])
     mocks.readSpend.mockResolvedValue(null)
-    mocks.dueFollowUps.mockResolvedValue([])
+    mocks.readDueFollowUpHealth.mockResolvedValue({ dueFollowUps: 0, scanSaturated: false, scanned: 0 })
     mocks.readSalesHealthRuntime.mockResolvedValue({
         inbound: {
             lastHeartbeatAtMs: Date.now() - 1000,
@@ -50,10 +50,7 @@ beforeEach(async () => {
 
 describe('sales leads health response', () => {
     it('aggregates real runtime and due queue data into a sanitized health object', async () => {
-        mocks.dueFollowUps.mockResolvedValue(Array.from({ length: 26 }, (_, i) => ({
-            phone: `non-dialable-followup-${i}`,
-            text: `private-followup-text-${i}`,
-        })))
+        mocks.readDueFollowUpHealth.mockResolvedValue({ dueFollowUps: 26, scanSaturated: true, scanned: 78 })
 
         const response = await GET(new Request('http://localhost/api/sales-agent/leads', {
             headers: { 'x-wt-secret': 'health-route-secret' },
@@ -65,10 +62,25 @@ describe('sales leads health response', () => {
         expect(body.health.whatsapp).toMatchObject({ status: 'amber', accepted: 1, delivered: 0, read: 0 })
         expect(body.health.followups).toMatchObject({ status: 'red', due: 26 })
         expect(mocks.readSalesHealthRuntime).toHaveBeenCalledTimes(1)
-        expect(mocks.dueFollowUps).toHaveBeenCalledWith(body.today, 26)
+        expect(mocks.readDueFollowUpHealth).toHaveBeenCalledWith(body.today)
         for (const forbidden of ['runtime-payload', 'breaker-secret', 'provider-id', 'lead-id', 'non-dialable-followup', 'followup-text']) {
             expect(health).not.toContain(forbidden)
         }
+    })
+
+    it('keeps a saturated due scan unknown instead of falsely green', async () => {
+        mocks.readDueFollowUpHealth.mockResolvedValue({ dueFollowUps: null, scanSaturated: true, scanned: 78 })
+
+        const response = await GET(new Request('http://localhost/api/sales-agent/leads', {
+            headers: { 'x-wt-secret': 'health-route-secret' },
+        }))
+        const body = await response.json()
+
+        expect(response.status).toBe(200)
+        expect(body.health.followups).toMatchObject({
+            status: 'unknown', reason: 'scan-saturated', due: null, scanSaturated: true,
+        })
+        expect(JSON.stringify(body.health)).not.toContain('non-dialable')
     })
 
     it('returns a normalized failure instead of leaking a Firestore error', async () => {

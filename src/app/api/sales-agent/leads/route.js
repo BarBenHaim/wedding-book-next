@@ -25,7 +25,7 @@ import { NextResponse } from 'next/server'
 import { adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { normalizePhone } from '@/lib/salesAgent/agent'
-import { listLeads, getLead, adminPatchLead, deleteLeads, isTestPhone, readSpend, readSalesHealthRuntime, dueFollowUps } from '@/lib/salesAgent/leads'
+import { listLeads, getLead, adminPatchLead, deleteLeads, isTestPhone, readSpend, readSalesHealthRuntime, readDueFollowUpHealth } from '@/lib/salesAgent/leads'
 import { summarizeSalesHealth } from '@/lib/salesAgent/leadsCore'
 import { unitEconomics, RATES_CHECKED_ON } from '@/lib/salesAgent/pricing'
 import { deriveLead, sortLeads, summarizeLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
@@ -117,14 +117,12 @@ export async function GET(req) {
     // from its own endpoint so the screen shows spend and outcome in the
     // same refresh — a cost figure that can disagree with the lead count
     // beside it invites exactly the wrong conclusion.
-    let spend, healthRuntime, due
+    let spend, healthRuntime, dueHealth
     try {
-        ;[spend, healthRuntime, due] = await Promise.all([
+        ;[spend, healthRuntime, dueHealth] = await Promise.all([
             readSpend({ todayISO: today }),
             readSalesHealthRuntime(),
-            // 26 is enough to distinguish the red boundary (>25) without
-            // moving phone-bearing queue rows any farther than this process.
-            dueFollowUps(today, 26),
+            readDueFollowUpHealth(today),
         ])
     } catch {
         console.error('[sales-leads] health read failed')
@@ -133,7 +131,8 @@ export async function GET(req) {
     const health = summarizeSalesHealth({
         nowMs: now,
         ...healthRuntime,
-        dueFollowUps: due.length,
+        dueFollowUps: dueHealth.dueFollowUps,
+        followupsScanSaturated: dueHealth.scanSaturated,
     })
 
     return NextResponse.json({

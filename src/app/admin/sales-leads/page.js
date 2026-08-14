@@ -257,7 +257,7 @@ function SalesLeadsContent() {
     }, [load, testLeadCount])
 
     if (state === 'loading') {
-        return <div className='flex h-screen items-center justify-center gap-2 text-[#7a6a52]'><Loader2 size={18} className='animate-spin' /> טוען לידים...</div>
+        return <div className='flex h-screen items-center justify-center gap-2 text-[#7a6a52]'><Loader2 size={18} className='animate-spin motion-reduce:animate-none' /> טוען לידים...</div>
     }
     if (state === 'error') {
         return (
@@ -289,19 +289,19 @@ function SalesLeadsContent() {
                             </p>
                         </div>
                     </div>
-                    <div className='flex items-center gap-2'>
+                    <div className='flex w-full max-w-full flex-wrap items-center gap-2 sm:w-auto'>
                         <button onClick={() => load()} disabled={refreshing}
-                            className='inline-flex min-h-11 items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d] focus-visible:ring-offset-2'
+                            className='inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d] focus-visible:ring-offset-2 sm:flex-none'
                             style={{ background: '#fff', border: '1px solid #ead9b3' }}>
                             <RefreshCw size={13} className={refreshing ? 'animate-spin motion-reduce:animate-none' : ''} /> רענן
                         </button>
                         {testLeadCount > 0 && (
                             <button onClick={clearTestLeads} disabled={busy === 'sweep'}
-                                className='inline-flex min-h-11 items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2'>
+                                className='order-3 inline-flex min-h-11 w-full max-w-full items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 sm:order-none sm:w-auto'>
                                 <Trash2 size={13} /> מחק {testLeadCount} לידי בדיקה
                             </button>
                         )}
-                        <a href='/admin' className='inline-flex min-h-11 items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d] focus-visible:ring-offset-2' style={{ background: '#fff', border: '1px solid #ead9b3' }}>
+                        <a href='/admin' className='inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d] focus-visible:ring-offset-2 sm:flex-none' style={{ background: '#fff', border: '1px solid #ead9b3' }}>
                             <ChevronRight size={13} /> מרכז הניהול
                         </a>
                     </div>
@@ -655,7 +655,7 @@ function LeadRow({ lead, active, onOpen, onAct, busy }) {
                         style={{ border: '1px solid #ead9b3' }}>
                         {active ? 'סגור' : 'שיחה'}
                     </button>
-                    {isBusy && <Loader2 size={12} className='animate-spin text-[#a89378]' />}
+                    {isBusy && <Loader2 size={12} className='animate-spin motion-reduce:animate-none text-[#a89378]' />}
                 </div>
             </div>
         </li>
@@ -681,7 +681,7 @@ function LeadDetail({ phone, lead, state, onClose, onAct, busy }) {
                 <button onClick={onClose} aria-label='סגירת השיחה' className='min-w-11 min-h-11 inline-flex items-center justify-center p-1.5 rounded-lg hover:bg-[#fbf6ec] text-[#a89378] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d]'><X size={15} /></button>
             </div>
 
-            {state === 'loading' && <div className='py-12 text-center text-[#a89378] text-[12.5px]'><Loader2 size={16} className='animate-spin inline' /> טוען שיחה...</div>}
+            {state === 'loading' && <div className='py-12 text-center text-[#a89378] text-[12.5px]'><Loader2 size={16} className='animate-spin motion-reduce:animate-none inline' /> טוען שיחה...</div>}
             {state === 'error' && <div className='py-12 text-center text-[#b32424] text-[12.5px]'>לא הצלחתי לטעון את השיחה</div>}
 
             {state === 'ready' && lead && (

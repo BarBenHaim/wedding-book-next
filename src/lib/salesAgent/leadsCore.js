@@ -278,13 +278,14 @@ function summarizeWhatsapp(attempts, nowMs, operationsStatus) {
     return { status, reason, ...counts, lastEvidenceAtMs }
 }
 
-function summarizeFollowups(dueFollowUps, lastRunAtMs) {
+function summarizeFollowups(dueFollowUps, lastRunAtMs, scanSaturated = false) {
     const due = nonNegativeCount(dueFollowUps)
     const safeLastRunAtMs = finiteMs(lastRunAtMs)
-    if (due == null) return { status: 'unknown', reason: 'no-queue-evidence', due: null, lastRunAtMs: safeLastRunAtMs }
-    if (due > 25) return { status: 'red', reason: 'queue-overloaded', due, lastRunAtMs: safeLastRunAtMs }
-    if (due > 0) return { status: 'amber', reason: 'followups-due', due, lastRunAtMs: safeLastRunAtMs }
-    return { status: 'green', reason: 'queue-clear', due, lastRunAtMs: safeLastRunAtMs }
+    const saturated = scanSaturated === true
+    if (due == null) return { status: 'unknown', reason: saturated ? 'scan-saturated' : 'no-queue-evidence', due: null, scanSaturated: saturated, lastRunAtMs: safeLastRunAtMs }
+    if (due > 25) return { status: 'red', reason: 'queue-overloaded', due, scanSaturated: saturated, lastRunAtMs: safeLastRunAtMs }
+    if (due > 0) return { status: 'amber', reason: 'followups-due', due, scanSaturated: saturated, lastRunAtMs: safeLastRunAtMs }
+    return { status: 'green', reason: 'queue-clear', due, scanSaturated: saturated, lastRunAtMs: safeLastRunAtMs }
 }
 
 export function summarizeSalesHealth(input = {}) {
@@ -295,7 +296,7 @@ export function summarizeSalesHealth(input = {}) {
         inbound,
         anthropic: summarizeAnthropic(input.breaker, nowMs),
         whatsapp: summarizeWhatsapp(input.deliveryAttempts, nowMs, inbound.operationsStatus),
-        followups: summarizeFollowups(input.dueFollowUps, input.followupsLastRunAtMs),
+        followups: summarizeFollowups(input.dueFollowUps, input.followupsLastRunAtMs, input.followupsScanSaturated),
     }
 }
 
@@ -338,9 +339,11 @@ export function salesHealthStageView(health = {}) {
         },
         {
             key: 'followups', label: 'פולואפים', status: followups.status || 'unknown', statusLabel: statusLabel(followups),
-            metric: followups.due == null ? 'מצב התור לא ידוע' : `${followups.due} ממתינים`,
+            metric: followups.reason === 'scan-saturated' ? 'הסריקה מלאה — מצב התור לא ידוע' : followups.due == null ? 'מצב התור לא ידוע' : `${followups.due} ממתינים`,
             evidenceAtMs: followups.lastRunAtMs || health.generatedAtMs || null,
-            action: followups.status === 'red' ? 'בדקו את תור הפולואפים והריצו בדיקה יבשה.' : null,
+            action: followups.reason === 'scan-saturated'
+                ? 'בדקו רשומות לא פעילות בתור לפני הסקת מסקנות.'
+                : followups.status === 'red' ? 'בדקו את תור הפולואפים והריצו בדיקה יבשה.' : null,
         },
     ]
 }

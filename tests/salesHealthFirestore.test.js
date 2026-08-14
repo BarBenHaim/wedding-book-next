@@ -11,9 +11,18 @@ const store = vi.hoisted(() => {
     const collectionDocs = name => [...docs.entries()]
         .filter(([key]) => key.startsWith(`${name}/`))
         .map(([key]) => snapshot(ref(key)))
+    const limitedQuery = (name, items) => ({
+        limit: count => ({
+            get: async () => ({ docs: items().slice(0, count), size: Math.min(items().length, count) }),
+        }),
+    })
     const db = {
         collection: name => ({
             doc: id => ref(`${name}/${id}`),
+            where: (field, operator, value) => limitedQuery(name, () => collectionDocs(name).filter(item => {
+                if (operator === '<=') return item.data()?.[field] <= value
+                throw new Error(`unsupported test operator: ${operator}`)
+            })),
             orderBy: field => ({
                 limit: count => ({
                     get: async () => ({
@@ -54,7 +63,7 @@ vi.mock('firebase-admin/firestore', () => ({
     },
 }))
 
-import { readSalesHealthRuntime, recordInboundHeartbeat } from '@/lib/salesAgent/leads'
+import { readDueFollowUpHealth, readSalesHealthRuntime, recordInboundHeartbeat } from '@/lib/salesAgent/leads'
 
 describe('sanitized sales health Firestore aggregation', () => {
     beforeEach(() => store.reset())
@@ -126,5 +135,42 @@ describe('sanitized sales health Firestore aggregation', () => {
         for (const forbidden of ['private-provider', 'private-lead', 'private-body', 'runtime-private', 'private-probe', 'private-followup']) {
             expect(serialized).not.toContain(forbidden)
         }
+    })
+
+    it('reports a saturated ineligible scan as unknown even when an eligible row is hidden behind it', async () => {
+        for (let i = 0; i < 78; i++) {
+            store.set(`sales_leads/non-dialable-terminal-${i}`, {
+                followUpAt: '2026-08-15',
+                stage: 'closed_lost',
+            })
+        }
+        store.set('sales_leads/non-dialable-hidden-eligible', {
+            followUpAt: '2026-08-15',
+            stage: 'engaged',
+            followUpCount: 0,
+        })
+
+        const result = await readDueFollowUpHealth('2026-08-15')
+
+        expect(result).toEqual({ dueFollowUps: null, scanSaturated: true, scanned: 78 })
+        expect(JSON.stringify(result)).not.toContain('non-dialable')
+    })
+
+    it('preserves the follow-up warning boundary below 26 and at 26', async () => {
+        for (let i = 0; i < 25; i++) {
+            store.set(`sales_leads/non-dialable-due-${i}`, {
+                followUpAt: '2026-08-15', stage: 'engaged', followUpCount: 0,
+            })
+        }
+        await expect(readDueFollowUpHealth('2026-08-15')).resolves.toEqual({
+            dueFollowUps: 25, scanSaturated: false, scanned: 25,
+        })
+
+        store.set('sales_leads/non-dialable-due-25', {
+            followUpAt: '2026-08-15', stage: 'engaged', followUpCount: 0,
+        })
+        await expect(readDueFollowUpHealth('2026-08-15')).resolves.toEqual({
+            dueFollowUps: 26, scanSaturated: false, scanned: 26,
+        })
     })
 })

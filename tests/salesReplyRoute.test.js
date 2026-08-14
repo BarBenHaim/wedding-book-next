@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { INBOUND_HEARTBEAT_BUDGET_MS } from '@/lib/salesAgent/circuitBreaker'
 
 const mocks = vi.hoisted(() => ({
     buildSystemPrompt: vi.fn(),
@@ -130,6 +131,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
 })
 
@@ -145,22 +147,37 @@ describe('inbound event duplicate fencing', () => {
         expect(JSON.stringify(mocks.recordInboundHeartbeat.mock.calls)).not.toContain('heartbeat fixture text')
     })
 
-    it('waits for heartbeat persistence before returning the authenticated response', async () => {
-        let releaseHeartbeat
-        mocks.recordInboundHeartbeat.mockReturnValue(new Promise(resolve => { releaseHeartbeat = resolve }))
+    it('bounds a stalled heartbeat and still returns a duplicate without model or send work', async () => {
+        vi.useFakeTimers()
+        mocks.recordInboundHeartbeat.mockReturnValue(new Promise(() => {}))
         mocks.claimInboundEvent.mockResolvedValue({ action: 'cached', outcome: { sendText: '', handoff: false } })
+        const warned = vi.spyOn(console, 'warn').mockImplementation(() => {})
         let settled = false
 
-        const pending = post(inbound({ text: 'heartbeat durability fixture' })).then(result => {
+        const pending = post(inbound({ text: 'stalled heartbeat private fixture' })).then(result => {
             settled = true
             return result
         })
-        await new Promise(resolve => setTimeout(resolve, 0))
+        await vi.advanceTimersByTimeAsync(INBOUND_HEARTBEAT_BUDGET_MS - 1)
 
         expect(settled).toBe(false)
         expect(mocks.claimInboundEvent).not.toHaveBeenCalled()
-        releaseHeartbeat()
-        await expect(pending).resolves.toMatchObject({ status: 200 })
+        await vi.advanceTimersByTimeAsync(1)
+
+        await expect(pending).resolves.toEqual({
+            status: 200,
+            body: {
+                ok: true, duplicate: true, shouldSend: false,
+                cachedOutcome: { sendText: '', handoff: false },
+                sendText: '', hasImage: false, hasVideo: false, handoff: false,
+            },
+        })
+        expect(mocks.claimInboundEvent).toHaveBeenCalledTimes(1)
+        expect(mocks.completeInboundEvent).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+        expect(warned).toHaveBeenCalledWith('[sales-agent] inbound heartbeat timed out')
+        expect(JSON.stringify(warned.mock.calls)).not.toContain('private fixture')
     })
 
     it('returns a completed duplicate as a no-send envelope without calling Claude', async () => {
