@@ -40,7 +40,7 @@ import {
     isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone, listLeads, recordSpend,
     listMedia, recordMediaSent, creditPendingMedia,
     claimInboundEvent, completeInboundEvent,
-    acquireProviderCircuit, recordProviderFailure, recordProviderSuccess, completeProviderFallback as persistProviderFallback,
+    acquireProviderCircuit, recordProviderFailure, recordProviderSuccess, completeProviderFallback as persistProviderFallback, completeSuccessfulExchange,
 } from '@/lib/salesAgent/leads'
 import { costOfClaudeUsage } from '@/lib/salesAgent/pricing'
 import { parseInboundBody } from '@/lib/salesAgent/inbound'
@@ -402,19 +402,6 @@ export async function POST(req) {
         })
     }
 
-    // This gate stays after all duplicate, silence, owner, customer, and
-    // media paths. Those routes do not call the provider and must not alter
-    // its health. The Firestore transaction grants only one half-open probe.
-    let circuit
-    try {
-        if (Date.now() >= providerDeadlineAtMs) return completeProviderFallback()
-        circuit = await acquireProviderCircuit({ deadlineAtMs: providerDeadlineAtMs })
-    } catch {
-        console.error('[sales-agent] provider breaker check failed')
-        return NextResponse.json({ error: 'provider-breaker-unavailable' }, { status: 503 })
-    }
-    if (!circuit.allow) return completeProviderFallback()
-
     // How long he has been gone. The prompt uses this to decide between
     // continuing a thread and reopening one; without it the agent either
     // greets someone who wrote a minute ago or resumes mid-sentence with
@@ -445,6 +432,19 @@ export async function POST(req) {
         performanceNote: perf,
     })
     const messages = toApiMessages(lead.turns, text)
+
+    // Reserve only once all non-provider preparation is complete. An
+    // exhausted preparation budget therefore cannot be counted as an
+    // Anthropic failure or strand a half-open probe.
+    let circuit
+    try {
+        if (Date.now() >= providerDeadlineAtMs) return completeProviderFallback()
+        circuit = await acquireProviderCircuit({ deadlineAtMs: providerDeadlineAtMs })
+    } catch {
+        console.error('[sales-agent] provider breaker check failed')
+        return NextResponse.json({ error: 'provider-breaker-unavailable' }, { status: 503 })
+    }
+    if (!circuit.allow) return completeProviderFallback()
 
     // Cost bookkeeping. Fire-and-forget on purpose: the customer is
     // waiting on this request, and a Firestore write for accounting must
@@ -573,33 +573,6 @@ export async function POST(req) {
         addDays: addDaysISO,
     })
 
-    try {
-        await saveExchange({
-            phone,
-            incomingText: text,
-            parsed,
-            followUpAt,
-            profileName: body?.profileName,
-            // Read off the first message when it says where they came
-            // from — the ad DMs send people here with a prefilled opener
-            // naming the channel. Locked after that, so a later mention
-            // cannot rewrite it. See attribution.js.
-            source: resolveSource({
-                isNew: !!lead.isNew,
-                text,
-                existing: lead.source,
-                fallback: body?.source,
-            }),
-            variant,
-            isNew: !!lead.isNew,
-        })
-    } catch (err) {
-        // The reply is already written and is worth sending even if the
-        // CRM write failed — losing the memory is better than losing the
-        // customer. The owner ping makes the gap visible.
-        console.error('[sales-agent] lead write failed', err)
-    }
-
     // Counted here rather than when Make confirms, for the same reason
     // follow-ups are: an ack round trip would double the Make operations
     // per message. A send that fails downstream inflates one denominator
@@ -607,11 +580,7 @@ export async function POST(req) {
     // conversations the bot can afford to have.
     if (parsed.image) recordMediaSent(parsed.image).catch(() => {})
 
-    // Settled, not awaited earlier: the accounting rides along with the
-    // CRM write instead of adding its own round trip before it.
-    await Promise.allSettled(spends)
-
-    return complete({
+    const responsePayload = {
         ok: true,
         send: parsed.messages,
         // `sendText` is the same reply as ONE string, and it is what the
@@ -652,7 +621,33 @@ export async function POST(req) {
         notifyOwner: parsed.handoff
             ? ownerPing(phone, parsed.handoffReason, { name: parsed.customerName || lead.name, stage: parsed.stage, lastText: text })
             : null,
-    })
+    }
+    const exchange = {
+        phone,
+        stage: parsed.stage,
+        followUpAt: followUpAt || null,
+        lastInboundAt: Date.now(),
+        lastMessageAt: Date.now(),
+        updatedAt: Date.now(),
+        ...(parsed.customerName ? { name: parsed.customerName } : body?.profileName ? { profileName: String(body.profileName).slice(0, 80) } : {}),
+        ...(parsed.eventType ? { eventType: parsed.eventType } : {}),
+        ...(parsed.eventDate ? { eventDate: parsed.eventDate } : {}),
+        ...(parsed.packageInterest ? { packageInterest: parsed.packageInterest } : {}),
+        ...(resolveSource({ isNew: !!lead.isNew, text, existing: lead.source, fallback: body?.source }) ? { source: resolveSource({ isNew: !!lead.isNew, text, existing: lead.source, fallback: body?.source }) } : {}),
+        ...(variant && lead.isNew ? { variant } : {}),
+    }
+    try {
+        const durable = await completeSuccessfulExchange({ eventId, claimToken: claim.claimToken, claimGeneration: claim.claimGeneration, phone, exchange, outcome: responsePayload, deadlineAtMs: routeDeadlineAtMs })
+        if (durable.action === 'completed') {
+            Promise.allSettled(spends).catch(() => {})
+            return NextResponse.json(responsePayload)
+        }
+        if (durable.action === 'cached') return NextResponse.json({ ok: true, duplicate: true, shouldSend: false, cachedOutcome: durable.outcome, sendText: '', hasImage: false, hasVideo: false, handoff: false })
+        return NextResponse.json({ error: durable.action === 'deadline' ? 'success-commit-deadline-exhausted' : 'success-commit-stale' }, { status: 503 })
+    } catch {
+        console.error('[sales-agent] success commit failed')
+        return NextResponse.json({ error: 'success-commit-failed' }, { status: 503 })
+    }
 }
 
 // The message Lord gets on his own WhatsApp. It has to be readable on a

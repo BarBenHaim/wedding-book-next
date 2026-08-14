@@ -353,7 +353,10 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
             }),
         })
         if (!res.ok) {
-            const body = await res.text().catch(() => '')
+            const body = await res.text().catch(err => {
+                if (err?.name === 'AbortError') throw err
+                return ''
+            })
             // A model id the API does not know. Retry once on the fallback
             // rather than dropping the customer: a configuration mistake
             // should cost a slightly less capable answer, not the answer.

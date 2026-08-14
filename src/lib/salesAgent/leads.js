@@ -67,9 +67,11 @@ export async function acquireProviderCircuit({ deadlineAtMs } = {}) {
     return adminDb.runTransaction(async tx => {
         assertBeforeDeadline(deadlineAtMs)
         const snap = await tx.get(runtimeRef)
+        if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { allow: false, mode: 'deadline' }
         const stored = snap.exists ? breakerRuntimeState(snap.data()) : {}
         const reservation = reserveHalfOpenProbe(stored, Date.now(), probeId)
         if (reservation.decision.mode === 'half-open') {
+            if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { allow: false, mode: 'deadline' }
             tx.set(runtimeRef, {
                 ...breakerRuntimeState(reservation.state),
                 updatedAt: FieldValue.serverTimestamp(),
@@ -86,8 +88,10 @@ export async function recordProviderFailure(errorCode, probeId = null, deadlineA
     return adminDb.runTransaction(async tx => {
         assertBeforeDeadline(deadlineAtMs)
         const snap = await tx.get(runtimeRef)
+        if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
         const resolution = resolveProviderFailure(snap.exists ? breakerRuntimeState(snap.data()) : {}, Date.now(), errorCode, probeId)
         if (resolution.action === 'stale') return resolution
+        if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
         tx.set(runtimeRef, { ...breakerRuntimeState(resolution.state), updatedAt: FieldValue.serverTimestamp() }, { merge: false })
         return resolution
     })
@@ -99,8 +103,10 @@ export async function recordProviderSuccess(probeId = null, deadlineAtMs = null)
     return adminDb.runTransaction(async tx => {
         assertBeforeDeadline(deadlineAtMs)
         const snap = await tx.get(runtimeRef)
+        if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
         const resolution = resolveProviderSuccess(snap.exists ? breakerRuntimeState(snap.data()) : {}, Date.now(), probeId)
         if (resolution.action === 'stale') return resolution
+        if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
         tx.set(runtimeRef, { ...breakerRuntimeState(resolution.state), updatedAt: FieldValue.serverTimestamp() }, { merge: false })
         return resolution
     })
@@ -123,10 +129,12 @@ export async function completeProviderFallback({ eventId, claimToken, claimGener
     return adminDb.runTransaction(async tx => {
         assertBeforeDeadline(deadlineAtMs)
         const [eventSnap] = await Promise.all([tx.get(eventRef), tx.get(leadRef)])
+        if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
         const stored = eventSnap.exists ? eventSnap.data() : null
         const decision = decideInboundCompletion(stored, ownedClaimToken, Date.now())
         if (decision.action !== 'complete') return decision
         if (Number(stored.claimGeneration) !== expectedGeneration) return { action: 'stale' }
+        if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
 
         tx.set(leadRef, {
             human: true,
@@ -140,6 +148,29 @@ export async function completeProviderFallback({ eventId, claimToken, claimGener
             outcome: cleanOutcome,
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true })
+        return { action: 'completed', outcome: cleanOutcome }
+    })
+}
+
+// Final customer-facing success is durable only when the lead exchange and
+// inbound completion commit together under the same claim fence.
+export async function completeSuccessfulExchange({ eventId, claimToken, claimGeneration, phone, exchange, outcome, deadlineAtMs = null }) {
+    assertBeforeDeadline(deadlineAtMs)
+    const ownedClaimToken = assertInboundClaimToken(claimToken)
+    const cleanOutcome = sanitizeInboundOutcome(outcome)
+    assertCompletableInboundOutcome(cleanOutcome)
+    const eventRef = inboundEventRef(eventId)
+    const leadRef = ref(normalizePhone(phone))
+    return adminDb.runTransaction(async tx => {
+        const [eventSnap] = await Promise.all([tx.get(eventRef), tx.get(leadRef)])
+        if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
+        const stored = eventSnap.exists ? eventSnap.data() : null
+        const decision = decideInboundCompletion(stored, ownedClaimToken, Date.now())
+        if (decision.action !== 'complete') return decision
+        if (Number(stored.claimGeneration) !== Number(claimGeneration)) return { action: 'stale' }
+        if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
+        tx.set(leadRef, exchange, { merge: true })
+        tx.set(eventRef, { status: 'completed', leaseUntilMs: null, outcome: cleanOutcome, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
         return { action: 'completed', outcome: cleanOutcome }
     })
 }

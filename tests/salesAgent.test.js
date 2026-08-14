@@ -29,6 +29,17 @@ describe('provider body deadline', () => {
         await expect(callClaude({ system: 'system', messages: [], deadlineAtMs: Date.now() + 12 })).rejects.toThrow('anthropic timeout')
         expect(fetch).toHaveBeenCalledTimes(1)
     })
+
+    it('rethrows an aborted non-OK body as a timeout rather than a provider error', async () => {
+        process.env.ANTHROPIC_API_KEY = 'test-secret'
+        vi.stubGlobal('fetch', vi.fn((_, { signal }) => Promise.resolve({
+            ok: false,
+            status: 500,
+            text: () => new Promise((_, reject) => signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true })),
+        })))
+
+        await expect(callClaude({ system: 'system', messages: [], deadlineAtMs: Date.now() + 12 })).rejects.toThrow('anthropic timeout')
+    })
 })
 
 describe('catalog — the only facts the agent may state', () => {

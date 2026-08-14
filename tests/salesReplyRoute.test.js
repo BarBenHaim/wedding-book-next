@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
     claimInboundEvent: vi.fn(),
     completeInboundEvent: vi.fn(),
     completeProviderFallback: vi.fn(),
+    completeSuccessfulExchange: vi.fn(),
     acquireProviderCircuit: vi.fn(),
     recordProviderFailure: vi.fn(),
     recordProviderSuccess: vi.fn(),
@@ -57,6 +58,7 @@ vi.mock('@/lib/salesAgent/leads', () => ({
     recordMediaSent: mocks.recordMediaSent, creditPendingMedia: mocks.creditPendingMedia,
     claimInboundEvent: mocks.claimInboundEvent, completeInboundEvent: mocks.completeInboundEvent,
     completeProviderFallback: mocks.completeProviderFallback,
+    completeSuccessfulExchange: mocks.completeSuccessfulExchange,
     acquireProviderCircuit: mocks.acquireProviderCircuit,
     recordProviderFailure: mocks.recordProviderFailure, recordProviderSuccess: mocks.recordProviderSuccess,
 }))
@@ -107,6 +109,7 @@ beforeEach(async () => {
     mocks.claimInboundEvent.mockResolvedValue({ action: 'process', claimToken: 'claim-token', claimGeneration: 1 })
     mocks.completeInboundEvent.mockResolvedValue({ action: 'completed' })
     mocks.completeProviderFallback.mockResolvedValue({ action: 'completed' })
+    mocks.completeSuccessfulExchange.mockResolvedValue({ action: 'completed' })
     mocks.acquireProviderCircuit.mockResolvedValue({ allow: true, mode: 'closed' })
     mocks.recordProviderFailure.mockResolvedValue(undefined)
     mocks.recordProviderSuccess.mockResolvedValue(undefined)
@@ -180,6 +183,7 @@ describe('Anthropic outage handling', () => {
     }
 
     it('completes a simulated fourth, open-breaker claim with a safe fallback and makes no model call', async () => {
+        prepareModelPath()
         mocks.acquireProviderCircuit.mockResolvedValue({ allow: false, mode: 'open' })
 
         const result = await post(inbound({ text: 'צריך מחיר' }))
@@ -195,6 +199,7 @@ describe('Anthropic outage handling', () => {
     })
 
     it('uses the POST-entry deadline before breaker acquire when preparation consumes the model budget', async () => {
+        prepareModelPath()
         let ticks = 0
         vi.spyOn(Date, 'now').mockImplementation(() => ticks++ === 0 ? 0 : 21_000)
 
@@ -254,6 +259,7 @@ describe('Anthropic outage handling', () => {
     })
 
     it('returns an honest no-send 503 when the atomic fallback commit fails', async () => {
+        prepareModelPath()
         mocks.acquireProviderCircuit.mockResolvedValue({ allow: false, mode: 'open' })
         mocks.completeProviderFallback.mockRejectedValue(new Error('persistence unavailable'))
         vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -266,6 +272,7 @@ describe('Anthropic outage handling', () => {
     })
 
     it('returns an honest no-send 503 for a stale fallback claim', async () => {
+        prepareModelPath()
         mocks.acquireProviderCircuit.mockResolvedValue({ allow: false, mode: 'open' })
         mocks.completeProviderFallback.mockResolvedValue({ action: 'stale' })
 
