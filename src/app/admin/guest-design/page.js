@@ -388,7 +388,7 @@ function Editor() {
                                     </div>
                                 ))}
                             </div>
-                            <p className='text-[10.5px] text-[#a89378] mt-2 leading-relaxed'>עצב אירוע כרצונך (כולל תמונות רקע/כפתור) ולחץ "שמור עיצוב נוכחי כפריסט" — כדי להשתמש בו שוב בכל אירוע.</p>
+                            <p className='text-[10.5px] text-[#a89378] mt-2 leading-relaxed'>עצב אירוע כרצונך (כולל תמונות רקע/כפתור) ולחץ &quot;שמור עיצוב נוכחי כפריסט&quot; — כדי להשתמש בו שוב בכל אירוע.</p>
                         </div>
 
                         {GROUPS.map(g => (

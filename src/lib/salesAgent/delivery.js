@@ -29,16 +29,18 @@ export function validateDeliveryEvent(input) {
 
     const eventId = identifier(input.eventId)
     if (!eventId) return { ok: false, error: 'INVALID_EVENT_ID' }
-    const outboundId = identifier(input.outboundId)
-    if (!outboundId || outboundId.includes('/')) return { ok: false, error: 'INVALID_OUTBOUND_ID' }
+    const outboundId = input.outboundId == null ? null : identifier(input.outboundId)
+    if (input.outboundId != null && (!outboundId || outboundId.includes('/'))) return { ok: false, error: 'INVALID_OUTBOUND_ID' }
     const channel = identifier(input.channel)
     if (!CHANNELS.has(channel)) return { ok: false, error: 'INVALID_CHANNEL' }
     const status = identifier(input.status)
     if (!STATUSES.has(status)) return { ok: false, error: 'INVALID_STATUS' }
+    if (status === 'accepted' && !outboundId) return { ok: false, error: 'OUTBOUND_ID_REQUIRED_FOR_ACCEPTANCE' }
 
     const providerMessageId = input.providerMessageId == null ? null : identifier(input.providerMessageId)
     if (input.providerMessageId != null && !providerMessageId) return { ok: false, error: 'INVALID_PROVIDER_MESSAGE_ID' }
     if (status !== 'failed' && !providerMessageId) return { ok: false, error: 'PROVIDER_MESSAGE_ID_REQUIRED' }
+    if (!outboundId && !providerMessageId) return { ok: false, error: 'PROVIDER_MESSAGE_ID_REQUIRED_FOR_CORRELATION' }
 
     const errorCode = input.errorCode == null ? null : identifier(input.errorCode)
     if (input.errorCode != null && !errorCode) return { ok: false, error: 'INVALID_ERROR_CODE' }
@@ -48,7 +50,8 @@ export function validateDeliveryEvent(input) {
     const occurredAt = identifier(input.occurredAt)
     if (!occurredAt || Number.isNaN(Date.parse(occurredAt))) return { ok: false, error: 'INVALID_OCCURRED_AT' }
 
-    const event = { eventId, outboundId, channel, status }
+    const event = { eventId, channel, status }
+    if (outboundId) event.outboundId = outboundId
     if (providerMessageId) event.providerMessageId = providerMessageId
     if (errorCode) event.errorCode = errorCode
     event.occurredAt = occurredAt
@@ -101,6 +104,10 @@ export function deliveryEventLedgerId(eventId) {
     return crypto.createHash('sha256').update(String(eventId || '')).digest('hex')
 }
 
+export function providerMessageCorrelationId(providerMessageId) {
+    return crypto.createHash('sha256').update(String(providerMessageId || '')).digest('hex')
+}
+
 export function deliveryEventFingerprint(event) {
     return crypto.createHash('sha256').update(JSON.stringify([
         String(event?.outboundId || ''),
@@ -132,6 +139,7 @@ const delivery = {
     validateDeliveryEvent,
     decideDeliveryTransition,
     deliveryEventLedgerId,
+    providerMessageCorrelationId,
     deliveryEventFingerprint,
     isDeliveryPending,
     createOutboundId,

@@ -24,7 +24,7 @@ import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerComman
 import { isoInIsrael } from './leadsView'
 import { assertCompletableInboundOutcome, assertInboundClaimToken, decideInboundCompletion, INBOUND_LEASE_MS, sanitizeInboundOutcome, startInboundClaim } from './inboundEventsCore'
 import { reserveHalfOpenProbe, resolveProviderFailure, resolveProviderSuccess, sanitizeBreakerRuntimeState } from './circuitBreaker'
-import { DELIVERY_ERROR_CODES, DELIVERY_REQUEST_LEASE_MS, decideDeliveryTransition, deliveryEventFingerprint, deliveryEventLedgerId, isDeliveryPending } from './delivery'
+import { DELIVERY_ERROR_CODES, DELIVERY_REQUEST_LEASE_MS, decideDeliveryTransition, deliveryEventFingerprint, deliveryEventLedgerId, isDeliveryPending, providerMessageCorrelationId } from './delivery'
 import { pendingFollowUpStatus } from './followupPolicy'
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
@@ -38,6 +38,7 @@ const RUNTIME_COLLECTION = 'sales_runtime'
 const ANTHROPIC_RUNTIME_ID = 'anthropic'
 const DELIVERY_EVENTS_COLLECTION = 'sales_delivery_events'
 const DELIVERY_EVENT_IDS_COLLECTION = 'sales_delivery_event_ids'
+const DELIVERY_PROVIDER_IDS_COLLECTION = 'sales_delivery_provider_ids'
 
 function ref(phone) {
     return adminDb.collection(COLLECTION).doc(phone)
@@ -59,12 +60,107 @@ function deliveryEventIdRef(eventId) {
     return adminDb.collection(DELIVERY_EVENT_IDS_COLLECTION).doc(deliveryEventLedgerId(eventId))
 }
 
+function deliveryProviderIdRef(providerMessageId) {
+    return adminDb.collection(DELIVERY_PROVIDER_IDS_COLLECTION).doc(providerMessageCorrelationId(providerMessageId))
+}
+
+function correlationOutboundId(value) {
+    const stored = value && typeof value === 'object' ? value : {}
+    const candidates = [
+        ...(typeof stored.outboundId === 'string' && stored.outboundId ? [stored.outboundId] : []),
+        ...(Array.isArray(stored.outboundIds) ? stored.outboundIds.filter(item => typeof item === 'string' && item) : []),
+    ]
+    const unique = [...new Set(candidates)]
+    if (unique.length > 1) throw deliveryError('PROVIDER_MESSAGE_ID_AMBIGUOUS')
+    return unique[0] || null
+}
+
 // Runtime state is metadata only. In particular, do not merge arbitrary
 // existing fields: a past operational mistake must not keep a provider body,
 // prompt, customer text, phone, or secret alive in this document.
 const breakerRuntimeState = sanitizeBreakerRuntimeState
 const assertBeforeDeadline = deadlineAtMs => {
     if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) throw new Error('sales runtime deadline exhausted')
+}
+
+const healthMs = value => {
+    if (value == null || value === '') return null
+    if (typeof value?.toMillis === 'function') return value.toMillis()
+    if (typeof value?.seconds === 'number') return value.seconds * 1000
+    return Number.isFinite(Number(value)) ? Number(value) : null
+}
+
+const healthEnum = (value, allowed) => allowed.includes(value) ? value : 'unknown'
+
+/**
+ * The authenticated reply request is the heartbeat; no extra Make module is
+ * needed. Replace the runtime document with an allowlist so an old accidental
+ * payload/phone field cannot survive forever through merge semantics.
+ */
+export async function recordInboundHeartbeat({ receivedAtMs = Date.now() } = {}) {
+    const inboundRef = adminDb.collection(RUNTIME_COLLECTION).doc('inbound')
+    const safeReceivedAtMs = healthMs(receivedAtMs) ?? Date.now()
+    return adminDb.runTransaction(async tx => {
+        const snap = await tx.get(inboundRef)
+        const stored = snap.exists ? snap.data() || {} : {}
+        const patch = {
+            lastHeartbeatAtMs: safeReceivedAtMs,
+            makeStatus: 'active',
+            heartbeatCount: Math.max(0, Number(stored.heartbeatCount) || 0) + 1,
+            updatedAt: FieldValue.serverTimestamp(),
+        }
+        const activationAtMs = healthMs(stored.activationAtMs)
+        if (activationAtMs != null) patch.activationAtMs = activationAtMs
+        const operationsStatus = healthEnum(stored.operationsStatus, ['available', 'exhausted', 'unknown'])
+        if (operationsStatus !== 'unknown' || stored.operationsStatus === 'unknown') patch.operationsStatus = operationsStatus
+        tx.set(inboundRef, patch, { merge: false })
+    })
+}
+
+/**
+ * Read the live metadata used by the admin health summary. Every returned key
+ * is allowlisted; provider IDs, outbound IDs, lead IDs and stored bodies stay
+ * inside Firestore.
+ */
+export async function readSalesHealthRuntime() {
+    const inboundRef = adminDb.collection(RUNTIME_COLLECTION).doc('inbound')
+    const followupsRef = adminDb.collection(RUNTIME_COLLECTION).doc('followups')
+    const [inboundSnap, breakerSnap, followupsSnap, deliverySnap] = await Promise.all([
+        adminDb.getAll(inboundRef).then(snaps => snaps[0]),
+        adminDb.getAll(anthropicRuntimeRef()).then(snaps => snaps[0]),
+        adminDb.getAll(followupsRef).then(snaps => snaps[0]),
+        adminDb.collection(DELIVERY_EVENTS_COLLECTION).orderBy('updatedAt', 'desc').limit(20).get(),
+    ])
+    const inbound = inboundSnap?.exists ? inboundSnap.data() || {} : null
+    const breaker = breakerSnap?.exists ? breakerSnap.data() || {} : null
+    const followups = followupsSnap?.exists ? followupsSnap.data() || {} : null
+    return {
+        inbound: inbound ? {
+            lastHeartbeatAtMs: healthMs(inbound.lastHeartbeatAtMs),
+            activationAtMs: healthMs(inbound.activationAtMs),
+            makeStatus: healthEnum(inbound.makeStatus, ['active', 'inactive', 'unknown']),
+            operationsStatus: healthEnum(inbound.operationsStatus, ['available', 'exhausted', 'unknown']),
+        } : null,
+        breaker: breaker ? {
+            consecutiveFailures: Math.max(0, Number(breaker.consecutiveFailures) || 0),
+            openUntilMs: healthMs(breaker.openUntilMs),
+            lastFailureAtMs: healthMs(breaker.lastFailureAtMs),
+            lastSuccessAtMs: healthMs(breaker.lastSuccessAtMs),
+            lastErrorCode: ['timeout', 'rate_limit', 'low_credit', 'invalid_json', 'provider_error']
+                .includes(breaker.lastErrorCode) ? breaker.lastErrorCode : null,
+        } : null,
+        deliveryAttempts: (deliverySnap?.docs || []).map(doc => {
+            const value = doc.data() || {}
+            return {
+                status: ['requested', 'accepted', 'delivered', 'read', 'failed'].includes(value.status) ? value.status : 'unknown',
+                requestedAtMs: healthMs(value.requestedAtMs),
+                occurredAtMs: healthMs(value.occurredAtMs),
+                updatedAtMs: healthMs(value.updatedAt),
+                deliveryPendingUntilMs: healthMs(value.deliveryPendingUntilMs),
+            }
+        }),
+        followupsLastRunAtMs: healthMs(followups?.lastRunAtMs),
+    }
 }
 
 /**
@@ -509,12 +605,21 @@ export async function prepareFollowUpDelivery({
 export async function recordDeliveryEvent(event) {
     const deliveryRef = deliveryEventRef(event.outboundId)
     const eventIdRef = deliveryEventIdRef(event.eventId)
+    const correlationRef = event.providerMessageId ? deliveryProviderIdRef(event.providerMessageId) : null
     const fingerprint = deliveryEventFingerprint(event)
     return adminDb.runTransaction(async tx => {
-        const [deliverySnap, eventIdSnap] = await Promise.all([tx.get(deliveryRef), tx.get(eventIdRef)])
+        const [deliverySnap, eventIdSnap, correlationSnap] = await Promise.all([
+            tx.get(deliveryRef),
+            tx.get(eventIdRef),
+            correlationRef ? tx.get(correlationRef) : null,
+        ])
         if (eventIdSnap.exists) {
             if (eventIdSnap.data()?.fingerprint === fingerprint) return { action: 'noop', reason: 'EVENT_REPLAY' }
             throw deliveryError('EVENT_ID_CONFLICT')
+        }
+        const correlatedOutboundId = correlationSnap?.exists ? correlationOutboundId(correlationSnap.data()) : null
+        if (correlatedOutboundId && correlatedOutboundId !== event.outboundId) {
+            throw deliveryError('PROVIDER_MESSAGE_ID_MISMATCH')
         }
         const stored = deliverySnap.exists ? deliverySnap.data() : null
         const ownership = normalizedDeliveryOwnership(stored, event.outboundId)
@@ -532,6 +637,13 @@ export async function recordDeliveryEvent(event) {
                 updatedAt: FieldValue.serverTimestamp(),
             }, { merge: true })
             tx.set(eventIdRef, ledgerPatch, { merge: false })
+            if (correlationRef) {
+                tx.set(correlationRef, {
+                    outboundId: String(event.outboundId),
+                    ...(!correlationSnap?.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
+                    updatedAt: FieldValue.serverTimestamp(),
+                }, { merge: true })
+            }
             return decision
         }
 
@@ -567,6 +679,13 @@ export async function recordDeliveryEvent(event) {
         }
         tx.set(deliveryRef, deliveryPatch, { merge: true })
         tx.set(eventIdRef, ledgerPatch, { merge: false })
+        if (correlationRef) {
+            tx.set(correlationRef, {
+                outboundId: String(event.outboundId),
+                ...(!correlationSnap?.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
+                updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true })
+        }
 
         if (leadRef && advanceOnDelivery) {
             if (logicalAlreadyAdvanced && decision.nextStatus !== 'read') {
@@ -623,6 +742,18 @@ export async function recordDeliveryEvent(event) {
         }
 
         return { action: 'applied', status: decision.nextStatus, advanced: advances }
+    })
+}
+
+/** Resolve Meta's provider message ID without storing the ID itself or a phone. */
+export async function resolveProviderMessageOutboundId(providerMessageId) {
+    const correlationRef = deliveryProviderIdRef(providerMessageId)
+    return adminDb.runTransaction(async tx => {
+        const snap = await tx.get(correlationRef)
+        if (!snap.exists) throw deliveryError('PROVIDER_MESSAGE_ID_NOT_FOUND')
+        const outboundId = correlationOutboundId(snap.data())
+        if (!outboundId) throw deliveryError('PROVIDER_MESSAGE_ID_NOT_FOUND')
+        return outboundId
     })
 }
 

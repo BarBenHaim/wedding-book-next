@@ -461,7 +461,7 @@ function QrCodesContent() {
                         {loading ? (
                             <p className='text-center text-[12px] text-[#a89378] py-6'>טוען...</p>
                         ) : qrList.length === 0 ? (
-                            <p className='text-center text-[12px] text-[#a89378] py-6'>אין ברקודים. לחץ "ברקוד חדש" כדי להתחיל.</p>
+                            <p className='text-center text-[12px] text-[#a89378] py-6'>אין ברקודים. לחץ &quot;ברקוד חדש&quot; כדי להתחיל.</p>
                         ) : (
                             <div className='grid grid-cols-1 lg:grid-cols-2 gap-3'>
                                 {qrList.map(qr => {

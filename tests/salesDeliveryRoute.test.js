@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ recordDeliveryEvent: vi.fn() }))
+const mocks = vi.hoisted(() => ({ recordDeliveryEvent: vi.fn(), resolveProviderMessageOutboundId: vi.fn() }))
 
-vi.mock('@/lib/salesAgent/leads', () => ({ recordDeliveryEvent: mocks.recordDeliveryEvent }))
+vi.mock('@/lib/salesAgent/leads', () => ({
+    recordDeliveryEvent: mocks.recordDeliveryEvent,
+    resolveProviderMessageOutboundId: mocks.resolveProviderMessageOutboundId,
+}))
 
 const valid = {
     eventId: 'status-route-a',
@@ -28,6 +31,7 @@ beforeEach(async () => {
     vi.clearAllMocks()
     process.env.SALES_AGENT_SECRET = 'route-secret-fixture'
     mocks.recordDeliveryEvent.mockResolvedValue({ action: 'applied', status: 'accepted', advanced: false })
+    mocks.resolveProviderMessageOutboundId.mockResolvedValue('followup-hash-route:template')
     ;({ POST } = await import('@/app/api/sales-agent/delivery/route'))
 })
 
@@ -75,6 +79,37 @@ describe('delivery acknowledgement route', () => {
         expect(response.status).toBe(202)
         expect(await response.json()).toMatchObject({ accepted: true, result: { action: 'applied' } })
         expect(mocks.recordDeliveryEvent).toHaveBeenCalledWith(mediaRepairEvent)
+    })
+
+    it('correlates a provider-only Meta status without exposing business identifiers', async () => {
+        const providerOnly = {
+            eventId: 'meta-status-provider-only',
+            channel: 'make',
+            status: 'delivered',
+            providerMessageId: 'wamid-provider-only-fixture',
+            occurredAt: '2026-08-14T10:05:00.000Z',
+        }
+
+        const response = await POST(request(providerOnly))
+
+        expect(response.status).toBe(202)
+        expect(mocks.resolveProviderMessageOutboundId).toHaveBeenCalledWith('wamid-provider-only-fixture')
+        expect(mocks.recordDeliveryEvent).toHaveBeenCalledWith({
+            ...providerOnly,
+            outboundId: 'followup-hash-route:template',
+        })
+    })
+
+    it('returns a stable conflict for ambiguous provider correlation', async () => {
+        const error = new Error('private correlation detail')
+        error.code = 'PROVIDER_MESSAGE_ID_AMBIGUOUS'
+        mocks.resolveProviderMessageOutboundId.mockRejectedValue(error)
+
+        const response = await POST(request({ ...valid, outboundId: undefined, status: 'read' }))
+
+        expect(response.status).toBe(409)
+        expect(await response.json()).toEqual({ error: 'PROVIDER_MESSAGE_ID_AMBIGUOUS' })
+        expect(mocks.recordDeliveryEvent).not.toHaveBeenCalled()
     })
 
     it('rejects a mismatched or regressive callback without leaking details', async () => {

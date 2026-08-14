@@ -5,7 +5,7 @@ export const maxDuration = 30
 
 import { NextResponse } from 'next/server'
 import { validateDeliveryEvent } from '@/lib/salesAgent/delivery'
-import { recordDeliveryEvent } from '@/lib/salesAgent/leads'
+import { recordDeliveryEvent, resolveProviderMessageOutboundId } from '@/lib/salesAgent/leads'
 
 const CONFLICT_CODES = new Set([
     'CHANNEL_MISMATCH',
@@ -15,6 +15,8 @@ const CONFLICT_CODES = new Set([
     'INVALID_DELIVERY_TRANSITION',
     'DELIVERY_STATE_REGRESSION',
     'TERMINAL_DELIVERY_STATE',
+    'PROVIDER_MESSAGE_ID_NOT_FOUND',
+    'PROVIDER_MESSAGE_ID_AMBIGUOUS',
 ])
 
 export async function POST(req) {
@@ -27,7 +29,10 @@ export async function POST(req) {
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
     try {
-        const result = await recordDeliveryEvent(parsed.event)
+        const event = parsed.event.outboundId
+            ? parsed.event
+            : { ...parsed.event, outboundId: await resolveProviderMessageOutboundId(parsed.event.providerMessageId) }
+        const result = await recordDeliveryEvent(event)
         return NextResponse.json({ accepted: true, result }, { status: 202 })
     } catch (error) {
         if (CONFLICT_CODES.has(error?.code)) {

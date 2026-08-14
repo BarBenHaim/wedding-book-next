@@ -30,6 +30,7 @@ import {
     Lock, Loader2, AlertTriangle, RefreshCw, Search, MessageCircle, ExternalLink,
     ChevronRight, X, Pause, Play, BellOff, Check, XCircle, Users, Phone, Calendar,
     Clock, TrendingUp, Wallet, Sparkles, FlaskConical, Trash2,
+    Radio, BrainCircuit, Send, ListChecks,
 } from 'lucide-react'
 import {
     ATTENTION_BUCKETS, STAGE_META, stageMeta, eventTypeLabel, PACKAGE_LABELS, relativeHe,
@@ -37,11 +38,21 @@ import {
 import { formatUsd } from '@/lib/salesAgent/pricing'
 import SalesMediaPanel from '@/components/SalesMediaPanel/SalesMediaPanel'
 import { formatHebrewDate } from '@/lib/salesAgent/prompt'
+import { salesHealthStageView } from '@/lib/salesAgent/leadsCore'
 
 // ─── palette (matches /admin/studio) ─────────────────────────────────
 const PAGE_BG = '#f8f4ec'
 const CARD = { background: '#fff', border: '1px solid rgba(212,184,103,0.30)', boxShadow: '0 8px 20px -16px rgba(170,136,64,0.18)' }
 const GOLD = 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)'
+
+const HEALTH_TONES = {
+    green: { shell: 'border-[#b8ddce] bg-[#f2fbf7]', dot: 'bg-[#147a52]', text: 'text-[#126143]' },
+    amber: { shell: 'border-[#ead09b] bg-[#fff9ec]', dot: 'bg-[#9a5b00]', text: 'text-[#7b4800]' },
+    red: { shell: 'border-[#efc0bb] bg-[#fff5f3]', dot: 'bg-[#b42318]', text: 'text-[#8e1c13]' },
+    unknown: { shell: 'border-slate-200 bg-slate-50', dot: 'bg-slate-500', text: 'text-slate-600' },
+}
+
+const HEALTH_ICONS = { inbound: Radio, anthropic: BrainCircuit, whatsapp: Send, followups: ListChecks }
 
 // Tone → the three class strings a badge needs. Kept as a lookup rather
 // than interpolated because Tailwind cannot see dynamic class names.
@@ -63,6 +74,56 @@ function Badge({ tone = 'slate', children, className = '' }) {
         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10.5px] font-bold whitespace-nowrap ${TONES[tone] || TONES.slate} ${className}`}>
             {children}
         </span>
+    )
+}
+
+function SignalRail({ health, nowMs }) {
+    const stages = salesHealthStageView(health)
+    return (
+        <section aria-labelledby='sales-signal-title' className='mb-4 rounded-2xl p-3 sm:p-4 overflow-hidden' style={CARD}>
+            <div className='flex items-start justify-between gap-3 mb-3'>
+                <div className='min-w-0'>
+                    <p className='text-[10px] font-bold tracking-[0.18em] text-[#b8893d]'>אות חי מקצה לקצה</p>
+                    <h2 id='sales-signal-title' className='text-[15px] font-bold text-[#1a1410] mt-0.5'>חדר אותות המכירה</h2>
+                </div>
+                <span className='shrink-0 text-[10.5px] text-[#7a6a52]' dir='ltr'>
+                    {health?.generatedAtMs ? fmtTime(health.generatedAtMs) : '—'}
+                </span>
+            </div>
+            <ol className='grid grid-cols-1 sm:grid-cols-4 gap-2' aria-label='קליטה, AI, WhatsApp ופולואפים'>
+                {stages.map((stage, index) => {
+                    const tone = HEALTH_TONES[stage.status] || HEALTH_TONES.unknown
+                    const Icon = HEALTH_ICONS[stage.key] || Radio
+                    return (
+                        <li key={stage.key} className={`relative min-w-0 rounded-xl border px-3 py-3 ${tone.shell}`}>
+                            {index < stages.length - 1 && (
+                                <span aria-hidden='true' className='hidden sm:block absolute top-1/2 -left-[9px] w-2 h-px bg-[#d7c7a4]' />
+                            )}
+                            <div className='flex items-center justify-between gap-2 min-w-0'>
+                                <div className='flex items-center gap-2 min-w-0'>
+                                    <span className='w-8 h-8 shrink-0 rounded-full bg-white/80 border border-current/10 flex items-center justify-center'>
+                                        <Icon size={15} aria-hidden='true' />
+                                    </span>
+                                    <span className='font-bold text-[12px] text-[#2e2419] truncate'>{stage.label}</span>
+                                </div>
+                                <span className={`inline-flex items-center gap-1.5 text-[10.5px] font-bold ${tone.text}`}>
+                                    <span className={`w-2 h-2 rounded-full shrink-0 ${tone.dot}`} aria-hidden='true' />
+                                    {stage.statusLabel}
+                                </span>
+                            </div>
+                            <p className='mt-2 text-[11px] leading-snug text-[#5e513f] break-words'>{stage.metric}</p>
+                            <p className='mt-1 text-[10px] text-[#8c7b65] min-h-[15px]'>
+                                {stage.evidenceAtMs ? `אות אחרון ${relativeHe(stage.evidenceAtMs, nowMs)}` : 'אין עדיין זמן עדות'}
+                            </p>
+                            {stage.action && <p className={`mt-2 text-[10.5px] font-semibold leading-snug ${tone.text}`}>{stage.action}</p>}
+                        </li>
+                    )
+                })}
+            </ol>
+            <p className='mt-2.5 text-[10px] text-[#7a6a52] leading-relaxed'>
+                התקבלה אצל הספק אינה מסירה: WhatsApp ירוק רק אחרי עדות נמסר/נקרא, ללא כשל או ניסיון תקוע.
+            </p>
+        </section>
     )
 }
 
@@ -203,7 +264,7 @@ function SalesLeadsContent() {
             <div className='flex h-screen flex-col items-center justify-center gap-3 text-[#b32424] px-6 text-center'>
                 <AlertTriangle size={28} />
                 <p className='text-[14px]'>{error}</p>
-                <button onClick={() => load()} className='px-4 py-2 rounded-lg text-[12.5px] font-bold text-[#7a6a52]' style={{ background: '#fff', border: '1px solid #ead9b3' }}>נסה שוב</button>
+                <button onClick={() => load()} className='min-h-11 px-4 py-2 rounded-lg text-[12.5px] font-bold text-[#7a6a52] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d]' style={{ background: '#fff', border: '1px solid #ead9b3' }}>נסה שוב</button>
             </div>
         )
     }
@@ -230,21 +291,23 @@ function SalesLeadsContent() {
                     </div>
                     <div className='flex items-center gap-2'>
                         <button onClick={() => load()} disabled={refreshing}
-                            className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52] disabled:opacity-50'
+                            className='inline-flex min-h-11 items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d] focus-visible:ring-offset-2'
                             style={{ background: '#fff', border: '1px solid #ead9b3' }}>
-                            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} /> רענן
+                            <RefreshCw size={13} className={refreshing ? 'animate-spin motion-reduce:animate-none' : ''} /> רענן
                         </button>
                         {testLeadCount > 0 && (
                             <button onClick={clearTestLeads} disabled={busy === 'sweep'}
-                                className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 disabled:opacity-50'>
+                                className='inline-flex min-h-11 items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2'>
                                 <Trash2 size={13} /> מחק {testLeadCount} לידי בדיקה
                             </button>
                         )}
-                        <a href='/admin' className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52]' style={{ background: '#fff', border: '1px solid #ead9b3' }}>
+                        <a href='/admin' className='inline-flex min-h-11 items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d] focus-visible:ring-offset-2' style={{ background: '#fff', border: '1px solid #ead9b3' }}>
                             <ChevronRight size={13} /> מרכז הניהול
                         </a>
                     </div>
                 </div>
+
+                <SignalRail health={data?.health} nowMs={data?.now || 0} />
 
                 {/* triage — the reason this page exists */}
                 <div className='grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-3'>
@@ -253,7 +316,7 @@ function SalesLeadsContent() {
                         const on = bucket === b.key
                         return (
                             <button key={b.key} onClick={() => setBucket(on ? null : b.key)} title={b.hint}
-                                className={`text-right rounded-2xl p-3.5 transition-all active:scale-[0.99] ${on ? 'ring-2' : ''}`}
+                                className={`text-right rounded-2xl p-3.5 transition-all motion-reduce:transition-none motion-reduce:transform-none active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d] ${on ? 'ring-2' : ''}`}
                                 style={{ ...CARD, ...(on ? { ringColor: '#b8893d', borderColor: '#b8893d' } : null), opacity: n === 0 && !on ? 0.55 : 1 }}>
                                 <div className='flex items-center justify-between gap-2 mb-1'>
                                     <span className='text-[12px] font-bold text-[#3d2e1a]'>{b.label}</span>
@@ -284,7 +347,7 @@ function SalesLeadsContent() {
                     <div className='relative flex-1 min-w-[180px] max-w-[320px]'>
                         <Search size={14} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#c4b9a4]' />
                         <input value={q} onChange={e => setQ(e.target.value)} placeholder='חיפוש שם, טלפון או הערה'
-                            className='w-full pr-9 pl-3 py-2 rounded-lg text-[12.5px] text-[#3d2e1a] outline-none'
+                            className='w-full min-h-11 pr-9 pl-3 py-2 rounded-lg text-[12.5px] text-[#3d2e1a] outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d]'
                             style={{ background: '#fff', border: '1px solid #ead9b3' }} />
                     </div>
                     <div className='flex items-center gap-1.5 flex-wrap'>
@@ -300,7 +363,7 @@ function SalesLeadsContent() {
                     </div>
                     {(bucket || stage || q) && (
                         <button onClick={() => { setBucket(null); setStage(null); setQ('') }}
-                            className='text-[11.5px] font-bold text-[#a89378] hover:text-[#7a6a52] px-2 py-1'>נקה סינון</button>
+                            className='min-h-11 text-[11.5px] font-bold text-[#a89378] hover:text-[#7a6a52] px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d] rounded-lg'>נקה סינון</button>
                     )}
                 </div>
 
@@ -426,7 +489,7 @@ function Experiments({ data, gaps }) {
 
     return (
         <div className='rounded-2xl mb-4 overflow-hidden' style={CARD}>
-            <button onClick={() => setOpen(!open)} className='w-full flex items-center justify-between gap-3 px-4 py-3 text-right hover:bg-[#fdfaf3]'>
+            <button onClick={() => setOpen(!open)} className='w-full min-h-11 flex items-center justify-between gap-3 px-4 py-3 text-right hover:bg-[#fdfaf3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#b8893d]'>
                 <div className='flex items-center gap-2'>
                     <FlaskConical size={14} style={{ color: '#c9a44e' }} />
                     <span className='text-[13px] font-bold text-[#1a1410]'>מה הבוט לומד</span>
@@ -434,7 +497,7 @@ function Experiments({ data, gaps }) {
                     {data.verdict === 'too-close' && <Badge tone='amber'>עדיין צמוד</Badge>}
                     {data.verdict === 'collecting' && <Badge tone='slate'>אוסף נתונים</Badge>}
                 </div>
-                <ChevronRight size={14} className={`text-[#a89378] transition-transform ${open ? '-rotate-90' : 'rotate-180'}`} />
+                <ChevronRight size={14} className={`text-[#a89378] transition-transform motion-reduce:transition-none ${open ? '-rotate-90' : 'rotate-180'}`} />
             </button>
 
             {open && (
@@ -524,7 +587,7 @@ function Stat({ icon: Icon, label, value, hint }) {
 function FilterChip({ active, onClick, children }) {
     return (
         <button onClick={onClick}
-            className={`px-2.5 py-1.5 rounded-lg text-[11.5px] font-bold transition-all ${active ? 'text-white' : 'text-[#7a6a52] hover:bg-[#fbf6ec]'}`}
+            className={`min-h-11 px-2.5 py-1.5 rounded-lg text-[11.5px] font-bold transition-all motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d] ${active ? 'text-white' : 'text-[#7a6a52] hover:bg-[#fbf6ec]'}`}
             style={active ? { background: GOLD } : { background: '#fff', border: '1px solid #ead9b3' }}>
             {children}
         </button>
@@ -542,7 +605,7 @@ function LeadRow({ lead, active, onOpen, onAct, busy }) {
             <div className='md:grid md:grid-cols-[1.6fr_1fr_0.9fr_1fr_0.8fr] md:gap-3 md:items-center'>
 
                 {/* who */}
-                <button onClick={onOpen} className='text-right w-full min-w-0'>
+                <button onClick={onOpen} className='text-right w-full min-w-0 min-h-11 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d]'>
                     <div className='flex items-center gap-1.5 flex-wrap'>
                         <span className='text-[13.5px] font-bold text-[#1a1410] truncate'>{lead.displayName}</span>
                         {bucketMeta && <Badge tone={bucketMeta.tone}>{bucketMeta.label}</Badge>}
@@ -584,11 +647,11 @@ function LeadRow({ lead, active, onOpen, onAct, busy }) {
                 <div className='flex items-center gap-1 mt-2 md:mt-0 flex-wrap'>
                     <a href={lead.waLink} target='_blank' rel='noreferrer'
                         onClick={e => e.stopPropagation()}
-                        className='inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'>
+                        className='inline-flex min-h-11 items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600'>
                         <ExternalLink size={11} /> ווטסאפ
                     </a>
                     <button onClick={onOpen}
-                        className='inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold text-[#7a6a52] hover:bg-[#fbf6ec]'
+                        className='inline-flex min-h-11 items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold text-[#7a6a52] hover:bg-[#fbf6ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d]'
                         style={{ border: '1px solid #ead9b3' }}>
                         {active ? 'סגור' : 'שיחה'}
                     </button>
@@ -615,7 +678,7 @@ function LeadDetail({ phone, lead, state, onClose, onAct, busy }) {
                     <p className='text-[13px] font-bold text-[#1a1410] truncate'>{lead?.displayName || phone}</p>
                     <p className='text-[11px] text-[#a89378] font-mono' dir='ltr'>{phone}</p>
                 </div>
-                <button onClick={onClose} className='p-1.5 rounded-lg hover:bg-[#fbf6ec] text-[#a89378]'><X size={15} /></button>
+                <button onClick={onClose} aria-label='סגירת השיחה' className='min-w-11 min-h-11 inline-flex items-center justify-center p-1.5 rounded-lg hover:bg-[#fbf6ec] text-[#a89378] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d]'><X size={15} /></button>
             </div>
 
             {state === 'loading' && <div className='py-12 text-center text-[#a89378] text-[12.5px]'><Loader2 size={16} className='animate-spin inline' /> טוען שיחה...</div>}
@@ -656,7 +719,7 @@ function LeadDetail({ phone, lead, state, onClose, onAct, busy }) {
                     {/* actions */}
                     <div className='px-3 py-3 border-t border-[#f0e8d4] flex flex-wrap gap-1.5' style={{ background: '#fff' }}>
                         <a href={lead.waLink} target='_blank' rel='noreferrer'
-                            className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-white'
+                            className='inline-flex min-h-11 items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2'
                             style={{ background: 'linear-gradient(180deg,#3ecf6a 0%,#25a24b 100%)' }}>
                             <ExternalLink size={12} /> פתח בווטסאפ
                         </a>
@@ -689,7 +752,7 @@ function ActionBtn({ onClick, disabled, icon: Icon, children, tone }) {
             : 'text-[#7a6a52] bg-white border-[#ead9b3] hover:bg-[#fbf6ec]'
     return (
         <button onClick={onClick} disabled={disabled}
-            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold border transition-all disabled:opacity-50 ${cls}`}>
+            className={`inline-flex min-h-11 items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold border transition-all motion-reduce:transition-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8893d] ${cls}`}>
             <Icon size={12} /> {children}
         </button>
     )

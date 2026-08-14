@@ -60,7 +60,11 @@ vi.mock('firebase-admin/firestore', () => ({
     },
 }))
 
-import { prepareDigestDelivery, prepareFollowUpDelivery, recordDeliveryEvent, recordDigestOutcome } from '@/lib/salesAgent/leads'
+import {
+    prepareDigestDelivery, prepareFollowUpDelivery, recordDeliveryEvent, recordDigestOutcome,
+    resolveProviderMessageOutboundId,
+} from '@/lib/salesAgent/leads'
+import { providerMessageCorrelationId } from '@/lib/salesAgent/delivery'
 import { POST as acknowledgeDelivery } from '@/app/api/sales-agent/delivery/route'
 
 const LEAD = 'sales_leads/41'
@@ -774,5 +778,44 @@ describe('global delivery event replay ledger', () => {
         expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
         expect(results.filter(result => result.status === 'rejected')).toHaveLength(1)
         expect(results.find(result => result.status === 'rejected').reason).toMatchObject({ code: 'EVENT_ID_CONFLICT' })
+    })
+})
+
+describe('privacy-safe provider message correlation', () => {
+    it('stores only a hashed provider key and phone-free outbound ID', async () => {
+        await prepareFollowUpDelivery(requested())
+        await recordDeliveryEvent(event('accepted'))
+
+        const key = `sales_delivery_provider_ids/${providerMessageCorrelationId('wamid-provider-fixture')}`
+        expect(store.get(key)).toEqual({
+            outboundId: OUTBOUND_ID,
+            createdAt: 'SERVER_TIME',
+            updatedAt: 'SERVER_TIME',
+        })
+        expect(key).not.toContain('wamid-provider-fixture')
+        expect(JSON.stringify(store.get(key))).not.toContain('non-dialable-lead-abc-41')
+        await expect(resolveProviderMessageOutboundId('wamid-provider-fixture')).resolves.toBe(OUTBOUND_ID)
+    })
+
+    it('rejects a provider ID bound to a mismatched outbound ID', async () => {
+        await prepareFollowUpDelivery(requested())
+        await recordDeliveryEvent(event('accepted'))
+
+        await expect(recordDeliveryEvent(event('accepted', {
+            eventId: 'mismatched-provider-binding-event',
+            outboundId: 'followup-other-phone-free-hash:template',
+        }))).rejects.toMatchObject({ code: 'PROVIDER_MESSAGE_ID_MISMATCH' })
+    })
+
+    it('fails closed for an ambiguous or missing correlation record', async () => {
+        const ambiguousId = 'wamid-ambiguous-fixture'
+        store.set(`sales_delivery_provider_ids/${providerMessageCorrelationId(ambiguousId)}`, {
+            outboundIds: ['phone-free-outbound-a:text', 'phone-free-outbound-b:text'],
+        })
+
+        await expect(resolveProviderMessageOutboundId(ambiguousId))
+            .rejects.toMatchObject({ code: 'PROVIDER_MESSAGE_ID_AMBIGUOUS' })
+        await expect(resolveProviderMessageOutboundId('wamid-missing-fixture'))
+            .rejects.toMatchObject({ code: 'PROVIDER_MESSAGE_ID_NOT_FOUND' })
     })
 })

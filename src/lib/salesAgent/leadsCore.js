@@ -144,4 +144,205 @@ export function isTestPhone(phone) {
     return TEST_PHONE_RE.test(normalizePhone(phone))
 }
 
+// ── Operational health ───────────────────────────────────────────────
+//
+// This is deliberately a pure projection. Firestore documents may carry
+// lead identifiers, provider IDs, and transport payloads; this function
+// reads only allowlisted counters/timestamps/enums and returns none of the
+// source objects. Keeping the privacy boundary here makes every caller use
+// the same truthful rules.
+const HOUR_MS = 60 * 60 * 1000
+const DELIVERY_REQUEST_LEASE_MS = 2 * 60 * 1000
+const INBOUND_AMBER_MS = 6 * HOUR_MS
+const INBOUND_RED_MS = 24 * HOUR_MS
+const DELIVERY_STATUSES = new Set(['requested', 'accepted', 'delivered', 'read', 'failed'])
+const MAKE_STATUSES = new Set(['active', 'inactive', 'unknown'])
+const OPERATIONS_STATUSES = new Set(['available', 'exhausted', 'unknown'])
+
+const finiteMs = value => value == null || value === '' ? null : Number.isFinite(Number(value)) ? Number(value) : null
+const nonNegativeCount = value => value == null || value === '' ? null : Number.isFinite(Number(value)) ? Math.max(0, Math.trunc(Number(value))) : null
+const enumValue = (value, allowed, fallback = 'unknown') => allowed.has(value) ? value : fallback
+
+function summarizeInbound(input, nowMs) {
+    const source = input && typeof input === 'object' ? input : null
+    const makeStatus = enumValue(source?.makeStatus, MAKE_STATUSES)
+    const operationsStatus = enumValue(source?.operationsStatus, OPERATIONS_STATUSES)
+    const lastHeartbeatAtMs = finiteMs(source?.lastHeartbeatAtMs)
+    const activationAtMs = finiteMs(source?.activationAtMs)
+    const evidenceAtMs = lastHeartbeatAtMs ?? activationAtMs
+    const ageMs = evidenceAtMs == null ? null : Math.max(0, nowMs - evidenceAtMs)
+
+    let status = 'unknown'
+    let reason = 'no-heartbeat'
+    if (operationsStatus === 'exhausted') {
+        status = 'red'
+        reason = 'make-operations-exhausted'
+    } else if (makeStatus === 'inactive') {
+        status = 'red'
+        reason = 'make-inactive'
+    } else if (evidenceAtMs != null && ageMs >= INBOUND_RED_MS) {
+        status = 'red'
+        reason = lastHeartbeatAtMs == null ? 'activation-stale' : 'heartbeat-stale'
+    } else if (evidenceAtMs != null && ageMs >= INBOUND_AMBER_MS) {
+        status = 'amber'
+        reason = lastHeartbeatAtMs == null ? 'activation-aging' : 'heartbeat-aging'
+    } else if (evidenceAtMs != null) {
+        status = 'green'
+        reason = lastHeartbeatAtMs == null ? 'activation-recent' : 'heartbeat-recent'
+    }
+
+    return { status, reason, makeStatus, operationsStatus, lastHeartbeatAtMs, activationAtMs, ageMs }
+}
+
+function summarizeAnthropic(input, nowMs) {
+    const source = input && typeof input === 'object' ? input : null
+    if (!source) {
+        return {
+            status: 'unknown', reason: 'no-runtime-evidence', consecutiveFailures: 0,
+            openUntilMs: null, lastFailureAtMs: null, lastSuccessAtMs: null, lastErrorCode: null,
+        }
+    }
+    const consecutiveFailures = nonNegativeCount(source.consecutiveFailures) ?? 0
+    const openUntilMs = finiteMs(source.openUntilMs)
+    const lastFailureAtMs = finiteMs(source.lastFailureAtMs)
+    const lastSuccessAtMs = finiteMs(source.lastSuccessAtMs)
+    const lastErrorCode = ['timeout', 'rate_limit', 'low_credit', 'invalid_json', 'provider_error']
+        .includes(source.lastErrorCode) ? source.lastErrorCode : null
+
+    let status = 'green'
+    let reason = 'provider-healthy'
+    if (openUntilMs != null && openUntilMs > nowMs) {
+        status = 'red'
+        reason = 'circuit-open'
+    } else if (consecutiveFailures > 0) {
+        status = 'amber'
+        reason = consecutiveFailures >= 3 ? 'half-open-recovery' : 'consecutive-failures'
+    }
+    return { status, reason, consecutiveFailures, openUntilMs, lastFailureAtMs, lastSuccessAtMs, lastErrorCode }
+}
+
+function summarizeWhatsapp(attempts, nowMs, operationsStatus) {
+    const counts = {
+        requested: 0, accepted: 0, delivered: 0, read: 0, failed: 0,
+        pendingRequested: 0, pendingAccepted: 0, staleRequested: 0, staleAccepted: 0,
+    }
+    let lastEvidenceAtMs = null
+    for (const raw of (Array.isArray(attempts) ? attempts : []).slice(0, 20)) {
+        const status = DELIVERY_STATUSES.has(raw?.status) ? raw.status : null
+        if (!status) continue
+        counts[status]++
+        const requestedAtMs = finiteMs(raw?.requestedAtMs)
+        const occurredAtMs = finiteMs(raw?.occurredAtMs)
+        const updatedAtMs = finiteMs(raw?.updatedAtMs)
+        const evidenceAtMs = occurredAtMs ?? updatedAtMs ?? requestedAtMs
+        if (evidenceAtMs != null) lastEvidenceAtMs = Math.max(lastEvidenceAtMs ?? evidenceAtMs, evidenceAtMs)
+
+        if (status === 'requested') {
+            if (requestedAtMs != null && requestedAtMs + DELIVERY_REQUEST_LEASE_MS <= nowMs) counts.staleRequested++
+            else counts.pendingRequested++
+        }
+        if (status === 'accepted') {
+            const pendingUntilMs = finiteMs(raw?.deliveryPendingUntilMs)
+            if (pendingUntilMs != null && pendingUntilMs <= nowMs) counts.staleAccepted++
+            else counts.pendingAccepted++
+        }
+    }
+
+    const stale = counts.staleRequested + counts.staleAccepted
+    const pending = counts.pendingRequested + counts.pendingAccepted
+    const verified = counts.delivered + counts.read
+    let status = 'unknown'
+    let reason = 'no-delivery-evidence'
+    if (operationsStatus === 'exhausted') {
+        status = 'red'
+        reason = 'make-operations-exhausted'
+    } else if (counts.failed >= 5) {
+        status = 'red'
+        reason = 'failure-threshold'
+    } else if (stale > 5) {
+        status = 'red'
+        reason = 'stale-threshold'
+    } else if (counts.failed > 0) {
+        status = 'amber'
+        reason = 'delivery-failures'
+    } else if (stale > 0) {
+        status = 'amber'
+        reason = 'stale-attempts'
+    } else if (pending > 0) {
+        status = 'amber'
+        reason = 'pending'
+    } else if (verified > 0) {
+        status = 'green'
+        reason = 'verified-delivery'
+    }
+    return { status, reason, ...counts, lastEvidenceAtMs }
+}
+
+function summarizeFollowups(dueFollowUps, lastRunAtMs) {
+    const due = nonNegativeCount(dueFollowUps)
+    const safeLastRunAtMs = finiteMs(lastRunAtMs)
+    if (due == null) return { status: 'unknown', reason: 'no-queue-evidence', due: null, lastRunAtMs: safeLastRunAtMs }
+    if (due > 25) return { status: 'red', reason: 'queue-overloaded', due, lastRunAtMs: safeLastRunAtMs }
+    if (due > 0) return { status: 'amber', reason: 'followups-due', due, lastRunAtMs: safeLastRunAtMs }
+    return { status: 'green', reason: 'queue-clear', due, lastRunAtMs: safeLastRunAtMs }
+}
+
+export function summarizeSalesHealth(input = {}) {
+    const nowMs = finiteMs(input.nowMs) ?? Date.now()
+    const inbound = summarizeInbound(input.inbound, nowMs)
+    return {
+        generatedAtMs: nowMs,
+        inbound,
+        anthropic: summarizeAnthropic(input.breaker, nowMs),
+        whatsapp: summarizeWhatsapp(input.deliveryAttempts, nowMs, inbound.operationsStatus),
+        followups: summarizeFollowups(input.dueFollowUps, input.followupsLastRunAtMs),
+    }
+}
+
+const STATUS_LABELS = {
+    green: 'תקין',
+    amber: 'דורש תשומת לב',
+    red: 'תקלה',
+    unknown: 'לא ידוע',
+}
+
+// Text for the signal rail is derived from the same enum reasons as the
+// backend summary. The UI never has to infer operational truth from color.
+export function salesHealthStageView(health = {}) {
+    const inbound = health.inbound || {}
+    const anthropic = health.anthropic || {}
+    const whatsapp = health.whatsapp || {}
+    const followups = health.followups || {}
+    const statusLabel = stage => STATUS_LABELS[stage.status] || STATUS_LABELS.unknown
+    return [
+        {
+            key: 'inbound', label: 'קליטה', status: inbound.status || 'unknown', statusLabel: statusLabel(inbound),
+            metric: inbound.lastHeartbeatAtMs ? 'התקבל אות כניסה' : 'אין עדיין אות כניסה',
+            evidenceAtMs: inbound.lastHeartbeatAtMs || inbound.activationAtMs || null,
+            action: inbound.status === 'red' ? 'בדקו שהתרחיש פעיל ושנותרו פעולות ב־Make.' : null,
+        },
+        {
+            key: 'anthropic', label: 'AI', status: anthropic.status || 'unknown', statusLabel: statusLabel(anthropic),
+            metric: `${anthropic.consecutiveFailures || 0} כשלים רצופים`,
+            evidenceAtMs: anthropic.lastSuccessAtMs || anthropic.lastFailureAtMs || null,
+            action: anthropic.status === 'red' ? 'המתינו לסגירת מפסק ההגנה ובדקו את יתרת הספק.' : null,
+        },
+        {
+            key: 'whatsapp', label: 'WhatsApp', status: whatsapp.status || 'unknown',
+            statusLabel: whatsapp.reason === 'pending' ? 'בהמתנה לאישור מסירה' : statusLabel(whatsapp),
+            metric: `${whatsapp.accepted || 0} התקבלו · ${(whatsapp.delivered || 0) + (whatsapp.read || 0)} נמסרו/נקראו`,
+            evidenceAtMs: whatsapp.lastEvidenceAtMs || null,
+            action: whatsapp.status === 'red' || ['delivery-failures', 'stale-attempts'].includes(whatsapp.reason)
+                ? 'בדקו כשלי שליחה, סטטוסים תקועים ופעולות Make.'
+                : null,
+        },
+        {
+            key: 'followups', label: 'פולואפים', status: followups.status || 'unknown', statusLabel: statusLabel(followups),
+            metric: followups.due == null ? 'מצב התור לא ידוע' : `${followups.due} ממתינים`,
+            evidenceAtMs: followups.lastRunAtMs || health.generatedAtMs || null,
+            action: followups.status === 'red' ? 'בדקו את תור הפולואפים והריצו בדיקה יבשה.' : null,
+        },
+    ]
+}
+
 export { MAX_TURNS, HUMAN_PAUSE_HOURS }

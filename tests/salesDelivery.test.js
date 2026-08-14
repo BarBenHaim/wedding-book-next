@@ -40,6 +40,15 @@ describe('delivery event validation', () => {
             .toMatchObject({ ok: true, event: { errorCode: 'GRAPH_TIMEOUT' } })
     })
 
+    it('accepts provider-only status callbacks but never provider-only acceptance', () => {
+        const delivered = accepted({ status: 'delivered', outboundId: undefined })
+        const expected = { ...delivered }
+        delete expected.outboundId
+        expect(validateDeliveryEvent(delivered)).toEqual({ ok: true, event: expected })
+        expect(validateDeliveryEvent(accepted({ outboundId: undefined })))
+            .toEqual({ ok: false, error: 'OUTBOUND_ID_REQUIRED_FOR_ACCEPTANCE' })
+    })
+
     it('rejects unknown channels, statuses, invalid dates, and oversized identifiers', () => {
         expect(validateDeliveryEvent(accepted({ channel: 'sms' }))).toEqual({ ok: false, error: 'INVALID_CHANNEL' })
         expect(validateDeliveryEvent(accepted({ status: 'queued' }))).toEqual({ ok: false, error: 'INVALID_STATUS' })

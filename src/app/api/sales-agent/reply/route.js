@@ -41,6 +41,7 @@ import {
     listMedia, recordMediaSent, creditPendingMedia,
     claimInboundEvent, completeInboundEvent,
     acquireProviderCircuit, recordProviderFailure, recordProviderSuccess, releaseProviderProbe, completeProviderFallback as persistProviderFallback, completeSuccessfulExchange, compactLeadBestEffort,
+    recordInboundHeartbeat,
 } from '@/lib/salesAgent/leads'
 import { costOfClaudeUsage } from '@/lib/salesAgent/pricing'
 import { parseInboundBody } from '@/lib/salesAgent/inbound'
@@ -115,6 +116,15 @@ export async function POST(req) {
 
     const eventId = String(body.eventId || '').trim()
     if (!eventId) return NextResponse.json({ error: 'missing-event-id' }, { status: 400 })
+
+    // This authenticated request is already the Make heartbeat. Persist a
+    // timestamp only; never copy the event ID, phone, message, or payload.
+    // Await the write so a short duplicate path cannot return and freeze the
+    // serverless invocation before the heartbeat reaches Firestore. A health
+    // write failure is still non-fatal to the customer request.
+    await recordInboundHeartbeat({ receivedAtMs: Date.now() }).catch(() => {
+        console.error('[sales-agent] inbound heartbeat write failed')
+    })
 
     const text = String(body?.text || '').trim()
     const messageType = body.messageType

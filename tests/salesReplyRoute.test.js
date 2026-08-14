@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
     acquireProviderCircuit: vi.fn(),
     recordProviderFailure: vi.fn(),
     recordProviderSuccess: vi.fn(),
+    recordInboundHeartbeat: vi.fn(),
     costOfClaudeUsage: vi.fn(),
     resolveSource: vi.fn(),
     mergeMedia: vi.fn(),
@@ -64,6 +65,7 @@ vi.mock('@/lib/salesAgent/leads', () => ({
     releaseProviderProbe: mocks.releaseProviderProbe, compactLeadBestEffort: mocks.compactLeadBestEffort,
     acquireProviderCircuit: mocks.acquireProviderCircuit,
     recordProviderFailure: mocks.recordProviderFailure, recordProviderSuccess: mocks.recordProviderSuccess,
+    recordInboundHeartbeat: mocks.recordInboundHeartbeat,
 }))
 vi.mock('@/lib/salesAgent/pricing', () => ({ costOfClaudeUsage: mocks.costOfClaudeUsage }))
 vi.mock('@/lib/salesAgent/attribution', () => ({ resolveSource: mocks.resolveSource }))
@@ -117,6 +119,7 @@ beforeEach(async () => {
     mocks.acquireProviderCircuit.mockResolvedValue({ allow: true, mode: 'closed' })
     mocks.recordProviderFailure.mockResolvedValue(undefined)
     mocks.recordProviderSuccess.mockResolvedValue(undefined)
+    mocks.recordInboundHeartbeat.mockResolvedValue(undefined)
     mocks.getLead.mockResolvedValue(lead)
     mocks.setHuman.mockResolvedValue(undefined)
     mocks.findCustomerByPhone.mockResolvedValue(null)
@@ -131,6 +134,35 @@ afterEach(() => {
 })
 
 describe('inbound event duplicate fencing', () => {
+    it('records one privacy-safe inbound heartbeat on the existing authenticated request path', async () => {
+        mocks.claimInboundEvent.mockResolvedValue({ action: 'cached', outcome: { sendText: '', handoff: false } })
+
+        const result = await post(inbound({ text: 'heartbeat fixture text that must not be stored' }))
+
+        expect(result.status).toBe(200)
+        expect(mocks.recordInboundHeartbeat).toHaveBeenCalledTimes(1)
+        expect(mocks.recordInboundHeartbeat).toHaveBeenCalledWith({ receivedAtMs: expect.any(Number) })
+        expect(JSON.stringify(mocks.recordInboundHeartbeat.mock.calls)).not.toContain('heartbeat fixture text')
+    })
+
+    it('waits for heartbeat persistence before returning the authenticated response', async () => {
+        let releaseHeartbeat
+        mocks.recordInboundHeartbeat.mockReturnValue(new Promise(resolve => { releaseHeartbeat = resolve }))
+        mocks.claimInboundEvent.mockResolvedValue({ action: 'cached', outcome: { sendText: '', handoff: false } })
+        let settled = false
+
+        const pending = post(inbound({ text: 'heartbeat durability fixture' })).then(result => {
+            settled = true
+            return result
+        })
+        await new Promise(resolve => setTimeout(resolve, 0))
+
+        expect(settled).toBe(false)
+        expect(mocks.claimInboundEvent).not.toHaveBeenCalled()
+        releaseHeartbeat()
+        await expect(pending).resolves.toMatchObject({ status: 200 })
+    })
+
     it('returns a completed duplicate as a no-send envelope without calling Claude', async () => {
         mocks.claimInboundEvent.mockResolvedValue({ action: 'cached', outcome: { sendText: '', handoff: false, noReply: true, skipped: 'own-echo' } })
 
