@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { assertCompletableInboundOutcome, decideInboundClaim, sanitizeInboundOutcome } from '../src/lib/salesAgent/inboundEventsCore'
+import {
+    assertCompletableInboundOutcome,
+    assertInboundClaimToken,
+    decideInboundClaim,
+    decideInboundCompletion,
+    sanitizeInboundOutcome,
+    startInboundClaim,
+} from '../src/lib/salesAgent/inboundEventsCore'
 
 describe('decideInboundClaim', () => {
     it('processes a new event', () => {
@@ -38,8 +45,8 @@ describe('sanitizeInboundOutcome', () => {
             handoff: false,
             stage: 'demo_sent',
             followUpAt: '2026-08-15',
-            notifyOwner: 'טלפון: 972501234567',
-            phone: '972501234567',
+            notifyOwner: 'טלפון: test-phone-token',
+            phone: 'test-phone-token',
         })).toEqual({
             sendText: 'שלום',
             sendImage: 'https://cdn.example/book.jpg',
@@ -62,5 +69,35 @@ describe('assertCompletableInboundOutcome', () => {
 
     it('allows a handoff that deliberately has no customer text', () => {
         expect(() => assertCompletableInboundOutcome({ sendText: '', handoff: true })).not.toThrow()
+    })
+})
+
+describe('inbound claim ownership', () => {
+    it('rejects a stale worker after a reclaimed event receives a new claim', () => {
+        const first = startInboundClaim(null, 1_000, 'claim-a')
+        const second = startInboundClaim({
+            status: 'processing',
+            leaseUntilMs: 1_000,
+            claimToken: first.claimToken,
+            claimGeneration: first.claimGeneration,
+        }, 2_000, 'claim-b')
+
+        expect(second).toEqual({ action: 'process', claimToken: 'claim-b', claimGeneration: 2 })
+        expect(decideInboundCompletion({
+            status: 'processing',
+            leaseUntilMs: 32_000,
+            claimToken: second.claimToken,
+            claimGeneration: second.claimGeneration,
+        }, first.claimToken, 2_001)).toEqual({ action: 'busy' })
+        expect(decideInboundCompletion({
+            status: 'processing',
+            leaseUntilMs: 32_000,
+            claimToken: second.claimToken,
+            claimGeneration: second.claimGeneration,
+        }, second.claimToken, 2_001)).toEqual({ action: 'complete' })
+    })
+
+    it('rejects a missing completion ownership token', () => {
+        expect(() => assertInboundClaimToken()).toThrow('inbound completion needs claimToken')
     })
 })

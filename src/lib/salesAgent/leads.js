@@ -22,7 +22,7 @@ import crypto from 'node:crypto'
 import { normalizePhone } from './agent'
 import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerCommand, isTestPhone, MAX_TURNS, HUMAN_PAUSE_HOURS } from './leadsCore'
 import { isoInIsrael } from './leadsView'
-import { assertCompletableInboundOutcome, decideInboundClaim, INBOUND_LEASE_MS, sanitizeInboundOutcome } from './inboundEventsCore'
+import { assertCompletableInboundOutcome, assertInboundClaimToken, decideInboundCompletion, INBOUND_LEASE_MS, sanitizeInboundOutcome, startInboundClaim } from './inboundEventsCore'
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
 // importing this file boots the Admin SDK, which needs credentials.
@@ -47,12 +47,13 @@ export function inboundEventRef(eventId) {
  */
 export async function claimInboundEvent({ eventId, phone, occurredAt }) {
     const eventRef = inboundEventRef(eventId)
+    const claimToken = crypto.randomUUID()
     return adminDb.runTransaction(async tx => {
         const snap = await tx.get(eventRef)
         const stored = snap.exists ? snap.data() : null
         const nowMs = Date.now()
-        const decision = decideInboundClaim(stored, nowMs)
-        if (decision.action !== 'process') return decision
+        const claim = startInboundClaim(stored, nowMs, claimToken)
+        if (claim.action !== 'process') return claim
 
         tx.set(eventRef, {
             eventId: String(eventId),
@@ -60,11 +61,13 @@ export async function claimInboundEvent({ eventId, phone, occurredAt }) {
             occurredAt: occurredAt || new Date().toISOString(),
             status: 'processing',
             leaseUntilMs: nowMs + INBOUND_LEASE_MS,
+            claimToken: claim.claimToken,
+            claimGeneration: claim.claimGeneration,
             attempts: FieldValue.increment(1),
             createdAt: stored?.createdAt || FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true })
-        return { action: 'process' }
+        return claim
     })
 }
 
@@ -73,7 +76,8 @@ export async function claimInboundEvent({ eventId, phone, occurredAt }) {
  * shape is intentionally descriptive only: Task 2's duplicate wrapper is
  * the only thing permitted to decide whether anything may be sent.
  */
-export async function completeInboundEvent({ eventId, outcome }) {
+export async function completeInboundEvent({ eventId, claimToken, outcome }) {
+    const ownedClaimToken = assertInboundClaimToken(claimToken)
     const cleanOutcome = sanitizeInboundOutcome(outcome)
     assertCompletableInboundOutcome(cleanOutcome)
     const eventRef = inboundEventRef(eventId)
@@ -81,8 +85,8 @@ export async function completeInboundEvent({ eventId, outcome }) {
     return adminDb.runTransaction(async tx => {
         const snap = await tx.get(eventRef)
         const stored = snap.exists ? snap.data() : null
-        const decision = decideInboundClaim(stored, Date.now())
-        if (decision.action === 'cached') return decision
+        const decision = decideInboundCompletion(stored, ownedClaimToken, Date.now())
+        if (decision.action !== 'complete') return decision
 
         tx.set(eventRef, {
             status: 'completed',

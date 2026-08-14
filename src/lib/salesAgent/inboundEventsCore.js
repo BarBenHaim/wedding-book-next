@@ -1,7 +1,9 @@
 export const INBOUND_LEASE_MS = 30_000
 
 const cachedText = value => value == null ? null : String(value)
-const redactPhoneNumber = text => text.replace(/(?:\+?972|0)(?:[\s()\-]*\d){8,}/g, '[redacted]')
+const redactPhoneNumber = text => text
+    .replace(/(?:\+?972|0)(?:[\s()\-]*\d){8,}/g, '[redacted]')
+    .replace(/(טלפון:\s*)[^\n]+/g, '$1[redacted]')
 
 // Completed-event records must be safe to return inside the duplicate
 // wrapper. They describe the original result but never include `ok`, a
@@ -27,6 +29,11 @@ export function assertCompletableInboundOutcome(outcome = {}) {
     }
 }
 
+export function assertInboundClaimToken(claimToken) {
+    if (!String(claimToken || '').trim()) throw new Error('inbound completion needs claimToken')
+    return String(claimToken)
+}
+
 export function decideInboundClaim(snapshot, nowMs = Date.now()) {
     if (!snapshot) return { action: 'process' }
     if (snapshot.status === 'completed' && snapshot.outcome) {
@@ -36,4 +43,28 @@ export function decideInboundClaim(snapshot, nowMs = Date.now()) {
         return { action: 'busy' }
     }
     return { action: 'process' }
+}
+
+// Kept pure so competing workers can be tested without Firebase. The
+// token is generated at the Firestore boundary and never derived from a
+// phone number or the event id.
+export function startInboundClaim(snapshot, nowMs, claimToken) {
+    const decision = decideInboundClaim(snapshot, nowMs)
+    if (decision.action !== 'process') return decision
+    return {
+        action: 'process',
+        claimToken: assertInboundClaimToken(claimToken),
+        claimGeneration: Number(snapshot?.claimGeneration || 0) + 1,
+    }
+}
+
+export function decideInboundCompletion(snapshot, claimToken, nowMs = Date.now()) {
+    if (snapshot?.status === 'completed' && snapshot.outcome) {
+        return { action: 'cached', outcome: snapshot.outcome }
+    }
+    if (snapshot?.status !== 'processing' || Number(snapshot.leaseUntilMs) <= nowMs) {
+        return { action: 'stale' }
+    }
+    if (!claimToken || snapshot.claimToken !== claimToken) return { action: 'busy' }
+    return { action: 'complete' }
 }
