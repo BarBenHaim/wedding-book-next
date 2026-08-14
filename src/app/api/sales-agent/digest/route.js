@@ -24,10 +24,12 @@ export const maxDuration = 30
 import { NextResponse } from 'next/server'
 import { adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
-import { listLeads } from '@/lib/salesAgent/leads'
+import { listLeads, recordDeliveryEvent, recordDigestOutcome } from '@/lib/salesAgent/leads'
 import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
 import { buildDigest } from '@/lib/salesAgent/digest'
+import { DAILY_DIGEST_TEMPLATE, sendWhatsAppTemplate } from '@/lib/salesAgent/whatsapp'
+import { createOutboundId } from '@/lib/salesAgent/delivery'
 
 // Three doors, same as the rest of the agent: the cron secret for
 // Vercel's scheduler, the shared secret for Make, a super-admin token
@@ -92,5 +94,68 @@ export async function GET(req) {
         gaps: summarizeGaps(items),
     })
 
-    return NextResponse.json({ ok: true, today, ...digest })
+    const authHeader = req.headers.get('authorization') || ''
+    const cronOwnsDelivery = !!process.env.CRON_SECRET
+        && authHeader === `Bearer ${process.env.CRON_SECRET}`
+    let delivery = { status: 'not_requested' }
+
+    if (cronOwnsDelivery && !digest.hasNews) {
+        delivery = { status: 'skipped', reason: 'no_news' }
+    } else if (cronOwnsDelivery) {
+        const outboundId = createOutboundId({
+            scope: 'digest', subject: today, attempt: 0, part: 'template',
+        })
+        const occurredAt = new Date().toISOString()
+        const failed = async errorCode => {
+            try {
+                await recordDeliveryEvent({
+                    eventId: `${outboundId}:failed`,
+                    outboundId,
+                    channel: 'whatsapp_graph',
+                    status: 'failed',
+                    errorCode,
+                    occurredAt,
+                })
+            } catch {
+                console.error('[sales-agent/digest] failure acknowledgement failed')
+            }
+            try {
+                await recordDigestOutcome({ status: 'digest_failed', errorCode, outboundId, occurredAt })
+            } catch {
+                console.error('[sales-agent/digest] health write failed')
+            }
+            return { status: 'failed', errorCode }
+        }
+
+        const ownerPhone = process.env.SALES_AGENT_OWNER_PHONE
+        if (!ownerPhone) {
+            delivery = await failed('OWNER_PHONE_MISSING')
+        } else {
+            try {
+                const evidence = await sendWhatsAppTemplate(ownerPhone, DAILY_DIGEST_TEMPLATE, digest.lines)
+                await recordDeliveryEvent({
+                    eventId: `${outboundId}:accepted`,
+                    outboundId,
+                    channel: 'whatsapp_graph',
+                    status: 'accepted',
+                    providerMessageId: evidence.providerMessageId,
+                    occurredAt,
+                })
+                await recordDigestOutcome({
+                    status: 'digest_accepted',
+                    outboundId,
+                    occurredAt,
+                })
+                delivery = { status: 'accepted', providerMessageId: evidence.providerMessageId }
+            } catch (error) {
+                const allowed = new Set([
+                    'GRAPH_REJECTED', 'GRAPH_TIMEOUT', 'PROVIDER_MESSAGE_ID_MISSING',
+                    'WHATSAPP_NOT_CONFIGURED', 'TEMPLATE_NOT_CONFIGURED',
+                ])
+                delivery = await failed(allowed.has(error?.errorCode) ? error.errorCode : 'PROVIDER_FAILED')
+            }
+        }
+    }
+
+    return NextResponse.json({ ok: true, today, ...digest, delivery })
 }

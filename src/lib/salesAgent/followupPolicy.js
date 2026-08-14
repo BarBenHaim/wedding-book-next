@@ -130,6 +130,14 @@ export function isFinalAttempt(attempt = 0) {
     return attempt + 1 >= MAX_ATTEMPTS
 }
 
+/** Operational state for an accepted follow-up waiting on Meta status. */
+export function pendingFollowUpStatus(lead, nowMs = Date.now()) {
+    if (lead?.lastDeliveryStatus !== 'accepted') return 'none'
+    const pendingUntil = Number(lead?.deliveryPendingUntilMs)
+    if (!Number.isFinite(pendingUntil)) return 'stale'
+    return pendingUntil > Number(nowMs) ? 'pending' : 'stale'
+}
+
 // ── When not to send ────────────────────────────────────────────────
 //
 // Times are read in Asia/Jerusalem rather than computed from an offset,
@@ -196,7 +204,9 @@ export function sendableNow(ms = Date.now()) {
  */
 export const MAX_PER_RUN = 25
 
-export default {
+const followupPolicy = {
     MAX_ATTEMPTS, MAX_PER_RUN, nextFollowUpDate, urgencyFor, daysUntil,
-    isFinalAttempt, sendableNow, israelClock,
+    isFinalAttempt, pendingFollowUpStatus, sendableNow, israelClock,
 }
+
+export default followupPolicy

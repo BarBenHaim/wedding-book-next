@@ -7,8 +7,8 @@
 //   1. SWEEP    — find live leads that lost their next step and put them
 //                 back on the ladder, so they are picked up by step 2 in
 //                 this same run rather than tomorrow's.
-//   2. CHASE    — write a real follow-up for every lead due today, from
-//                 that specific conversation, never a template.
+//   2. CHASE    — write a real follow-up for every lead due today, using
+//                 free-form content only in-window and wt_followup outside.
 //   3. ESCALATE — hand Lord the list of handoffs nobody picked up. The
 //                 bot does not resume those, ever.
 //
@@ -49,12 +49,13 @@ import { adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { buildFollowUpPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, resolveFollowUp } from '@/lib/salesAgent/agent'
-import { dueFollowUps, markFollowUpSent, listLeads, reviveOrphans, listMedia, recordMediaSent } from '@/lib/salesAgent/leads'
+import { dueFollowUps, prepareFollowUpDelivery, recordDeliveryEvent, listLeads, reviveOrphans, listMedia } from '@/lib/salesAgent/leads'
 import { sendableNow, MAX_PER_RUN, isFinalAttempt } from '@/lib/salesAgent/followupPolicy'
 import { MEDIA } from '@/lib/salesAgent/catalog'
 import { mergeMedia, performanceNote } from '@/lib/salesAgent/mediaLibrary'
 import { findOrphans, findStaleHandoffs, handoffAlert } from '@/lib/salesAgent/sweep'
-import { canSendWhatsApp, sendWhatsAppText, sendWhatsAppImage } from '@/lib/salesAgent/whatsapp'
+import { canSendWhatsApp, sendWhatsAppText, sendWhatsAppImage, sendWhatsAppTemplate, FOLLOWUP_TEMPLATE } from '@/lib/salesAgent/whatsapp'
+import { createOutboundId } from '@/lib/salesAgent/delivery'
 
 const WINDOW_MS = 24 * 3600 * 1000
 
@@ -218,55 +219,134 @@ export async function GET(req) {
                 // ever sent; until now the route accepted the model's
                 // choice, counted it, and then returned no URL — so Make
                 // had nothing to send. Same contract as /reply.
-                sendImage: parsed.image && library[parsed.image]?.kind !== 'video' ? library[parsed.image].url : null,
-                sendImageCaption: parsed.image && library[parsed.image]?.kind !== 'video' ? library[parsed.image].caption : null,
-                hasImage: !!parsed.image && library[parsed.image]?.kind !== 'video',
+                sendImage: withinWindow && parsed.image && library[parsed.image]?.kind !== 'video' ? library[parsed.image].url : null,
+                sendImageCaption: withinWindow && parsed.image && library[parsed.image]?.kind !== 'video' ? library[parsed.image].caption : null,
+                hasImage: withinWindow && !!parsed.image && library[parsed.image]?.kind !== 'video',
                 // True when this lead only got here because the sweep
                 // caught it. Worth seeing in Make's run log: it is the
                 // one number that says whether the safety net is idle
                 // or doing daily work it should not have to.
                 recovered: revived.some(r => r.phone === lead.phone),
             }
-            items.push(item)
-
-            // Direct delivery. Outside the 24-hour window WhatsApp
-            // rejects free-form messages and the send throws — the item
-            // stays unmarked, stays due, and the error is recorded on
-            // the item instead of vanishing. That is the honest outcome
-            // until the wt_followup template exists.
-            let delivered = callerDelivers
-            // `!dry` here is not defensive styling — it was missing, and
-            // a "dry" run with the token configured really sent. Marking
-            // and counting were both correctly gated and the SEND was
-            // not, which is the worst combination: messages go out and
-            // no record anywhere says so.
-            if (directSend && !dry) {
-                try {
-                    await sendWhatsAppText(lead.phone, text)
-                    if (parsed.image && library[parsed.image]?.kind !== 'video') {
-                        await sendWhatsAppImage(lead.phone, library[parsed.image].url, library[parsed.image].caption)
-                    }
-                    delivered = true
-                } catch {
-                    item.sendError = 'whatsapp-send-failed'
-                    console.warn('[sales-agent/followups] send failed')
-                }
+            if (dry || composeOnly) {
+                item.deliveryStatus = dry ? 'dry' : 'composed'
+                items.push(item)
+                return
             }
 
-            if (parsed.image && !dry && delivered) recordMediaSent(parsed.image).catch(() => {})
-
-            if (!dry && delivered) {
-                // Marked as sent when handed to Make, not after Make
-                // confirms — an ack round-trip would double the operation
-                // cost on the Free plan. The trade-off: a Make failure
-                // loses ONE follow-up, which the CRM still shows.
-                await markFollowUpSent({
-                    phone: lead.phone,
-                    text,
-                    nextFollowUpAt,
-                    stage: parsed.stage,
+            const requestedAt = new Date().toISOString()
+            const subject = `${lead.phone}:${item.followUpNumber}:${today}:${requestedAt}`
+            const primaryPart = withinWindow ? 'text' : 'template'
+            const primaryOutboundId = createOutboundId({
+                scope: 'followup', subject, attempt: item.followUpNumber, part: primaryPart,
+            })
+            const outboundParts = { [primaryPart]: primaryOutboundId }
+            if (withinWindow && item.hasImage) {
+                outboundParts.image = createOutboundId({
+                    scope: 'followup', subject, attempt: item.followUpNumber, part: 'image',
                 })
             }
+            item.outboundId = primaryOutboundId
+            item.outboundParts = outboundParts
+            item.transport = withinWindow ? 'text' : 'template'
+            if (!withinWindow) {
+                item.templateName = FOLLOWUP_TEMPLATE
+                item.templateParameters = [text]
+            }
+
+            const preparePart = (part, outboundId, advancesFollowUp) => prepareFollowUpDelivery({
+                phone: lead.phone,
+                outboundId,
+                channel: callerDelivers ? 'make' : 'whatsapp_graph',
+                part,
+                text: advancesFollowUp ? text : '',
+                nextFollowUpAt,
+                stage: parsed.stage,
+                advancesFollowUp,
+                templateName: part === 'template' ? FOLLOWUP_TEMPLATE : null,
+                requestedAt,
+            })
+            const primaryPreparation = await preparePart(primaryPart, primaryOutboundId, true)
+            if (primaryPreparation.action === 'pending') {
+                item.deliveryStatus = 'pending'
+                items.push(item)
+                return
+            }
+            if (outboundParts.image) await preparePart('image', outboundParts.image, false)
+
+            if (callerDelivers) {
+                item.deliveryStatus = 'requested'
+                items.push(item)
+                return
+            }
+
+            const acknowledge = async (outboundId, evidence) => recordDeliveryEvent({
+                eventId: `${outboundId}:accepted`,
+                outboundId,
+                channel: 'whatsapp_graph',
+                status: 'accepted',
+                providerMessageId: evidence.providerMessageId,
+                occurredAt: new Date().toISOString(),
+            })
+            const fail = async (outboundId, errorCode) => recordDeliveryEvent({
+                eventId: `${outboundId}:failed`,
+                outboundId,
+                channel: 'whatsapp_graph',
+                status: 'failed',
+                errorCode,
+                occurredAt: new Date().toISOString(),
+            })
+
+            try {
+                const primaryEvidence = withinWindow
+                    ? await sendWhatsAppText(lead.phone, text)
+                    : await sendWhatsAppTemplate(lead.phone, FOLLOWUP_TEMPLATE, [text])
+                await acknowledge(primaryOutboundId, primaryEvidence)
+                item.deliveryStatus = 'accepted'
+            } catch (error) {
+                const allowed = new Set([
+                    'GRAPH_REJECTED', 'GRAPH_TIMEOUT', 'PROVIDER_MESSAGE_ID_MISSING',
+                    'WHATSAPP_NOT_CONFIGURED', 'TEMPLATE_NOT_CONFIGURED',
+                ])
+                const errorCode = allowed.has(error?.errorCode) ? error.errorCode : 'PROVIDER_FAILED'
+                try {
+                    await fail(primaryOutboundId, errorCode)
+                } catch {
+                    console.warn('[sales-agent/followups] failure acknowledgement failed')
+                }
+                item.sendError = errorCode
+                item.deliveryStatus = 'failed'
+                console.warn('[sales-agent/followups] send failed')
+                items.push(item)
+                return
+            }
+
+            if (outboundParts.image) {
+                try {
+                    const imageEvidence = await sendWhatsAppImage(
+                        lead.phone,
+                        library[parsed.image].url,
+                        library[parsed.image].caption,
+                    )
+                    await acknowledge(outboundParts.image, imageEvidence)
+                    item.mediaDeliveryStatus = 'accepted'
+                } catch (error) {
+                    const allowed = new Set([
+                        'GRAPH_REJECTED', 'GRAPH_TIMEOUT', 'PROVIDER_MESSAGE_ID_MISSING',
+                        'WHATSAPP_NOT_CONFIGURED', 'TEMPLATE_NOT_CONFIGURED',
+                    ])
+                    const errorCode = allowed.has(error?.errorCode) ? error.errorCode : 'PROVIDER_FAILED'
+                    try {
+                        await fail(outboundParts.image, errorCode)
+                    } catch {
+                        console.warn('[sales-agent/followups] media failure acknowledgement failed')
+                    }
+                    item.mediaSendError = errorCode
+                    item.mediaDeliveryStatus = 'failed'
+                    console.warn('[sales-agent/followups] media send failed')
+                }
+            }
+            items.push(item)
         } catch {
             console.error('[sales-agent/followups] lead failed')
         }
@@ -284,17 +364,9 @@ export async function GET(req) {
     // stop reading, and then you miss the day it said 3.
     const alert = handoffAlert(stale)
 
-    // On the direct path the owner alert is also ours to deliver. Lord
-    // messages his own bot often enough that the 24-hour window is
-    // usually open; when it is not, the failure lands in the log and
-    // the alert still rides the JSON for whoever reads it.
-    if (!dry && directSend && alert && process.env.SALES_AGENT_OWNER_PHONE) {
-        try {
-            await sendWhatsAppText(process.env.SALES_AGENT_OWNER_PHONE, alert)
-        } catch {
-            console.warn('[sales-agent/followups] owner alert failed')
-        }
-    }
+    // No approved business-initiated handoff-alert template exists. Keep the
+    // alert inspectable in JSON instead of gambling on a free-form send outside
+    // the service window. The scheduled digest has its own approved template.
 
     return NextResponse.json({
         ok: true,

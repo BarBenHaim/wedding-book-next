@@ -24,6 +24,8 @@ import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerComman
 import { isoInIsrael } from './leadsView'
 import { assertCompletableInboundOutcome, assertInboundClaimToken, decideInboundCompletion, INBOUND_LEASE_MS, sanitizeInboundOutcome, startInboundClaim } from './inboundEventsCore'
 import { reserveHalfOpenProbe, resolveProviderFailure, resolveProviderSuccess, sanitizeBreakerRuntimeState } from './circuitBreaker'
+import { DELIVERY_ERROR_CODES, decideDeliveryTransition, isDeliveryPending } from './delivery'
+import { pendingFollowUpStatus } from './followupPolicy'
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
 // importing this file boots the Admin SDK, which needs credentials.
@@ -34,6 +36,7 @@ const COLLECTION = 'sales_leads'
 const INBOUND_EVENTS_COLLECTION = 'sales_inbound_events'
 const RUNTIME_COLLECTION = 'sales_runtime'
 const ANTHROPIC_RUNTIME_ID = 'anthropic'
+const DELIVERY_EVENTS_COLLECTION = 'sales_delivery_events'
 
 function ref(phone) {
     return adminDb.collection(COLLECTION).doc(phone)
@@ -45,6 +48,10 @@ export function inboundEventRef(eventId) {
 
 function anthropicRuntimeRef() {
     return adminDb.collection(RUNTIME_COLLECTION).doc(ANTHROPIC_RUNTIME_ID)
+}
+
+function deliveryEventRef(outboundId) {
+    return adminDb.collection(DELIVERY_EVENTS_COLLECTION).doc(String(outboundId))
 }
 
 // Runtime state is metadata only. In particular, do not merge arbitrary
@@ -359,17 +366,192 @@ export function compactLeadBestEffort(phone) {
     if (id) compactIfNeeded(id)
 }
 
-export async function markFollowUpSent({ phone, text, nextFollowUpAt, stage }) {
+function deliveryError(code) {
+    const error = new Error('delivery event rejected')
+    error.code = code
+    return error
+}
+
+/**
+ * Register the exact outbound part before transport starts. This is metadata,
+ * not a success claim: the lead cadence and pending suppression stay untouched
+ * until a provider message ID is acknowledged.
+ */
+export async function prepareFollowUpDelivery({
+    phone,
+    outboundId,
+    channel,
+    part = 'text',
+    text = '',
+    nextFollowUpAt = null,
+    stage = null,
+    advancesFollowUp = true,
+    templateName = null,
+    requestedAt = new Date().toISOString(),
+}) {
     const id = normalizePhone(phone)
-    const patch = {
-        lastFollowUpAt: FieldValue.serverTimestamp(),
-        lastMessageAt: FieldValue.serverTimestamp(),
-        followUpCount: FieldValue.increment(1),
-        followUpAt: nextFollowUpAt || null,
-        turns: FieldValue.arrayUnion({ role: 'assistant', text: String(text || '').slice(0, 2000), at: Date.now() }),
-    }
-    if (stage) patch.stage = stage
-    await ref(id).set(patch, { merge: true })
+    if (!id) throw deliveryError('INVALID_LEAD_ID')
+    const deliveryRef = deliveryEventRef(outboundId)
+    const leadRef = ref(id)
+    const requestedAtMs = Date.parse(requestedAt)
+    if (!Number.isFinite(requestedAtMs)) throw deliveryError('INVALID_OCCURRED_AT')
+
+    return adminDb.runTransaction(async tx => {
+        const [deliverySnap, leadSnap] = await Promise.all([tx.get(deliveryRef), tx.get(leadRef)])
+        const stored = deliverySnap.exists ? deliverySnap.data() : null
+        if (stored) return { action: 'existing', outboundId: String(outboundId), status: stored.status }
+
+        const lead = leadSnap.exists ? leadSnap.data() : {}
+        if (isDeliveryPending({
+            status: lead.lastDeliveryStatus,
+            deliveryPendingUntilMs: lead.deliveryPendingUntilMs,
+        }, requestedAtMs)) {
+            return { action: 'pending', outboundId: lead.deliveryPendingOutboundId || null }
+        }
+
+        const attemptNumber = Number(lead.followUpCount || 0) + 1
+        tx.set(deliveryRef, {
+            outboundId: String(outboundId),
+            channel: String(channel),
+            status: 'requested',
+            leadId: id,
+            part: String(part),
+            advancesFollowUp: !!advancesFollowUp,
+            attemptNumber,
+            nextFollowUpAt: nextFollowUpAt || null,
+            stage: stage || null,
+            templateName: templateName || null,
+            requestedAtMs,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: false })
+        const leadPatch = {}
+        if (pendingFollowUpStatus(lead, requestedAtMs) === 'stale') {
+            leadPatch.lastDeliveryStatus = 'requested'
+            leadPatch.deliveryPendingOutboundId = null
+            leadPatch.deliveryPendingUntilMs = null
+            leadPatch.staleDeliveryOutboundId = lead.deliveryPendingOutboundId || null
+            leadPatch.staleDeliveryDetectedAtMs = requestedAtMs
+        }
+        if (advancesFollowUp) {
+            leadPatch.pendingDeliveryMessages = {
+                    ...(lead.pendingDeliveryMessages && typeof lead.pendingDeliveryMessages === 'object'
+                        ? lead.pendingDeliveryMessages
+                        : {}),
+                    [String(outboundId)]: String(text || '').slice(0, 2000),
+                }
+        }
+        if (Object.keys(leadPatch).length) {
+            leadPatch.updatedAt = FieldValue.serverTimestamp()
+            tx.set(leadRef, leadPatch, { merge: true })
+        }
+        return { action: 'requested', outboundId: String(outboundId) }
+    })
+}
+
+/**
+ * Apply one provider callback and the lead truth in the same transaction.
+ * The pure state machine rejects mismatches/regressions before any write.
+ */
+export async function recordDeliveryEvent(event) {
+    const deliveryRef = deliveryEventRef(event.outboundId)
+    return adminDb.runTransaction(async tx => {
+        const deliverySnap = await tx.get(deliveryRef)
+        const stored = deliverySnap.exists ? deliverySnap.data() : null
+        const decision = decideDeliveryTransition(stored, event)
+        if (decision.action === 'reject') throw deliveryError(decision.error)
+        if (decision.action === 'noop') return decision
+
+        const leadRef = stored?.leadId ? ref(stored.leadId) : null
+        const leadSnap = leadRef ? await tx.get(leadRef) : null
+        const lead = leadSnap?.exists ? leadSnap.data() : {}
+        const pendingMessages = lead.pendingDeliveryMessages && typeof lead.pendingDeliveryMessages === 'object'
+            ? lead.pendingDeliveryMessages
+            : {}
+        const withoutCurrentMessage = Object.fromEntries(
+            Object.entries(pendingMessages).filter(([outboundId]) => outboundId !== event.outboundId),
+        )
+        const logicalAlreadyAdvanced = stored?.advancesFollowUp
+            && Number(lead.followUpCount || 0) >= Number(stored.attemptNumber || 1)
+        const advances = !!(decision.advanceFollowUp && stored?.advancesFollowUp && !logicalAlreadyAdvanced)
+
+        const deliveryPatch = {
+            eventId: event.eventId,
+            channel: event.channel,
+            status: decision.nextStatus,
+            providerMessageId: event.providerMessageId || stored?.providerMessageId || null,
+            errorCode: event.status === 'failed' ? event.errorCode : null,
+            occurredAt: event.occurredAt,
+            occurredAtMs: Date.parse(event.occurredAt),
+            deliveryPendingUntilMs: decision.pendingUntilMs,
+            followUpAdvanced: !!(stored?.followUpAdvanced || advances),
+            updatedAt: FieldValue.serverTimestamp(),
+        }
+        tx.set(deliveryRef, deliveryPatch, { merge: true })
+
+        if (leadRef) {
+            const ownsPending = !lead.deliveryPendingOutboundId || lead.deliveryPendingOutboundId === event.outboundId
+            if (!ownsPending && !advances) {
+                if (Object.hasOwn(pendingMessages, event.outboundId) && decision.clearPending) {
+                    tx.set(leadRef, { pendingDeliveryMessages: withoutCurrentMessage }, { merge: true })
+                }
+                return { action: 'applied', status: decision.nextStatus, advanced: false }
+            }
+            const leadPatch = {
+                lastDeliveryStatus: decision.nextStatus,
+                updatedAt: FieldValue.serverTimestamp(),
+            }
+            if (event.status === 'accepted' && stored?.advancesFollowUp && !logicalAlreadyAdvanced && ownsPending) {
+                leadPatch.deliveryPendingOutboundId = event.outboundId
+                leadPatch.deliveryPendingUntilMs = decision.pendingUntilMs
+                leadPatch.lastDeliveryError = null
+            } else if (decision.clearPending && ownsPending) {
+                leadPatch.deliveryPendingOutboundId = null
+                leadPatch.deliveryPendingUntilMs = null
+                leadPatch.pendingDeliveryMessages = withoutCurrentMessage
+            }
+            if (event.status === 'failed' && ownsPending) leadPatch.lastDeliveryError = event.errorCode
+            if (advances) {
+                leadPatch.deliveryPendingOutboundId = null
+                leadPatch.deliveryPendingUntilMs = null
+                leadPatch.lastDeliveryError = null
+                leadPatch.lastFollowUpAt = FieldValue.serverTimestamp()
+                leadPatch.lastMessageAt = FieldValue.serverTimestamp()
+                leadPatch.followUpCount = FieldValue.increment(1)
+                leadPatch.followUpAt = stored.nextFollowUpAt || null
+                leadPatch.pendingDeliveryMessages = {}
+                leadPatch.turns = FieldValue.arrayUnion({
+                    role: 'assistant',
+                    text: String(pendingMessages[event.outboundId] || '').slice(0, 2000),
+                    at: Date.parse(event.occurredAt),
+                })
+                if (stored.stage) leadPatch.stage = stored.stage
+            }
+            tx.set(leadRef, leadPatch, { merge: true })
+        }
+
+        return { action: 'applied', status: decision.nextStatus, advanced: advances }
+    })
+}
+
+// Kept as the named provider-acceptance seam for direct callers. It does
+// not advance the follow-up cadence; only a later delivered/read callback can.
+export const markFollowUpAccepted = recordDeliveryEvent
+
+/** Sanitized digest transport state consumed by the operational health view. */
+export async function recordDigestOutcome({ status, errorCode = null, outboundId, occurredAt }) {
+    if (status !== 'digest_accepted' && status !== 'digest_failed') throw deliveryError('INVALID_DIGEST_STATUS')
+    if (status === 'digest_failed' && !DELIVERY_ERROR_CODES.includes(errorCode)) throw deliveryError('INVALID_ERROR_CODE')
+    const runtimeRef = adminDb.collection(RUNTIME_COLLECTION).doc('digest')
+    return adminDb.runTransaction(async tx => {
+        tx.set(runtimeRef, {
+            status,
+            errorCode: status === 'digest_failed' ? errorCode : null,
+            outboundId: String(outboundId || '').slice(0, 500),
+            occurredAt: String(occurredAt || '').slice(0, 100),
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: false })
+    })
 }
 
 // Leads due for a follow-up today. `stage` filters are applied in memory
@@ -388,6 +570,7 @@ export async function dueFollowUps(todayISO, limit = 40) {
         if (lead.stage === 'closed_won' || lead.stage === 'closed_lost') continue
         if (isPausedForHuman(lead)) continue
         if ((lead.followUpCount || 0) >= 3) continue
+        if (pendingFollowUpStatus(lead) === 'pending') continue
         out.push(lead)
         if (out.length >= limit) break
     }

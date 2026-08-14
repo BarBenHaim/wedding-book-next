@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
     MAX_ATTEMPTS, nextFollowUpDate, urgencyFor, daysUntil, isFinalAttempt,
     sendableNow, israelClock,
+    pendingFollowUpStatus,
 } from '@/lib/salesAgent/followupPolicy'
 
 // This file guards the difference between a helpful nudge and the reason
@@ -187,5 +188,22 @@ describe('quiet hours', () => {
         // 21:00Z is midnight in Israel: the naive UTC reading would call
         // this a perfectly good evening.
         expect(sendableNow(at('2026-08-10T21:00:00Z')).ok).toBe(false)
+    })
+})
+
+describe('provider-pending suppression', () => {
+    const pendingUntil = Date.parse('2026-08-14T10:30:00Z')
+
+    it('suppresses a second follow-up only during the 30-minute accepted window', () => {
+        const lead = { lastDeliveryStatus: 'accepted', deliveryPendingUntilMs: pendingUntil }
+        expect(pendingFollowUpStatus(lead, pendingUntil - 1)).toBe('pending')
+        expect(pendingFollowUpStatus(lead, pendingUntil)).toBe('stale')
+    })
+
+    it('keeps failed attempts due even if an old pending timestamp remains', () => {
+        expect(pendingFollowUpStatus({
+            lastDeliveryStatus: 'failed',
+            deliveryPendingUntilMs: pendingUntil,
+        }, pendingUntil - 1)).toBe('none')
     })
 })
