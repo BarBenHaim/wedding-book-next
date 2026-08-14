@@ -154,7 +154,7 @@ export async function POST(req) {
     // Once this worker owns the event, no response may leave without
     // finalizing it. A stale worker must go silent rather than replaying
     // an answer that a newer worker has already made durable.
-    const complete = async payload => {
+    const complete = async (payload, transport = payload) => {
         const outcome = {
             sendText: payload.sendText || '',
             sendImage: payload.sendImage || null,
@@ -173,7 +173,7 @@ export async function POST(req) {
         }
         try {
             const result = await completeInboundEvent({ eventId, claimToken: claim.claimToken, outcome })
-            if (result.action === 'completed') return NextResponse.json(payload)
+            if (result.action === 'completed') return NextResponse.json(transport)
             if (result.action === 'cached') {
                 return NextResponse.json({
                     ok: true, duplicate: true, shouldSend: false, cachedOutcome: result.outcome,
@@ -219,8 +219,15 @@ export async function POST(req) {
             await setHuman(phone, true, 'ענית בעצמך בשיחה')
         } catch (err) {
             console.error('[sales-agent] auto-pause failed', err)
+            return NextResponse.json({ error: 'owner-takeover-persist-failed' }, { status: 503 })
         }
-        return complete({ ok: true, send: [], sendText: '', handoff: true, paused: true, reason: 'owner-replied' })
+        return complete(
+            { ok: true, send: [], sendText: '', handoff: true, noReply: false, paused: true, reason: 'owner-replied' },
+            {
+                ok: true, send: [], sendText: '', hasImage: false, hasVideo: false,
+                shouldSend: false, handoff: false, noReply: true, paused: true, reason: 'owner-replied',
+            },
+        )
     }
 
     // ── A command from Lord's own phone ──────────────────────────────

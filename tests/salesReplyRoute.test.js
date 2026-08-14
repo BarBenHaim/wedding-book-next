@@ -221,3 +221,35 @@ describe('silent terminal outcomes keep their real meaning', () => {
         expect(mocks.callClaude).not.toHaveBeenCalled()
     })
 })
+
+describe('owner takeover persistence and transport', () => {
+    const ownerEcho = { text: 'owner takeover', from: 'business-token', businessPhone: 'business-token', to: 'test-phone-token' }
+
+    it('stores the owner takeover durably but returns only a no-send response', async () => {
+        const result = await post(inbound(ownerEcho))
+
+        expect(mocks.setHuman).toHaveBeenCalledWith('test-phone-token', true, 'ענית בעצמך בשיחה')
+        expect(mocks.completeInboundEvent).toHaveBeenCalledWith(expect.objectContaining({
+            outcome: expect.objectContaining({ handoff: true, noReply: false }),
+        }))
+        expect(result).toEqual({
+            status: 200,
+            body: {
+                ok: true, send: [], sendText: '', hasImage: false, hasVideo: false,
+                shouldSend: false, handoff: false, noReply: true, paused: true, reason: 'owner-replied',
+            },
+        })
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+    })
+
+    it('leaves an owner takeover retriable when the human pause cannot persist', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        mocks.setHuman.mockRejectedValue(new Error('persistence unavailable'))
+
+        const result = await post(inbound(ownerEcho))
+
+        expect(result).toEqual({ status: 503, body: { error: 'owner-takeover-persist-failed' } })
+        expect(mocks.completeInboundEvent).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+    })
+})
