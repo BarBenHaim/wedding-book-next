@@ -339,9 +339,11 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
     }
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     let res
+    let providerStarted = false
     try {
         // This marker distinguishes an actual upstream attempt from a local
         // deadline that expired in the small window after breaker acquire.
+        providerStarted = true
         res = await fetch(API_URL, {
             method: 'POST',
             signal: controller.signal,
@@ -369,7 +371,7 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
             if (res.status === 404 && model !== FALLBACK_MODEL && /model/i.test(body)) {
                 const next = model !== DEFAULT_MODEL ? DEFAULT_MODEL : FALLBACK_MODEL
                 console.error(`[sales-agent] unknown model ${model}, falling back to ${next}`)
-                return callClaude({ system, messages, model: next, maxTokens, temperature, deadlineAtMs })
+                return await callClaude({ system, messages, model: next, maxTokens, temperature, deadlineAtMs })
             }
             throw new Error(`anthropic ${res.status}: ${body.slice(0, 400)}`)
         }
@@ -387,7 +389,7 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
             timeout.providerStarted = true
             throw timeout
         }
-        if (err && err.providerStarted == null) err.providerStarted = true
+        if (err) err.providerStarted = providerStarted || err.providerStarted !== false
         throw err
     } finally {
         // Keep the controller alive through headers *and* body decoding.

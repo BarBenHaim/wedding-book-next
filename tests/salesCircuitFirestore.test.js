@@ -1,24 +1,42 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const store = vi.hoisted(() => {
     const docs = new Map()
     let queue = Promise.resolve()
     let failCommit = false
+    let nowMs = 10_000
+    let stagedWrites = []
+    let committedWrites = []
+    let readGates = []
     const doc = key => ({ key })
+    const snapshot = ref => ({ exists: docs.has(ref.key), data: () => docs.get(ref.key) })
     const db = {
         collection: name => ({ doc: id => doc(`${name}/${id}`) }),
         runTransaction: work => {
             const run = queue.then(async () => {
                 const writes = []
                 const tx = {
-                    get: async ref => ({ exists: docs.has(ref.key), data: () => docs.get(ref.key) }),
-                    set: (ref, value, options) => writes.push({ ref, value, options }),
+                    get: async ref => {
+                        const index = readGates.findIndex(gate => gate.key === ref.key)
+                        if (index >= 0) {
+                            const [gate] = readGates.splice(index, 1)
+                            gate.markStarted()
+                            await gate.wait
+                        }
+                        return snapshot(ref)
+                    },
+                    set: (ref, value, options) => {
+                        const write = { key: ref.key, value, options }
+                        writes.push(write)
+                        stagedWrites.push(write)
+                    },
                 }
                 const result = await work(tx)
                 if (failCommit) throw new Error('injected commit failure')
                 for (const write of writes) {
-                    const old = docs.get(write.ref.key) || {}
-                    docs.set(write.ref.key, write.options?.merge ? { ...old, ...write.value } : write.value)
+                    const old = docs.get(write.key) || {}
+                    docs.set(write.key, write.options?.merge ? { ...old, ...write.value } : write.value)
+                    committedWrites.push(write)
                 }
                 return result
             })
@@ -28,96 +46,357 @@ const store = vi.hoisted(() => {
     }
     return {
         db,
-        reset() { docs.clear(); queue = Promise.resolve(); failCommit = false },
+        reset() {
+            docs.clear()
+            queue = Promise.resolve()
+            failCommit = false
+            nowMs = 10_000
+            stagedWrites = []
+            committedWrites = []
+            readGates = []
+        },
         set(key, value) { docs.set(key, value) },
         get(key) { return docs.get(key) },
-        values() { return [...docs.entries()] },
+        entries() { return [...docs.entries()] },
         fail() { failCommit = true },
+        now() { return nowMs },
+        setNow(value) { nowMs = value },
+        staged() { return [...stagedWrites] },
+        committed() { return [...committedWrites] },
+        delayRead(key) {
+            let release
+            let markStarted
+            const wait = new Promise(resolve => { release = resolve })
+            const started = new Promise(resolve => { markStarted = resolve })
+            readGates.push({ key, wait, markStarted })
+            return { started, release }
+        },
     }
 })
 
 vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: store.db }))
-vi.mock('firebase-admin/firestore', () => ({ FieldValue: { serverTimestamp: () => 'SERVER_TIME', increment: n => ({ increment: n }), arrayUnion: (...items) => ({ arrayUnion: items }) } }))
+vi.mock('firebase-admin/firestore', () => ({
+    FieldValue: {
+        serverTimestamp: () => 'SERVER_TIME',
+        increment: n => ({ increment: n }),
+        arrayUnion: (...items) => ({ arrayUnion: items }),
+    },
+}))
 
-import { acquireProviderCircuit, buildExchangePatch, completeProviderFallback, completeSuccessfulExchange, releaseProviderProbe } from '@/lib/salesAgent/leads'
+import {
+    acquireProviderCircuit,
+    buildExchangePatch,
+    completeProviderFallback,
+    completeSuccessfulExchange,
+    recordProviderFailure,
+    recordProviderSuccess,
+    releaseProviderProbe,
+} from '@/lib/salesAgent/leads'
 
-describe('Firestore provider circuit and fallback fences', () => {
-    beforeEach(() => {
-        store.reset()
-        vi.spyOn(Date, 'now').mockReturnValue(10_000)
-    })
+const RUNTIME = 'sales_runtime/anthropic'
+const EVENT = 'sales_inbound_events/event-token'
+const DEADLINE = 10_100
+const processingEvent = (overrides = {}) => ({
+    status: 'processing', leaseUntilMs: 20_000, claimToken: 'claim-token', claimGeneration: 1, ...overrides,
+})
+const fallbackArgs = (overrides = {}) => ({
+    eventId: 'event-token', claimToken: 'claim-token', claimGeneration: 1, phone: 'test-phone-123',
+    reason: 'תקלה בשירות ה-AI',
+    outcome: { sendText: 'קיבלתי את ההודעה שלך. מישהו מהצוות יחזור אליך בהקדם.', handoff: true },
+    ...overrides,
+})
+const parsed = {
+    messages: ['assistant one', 'assistant two'], stage: 'offer_sent', customerName: 'Name',
+    eventType: 'wedding', eventDate: '2026-12-12', celebrantName: 'Celebrant',
+    packageInterest: 'premium', notes: 'note', callbackPromised: '2026-11-11',
+    objectionRaised: true, image: 'book_wedding', handoff: true, handoffReason: 'human',
+}
+const exchange = {
+    phone: 'test-lead-456', incomingText: 'customer', parsed, followUpAt: null,
+    profileName: 'Profile', source: 'instagram', variant: 'question_first', isNew: true,
+}
+const successArgs = (overrides = {}) => ({
+    eventId: 'event-token', claimToken: 'claim-token', claimGeneration: 1,
+    exchange, outcome: { sendText: 'answer', handoff: true }, ...overrides,
+})
 
+function expectNoWrites() {
+    expect(store.staged()).toEqual([])
+    expect(store.committed()).toEqual([])
+}
+
+beforeEach(() => {
+    store.reset()
+    vi.spyOn(Date, 'now').mockImplementation(() => store.now())
+})
+
+afterEach(() => {
+    vi.restoreAllMocks()
+})
+
+describe('Firestore provider acquire deadline fence', () => {
     it('allows exactly one concurrent half-open acquire', async () => {
-        store.set('sales_runtime/anthropic', { consecutiveFailures: 3, openUntilMs: 9_999 })
+        store.set(RUNTIME, { consecutiveFailures: 3, openUntilMs: 9_999 })
 
         const results = await Promise.all([acquireProviderCircuit(), acquireProviderCircuit()])
 
         expect(results.filter(result => result.allow)).toHaveLength(1)
         expect(results.filter(result => result.mode === 'half-open-busy')).toHaveLength(1)
+        expect(store.committed()).toHaveLength(1)
     })
 
-    it('atomically commits the fallback event and human state', async () => {
-        store.set('sales_inbound_events/event-token', { status: 'processing', leaseUntilMs: 20_000, claimToken: 'claim-token', claimGeneration: 1 })
+    it('acquire delayed-read expiry stages and commits zero writes', async () => {
+        store.set(RUNTIME, { consecutiveFailures: 3, openUntilMs: 9_999 })
+        const gate = store.delayRead(RUNTIME)
+        const pending = acquireProviderCircuit({ deadlineAtMs: DEADLINE })
+        await gate.started
+        store.setNow(DEADLINE)
+        gate.release()
 
-        const result = await completeProviderFallback({
-            eventId: 'event-token', claimToken: 'claim-token', claimGeneration: 1, phone: 'test-phone-token',
-            reason: 'תקלה בשירות ה-AI', outcome: { sendText: 'קיבלתי את ההודעה שלך. מישהו מהצוות יחזור אליך בהקדם.', handoff: true },
-        })
+        await expect(pending).resolves.toEqual({ allow: false, mode: 'deadline' })
+        expectNoWrites()
+    })
+})
 
-        expect(result.action).toBe('completed')
-        expect(store.values().find(([key]) => key.startsWith('sales_leads/'))?.[1]).toMatchObject({ human: true, handoffReason: 'תקלה בשירות ה-AI' })
-        expect(store.get('sales_inbound_events/event-token')).toMatchObject({ status: 'completed', outcome: { handoff: true } })
+describe('Firestore provider success resolver matrix', () => {
+    it('success resolver matching probe resets the breaker', async () => {
+        store.set(RUNTIME, { consecutiveFailures: 3, openUntilMs: null, halfOpenProbeId: 'probe-a', halfOpenLeaseUntilMs: 20_000 })
+
+        await expect(recordProviderSuccess('probe-a')).resolves.toMatchObject({ action: 'resolved' })
+
+        expect(store.get(RUNTIME)).toMatchObject({ consecutiveFailures: 0, openUntilMs: null, halfOpenProbeId: null })
+        expect(store.committed()).toHaveLength(1)
     })
 
-    it('rolls back the human pause when fallback commit fails', async () => {
-        store.set('sales_inbound_events/event-token', { status: 'processing', leaseUntilMs: 20_000, claimToken: 'claim-token', claimGeneration: 1 })
+    it('success resolver mismatched probe is stale and writes nothing', async () => {
+        const newer = { consecutiveFailures: 3, openUntilMs: null, halfOpenProbeId: 'probe-new', halfOpenLeaseUntilMs: 20_000 }
+        store.set(RUNTIME, newer)
+
+        await expect(recordProviderSuccess('probe-old')).resolves.toEqual({ action: 'stale' })
+
+        expect(store.get(RUNTIME)).toEqual(newer)
+        expectNoWrites()
+    })
+
+    it('success resolver delayed-read expiry cannot reset a newer probe', async () => {
+        store.set(RUNTIME, { consecutiveFailures: 3, halfOpenProbeId: 'probe-old', halfOpenLeaseUntilMs: 20_000 })
+        const gate = store.delayRead(RUNTIME)
+        const pending = recordProviderSuccess('probe-old', DEADLINE)
+        await gate.started
+        const newer = { consecutiveFailures: 3, halfOpenProbeId: 'probe-new', halfOpenLeaseUntilMs: 30_000 }
+        store.set(RUNTIME, newer)
+        store.setNow(DEADLINE)
+        gate.release()
+
+        await expect(pending).resolves.toEqual({ action: 'deadline' })
+        expect(store.get(RUNTIME)).toEqual(newer)
+        expectNoWrites()
+    })
+})
+
+describe('Firestore provider failure resolver matrix', () => {
+    it('failure resolver matching probe increments once and clears ownership', async () => {
+        store.set(RUNTIME, { consecutiveFailures: 1, openUntilMs: null, halfOpenProbeId: 'probe-a', halfOpenLeaseUntilMs: 20_000 })
+
+        await expect(recordProviderFailure('timeout', 'probe-a')).resolves.toMatchObject({ action: 'resolved' })
+
+        expect(store.get(RUNTIME)).toMatchObject({ consecutiveFailures: 2, lastErrorCode: 'timeout', halfOpenProbeId: null })
+        expect(store.committed()).toHaveLength(1)
+    })
+
+    it('failure resolver mismatched probe is stale and writes nothing', async () => {
+        const newer = { consecutiveFailures: 3, openUntilMs: null, halfOpenProbeId: 'probe-new', halfOpenLeaseUntilMs: 20_000 }
+        store.set(RUNTIME, newer)
+
+        await expect(recordProviderFailure('timeout', 'probe-old')).resolves.toEqual({ action: 'stale' })
+
+        expect(store.get(RUNTIME)).toEqual(newer)
+        expectNoWrites()
+    })
+
+    it('failure resolver reopens the breaker from a matching half-open probe', async () => {
+        store.set(RUNTIME, { consecutiveFailures: 3, openUntilMs: null, halfOpenProbeId: 'probe-a', halfOpenLeaseUntilMs: 20_000 })
+
+        await expect(recordProviderFailure('rate_limit', 'probe-a')).resolves.toMatchObject({ action: 'resolved' })
+
+        expect(store.get(RUNTIME)).toMatchObject({ consecutiveFailures: 4, openUntilMs: 310_000, lastErrorCode: 'rate_limit', halfOpenProbeId: null })
+    })
+
+    it('failure resolver delayed-read expiry cannot increment a newer probe', async () => {
+        store.set(RUNTIME, { consecutiveFailures: 3, halfOpenProbeId: 'probe-old', halfOpenLeaseUntilMs: 20_000 })
+        const gate = store.delayRead(RUNTIME)
+        const pending = recordProviderFailure('timeout', 'probe-old', DEADLINE)
+        await gate.started
+        const newer = { consecutiveFailures: 3, halfOpenProbeId: 'probe-new', halfOpenLeaseUntilMs: 30_000 }
+        store.set(RUNTIME, newer)
+        store.setNow(DEADLINE)
+        gate.release()
+
+        await expect(pending).resolves.toEqual({ action: 'deadline' })
+        expect(store.get(RUNTIME)).toEqual(newer)
+        expectNoWrites()
+    })
+})
+
+describe('Firestore provider probe release matrix', () => {
+    it('release matching probe clears only lease metadata without changing failures', async () => {
+        store.set(RUNTIME, { consecutiveFailures: 3, openUntilMs: null, halfOpenProbeId: 'probe-a', halfOpenLeaseUntilMs: 20_000 })
+
+        await expect(releaseProviderProbe('probe-a')).resolves.toEqual({ action: 'released' })
+
+        expect(store.get(RUNTIME)).toMatchObject({ consecutiveFailures: 3, halfOpenProbeId: null, halfOpenLeaseUntilMs: null })
+        expect(store.committed()).toHaveLength(1)
+    })
+
+    it('release mismatched probe is stale and writes nothing', async () => {
+        const newer = { consecutiveFailures: 3, halfOpenProbeId: 'probe-new', halfOpenLeaseUntilMs: 20_000 }
+        store.set(RUNTIME, newer)
+
+        await expect(releaseProviderProbe('probe-old')).resolves.toEqual({ action: 'stale' })
+
+        expect(store.get(RUNTIME)).toEqual(newer)
+        expectNoWrites()
+    })
+
+    it('release pre-entry deadline expiry stages and commits zero writes', async () => {
+        store.setNow(DEADLINE)
+
+        await expect(releaseProviderProbe('probe-a', DEADLINE)).rejects.toThrow('deadline exhausted')
+
+        expectNoWrites()
+    })
+
+    it('release delayed-read expiry cannot clear a newer probe', async () => {
+        store.set(RUNTIME, { consecutiveFailures: 3, halfOpenProbeId: 'probe-old', halfOpenLeaseUntilMs: 20_000 })
+        const gate = store.delayRead(RUNTIME)
+        const pending = releaseProviderProbe('probe-old', DEADLINE)
+        await gate.started
+        const newer = { consecutiveFailures: 3, halfOpenProbeId: 'probe-new', halfOpenLeaseUntilMs: 30_000 }
+        store.set(RUNTIME, newer)
+        store.setNow(DEADLINE)
+        gate.release()
+
+        await expect(pending).resolves.toEqual({ action: 'deadline' })
+        expect(store.get(RUNTIME)).toEqual(newer)
+        expectNoWrites()
+    })
+})
+
+describe('Firestore atomic provider fallback matrix', () => {
+    it('fallback success commits the event and human state as one pair', async () => {
+        store.set(EVENT, processingEvent())
+
+        await expect(completeProviderFallback(fallbackArgs())).resolves.toMatchObject({ action: 'completed' })
+
+        expect(store.entries().find(([key]) => key.startsWith('sales_leads/'))?.[1]).toMatchObject({ human: true, handoffReason: 'תקלה בשירות ה-AI' })
+        expect(store.get(EVENT)).toMatchObject({ status: 'completed', outcome: { handoff: true } })
+        expect(store.committed().map(write => write.key).sort()).toEqual([EVENT, 'sales_leads/123'].sort())
+    })
+
+    it('fallback stale generation writes neither lead nor event', async () => {
+        const newer = processingEvent({ claimGeneration: 2 })
+        store.set(EVENT, newer)
+
+        await expect(completeProviderFallback(fallbackArgs())).resolves.toEqual({ action: 'stale' })
+
+        expect(store.get(EVENT)).toEqual(newer)
+        expectNoWrites()
+    })
+
+    it('fallback pre-entry deadline expiry stages and commits zero writes', async () => {
+        store.set(EVENT, processingEvent())
+        store.setNow(DEADLINE)
+
+        await expect(completeProviderFallback(fallbackArgs({ deadlineAtMs: DEADLINE }))).rejects.toThrow('deadline exhausted')
+
+        expectNoWrites()
+    })
+
+    it('fallback delayed-read expiry cannot mutate a newer event claim', async () => {
+        store.set(EVENT, processingEvent())
+        const gate = store.delayRead(EVENT)
+        const pending = completeProviderFallback(fallbackArgs({ deadlineAtMs: DEADLINE }))
+        await gate.started
+        const newer = processingEvent({ claimToken: 'new-token', claimGeneration: 2, leaseUntilMs: 30_000 })
+        store.set(EVENT, newer)
+        store.setNow(DEADLINE)
+        gate.release()
+
+        await expect(pending).resolves.toEqual({ action: 'deadline' })
+        expect(store.get(EVENT)).toEqual(newer)
+        expect(store.entries().find(([key]) => key.startsWith('sales_leads/'))).toBeUndefined()
+        expectNoWrites()
+    })
+
+    it('fallback rollback exposes staged pair but commits neither write', async () => {
+        store.set(EVENT, processingEvent())
         store.fail()
 
-        await expect(completeProviderFallback({
-            eventId: 'event-token', claimToken: 'claim-token', claimGeneration: 1, phone: 'test-phone-token',
-            reason: 'תקלה בשירות ה-AI', outcome: { sendText: 'קיבלתי את ההודעה שלך. מישהו מהצוות יחזור אליך בהקדם.', handoff: true },
-        })).rejects.toThrow('injected commit failure')
+        await expect(completeProviderFallback(fallbackArgs())).rejects.toThrow('injected commit failure')
 
-        expect(store.values().find(([key]) => key.startsWith('sales_leads/'))).toBeUndefined()
-        expect(store.get('sales_inbound_events/event-token').status).toBe('processing')
+        expect(store.staged().map(write => write.key).sort()).toEqual([EVENT, 'sales_leads/123'].sort())
+        expect(store.committed()).toEqual([])
+        expect(store.get(EVENT)).toEqual(processingEvent())
+        expect(store.entries().find(([key]) => key.startsWith('sales_leads/'))).toBeUndefined()
     })
+})
 
-    it('does not pause a lead for a stale reclaimed claim', async () => {
-        store.set('sales_inbound_events/event-token', { status: 'processing', leaseUntilMs: 20_000, claimToken: 'new-token', claimGeneration: 2 })
-
-        const result = await completeProviderFallback({
-            eventId: 'event-token', claimToken: 'old-token', claimGeneration: 1, phone: 'test-phone-token',
-            reason: 'תקלה בשירות ה-AI', outcome: { sendText: 'קיבלתי את ההודעה שלך. מישהו מהצוות יחזור אליך בהקדם.', handoff: true },
-        })
-
-        expect(result.action).toBe('busy')
-        expect(store.values().find(([key]) => key.startsWith('sales_leads/'))).toBeUndefined()
-    })
-
-    it('uses the same rich exchange patch for the atomic success commit', async () => {
-        const parsed = { messages: ['assistant one', 'assistant two'], stage: 'offer_sent', customerName: 'Name', eventType: 'wedding', eventDate: '2026-12-12', celebrantName: 'Celebrant', packageInterest: 'premium', notes: 'note', callbackPromised: '2026-11-11', objectionRaised: true, image: 'book_wedding', handoff: true, handoffReason: 'human' }
-        const exchange = { phone: 'test123', incomingText: 'customer', parsed, followUpAt: null, profileName: 'Profile', source: 'instagram', variant: 'warm', isNew: true }
+describe('Firestore atomic successful exchange matrix', () => {
+    it('successful exchange commits the exact exchange and event pair', async () => {
+        store.set(EVENT, processingEvent())
         const expected = buildExchangePatch(exchange)
-        store.set('sales_inbound_events/event-token', { status: 'processing', leaseUntilMs: 20_000, claimToken: 'claim-token', claimGeneration: 1 })
 
-        const result = await completeSuccessfulExchange({ eventId: 'event-token', claimToken: 'claim-token', claimGeneration: 1, exchange, outcome: { sendText: 'answer', handoff: true } })
+        await expect(completeSuccessfulExchange(successArgs())).resolves.toMatchObject({ action: 'completed' })
 
-        expect(result.action).toBe('completed')
-        expect(store.values().find(([key]) => key === `sales_leads/${expected.id}`)?.[1]).toEqual(expected.patch)
-        expect(store.get('sales_inbound_events/event-token')).toMatchObject({ status: 'completed', outcome: { sendText: 'answer', handoff: true } })
+        expect(store.get(`sales_leads/${expected.id}`)).toEqual(expected.patch)
+        expect(store.get(EVENT)).toMatchObject({ status: 'completed', outcome: { sendText: 'answer', handoff: true } })
+        expect(store.committed().map(write => write.key).sort()).toEqual([EVENT, `sales_leads/${expected.id}`].sort())
     })
 
-    it('rolls back atomic success when commit rejects', async () => {
-        store.set('sales_inbound_events/event-token', { status: 'processing', leaseUntilMs: 20_000, claimToken: 'claim-token', claimGeneration: 1 })
+    it('successful exchange stale generation writes neither lead nor event', async () => {
+        const newer = processingEvent({ claimGeneration: 2 })
+        store.set(EVENT, newer)
+
+        await expect(completeSuccessfulExchange(successArgs())).resolves.toEqual({ action: 'stale' })
+
+        expect(store.get(EVENT)).toEqual(newer)
+        expectNoWrites()
+    })
+
+    it('successful exchange pre-entry deadline expiry stages and commits zero writes', async () => {
+        store.set(EVENT, processingEvent())
+        store.setNow(DEADLINE)
+
+        await expect(completeSuccessfulExchange(successArgs({ deadlineAtMs: DEADLINE }))).rejects.toThrow('deadline exhausted')
+
+        expectNoWrites()
+    })
+
+    it('successful exchange delayed-read expiry cannot mutate a newer event claim', async () => {
+        store.set(EVENT, processingEvent())
+        const gate = store.delayRead(EVENT)
+        const pending = completeSuccessfulExchange(successArgs({ deadlineAtMs: DEADLINE }))
+        await gate.started
+        const newer = processingEvent({ claimToken: 'new-token', claimGeneration: 2, leaseUntilMs: 30_000 })
+        store.set(EVENT, newer)
+        store.setNow(DEADLINE)
+        gate.release()
+
+        await expect(pending).resolves.toEqual({ action: 'deadline' })
+        expect(store.get(EVENT)).toEqual(newer)
+        expect(store.entries().find(([key]) => key.startsWith('sales_leads/'))).toBeUndefined()
+        expectNoWrites()
+    })
+
+    it('successful exchange rollback exposes staged pair but commits neither write', async () => {
+        store.set(EVENT, processingEvent())
         store.fail()
-        await expect(completeSuccessfulExchange({ eventId: 'event-token', claimToken: 'claim-token', claimGeneration: 1, exchange: { phone: 'test123', incomingText: 'customer', parsed: { messages: ['answer'], stage: 'engaged' }, followUpAt: null, isNew: false }, outcome: { sendText: 'answer' } })).rejects.toThrow('injected commit failure')
-        expect(store.get('sales_inbound_events/event-token').status).toBe('processing')
-    })
 
-    it('releases only its matching half-open probe without changing failures', async () => {
-        store.set('sales_runtime/anthropic', { consecutiveFailures: 3, openUntilMs: null, halfOpenProbeId: 'probe-a', halfOpenLeaseUntilMs: 20_000 })
-        expect(await releaseProviderProbe('probe-a')).toEqual({ action: 'released' })
-        expect(store.get('sales_runtime/anthropic')).toMatchObject({ consecutiveFailures: 3, halfOpenProbeId: null })
-        expect(await releaseProviderProbe('probe-old')).toEqual({ action: 'stale' })
+        await expect(completeSuccessfulExchange(successArgs())).rejects.toThrow('injected commit failure')
+
+        expect(store.staged().map(write => write.key).sort()).toEqual([EVENT, 'sales_leads/456'].sort())
+        expect(store.committed()).toEqual([])
+        expect(store.get(EVENT)).toEqual(processingEvent())
+        expect(store.get('sales_leads/456')).toBeUndefined()
     })
 })

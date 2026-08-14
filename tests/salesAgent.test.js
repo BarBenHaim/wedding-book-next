@@ -40,6 +40,24 @@ describe('provider body deadline', () => {
 
         await expect(callClaude({ system: 'system', messages: [], deadlineAtMs: Date.now() + 12 })).rejects.toThrow('anthropic timeout')
     })
+
+    it('preserves the first fetch when an unknown-model fallback expires before its fetch', async () => {
+        process.env.ANTHROPIC_API_KEY = 'test-secret'
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        const now = vi.spyOn(Date, 'now')
+        now.mockReturnValueOnce(0).mockReturnValue(100)
+        const fetch = vi.fn().mockResolvedValue({
+            ok: false,
+            status: 404,
+            text: vi.fn().mockResolvedValue('unknown model'),
+        })
+        vi.stubGlobal('fetch', fetch)
+
+        await expect(callClaude({
+            system: 'system', messages: [], model: 'unknown-model', deadlineAtMs: 100,
+        })).rejects.toMatchObject({ providerStarted: true })
+        expect(fetch).toHaveBeenCalledTimes(1)
+    })
 })
 
 describe('catalog — the only facts the agent may state', () => {

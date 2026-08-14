@@ -145,6 +145,8 @@ describe('inbound event duplicate fencing', () => {
             },
         })
         expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.recordMediaSent).not.toHaveBeenCalled()
+        expect(mocks.compactLeadBestEffort).not.toHaveBeenCalled()
         expectNoProviderWork()
     })
 
@@ -248,6 +250,73 @@ describe('Anthropic outage handling', () => {
         expect(mocks.recordProviderFailure).toHaveBeenCalledWith('invalid_json', null, expect.any(Number))
     })
 
+    it('counts a malformed first response when repair expires before fetch and never releases its probe', async () => {
+        prepareModelPath()
+        const prefetchDeadline = Object.assign(new Error('provider deadline exhausted'), { providerStarted: false })
+        mocks.callClaude
+            .mockResolvedValueOnce({ text: 'not json', usage: null, model: 'test' })
+            .mockRejectedValueOnce(prefetchDeadline)
+        mocks.parseAgentJson.mockReturnValue({ malformed: true, messages: [], handoff: true })
+        vi.spyOn(console, 'warn').mockImplementation(() => {})
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const first = await post(inbound({ text: 'צריך מחיר' }))
+
+        expect(first.body).toMatchObject({ sendText: safeFallback, handoff: true })
+        expect(mocks.recordProviderFailure).toHaveBeenCalledTimes(1)
+        expect(mocks.recordProviderFailure).toHaveBeenCalledWith('invalid_json', null, expect.any(Number))
+        expect(mocks.releaseProviderProbe).not.toHaveBeenCalled()
+        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
+
+        mocks.claimInboundEvent.mockResolvedValueOnce({ action: 'cached', outcome: { sendText: safeFallback, handoff: true } })
+        const duplicate = await post(inbound({ text: 'צריך מחיר' }))
+        expect(duplicate.body).toMatchObject({ duplicate: true, shouldSend: false, sendText: '', handoff: false })
+        expect(mocks.callClaude).toHaveBeenCalledTimes(2)
+        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
+    })
+
+    it('counts an unknown-model sequence whose recursive fallback expires before fetch', async () => {
+        prepareModelPath()
+        const recursiveDeadline = Object.assign(new Error('anthropic timeout: provider deadline exhausted'), { providerStarted: true })
+        mocks.callClaude.mockRejectedValue(recursiveDeadline)
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const first = await post(inbound({ text: 'צריך מחיר' }))
+
+        expect(first.body).toMatchObject({ sendText: safeFallback, handoff: true })
+        expect(mocks.recordProviderFailure).toHaveBeenCalledTimes(1)
+        expect(mocks.recordProviderFailure).toHaveBeenCalledWith('timeout', null, expect.any(Number))
+        expect(mocks.releaseProviderProbe).not.toHaveBeenCalled()
+        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
+
+        mocks.claimInboundEvent.mockResolvedValueOnce({ action: 'cached', outcome: { sendText: safeFallback, handoff: true } })
+        const duplicate = await post(inbound({ text: 'צריך מחיר' }))
+        expect(duplicate.body).toMatchObject({ duplicate: true, shouldSend: false, sendText: '', handoff: false })
+        expect(mocks.callClaude).toHaveBeenCalledTimes(1)
+        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
+    })
+
+    it('releases a genuinely zero-fetch sequence without incrementing provider failures', async () => {
+        prepareModelPath()
+        const prefetchDeadline = Object.assign(new Error('provider deadline exhausted'), { providerStarted: false })
+        mocks.acquireProviderCircuit.mockResolvedValue({ allow: true, mode: 'half-open', probeId: 'probe-token' })
+        mocks.callClaude.mockRejectedValue(prefetchDeadline)
+
+        const first = await post(inbound({ text: 'צריך מחיר' }))
+
+        expect(first.body).toMatchObject({ sendText: safeFallback, handoff: true })
+        expect(mocks.releaseProviderProbe).toHaveBeenCalledTimes(1)
+        expect(mocks.releaseProviderProbe).toHaveBeenCalledWith('probe-token', expect.any(Number))
+        expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
+        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
+
+        mocks.claimInboundEvent.mockResolvedValueOnce({ action: 'cached', outcome: { sendText: safeFallback, handoff: true } })
+        const duplicate = await post(inbound({ text: 'צריך מחיר' }))
+        expect(duplicate.body).toMatchObject({ duplicate: true, shouldSend: false, sendText: '', handoff: false })
+        expect(mocks.callClaude).toHaveBeenCalledTimes(1)
+        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
+    })
+
     it('resets the breaker only after a valid model result', async () => {
         prepareModelPath()
         mocks.callClaude.mockResolvedValue({ text: 'valid', usage: null, model: 'test' })
@@ -262,6 +331,84 @@ describe('Anthropic outage handling', () => {
         expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
         expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
         expect(mocks.compactLeadBestEffort).toHaveBeenCalledWith('test-phone-token')
+    })
+
+    it('runs media analytics and compaction only after the durable exchange completes', async () => {
+        prepareModelPath()
+        mocks.mergeMedia.mockReturnValue({
+            'image-key': { kind: 'image', url: '/test-image.jpg', caption: 'catalog caption' },
+        })
+        mocks.recordMediaSent.mockResolvedValue(undefined)
+        mocks.callClaude.mockResolvedValue({ text: 'valid', usage: null, model: 'test' })
+        mocks.parseAgentJson.mockReturnValue({
+            malformed: false, messages: ['שלום'], stage: 'engaged', handoff: false,
+            image: 'image-key', eventType: null, callbackPromised: null, followUpAt: null,
+        })
+
+        const result = await post(inbound({ text: 'שלום' }))
+
+        expect(result.body).toMatchObject({ sendImage: '/test-image.jpg', hasImage: true })
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
+        expect(mocks.recordMediaSent).toHaveBeenCalledWith('image-key')
+        expect(mocks.compactLeadBestEffort).toHaveBeenCalledWith('test-phone-token')
+        expect(mocks.completeSuccessfulExchange.mock.invocationCallOrder[0]).toBeLessThan(mocks.recordMediaSent.mock.invocationCallOrder[0])
+        expect(mocks.completeSuccessfulExchange.mock.invocationCallOrder[0]).toBeLessThan(mocks.compactLeadBestEffort.mock.invocationCallOrder[0])
+    })
+
+    it.each([
+        ['cached', { action: 'cached', outcome: { sendText: 'already durable', handoff: false } }, 200, ''],
+        ['busy', { action: 'busy' }, 503, 'success-commit-stale'],
+        ['stale', { action: 'stale' }, 503, 'success-commit-stale'],
+        ['deadline', { action: 'deadline' }, 503, 'success-commit-deadline-exhausted'],
+    ])('does not run media analytics or compaction for durable %s', async (_name, durable, status, error) => {
+        prepareModelPath()
+        mocks.mergeMedia.mockReturnValue({
+            'image-key': { kind: 'image', url: '/test-image.jpg', caption: 'catalog caption' },
+        })
+        mocks.callClaude.mockResolvedValue({ text: 'valid', usage: null, model: 'test' })
+        mocks.parseAgentJson.mockReturnValue({
+            malformed: false, messages: ['שלום'], stage: 'engaged', handoff: false,
+            image: 'image-key', eventType: null, callbackPromised: null, followUpAt: null,
+        })
+        mocks.completeSuccessfulExchange.mockResolvedValue(durable)
+
+        const result = await post(inbound({ text: 'שלום' }))
+
+        expect(result.status).toBe(status)
+        if (error) expect(result.body.error).toBe(error)
+        else expect(result.body).toMatchObject({ duplicate: true, shouldSend: false, sendText: '' })
+        expect(mocks.recordMediaSent).not.toHaveBeenCalled()
+        expect(mocks.compactLeadBestEffort).not.toHaveBeenCalled()
+    })
+
+    it('does not run media analytics or compaction when the durable exchange rejects', async () => {
+        prepareModelPath()
+        mocks.callClaude.mockResolvedValue({ text: 'valid', usage: null, model: 'test' })
+        mocks.parseAgentJson.mockReturnValue({
+            malformed: false, messages: ['שלום'], stage: 'engaged', handoff: false,
+            image: null, eventType: null, callbackPromised: null, followUpAt: null,
+        })
+        mocks.completeSuccessfulExchange.mockRejectedValue(new Error('transaction rejected'))
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const result = await post(inbound({ text: 'שלום' }))
+
+        expect(result).toEqual({ status: 503, body: { error: 'success-commit-failed' } })
+        expect(mocks.recordMediaSent).not.toHaveBeenCalled()
+        expect(mocks.compactLeadBestEffort).not.toHaveBeenCalled()
+    })
+
+    it('does not run success bookkeeping on the provider-fallback path', async () => {
+        prepareModelPath()
+        mocks.callClaude.mockRejectedValue(Object.assign(new Error('anthropic timeout'), { providerStarted: true }))
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const result = await post(inbound({ text: 'שלום' }))
+
+        expect(result.body).toMatchObject({ sendText: safeFallback, handoff: true })
+        expect(mocks.completeSuccessfulExchange).not.toHaveBeenCalled()
+        expect(mocks.recordMediaSent).not.toHaveBeenCalled()
+        expect(mocks.compactLeadBestEffort).not.toHaveBeenCalled()
     })
 
     it('returns an honest no-send 503 when the atomic fallback commit fails', async () => {

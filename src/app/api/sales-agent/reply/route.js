@@ -459,9 +459,10 @@ export async function POST(req) {
 
     let parsed
     let providerFailureCode = null
-    let providerStarted = true
+    let providerStarted = false
     try {
         const { text: raw, usage, model, stopReason } = await callClaude({ system, messages, deadlineAtMs: providerDeadlineAtMs })
+        providerStarted = true
         // The merged keys, or every uploaded asset the model was just
         // told about gets nulled at parse. See parseAgentJson.
         parsed = parseAgentJson(raw, { mediaKeys: Object.keys(library) })
@@ -478,20 +479,29 @@ export async function POST(req) {
         // truncated answer, or a model that wrapped the JSON in prose.
         if (parsed.malformed) {
             console.warn('[sales-agent] unparseable output, retrying once', 'stop:', stopReason)
-            const retry = await callClaude({
-                system: `${system}\n\nחשוב: התשובה הקודמת שלך לא הייתה JSON תקין. החזר עכשיו אך ורק אובייקט JSON יחיד, בלי טקסט לפניו או אחריו, ושמור על התשובה ללקוח קצרה.`,
-                messages,
-                temperature: 0.3,
-                deadlineAtMs: providerDeadlineAtMs,
-            })
-            meter(retry.usage, retry.model)
-            const second = parseAgentJson(retry.text, { mediaKeys: Object.keys(library) })
-            if (!second.malformed) parsed = second
+            let retry
+            try {
+                retry = await callClaude({
+                    system: `${system}\n\nחשוב: התשובה הקודמת שלך לא הייתה JSON תקין. החזר עכשיו אך ורק אובייקט JSON יחיד, בלי טקסט לפניו או אחריו, ושמור על התשובה ללקוח קצרה.`,
+                    messages,
+                    temperature: 0.3,
+                    deadlineAtMs: providerDeadlineAtMs,
+                })
+                providerStarted = true
+            } catch (err) {
+                providerStarted = providerStarted || err?.providerStarted !== false
+                providerFailureCode = err?.providerStarted === false ? 'invalid_json' : normalizeProviderError(err)
+            }
+            if (retry) {
+                meter(retry.usage, retry.model)
+                const second = parseAgentJson(retry.text, { mediaKeys: Object.keys(library) })
+                if (!second.malformed) parsed = second
+            }
         }
-        if (parsed.malformed) providerFailureCode = 'invalid_json'
+        if (parsed.malformed && !providerFailureCode) providerFailureCode = 'invalid_json'
     } catch (err) {
-        providerStarted = err?.providerStarted !== false
-        providerFailureCode = normalizeProviderError(err)
+        providerStarted = providerStarted || err?.providerStarted !== false
+        providerFailureCode = providerFailureCode || normalizeProviderError(err)
     }
 
     if (!providerStarted) {
