@@ -18,9 +18,11 @@
 
 import { adminDb } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
+import crypto from 'node:crypto'
 import { normalizePhone } from './agent'
 import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerCommand, isTestPhone, MAX_TURNS, HUMAN_PAUSE_HOURS } from './leadsCore'
 import { isoInIsrael } from './leadsView'
+import { assertCompletableInboundOutcome, decideInboundClaim, INBOUND_LEASE_MS, sanitizeInboundOutcome } from './inboundEventsCore'
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
 // importing this file boots the Admin SDK, which needs credentials.
@@ -28,9 +30,68 @@ import { isoInIsrael } from './leadsView'
 export { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerCommand, isTestPhone, MAX_TURNS, HUMAN_PAUSE_HOURS }
 
 const COLLECTION = 'sales_leads'
+const INBOUND_EVENTS_COLLECTION = 'sales_inbound_events'
 
 function ref(phone) {
     return adminDb.collection(COLLECTION).doc(phone)
+}
+
+export function inboundEventRef(eventId) {
+    return adminDb.collection(INBOUND_EVENTS_COLLECTION).doc(String(eventId))
+}
+
+/**
+ * Claim the one durable unit of inbound work before a reply can spend
+ * money or write a lead. The event id is Meta's stable delivery id; the
+ * phone is deliberately reduced to a hash before it reaches Firestore.
+ */
+export async function claimInboundEvent({ eventId, phone, occurredAt }) {
+    const eventRef = inboundEventRef(eventId)
+    return adminDb.runTransaction(async tx => {
+        const snap = await tx.get(eventRef)
+        const stored = snap.exists ? snap.data() : null
+        const nowMs = Date.now()
+        const decision = decideInboundClaim(stored, nowMs)
+        if (decision.action !== 'process') return decision
+
+        tx.set(eventRef, {
+            eventId: String(eventId),
+            phoneHash: crypto.createHash('sha256').update(String(phone)).digest('hex'),
+            occurredAt: occurredAt || new Date().toISOString(),
+            status: 'processing',
+            leaseUntilMs: nowMs + INBOUND_LEASE_MS,
+            attempts: FieldValue.increment(1),
+            createdAt: stored?.createdAt || FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true })
+        return { action: 'process' }
+    })
+}
+
+/**
+ * Finalize an event once its reply outcome has been assembled. The stored
+ * shape is intentionally descriptive only: Task 2's duplicate wrapper is
+ * the only thing permitted to decide whether anything may be sent.
+ */
+export async function completeInboundEvent({ eventId, outcome }) {
+    const cleanOutcome = sanitizeInboundOutcome(outcome)
+    assertCompletableInboundOutcome(cleanOutcome)
+    const eventRef = inboundEventRef(eventId)
+
+    return adminDb.runTransaction(async tx => {
+        const snap = await tx.get(eventRef)
+        const stored = snap.exists ? snap.data() : null
+        const decision = decideInboundClaim(stored, Date.now())
+        if (decision.action === 'cached') return decision
+
+        tx.set(eventRef, {
+            status: 'completed',
+            leaseUntilMs: null,
+            outcome: cleanOutcome,
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true })
+        return { action: 'completed', outcome: cleanOutcome }
+    })
 }
 
 export async function getLead(rawPhone) {
