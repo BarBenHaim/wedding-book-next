@@ -40,7 +40,7 @@ import {
     isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone, listLeads, recordSpend,
     listMedia, recordMediaSent, creditPendingMedia,
     claimInboundEvent, completeInboundEvent,
-    acquireProviderCircuit, recordProviderFailure, recordProviderSuccess, completeProviderFallback as persistProviderFallback, completeSuccessfulExchange,
+    acquireProviderCircuit, recordProviderFailure, recordProviderSuccess, releaseProviderProbe, completeProviderFallback as persistProviderFallback, completeSuccessfulExchange, compactLeadBestEffort,
 } from '@/lib/salesAgent/leads'
 import { costOfClaudeUsage } from '@/lib/salesAgent/pricing'
 import { parseInboundBody } from '@/lib/salesAgent/inbound'
@@ -459,6 +459,7 @@ export async function POST(req) {
 
     let parsed
     let providerFailureCode = null
+    let providerStarted = true
     try {
         const { text: raw, usage, model, stopReason } = await callClaude({ system, messages, deadlineAtMs: providerDeadlineAtMs })
         // The merged keys, or every uploaded asset the model was just
@@ -489,7 +490,18 @@ export async function POST(req) {
         }
         if (parsed.malformed) providerFailureCode = 'invalid_json'
     } catch (err) {
+        providerStarted = err?.providerStarted !== false
         providerFailureCode = normalizeProviderError(err)
+    }
+
+    if (!providerStarted) {
+        try {
+            const released = await releaseProviderProbe(circuit.probeId || null, routeDeadlineAtMs)
+            if (released.action === 'deadline') return NextResponse.json({ error: 'provider-probe-release-deadline-exhausted' }, { status: 503 })
+        } catch {
+            return NextResponse.json({ error: 'provider-probe-release-failed' }, { status: 503 })
+        }
+        return completeProviderFallback()
     }
 
     if (providerFailureCode) {
@@ -624,6 +636,7 @@ export async function POST(req) {
         const durable = await completeSuccessfulExchange({ eventId, claimToken: claim.claimToken, claimGeneration: claim.claimGeneration, exchange, outcome: responsePayload, deadlineAtMs: routeDeadlineAtMs })
         if (durable.action === 'completed') {
             if (parsed.image) recordMediaSent(parsed.image).catch(() => {})
+            compactLeadBestEffort(phone)
             Promise.allSettled(spends).catch(() => {})
             return NextResponse.json(responsePayload)
         }

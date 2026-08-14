@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
     completeInboundEvent: vi.fn(),
     completeProviderFallback: vi.fn(),
     completeSuccessfulExchange: vi.fn(),
+    releaseProviderProbe: vi.fn(),
+    compactLeadBestEffort: vi.fn(),
     acquireProviderCircuit: vi.fn(),
     recordProviderFailure: vi.fn(),
     recordProviderSuccess: vi.fn(),
@@ -59,6 +61,7 @@ vi.mock('@/lib/salesAgent/leads', () => ({
     claimInboundEvent: mocks.claimInboundEvent, completeInboundEvent: mocks.completeInboundEvent,
     completeProviderFallback: mocks.completeProviderFallback,
     completeSuccessfulExchange: mocks.completeSuccessfulExchange,
+    releaseProviderProbe: mocks.releaseProviderProbe, compactLeadBestEffort: mocks.compactLeadBestEffort,
     acquireProviderCircuit: mocks.acquireProviderCircuit,
     recordProviderFailure: mocks.recordProviderFailure, recordProviderSuccess: mocks.recordProviderSuccess,
 }))
@@ -110,6 +113,7 @@ beforeEach(async () => {
     mocks.completeInboundEvent.mockResolvedValue({ action: 'completed' })
     mocks.completeProviderFallback.mockResolvedValue({ action: 'completed' })
     mocks.completeSuccessfulExchange.mockResolvedValue({ action: 'completed' })
+    mocks.releaseProviderProbe.mockResolvedValue({ action: 'released' })
     mocks.acquireProviderCircuit.mockResolvedValue({ allow: true, mode: 'closed' })
     mocks.recordProviderFailure.mockResolvedValue(undefined)
     mocks.recordProviderSuccess.mockResolvedValue(undefined)
@@ -256,6 +260,8 @@ describe('Anthropic outage handling', () => {
 
         expect(mocks.recordProviderSuccess).toHaveBeenCalledTimes(1)
         expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
+        expect(mocks.compactLeadBestEffort).toHaveBeenCalledWith('test-phone-token')
     })
 
     it('returns an honest no-send 503 when the atomic fallback commit fails', async () => {

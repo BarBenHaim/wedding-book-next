@@ -39,7 +39,7 @@ const store = vi.hoisted(() => {
 vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: store.db }))
 vi.mock('firebase-admin/firestore', () => ({ FieldValue: { serverTimestamp: () => 'SERVER_TIME', increment: n => ({ increment: n }), arrayUnion: (...items) => ({ arrayUnion: items }) } }))
 
-import { acquireProviderCircuit, buildExchangePatch, completeProviderFallback, completeSuccessfulExchange } from '@/lib/salesAgent/leads'
+import { acquireProviderCircuit, buildExchangePatch, completeProviderFallback, completeSuccessfulExchange, releaseProviderProbe } from '@/lib/salesAgent/leads'
 
 describe('Firestore provider circuit and fallback fences', () => {
     beforeEach(() => {
@@ -112,5 +112,12 @@ describe('Firestore provider circuit and fallback fences', () => {
         store.fail()
         await expect(completeSuccessfulExchange({ eventId: 'event-token', claimToken: 'claim-token', claimGeneration: 1, exchange: { phone: 'test123', incomingText: 'customer', parsed: { messages: ['answer'], stage: 'engaged' }, followUpAt: null, isNew: false }, outcome: { sendText: 'answer' } })).rejects.toThrow('injected commit failure')
         expect(store.get('sales_inbound_events/event-token').status).toBe('processing')
+    })
+
+    it('releases only its matching half-open probe without changing failures', async () => {
+        store.set('sales_runtime/anthropic', { consecutiveFailures: 3, openUntilMs: null, halfOpenProbeId: 'probe-a', halfOpenLeaseUntilMs: 20_000 })
+        expect(await releaseProviderProbe('probe-a')).toEqual({ action: 'released' })
+        expect(store.get('sales_runtime/anthropic')).toMatchObject({ consecutiveFailures: 3, halfOpenProbeId: null })
+        expect(await releaseProviderProbe('probe-old')).toEqual({ action: 'stale' })
     })
 })

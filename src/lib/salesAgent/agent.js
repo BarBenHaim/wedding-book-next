@@ -332,10 +332,16 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
 
     const controller = new AbortController()
     const timeoutMs = attemptTimeoutMs(deadlineAtMs)
-    if (timeoutMs <= 0) throw new Error('anthropic timeout: provider deadline exhausted')
+    if (timeoutMs <= 0) {
+        const error = new Error('anthropic timeout: provider deadline exhausted')
+        error.providerStarted = false
+        throw error
+    }
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     let res
     try {
+        // This marker distinguishes an actual upstream attempt from a local
+        // deadline that expired in the small window after breaker acquire.
         res = await fetch(API_URL, {
             method: 'POST',
             signal: controller.signal,
@@ -376,7 +382,12 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
     } catch (err) {
         // An abort surfaces as a generic AbortError; name it so the
         // handoff message to the owner says something useful.
-        if (err?.name === 'AbortError') throw new Error(`anthropic timeout after ${timeoutMs}ms`)
+        if (err?.name === 'AbortError') {
+            const timeout = new Error(`anthropic timeout after ${timeoutMs}ms`)
+            timeout.providerStarted = true
+            throw timeout
+        }
+        if (err && err.providerStarted == null) err.providerStarted = true
         throw err
     } finally {
         // Keep the controller alive through headers *and* body decoding.

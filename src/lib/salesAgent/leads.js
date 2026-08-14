@@ -112,6 +112,20 @@ export async function recordProviderSuccess(probeId = null, deadlineAtMs = null)
     })
 }
 
+export async function releaseProviderProbe(probeId, deadlineAtMs = null) {
+    if (!probeId) return { action: 'released' }
+    assertBeforeDeadline(deadlineAtMs)
+    const runtimeRef = anthropicRuntimeRef()
+    return adminDb.runTransaction(async tx => {
+        const snap = await tx.get(runtimeRef)
+        if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
+        const stored = snap.exists ? breakerRuntimeState(snap.data()) : {}
+        if (stored.halfOpenProbeId !== probeId) return { action: 'stale' }
+        tx.set(runtimeRef, { ...stored, halfOpenProbeId: null, halfOpenLeaseUntilMs: null, updatedAt: FieldValue.serverTimestamp() }, { merge: false })
+        return { action: 'released' }
+    })
+}
+
 /**
  * Commit a provider fallback as one fenced transaction. A stale outbound
  * worker cannot pause a lead after its inbound lease was reclaimed.
@@ -338,6 +352,11 @@ async function compactIfNeeded(id) {
         // Compaction is housekeeping — never fail a customer reply over it.
         console.warn('[salesAgent] compact failed', err?.message || err)
     }
+}
+
+export function compactLeadBestEffort(phone) {
+    const id = normalizePhone(phone)
+    if (id) compactIfNeeded(id)
 }
 
 export async function markFollowUpSent({ phone, text, nextFollowUpAt, stage }) {
