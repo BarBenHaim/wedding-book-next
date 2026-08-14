@@ -17,6 +17,10 @@ export function sanitizeInboundOutcome(outcome = {}) {
         sendVideo: cachedText(outcome.sendVideo),
         sendVideoCaption: cachedText(outcome.sendVideoCaption),
         handoff: outcome.handoff === true,
+        // A duplicate of an intentional no-send event must preserve that
+        // silence without inventing a human takeover.
+        noReply: outcome.noReply === true,
+        skipped: cachedText(outcome.skipped),
         stage: cachedText(outcome.stage),
         followUpAt: cachedText(outcome.followUpAt),
         notifyOwner: cachedText(outcome.notifyOwner) ? redactPhoneNumber(cachedText(outcome.notifyOwner)) : null,
@@ -24,8 +28,8 @@ export function sanitizeInboundOutcome(outcome = {}) {
 }
 
 export function assertCompletableInboundOutcome(outcome = {}) {
-    if (!String(outcome.sendText || '').trim() && outcome.handoff !== true) {
-        throw new Error('inbound outcome needs sendText or handoff')
+    if (!String(outcome.sendText || '').trim() && outcome.handoff !== true && outcome.noReply !== true) {
+        throw new Error('inbound outcome needs sendText, handoff, or noReply')
     }
 }
 

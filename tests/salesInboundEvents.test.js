@@ -54,21 +54,32 @@ describe('sanitizeInboundOutcome', () => {
             sendVideo: 'https://cdn.example/demo.mp4',
             sendVideoCaption: 'דפדוף',
             handoff: false,
+            noReply: false,
+            skipped: null,
             stage: 'demo_sent',
             followUpAt: '2026-08-15',
             notifyOwner: 'טלפון: [redacted]',
         })
+    })
+
+    it('keeps a truthful terminal noReply outcome without granting handoff', () => {
+        expect(sanitizeInboundOutcome({ sendText: '', handoff: false, noReply: true, skipped: 'own-echo' }))
+            .toMatchObject({ sendText: '', handoff: false, noReply: true, skipped: 'own-echo' })
     })
 })
 
 describe('assertCompletableInboundOutcome', () => {
     it('rejects a completed event that has neither a reply nor a handoff', () => {
         expect(() => assertCompletableInboundOutcome({ sendText: '   ', handoff: false }))
-            .toThrow('inbound outcome needs sendText or handoff')
+            .toThrow('inbound outcome needs sendText, handoff, or noReply')
     })
 
     it('allows a handoff that deliberately has no customer text', () => {
         expect(() => assertCompletableInboundOutcome({ sendText: '', handoff: true })).not.toThrow()
+    })
+
+    it('allows a terminal noReply outcome that has no customer text', () => {
+        expect(() => assertCompletableInboundOutcome({ sendText: '', handoff: false, noReply: true })).not.toThrow()
     })
 })
 

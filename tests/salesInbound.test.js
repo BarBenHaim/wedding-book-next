@@ -36,7 +36,7 @@ describe('valid JSON', () => {
 
     it('keeps a complete WhatsApp referral and media identity', () => {
         const raw = JSON.stringify({
-            eventId: 'wamid.abc', phone: '972501234567', text: '', profileName: 'נועה',
+            eventId: 'wamid.abc', phone: 'test-phone-token', text: '', profileName: 'נועה',
             messageType: 'image', mediaId: '9988', occurredAt: '2026-08-14T09:00:00.000Z',
             conversationId: 'conv-1',
             referral: { sourceUrl: 'https://fb.me/ad', sourceId: '238', campaignId: '120', adsetId: '121', adId: '122' },
@@ -49,7 +49,7 @@ describe('valid JSON', () => {
 
     it('normalizes flat referral fields and unknown media types safely', () => {
         const raw = JSON.stringify({
-            eventId: 'wamid.unknown', phone: '972501234567', text: '',
+            eventId: 'wamid.unknown', phone: 'test-phone-token', text: '',
             messageType: 'sticker', campaignId: '120', adId: '122', sourceUrl: 'https://fb.me/ad',
         })
         expect(parseInboundBody(raw).body).toMatchObject({

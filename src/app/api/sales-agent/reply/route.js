@@ -93,7 +93,7 @@ export async function POST(req) {
         const raw = await req.text().catch(() => '')
         const parsed = parseInboundBody(raw)
         if (!parsed.body) {
-            console.error('[sales-agent] unreadable body', parsed.reason, raw.slice(0, 200))
+            console.error('[sales-agent] unreadable body', parsed.reason)
             return NextResponse.json({ error: 'bad-json', reason: parsed.reason }, { status: 400 })
         }
         body = parsed.body
@@ -155,17 +155,18 @@ export async function POST(req) {
     // finalizing it. A stale worker must go silent rather than replaying
     // an answer that a newer worker has already made durable.
     const complete = async payload => {
-        const hasText = !!String(payload.sendText || '').trim()
         const outcome = {
             sendText: payload.sendText || '',
             sendImage: payload.sendImage || null,
             sendImageCaption: payload.sendImageCaption || null,
             sendVideo: payload.sendVideo || null,
             sendVideoCaption: payload.sendVideoCaption || null,
-            // Task 1 accepts only sendable or handoff outcomes. Silent
-            // echoes and owner commands are stored as non-sendable terminal
-            // outcomes; the original HTTP response remains unchanged.
-            handoff: payload.handoff === true || !hasText,
+            // Handoff is reserved for an actual human takeover. An
+            // intentional no-send event remains truthful in the event
+            // record, so a duplicate cannot turn silence into a handoff.
+            handoff: payload.handoff === true,
+            noReply: payload.noReply === true,
+            skipped: payload.skipped || null,
             stage: payload.stage || null,
             followUpAt: payload.followUpAt || null,
             notifyOwner: payload.notifyOwner || null,
@@ -189,7 +190,7 @@ export async function POST(req) {
     if (!text && messageType === 'text') {
         // Reactions and empty text events stay quiet. Their event is still
         // finalized above so a provider retry cannot later wake the bot.
-        return complete({ ok: true, send: [], sendText: '', skipped: 'empty-text' })
+        return complete({ ok: true, send: [], sendText: '', handoff: false, noReply: true, skipped: 'empty-text' })
     }
 
     const today = todayISO()
@@ -212,14 +213,14 @@ export async function POST(req) {
     // knows he is typing.
     if (outgoing) {
         if (isOwnEcho(lead, text)) {
-            return complete({ ok: true, send: [], sendText: '', skipped: 'own-echo' })
+            return complete({ ok: true, send: [], sendText: '', handoff: false, noReply: true, skipped: 'own-echo' })
         }
         try {
             await setHuman(phone, true, 'ענית בעצמך בשיחה')
         } catch (err) {
             console.error('[sales-agent] auto-pause failed', err)
         }
-        return complete({ ok: true, send: [], sendText: '', paused: true, reason: 'owner-replied' })
+        return complete({ ok: true, send: [], sendText: '', handoff: true, paused: true, reason: 'owner-replied' })
     }
 
     // ── A command from Lord's own phone ──────────────────────────────
@@ -228,7 +229,7 @@ export async function POST(req) {
     if (OWNER_PHONE && phone === OWNER_PHONE) {
         const cmd = parseOwnerCommand(text)
         if (!cmd) {
-            return complete({ ok: true, send: [], sendText: '', skipped: 'owner-message' })
+            return complete({ ok: true, send: [], sendText: '', handoff: false, noReply: true, skipped: 'owner-message' })
         }
         // The digest is about the whole pipeline, so it takes no number
         // and must be handled before the "give me a number" guard.
@@ -272,7 +273,7 @@ export async function POST(req) {
     // A human already took this conversation. The bot must not talk over
     // Lord mid-negotiation — that is the fastest way to lose a warm lead.
     if (isPausedForHuman(lead)) {
-        return complete({ ok: true, send: [], sendText: '', paused: true, stage: lead.stage || 'handoff' })
+        return complete({ ok: true, send: [], sendText: '', handoff: false, noReply: true, paused: true, stage: lead.stage || 'handoff' })
     }
 
     // ── Already a customer ───────────────────────────────────────────
@@ -337,6 +338,7 @@ export async function POST(req) {
             hasVideo: false,
             stage: 'handoff',
             handoff: true,
+            noReply: false,
             handoffReason,
             notifyOwner: ownerPing(phone, handoffReason, { name: body.profileName }),
         })
@@ -390,7 +392,7 @@ export async function POST(req) {
         // The merged keys, or every uploaded asset the model was just
         // told about gets nulled at parse. See parseAgentJson.
         parsed = parseAgentJson(raw, { mediaKeys: Object.keys(library) })
-        if (usage) console.log('[sales-agent] usage', phone, usage.input_tokens, usage.output_tokens, stopReason)
+        if (usage) console.log('[sales-agent] usage', usage.input_tokens, usage.output_tokens, stopReason)
         // Metered here rather than after the retry, because a retry is a
         // second billed call and hiding it would make the failure look
         // free. See pricing.js.
@@ -402,7 +404,7 @@ export async function POST(req) {
         // costs a couple of agorot and recovers the common cases — a
         // truncated answer, or a model that wrapped the JSON in prose.
         if (parsed.malformed) {
-            console.warn('[sales-agent] unparseable output, retrying once', phone, 'stop:', stopReason)
+            console.warn('[sales-agent] unparseable output, retrying once', 'stop:', stopReason)
             const retry = await callClaude({
                 system: `${system}\n\nחשוב: התשובה הקודמת שלך לא הייתה JSON תקין. החזר עכשיו אך ורק אובייקט JSON יחיד, בלי טקסט לפניו או אחריו, ושמור על התשובה ללקוח קצרה.`,
                 messages,
@@ -447,7 +449,7 @@ export async function POST(req) {
     // model's sentence is usually fine, it was just missing the one
     // thing that was asked for.
     if (priceDodged(text, parsed.messages)) {
-        console.warn('[sales-agent] price dodged, repairing', phone)
+        console.warn('[sales-agent] price dodged, repairing')
         parsed.messages = [...parsed.messages, priceFallbackMessage()].slice(0, 3)
     }
 
@@ -467,7 +469,7 @@ export async function POST(req) {
             library,
         })
         if (pick) {
-            console.log('[sales-agent] media guard attached', pick, phone)
+            console.log('[sales-agent] media guard attached', pick)
             parsed.image = pick
         }
     }
