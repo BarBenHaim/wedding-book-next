@@ -154,13 +154,14 @@ export async function completeProviderFallback({ eventId, claimToken, claimGener
 
 // Final customer-facing success is durable only when the lead exchange and
 // inbound completion commit together under the same claim fence.
-export async function completeSuccessfulExchange({ eventId, claimToken, claimGeneration, phone, exchange, outcome, deadlineAtMs = null }) {
+export async function completeSuccessfulExchange({ eventId, claimToken, claimGeneration, exchange, outcome, deadlineAtMs = null }) {
     assertBeforeDeadline(deadlineAtMs)
     const ownedClaimToken = assertInboundClaimToken(claimToken)
     const cleanOutcome = sanitizeInboundOutcome(outcome)
     assertCompletableInboundOutcome(cleanOutcome)
     const eventRef = inboundEventRef(eventId)
-    const leadRef = ref(normalizePhone(phone))
+    const { id, patch } = buildExchangePatch(exchange)
+    const leadRef = ref(id)
     return adminDb.runTransaction(async tx => {
         const [eventSnap] = await Promise.all([tx.get(eventRef), tx.get(leadRef)])
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
@@ -169,7 +170,7 @@ export async function completeSuccessfulExchange({ eventId, claimToken, claimGen
         if (decision.action !== 'complete') return decision
         if (Number(stored.claimGeneration) !== Number(claimGeneration)) return { action: 'stale' }
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
-        tx.set(leadRef, exchange, { merge: true })
+        tx.set(leadRef, patch, { merge: true })
         tx.set(eventRef, { status: 'completed', leaseUntilMs: null, outcome: cleanOutcome, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
         return { action: 'completed', outcome: cleanOutcome }
     })
@@ -245,7 +246,7 @@ export async function getLead(rawPhone) {
  * Persist one exchange. Undefined values are stripped — the Firestore
  * client rejects them, and a half-written lead is worse than a stale one.
  */
-export async function saveExchange({ phone, incomingText, parsed, followUpAt, profileName, source, variant, isNew }) {
+export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, profileName, source, variant, isNew }) {
     const id = normalizePhone(phone)
     if (!id) throw new Error('bad phone')
 
@@ -314,6 +315,11 @@ export async function saveExchange({ phone, incomingText, parsed, followUpAt, pr
         patch.handoffReason = parsed.handoffReason || null
     }
 
+    return { id, patch }
+}
+
+export async function saveExchange(args) {
+    const { id, patch } = buildExchangePatch(args)
     await ref(id).set(patch, { merge: true })
     // arrayUnion cannot trim, so the cap is enforced on the next read
     // path via trimTurns() and compacted here when it grows too far.

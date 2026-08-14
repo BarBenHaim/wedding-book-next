@@ -36,7 +36,7 @@ import { NextResponse } from 'next/server'
 import { buildSystemPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, normalizePhone, resolveFollowUp } from '@/lib/salesAgent/agent'
 import {
-    getLead, saveExchange, toApiMessages, isPausedForHuman,
+    getLead, toApiMessages, isPausedForHuman,
     isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone, listLeads, recordSpend,
     listMedia, recordMediaSent, creditPendingMedia,
     claimInboundEvent, completeInboundEvent,
@@ -573,13 +573,6 @@ export async function POST(req) {
         addDays: addDaysISO,
     })
 
-    // Counted here rather than when Make confirms, for the same reason
-    // follow-ups are: an ack round trip would double the Make operations
-    // per message. A send that fails downstream inflates one denominator
-    // slightly, which is a much cheaper error than halving the number of
-    // conversations the bot can afford to have.
-    if (parsed.image) recordMediaSent(parsed.image).catch(() => {})
-
     const responsePayload = {
         ok: true,
         send: parsed.messages,
@@ -623,22 +616,14 @@ export async function POST(req) {
             : null,
     }
     const exchange = {
-        phone,
-        stage: parsed.stage,
-        followUpAt: followUpAt || null,
-        lastInboundAt: Date.now(),
-        lastMessageAt: Date.now(),
-        updatedAt: Date.now(),
-        ...(parsed.customerName ? { name: parsed.customerName } : body?.profileName ? { profileName: String(body.profileName).slice(0, 80) } : {}),
-        ...(parsed.eventType ? { eventType: parsed.eventType } : {}),
-        ...(parsed.eventDate ? { eventDate: parsed.eventDate } : {}),
-        ...(parsed.packageInterest ? { packageInterest: parsed.packageInterest } : {}),
-        ...(resolveSource({ isNew: !!lead.isNew, text, existing: lead.source, fallback: body?.source }) ? { source: resolveSource({ isNew: !!lead.isNew, text, existing: lead.source, fallback: body?.source }) } : {}),
-        ...(variant && lead.isNew ? { variant } : {}),
+        phone, incomingText: text, parsed, followUpAt, profileName: body?.profileName,
+        source: resolveSource({ isNew: !!lead.isNew, text, existing: lead.source, fallback: body?.source }),
+        variant, isNew: !!lead.isNew,
     }
     try {
-        const durable = await completeSuccessfulExchange({ eventId, claimToken: claim.claimToken, claimGeneration: claim.claimGeneration, phone, exchange, outcome: responsePayload, deadlineAtMs: routeDeadlineAtMs })
+        const durable = await completeSuccessfulExchange({ eventId, claimToken: claim.claimToken, claimGeneration: claim.claimGeneration, exchange, outcome: responsePayload, deadlineAtMs: routeDeadlineAtMs })
         if (durable.action === 'completed') {
+            if (parsed.image) recordMediaSent(parsed.image).catch(() => {})
             Promise.allSettled(spends).catch(() => {})
             return NextResponse.json(responsePayload)
         }
