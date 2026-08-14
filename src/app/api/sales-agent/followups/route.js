@@ -236,6 +236,12 @@ export async function GET(req) {
 
             const requestedAt = new Date().toISOString()
             const subject = `${lead.phone}:${item.followUpNumber}:${today}:${requestedAt}`
+            const logicalAttemptId = createOutboundId({
+                scope: 'followup-attempt',
+                subject: `${lead.phone}:${item.followUpNumber}:${today}`,
+                attempt: item.followUpNumber,
+                part: 'logical',
+            })
             const primaryPart = withinWindow ? 'text' : 'template'
             const primaryOutboundId = createOutboundId({
                 scope: 'followup', subject, attempt: item.followUpNumber, part: primaryPart,
@@ -263,6 +269,7 @@ export async function GET(req) {
                 nextFollowUpAt,
                 stage: parsed.stage,
                 advancesFollowUp,
+                logicalAttemptId,
                 templateName: part === 'template' ? FOLLOWUP_TEMPLATE : null,
                 requestedAt,
             })
@@ -283,14 +290,6 @@ export async function GET(req) {
                 return
             }
 
-            const acknowledge = async (outboundId, evidence) => recordDeliveryEvent({
-                eventId: `${outboundId}:accepted`,
-                outboundId,
-                channel: 'whatsapp_graph',
-                status: 'accepted',
-                providerMessageId: evidence.providerMessageId,
-                occurredAt: new Date().toISOString(),
-            })
             const fail = async (outboundId, errorCode) => recordDeliveryEvent({
                 eventId: `${outboundId}:failed`,
                 outboundId,
@@ -376,10 +375,23 @@ export async function GET(req) {
                 }
                 if (imageEvidence) {
                     item.mediaDeliveryStatus = 'accepted'
+                    const mediaAcceptedAt = new Date().toISOString()
+                    const mediaAcceptedEvent = {
+                        eventId: `${outboundParts.image}:accepted`,
+                        outboundId: outboundParts.image,
+                        channel: 'whatsapp_graph',
+                        status: 'accepted',
+                        providerMessageId: imageEvidence.providerMessageId,
+                        occurredAt: mediaAcceptedAt,
+                    }
                     try {
-                        await acknowledge(outboundParts.image, imageEvidence)
+                        await recordDeliveryEvent(mediaAcceptedEvent)
                     } catch {
                         item.mediaPersistenceDegraded = true
+                        item.mediaRepair = {
+                            endpoint: '/api/sales-agent/delivery',
+                            event: mediaAcceptedEvent,
+                        }
                         console.warn('[sales-agent/followups] media acceptance persistence degraded')
                     }
                 }

@@ -391,6 +391,7 @@ export async function prepareFollowUpDelivery({
     nextFollowUpAt = null,
     stage = null,
     advancesFollowUp = true,
+    logicalAttemptId = outboundId,
     templateName = null,
     requestedAt = new Date().toISOString(),
 }) {
@@ -429,6 +430,9 @@ export async function prepareFollowUpDelivery({
             status: 'requested',
             leadId: id,
             part: String(part),
+            deliveryRole: advancesFollowUp ? 'primary' : 'secondary',
+            advanceOnDelivery: !!advancesFollowUp,
+            logicalAttemptId: String(logicalAttemptId),
             advancesFollowUp: !!advancesFollowUp,
             attemptNumber,
             nextFollowUpAt: nextFollowUpAt || null,
@@ -449,6 +453,7 @@ export async function prepareFollowUpDelivery({
         if (advancesFollowUp) {
             leadPatch.lastDeliveryStatus = 'requested'
             leadPatch.deliveryRequestOutboundId = String(outboundId)
+            leadPatch.deliveryRequestAttemptId = String(logicalAttemptId)
             leadPatch.deliveryRequestUntilMs = requestedAtMs + DELIVERY_REQUEST_LEASE_MS
             if (operationalStatus === 'stale-requested') {
                 leadPatch.staleRequestOutboundId = lead.deliveryRequestOutboundId || null
@@ -505,9 +510,13 @@ export async function recordDeliveryEvent(event) {
         const withoutCurrentMessage = Object.fromEntries(
             Object.entries(pendingMessages).filter(([outboundId]) => outboundId !== event.outboundId),
         )
-        const logicalAlreadyAdvanced = stored?.advancesFollowUp
-            && Number(lead.followUpCount || 0) >= Number(stored.attemptNumber || 1)
-        const advances = !!(decision.advanceFollowUp && stored?.advancesFollowUp && !logicalAlreadyAdvanced)
+        const advanceOnDelivery = stored?.advanceOnDelivery ?? stored?.advancesFollowUp
+        const logicalAttemptId = stored?.logicalAttemptId || event.outboundId
+        const logicalAlreadyAdvanced = !!(advanceOnDelivery && (
+            lead.lastAdvancedDeliveryAttemptId === logicalAttemptId
+            || Number(lead.followUpCount || 0) >= Number(stored.attemptNumber || 1)
+        ))
+        const advances = !!(decision.advanceFollowUp && advanceOnDelivery && !logicalAlreadyAdvanced)
 
         const deliveryPatch = {
             eventId: event.eventId,
@@ -524,10 +533,15 @@ export async function recordDeliveryEvent(event) {
         tx.set(deliveryRef, deliveryPatch, { merge: true })
         tx.set(eventIdRef, ledgerPatch, { merge: false })
 
-        if (leadRef) {
+        if (leadRef && advanceOnDelivery) {
+            if (logicalAlreadyAdvanced && decision.nextStatus !== 'read') {
+                return { action: 'applied', status: decision.nextStatus, advanced: false }
+            }
             const ownsPending = (!lead.deliveryPendingOutboundId || lead.deliveryPendingOutboundId === event.outboundId)
                 && (!lead.deliveryRequestOutboundId || lead.deliveryRequestOutboundId === event.outboundId)
-            if (!ownsPending && !advances) {
+            const ownsLogicalAttempt = (!lead.deliveryPendingAttemptId || lead.deliveryPendingAttemptId === logicalAttemptId)
+                && (!lead.deliveryRequestAttemptId || lead.deliveryRequestAttemptId === logicalAttemptId)
+            if ((!ownsPending || !ownsLogicalAttempt) && !advances) {
                 if (Object.hasOwn(pendingMessages, event.outboundId) && decision.clearPending) {
                     tx.set(leadRef, { pendingDeliveryMessages: withoutCurrentMessage }, { merge: true })
                 }
@@ -537,21 +551,26 @@ export async function recordDeliveryEvent(event) {
                 lastDeliveryStatus: decision.nextStatus,
                 deliveryRequestOutboundId: null,
                 deliveryRequestUntilMs: null,
+                deliveryRequestAttemptId: null,
                 updatedAt: FieldValue.serverTimestamp(),
             }
             if (event.status === 'accepted' && stored?.advancesFollowUp && !logicalAlreadyAdvanced && ownsPending) {
                 leadPatch.deliveryPendingOutboundId = event.outboundId
                 leadPatch.deliveryPendingUntilMs = decision.pendingUntilMs
+                leadPatch.deliveryPendingAttemptId = logicalAttemptId
                 leadPatch.lastDeliveryError = null
             } else if (decision.clearPending && ownsPending) {
                 leadPatch.deliveryPendingOutboundId = null
                 leadPatch.deliveryPendingUntilMs = null
+                leadPatch.deliveryPendingAttemptId = null
                 leadPatch.pendingDeliveryMessages = withoutCurrentMessage
             }
             if (event.status === 'failed' && ownsPending) leadPatch.lastDeliveryError = event.errorCode
             if (advances) {
                 leadPatch.deliveryPendingOutboundId = null
                 leadPatch.deliveryPendingUntilMs = null
+                leadPatch.deliveryPendingAttemptId = null
+                leadPatch.lastAdvancedDeliveryAttemptId = logicalAttemptId
                 leadPatch.lastDeliveryError = null
                 leadPatch.lastFollowUpAt = FieldValue.serverTimestamp()
                 leadPatch.lastMessageAt = FieldValue.serverTimestamp()
@@ -592,6 +611,9 @@ export async function prepareDigestDelivery({ outboundId, requestedAt = new Date
             status: 'requested',
             kind: 'daily_digest',
             part: 'template',
+            deliveryRole: 'owner_digest',
+            advanceOnDelivery: false,
+            logicalAttemptId: String(outboundId),
             advancesFollowUp: false,
             attemptNumber: Math.max(1, Number.parseInt(attemptNumber, 10) || 1),
             requestedAtMs,

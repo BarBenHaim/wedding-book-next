@@ -74,6 +74,7 @@ const requested = (overrides = {}) => ({
     nextFollowUpAt: '2026-08-17',
     stage: 'engaged',
     advancesFollowUp: true,
+    logicalAttemptId: 'followup-logical-attempt-1',
     requestedAt: '2026-08-14T10:00:00.000Z',
     ...overrides,
 })
@@ -96,7 +97,13 @@ describe('transactional follow-up delivery truth', () => {
     it('records requested metadata without claiming the follow-up was accepted or delivered', async () => {
         await expect(prepareFollowUpDelivery(requested())).resolves.toEqual({ action: 'requested', outboundId: OUTBOUND_ID })
 
-        expect(store.get(DELIVERY)).toMatchObject({ status: 'requested', leadId: '41', advancesFollowUp: true })
+        expect(store.get(DELIVERY)).toMatchObject({
+            status: 'requested',
+            leadId: '41',
+            deliveryRole: 'primary',
+            advanceOnDelivery: true,
+            logicalAttemptId: 'followup-logical-attempt-1',
+        })
         expect(store.get(DELIVERY)).not.toHaveProperty('text')
         expect(store.get(LEAD)).toMatchObject({ followUpAt: '2026-08-14', followUpCount: 0 })
         expect(store.get(LEAD).pendingDeliveryMessages).toEqual({ [OUTBOUND_ID]: 'follow-up fixture text' })
@@ -256,6 +263,7 @@ describe('transactional follow-up delivery truth', () => {
         await prepareFollowUpDelivery(requested({
             outboundId: newerOutboundId,
             part: 'text',
+            logicalAttemptId: 'followup-logical-attempt-2',
             requestedAt: '2026-08-14T10:02:00.000Z',
             nextFollowUpAt: '2026-08-21',
         }))
@@ -274,6 +282,75 @@ describe('transactional follow-up delivery truth', () => {
             deliveryPendingUntilMs: Date.parse('2026-08-14T10:33:00.000Z'),
         })
     })
+
+    it.each(['accepted', 'failed'])(
+        'a secondary image %s event updates its delivery and replay ledger but leaves the exact primary lead truth unchanged',
+        async status => {
+            const imageOutboundId = 'followup-a1b2c3-1:image'
+            await prepareFollowUpDelivery(requested())
+            await prepareFollowUpDelivery(requested({
+                outboundId: imageOutboundId,
+                part: 'image',
+                text: '',
+                advancesFollowUp: false,
+            }))
+            expect(store.get(`sales_delivery_events/${imageOutboundId}`)).toMatchObject({
+                deliveryRole: 'secondary',
+                advanceOnDelivery: false,
+                logicalAttemptId: 'followup-logical-attempt-1',
+            })
+            await recordDeliveryEvent(event('delivered', { eventId: 'primary-delivered-before-image' }))
+            await recordDeliveryEvent(event('read', { eventId: 'primary-read-before-image' }))
+            const leadBeforeImage = structuredClone(store.get(LEAD))
+            const imageEvent = event(status, {
+                eventId: `image-${status}-fixture`,
+                outboundId: imageOutboundId,
+                providerMessageId: status === 'failed' ? undefined : 'wamid-image-fixture',
+                errorCode: status === 'failed' ? 'GRAPH_REJECTED' : undefined,
+                occurredAt: '2026-08-14T10:03:00.000Z',
+            })
+
+            await expect(recordDeliveryEvent(imageEvent)).resolves.toMatchObject({ action: 'applied', advanced: false })
+            expect(store.get(LEAD)).toEqual(leadBeforeImage)
+            expect(store.get(`sales_delivery_events/${imageOutboundId}`)).toMatchObject({ status })
+            await expect(recordDeliveryEvent(imageEvent)).resolves.toEqual({ action: 'noop', reason: 'EVENT_REPLAY' })
+            await expect(recordDeliveryEvent({
+                ...imageEvent,
+                status: status === 'failed' ? 'accepted' : 'failed',
+                providerMessageId: status === 'failed' ? 'wamid-image-fixture' : undefined,
+                errorCode: status === 'failed' ? undefined : 'GRAPH_REJECTED',
+            })).rejects.toMatchObject({ code: 'EVENT_ID_CONFLICT' })
+            expect(store.get(LEAD)).toEqual(leadBeforeImage)
+        },
+    )
+
+    it.each(['accepted', 'failed'])(
+        'a newer same-attempt primary %s callback cannot overwrite truth after the older primary advances',
+        async status => {
+            const newerOutboundId = 'followup-same-attempt-retry:template'
+            await prepareFollowUpDelivery(requested())
+            await prepareFollowUpDelivery(requested({
+                outboundId: newerOutboundId,
+                requestedAt: '2026-08-14T10:02:00.000Z',
+            }))
+            await recordDeliveryEvent(event('delivered', {
+                eventId: 'older-primary-delivered-same-attempt',
+                occurredAt: '2026-08-14T10:02:30.000Z',
+            }))
+            const advancedLead = structuredClone(store.get(LEAD))
+
+            await recordDeliveryEvent(event(status, {
+                eventId: `newer-primary-${status}-same-attempt`,
+                outboundId: newerOutboundId,
+                providerMessageId: status === 'failed' ? undefined : 'wamid-newer-same-attempt',
+                errorCode: status === 'failed' ? 'GRAPH_TIMEOUT' : undefined,
+                occurredAt: '2026-08-14T10:03:00.000Z',
+            }))
+
+            expect(store.get(LEAD)).toEqual(advancedLead)
+            expect(store.get(`sales_delivery_events/${newerOutboundId}`)).toMatchObject({ status })
+        },
+    )
 })
 
 describe('owner digest health metadata', () => {
@@ -285,6 +362,11 @@ describe('owner digest health metadata', () => {
             outboundId: 'digest-fixture:template', requestedAt: '2026-08-14T10:01:00.000Z', attemptNumber: 1,
         })
         expect(first).toEqual({ action: 'requested', outboundId: 'digest-fixture:template' })
+        expect(store.get('sales_delivery_events/digest-fixture:template')).toMatchObject({
+            deliveryRole: 'owner_digest',
+            advanceOnDelivery: false,
+            logicalAttemptId: 'digest-fixture:template',
+        })
         expect(replay).toEqual({ action: 'existing', outboundId: 'digest-fixture:template', status: 'requested' })
 
         await recordDeliveryEvent(event('failed', {

@@ -197,6 +197,9 @@ describe('truthful follow-up transport', () => {
         expect(mocks.sendWhatsAppImage).toHaveBeenCalledWith(lead.phone, 'https://cdn.example/book.jpg', 'book fixture')
         expect(mocks.prepareFollowUpDelivery).toHaveBeenCalledWith(expect.objectContaining({ part: 'text', advancesFollowUp: true }))
         expect(mocks.prepareFollowUpDelivery).toHaveBeenCalledWith(expect.objectContaining({ part: 'image', advancesFollowUp: false }))
+        const preparedParts = mocks.prepareFollowUpDelivery.mock.calls.map(([delivery]) => delivery)
+        expect(preparedParts[0].logicalAttemptId).toBe('outbound-fixture:logical')
+        expect(preparedParts[1].logicalAttemptId).toBe(preparedParts[0].logicalAttemptId)
         expect(result.body.items[0].outboundParts).toEqual({
             text: 'outbound-fixture:text',
             image: 'outbound-fixture:image',
@@ -268,6 +271,41 @@ describe('truthful follow-up transport', () => {
             mediaDeliveryStatus: 'failed',
             mediaSendError: 'GRAPH_REJECTED',
         })
+    })
+
+    it('returns a privacy-safe repair event when image acceptance persistence fails without recording failed', async () => {
+        mocks.dueFollowUps.mockResolvedValue([{ ...lead, lastInboundAt: Date.now() }])
+        mocks.parseAgentJson.mockReturnValue({
+            malformed: false, handoff: false, messages: ['follow-up'], stage: 'engaged', image: 'book',
+            callbackPromised: null, followUpAt: null,
+        })
+        mocks.mergeMedia.mockReturnValue({ book: { kind: 'image', url: 'https://cdn.example/book.jpg', caption: 'book fixture' } })
+        mocks.recordDeliveryEvent
+            .mockResolvedValueOnce({ action: 'applied', status: 'accepted', advanced: false })
+            .mockRejectedValueOnce(new Error('image persistence body sentinel'))
+
+        const result = await runCron()
+        const item = result.body.items[0]
+        const callbacks = mocks.recordDeliveryEvent.mock.calls.map(([callback]) => callback)
+
+        expect(callbacks).toHaveLength(2)
+        expect(callbacks).not.toContainEqual(expect.objectContaining({ status: 'failed' }))
+        expect(item.mediaDeliveryStatus).toBe('accepted')
+        expect(item.mediaPersistenceDegraded).toBe(true)
+        expect(item.mediaRepair).toEqual({
+            endpoint: '/api/sales-agent/delivery',
+            event: {
+                eventId: 'outbound-fixture:image:accepted',
+                outboundId: 'outbound-fixture:image',
+                channel: 'whatsapp_graph',
+                status: 'accepted',
+                providerMessageId: 'wamid-image-fixture',
+                occurredAt: expect.any(String),
+            },
+        })
+        expect(JSON.stringify(item.mediaRepair)).not.toContain('private-phone-sentinel')
+        expect(JSON.stringify(item.mediaRepair)).not.toContain('image persistence body sentinel')
+        expect(JSON.stringify(item.mediaRepair)).not.toMatch(/token|secret|provider body/i)
     })
 
     it('prepares Make outbound metadata but waits for Make acknowledgement before marking pending', async () => {

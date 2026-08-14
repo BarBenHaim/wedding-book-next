@@ -5,7 +5,7 @@ Status: implemented and locally verified on `revenue-chat-closer` from base `196
 ## Binding decisions
 
 - R2 is authoritative: `accepted` means provider evidence exists and creates a 30-minute pending window. It never increments `followUpCount`, writes `lastFollowUpAt`, moves `followUpAt`, or uses the word delivered.
-- The first verified `delivered` callback advances the logical follow-up attempt. A later `read`, repeated `delivered`/`read`, or another transport result for the same logical attempt cannot advance it again.
+- The first verified `delivered` or `read` callback advances the logical follow-up attempt. A later `read`, repeated `delivered`/`read`, or another transport result for the same logical attempt cannot advance it again.
 - `failed` is terminal for that outbound ID, clears only the pending state owned by that outbound, stores one allowlisted code, and leaves the lead due. An expired pending window is converted to explicit stale-warning metadata before a retry.
 - R3 is authoritative: outside the service window the customer transport is only `wt_followup`; the cron owner digest is only `wt_daily_digest`. Missing/unapproved/rejected template paths fail without free-form fallback.
 - Direct Graph acceptance requires `messages[0].id`. Provider bodies are not parsed on rejection and never reach an exception or log. The request deadline is 12 seconds, below both route budgets.
@@ -212,3 +212,69 @@ exit 0, no diagnostics
 ```
 
 Privacy/security remains unchanged or stronger: replay documents contain hashes and timestamps only; degradation responses contain stable IDs and normalized callback fields but no phone, token, provider body, payload, transcript, or secret. No calls or dial tasks were introduced. Make remains requested-only pending its authenticated callback and Task 6 wiring remains untouched.
+
+## Fix round 2/5 — secondary-part ownership
+
+Status: implemented and verified after review of commit `97bdf78e039a93cfdc78ac25e31671dd3641f76d`.
+
+### Binding decisions
+
+- Every new outbound delivery document now records `deliveryRole`, `advanceOnDelivery`, and `logicalAttemptId`. Customer text/template is `primary` and may own lead cadence; image/media is `secondary` and cannot. Owner digest is `owner_digest` and cannot affect lead state.
+- Primary and secondary parts from one follow-up share a stable, phone-free logical attempt ID. Existing delivery records remain compatible through `advanceOnDelivery ?? advancesFollowUp` and an outbound-ID logical fallback, so no Firestore migration is required.
+- A non-advancing delivery callback writes only its delivery document and the global hashed event ledger. It never writes the lead document, even when pending/request ownership fields are empty.
+- Advancement stores `lastAdvancedDeliveryAttemptId`. A later accepted/failed callback from another primary for that already-advanced logical attempt updates only its own delivery document and ledger. A legitimate `delivered -> read` upgrade can still update the primary lead truth once without changing cadence.
+- Image Graph evidence is returned truthfully when acknowledgement persistence fails. `mediaRepair` contains exactly the authenticated delivery endpoint and normalized accepted callback fields needed for later repair; it contains no recipient, provider body, token, secret, or transcript.
+
+### Acceptance mapping
+
+| Review acceptance item | Named test evidence |
+|---|---|
+| Explicit role, advancement ownership, and shared logical attempt identity | `transactional follow-up delivery truth > records requested metadata without claiming the follow-up was accepted or delivered`; `a secondary image accepted/failed event updates its delivery and replay ledger but leaves the exact primary lead truth unchanged`; `truthful follow-up transport > uses free-form text inside an open service window and gives media its own phone-free outbound ID`; `owner digest health metadata > claims a deterministic digest attempt before transport and never reuses a terminal attempt` |
+| Secondary accepted/failed callbacks leave the exact lead unchanged | Both table cases named `a secondary image accepted/failed event updates its delivery and replay ledger but leaves the exact primary lead truth unchanged` compare the complete lead object before and after, while also checking the secondary document transition. |
+| Secondary replay/conflict remains globally correct | The same secondary table cases replay the identical event as `EVENT_REPLAY`, then reuse its ID with a changed status and require `EVENT_ID_CONFLICT`, while the complete lead remains unchanged. |
+| Older primary advances; newer same-attempt accepted/failed cannot overwrite | Both table cases named `a newer same-attempt primary accepted/failed callback cannot overwrite truth after the older primary advances` compare the complete advanced lead object while verifying the newer delivery document transitions. |
+| Repairable accepted image persistence degradation | `truthful follow-up transport > returns a privacy-safe repair event when image acceptance persistence fails without recording failed`; `delivery acknowledgement route > accepts the complete secondary-image repair event for later persistence` |
+| Top-level report states first delivered or read advances | Corrected in `Binding decisions` above; this is human-facing evidence rather than executable behavior. State-machine behavior remains covered by the round-1 transition tests. |
+
+### Strict TDD and verification evidence
+
+Focused RED before production changes:
+
+```text
+npx vitest run tests/salesDeliveryFirestore.test.js tests/salesFollowupsRoute.test.js tests/salesDeliveryRoute.test.js
+Test Files  2 failed | 1 passed (3)
+Tests       7 failed | 34 passed (41)
+failures: explicit role/logical metadata missing; secondary accepted/failed mutated lead; late same-attempt accepted/failed overwrote delivered truth; media repair payload missing
+exit 1
+```
+
+Focused GREEN:
+
+```text
+npx vitest run tests/salesDelivery.test.js tests/salesDeliveryFirestore.test.js tests/salesDeliveryRoute.test.js tests/salesWhatsApp.test.js tests/salesFollowupPolicy.test.js tests/salesFollowupsRoute.test.js tests/salesDigest.test.js tests/salesDigestRoute.test.js
+Test Files  8 passed (8)
+Tests       123 passed (123)
+exit 0
+```
+
+Regression, full, lint, and diff hygiene:
+
+```text
+npx vitest run tests/salesInboundEvents.test.js tests/salesInbound.test.js tests/salesExperiments.test.js tests/salesAgent.test.js tests/salesReplyRoute.test.js tests/salesCircuitBreaker.test.js tests/salesCircuitFirestore.test.js tests/salesConversation.test.js tests/salesAttribution.test.js tests/salesMediaGuard.test.js tests/salesMediaLibrary.test.js tests/salesSelling.test.js tests/salesLeadsView.test.js
+Test Files  13 passed (13)
+Tests       357 passed (357)
+exit 0
+
+npm test
+Test Files  42 passed (42)
+Tests       827 passed (827)
+exit 0
+
+npx eslint <5 changed JS files>
+exit 0, no diagnostics
+
+git diff --check
+exit 0; only configured LF-to-CRLF working-copy notices
+```
+
+Privacy/security: secondary repair contains only stable hashed outbound identity, channel, status, provider message ID, timestamp, stable event ID, and the authenticated delivery endpoint. The implementation adds no phone, token, secret, raw provider response, transcript, call, or dial-task surface. Task 6 Make wiring remains unchanged.

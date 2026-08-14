@@ -61,6 +61,22 @@ describe('delivery acknowledgement route', () => {
         expect(mocks.recordDeliveryEvent).toHaveBeenCalledWith(valid)
     })
 
+    it('accepts the complete secondary-image repair event for later persistence', async () => {
+        const mediaRepairEvent = {
+            eventId: 'followup-image-fixture:accepted',
+            outboundId: 'followup-image-fixture:image',
+            channel: 'whatsapp_graph',
+            status: 'accepted',
+            providerMessageId: 'wamid-image-repair-fixture',
+            occurredAt: '2026-08-14T10:04:00.000Z',
+        }
+        const response = await POST(request(mediaRepairEvent))
+
+        expect(response.status).toBe(202)
+        expect(await response.json()).toMatchObject({ accepted: true, result: { action: 'applied' } })
+        expect(mocks.recordDeliveryEvent).toHaveBeenCalledWith(mediaRepairEvent)
+    })
+
     it('rejects a mismatched or regressive callback without leaking details', async () => {
         const error = new Error('provider body and private fixture must not escape')
         error.code = 'PROVIDER_MESSAGE_ID_MISMATCH'
