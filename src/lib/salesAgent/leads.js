@@ -377,6 +377,24 @@ function deliveryError(code) {
     return error
 }
 
+function normalizedDeliveryOwnership(stored, outboundId) {
+    const hasExplicitAdvance = typeof stored?.advanceOnDelivery === 'boolean'
+    const advanceOnDelivery = hasExplicitAdvance
+        ? stored.advanceOnDelivery
+        : stored?.advancesFollowUp === true
+    const deliveryRole = typeof stored?.deliveryRole === 'string' && stored.deliveryRole
+        ? stored.deliveryRole
+        : stored?.advancesFollowUp === true
+            ? 'primary'
+            : stored?.advancesFollowUp === false
+                ? 'secondary'
+                : 'external'
+    const logicalAttemptId = typeof stored?.logicalAttemptId === 'string' && stored.logicalAttemptId
+        ? stored.logicalAttemptId
+        : String(stored?.outboundId || outboundId)
+    return { deliveryRole, advanceOnDelivery, logicalAttemptId }
+}
+
 /**
  * Register the exact outbound part before transport starts. This is metadata,
  * not a success claim: the lead cadence and pending suppression stay untouched
@@ -489,6 +507,7 @@ export async function recordDeliveryEvent(event) {
             throw deliveryError('EVENT_ID_CONFLICT')
         }
         const stored = deliverySnap.exists ? deliverySnap.data() : null
+        const ownership = normalizedDeliveryOwnership(stored, event.outboundId)
         const decision = decideDeliveryTransition(stored, event)
         if (decision.action === 'reject') throw deliveryError(decision.error)
         const ledgerPatch = {
@@ -497,6 +516,11 @@ export async function recordDeliveryEvent(event) {
             createdAt: FieldValue.serverTimestamp(),
         }
         if (decision.action === 'noop') {
+            tx.set(deliveryRef, {
+                outboundId: String(stored?.outboundId || event.outboundId),
+                ...ownership,
+                updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true })
             tx.set(eventIdRef, ledgerPatch, { merge: false })
             return decision
         }
@@ -510,8 +534,7 @@ export async function recordDeliveryEvent(event) {
         const withoutCurrentMessage = Object.fromEntries(
             Object.entries(pendingMessages).filter(([outboundId]) => outboundId !== event.outboundId),
         )
-        const advanceOnDelivery = stored?.advanceOnDelivery ?? stored?.advancesFollowUp
-        const logicalAttemptId = stored?.logicalAttemptId || event.outboundId
+        const { advanceOnDelivery, logicalAttemptId } = ownership
         const logicalAlreadyAdvanced = !!(advanceOnDelivery && (
             lead.lastAdvancedDeliveryAttemptId === logicalAttemptId
             || Number(lead.followUpCount || 0) >= Number(stored.attemptNumber || 1)
@@ -519,6 +542,8 @@ export async function recordDeliveryEvent(event) {
         const advances = !!(decision.advanceFollowUp && advanceOnDelivery && !logicalAlreadyAdvanced)
 
         const deliveryPatch = {
+            outboundId: String(stored?.outboundId || event.outboundId),
+            ...ownership,
             eventId: event.eventId,
             channel: event.channel,
             status: decision.nextStatus,

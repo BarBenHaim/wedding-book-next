@@ -61,6 +61,7 @@ vi.mock('firebase-admin/firestore', () => ({
 }))
 
 import { prepareDigestDelivery, prepareFollowUpDelivery, recordDeliveryEvent, recordDigestOutcome } from '@/lib/salesAgent/leads'
+import { POST as acknowledgeDelivery } from '@/app/api/sales-agent/delivery/route'
 
 const LEAD = 'sales_leads/41'
 const OUTBOUND_ID = 'followup-a1b2c3-1:template'
@@ -351,6 +352,137 @@ describe('transactional follow-up delivery truth', () => {
             expect(store.get(`sales_delivery_events/${newerOutboundId}`)).toMatchObject({ status })
         },
     )
+})
+
+describe('callback-created and legacy delivery normalization', () => {
+    const externalOutboundId = 'make-callback-created-fixture:text'
+    const externalEvent = (status, overrides = {}) => ({
+        eventId: `make-external-${status}`,
+        outboundId: externalOutboundId,
+        channel: 'make',
+        status,
+        providerMessageId: 'wamid-make-external-fixture',
+        occurredAt: '2026-08-14T11:00:00.000Z',
+        ...overrides,
+    })
+
+    it('creates explicit external metadata and never writes a lead across accepted, delivered, and read', async () => {
+        const leadBefore = structuredClone(store.get(LEAD))
+        await recordDeliveryEvent(externalEvent('accepted'))
+        expect(store.get(`sales_delivery_events/${externalOutboundId}`)).toMatchObject({
+            outboundId: externalOutboundId,
+            deliveryRole: 'external',
+            advanceOnDelivery: false,
+            logicalAttemptId: externalOutboundId,
+            status: 'accepted',
+        })
+
+        await recordDeliveryEvent(externalEvent('delivered', { eventId: 'make-external-delivered' }))
+        await recordDeliveryEvent(externalEvent('read', { eventId: 'make-external-read' }))
+
+        expect(store.get(`sales_delivery_events/${externalOutboundId}`)).toMatchObject({ status: 'read', followUpAdvanced: false })
+        expect(store.get(LEAD)).toEqual(leadBefore)
+        expect(store.writes().filter(write => write.key === LEAD)).toEqual([])
+        expect(store.entries().filter(([key]) => key.startsWith('sales_delivery_event_ids/'))).toHaveLength(3)
+    })
+
+    it('creates explicit non-advancing metadata for a callback-created failure', async () => {
+        const failedOutboundId = 'make-callback-created-failed:text'
+        await recordDeliveryEvent(externalEvent('failed', {
+            eventId: 'make-external-failed',
+            outboundId: failedOutboundId,
+            providerMessageId: undefined,
+            errorCode: 'PROVIDER_FAILED',
+        }))
+        expect(store.get(`sales_delivery_events/${failedOutboundId}`)).toMatchObject({
+            deliveryRole: 'external',
+            advanceOnDelivery: false,
+            logicalAttemptId: failedOutboundId,
+            status: 'failed',
+        })
+        expect(store.writes().filter(write => write.key === LEAD)).toEqual([])
+    })
+
+    it('backfills a legacy primary and preserves its stored advancing ownership exactly once', async () => {
+        const outboundId = 'legacy-primary-fixture:text'
+        store.set(`sales_delivery_events/${outboundId}`, {
+            outboundId,
+            channel: 'make',
+            status: 'requested',
+            leadId: '41',
+            advancesFollowUp: true,
+            attemptNumber: 1,
+            nextFollowUpAt: '2026-08-17',
+        })
+        store.set(LEAD, {
+            ...store.get(LEAD),
+            pendingDeliveryMessages: { [outboundId]: 'legacy primary fixture' },
+        })
+        await recordDeliveryEvent(externalEvent('delivered', {
+            eventId: 'legacy-primary-delivered', outboundId,
+        }))
+        expect(store.get(`sales_delivery_events/${outboundId}`)).toMatchObject({
+            deliveryRole: 'primary',
+            advanceOnDelivery: true,
+            logicalAttemptId: outboundId,
+            followUpAdvanced: true,
+        })
+        expect(store.get(LEAD)).toMatchObject({ followUpCount: 1, followUpAt: '2026-08-17' })
+        await recordDeliveryEvent(externalEvent('read', { eventId: 'legacy-primary-read', outboundId }))
+        expect(store.get(LEAD).followUpCount).toBe(1)
+    })
+
+    it.each([
+        ['secondary', false],
+        ['external', undefined],
+    ])('backfills legacy %s metadata without ever mutating its referenced lead', async (expectedRole, legacyFlag) => {
+        const outboundId = `legacy-${expectedRole}-fixture:image`
+        const legacy = {
+            outboundId,
+            channel: 'make',
+            status: 'requested',
+            leadId: '41',
+            attemptNumber: 1,
+        }
+        if (legacyFlag !== undefined) legacy.advancesFollowUp = legacyFlag
+        store.set(`sales_delivery_events/${outboundId}`, legacy)
+        const leadBefore = structuredClone(store.get(LEAD))
+        const accepted = externalEvent('accepted', { eventId: `legacy-${expectedRole}-accepted`, outboundId })
+
+        await recordDeliveryEvent(accepted)
+        expect(store.get(`sales_delivery_events/${outboundId}`)).toMatchObject({
+            deliveryRole: expectedRole,
+            advanceOnDelivery: false,
+            logicalAttemptId: outboundId,
+        })
+        expect(store.get(LEAD)).toEqual(leadBefore)
+        await expect(recordDeliveryEvent(accepted)).resolves.toEqual({ action: 'noop', reason: 'EVENT_REPLAY' })
+        await expect(recordDeliveryEvent({ ...accepted, providerMessageId: 'wamid-conflicting-replay' }))
+            .rejects.toMatchObject({ code: 'EVENT_ID_CONFLICT' })
+        await expect(recordDeliveryEvent(externalEvent('delivered', {
+            eventId: `legacy-${expectedRole}-mismatched-provider`,
+            outboundId,
+            providerMessageId: 'wamid-mismatched-provider',
+        }))).rejects.toMatchObject({ code: 'PROVIDER_MESSAGE_ID_MISMATCH' })
+        expect(store.get(LEAD)).toEqual(leadBefore)
+    })
+
+    it('persists a Task6-like Make callback-created outbound through the authenticated route', async () => {
+        process.env.SALES_AGENT_SECRET = 'route-secret-fixture'
+        const event = externalEvent('accepted', { eventId: 'task6-make-route-accepted' })
+        const response = await acknowledgeDelivery(new Request('http://localhost/api/sales-agent/delivery', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-sales-agent-secret': 'route-secret-fixture' },
+            body: JSON.stringify(event),
+        }))
+
+        expect(response.status).toBe(202)
+        expect(await response.json()).toMatchObject({ accepted: true, result: { action: 'applied' } })
+        expect(store.get(`sales_delivery_events/${externalOutboundId}`)).toMatchObject({
+            deliveryRole: 'external', advanceOnDelivery: false, logicalAttemptId: externalOutboundId,
+        })
+        expect(store.writes().filter(write => write.key === LEAD)).toEqual([])
+    })
 })
 
 describe('owner digest health metadata', () => {

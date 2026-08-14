@@ -219,8 +219,8 @@ Status: implemented and verified after review of commit `97bdf78e039a93cfdc78ac2
 
 ### Binding decisions
 
-- Every new outbound delivery document now records `deliveryRole`, `advanceOnDelivery`, and `logicalAttemptId`. Customer text/template is `primary` and may own lead cadence; image/media is `secondary` and cannot. Owner digest is `owner_digest` and cannot affect lead state.
-- Primary and secondary parts from one follow-up share a stable, phone-free logical attempt ID. Existing delivery records remain compatible through `advanceOnDelivery ?? advancesFollowUp` and an outbound-ID logical fallback, so no Firestore migration is required.
+- Every prepared outbound delivery document records `deliveryRole`, `advanceOnDelivery`, and `logicalAttemptId`. Customer text/template is `primary` and may own lead cadence; image/media is `secondary` and cannot. Owner digest is `owner_digest` and cannot affect lead state. Callback-created and legacy records are explicitly normalized on their next valid event as documented in fix round 3.
+- Primary and secondary parts from one follow-up share a stable, phone-free logical attempt ID. Existing delivery records remain compatible and are transactionally backfilled from explicit metadata, then legacy `advancesFollowUp`, with safe outbound-ID identity fallback; no bulk Firestore migration is required.
 - A non-advancing delivery callback writes only its delivery document and the global hashed event ledger. It never writes the lead document, even when pending/request ownership fields are empty.
 - Advancement stores `lastAdvancedDeliveryAttemptId`. A later accepted/failed callback from another primary for that already-advanced logical attempt updates only its own delivery document and ledger. A legitimate `delivered -> read` upgrade can still update the primary lead truth once without changing cadence.
 - Image Graph evidence is returned truthfully when acknowledgement persistence fails. `mediaRepair` contains exactly the authenticated delivery endpoint and normalized accepted callback fields needed for later repair; it contains no recipient, provider body, token, secret, or transcript.
@@ -278,3 +278,69 @@ exit 0; only configured LF-to-CRLF working-copy notices
 ```
 
 Privacy/security: secondary repair contains only stable hashed outbound identity, channel, status, provider message ID, timestamp, stable event ID, and the authenticated delivery endpoint. The implementation adds no phone, token, secret, raw provider response, transcript, call, or dial-task surface. Task 6 Make wiring remains unchanged.
+
+## Fix round 3/5 — callback-created and legacy normalization
+
+Status: implemented and verified after review of commit `21ce3a35d1747e39633f5de590c096435a2e9f6d`.
+
+### Normalization contract
+
+- Every valid apply or new-event no-op write from `recordDeliveryEvent` persists `deliveryRole`, `advanceOnDelivery`, and `logicalAttemptId` alongside `outboundId`. A byte-identical global event replay performs no delivery write because its first application already normalized the document.
+- A missing document is explicitly `external`, `advanceOnDelivery: false`, and uses `event.outboundId` as its logical attempt. Accepted, delivered, read, and failed callbacks stay non-lead/non-advancing regardless of identifier shape.
+- Existing explicit fields win. Otherwise legacy `advancesFollowUp: true` becomes `primary` and remains advancing; legacy `false` becomes `secondary` and non-advancing; an absent flag becomes `external` and non-advancing. Missing logical identity is backfilled from the stored outbound identity, then the callback outbound ID.
+- Backfill is part of the same delivery/hashed-ledger transaction. It does not rewrite established status or provider identity beyond the valid requested transition, and mismatch/conflict checks still execute before writes.
+- Task 6 external wiring remains deferred, but the authenticated delivery route now has real Firestore integration evidence for a callback-created Make accepted event.
+
+### Acceptance mapping
+
+| Review acceptance item | Named test evidence |
+|---|---|
+| Missing-doc accepted creates explicit external metadata and ledger; delivered/read never advances or writes a lead | `callback-created and legacy delivery normalization > creates explicit external metadata and never writes a lead across accepted, delivered, and read` |
+| Missing-doc failed is explicit and non-advancing | `creates explicit non-advancing metadata for a callback-created failure` |
+| Legacy primary preserves stored lead/attempt ownership, backfills, and advances once | `backfills a legacy primary and preserves its stored advancing ownership exactly once` |
+| Legacy false and absent flags are secondary/external and never mutate their referenced lead | Both table cases named `backfills legacy secondary/external metadata without ever mutating its referenced lead` |
+| Replay/conflict and provider identity survive backfill | The legacy secondary/external table cases require identical `EVENT_REPLAY`, changed-fingerprint `EVENT_ID_CONFLICT`, and new-event `PROVIDER_MESSAGE_ID_MISMATCH`, with the complete lead unchanged. |
+| Task6-like authenticated Make callback-created path | `persists a Task6-like Make callback-created outbound through the authenticated route` invokes the real route and Firestore transaction, then verifies explicit external metadata and zero lead writes. |
+
+### Strict TDD and verification evidence
+
+RED before production changes:
+
+```text
+npx vitest run tests/salesDeliveryFirestore.test.js
+Test Files  1 failed (1)
+Tests       6 failed | 23 passed (29)
+failures: callback-created accepted/failed, legacy primary, legacy false/absent, and authenticated Make path all lacked explicit normalized metadata
+exit 1
+```
+
+Focused GREEN:
+
+```text
+npx vitest run tests/salesDelivery.test.js tests/salesDeliveryFirestore.test.js tests/salesDeliveryRoute.test.js tests/salesWhatsApp.test.js tests/salesFollowupPolicy.test.js tests/salesFollowupsRoute.test.js tests/salesDigest.test.js tests/salesDigestRoute.test.js
+Test Files  8 passed (8)
+Tests       129 passed (129)
+exit 0
+```
+
+Regression and full-suite GREEN:
+
+```text
+npx vitest run tests/salesInboundEvents.test.js tests/salesInbound.test.js tests/salesExperiments.test.js tests/salesAgent.test.js tests/salesReplyRoute.test.js tests/salesCircuitBreaker.test.js tests/salesCircuitFirestore.test.js tests/salesConversation.test.js tests/salesAttribution.test.js tests/salesMediaGuard.test.js tests/salesMediaLibrary.test.js tests/salesSelling.test.js tests/salesLeadsView.test.js
+Test Files  13 passed (13)
+Tests       357 passed (357)
+exit 0
+
+npm test
+Test Files  42 passed (42)
+Tests       833 passed (833)
+exit 0
+
+npx eslint src/lib/salesAgent/leads.js tests/salesDeliveryFirestore.test.js
+exit 0, no diagnostics
+
+git diff --check
+exit 0; only configured LF-to-CRLF working-copy notices
+```
+
+Privacy/security remains unchanged: normalized documents and ledger claims contain stable metadata only. Callback-created identifiers do not trigger lead lookup or mutation without stored lead ownership, and no phone, secret, token, provider body, payload, transcript, call, or dial task is introduced.
