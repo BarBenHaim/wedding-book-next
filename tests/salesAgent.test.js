@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import { PACKAGES, ADDONS, STAGES, findPackage, FACTS, MEDIA_KEYS, findMedia } from '@/lib/salesAgent/catalog'
 import { buildSystemPrompt, buildFollowUpPrompt, addDaysISO, formatHebrewDate } from '@/lib/salesAgent/prompt'
-import { parseAgentJson, normalizePhone, resolveFollowUp, sanitizeReply } from '@/lib/salesAgent/agent'
+import { callClaude, parseAgentJson, normalizePhone, resolveFollowUp, sanitizeReply } from '@/lib/salesAgent/agent'
 // leadsCore, not leads: importing leads.js boots the Firebase Admin SDK,
 // which needs service-account credentials the test runner has no business
 // holding. The pure logic lives in leadsCore for exactly this reason.
@@ -11,6 +11,25 @@ import { toApiMessages, trimTurns, isPausedForHuman, isOwnEcho, parseOwnerComman
 // tests pin the things that would be expensive to discover in production:
 // a wrong price in the prompt, a lead that silently stops being chased,
 // a malformed model answer reaching a customer as-is.
+
+afterEach(() => {
+    vi.unstubAllGlobals()
+    delete process.env.ANTHROPIC_API_KEY
+})
+
+describe('provider body deadline', () => {
+    it('aborts a stalled JSON body after headers arrive before the absolute deadline', async () => {
+        process.env.ANTHROPIC_API_KEY = 'test-secret'
+        const fetch = vi.fn((_, { signal }) => Promise.resolve({
+            ok: true,
+            json: () => new Promise((_, reject) => signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true })),
+        }))
+        vi.stubGlobal('fetch', fetch)
+
+        await expect(callClaude({ system: 'system', messages: [], deadlineAtMs: Date.now() + 12 })).rejects.toThrow('anthropic timeout')
+        expect(fetch).toHaveBeenCalledTimes(1)
+    })
+})
 
 describe('catalog — the only facts the agent may state', () => {
     it('carries the live prices and checkout links', () => {

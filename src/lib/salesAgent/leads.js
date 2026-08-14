@@ -51,16 +51,21 @@ function anthropicRuntimeRef() {
 // existing fields: a past operational mistake must not keep a provider body,
 // prompt, customer text, phone, or secret alive in this document.
 const breakerRuntimeState = sanitizeBreakerRuntimeState
+const assertBeforeDeadline = deadlineAtMs => {
+    if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) throw new Error('sales runtime deadline exhausted')
+}
 
 /**
  * Atomically consults the provider circuit before a model call. A closed
  * circuit needs only a transaction read; a half-open circuit writes a short
  * lease, so exactly one concurrent request becomes the probe.
  */
-export async function acquireProviderCircuit() {
+export async function acquireProviderCircuit({ deadlineAtMs } = {}) {
+    assertBeforeDeadline(deadlineAtMs)
     const runtimeRef = anthropicRuntimeRef()
     const probeId = crypto.randomUUID()
     return adminDb.runTransaction(async tx => {
+        assertBeforeDeadline(deadlineAtMs)
         const snap = await tx.get(runtimeRef)
         const stored = snap.exists ? breakerRuntimeState(snap.data()) : {}
         const reservation = reserveHalfOpenProbe(stored, Date.now(), probeId)
@@ -75,9 +80,11 @@ export async function acquireProviderCircuit() {
     })
 }
 
-export async function recordProviderFailure(errorCode, probeId = null) {
+export async function recordProviderFailure(errorCode, probeId = null, deadlineAtMs = null) {
+    assertBeforeDeadline(deadlineAtMs)
     const runtimeRef = anthropicRuntimeRef()
     return adminDb.runTransaction(async tx => {
+        assertBeforeDeadline(deadlineAtMs)
         const snap = await tx.get(runtimeRef)
         const resolution = resolveProviderFailure(snap.exists ? breakerRuntimeState(snap.data()) : {}, Date.now(), errorCode, probeId)
         if (resolution.action === 'stale') return resolution
@@ -86,9 +93,11 @@ export async function recordProviderFailure(errorCode, probeId = null) {
     })
 }
 
-export async function recordProviderSuccess(probeId = null) {
+export async function recordProviderSuccess(probeId = null, deadlineAtMs = null) {
+    assertBeforeDeadline(deadlineAtMs)
     const runtimeRef = anthropicRuntimeRef()
     return adminDb.runTransaction(async tx => {
+        assertBeforeDeadline(deadlineAtMs)
         const snap = await tx.get(runtimeRef)
         const resolution = resolveProviderSuccess(snap.exists ? breakerRuntimeState(snap.data()) : {}, Date.now(), probeId)
         if (resolution.action === 'stale') return resolution
@@ -101,7 +110,8 @@ export async function recordProviderSuccess(probeId = null) {
  * Commit a provider fallback as one fenced transaction. A stale outbound
  * worker cannot pause a lead after its inbound lease was reclaimed.
  */
-export async function completeProviderFallback({ eventId, claimToken, claimGeneration, phone, reason, outcome }) {
+export async function completeProviderFallback({ eventId, claimToken, claimGeneration, phone, reason, outcome, deadlineAtMs = null }) {
+    assertBeforeDeadline(deadlineAtMs)
     const ownedClaimToken = assertInboundClaimToken(claimToken)
     const cleanOutcome = sanitizeInboundOutcome(outcome)
     assertCompletableInboundOutcome(cleanOutcome)
@@ -111,6 +121,7 @@ export async function completeProviderFallback({ eventId, claimToken, claimGener
     if (!Number.isInteger(expectedGeneration) || expectedGeneration < 1) throw new Error('inbound fallback needs claimGeneration')
 
     return adminDb.runTransaction(async tx => {
+        assertBeforeDeadline(deadlineAtMs)
         const [eventSnap] = await Promise.all([tx.get(eventRef), tx.get(leadRef)])
         const stored = eventSnap.exists ? eventSnap.data() : null
         const decision = decideInboundCompletion(stored, ownedClaimToken, Date.now())

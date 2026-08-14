@@ -52,7 +52,7 @@ import { mediaGuard } from '@/lib/salesAgent/mediaGuard'
 import { assignVariant, summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
 import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
-import { normalizeProviderError, PROVIDER_PATH_DEADLINE_MS } from '@/lib/salesAgent/circuitBreaker'
+import { normalizeProviderError, INBOUND_ROUTE_DEADLINE_MS, FALLBACK_COMMIT_RESERVE_MS } from '@/lib/salesAgent/circuitBreaker'
 
 // What the customer sees when the machinery breaks. Deliberately honest
 // and short — no apology theatre, no invented reason.
@@ -86,6 +86,9 @@ function todayISO() {
 }
 
 export async function POST(req) {
+    // One end-to-end deadline starts before body parsing and claim work. It
+    // leaves a fenced final reserve for durable fallback and HTTP transport.
+    const routeDeadlineAtMs = Date.now() + INBOUND_ROUTE_DEADLINE_MS
     if (!authorized(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     // Not req.json(). Make builds the body by interpolating values into a
@@ -131,6 +134,7 @@ export async function POST(req) {
     // which sent only that, keeps working unchanged.
     const phone = outgoing ? to || normalizePhone(body?.phone) : normalizePhone(body?.phone) || from
     if (!phone) return NextResponse.json({ error: 'bad-phone' }, { status: 400 })
+    if (Date.now() >= routeDeadlineAtMs) return NextResponse.json({ error: 'inbound-deadline-exhausted' }, { status: 503 })
 
     let claim
     try {
@@ -154,9 +158,7 @@ export async function POST(req) {
     if (claim.action === 'busy') {
         return NextResponse.json({ ok: true, duplicate: true, processing: true, shouldSend: false }, { status: 202 })
     }
-    // Starts after the durable inbound claim and bounds every following
-    // provider-path step, including prompt preparation and JSON repair.
-    const providerDeadlineAtMs = Date.now() + PROVIDER_PATH_DEADLINE_MS
+    const providerDeadlineAtMs = routeDeadlineAtMs - FALLBACK_COMMIT_RESERVE_MS
 
     // Once this worker owns the event, no response may leave without
     // finalizing it. A stale worker must go silent rather than replaying
@@ -199,6 +201,7 @@ export async function POST(req) {
     // retry rather than claiming that a human was notified when they were not.
     const completeProviderFallback = async () => {
         try {
+            if (Date.now() >= routeDeadlineAtMs) return NextResponse.json({ error: 'provider-fallback-deadline-exhausted' }, { status: 503 })
             const result = await persistProviderFallback({
                 eventId,
                 claimToken: claim.claimToken,
@@ -211,6 +214,7 @@ export async function POST(req) {
                     handoff: true,
                     notifyOwner: ownerPing(phone, AI_OUTAGE_REASON, { name: body.profileName || lead?.name }),
                 },
+                deadlineAtMs: routeDeadlineAtMs,
             })
             if (result.action === 'completed') {
                 return NextResponse.json({
@@ -403,7 +407,8 @@ export async function POST(req) {
     // its health. The Firestore transaction grants only one half-open probe.
     let circuit
     try {
-        circuit = await acquireProviderCircuit()
+        if (Date.now() >= providerDeadlineAtMs) return completeProviderFallback()
+        circuit = await acquireProviderCircuit({ deadlineAtMs: providerDeadlineAtMs })
     } catch {
         console.error('[sales-agent] provider breaker check failed')
         return NextResponse.json({ error: 'provider-breaker-unavailable' }, { status: 503 })
@@ -492,7 +497,8 @@ export async function POST(req) {
         // The runtime state and logs retain only the fixed classification.
         console.error('[sales-agent] model provider failure', providerFailureCode)
         try {
-            await recordProviderFailure(providerFailureCode, circuit.probeId || null)
+            if (Date.now() >= routeDeadlineAtMs) return completeProviderFallback()
+            await recordProviderFailure(providerFailureCode, circuit.probeId || null, routeDeadlineAtMs)
         } catch {
             console.error('[sales-agent] provider breaker failure record failed')
             return NextResponse.json({ error: 'provider-failure-record-failed' }, { status: 503 })
@@ -501,7 +507,8 @@ export async function POST(req) {
     }
 
     try {
-        await recordProviderSuccess(circuit.probeId || null)
+        if (Date.now() >= routeDeadlineAtMs) return completeProviderFallback()
+        await recordProviderSuccess(circuit.probeId || null, routeDeadlineAtMs)
     } catch {
         console.error('[sales-agent] provider breaker success record failed')
         return NextResponse.json({ error: 'provider-success-record-failed' }, { status: 503 })

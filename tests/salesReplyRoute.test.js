@@ -194,6 +194,17 @@ describe('Anthropic outage handling', () => {
         expect(mocks.callClaude).not.toHaveBeenCalled()
     })
 
+    it('uses the POST-entry deadline before breaker acquire when preparation consumes the model budget', async () => {
+        let ticks = 0
+        vi.spyOn(Date, 'now').mockImplementation(() => ticks++ === 0 ? 0 : 21_000)
+
+        const result = await post(inbound({ text: 'צריך מחיר' }))
+
+        expect(result.body).toMatchObject({ sendText: safeFallback, handoff: true })
+        expect(mocks.acquireProviderCircuit).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+    })
+
     it.each([
         [Object.assign(new Error('timed out'), { name: 'AbortError' }), 'timeout'],
         [new Error('anthropic 429: busy'), 'rate_limit'],
@@ -206,7 +217,7 @@ describe('Anthropic outage handling', () => {
         const result = await post(inbound({ text: 'צריך מחיר' }))
 
         expect(result.body).toMatchObject({ sendText: safeFallback, handoff: true })
-        expect(mocks.recordProviderFailure).toHaveBeenCalledWith(code, null)
+        expect(mocks.recordProviderFailure).toHaveBeenCalledWith(code, null, expect.any(Number))
         expect(console.error).toHaveBeenCalledWith('[sales-agent] model provider failure', code)
         expect(mocks.completeProviderFallback).toHaveBeenCalledWith(expect.objectContaining({ outcome: expect.objectContaining({ sendText: safeFallback, handoff: true }) }))
     })
@@ -224,8 +235,8 @@ describe('Anthropic outage handling', () => {
         expect(mocks.callClaude).toHaveBeenCalledTimes(2)
         const [firstCall, secondCall] = mocks.callClaude.mock.calls
         expect(firstCall[0].deadlineAtMs).toBe(secondCall[0].deadlineAtMs)
-        expect(firstCall[0].deadlineAtMs - Date.now()).toBeLessThanOrEqual(22_000)
-        expect(mocks.recordProviderFailure).toHaveBeenCalledWith('invalid_json', null)
+        expect(firstCall[0].deadlineAtMs - Date.now()).toBeLessThanOrEqual(20_000)
+        expect(mocks.recordProviderFailure).toHaveBeenCalledWith('invalid_json', null, expect.any(Number))
     })
 
     it('resets the breaker only after a valid model result', async () => {

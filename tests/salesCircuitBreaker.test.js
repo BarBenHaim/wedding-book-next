@@ -34,7 +34,7 @@ describe('Anthropic circuit breaker', () => {
 
         expect(first).toEqual({
             decision: { allow: true, mode: 'half-open' },
-            state: expect.objectContaining({ halfOpenProbeId: 'probe-a', halfOpenLeaseUntilMs: 28_001 }),
+            state: expect.objectContaining({ halfOpenProbeId: 'probe-a', halfOpenLeaseUntilMs: 26_001 }),
         })
         expect(second.decision).toEqual({ allow: false, mode: 'half-open-busy' })
     })

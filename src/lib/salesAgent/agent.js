@@ -352,42 +352,33 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
                 messages,
             }),
         })
+        if (!res.ok) {
+            const body = await res.text().catch(() => '')
+            // A model id the API does not know. Retry once on the fallback
+            // rather than dropping the customer: a configuration mistake
+            // should cost a slightly less capable answer, not the answer.
+            if (res.status === 404 && model !== FALLBACK_MODEL && /model/i.test(body)) {
+                const next = model !== DEFAULT_MODEL ? DEFAULT_MODEL : FALLBACK_MODEL
+                console.error(`[sales-agent] unknown model ${model}, falling back to ${next}`)
+                return callClaude({ system, messages, model: next, maxTokens, temperature, deadlineAtMs })
+            }
+            throw new Error(`anthropic ${res.status}: ${body.slice(0, 400)}`)
+        }
+        const data = await res.json()
+        const text = (data?.content || [])
+            .filter(b => b?.type === 'text')
+            .map(b => b.text)
+            .join('')
+        return { text, usage: data?.usage || null, model: data?.model || model, stopReason: data?.stop_reason || null }
     } catch (err) {
         // An abort surfaces as a generic AbortError; name it so the
         // handoff message to the owner says something useful.
         if (err?.name === 'AbortError') throw new Error(`anthropic timeout after ${timeoutMs}ms`)
         throw err
     } finally {
+        // Keep the controller alive through headers *and* body decoding.
         clearTimeout(timer)
     }
-
-    if (!res.ok) {
-        const body = await res.text().catch(() => '')
-        // A model id the API does not know. Retry once on the fallback
-        // rather than dropping the customer: a configuration mistake
-        // should cost a slightly less capable answer, not the answer.
-        if (res.status === 404 && model !== FALLBACK_MODEL && /model/i.test(body)) {
-            // Step down to sonnet first, haiku only after. The old
-            // behaviour dropped straight to haiku, which punished a
-            // typo'd ANTHROPIC_MODEL with the cheapest model in the
-            // house — silently, in front of customers.
-            const next = model !== DEFAULT_MODEL ? DEFAULT_MODEL : FALLBACK_MODEL
-            console.error(`[sales-agent] unknown model ${model}, falling back to ${next}`)
-            return callClaude({ system, messages, model: next, maxTokens, temperature, deadlineAtMs })
-        }
-        // 401 = bad key · 429 = rate limited · 400 with credit_balance =
-        // out of credit. All three read identically from the outside
-        // ("the bot stopped answering"), so keep the upstream text.
-        throw new Error(`anthropic ${res.status}: ${body.slice(0, 400)}`)
-    }
-    const data = await res.json()
-    const text = (data?.content || [])
-        .filter(b => b?.type === 'text')
-        .map(b => b.text)
-        .join('')
-    // stopReason 'max_tokens' means the JSON is truncated and WILL fail to
-    // parse. Surfaced so the caller can retry instead of guessing why.
-    return { text, usage: data?.usage || null, model: data?.model || model, stopReason: data?.stop_reason || null }
 }
 
 export default { callClaude, parseAgentJson, normalizePhone, resolveFollowUp, sanitizeReply }
