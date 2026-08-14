@@ -24,7 +24,7 @@ import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerComman
 import { isoInIsrael } from './leadsView'
 import { assertCompletableInboundOutcome, assertInboundClaimToken, decideInboundCompletion, INBOUND_LEASE_MS, sanitizeInboundOutcome, startInboundClaim } from './inboundEventsCore'
 import { reserveHalfOpenProbe, resolveProviderFailure, resolveProviderSuccess, sanitizeBreakerRuntimeState } from './circuitBreaker'
-import { DELIVERY_ERROR_CODES, decideDeliveryTransition, isDeliveryPending } from './delivery'
+import { DELIVERY_ERROR_CODES, DELIVERY_REQUEST_LEASE_MS, decideDeliveryTransition, deliveryEventFingerprint, deliveryEventLedgerId, isDeliveryPending } from './delivery'
 import { pendingFollowUpStatus } from './followupPolicy'
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
@@ -37,6 +37,7 @@ const INBOUND_EVENTS_COLLECTION = 'sales_inbound_events'
 const RUNTIME_COLLECTION = 'sales_runtime'
 const ANTHROPIC_RUNTIME_ID = 'anthropic'
 const DELIVERY_EVENTS_COLLECTION = 'sales_delivery_events'
+const DELIVERY_EVENT_IDS_COLLECTION = 'sales_delivery_event_ids'
 
 function ref(phone) {
     return adminDb.collection(COLLECTION).doc(phone)
@@ -52,6 +53,10 @@ function anthropicRuntimeRef() {
 
 function deliveryEventRef(outboundId) {
     return adminDb.collection(DELIVERY_EVENTS_COLLECTION).doc(String(outboundId))
+}
+
+function deliveryEventIdRef(eventId) {
+    return adminDb.collection(DELIVERY_EVENT_IDS_COLLECTION).doc(deliveryEventLedgerId(eventId))
 }
 
 // Runtime state is metadata only. In particular, do not merge arbitrary
@@ -408,6 +413,14 @@ export async function prepareFollowUpDelivery({
         }, requestedAtMs)) {
             return { action: 'pending', outboundId: lead.deliveryPendingOutboundId || null }
         }
+        const operationalStatus = pendingFollowUpStatus(lead, requestedAtMs)
+        if (advancesFollowUp && operationalStatus === 'requested') {
+            return {
+                action: 'busy',
+                outboundId: lead.deliveryRequestOutboundId || null,
+                status: 'requested',
+            }
+        }
 
         const attemptNumber = Number(lead.followUpCount || 0) + 1
         tx.set(deliveryRef, {
@@ -426,7 +439,7 @@ export async function prepareFollowUpDelivery({
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: false })
         const leadPatch = {}
-        if (pendingFollowUpStatus(lead, requestedAtMs) === 'stale') {
+        if (operationalStatus === 'stale') {
             leadPatch.lastDeliveryStatus = 'requested'
             leadPatch.deliveryPendingOutboundId = null
             leadPatch.deliveryPendingUntilMs = null
@@ -434,6 +447,13 @@ export async function prepareFollowUpDelivery({
             leadPatch.staleDeliveryDetectedAtMs = requestedAtMs
         }
         if (advancesFollowUp) {
+            leadPatch.lastDeliveryStatus = 'requested'
+            leadPatch.deliveryRequestOutboundId = String(outboundId)
+            leadPatch.deliveryRequestUntilMs = requestedAtMs + DELIVERY_REQUEST_LEASE_MS
+            if (operationalStatus === 'stale-requested') {
+                leadPatch.staleRequestOutboundId = lead.deliveryRequestOutboundId || null
+                leadPatch.staleRequestDetectedAtMs = requestedAtMs
+            }
             leadPatch.pendingDeliveryMessages = {
                     ...(lead.pendingDeliveryMessages && typeof lead.pendingDeliveryMessages === 'object'
                         ? lead.pendingDeliveryMessages
@@ -455,12 +475,26 @@ export async function prepareFollowUpDelivery({
  */
 export async function recordDeliveryEvent(event) {
     const deliveryRef = deliveryEventRef(event.outboundId)
+    const eventIdRef = deliveryEventIdRef(event.eventId)
+    const fingerprint = deliveryEventFingerprint(event)
     return adminDb.runTransaction(async tx => {
-        const deliverySnap = await tx.get(deliveryRef)
+        const [deliverySnap, eventIdSnap] = await Promise.all([tx.get(deliveryRef), tx.get(eventIdRef)])
+        if (eventIdSnap.exists) {
+            if (eventIdSnap.data()?.fingerprint === fingerprint) return { action: 'noop', reason: 'EVENT_REPLAY' }
+            throw deliveryError('EVENT_ID_CONFLICT')
+        }
         const stored = deliverySnap.exists ? deliverySnap.data() : null
         const decision = decideDeliveryTransition(stored, event)
         if (decision.action === 'reject') throw deliveryError(decision.error)
-        if (decision.action === 'noop') return decision
+        const ledgerPatch = {
+            eventIdHash: deliveryEventLedgerId(event.eventId),
+            fingerprint,
+            createdAt: FieldValue.serverTimestamp(),
+        }
+        if (decision.action === 'noop') {
+            tx.set(eventIdRef, ledgerPatch, { merge: false })
+            return decision
+        }
 
         const leadRef = stored?.leadId ? ref(stored.leadId) : null
         const leadSnap = leadRef ? await tx.get(leadRef) : null
@@ -488,9 +522,11 @@ export async function recordDeliveryEvent(event) {
             updatedAt: FieldValue.serverTimestamp(),
         }
         tx.set(deliveryRef, deliveryPatch, { merge: true })
+        tx.set(eventIdRef, ledgerPatch, { merge: false })
 
         if (leadRef) {
-            const ownsPending = !lead.deliveryPendingOutboundId || lead.deliveryPendingOutboundId === event.outboundId
+            const ownsPending = (!lead.deliveryPendingOutboundId || lead.deliveryPendingOutboundId === event.outboundId)
+                && (!lead.deliveryRequestOutboundId || lead.deliveryRequestOutboundId === event.outboundId)
             if (!ownsPending && !advances) {
                 if (Object.hasOwn(pendingMessages, event.outboundId) && decision.clearPending) {
                     tx.set(leadRef, { pendingDeliveryMessages: withoutCurrentMessage }, { merge: true })
@@ -499,6 +535,8 @@ export async function recordDeliveryEvent(event) {
             }
             const leadPatch = {
                 lastDeliveryStatus: decision.nextStatus,
+                deliveryRequestOutboundId: null,
+                deliveryRequestUntilMs: null,
                 updatedAt: FieldValue.serverTimestamp(),
             }
             if (event.status === 'accepted' && stored?.advancesFollowUp && !logicalAlreadyAdvanced && ownsPending) {
@@ -538,6 +576,32 @@ export async function recordDeliveryEvent(event) {
 // not advance the follow-up cadence; only a later delivered/read callback can.
 export const markFollowUpAccepted = recordDeliveryEvent
 
+/** Claim one immutable daily digest attempt before any provider call. */
+export async function prepareDigestDelivery({ outboundId, requestedAt = new Date().toISOString(), attemptNumber = 1 }) {
+    const requestedAtMs = Date.parse(requestedAt)
+    if (!Number.isFinite(requestedAtMs)) throw deliveryError('INVALID_OCCURRED_AT')
+    const deliveryRef = deliveryEventRef(outboundId)
+    return adminDb.runTransaction(async tx => {
+        const snap = await tx.get(deliveryRef)
+        if (snap.exists) {
+            return { action: 'existing', outboundId: String(outboundId), status: snap.data()?.status || 'requested' }
+        }
+        tx.set(deliveryRef, {
+            outboundId: String(outboundId),
+            channel: 'whatsapp_graph',
+            status: 'requested',
+            kind: 'daily_digest',
+            part: 'template',
+            advancesFollowUp: false,
+            attemptNumber: Math.max(1, Number.parseInt(attemptNumber, 10) || 1),
+            requestedAtMs,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: false })
+        return { action: 'requested', outboundId: String(outboundId) }
+    })
+}
+
 /** Sanitized digest transport state consumed by the operational health view. */
 export async function recordDigestOutcome({ status, errorCode = null, outboundId, occurredAt }) {
     if (status !== 'digest_accepted' && status !== 'digest_failed') throw deliveryError('INVALID_DIGEST_STATUS')
@@ -570,7 +634,7 @@ export async function dueFollowUps(todayISO, limit = 40) {
         if (lead.stage === 'closed_won' || lead.stage === 'closed_lost') continue
         if (isPausedForHuman(lead)) continue
         if ((lead.followUpCount || 0) >= 3) continue
-        if (pendingFollowUpStatus(lead) === 'pending') continue
+        if (['pending', 'requested'].includes(pendingFollowUpStatus(lead))) continue
         out.push(lead)
         if (out.length >= limit) break
     }

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
     listLeads: vi.fn(),
     recordDeliveryEvent: vi.fn(),
     recordDigestOutcome: vi.fn(),
+    prepareDigestDelivery: vi.fn(),
     deriveLead: vi.fn(value => value),
     sortLeads: vi.fn(value => value),
     isoInIsrael: vi.fn(() => '2026-08-14'),
@@ -20,6 +21,7 @@ vi.mock('@/lib/firebaseAdmin', () => ({ adminAuth: { verifyIdToken: mocks.verify
 vi.mock('@/lib/superAdmin', () => ({ isSuperAdmin: mocks.isSuperAdmin }))
 vi.mock('@/lib/salesAgent/leads', () => ({
     listLeads: mocks.listLeads,
+    prepareDigestDelivery: mocks.prepareDigestDelivery,
     recordDeliveryEvent: mocks.recordDeliveryEvent,
     recordDigestOutcome: mocks.recordDigestOutcome,
 }))
@@ -67,6 +69,7 @@ beforeEach(async () => {
     mocks.sendWhatsAppTemplate.mockResolvedValue({ accepted: true, providerMessageId: 'wamid-digest-fixture' })
     mocks.recordDeliveryEvent.mockResolvedValue({ action: 'applied', status: 'accepted', advanced: false })
     mocks.recordDigestOutcome.mockResolvedValue(undefined)
+    mocks.prepareDigestDelivery.mockResolvedValue({ action: 'requested', outboundId: 'digest-hash-fixture:template' })
     ;({ GET } = await import('@/app/api/sales-agent/digest/route'))
 })
 
@@ -128,6 +131,62 @@ describe('scheduled owner digest delivery', () => {
         expect(result.body.delivery).toEqual({ status: 'failed', errorCode: 'GRAPH_REJECTED' })
         expect(JSON.stringify(result.body)).not.toContain('private provider body fixture')
         expect(JSON.stringify(result.body)).not.toContain('delivered')
+    })
+
+    it('preclaims before Graph and short-circuits requested, accepted, or failed replay attempts', async () => {
+        for (const status of ['requested', 'accepted', 'failed']) {
+            vi.clearAllMocks()
+            mocks.listLeads.mockResolvedValue([])
+            mocks.buildDigest.mockReturnValue(digest)
+            mocks.prepareDigestDelivery.mockResolvedValue({ action: 'existing', outboundId: 'digest-hash-fixture:template', status })
+            const result = await runCron()
+            expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
+            expect(result.body.delivery).toMatchObject({ status: 'not_sent', reason: 'existing_attempt', existingStatus: status })
+        }
+    })
+
+    it('sends Graph once when concurrent cron requests race for the same attempt', async () => {
+        let claimed = false
+        mocks.prepareDigestDelivery.mockImplementation(async ({ outboundId }) => {
+            if (claimed) return { action: 'existing', outboundId, status: 'requested' }
+            claimed = true
+            return { action: 'requested', outboundId }
+        })
+        const results = await Promise.all([runCron(), runCron()])
+        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledTimes(1)
+        expect(results.map(result => result.body.delivery.status).sort()).toEqual(['accepted', 'not_sent'])
+    })
+
+    it('preserves Graph acceptance when delivery acknowledgement persistence fails', async () => {
+        mocks.recordDeliveryEvent.mockRejectedValueOnce(new Error('delivery persistence fixture'))
+        const result = await runCron()
+        expect(mocks.recordDeliveryEvent).toHaveBeenCalledTimes(1)
+        expect(mocks.recordDeliveryEvent).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'failed' }))
+        expect(result.body.delivery).toMatchObject({
+            status: 'accepted', accepted: true, providerMessageId: 'wamid-digest-fixture', persistenceDegraded: true,
+            repair: { endpoint: '/api/sales-agent/delivery' },
+        })
+    })
+
+    it('keeps accepted delivery truth when digest health persistence fails', async () => {
+        mocks.recordDigestOutcome.mockRejectedValueOnce(new Error('health persistence fixture'))
+        const result = await runCron()
+        expect(mocks.recordDeliveryEvent).toHaveBeenCalledTimes(1)
+        expect(result.body.delivery).toMatchObject({
+            status: 'accepted', accepted: true, healthPersistenceDegraded: true,
+        })
+    })
+
+    it('supports a deliberate distinct retry attempt ID', async () => {
+        mocks.createOutboundId.mockImplementation(({ attempt }) => `digest-attempt-${attempt}:template`)
+        const response = await GET(new Request('http://localhost/api/sales-agent/digest?attempt=2', {
+            headers: { authorization: 'Bearer digest-cron-secret-fixture' },
+        }))
+        await response.json()
+        expect(mocks.createOutboundId).toHaveBeenCalledWith(expect.objectContaining({ attempt: 2 }))
+        expect(mocks.prepareDigestDelivery).toHaveBeenCalledWith(expect.objectContaining({
+            outboundId: 'digest-attempt-2:template', attemptNumber: 2,
+        }))
     })
 
     it('does not send from the shared-secret inspection path or on a quiet day', async () => {

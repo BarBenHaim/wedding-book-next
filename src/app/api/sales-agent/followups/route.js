@@ -267,8 +267,11 @@ export async function GET(req) {
                 requestedAt,
             })
             const primaryPreparation = await preparePart(primaryPart, primaryOutboundId, true)
-            if (primaryPreparation.action === 'pending') {
-                item.deliveryStatus = 'pending'
+            if (primaryPreparation.action !== 'requested') {
+                item.outboundId = primaryPreparation.outboundId || primaryOutboundId
+                item.deliveryStatus = primaryPreparation.action === 'pending'
+                    ? 'pending'
+                    : (primaryPreparation.status || 'requested')
                 items.push(item)
                 return
             }
@@ -297,12 +300,11 @@ export async function GET(req) {
                 occurredAt: new Date().toISOString(),
             })
 
+            let primaryEvidence
             try {
-                const primaryEvidence = withinWindow
+                primaryEvidence = withinWindow
                     ? await sendWhatsAppText(lead.phone, text)
                     : await sendWhatsAppTemplate(lead.phone, FOLLOWUP_TEMPLATE, [text])
-                await acknowledge(primaryOutboundId, primaryEvidence)
-                item.deliveryStatus = 'accepted'
             } catch (error) {
                 const allowed = new Set([
                     'GRAPH_REJECTED', 'GRAPH_TIMEOUT', 'PROVIDER_MESSAGE_ID_MISSING',
@@ -320,16 +322,43 @@ export async function GET(req) {
                 items.push(item)
                 return
             }
+            const primaryAcceptedAt = new Date().toISOString()
+            item.accepted = true
+            item.providerMessageId = primaryEvidence.providerMessageId
+            item.deliveryStatus = 'accepted'
+            try {
+                await recordDeliveryEvent({
+                    eventId: `${primaryOutboundId}:accepted`,
+                    outboundId: primaryOutboundId,
+                    channel: 'whatsapp_graph',
+                    status: 'accepted',
+                    providerMessageId: primaryEvidence.providerMessageId,
+                    occurredAt: primaryAcceptedAt,
+                })
+            } catch {
+                item.persistenceDegraded = true
+                item.repair = {
+                    endpoint: '/api/sales-agent/delivery',
+                    event: {
+                        eventId: `${primaryOutboundId}:accepted`,
+                        outboundId: primaryOutboundId,
+                        channel: 'whatsapp_graph',
+                        status: 'accepted',
+                        providerMessageId: primaryEvidence.providerMessageId,
+                        occurredAt: primaryAcceptedAt,
+                    },
+                }
+                console.warn('[sales-agent/followups] acceptance persistence degraded')
+            }
 
             if (outboundParts.image) {
+                let imageEvidence
                 try {
-                    const imageEvidence = await sendWhatsAppImage(
+                    imageEvidence = await sendWhatsAppImage(
                         lead.phone,
                         library[parsed.image].url,
                         library[parsed.image].caption,
                     )
-                    await acknowledge(outboundParts.image, imageEvidence)
-                    item.mediaDeliveryStatus = 'accepted'
                 } catch (error) {
                     const allowed = new Set([
                         'GRAPH_REJECTED', 'GRAPH_TIMEOUT', 'PROVIDER_MESSAGE_ID_MISSING',
@@ -344,6 +373,15 @@ export async function GET(req) {
                     item.mediaSendError = errorCode
                     item.mediaDeliveryStatus = 'failed'
                     console.warn('[sales-agent/followups] media send failed')
+                }
+                if (imageEvidence) {
+                    item.mediaDeliveryStatus = 'accepted'
+                    try {
+                        await acknowledge(outboundParts.image, imageEvidence)
+                    } catch {
+                        item.mediaPersistenceDegraded = true
+                        console.warn('[sales-agent/followups] media acceptance persistence degraded')
+                    }
                 }
             }
             items.push(item)

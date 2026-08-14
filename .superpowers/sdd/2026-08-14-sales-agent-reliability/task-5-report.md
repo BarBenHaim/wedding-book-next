@@ -128,3 +128,87 @@ Modified:
 - Meta must approve/configure `wt_followup` and `wt_daily_digest`; rejection remains visible and has no free-form fallback.
 - Task 6 still must patch Make scenario `9630287` to post accepted/delivered/read/failed callbacks and map the returned template/outbound-part metadata. This task intentionally did not mutate Make.
 - A direct Graph send is truthfully only `accepted` until the existing WhatsApp status-webhook transport posts `delivered` or `read`; without that Task 6 wiring, the 30-minute pending state expires and becomes due/stale rather than silently advancing.
+
+## Fix round 1/5 — review findings
+
+Status: implemented and verified after review of commit `97ed8d8c23cbfe1a3b98c9342e990c824a49b56f`.
+
+### Corrected state-machine decisions
+
+- The first verified success is either `delivered` or `read`, directly from `requested` or after `accepted`. It transactionally binds the first provider message ID and advances the logical follow-up exactly once. `delivered -> read` updates status without advancing again; `read -> delivered` is a claimed stale no-op. Identical callback replays are global no-ops.
+- Before direct Graph transport, an advancing follow-up owns a two-minute `requested` lease on the lead. The lease is explicitly not acceptance or delivery and does not move cadence. It prevents an immediate duplicate send after Graph evidence if acceptance persistence is temporarily unavailable; expiry becomes `stale-requested` warning metadata and permits repair/retry.
+- Once Graph returns `messages[0].id`, transport truth is immutable: later acknowledgement or operational-health persistence failures return `accepted: true` with degradation flags. They never synthesize a provider failure or clear the requested claim. The response includes a privacy-safe callback event and authenticated repair endpoint.
+- Delivery event IDs use a separate `sales_delivery_event_ids/{sha256(eventId)}` ledger claimed in the same Firestore transaction as the delivery transition. Its canonical SHA-256 fingerprint covers outbound ID, channel, status, provider message ID, and normalized error code, but not callback timestamp. An identical global replay is a no-op; any changed identity is `EVENT_ID_CONFLICT`. A transaction rollback leaves neither transition nor claim. Valid stale callbacks are claimed as no-ops; rejected regressions are not claimed.
+- A scheduled digest atomically creates its deterministic `requested` attempt before Graph. Existing requested/in-progress-equivalent, accepted, delivered, read, or failed attempts never send again. Authenticated `?attempt=N` is the explicit intentional-retry seam and creates a distinct outbound ID. Graph acceptance and digest-health metadata are persisted independently.
+
+### Acceptance mapping
+
+| Review acceptance item | Named test evidence |
+|---|---|
+| Requested/accepted to first delivered or read; one advancement; late/replayed ordering | `delivery state transitions > allows delivered or read to be the first verified success and advances once`; `transactional follow-up delivery truth > requested/accepted to first verified delivered/read binds provider identity and advances exactly once`; `delivered then read and replayed read advance the logical attempt once total` |
+| Requested lease before transport; active suppression; expired warning; acceptance clears lease | `provider-pending suppression > suppresses duplicate transport while a requested lease is active and expires it cleanly`; `records requested metadata without claiming the follow-up was accepted or delivered`; `suppresses another advancing follow-up during the requested lease and permits repair after expiry`; `does not send again when a prior requested lease owns the lead` |
+| Graph accepted, acknowledgement persistence fails truthfully | `truthful follow-up transport > preserves provider acceptance when acknowledgement persistence fails and does not record failed`; `scheduled owner digest delivery > preserves Graph acceptance when delivery acknowledgement persistence fails` |
+| Digest health failure cannot rewrite accepted delivery | `scheduled owner digest delivery > keeps accepted delivery truth when digest health persistence fails` |
+| Global identical replay after newer event | `global delivery event replay ledger > returns an explicit no-op for an identical old event after newer status events` |
+| Event ID conflict across status/outbound/channel/provider identity | `global delivery event replay ledger > rejects the same event ID reused for another status, outbound, channel, or provider identity` |
+| Atomic rollback and concurrent global claim | `does not retain a replay claim when the delivery transaction rolls back`; `allows one winner when the same event ID is claimed concurrently for different outbounds` |
+| Digest preclaim, terminal replay suppression, distinct retry | `owner digest health metadata > claims a deterministic digest attempt before transport and never reuses a terminal attempt`; `allows one transactional winner for concurrent digest preclaims`; `scheduled owner digest delivery > preclaims before Graph and short-circuits requested, accepted, or failed replay attempts`; `supports a deliberate distinct retry attempt ID` |
+| Concurrent cron delivery sends Graph once | `scheduled owner digest delivery > sends Graph once when concurrent cron requests race for the same attempt` |
+
+### Strict TDD evidence
+
+First-success transition RED, before implementation:
+
+```text
+npx vitest run tests/salesDelivery.test.js
+Test Files  1 failed (1)
+Tests       5 failed | 10 passed (15)
+exit 1
+```
+
+Global ledger RED, before implementation:
+
+```text
+npx vitest run tests/salesDeliveryFirestore.test.js
+Test Files  1 failed (1)
+Tests       4 failed | 12 passed (16)
+failures: old identical callback was a regression; reused IDs were not globally conflicting; rollback/retry wrote no ledger; concurrent conflicting claims both won
+exit 1
+```
+
+Requested-lease, persistence-boundary, and digest-preclaim RED, before implementation:
+
+```text
+npx vitest run tests/salesFollowupPolicy.test.js tests/salesDeliveryFirestore.test.js tests/salesFollowupsRoute.test.js tests/salesDigestRoute.test.js
+Test Files  4 failed (4)
+Tests       11 failed | 58 passed (69)
+exit 1
+```
+
+Focused GREEN after implementation:
+
+```text
+npx vitest run tests/salesDelivery.test.js tests/salesDeliveryFirestore.test.js tests/salesDeliveryRoute.test.js tests/salesWhatsApp.test.js tests/salesFollowupPolicy.test.js tests/salesFollowupsRoute.test.js tests/salesDigest.test.js tests/salesDigestRoute.test.js
+Test Files  8 passed (8)
+Tests       117 passed (117)
+exit 0
+```
+
+Regression and full-suite GREEN:
+
+```text
+npx vitest run tests/salesInboundEvents.test.js tests/salesInbound.test.js tests/salesExperiments.test.js tests/salesAgent.test.js tests/salesReplyRoute.test.js tests/salesCircuitBreaker.test.js tests/salesCircuitFirestore.test.js tests/salesConversation.test.js tests/salesAttribution.test.js tests/salesMediaGuard.test.js tests/salesMediaLibrary.test.js tests/salesSelling.test.js tests/salesLeadsView.test.js
+Test Files  13 passed (13)
+Tests       357 passed (357)
+exit 0
+
+npm test
+Test Files  42 passed (42)
+Tests       821 passed (821)
+exit 0
+
+npx eslint <11 changed JS files>
+exit 0, no diagnostics
+```
+
+Privacy/security remains unchanged or stronger: replay documents contain hashes and timestamps only; degradation responses contain stable IDs and normalized callback fields but no phone, token, provider body, payload, transcript, or secret. No calls or dial tasks were introduced. Make remains requested-only pending its authenticated callback and Task 6 wiring remains untouched.

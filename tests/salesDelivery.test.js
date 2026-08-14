@@ -101,13 +101,34 @@ describe('delivery state transitions', () => {
         expect(decideDeliveryTransition(storedAccepted, accepted({ channel: 'make' })))
             .toEqual({ action: 'reject', error: 'CHANNEL_MISMATCH' })
         expect(decideDeliveryTransition(requested, accepted({ status: 'delivered' })))
-            .toEqual({ action: 'reject', error: 'INVALID_DELIVERY_TRANSITION' })
+            .toMatchObject({ action: 'apply', nextStatus: 'delivered', advanceFollowUp: true })
         expect(decideDeliveryTransition({ ...storedAccepted, status: 'read' }, accepted({ status: 'delivered' })))
-            .toEqual({ action: 'reject', error: 'DELIVERY_STATE_REGRESSION' })
-        expect(decideDeliveryTransition(
-            { ...storedAccepted, eventId: 'replayed-event-fixture' },
-            accepted({ status: 'delivered', eventId: 'replayed-event-fixture' }),
-        )).toEqual({ action: 'reject', error: 'EVENT_ID_REPLAY' })
+            .toEqual({ action: 'noop', reason: 'STALE_STATUS' })
+    })
+
+    it.each([
+        ['requested', 'delivered'],
+        ['requested', 'read'],
+        ['accepted', 'delivered'],
+        ['accepted', 'read'],
+    ])('advances on the first verified %s to %s success', (from, status) => {
+        const current = {
+            ...requested,
+            status: from,
+            ...(from === 'accepted' ? { providerMessageId: 'wamid-provider-a' } : {}),
+        }
+        expect(decideDeliveryTransition(current, accepted({ status, eventId: `first-${status}` })))
+            .toMatchObject({ action: 'apply', nextStatus: status, advanceFollowUp: true, clearPending: true })
+    })
+
+    it('treats delivered after a read-first success as a stale no-op', () => {
+        expect(decideDeliveryTransition({
+            ...requested,
+            status: 'read',
+            providerMessageId: 'wamid-provider-a',
+            followUpAdvanced: true,
+        }, accepted({ status: 'delivered', eventId: 'late-delivered-event' })))
+            .toEqual({ action: 'noop', reason: 'STALE_STATUS' })
     })
 })
 

@@ -132,6 +132,11 @@ export function isFinalAttempt(attempt = 0) {
 
 /** Operational state for an accepted follow-up waiting on Meta status. */
 export function pendingFollowUpStatus(lead, nowMs = Date.now()) {
+    if (lead?.lastDeliveryStatus === 'requested') {
+        const requestUntil = Number(lead?.deliveryRequestUntilMs)
+        if (!Number.isFinite(requestUntil)) return 'stale-requested'
+        return requestUntil > Number(nowMs) ? 'requested' : 'stale-requested'
+    }
     if (lead?.lastDeliveryStatus !== 'accepted') return 'none'
     const pendingUntil = Number(lead?.deliveryPendingUntilMs)
     if (!Number.isFinite(pendingUntil)) return 'stale'

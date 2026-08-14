@@ -220,6 +220,30 @@ describe('truthful follow-up transport', () => {
         expect(result.body.items[0]).not.toHaveProperty('delivered')
     })
 
+    it('preserves provider acceptance when acknowledgement persistence fails and does not record failed', async () => {
+        mocks.recordDeliveryEvent.mockRejectedValueOnce(new Error('firestore unavailable fixture'))
+
+        const result = await runCron()
+        const callbacks = mocks.recordDeliveryEvent.mock.calls.map(([callback]) => callback)
+
+        expect(callbacks).toHaveLength(1)
+        expect(callbacks[0]).toMatchObject({ status: 'accepted', providerMessageId: 'wamid-template-fixture' })
+        expect(result.body.items[0]).toMatchObject({
+            accepted: true,
+            deliveryStatus: 'accepted',
+            providerMessageId: 'wamid-template-fixture',
+            persistenceDegraded: true,
+            repair: { endpoint: '/api/sales-agent/delivery' },
+        })
+    })
+
+    it('does not send again when a prior requested lease owns the lead', async () => {
+        mocks.prepareFollowUpDelivery.mockResolvedValue({ action: 'busy', outboundId: 'earlier-outbound', status: 'requested' })
+        const result = await runCron()
+        expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
+        expect(result.body.items[0]).toMatchObject({ deliveryStatus: 'requested', outboundId: 'earlier-outbound' })
+    })
+
     it('keeps primary acceptance pending when a separate image part fails', async () => {
         mocks.dueFollowUps.mockResolvedValue([{ ...lead, lastInboundAt: Date.now() }])
         mocks.parseAgentJson.mockReturnValue({

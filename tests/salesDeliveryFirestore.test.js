@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const store = vi.hoisted(() => {
     const docs = new Map()
     let writes = []
+    let queue = Promise.resolve()
+    let failNextCommit = false
     const ref = key => ({ key })
     const snapshot = target => ({ exists: docs.has(target.key), data: () => docs.get(target.key) })
     const materialize = (old, patch) => Object.fromEntries(Object.entries(patch).map(([key, value]) => {
@@ -15,27 +17,37 @@ const store = vi.hoisted(() => {
     }))
     const db = {
         collection: name => ({ doc: id => ref(`${name}/${id}`) }),
-        runTransaction: async work => {
-            const staged = []
-            const result = await work({
-                get: async target => snapshot(target),
-                set: (target, value, options) => staged.push({ target, value, options }),
+        runTransaction: work => {
+            const run = queue.then(async () => {
+                const staged = []
+                const result = await work({
+                    get: async target => snapshot(target),
+                    set: (target, value, options) => staged.push({ target, value, options }),
+                })
+                if (failNextCommit) {
+                    failNextCommit = false
+                    throw new Error('injected delivery transaction failure')
+                }
+                for (const write of staged) {
+                    const old = docs.get(write.target.key) || {}
+                    const next = materialize(old, write.value)
+                    docs.set(write.target.key, write.options?.merge ? { ...old, ...next } : next)
+                    writes.push({ key: write.target.key, value: write.value })
+                }
+                return result
             })
-            for (const write of staged) {
-                const old = docs.get(write.target.key) || {}
-                const next = materialize(old, write.value)
-                docs.set(write.target.key, write.options?.merge ? { ...old, ...next } : next)
-                writes.push({ key: write.target.key, value: write.value })
-            }
-            return result
+            queue = run.catch(() => {})
+            return run
         },
     }
     return {
         db,
-        reset() { docs.clear(); writes = [] },
+        reset() { docs.clear(); writes = []; queue = Promise.resolve(); failNextCommit = false },
         set(key, value) { docs.set(key, value) },
         get(key) { return docs.get(key) },
+        entries() { return [...docs.entries()] },
         writes() { return [...writes] },
+        failNext() { failNextCommit = true },
     }
 })
 
@@ -48,7 +60,7 @@ vi.mock('firebase-admin/firestore', () => ({
     },
 }))
 
-import { prepareFollowUpDelivery, recordDeliveryEvent, recordDigestOutcome } from '@/lib/salesAgent/leads'
+import { prepareDigestDelivery, prepareFollowUpDelivery, recordDeliveryEvent, recordDigestOutcome } from '@/lib/salesAgent/leads'
 
 const LEAD = 'sales_leads/41'
 const OUTBOUND_ID = 'followup-a1b2c3-1:template'
@@ -90,6 +102,26 @@ describe('transactional follow-up delivery truth', () => {
         expect(store.get(LEAD).pendingDeliveryMessages).toEqual({ [OUTBOUND_ID]: 'follow-up fixture text' })
         expect(store.get(LEAD).lastFollowUpAt).toBeUndefined()
         expect(store.get(LEAD).deliveryPendingUntilMs).toBeUndefined()
+        expect(store.get(LEAD)).toMatchObject({
+            lastDeliveryStatus: 'requested',
+            deliveryRequestOutboundId: OUTBOUND_ID,
+            deliveryRequestUntilMs: Date.parse('2026-08-14T10:02:00.000Z'),
+        })
+    })
+
+    it('suppresses another advancing follow-up during the requested lease and permits repair after expiry', async () => {
+        await prepareFollowUpDelivery(requested())
+        const retryId = 'followup-retry-fixture-1:template'
+        await expect(prepareFollowUpDelivery(requested({ outboundId: retryId, requestedAt: '2026-08-14T10:01:00.000Z' })))
+            .resolves.toEqual({ action: 'busy', outboundId: OUTBOUND_ID, status: 'requested' })
+        expect(store.get(`sales_delivery_events/${retryId}`)).toBeUndefined()
+
+        await expect(prepareFollowUpDelivery(requested({ outboundId: retryId, requestedAt: '2026-08-14T10:02:00.000Z' })))
+            .resolves.toEqual({ action: 'requested', outboundId: retryId })
+        expect(store.get(LEAD)).toMatchObject({
+            deliveryRequestOutboundId: retryId,
+            staleRequestOutboundId: OUTBOUND_ID,
+        })
     })
 
     it('accepted creates pending for 30 minutes but does not increment or move the cadence', async () => {
@@ -103,6 +135,8 @@ describe('transactional follow-up delivery truth', () => {
             lastDeliveryStatus: 'accepted',
             deliveryPendingOutboundId: OUTBOUND_ID,
             deliveryPendingUntilMs: Date.parse('2026-08-14T10:31:00.000Z'),
+            deliveryRequestOutboundId: null,
+            deliveryRequestUntilMs: null,
         })
         expect(store.get(LEAD).lastFollowUpAt).toBeUndefined()
     })
@@ -112,7 +146,7 @@ describe('transactional follow-up delivery truth', () => {
         await recordDeliveryEvent(event('accepted'))
         await expect(recordDeliveryEvent(event('delivered'))).resolves.toMatchObject({ action: 'applied', advanced: true })
         await expect(recordDeliveryEvent(event('read'))).resolves.toMatchObject({ action: 'applied', advanced: false })
-        await expect(recordDeliveryEvent(event('read'))).resolves.toEqual({ action: 'noop', reason: 'DUPLICATE_STATUS' })
+        await expect(recordDeliveryEvent(event('read'))).resolves.toEqual({ action: 'noop', reason: 'EVENT_REPLAY' })
 
         expect(store.get(DELIVERY)).toMatchObject({ status: 'read', followUpAdvanced: true })
         expect(store.get(LEAD)).toMatchObject({
@@ -124,6 +158,31 @@ describe('transactional follow-up delivery truth', () => {
             deliveryPendingOutboundId: null,
         })
         expect(store.get(LEAD).turns).toEqual([{ role: 'assistant', text: 'follow-up fixture text', at: Date.parse('2026-08-14T10:01:00.000Z') }])
+    })
+
+    it.each([
+        ['requested', 'delivered'],
+        ['requested', 'read'],
+        ['accepted', 'delivered'],
+        ['accepted', 'read'],
+    ])('%s to first verified %s binds provider identity and advances exactly once', async (from, status) => {
+        await prepareFollowUpDelivery(requested())
+        if (from === 'accepted') await recordDeliveryEvent(event('accepted', { eventId: `pre-${status}-accepted` }))
+
+        await recordDeliveryEvent(event(status, { eventId: `first-${status}-success` }))
+        if (status === 'read') {
+            await expect(recordDeliveryEvent(event('delivered', { eventId: 'late-delivered-after-read' })))
+                .resolves.toEqual({ action: 'noop', reason: 'STALE_STATUS' })
+        } else {
+            await recordDeliveryEvent(event('read', { eventId: 'read-after-delivered' }))
+        }
+
+        expect(store.get(DELIVERY)).toMatchObject({
+            status: 'read',
+            providerMessageId: 'wamid-provider-fixture',
+            followUpAdvanced: true,
+        })
+        expect(store.get(LEAD)).toMatchObject({ followUpCount: 1, followUpAt: '2026-08-17' })
     })
 
     it('failed clears pending, stores only a normalized code, and leaves the lead due', async () => {
@@ -218,6 +277,38 @@ describe('transactional follow-up delivery truth', () => {
 })
 
 describe('owner digest health metadata', () => {
+    it('claims a deterministic digest attempt before transport and never reuses a terminal attempt', async () => {
+        const first = await prepareDigestDelivery({
+            outboundId: 'digest-fixture:template', requestedAt: '2026-08-14T10:00:00.000Z', attemptNumber: 1,
+        })
+        const replay = await prepareDigestDelivery({
+            outboundId: 'digest-fixture:template', requestedAt: '2026-08-14T10:01:00.000Z', attemptNumber: 1,
+        })
+        expect(first).toEqual({ action: 'requested', outboundId: 'digest-fixture:template' })
+        expect(replay).toEqual({ action: 'existing', outboundId: 'digest-fixture:template', status: 'requested' })
+
+        await recordDeliveryEvent(event('failed', {
+            eventId: 'digest-failed-fixture', outboundId: 'digest-fixture:template',
+            providerMessageId: undefined, errorCode: 'GRAPH_REJECTED',
+        }))
+        await expect(prepareDigestDelivery({
+            outboundId: 'digest-fixture:template', requestedAt: '2026-08-14T10:02:00.000Z', attemptNumber: 1,
+        })).resolves.toMatchObject({ action: 'existing', status: 'failed' })
+        await expect(prepareDigestDelivery({
+            outboundId: 'digest-fixture-retry:template', requestedAt: '2026-08-14T10:02:00.000Z', attemptNumber: 2,
+        })).resolves.toMatchObject({ action: 'requested' })
+    })
+
+    it('allows one transactional winner for concurrent digest preclaims', async () => {
+        const claim = {
+            outboundId: 'digest-concurrent-fixture:template',
+            requestedAt: '2026-08-14T10:00:00.000Z',
+            attemptNumber: 1,
+        }
+        const results = await Promise.all([prepareDigestDelivery(claim), prepareDigestDelivery(claim)])
+        expect(results.map(result => result.action).sort()).toEqual(['existing', 'requested'])
+    })
+
     it('stores only normalized digest delivery metadata', async () => {
         await recordDigestOutcome({
             status: 'digest_failed',
@@ -235,5 +326,68 @@ describe('owner digest health metadata', () => {
             occurredAt: '2026-08-14T10:00:00.000Z',
             updatedAt: 'SERVER_TIME',
         })
+    })
+})
+
+describe('global delivery event replay ledger', () => {
+    const replayEvent = (overrides = {}) => event('accepted', {
+        eventId: 'global-replay-event-fixture',
+        ...overrides,
+    })
+
+    it('returns an explicit no-op for an identical old event after newer status events', async () => {
+        await prepareFollowUpDelivery(requested())
+        await recordDeliveryEvent(replayEvent())
+        await recordDeliveryEvent(event('delivered', { eventId: 'newer-delivered-event-fixture' }))
+
+        await expect(recordDeliveryEvent(replayEvent()))
+            .resolves.toEqual({ action: 'noop', reason: 'EVENT_REPLAY' })
+        expect(store.get(LEAD).followUpCount).toBe(1)
+    })
+
+    it('rejects the same event ID reused for another status, outbound, channel, or provider identity', async () => {
+        await prepareFollowUpDelivery(requested())
+        await recordDeliveryEvent(replayEvent())
+
+        await expect(recordDeliveryEvent(replayEvent({ status: 'read' })))
+            .rejects.toMatchObject({ code: 'EVENT_ID_CONFLICT' })
+        await expect(recordDeliveryEvent(replayEvent({ channel: 'make' })))
+            .rejects.toMatchObject({ code: 'EVENT_ID_CONFLICT' })
+        await expect(recordDeliveryEvent(replayEvent({ providerMessageId: 'wamid-conflicting-fixture' })))
+            .rejects.toMatchObject({ code: 'EVENT_ID_CONFLICT' })
+
+        const otherOutboundId = 'followup-other-fixture-1:text'
+        await prepareFollowUpDelivery(requested({ outboundId: otherOutboundId, part: 'text' }))
+        await expect(recordDeliveryEvent(replayEvent({ outboundId: otherOutboundId })))
+            .rejects.toMatchObject({ code: 'EVENT_ID_CONFLICT' })
+    })
+
+    it('does not retain a replay claim when the delivery transaction rolls back', async () => {
+        await prepareFollowUpDelivery(requested())
+        store.failNext()
+
+        await expect(recordDeliveryEvent(replayEvent())).rejects.toThrow('injected delivery transaction failure')
+        expect(store.get(DELIVERY).status).toBe('requested')
+        expect(store.entries().filter(([key]) => key.startsWith('sales_delivery_event_ids/'))).toEqual([])
+
+        await expect(recordDeliveryEvent(replayEvent())).resolves.toMatchObject({ action: 'applied' })
+        const ledgerRows = store.entries().filter(([key]) => key.startsWith('sales_delivery_event_ids/'))
+        expect(ledgerRows).toHaveLength(1)
+        expect(ledgerRows[0][0]).not.toContain('global-replay-event-fixture')
+    })
+
+    it('allows one winner when the same event ID is claimed concurrently for different outbounds', async () => {
+        const otherOutboundId = 'followup-concurrent-fixture-1:text'
+        await prepareFollowUpDelivery(requested())
+        await prepareFollowUpDelivery(requested({ outboundId: otherOutboundId, part: 'text' }))
+
+        const results = await Promise.allSettled([
+            recordDeliveryEvent(replayEvent()),
+            recordDeliveryEvent(replayEvent({ outboundId: otherOutboundId, providerMessageId: 'wamid-other-fixture' })),
+        ])
+
+        expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
+        expect(results.filter(result => result.status === 'rejected')).toHaveLength(1)
+        expect(results.find(result => result.status === 'rejected').reason).toMatchObject({ code: 'EVENT_ID_CONFLICT' })
     })
 })

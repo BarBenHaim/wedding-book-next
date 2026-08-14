@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 
 export const DELIVERY_PENDING_MS = 30 * 60 * 1000
+export const DELIVERY_REQUEST_LEASE_MS = 2 * 60 * 1000
 
 export const DELIVERY_ERROR_CODES = Object.freeze([
     'GRAPH_REJECTED',
@@ -64,16 +65,16 @@ export function decideDeliveryTransition(current, event) {
     const from = stored?.status || 'requested'
     const to = event.status
     if (from === to) return { action: 'noop', reason: 'DUPLICATE_STATUS' }
-    if (stored?.eventId && stored.eventId === event.eventId) return { action: 'reject', error: 'EVENT_ID_REPLAY' }
     if (from === 'failed') return { action: 'reject', error: 'TERMINAL_DELIVERY_STATE' }
-    if (from === 'read') return { action: 'reject', error: to === 'delivered' || to === 'accepted' ? 'DELIVERY_STATE_REGRESSION' : 'TERMINAL_DELIVERY_STATE' }
+    if (from === 'read' && to === 'delivered') return { action: 'noop', reason: 'STALE_STATUS' }
+    if (from === 'read') return { action: 'reject', error: to === 'accepted' ? 'DELIVERY_STATE_REGRESSION' : 'TERMINAL_DELIVERY_STATE' }
     if (from === 'delivered' && to !== 'read') {
         return { action: 'reject', error: to === 'accepted' ? 'DELIVERY_STATE_REGRESSION' : 'TERMINAL_DELIVERY_STATE' }
     }
 
     const allowed = (
-        (from === 'requested' && (to === 'accepted' || to === 'failed'))
-        || (from === 'accepted' && (to === 'delivered' || to === 'failed'))
+        (from === 'requested' && (to === 'accepted' || to === 'delivered' || to === 'read' || to === 'failed'))
+        || (from === 'accepted' && (to === 'delivered' || to === 'read' || to === 'failed'))
         || (from === 'delivered' && to === 'read')
     )
     if (!allowed) return { action: 'reject', error: 'INVALID_DELIVERY_TRANSITION' }
@@ -90,10 +91,24 @@ export function decideDeliveryTransition(current, event) {
     return {
         action: 'apply',
         nextStatus: to,
-        advanceFollowUp: to === 'delivered' && !stored?.followUpAdvanced,
+        advanceFollowUp: (to === 'delivered' || to === 'read') && !stored?.followUpAdvanced,
         clearPending: true,
         pendingUntilMs: null,
     }
+}
+
+export function deliveryEventLedgerId(eventId) {
+    return crypto.createHash('sha256').update(String(eventId || '')).digest('hex')
+}
+
+export function deliveryEventFingerprint(event) {
+    return crypto.createHash('sha256').update(JSON.stringify([
+        String(event?.outboundId || ''),
+        String(event?.channel || ''),
+        String(event?.status || ''),
+        String(event?.providerMessageId || ''),
+        String(event?.errorCode || ''),
+    ])).digest('hex')
 }
 
 export function isDeliveryPending(value, nowMs = Date.now()) {
@@ -112,9 +127,12 @@ export function createOutboundId({ scope, subject, attempt, part }) {
 
 const delivery = {
     DELIVERY_PENDING_MS,
+    DELIVERY_REQUEST_LEASE_MS,
     DELIVERY_ERROR_CODES,
     validateDeliveryEvent,
     decideDeliveryTransition,
+    deliveryEventLedgerId,
+    deliveryEventFingerprint,
     isDeliveryPending,
     createOutboundId,
 }

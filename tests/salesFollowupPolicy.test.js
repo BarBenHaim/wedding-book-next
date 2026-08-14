@@ -206,4 +206,10 @@ describe('provider-pending suppression', () => {
             deliveryPendingUntilMs: pendingUntil,
         }, pendingUntil - 1)).toBe('none')
     })
+
+    it('suppresses duplicate transport while a requested lease is active and expires it cleanly', () => {
+        const lead = { lastDeliveryStatus: 'requested', deliveryRequestUntilMs: pendingUntil }
+        expect(pendingFollowUpStatus(lead, pendingUntil - 1)).toBe('requested')
+        expect(pendingFollowUpStatus(lead, pendingUntil)).toBe('stale-requested')
+    })
 })

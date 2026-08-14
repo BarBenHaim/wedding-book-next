@@ -24,7 +24,7 @@ export const maxDuration = 30
 import { NextResponse } from 'next/server'
 import { adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
-import { listLeads, recordDeliveryEvent, recordDigestOutcome } from '@/lib/salesAgent/leads'
+import { listLeads, prepareDigestDelivery, recordDeliveryEvent, recordDigestOutcome } from '@/lib/salesAgent/leads'
 import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
 import { buildDigest } from '@/lib/salesAgent/digest'
@@ -102,8 +102,9 @@ export async function GET(req) {
     if (cronOwnsDelivery && !digest.hasNews) {
         delivery = { status: 'skipped', reason: 'no_news' }
     } else if (cronOwnsDelivery) {
+        const attemptNumber = Math.max(1, Number.parseInt(new URL(req.url).searchParams.get('attempt'), 10) || 1)
         const outboundId = createOutboundId({
-            scope: 'digest', subject: today, attempt: 0, part: 'template',
+            scope: 'digest', subject: today, attempt: attemptNumber, part: 'template',
         })
         const occurredAt = new Date().toISOString()
         const failed = async errorCode => {
@@ -127,32 +128,58 @@ export async function GET(req) {
             return { status: 'failed', errorCode }
         }
 
-        const ownerPhone = process.env.SALES_AGENT_OWNER_PHONE
-        if (!ownerPhone) {
-            delivery = await failed('OWNER_PHONE_MISSING')
+        const preparation = await prepareDigestDelivery({ outboundId, requestedAt: occurredAt, attemptNumber })
+        if (preparation.action !== 'requested') {
+            delivery = {
+                status: 'not_sent',
+                reason: 'existing_attempt',
+                existingStatus: preparation.status,
+                outboundId,
+            }
         } else {
-            try {
-                const evidence = await sendWhatsAppTemplate(ownerPhone, DAILY_DIGEST_TEMPLATE, digest.lines)
-                await recordDeliveryEvent({
+            const ownerPhone = process.env.SALES_AGENT_OWNER_PHONE
+            if (!ownerPhone) {
+                delivery = await failed('OWNER_PHONE_MISSING')
+            } else {
+                let evidence
+                try {
+                    evidence = await sendWhatsAppTemplate(ownerPhone, DAILY_DIGEST_TEMPLATE, digest.lines)
+                } catch (error) {
+                    const allowed = new Set([
+                        'GRAPH_REJECTED', 'GRAPH_TIMEOUT', 'PROVIDER_MESSAGE_ID_MISSING',
+                        'WHATSAPP_NOT_CONFIGURED', 'TEMPLATE_NOT_CONFIGURED',
+                    ])
+                    delivery = await failed(allowed.has(error?.errorCode) ? error.errorCode : 'PROVIDER_FAILED')
+                }
+                if (evidence) {
+                    const acceptedEvent = {
                     eventId: `${outboundId}:accepted`,
                     outboundId,
                     channel: 'whatsapp_graph',
                     status: 'accepted',
                     providerMessageId: evidence.providerMessageId,
                     occurredAt,
-                })
-                await recordDigestOutcome({
-                    status: 'digest_accepted',
-                    outboundId,
-                    occurredAt,
-                })
-                delivery = { status: 'accepted', providerMessageId: evidence.providerMessageId }
-            } catch (error) {
-                const allowed = new Set([
-                    'GRAPH_REJECTED', 'GRAPH_TIMEOUT', 'PROVIDER_MESSAGE_ID_MISSING',
-                    'WHATSAPP_NOT_CONFIGURED', 'TEMPLATE_NOT_CONFIGURED',
-                ])
-                delivery = await failed(allowed.has(error?.errorCode) ? error.errorCode : 'PROVIDER_FAILED')
+                    }
+                    delivery = {
+                        status: 'accepted',
+                        accepted: true,
+                        outboundId,
+                        providerMessageId: evidence.providerMessageId,
+                    }
+                    try {
+                        await recordDeliveryEvent(acceptedEvent)
+                    } catch {
+                        delivery.persistenceDegraded = true
+                        delivery.repair = { endpoint: '/api/sales-agent/delivery', event: acceptedEvent }
+                        console.error('[sales-agent/digest] acceptance persistence degraded')
+                    }
+                    try {
+                        await recordDigestOutcome({ status: 'digest_accepted', outboundId, occurredAt })
+                    } catch {
+                        delivery.healthPersistenceDegraded = true
+                        console.error('[sales-agent/digest] health write failed')
+                    }
+                }
             }
         }
     }
