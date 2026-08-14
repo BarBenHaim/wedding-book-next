@@ -17,6 +17,7 @@
 
 import { STAGES, MEDIA_KEYS } from './catalog'
 import { nextFollowUpDate } from './followupPolicy'
+import { PROVIDER_PATH_DEADLINE_MS } from './circuitBreaker'
 
 const API_URL = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
@@ -298,7 +299,21 @@ export function resolveFollowUp({ parsed, todayISO, followUpCount = 0, addDays }
 // 20s is chosen against reality: a normal reply comes back in 2-6s, so
 // anything past 20s is already a lost conversation. Better to hand that
 // one customer to a human than to queue everyone else behind it.
-const TIMEOUT_MS = Number(process.env.SALES_AGENT_TIMEOUT_MS) || 20000
+const DEFAULT_TIMEOUT_MS = 16_000
+
+// The environment may shorten an attempt but can never make the provider
+// path exceed its shared absolute deadline. A retry receives the remaining
+// budget rather than starting a second full timeout.
+export function providerDeadlineAt(nowMs = Date.now()) {
+    return nowMs + PROVIDER_PATH_DEADLINE_MS
+}
+
+function attemptTimeoutMs(deadlineAtMs) {
+    const configured = Number(process.env.SALES_AGENT_TIMEOUT_MS)
+    const perAttempt = Number.isFinite(configured) && configured > 0 ? Math.min(configured, DEFAULT_TIMEOUT_MS) : DEFAULT_TIMEOUT_MS
+    const remaining = Number(deadlineAtMs) - Date.now()
+    return Math.max(0, Math.min(perAttempt, remaining))
+}
 
 // 2000, not 700. The reply is Hebrew, and Hebrew costs far more tokens
 // per character than English — a normal 4-line answer plus the dozen
@@ -311,12 +326,14 @@ const TIMEOUT_MS = Number(process.env.SALES_AGENT_TIMEOUT_MS) || 20000
 // A generous ceiling costs nothing and removes a whole failure mode.
 const MAX_TOKENS = Number(process.env.SALES_AGENT_MAX_TOKENS) || 2000
 
-export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxTokens = MAX_TOKENS, temperature = 0.6 }) {
+export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxTokens = MAX_TOKENS, temperature = 0.6, deadlineAtMs = providerDeadlineAt() }) {
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set')
 
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    const timeoutMs = attemptTimeoutMs(deadlineAtMs)
+    if (timeoutMs <= 0) throw new Error('anthropic timeout: provider deadline exhausted')
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
     let res
     try {
         res = await fetch(API_URL, {
@@ -338,7 +355,7 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
     } catch (err) {
         // An abort surfaces as a generic AbortError; name it so the
         // handoff message to the owner says something useful.
-        if (err?.name === 'AbortError') throw new Error(`anthropic timeout after ${TIMEOUT_MS}ms`)
+        if (err?.name === 'AbortError') throw new Error(`anthropic timeout after ${timeoutMs}ms`)
         throw err
     } finally {
         clearTimeout(timer)
@@ -356,7 +373,7 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
             // house — silently, in front of customers.
             const next = model !== DEFAULT_MODEL ? DEFAULT_MODEL : FALLBACK_MODEL
             console.error(`[sales-agent] unknown model ${model}, falling back to ${next}`)
-            return callClaude({ system, messages, model: next, maxTokens, temperature })
+            return callClaude({ system, messages, model: next, maxTokens, temperature, deadlineAtMs })
         }
         // 401 = bad key · 429 = rate limited · 400 with credit_balance =
         // out of credit. All three read identically from the outside

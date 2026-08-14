@@ -40,7 +40,7 @@ import {
     isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone, listLeads, recordSpend,
     listMedia, recordMediaSent, creditPendingMedia,
     claimInboundEvent, completeInboundEvent,
-    acquireProviderCircuit, recordProviderFailure, recordProviderSuccess,
+    acquireProviderCircuit, recordProviderFailure, recordProviderSuccess, completeProviderFallback as persistProviderFallback,
 } from '@/lib/salesAgent/leads'
 import { costOfClaudeUsage } from '@/lib/salesAgent/pricing'
 import { parseInboundBody } from '@/lib/salesAgent/inbound'
@@ -52,7 +52,7 @@ import { mediaGuard } from '@/lib/salesAgent/mediaGuard'
 import { assignVariant, summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
 import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
-import { normalizeProviderError } from '@/lib/salesAgent/circuitBreaker'
+import { normalizeProviderError, PROVIDER_PATH_DEADLINE_MS } from '@/lib/salesAgent/circuitBreaker'
 
 // What the customer sees when the machinery breaks. Deliberately honest
 // and short — no apology theatre, no invented reason.
@@ -154,6 +154,9 @@ export async function POST(req) {
     if (claim.action === 'busy') {
         return NextResponse.json({ ok: true, duplicate: true, processing: true, shouldSend: false }, { status: 202 })
     }
+    // Starts after the durable inbound claim and bounds every following
+    // provider-path step, including prompt preparation and JSON repair.
+    const providerDeadlineAtMs = Date.now() + PROVIDER_PATH_DEADLINE_MS
 
     // Once this worker owns the event, no response may leave without
     // finalizing it. A stale worker must go silent rather than replaying
@@ -196,20 +199,39 @@ export async function POST(req) {
     // retry rather than claiming that a human was notified when they were not.
     const completeProviderFallback = async () => {
         try {
-            await setHuman(phone, true, AI_OUTAGE_REASON)
+            const result = await persistProviderFallback({
+                eventId,
+                claimToken: claim.claimToken,
+                claimGeneration: claim.claimGeneration,
+                phone,
+                reason: AI_OUTAGE_REASON,
+                outcome: {
+                    sendText: AI_OUTAGE_REPLY,
+                    stage: 'handoff',
+                    handoff: true,
+                    notifyOwner: ownerPing(phone, AI_OUTAGE_REASON, { name: body.profileName || lead?.name }),
+                },
+            })
+            if (result.action === 'completed') {
+                return NextResponse.json({
+                    ok: true,
+                    send: [AI_OUTAGE_REPLY],
+                    sendText: AI_OUTAGE_REPLY,
+                    stage: 'handoff',
+                    handoff: true,
+                    handoffReason: AI_OUTAGE_REASON,
+                    notifyOwner: ownerPing(phone, AI_OUTAGE_REASON, { name: body.profileName || lead?.name }),
+                })
+            }
+            if (result.action === 'cached') {
+                return NextResponse.json({ ok: true, duplicate: true, shouldSend: false, cachedOutcome: result.outcome, sendText: '', hasImage: false, hasVideo: false, handoff: false })
+            }
+            if (result.action === 'busy') return NextResponse.json({ ok: true, duplicate: true, processing: true, shouldSend: false }, { status: 202 })
+            return NextResponse.json({ error: 'provider-fallback-stale' }, { status: 503 })
         } catch {
-            console.error('[sales-agent] provider handoff persistence failed')
-            return NextResponse.json({ error: 'provider-handoff-persist-failed' }, { status: 503 })
+            console.error('[sales-agent] provider fallback commit failed')
+            return NextResponse.json({ error: 'provider-fallback-commit-failed' }, { status: 503 })
         }
-        return complete({
-            ok: true,
-            send: [AI_OUTAGE_REPLY],
-            sendText: AI_OUTAGE_REPLY,
-            stage: 'handoff',
-            handoff: true,
-            handoffReason: AI_OUTAGE_REASON,
-            notifyOwner: ownerPing(phone, AI_OUTAGE_REASON, { name: body.profileName || lead?.name }),
-        })
     }
 
     if (!text && messageType === 'text') {
@@ -433,7 +455,7 @@ export async function POST(req) {
     let parsed
     let providerFailureCode = null
     try {
-        const { text: raw, usage, model, stopReason } = await callClaude({ system, messages })
+        const { text: raw, usage, model, stopReason } = await callClaude({ system, messages, deadlineAtMs: providerDeadlineAtMs })
         // The merged keys, or every uploaded asset the model was just
         // told about gets nulled at parse. See parseAgentJson.
         parsed = parseAgentJson(raw, { mediaKeys: Object.keys(library) })
@@ -454,6 +476,7 @@ export async function POST(req) {
                 system: `${system}\n\nחשוב: התשובה הקודמת שלך לא הייתה JSON תקין. החזר עכשיו אך ורק אובייקט JSON יחיד, בלי טקסט לפניו או אחריו, ושמור על התשובה ללקוח קצרה.`,
                 messages,
                 temperature: 0.3,
+                deadlineAtMs: providerDeadlineAtMs,
             })
             meter(retry.usage, retry.model)
             const second = parseAgentJson(retry.text, { mediaKeys: Object.keys(library) })
@@ -469,7 +492,7 @@ export async function POST(req) {
         // The runtime state and logs retain only the fixed classification.
         console.error('[sales-agent] model provider failure', providerFailureCode)
         try {
-            await recordProviderFailure(providerFailureCode)
+            await recordProviderFailure(providerFailureCode, circuit.probeId || null)
         } catch {
             console.error('[sales-agent] provider breaker failure record failed')
             return NextResponse.json({ error: 'provider-failure-record-failed' }, { status: 503 })
@@ -478,7 +501,7 @@ export async function POST(req) {
     }
 
     try {
-        await recordProviderSuccess()
+        await recordProviderSuccess(circuit.probeId || null)
     } catch {
         console.error('[sales-agent] provider breaker success record failed')
         return NextResponse.json({ error: 'provider-success-record-failed' }, { status: 503 })

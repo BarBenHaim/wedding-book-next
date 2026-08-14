@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
     creditPendingMedia: vi.fn(),
     claimInboundEvent: vi.fn(),
     completeInboundEvent: vi.fn(),
+    completeProviderFallback: vi.fn(),
     acquireProviderCircuit: vi.fn(),
     recordProviderFailure: vi.fn(),
     recordProviderSuccess: vi.fn(),
@@ -55,6 +56,7 @@ vi.mock('@/lib/salesAgent/leads', () => ({
     recordSpend: mocks.recordSpend, listMedia: mocks.listMedia,
     recordMediaSent: mocks.recordMediaSent, creditPendingMedia: mocks.creditPendingMedia,
     claimInboundEvent: mocks.claimInboundEvent, completeInboundEvent: mocks.completeInboundEvent,
+    completeProviderFallback: mocks.completeProviderFallback,
     acquireProviderCircuit: mocks.acquireProviderCircuit,
     recordProviderFailure: mocks.recordProviderFailure, recordProviderSuccess: mocks.recordProviderSuccess,
 }))
@@ -72,6 +74,12 @@ const lead = { isNew: false, stage: 'engaged', turns: [], followUpCount: 0, imag
 const inbound = overrides => ({ eventId: 'event-token', phone: 'test-phone-token', text: '', messageType: 'text', ...overrides })
 
 let POST
+
+function expectNoProviderWork() {
+    expect(mocks.acquireProviderCircuit).not.toHaveBeenCalled()
+    expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
+    expect(mocks.recordProviderSuccess).not.toHaveBeenCalled()
+}
 
 async function post(body) {
     const response = await POST(new Request('http://localhost/api/sales-agent/reply', {
@@ -98,6 +106,7 @@ beforeEach(async () => {
     process.env.SALES_AGENT_OWNER_PHONE = 'owner-token'
     mocks.claimInboundEvent.mockResolvedValue({ action: 'process', claimToken: 'claim-token', claimGeneration: 1 })
     mocks.completeInboundEvent.mockResolvedValue({ action: 'completed' })
+    mocks.completeProviderFallback.mockResolvedValue({ action: 'completed' })
     mocks.acquireProviderCircuit.mockResolvedValue({ allow: true, mode: 'closed' })
     mocks.recordProviderFailure.mockResolvedValue(undefined)
     mocks.recordProviderSuccess.mockResolvedValue(undefined)
@@ -129,7 +138,7 @@ describe('inbound event duplicate fencing', () => {
             },
         })
         expect(mocks.callClaude).not.toHaveBeenCalled()
-        expect(mocks.acquireProviderCircuit).not.toHaveBeenCalled()
+        expectNoProviderWork()
     })
 
     it('returns an in-flight duplicate as a no-send envelope without calling Claude', async () => {
@@ -139,7 +148,7 @@ describe('inbound event duplicate fencing', () => {
 
         expect(result).toEqual({ status: 202, body: { ok: true, duplicate: true, processing: true, shouldSend: false } })
         expect(mocks.callClaude).not.toHaveBeenCalled()
-        expect(mocks.acquireProviderCircuit).not.toHaveBeenCalled()
+        expectNoProviderWork()
     })
 
     it('keeps a duplicate safe fallback cached but never sends it again', async () => {
@@ -151,6 +160,7 @@ describe('inbound event duplicate fencing', () => {
         expect(result.body).toMatchObject({ duplicate: true, shouldSend: false, sendText: '', handoff: false })
         expect(result.body.cachedOutcome).toEqual({ sendText: safeFallback, handoff: true })
         expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
     })
 })
 
@@ -175,8 +185,9 @@ describe('Anthropic outage handling', () => {
         const result = await post(inbound({ text: 'צריך מחיר' }))
 
         expect(result.body).toMatchObject({ sendText: safeFallback, handoff: true })
-        expect(mocks.setHuman).toHaveBeenCalledWith('test-phone-token', true, 'תקלה בשירות ה-AI')
-        expect(mocks.completeInboundEvent).toHaveBeenCalledWith(expect.objectContaining({
+        expect(mocks.completeProviderFallback).toHaveBeenCalledWith(expect.objectContaining({
+            eventId: 'event-token', claimToken: 'claim-token', claimGeneration: 1,
+            phone: 'test-phone-token', reason: 'תקלה בשירות ה-AI',
             outcome: expect.objectContaining({ sendText: safeFallback, handoff: true, stage: 'handoff' }),
         }))
         expect(result.body.notifyOwner).toContain('תקלה בשירות ה-AI')
@@ -195,11 +206,9 @@ describe('Anthropic outage handling', () => {
         const result = await post(inbound({ text: 'צריך מחיר' }))
 
         expect(result.body).toMatchObject({ sendText: safeFallback, handoff: true })
-        expect(mocks.recordProviderFailure).toHaveBeenCalledWith(code)
+        expect(mocks.recordProviderFailure).toHaveBeenCalledWith(code, null)
         expect(console.error).toHaveBeenCalledWith('[sales-agent] model provider failure', code)
-        expect(mocks.completeInboundEvent).toHaveBeenCalledWith(expect.objectContaining({
-            outcome: expect.objectContaining({ sendText: safeFallback, handoff: true }),
-        }))
+        expect(mocks.completeProviderFallback).toHaveBeenCalledWith(expect.objectContaining({ outcome: expect.objectContaining({ sendText: safeFallback, handoff: true }) }))
     })
 
     it('counts two malformed model responses as one invalid-json failure and safely hands off', async () => {
@@ -213,7 +222,10 @@ describe('Anthropic outage handling', () => {
 
         expect(result.body).toMatchObject({ sendText: safeFallback, handoff: true })
         expect(mocks.callClaude).toHaveBeenCalledTimes(2)
-        expect(mocks.recordProviderFailure).toHaveBeenCalledWith('invalid_json')
+        const [firstCall, secondCall] = mocks.callClaude.mock.calls
+        expect(firstCall[0].deadlineAtMs).toBe(secondCall[0].deadlineAtMs)
+        expect(firstCall[0].deadlineAtMs - Date.now()).toBeLessThanOrEqual(22_000)
+        expect(mocks.recordProviderFailure).toHaveBeenCalledWith('invalid_json', null)
     })
 
     it('resets the breaker only after a valid model result', async () => {
@@ -230,26 +242,25 @@ describe('Anthropic outage handling', () => {
         expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
     })
 
-    it('returns an honest no-send 503 when the fallback handoff cannot persist', async () => {
+    it('returns an honest no-send 503 when the atomic fallback commit fails', async () => {
         mocks.acquireProviderCircuit.mockResolvedValue({ allow: false, mode: 'open' })
-        mocks.setHuman.mockRejectedValue(new Error('persistence unavailable'))
+        mocks.completeProviderFallback.mockRejectedValue(new Error('persistence unavailable'))
         vi.spyOn(console, 'error').mockImplementation(() => {})
 
         const result = await post(inbound({ text: 'צריך מחיר' }))
 
-        expect(result).toEqual({ status: 503, body: { error: 'provider-handoff-persist-failed' } })
-        expect(mocks.completeInboundEvent).not.toHaveBeenCalled()
+        expect(result).toEqual({ status: 503, body: { error: 'provider-fallback-commit-failed' } })
+        expect(mocks.setHuman).not.toHaveBeenCalled()
         expect(mocks.callClaude).not.toHaveBeenCalled()
     })
 
-    it('returns an honest no-send 503 when fallback completion fails', async () => {
+    it('returns an honest no-send 503 for a stale fallback claim', async () => {
         mocks.acquireProviderCircuit.mockResolvedValue({ allow: false, mode: 'open' })
-        mocks.completeInboundEvent.mockRejectedValue(new Error('completion unavailable'))
-        vi.spyOn(console, 'error').mockImplementation(() => {})
+        mocks.completeProviderFallback.mockResolvedValue({ action: 'stale' })
 
         const result = await post(inbound({ text: 'צריך מחיר' }))
 
-        expect(result).toEqual({ status: 503, body: { error: 'event-completion-failed' } })
+        expect(result).toEqual({ status: 503, body: { error: 'provider-fallback-stale' } })
         expect(mocks.callClaude).not.toHaveBeenCalled()
     })
 })
@@ -279,7 +290,7 @@ describe('non-text inbound media', () => {
                 outcome: expect.objectContaining({ handoff: true, noReply: false, stage: 'handoff' }),
             }))
             expect(mocks.callClaude).not.toHaveBeenCalled()
-            expect(mocks.acquireProviderCircuit).not.toHaveBeenCalled()
+            expectNoProviderWork()
         })
     }
 
@@ -292,6 +303,7 @@ describe('non-text inbound media', () => {
         expect(result).toEqual({ status: 503, body: { error: 'media-handoff-persist-failed' } })
         expect(mocks.completeInboundEvent).not.toHaveBeenCalled()
         expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
     })
 })
 
@@ -303,6 +315,7 @@ describe('silent terminal outcomes keep their real meaning', () => {
         expect(mocks.completeInboundEvent).toHaveBeenCalledWith(expect.objectContaining({
             outcome: expect.objectContaining({ handoff: false, noReply: true, skipped: 'empty-text' }),
         }))
+        expectNoProviderWork()
     })
 
     it('records the bot own echo as noReply rather than a handoff', async () => {
@@ -312,6 +325,7 @@ describe('silent terminal outcomes keep their real meaning', () => {
 
         expect(result.body).toMatchObject({ skipped: 'own-echo', handoff: false, noReply: true })
         expect(mocks.completeInboundEvent).toHaveBeenCalledWith(expect.objectContaining({ outcome: expect.objectContaining({ handoff: false, noReply: true }) }))
+        expectNoProviderWork()
     })
 
     it('keeps a non-command owner message ahead of media handoff', async () => {
@@ -320,6 +334,7 @@ describe('silent terminal outcomes keep their real meaning', () => {
         expect(result.body).toMatchObject({ skipped: 'owner-message', handoff: false, noReply: true })
         expect(mocks.setHuman).not.toHaveBeenCalled()
         expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
     })
 
     it('keeps an already-paused conversation ahead of media handoff', async () => {
@@ -330,6 +345,7 @@ describe('silent terminal outcomes keep their real meaning', () => {
         expect(result.body).toMatchObject({ paused: true, handoff: false, noReply: true })
         expect(mocks.setHuman).not.toHaveBeenCalled()
         expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
     })
 
     it('keeps an existing customer ahead of media handoff', async () => {
@@ -341,6 +357,7 @@ describe('silent terminal outcomes keep their real meaning', () => {
         expect(result.body).toMatchObject({ customer: true, handoff: true })
         expect(mocks.setHuman).toHaveBeenCalledWith('test-phone-token', true, 'לקוח קיים כתב')
         expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
     })
 })
 
@@ -362,6 +379,7 @@ describe('owner takeover persistence and transport', () => {
             },
         })
         expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
     })
 
     it('leaves an owner takeover retriable when the human pause cannot persist', async () => {
@@ -373,5 +391,6 @@ describe('owner takeover persistence and transport', () => {
         expect(result).toEqual({ status: 503, body: { error: 'owner-takeover-persist-failed' } })
         expect(mocks.completeInboundEvent).not.toHaveBeenCalled()
         expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
     })
 })

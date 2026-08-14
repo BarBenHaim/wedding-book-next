@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
     breakerDecision, nextFailureState, successState, reserveHalfOpenProbe,
-    normalizeProviderError,
+    normalizeProviderError, resolveProviderFailure, resolveProviderSuccess,
+    HALF_OPEN_LEASE_MS, PROVIDER_PATH_DEADLINE_MS, sanitizeBreakerRuntimeState,
 } from '../src/lib/salesAgent/circuitBreaker'
 
 describe('Anthropic circuit breaker', () => {
@@ -33,9 +34,30 @@ describe('Anthropic circuit breaker', () => {
 
         expect(first).toEqual({
             decision: { allow: true, mode: 'half-open' },
-            state: expect.objectContaining({ halfOpenProbeId: 'probe-a', halfOpenLeaseUntilMs: 33_001 }),
+            state: expect.objectContaining({ halfOpenProbeId: 'probe-a', halfOpenLeaseUntilMs: 28_001 }),
         })
         expect(second.decision).toEqual({ allow: false, mode: 'half-open-busy' })
+    })
+
+    it('keeps the half-open lease longer than the complete provider budget', () => {
+        expect(HALF_OPEN_LEASE_MS).toBeGreaterThan(PROVIDER_PATH_DEADLINE_MS)
+        expect(PROVIDER_PATH_DEADLINE_MS).toBeLessThan(30_000)
+    })
+
+    it('fences a late half-open resolver so it cannot clear a newer probe', () => {
+        const first = reserveHalfOpenProbe({ consecutiveFailures: 3, openUntilMs: 1_000 }, 1_001, 'probe-old')
+        const second = reserveHalfOpenProbe({ ...first.state, halfOpenLeaseUntilMs: 2_000 }, 2_001, 'probe-new')
+
+        expect(resolveProviderSuccess(second.state, 2_002, 'probe-old')).toEqual({ action: 'stale' })
+        expect(resolveProviderFailure(second.state, 2_002, 'timeout', 'probe-old')).toEqual({ action: 'stale' })
+        expect(resolveProviderFailure(second.state, 2_002, 'timeout', 'probe-new')).toMatchObject({
+            action: 'resolved', state: { consecutiveFailures: 4, openUntilMs: 302_002, halfOpenProbeId: null },
+        })
+    })
+
+    it('keeps null timestamps null when sanitizing runtime state', () => {
+        expect(sanitizeBreakerRuntimeState({ openUntilMs: null, lastFailureAtMs: null, lastSuccessAtMs: null }))
+            .toMatchObject({ openUntilMs: null, lastFailureAtMs: null, lastSuccessAtMs: null })
     })
 
     it('resets completely on success', () => {

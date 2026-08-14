@@ -23,7 +23,7 @@ import { normalizePhone } from './agent'
 import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerCommand, isTestPhone, MAX_TURNS, HUMAN_PAUSE_HOURS } from './leadsCore'
 import { isoInIsrael } from './leadsView'
 import { assertCompletableInboundOutcome, assertInboundClaimToken, decideInboundCompletion, INBOUND_LEASE_MS, sanitizeInboundOutcome, startInboundClaim } from './inboundEventsCore'
-import { nextFailureState, normalizeProviderError, reserveHalfOpenProbe, successState } from './circuitBreaker'
+import { reserveHalfOpenProbe, resolveProviderFailure, resolveProviderSuccess, sanitizeBreakerRuntimeState } from './circuitBreaker'
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
 // importing this file boots the Admin SDK, which needs credentials.
@@ -50,18 +50,7 @@ function anthropicRuntimeRef() {
 // Runtime state is metadata only. In particular, do not merge arbitrary
 // existing fields: a past operational mistake must not keep a provider body,
 // prompt, customer text, phone, or secret alive in this document.
-function breakerRuntimeState(state = {}) {
-    const numberOrNull = value => Number.isFinite(Number(value)) ? Number(value) : null
-    return {
-        consecutiveFailures: Math.max(0, Number(state.consecutiveFailures) || 0),
-        openUntilMs: numberOrNull(state.openUntilMs),
-        lastFailureAtMs: numberOrNull(state.lastFailureAtMs),
-        lastSuccessAtMs: numberOrNull(state.lastSuccessAtMs),
-        lastErrorCode: state.lastErrorCode ? normalizeProviderError({ errorCode: state.lastErrorCode }) : null,
-        halfOpenProbeId: state.halfOpenProbeId || null,
-        halfOpenLeaseUntilMs: numberOrNull(state.halfOpenLeaseUntilMs),
-    }
-}
+const breakerRuntimeState = sanitizeBreakerRuntimeState
 
 /**
  * Atomically consults the provider circuit before a model call. A closed
@@ -86,23 +75,61 @@ export async function acquireProviderCircuit() {
     })
 }
 
-export async function recordProviderFailure(errorCode) {
+export async function recordProviderFailure(errorCode, probeId = null) {
     const runtimeRef = anthropicRuntimeRef()
     return adminDb.runTransaction(async tx => {
         const snap = await tx.get(runtimeRef)
-        const next = nextFailureState(snap.exists ? breakerRuntimeState(snap.data()) : {}, Date.now(), errorCode)
-        tx.set(runtimeRef, { ...breakerRuntimeState(next), updatedAt: FieldValue.serverTimestamp() }, { merge: false })
-        return next
+        const resolution = resolveProviderFailure(snap.exists ? breakerRuntimeState(snap.data()) : {}, Date.now(), errorCode, probeId)
+        if (resolution.action === 'stale') return resolution
+        tx.set(runtimeRef, { ...breakerRuntimeState(resolution.state), updatedAt: FieldValue.serverTimestamp() }, { merge: false })
+        return resolution
     })
 }
 
-export async function recordProviderSuccess() {
+export async function recordProviderSuccess(probeId = null) {
     const runtimeRef = anthropicRuntimeRef()
     return adminDb.runTransaction(async tx => {
-        await tx.get(runtimeRef)
-        const next = successState(Date.now())
-        tx.set(runtimeRef, { ...breakerRuntimeState(next), updatedAt: FieldValue.serverTimestamp() }, { merge: false })
-        return next
+        const snap = await tx.get(runtimeRef)
+        const resolution = resolveProviderSuccess(snap.exists ? breakerRuntimeState(snap.data()) : {}, Date.now(), probeId)
+        if (resolution.action === 'stale') return resolution
+        tx.set(runtimeRef, { ...breakerRuntimeState(resolution.state), updatedAt: FieldValue.serverTimestamp() }, { merge: false })
+        return resolution
+    })
+}
+
+/**
+ * Commit a provider fallback as one fenced transaction. A stale outbound
+ * worker cannot pause a lead after its inbound lease was reclaimed.
+ */
+export async function completeProviderFallback({ eventId, claimToken, claimGeneration, phone, reason, outcome }) {
+    const ownedClaimToken = assertInboundClaimToken(claimToken)
+    const cleanOutcome = sanitizeInboundOutcome(outcome)
+    assertCompletableInboundOutcome(cleanOutcome)
+    const eventRef = inboundEventRef(eventId)
+    const leadRef = ref(normalizePhone(phone))
+    const expectedGeneration = Number(claimGeneration)
+    if (!Number.isInteger(expectedGeneration) || expectedGeneration < 1) throw new Error('inbound fallback needs claimGeneration')
+
+    return adminDb.runTransaction(async tx => {
+        const [eventSnap] = await Promise.all([tx.get(eventRef), tx.get(leadRef)])
+        const stored = eventSnap.exists ? eventSnap.data() : null
+        const decision = decideInboundCompletion(stored, ownedClaimToken, Date.now())
+        if (decision.action !== 'complete') return decision
+        if (Number(stored.claimGeneration) !== expectedGeneration) return { action: 'stale' }
+
+        tx.set(leadRef, {
+            human: true,
+            humanSince: FieldValue.serverTimestamp(),
+            handoffReason: String(reason || '').slice(0, 120) || null,
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true })
+        tx.set(eventRef, {
+            status: 'completed',
+            leaseUntilMs: null,
+            outcome: cleanOutcome,
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true })
+        return { action: 'completed', outcome: cleanOutcome }
     })
 }
 
