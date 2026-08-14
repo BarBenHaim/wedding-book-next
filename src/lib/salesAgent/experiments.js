@@ -23,9 +23,9 @@
 // a lead can never be re-rolled into a different arm by a retry, a lost
 // write, or a replayed webhook. Same customer, same arm, forever.
 
-// Four openings that encode genuinely different beliefs about why people
-// buy this product. They are deliberately far apart — testing two
-// rewordings of the same idea burns months to learn nothing.
+// Seven historical openings encode genuinely different beliefs about why
+// people buy this product. Reporting keeps every arm so old leads do not
+// disappear; assignment below intentionally focuses new leads on three.
 export const OPENING_VARIANTS = [
     {
         id: 'question_first',
@@ -85,6 +85,7 @@ image, עם משפט אחד לצידה על מה שרואים. ההנחיה הז
 ]
 
 export const VARIANT_IDS = OPENING_VARIANTS.map(v => v.id)
+export const ACTIVE_VARIANT_IDS = ['question_first', 'price_upfront', 'demo_first']
 
 export function findVariant(id) {
     return OPENING_VARIANTS.find(v => v.id === id) || null
@@ -98,13 +99,13 @@ export function findVariant(id) {
  */
 export function assignVariant(phone) {
     const s = String(phone || '')
-    if (!s) return VARIANT_IDS[0]
+    if (!s) return ACTIVE_VARIANT_IDS[0]
     let h = 2166136261
     for (let i = 0; i < s.length; i++) {
         h ^= s.charCodeAt(i)
         h = Math.imul(h, 16777619) >>> 0
     }
-    return VARIANT_IDS[h % VARIANT_IDS.length]
+    return ACTIVE_VARIANT_IDS[h % ACTIVE_VARIANT_IDS.length]
 }
 
 /**
@@ -232,4 +233,4 @@ export function summarizeGaps(leads, { limit = 8 } = {}) {
     return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, limit)
 }
 
-export default { OPENING_VARIANTS, assignVariant, summarizeExperiments, summarizeGaps, findVariant }
+export default { OPENING_VARIANTS, ACTIVE_VARIANT_IDS, assignVariant, summarizeExperiments, summarizeGaps, findVariant }

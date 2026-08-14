@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-    OPENING_VARIANTS, VARIANT_IDS, assignVariant, findVariant, shouldApplyOpening,
+    OPENING_VARIANTS, VARIANT_IDS, ACTIVE_VARIANT_IDS, assignVariant, findVariant, shouldApplyOpening,
     summarizeExperiments, summarizeGaps, MIN_SAMPLE,
 } from '@/lib/salesAgent/experiments'
 import { buildSystemPrompt } from '@/lib/salesAgent/prompt'
@@ -10,7 +10,8 @@ import { buildSystemPrompt } from '@/lib/salesAgent/prompt'
 // twenty-point gap for weeks; a screen that calls that a winner costs
 // its owner a good opener. These tests exist to keep it honest.
 
-const lead = over => ({ phone: '972500000001', variant: 'question_first', ...over })
+const lead = over => ({ phone: 'test-lead-default', variant: 'question_first', ...over })
+const approvedVariantIds = ['question_first', 'price_upfront', 'demo_first']
 
 describe('variants', () => {
     it('defines genuinely different openings, each with a stated hypothesis', () => {
@@ -39,26 +40,32 @@ describe('assignment', () => {
     it('is stable for the same phone', () => {
         // A retried webhook must never move a lead to another arm — that
         // silently biases the comparison toward whichever arm retries.
-        const a = assignVariant('972501234567')
-        for (let i = 0; i < 20; i++) expect(assignVariant('972501234567')).toBe(a)
+        const a = assignVariant('test-lead-stable')
+        for (let i = 0; i < 20; i++) expect(assignVariant('test-lead-stable')).toBe(a)
+    })
+
+    it('assigns new leads only to the three approved arms', () => {
+        expect(ACTIVE_VARIANT_IDS).toEqual(approvedVariantIds)
+        const assigned = new Set(Array.from({ length: 500 }, (_, i) => assignVariant(`test-lead-${i}`)))
+        expect([...assigned].sort()).toEqual([...approvedVariantIds].sort())
     })
 
     it('only ever returns a real variant id', () => {
         for (let i = 0; i < 200; i++) {
-            expect(VARIANT_IDS).toContain(assignVariant(`97250${String(i).padStart(7, '0')}`))
+            expect(VARIANT_IDS).toContain(assignVariant(`test-lead-${i}`))
         }
     })
 
     it('spreads reasonably evenly across arms', () => {
         const counts = {}
         for (let i = 0; i < 4000; i++) {
-            const v = assignVariant(`9725${String(1000000 + i)}`)
+            const v = assignVariant(`test-spread-${i}`)
             counts[v] = (counts[v] || 0) + 1
         }
         // Expected N/arms per arm; ±30% is a generous band that still
         // catches a broken hash, at any arm count.
-        const expected = 4000 / VARIANT_IDS.length
-        for (const id of VARIANT_IDS) {
+        const expected = 4000 / approvedVariantIds.length
+        for (const id of approvedVariantIds) {
             expect(counts[id], `${id} got ${counts[id]}`).toBeGreaterThan(expected * 0.7)
             expect(counts[id]).toBeLessThan(expected * 1.3)
         }
@@ -156,6 +163,21 @@ describe('summary — counting', () => {
             expect(r.enough).toBe(false)
         }
     })
+
+    it('still reports every retired historical arm', () => {
+        const historicalIds = [
+            'question_first', 'demo_first', 'photo_sample', 'call_offer',
+            'assistant_intro', 'pics_first', 'price_upfront',
+        ]
+        const result = summarizeExperiments(historicalIds.map((variant, i) => ({
+            phone: `historical-lead-${i}`, variant, userTurns: 2,
+        })))
+
+        expect(result.rows.map(row => row.id).sort()).toEqual([...historicalIds].sort())
+        for (const id of historicalIds) {
+            expect(result.rows.find(row => row.id === id)).toMatchObject({ leads: 1, replied: 1 })
+        }
+    })
 })
 
 describe('summary — refusing to lie about small numbers', () => {
@@ -189,6 +211,7 @@ describe('summary — refusing to lie about small numbers', () => {
     })
 
     it('never marks a small arm as having enough data', () => {
+        expect(MIN_SAMPLE).toBe(30)
         const s = summarizeExperiments(arm('question_first', MIN_SAMPLE - 1, 10))
         expect(s.rows.find(r => r.id === 'question_first').enough).toBe(false)
         const s2 = summarizeExperiments(arm('question_first', MIN_SAMPLE, 10))
@@ -214,10 +237,10 @@ describe('gaps — the fast-feedback half', () => {
 
     it('keeps a couple of phone numbers so you can go read the chat', () => {
         const g = summarizeGaps([
-            lead({ phone: '972501111111', handoffReason: 'שאל על חשבונית' }),
-            lead({ phone: '972502222222', handoffReason: 'שאל על חשבונית' }),
+            lead({ phone: 'test-gap-one', handoffReason: 'שאל על חשבונית' }),
+            lead({ phone: 'test-gap-two', handoffReason: 'שאל על חשבונית' }),
         ])
-        expect(g[0].phones).toEqual(['972501111111', '972502222222'])
+        expect(g[0].phones).toEqual(['test-gap-one', 'test-gap-two'])
     })
 
     it('ignores leads that never needed a human', () => {
