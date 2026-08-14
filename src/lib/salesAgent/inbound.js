@@ -36,7 +36,41 @@
 // each key is searched for only AFTER the previous one, so a customer
 // who types something that looks like JSON cannot make us mis-read a
 // field that was already read.
-export const BODY_KEYS = ['phone', 'text', 'profileName', 'source', 'from', 'to', 'businessPhone', 'field']
+export const BODY_KEYS = [
+    'eventId', 'phone', 'text', 'profileName', 'source', 'from', 'to',
+    'businessPhone', 'field', 'messageType', 'mediaId', 'occurredAt',
+    'conversationId', 'campaignId', 'campaignName', 'adsetId', 'adId',
+    'adName', 'ctwaClid', 'sourceUrl', 'headline',
+]
+
+const MESSAGE_TYPES = new Set(['text', 'image', 'video', 'audio', 'document'])
+const REFERRAL_KEYS = ['campaignId', 'campaignName', 'adsetId', 'adId', 'adName', 'ctwaClid', 'sourceUrl', 'headline']
+
+// Keep Make's older scalar fields available to the route, while giving
+// downstream code one stable shape for the newer WhatsApp event metadata.
+// A nested referral is already a complete Meta object; only synthesize one
+// from the flattened Make mapping when that object was not present.
+function normalizeInboundBody(input) {
+    const body = { ...input }
+    const requestedType = String(body.messageType || 'text').toLowerCase()
+    body.eventId = String(body.eventId || '')
+    body.phone = String(body.phone || '')
+    body.text = String(body.text || '')
+    body.profileName = String(body.profileName || '')
+    body.messageType = MESSAGE_TYPES.has(requestedType) ? requestedType : 'document'
+    body.mediaId = String(body.mediaId || '')
+    body.occurredAt = String(body.occurredAt || '')
+    body.conversationId = String(body.conversationId || '')
+
+    if (!body.referral || typeof body.referral !== 'object' || Array.isArray(body.referral)) {
+        const referral = {}
+        for (const key of REFERRAL_KEYS) {
+            if (body[key] != null && String(body[key]).trim()) referral[key] = String(body[key])
+        }
+        body.referral = Object.keys(referral).length ? referral : null
+    }
+    return body
+}
 
 // A body this large is not a WhatsApp message, it is something wrong.
 // Bailing early keeps a bad request from turning into slow string work.
@@ -96,7 +130,7 @@ export function parseInboundBody(raw, keys = BODY_KEYS) {
     try {
         const parsed = JSON.parse(s)
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-            return { body: parsed, repaired: false, reason: null }
+            return { body: normalizeInboundBody(parsed), repaired: false, reason: null }
         }
     } catch {
         /* fall through to the repair */
@@ -118,7 +152,7 @@ export function parseInboundBody(raw, keys = BODY_KEYS) {
         const end = i + 1 < found.length ? found[i + 1].at : s.length
         body[found[i].key] = unwrapValue(s.slice(found[i].valueAt, end))
     }
-    return { body, repaired: true, reason: null }
+    return { body: normalizeInboundBody(body), repaired: true, reason: null }
 }
 
 export default { parseInboundBody, BODY_KEYS, MAX_BODY_CHARS }

@@ -21,16 +21,41 @@ const good = {
 const asMakeSendsIt = v => `{"phone":"${v.phone}","text":"${v.text}","profileName":"${v.profileName}","source":"${v.source}","from":"${v.from}","to":"${v.to}","businessPhone":"${v.businessPhone}","field":"${v.field}"}`
 
 describe('valid JSON', () => {
-    it('is parsed strictly and not marked repaired', () => {
+    it('parses valid JSON without marking it repaired', () => {
         const r = parseInboundBody(JSON.stringify(good))
         expect(r.repaired).toBe(false)
-        expect(r.body).toEqual(good)
+        expect(r.body).toMatchObject(good)
+        expect(r.body).toMatchObject({ messageType: 'text', referral: null })
     })
 
     it('keeps escaped newlines that arrived correctly escaped', () => {
         const r = parseInboundBody(JSON.stringify({ ...good, text: 'שורה\nשנייה' }))
         expect(r.repaired).toBe(false)
         expect(r.body.text).toBe('שורה\nשנייה')
+    })
+
+    it('keeps a complete WhatsApp referral and media identity', () => {
+        const raw = JSON.stringify({
+            eventId: 'wamid.abc', phone: '972501234567', text: '', profileName: 'נועה',
+            messageType: 'image', mediaId: '9988', occurredAt: '2026-08-14T09:00:00.000Z',
+            conversationId: 'conv-1',
+            referral: { sourceUrl: 'https://fb.me/ad', sourceId: '238', campaignId: '120', adsetId: '121', adId: '122' },
+        })
+        expect(parseInboundBody(raw).body).toMatchObject({
+            eventId: 'wamid.abc', messageType: 'image', mediaId: '9988',
+            referral: { campaignId: '120', adId: '122' },
+        })
+    })
+
+    it('normalizes flat referral fields and unknown media types safely', () => {
+        const raw = JSON.stringify({
+            eventId: 'wamid.unknown', phone: '972501234567', text: '',
+            messageType: 'sticker', campaignId: '120', adId: '122', sourceUrl: 'https://fb.me/ad',
+        })
+        expect(parseInboundBody(raw).body).toMatchObject({
+            messageType: 'document',
+            referral: { campaignId: '120', adId: '122', sourceUrl: 'https://fb.me/ad' },
+        })
     })
 })
 
@@ -50,7 +75,12 @@ describe('the message that broke it', () => {
 
     it('recovers every other field alongside it', () => {
         const r = parseInboundBody(asMakeSendsIt({ ...good, text }))
-        expect(r.body).toEqual({ ...good, text })
+        expect(r.body).toMatchObject({ ...good, text, messageType: 'text' })
+    })
+
+    it('repairs Make raw JSON with the expanded ordered keys', () => {
+        const raw = '{"eventId":"wamid.1","phone":"9725","text":"שורה 1\nשורה 2","profileName":"בר","messageType":"text","mediaId":"","occurredAt":"2026-08-14T09:00:00Z","conversationId":"c1"}'
+        expect(parseInboundBody(raw).body).toMatchObject({ eventId: 'wamid.1', text: 'שורה 1\nשורה 2', messageType: 'text' })
     })
 })
 
@@ -110,7 +140,7 @@ describe('missing and odd fields', () => {
         const r = parseInboundBody('{"phone":"972544924495","text":"היי\nמה קורה"}')
         expect(r.body.phone).toBe('972544924495')
         expect(r.body.text).toBe('היי\nמה קורה')
-        expect(r.body.profileName).toBeUndefined()
+        expect(r.body.profileName).toBe('')
     })
 
     it('preserves whitespace inside a quoted value', () => {

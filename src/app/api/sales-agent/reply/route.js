@@ -39,6 +39,7 @@ import {
     getLead, saveExchange, toApiMessages, isPausedForHuman,
     isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone, listLeads, recordSpend,
     listMedia, recordMediaSent, creditPendingMedia,
+    claimInboundEvent, completeInboundEvent,
 } from '@/lib/salesAgent/leads'
 import { costOfClaudeUsage } from '@/lib/salesAgent/pricing'
 import { parseInboundBody } from '@/lib/salesAgent/inbound'
@@ -105,7 +106,11 @@ export async function POST(req) {
         console.warn('[sales-agent] repaired a malformed body from Make')
     }
 
+    const eventId = String(body.eventId || '').trim()
+    if (!eventId) return NextResponse.json({ error: 'missing-event-id' }, { status: 400 })
+
     const text = String(body?.text || '').trim()
+    const messageType = body.messageType
 
     // Who sent this, and to whom. On a coexistence number Meta echoes
     // the business's OWN outgoing messages back through the same webhook,
@@ -122,10 +127,69 @@ export async function POST(req) {
     // which sent only that, keeps working unchanged.
     const phone = outgoing ? to || normalizePhone(body?.phone) : normalizePhone(body?.phone) || from
     if (!phone) return NextResponse.json({ error: 'bad-phone' }, { status: 400 })
-    if (!text) {
-        // Stickers, reactions and media arrive with no text. Staying quiet
-        // is correct — answering "לא הבנתי" to a thumbs-up is worse.
-        return NextResponse.json({ ok: true, send: [], sendText: '', skipped: 'empty-text' })
+
+    let claim
+    try {
+        claim = await claimInboundEvent({ eventId, phone, occurredAt: body.occurredAt })
+    } catch (err) {
+        console.error('[sales-agent] event claim failed', err)
+        return NextResponse.json({ error: 'event-claim-failed' }, { status: 503 })
+    }
+    if (claim.action === 'cached') {
+        return NextResponse.json({
+            ok: true,
+            duplicate: true,
+            shouldSend: false,
+            cachedOutcome: claim.outcome,
+            sendText: '',
+            hasImage: false,
+            hasVideo: false,
+            handoff: false,
+        })
+    }
+    if (claim.action === 'busy') {
+        return NextResponse.json({ ok: true, duplicate: true, processing: true, shouldSend: false }, { status: 202 })
+    }
+
+    // Once this worker owns the event, no response may leave without
+    // finalizing it. A stale worker must go silent rather than replaying
+    // an answer that a newer worker has already made durable.
+    const complete = async payload => {
+        const hasText = !!String(payload.sendText || '').trim()
+        const outcome = {
+            sendText: payload.sendText || '',
+            sendImage: payload.sendImage || null,
+            sendImageCaption: payload.sendImageCaption || null,
+            sendVideo: payload.sendVideo || null,
+            sendVideoCaption: payload.sendVideoCaption || null,
+            // Task 1 accepts only sendable or handoff outcomes. Silent
+            // echoes and owner commands are stored as non-sendable terminal
+            // outcomes; the original HTTP response remains unchanged.
+            handoff: payload.handoff === true || !hasText,
+            stage: payload.stage || null,
+            followUpAt: payload.followUpAt || null,
+            notifyOwner: payload.notifyOwner || null,
+        }
+        try {
+            const result = await completeInboundEvent({ eventId, claimToken: claim.claimToken, outcome })
+            if (result.action === 'completed') return NextResponse.json(payload)
+            if (result.action === 'cached') {
+                return NextResponse.json({
+                    ok: true, duplicate: true, shouldSend: false, cachedOutcome: result.outcome,
+                    sendText: '', hasImage: false, hasVideo: false, handoff: false,
+                })
+            }
+            return NextResponse.json({ ok: true, duplicate: true, processing: true, shouldSend: false }, { status: 202 })
+        } catch (err) {
+            console.error('[sales-agent] event completion failed', err)
+            return NextResponse.json({ error: 'event-completion-failed' }, { status: 503 })
+        }
+    }
+
+    if (!text && messageType === 'text') {
+        // Reactions and empty text events stay quiet. Their event is still
+        // finalized above so a provider retry cannot later wake the bot.
+        return complete({ ok: true, send: [], sendText: '', skipped: 'empty-text' })
     }
 
     const today = todayISO()
@@ -134,7 +198,7 @@ export async function POST(req) {
         lead = await getLead(phone)
     } catch (err) {
         console.error('[sales-agent] lead read failed', err)
-        return NextResponse.json({ ok: true, send: [FALLBACK_REPLY], sendText: FALLBACK_REPLY, handoff: true, notifyOwner: ownerPing(phone, 'שגיאת מסד נתונים — הבוט לא הצליח לקרוא את הליד') })
+        return complete({ ok: true, send: [FALLBACK_REPLY], sendText: FALLBACK_REPLY, handoff: true, notifyOwner: ownerPing(phone, 'שגיאת מסד נתונים — הבוט לא הצליח לקרוא את הליד') })
     }
 
     // ── Lord answered in the chat himself ────────────────────────────
@@ -148,14 +212,14 @@ export async function POST(req) {
     // knows he is typing.
     if (outgoing) {
         if (isOwnEcho(lead, text)) {
-            return NextResponse.json({ ok: true, send: [], sendText: '', skipped: 'own-echo' })
+            return complete({ ok: true, send: [], sendText: '', skipped: 'own-echo' })
         }
         try {
             await setHuman(phone, true, 'ענית בעצמך בשיחה')
         } catch (err) {
             console.error('[sales-agent] auto-pause failed', err)
         }
-        return NextResponse.json({ ok: true, send: [], sendText: '', paused: true, reason: 'owner-replied' })
+        return complete({ ok: true, send: [], sendText: '', paused: true, reason: 'owner-replied' })
     }
 
     // ── A command from Lord's own phone ──────────────────────────────
@@ -164,25 +228,25 @@ export async function POST(req) {
     if (OWNER_PHONE && phone === OWNER_PHONE) {
         const cmd = parseOwnerCommand(text)
         if (!cmd) {
-            return NextResponse.json({ ok: true, send: [], sendText: '', skipped: 'owner-message' })
+            return complete({ ok: true, send: [], sendText: '', skipped: 'owner-message' })
         }
         // The digest is about the whole pipeline, so it takes no number
         // and must be handled before the "give me a number" guard.
         if (cmd.action === 'digest') {
             try {
                 const d = await buildOwnerDigest()
-                return NextResponse.json({ ok: true, send: [d], sendText: d, skipped: 'owner-command' })
+                return complete({ ok: true, send: [d], sendText: d, skipped: 'owner-command' })
             } catch (err) {
                 console.error('[sales-agent] digest command failed', err)
                 const oops = 'לא הצלחתי להרכיב את הדוח כרגע.'
-                return NextResponse.json({ ok: true, send: [oops], sendText: oops, skipped: 'owner-command' })
+                return complete({ ok: true, send: [oops], sendText: oops, skipped: 'owner-command' })
             }
         }
 
         const target = normalizePhone(cmd.phone)
         if (!target) {
             const help = 'צריך מספר. למשל:\nשקט 0501234567\nבוט 0501234567\nסטטוס 0501234567\n\nאו פשוט: דוח'
-            return NextResponse.json({ ok: true, send: [help], sendText: help, skipped: 'owner-command' })
+            return complete({ ok: true, send: [help], sendText: help, skipped: 'owner-command' })
         }
         let reply
         try {
@@ -202,13 +266,13 @@ export async function POST(req) {
             console.error('[sales-agent] owner command failed', err)
             reply = 'הפעולה נכשלה. נסה שוב.'
         }
-        return NextResponse.json({ ok: true, send: [reply], sendText: reply, skipped: 'owner-command' })
+        return complete({ ok: true, send: [reply], sendText: reply, skipped: 'owner-command' })
     }
 
     // A human already took this conversation. The bot must not talk over
     // Lord mid-negotiation — that is the fastest way to lose a warm lead.
     if (isPausedForHuman(lead)) {
-        return NextResponse.json({ ok: true, send: [], sendText: '', paused: true, stage: lead.stage || 'handoff' })
+        return complete({ ok: true, send: [], sendText: '', paused: true, stage: lead.stage || 'handoff' })
     }
 
     // ── Already a customer ───────────────────────────────────────────
@@ -235,7 +299,7 @@ export async function POST(req) {
         } catch (err) {
             console.error('[sales-agent] customer mute failed', err)
         }
-        return NextResponse.json({
+        return complete({
             ok: true,
             send: [CUSTOMER_REPLY],
             sendText: CUSTOMER_REPLY,
@@ -246,6 +310,35 @@ export async function POST(req) {
                 stage: lead.stage,
                 lastText: text,
             }),
+        })
+    }
+
+    // A photo, video, voice note, or document cannot be interpreted
+    // reliably without its bytes. Keep the handoff in this WhatsApp chat;
+    // do not spend a model call inventing what the attachment might show.
+    if (messageType !== 'text') {
+        const handoffReason = messageType === 'image'
+            ? 'הלקוח שלח תמונה — נדרשת בדיקה אנושית והכנת דוגמה אם הוצעה'
+            : `הלקוח שלח ${messageType} — נדרשת בדיקה אנושית`
+        try {
+            // This write is deliberately before event completion. Otherwise
+            // a retry could be suppressed while the lead was never marked
+            // for the human who needs to open the existing WhatsApp chat.
+            await setHuman(phone, true, handoffReason)
+        } catch (err) {
+            console.error('[sales-agent] media handoff persistence failed', err)
+            return NextResponse.json({ error: 'media-handoff-persist-failed' }, { status: 503 })
+        }
+        return complete({
+            ok: true,
+            send: [],
+            sendText: '',
+            hasImage: false,
+            hasVideo: false,
+            stage: 'handoff',
+            handoff: true,
+            handoffReason,
+            notifyOwner: ownerPing(phone, handoffReason, { name: body.profileName }),
         })
     }
 
@@ -429,7 +522,7 @@ export async function POST(req) {
     // CRM write instead of adding its own round trip before it.
     await Promise.allSettled(spends)
 
-    return NextResponse.json({
+    return complete({
         ok: true,
         send: parsed.messages,
         // `sendText` is the same reply as ONE string, and it is what the
