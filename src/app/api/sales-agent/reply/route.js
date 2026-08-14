@@ -40,6 +40,7 @@ import {
     isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone, listLeads, recordSpend,
     listMedia, recordMediaSent, creditPendingMedia,
     claimInboundEvent, completeInboundEvent,
+    acquireProviderCircuit, recordProviderFailure, recordProviderSuccess,
 } from '@/lib/salesAgent/leads'
 import { costOfClaudeUsage } from '@/lib/salesAgent/pricing'
 import { parseInboundBody } from '@/lib/salesAgent/inbound'
@@ -51,10 +52,13 @@ import { mediaGuard } from '@/lib/salesAgent/mediaGuard'
 import { assignVariant, summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
 import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
+import { normalizeProviderError } from '@/lib/salesAgent/circuitBreaker'
 
 // What the customer sees when the machinery breaks. Deliberately honest
 // and short — no apology theatre, no invented reason.
 const FALLBACK_REPLY = 'רגע אחד, אני מעביר אותך לנציג שלנו 🙏'
+const AI_OUTAGE_REPLY = 'קיבלתי את ההודעה שלך. מישהו מהצוות יחזור אליך בהקדם.'
+const AI_OUTAGE_REASON = 'תקלה בשירות ה-AI'
 
 // What an existing customer hears. Deliberately not a sales sentence:
 // they already bought, and the only useful thing the bot can do is
@@ -185,6 +189,27 @@ export async function POST(req) {
             console.error('[sales-agent] event completion failed', err)
             return NextResponse.json({ error: 'event-completion-failed' }, { status: 503 })
         }
+    }
+
+    // A breaker fallback is not durable until the handoff state and inbound
+    // completion both succeed. If either write fails, leave the claim for a
+    // retry rather than claiming that a human was notified when they were not.
+    const completeProviderFallback = async () => {
+        try {
+            await setHuman(phone, true, AI_OUTAGE_REASON)
+        } catch {
+            console.error('[sales-agent] provider handoff persistence failed')
+            return NextResponse.json({ error: 'provider-handoff-persist-failed' }, { status: 503 })
+        }
+        return complete({
+            ok: true,
+            send: [AI_OUTAGE_REPLY],
+            sendText: AI_OUTAGE_REPLY,
+            stage: 'handoff',
+            handoff: true,
+            handoffReason: AI_OUTAGE_REASON,
+            notifyOwner: ownerPing(phone, AI_OUTAGE_REASON, { name: body.profileName || lead?.name }),
+        })
     }
 
     if (!text && messageType === 'text') {
@@ -351,6 +376,18 @@ export async function POST(req) {
         })
     }
 
+    // This gate stays after all duplicate, silence, owner, customer, and
+    // media paths. Those routes do not call the provider and must not alter
+    // its health. The Firestore transaction grants only one half-open probe.
+    let circuit
+    try {
+        circuit = await acquireProviderCircuit()
+    } catch {
+        console.error('[sales-agent] provider breaker check failed')
+        return NextResponse.json({ error: 'provider-breaker-unavailable' }, { status: 503 })
+    }
+    if (!circuit.allow) return completeProviderFallback()
+
     // How long he has been gone. The prompt uses this to decide between
     // continuing a thread and reopening one; without it the agent either
     // greets someone who wrote a minute ago or resumes mid-sentence with
@@ -394,6 +431,7 @@ export async function POST(req) {
     }
 
     let parsed
+    let providerFailureCode = null
     try {
         const { text: raw, usage, model, stopReason } = await callClaude({ system, messages })
         // The merged keys, or every uploaded asset the model was just
@@ -421,17 +459,29 @@ export async function POST(req) {
             const second = parseAgentJson(retry.text, { mediaKeys: Object.keys(library) })
             if (!second.malformed) parsed = second
         }
+        if (parsed.malformed) providerFailureCode = 'invalid_json'
     } catch (err) {
-        console.error('[sales-agent] model call failed', err?.message || err)
-        parsed = {
-            messages: [FALLBACK_REPLY],
-            stage: 'handoff',
-            handoff: true,
-            handoffReason: `הבוט נפל: ${String(err?.message || err).slice(0, 140)}`,
-            eventType: null, eventDate: null, celebrantName: null, customerName: null,
-            packageInterest: null, callbackPromised: null, followUpAt: null,
-            objectionRaised: false, notes: null, image: null, malformed: true,
+        providerFailureCode = normalizeProviderError(err)
+    }
+
+    if (providerFailureCode) {
+        // Provider payloads can contain prompt fragments and customer text.
+        // The runtime state and logs retain only the fixed classification.
+        console.error('[sales-agent] model provider failure', providerFailureCode)
+        try {
+            await recordProviderFailure(providerFailureCode)
+        } catch {
+            console.error('[sales-agent] provider breaker failure record failed')
+            return NextResponse.json({ error: 'provider-failure-record-failed' }, { status: 503 })
         }
+        return completeProviderFallback()
+    }
+
+    try {
+        await recordProviderSuccess()
+    } catch {
+        console.error('[sales-agent] provider breaker success record failed')
+        return NextResponse.json({ error: 'provider-success-record-failed' }, { status: 503 })
     }
 
     // A handoff with no words leaves the customer staring at silence.

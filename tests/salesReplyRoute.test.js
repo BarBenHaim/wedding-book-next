@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => ({
     creditPendingMedia: vi.fn(),
     claimInboundEvent: vi.fn(),
     completeInboundEvent: vi.fn(),
+    acquireProviderCircuit: vi.fn(),
+    recordProviderFailure: vi.fn(),
+    recordProviderSuccess: vi.fn(),
     costOfClaudeUsage: vi.fn(),
     resolveSource: vi.fn(),
     mergeMedia: vi.fn(),
@@ -52,6 +55,8 @@ vi.mock('@/lib/salesAgent/leads', () => ({
     recordSpend: mocks.recordSpend, listMedia: mocks.listMedia,
     recordMediaSent: mocks.recordMediaSent, creditPendingMedia: mocks.creditPendingMedia,
     claimInboundEvent: mocks.claimInboundEvent, completeInboundEvent: mocks.completeInboundEvent,
+    acquireProviderCircuit: mocks.acquireProviderCircuit,
+    recordProviderFailure: mocks.recordProviderFailure, recordProviderSuccess: mocks.recordProviderSuccess,
 }))
 vi.mock('@/lib/salesAgent/pricing', () => ({ costOfClaudeUsage: mocks.costOfClaudeUsage }))
 vi.mock('@/lib/salesAgent/attribution', () => ({ resolveSource: mocks.resolveSource }))
@@ -93,6 +98,9 @@ beforeEach(async () => {
     process.env.SALES_AGENT_OWNER_PHONE = 'owner-token'
     mocks.claimInboundEvent.mockResolvedValue({ action: 'process', claimToken: 'claim-token', claimGeneration: 1 })
     mocks.completeInboundEvent.mockResolvedValue({ action: 'completed' })
+    mocks.acquireProviderCircuit.mockResolvedValue({ allow: true, mode: 'closed' })
+    mocks.recordProviderFailure.mockResolvedValue(undefined)
+    mocks.recordProviderSuccess.mockResolvedValue(undefined)
     mocks.getLead.mockResolvedValue(lead)
     mocks.setHuman.mockResolvedValue(undefined)
     mocks.findCustomerByPhone.mockResolvedValue(null)
@@ -121,6 +129,7 @@ describe('inbound event duplicate fencing', () => {
             },
         })
         expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.acquireProviderCircuit).not.toHaveBeenCalled()
     })
 
     it('returns an in-flight duplicate as a no-send envelope without calling Claude', async () => {
@@ -129,6 +138,118 @@ describe('inbound event duplicate fencing', () => {
         const result = await post(inbound({ text: 'שלום' }))
 
         expect(result).toEqual({ status: 202, body: { ok: true, duplicate: true, processing: true, shouldSend: false } })
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.acquireProviderCircuit).not.toHaveBeenCalled()
+    })
+
+    it('keeps a duplicate safe fallback cached but never sends it again', async () => {
+        const safeFallback = 'קיבלתי את ההודעה שלך. מישהו מהצוות יחזור אליך בהקדם.'
+        mocks.claimInboundEvent.mockResolvedValue({ action: 'cached', outcome: { sendText: safeFallback, handoff: true } })
+
+        const result = await post(inbound({ text: 'שלום' }))
+
+        expect(result.body).toMatchObject({ duplicate: true, shouldSend: false, sendText: '', handoff: false })
+        expect(result.body.cachedOutcome).toEqual({ sendText: safeFallback, handoff: true })
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+    })
+})
+
+describe('Anthropic outage handling', () => {
+    const safeFallback = 'קיבלתי את ההודעה שלך. מישהו מהצוות יחזור אליך בהקדם.'
+
+    function prepareModelPath() {
+        mocks.listMedia.mockResolvedValue([])
+        mocks.mergeMedia.mockReturnValue({})
+        mocks.performanceNote.mockReturnValue(null)
+        mocks.creditPendingMedia.mockResolvedValue(undefined)
+        mocks.buildSystemPrompt.mockReturnValue('system')
+        mocks.toApiMessages.mockReturnValue([])
+        mocks.priceDodged.mockReturnValue(false)
+        mocks.mediaGuard.mockReturnValue(null)
+        mocks.saveExchange.mockResolvedValue(undefined)
+    }
+
+    it('completes a simulated fourth, open-breaker claim with a safe fallback and makes no model call', async () => {
+        mocks.acquireProviderCircuit.mockResolvedValue({ allow: false, mode: 'open' })
+
+        const result = await post(inbound({ text: 'צריך מחיר' }))
+
+        expect(result.body).toMatchObject({ sendText: safeFallback, handoff: true })
+        expect(mocks.setHuman).toHaveBeenCalledWith('test-phone-token', true, 'תקלה בשירות ה-AI')
+        expect(mocks.completeInboundEvent).toHaveBeenCalledWith(expect.objectContaining({
+            outcome: expect.objectContaining({ sendText: safeFallback, handoff: true, stage: 'handoff' }),
+        }))
+        expect(result.body.notifyOwner).toContain('תקלה בשירות ה-AI')
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+    })
+
+    it.each([
+        [Object.assign(new Error('timed out'), { name: 'AbortError' }), 'timeout'],
+        [new Error('anthropic 429: busy'), 'rate_limit'],
+        [new Error('anthropic 400: credit_balance exhausted'), 'low_credit'],
+    ])('records a normalized %s provider failure before safely handing off', async (error, code) => {
+        prepareModelPath()
+        mocks.callClaude.mockRejectedValue(error)
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const result = await post(inbound({ text: 'צריך מחיר' }))
+
+        expect(result.body).toMatchObject({ sendText: safeFallback, handoff: true })
+        expect(mocks.recordProviderFailure).toHaveBeenCalledWith(code)
+        expect(console.error).toHaveBeenCalledWith('[sales-agent] model provider failure', code)
+        expect(mocks.completeInboundEvent).toHaveBeenCalledWith(expect.objectContaining({
+            outcome: expect.objectContaining({ sendText: safeFallback, handoff: true }),
+        }))
+    })
+
+    it('counts two malformed model responses as one invalid-json failure and safely hands off', async () => {
+        prepareModelPath()
+        mocks.callClaude.mockResolvedValue({ text: 'not json', usage: null, model: 'test' })
+        mocks.parseAgentJson.mockReturnValue({ malformed: true, messages: [], handoff: true })
+        vi.spyOn(console, 'warn').mockImplementation(() => {})
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const result = await post(inbound({ text: 'צריך מחיר' }))
+
+        expect(result.body).toMatchObject({ sendText: safeFallback, handoff: true })
+        expect(mocks.callClaude).toHaveBeenCalledTimes(2)
+        expect(mocks.recordProviderFailure).toHaveBeenCalledWith('invalid_json')
+    })
+
+    it('resets the breaker only after a valid model result', async () => {
+        prepareModelPath()
+        mocks.callClaude.mockResolvedValue({ text: 'valid', usage: null, model: 'test' })
+        mocks.parseAgentJson.mockReturnValue({
+            malformed: false, messages: ['שלום'], stage: 'engaged', handoff: false,
+            image: null, eventType: null, callbackPromised: null, followUpAt: null,
+        })
+
+        await post(inbound({ text: 'שלום' }))
+
+        expect(mocks.recordProviderSuccess).toHaveBeenCalledTimes(1)
+        expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
+    })
+
+    it('returns an honest no-send 503 when the fallback handoff cannot persist', async () => {
+        mocks.acquireProviderCircuit.mockResolvedValue({ allow: false, mode: 'open' })
+        mocks.setHuman.mockRejectedValue(new Error('persistence unavailable'))
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const result = await post(inbound({ text: 'צריך מחיר' }))
+
+        expect(result).toEqual({ status: 503, body: { error: 'provider-handoff-persist-failed' } })
+        expect(mocks.completeInboundEvent).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+    })
+
+    it('returns an honest no-send 503 when fallback completion fails', async () => {
+        mocks.acquireProviderCircuit.mockResolvedValue({ allow: false, mode: 'open' })
+        mocks.completeInboundEvent.mockRejectedValue(new Error('completion unavailable'))
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const result = await post(inbound({ text: 'צריך מחיר' }))
+
+        expect(result).toEqual({ status: 503, body: { error: 'event-completion-failed' } })
         expect(mocks.callClaude).not.toHaveBeenCalled()
     })
 })
@@ -158,6 +279,7 @@ describe('non-text inbound media', () => {
                 outcome: expect.objectContaining({ handoff: true, noReply: false, stage: 'handoff' }),
             }))
             expect(mocks.callClaude).not.toHaveBeenCalled()
+            expect(mocks.acquireProviderCircuit).not.toHaveBeenCalled()
         })
     }
 

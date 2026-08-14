@@ -23,6 +23,7 @@ import { normalizePhone } from './agent'
 import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerCommand, isTestPhone, MAX_TURNS, HUMAN_PAUSE_HOURS } from './leadsCore'
 import { isoInIsrael } from './leadsView'
 import { assertCompletableInboundOutcome, assertInboundClaimToken, decideInboundCompletion, INBOUND_LEASE_MS, sanitizeInboundOutcome, startInboundClaim } from './inboundEventsCore'
+import { nextFailureState, normalizeProviderError, reserveHalfOpenProbe, successState } from './circuitBreaker'
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
 // importing this file boots the Admin SDK, which needs credentials.
@@ -31,6 +32,8 @@ export { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerComman
 
 const COLLECTION = 'sales_leads'
 const INBOUND_EVENTS_COLLECTION = 'sales_inbound_events'
+const RUNTIME_COLLECTION = 'sales_runtime'
+const ANTHROPIC_RUNTIME_ID = 'anthropic'
 
 function ref(phone) {
     return adminDb.collection(COLLECTION).doc(phone)
@@ -38,6 +41,69 @@ function ref(phone) {
 
 export function inboundEventRef(eventId) {
     return adminDb.collection(INBOUND_EVENTS_COLLECTION).doc(String(eventId))
+}
+
+function anthropicRuntimeRef() {
+    return adminDb.collection(RUNTIME_COLLECTION).doc(ANTHROPIC_RUNTIME_ID)
+}
+
+// Runtime state is metadata only. In particular, do not merge arbitrary
+// existing fields: a past operational mistake must not keep a provider body,
+// prompt, customer text, phone, or secret alive in this document.
+function breakerRuntimeState(state = {}) {
+    const numberOrNull = value => Number.isFinite(Number(value)) ? Number(value) : null
+    return {
+        consecutiveFailures: Math.max(0, Number(state.consecutiveFailures) || 0),
+        openUntilMs: numberOrNull(state.openUntilMs),
+        lastFailureAtMs: numberOrNull(state.lastFailureAtMs),
+        lastSuccessAtMs: numberOrNull(state.lastSuccessAtMs),
+        lastErrorCode: state.lastErrorCode ? normalizeProviderError({ errorCode: state.lastErrorCode }) : null,
+        halfOpenProbeId: state.halfOpenProbeId || null,
+        halfOpenLeaseUntilMs: numberOrNull(state.halfOpenLeaseUntilMs),
+    }
+}
+
+/**
+ * Atomically consults the provider circuit before a model call. A closed
+ * circuit needs only a transaction read; a half-open circuit writes a short
+ * lease, so exactly one concurrent request becomes the probe.
+ */
+export async function acquireProviderCircuit() {
+    const runtimeRef = anthropicRuntimeRef()
+    const probeId = crypto.randomUUID()
+    return adminDb.runTransaction(async tx => {
+        const snap = await tx.get(runtimeRef)
+        const stored = snap.exists ? breakerRuntimeState(snap.data()) : {}
+        const reservation = reserveHalfOpenProbe(stored, Date.now(), probeId)
+        if (reservation.decision.mode === 'half-open') {
+            tx.set(runtimeRef, {
+                ...breakerRuntimeState(reservation.state),
+                updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: false })
+            return { ...reservation.decision, probeId }
+        }
+        return reservation.decision
+    })
+}
+
+export async function recordProviderFailure(errorCode) {
+    const runtimeRef = anthropicRuntimeRef()
+    return adminDb.runTransaction(async tx => {
+        const snap = await tx.get(runtimeRef)
+        const next = nextFailureState(snap.exists ? breakerRuntimeState(snap.data()) : {}, Date.now(), errorCode)
+        tx.set(runtimeRef, { ...breakerRuntimeState(next), updatedAt: FieldValue.serverTimestamp() }, { merge: false })
+        return next
+    })
+}
+
+export async function recordProviderSuccess() {
+    const runtimeRef = anthropicRuntimeRef()
+    return adminDb.runTransaction(async tx => {
+        await tx.get(runtimeRef)
+        const next = successState(Date.now())
+        tx.set(runtimeRef, { ...breakerRuntimeState(next), updatedAt: FieldValue.serverTimestamp() }, { merge: false })
+        return next
+    })
 }
 
 /**
