@@ -139,8 +139,8 @@ export async function POST(req) {
     let claim
     try {
         claim = await claimInboundEvent({ eventId, phone, occurredAt: body.occurredAt })
-    } catch (err) {
-        console.error('[sales-agent] event claim failed', err)
+    } catch {
+        console.error('[sales-agent] event claim failed')
         return NextResponse.json({ error: 'event-claim-failed' }, { status: 503 })
     }
     if (claim.action === 'cached') {
@@ -190,8 +190,8 @@ export async function POST(req) {
                 })
             }
             return NextResponse.json({ ok: true, duplicate: true, processing: true, shouldSend: false }, { status: 202 })
-        } catch (err) {
-            console.error('[sales-agent] event completion failed', err)
+        } catch {
+            console.error('[sales-agent] event completion failed')
             return NextResponse.json({ error: 'event-completion-failed' }, { status: 503 })
         }
     }
@@ -248,8 +248,8 @@ export async function POST(req) {
     let lead
     try {
         lead = await getLead(phone)
-    } catch (err) {
-        console.error('[sales-agent] lead read failed', err)
+    } catch {
+        console.error('[sales-agent] lead read failed')
         return complete({ ok: true, send: [FALLBACK_REPLY], sendText: FALLBACK_REPLY, handoff: true, notifyOwner: ownerPing(phone, 'שגיאת מסד נתונים — הבוט לא הצליח לקרוא את הליד') })
     }
 
@@ -268,8 +268,8 @@ export async function POST(req) {
         }
         try {
             await setHuman(phone, true, 'ענית בעצמך בשיחה')
-        } catch (err) {
-            console.error('[sales-agent] auto-pause failed', err)
+        } catch {
+            console.error('[sales-agent] auto-pause failed')
             return NextResponse.json({ error: 'owner-takeover-persist-failed' }, { status: 503 })
         }
         return complete(
@@ -295,8 +295,8 @@ export async function POST(req) {
             try {
                 const d = await buildOwnerDigest()
                 return complete({ ok: true, send: [d], sendText: d, skipped: 'owner-command' })
-            } catch (err) {
-                console.error('[sales-agent] digest command failed', err)
+            } catch {
+                console.error('[sales-agent] digest command failed')
                 const oops = 'לא הצלחתי להרכיב את הדוח כרגע.'
                 return complete({ ok: true, send: [oops], sendText: oops, skipped: 'owner-command' })
             }
@@ -321,8 +321,8 @@ export async function POST(req) {
                     ? `אין ליד עם המספר ${target}.`
                     : `${target}\nשלב: ${t.stage || 'new'}\nמושתק: ${isPausedForHuman(t) ? 'כן' : 'לא'}\nמעקב: ${t.followUpAt || 'אין'}\n${t.notes || ''}`.trim()
             }
-        } catch (err) {
-            console.error('[sales-agent] owner command failed', err)
+        } catch {
+            console.error('[sales-agent] owner command failed')
             reply = 'הפעולה נכשלה. נסה שוב.'
         }
         return complete({ ok: true, send: [reply], sendText: reply, skipped: 'owner-command' })
@@ -355,8 +355,8 @@ export async function POST(req) {
     if (customer) {
         try {
             await setHuman(phone, true, 'לקוח קיים כתב')
-        } catch (err) {
-            console.error('[sales-agent] customer mute failed', err)
+        } catch {
+            console.error('[sales-agent] customer mute failed')
         }
         return complete({
             ok: true,
@@ -384,8 +384,8 @@ export async function POST(req) {
             // a retry could be suppressed while the lead was never marked
             // for the human who needs to open the existing WhatsApp chat.
             await setHuman(phone, true, handoffReason)
-        } catch (err) {
-            console.error('[sales-agent] media handoff persistence failed', err)
+        } catch {
+            console.error('[sales-agent] media handoff persistence failed')
             return NextResponse.json({ error: 'media-handoff-persist-failed' }, { status: 503 })
         }
         return complete({

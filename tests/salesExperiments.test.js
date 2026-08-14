@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-    OPENING_VARIANTS, VARIANT_IDS, ACTIVE_VARIANT_IDS, assignVariant, findVariant, shouldApplyOpening,
+    OPENING_VARIANTS, VARIANT_IDS, ACTIVE_VARIANT_IDS, assignVariant, findVariant, findActiveVariant, shouldApplyOpening,
     summarizeExperiments, summarizeGaps, MIN_SAMPLE,
 } from '@/lib/salesAgent/experiments'
 import { buildSystemPrompt } from '@/lib/salesAgent/prompt'
@@ -31,6 +31,9 @@ describe('variants', () => {
 
     it('resolves a known id and refuses an unknown one', () => {
         expect(findVariant('demo_first').label).toBe('דמו מיד')
+        expect(findActiveVariant('demo_first').label).toBe('דמו מיד')
+        expect(findActiveVariant('call_offer')).toBeNull()
+        expect(findActiveVariant('photo_sample')).toBeNull()
         expect(findVariant('nope')).toBeNull()
         expect(findVariant(undefined)).toBeNull()
     })
@@ -161,6 +164,13 @@ describe('summary — counting', () => {
             expect(r.leads).toBe(0)
             expect(r.replyRate).toBeNull()
             expect(r.enough).toBe(false)
+        }
+    })
+
+    it('injects each active opening directive while the lead is still opening', () => {
+        for (const id of approvedVariantIds) {
+            const prompt = buildSystemPrompt({ isNew: false, userTurns: 1, variant: id }, '2026-08-07')
+            expect(prompt, id).toContain(findVariant(id).directive)
         }
     })
 

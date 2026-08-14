@@ -111,8 +111,8 @@ async function sweep(today) {
             revived: orphans.map(l => ({ phone: l.phone, name: l.name || l.profileName || null })),
             stale,
         }
-    } catch (err) {
-        console.error('[sales-agent/followups] sweep failed', err?.message || err)
+    } catch {
+        console.error('[sales-agent/followups] sweep failed')
         return { revived: [], stale: [], error: 'sweep-failed' }
     }
 }
@@ -159,8 +159,8 @@ export async function GET(req) {
     let leads
     try {
         leads = await dueFollowUps(today, MAX_PER_RUN)
-    } catch (err) {
-        console.error('[sales-agent/followups] query failed', err)
+    } catch {
+        console.error('[sales-agent/followups] query failed')
         return NextResponse.json({ error: 'query-failed' }, { status: 502 })
     }
 
@@ -247,9 +247,9 @@ export async function GET(req) {
                         await sendWhatsAppImage(lead.phone, library[parsed.image].url, library[parsed.image].caption)
                     }
                     delivered = true
-                } catch (err) {
-                    item.sendError = String(err?.message || err).slice(0, 160)
-                    console.warn('[sales-agent/followups] send failed', lead.phone, err?.message)
+                } catch {
+                    item.sendError = 'whatsapp-send-failed'
+                    console.warn('[sales-agent/followups] send failed')
                 }
             }
 
@@ -267,8 +267,8 @@ export async function GET(req) {
                     stage: parsed.stage,
                 })
             }
-        } catch (err) {
-            console.error('[sales-agent/followups] lead failed', lead.phone, err?.message || err)
+        } catch {
+            console.error('[sales-agent/followups] lead failed')
         }
     }
 
@@ -291,8 +291,8 @@ export async function GET(req) {
     if (!dry && directSend && alert && process.env.SALES_AGENT_OWNER_PHONE) {
         try {
             await sendWhatsAppText(process.env.SALES_AGENT_OWNER_PHONE, alert)
-        } catch (err) {
-            console.warn('[sales-agent/followups] owner alert failed', err?.message)
+        } catch {
+            console.warn('[sales-agent/followups] owner alert failed')
         }
     }
 

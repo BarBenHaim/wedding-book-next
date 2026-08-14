@@ -326,16 +326,30 @@ function attemptTimeoutMs(deadlineAtMs) {
 // A generous ceiling costs nothing and removes a whole failure mode.
 const MAX_TOKENS = Number(process.env.SALES_AGENT_MAX_TOKENS) || 2000
 
+class ProviderCallError extends Error {
+    constructor(errorCode, { providerStarted, status = null } = {}) {
+        const hasStatus = status != null && Number.isFinite(Number(status))
+        const statusText = hasStatus ? ` status ${Number(status)}` : ''
+        super(`anthropic ${String(errorCode || 'provider_error')}${statusText}`)
+        this.name = 'ProviderCallError'
+        this.errorCode = String(errorCode || 'provider_error')
+        this.providerStarted = providerStarted === true
+        if (hasStatus) this.status = Number(status)
+    }
+}
+
+function providerCallError(errorCode, options) {
+    return new ProviderCallError(errorCode, options)
+}
+
 export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxTokens = MAX_TOKENS, temperature = 0.6, deadlineAtMs = providerDeadlineAt() }) {
     const apiKey = process.env.ANTHROPIC_API_KEY
-    if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set')
+    if (!apiKey) throw providerCallError('provider_error', { providerStarted: false })
 
     const controller = new AbortController()
     const timeoutMs = attemptTimeoutMs(deadlineAtMs)
     if (timeoutMs <= 0) {
-        const error = new Error('anthropic timeout: provider deadline exhausted')
-        error.providerStarted = false
-        throw error
+        throw providerCallError('timeout', { providerStarted: false })
     }
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     let res
@@ -373,9 +387,20 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
                 console.error(`[sales-agent] unknown model ${model}, falling back to ${next}`)
                 return await callClaude({ system, messages, model: next, maxTokens, temperature, deadlineAtMs })
             }
-            throw new Error(`anthropic ${res.status}: ${body.slice(0, 400)}`)
+            const errorCode = res.status === 429
+                ? 'rate_limit'
+                : /low.?credit|credit.?balance|insufficient.?credit|insufficient.?balance/i.test(body)
+                    ? 'low_credit'
+                    : 'provider_error'
+            throw providerCallError(errorCode, { providerStarted: true, status: res.status })
         }
-        const data = await res.json()
+        let data
+        try {
+            data = await res.json()
+        } catch (err) {
+            if (err?.name === 'AbortError') throw err
+            throw providerCallError('invalid_json', { providerStarted: true, status: res.status })
+        }
         const text = (data?.content || [])
             .filter(b => b?.type === 'text')
             .map(b => b.text)
@@ -385,12 +410,13 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
         // An abort surfaces as a generic AbortError; name it so the
         // handoff message to the owner says something useful.
         if (err?.name === 'AbortError') {
-            const timeout = new Error(`anthropic timeout after ${timeoutMs}ms`)
-            timeout.providerStarted = true
-            throw timeout
+            throw providerCallError('timeout', { providerStarted: true })
         }
-        if (err) err.providerStarted = providerStarted || err.providerStarted !== false
-        throw err
+        if (err instanceof ProviderCallError) {
+            err.providerStarted = providerStarted || err.providerStarted
+            throw err
+        }
+        throw providerCallError('provider_error', { providerStarted })
     } finally {
         // Keep the controller alive through headers *and* body decoding.
         clearTimeout(timer)

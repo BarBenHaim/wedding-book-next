@@ -18,6 +18,46 @@ afterEach(() => {
 })
 
 describe('provider body deadline', () => {
+    it('marks a missing API key as an explicit zero-fetch provider failure', async () => {
+        delete process.env.ANTHROPIC_API_KEY
+
+        await expect(callClaude({ system: 'system', messages: [] })).rejects.toMatchObject({
+            providerStarted: false,
+            errorCode: 'provider_error',
+        })
+    })
+
+    it('never includes a non-OK provider body, prompt, or secret in the thrown error', async () => {
+        process.env.ANTHROPIC_API_KEY = 'api-key-secret-sentinel'
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+            ok: false,
+            status: 500,
+            text: vi.fn().mockResolvedValue('provider-body-sentinel customer-text-sentinel'),
+        }))
+
+        const error = await callClaude({
+            system: 'prompt-secret-sentinel', messages: [], deadlineAtMs: Date.now() + 1_000,
+        }).catch(err => err)
+
+        expect(error).toMatchObject({ providerStarted: true, errorCode: 'provider_error', status: 500 })
+        expect(error.message).not.toContain('provider-body-sentinel')
+        expect(error.message).not.toContain('customer-text-sentinel')
+        expect(error.message).not.toContain('prompt-secret-sentinel')
+        expect(error.message).not.toContain('api-key-secret-sentinel')
+    })
+
+    it('normalizes an arbitrary fetch rejection instead of rethrowing its message', async () => {
+        process.env.ANTHROPIC_API_KEY = 'api-key-secret-sentinel'
+        vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network-body-sentinel customer-sentinel')))
+
+        const error = await callClaude({ system: 'prompt-sentinel', messages: [] }).catch(err => err)
+
+        expect(error).toMatchObject({ providerStarted: true, errorCode: 'provider_error' })
+        expect(error.message).toBe('anthropic provider_error')
+        expect(error.message).not.toContain('network-body-sentinel')
+        expect(error.message).not.toContain('customer-sentinel')
+    })
+
     it('aborts a stalled JSON body after headers arrive before the absolute deadline', async () => {
         process.env.ANTHROPIC_API_KEY = 'test-secret'
         const fetch = vi.fn((_, { signal }) => Promise.resolve({
@@ -102,6 +142,14 @@ describe('system prompt — what actually reaches the model', () => {
     it('injects the facts list so answers are quoted, not invented', () => {
         const p = buildSystemPrompt({}, today)
         expect(p).toContain(FACTS[0])
+    })
+
+    it('never executes a retired call-offer directive for an existing historical lead', () => {
+        const prompt = buildSystemPrompt({ isNew: false, userTurns: 1, variant: 'call_offer' }, today)
+
+        expect(prompt).not.toContain('מתי יהיה לך נוח שנדבר?')
+        expect(prompt).not.toContain('את השיחה עושה בן אדם')
+        expect(prompt).not.toContain('איך לפתוח את השיחה הזאת')
     })
 
     it('tells the agent what it already knows, so it stops re-asking', () => {

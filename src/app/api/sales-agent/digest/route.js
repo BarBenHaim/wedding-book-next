@@ -68,8 +68,8 @@ export async function GET(req) {
     let raw
     try {
         raw = await listLeads({ limit: 500 })
-    } catch (err) {
-        console.error('[digest] list failed', err)
+    } catch {
+        console.error('[digest] list failed')
         return NextResponse.json({ error: 'list-failed' }, { status: 500 })
     }
 

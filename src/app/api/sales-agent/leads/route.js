@@ -80,8 +80,8 @@ export async function GET(req) {
         let lead
         try {
             lead = await getLead(phone)
-        } catch (err) {
-            console.error('[sales-leads] read failed', err)
+        } catch {
+            console.error('[sales-leads] read failed')
             return NextResponse.json({ error: 'read-failed' }, { status: 500 })
         }
         if (!lead || lead.isNew) return NextResponse.json({ error: 'not-found' }, { status: 404 })
@@ -100,8 +100,8 @@ export async function GET(req) {
     let raw
     try {
         raw = await listLeads({ limit: 500 })
-    } catch (err) {
-        console.error('[sales-leads] list failed', err)
+    } catch {
+        console.error('[sales-leads] list failed')
         return NextResponse.json({ error: 'list-failed' }, { status: 500 })
     }
 
@@ -185,8 +185,8 @@ export async function PATCH(req) {
 
     try {
         await adminPatchLead(phone, patch)
-    } catch (err) {
-        console.error('[sales-leads] patch failed', err)
+    } catch {
+        console.error('[sales-leads] patch failed')
         return NextResponse.json({ error: 'write-failed' }, { status: 500 })
     }
     return NextResponse.json({ ok: true, phone, patch })
@@ -214,8 +214,8 @@ export async function DELETE(req) {
     if (body?.testOnly === true) {
         try {
             phones = (await listLeads({ limit: 500 })).map(l => l.phone).filter(isTestPhone)
-        } catch (err) {
-            console.error('[sales-leads] test sweep failed', err)
+        } catch {
+            console.error('[sales-leads] test sweep failed')
             return NextResponse.json({ error: 'list-failed' }, { status: 500 })
         }
     } else if (Array.isArray(body?.phones)) {
@@ -229,8 +229,8 @@ export async function DELETE(req) {
     try {
         const res = await deleteLeads(phones)
         return NextResponse.json({ ok: true, ...res })
-    } catch (err) {
-        console.error('[sales-leads] delete failed', err)
+    } catch {
+        console.error('[sales-leads] delete failed')
         return NextResponse.json({ error: 'delete-failed' }, { status: 500 })
     }
 }

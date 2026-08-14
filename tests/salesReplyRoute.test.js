@@ -317,6 +317,38 @@ describe('Anthropic outage handling', () => {
         expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
     })
 
+    it('releases a half-open probe when the API key is missing before fetch, then keeps the duplicate silent', async () => {
+        prepareModelPath()
+        const missingKey = Object.assign(new Error('anthropic provider unavailable'), {
+            providerStarted: false,
+            errorCode: 'provider_error',
+        })
+        mocks.acquireProviderCircuit.mockResolvedValue({ allow: true, mode: 'half-open', probeId: 'missing-key-probe' })
+        mocks.callClaude.mockRejectedValue(missingKey)
+
+        const first = await post(inbound({ text: 'צריך מחיר' }))
+
+        expect(first.body).toMatchObject({ sendText: safeFallback, stage: 'handoff', handoff: true })
+        expect(mocks.releaseProviderProbe).toHaveBeenCalledTimes(1)
+        expect(mocks.releaseProviderProbe).toHaveBeenCalledWith('missing-key-probe', expect.any(Number))
+        expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
+        expect(mocks.recordProviderSuccess).not.toHaveBeenCalled()
+        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
+        expect(mocks.completeProviderFallback).toHaveBeenCalledWith(expect.objectContaining({
+            eventId: 'event-token', claimToken: 'claim-token', claimGeneration: 1,
+            phone: 'test-phone-token', reason: 'תקלה בשירות ה-AI',
+            outcome: expect.objectContaining({ sendText: safeFallback, stage: 'handoff', handoff: true }),
+        }))
+
+        mocks.claimInboundEvent.mockResolvedValueOnce({ action: 'cached', outcome: { sendText: safeFallback, handoff: true } })
+        const duplicate = await post(inbound({ text: 'צריך מחיר' }))
+
+        expect(duplicate.body).toMatchObject({ duplicate: true, shouldSend: false, sendText: '', handoff: false })
+        expect(mocks.callClaude).toHaveBeenCalledTimes(1)
+        expect(mocks.releaseProviderProbe).toHaveBeenCalledTimes(1)
+        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
+    })
+
     it('resets the breaker only after a valid model result', async () => {
         prepareModelPath()
         mocks.callClaude.mockResolvedValue({ text: 'valid', usage: null, model: 'test' })

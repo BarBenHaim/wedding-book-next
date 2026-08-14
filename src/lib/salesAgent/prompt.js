@@ -18,7 +18,7 @@
 //    let the two answers disagree.
 
 import { BUSINESS, DEMO, PACKAGES, ADDONS, FACTS, CONCESSION, MEDIA } from './catalog'
-import { findVariant, shouldApplyOpening } from './experiments'
+import { findActiveVariant, shouldApplyOpening } from './experiments'
 import { journeyBlock, LANGUAGE_RULES } from './journey'
 import { CONVERSATION_CRAFT, readStyle, styleNote } from './conversation'
 import { SELLING_CRAFT } from './selling'
@@ -226,7 +226,7 @@ function humanName() {
 // would then be measuring something it never actually did.
 function openingBlock(lead) {
     if (!shouldApplyOpening(lead)) return ''
-    const v = findVariant(lead?.variant)
+    const v = findActiveVariant(lead?.variant)
     if (!v) return ''
     return `## איך לפתוח את השיחה הזאת
 ${v.directive}

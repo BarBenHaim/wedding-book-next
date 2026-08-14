@@ -91,6 +91,10 @@ export function findVariant(id) {
     return OPENING_VARIANTS.find(v => v.id === id) || null
 }
 
+export function findActiveVariant(id) {
+    return ACTIVE_VARIANT_IDS.includes(id) ? findVariant(id) : null
+}
+
 /**
  * Deterministic arm assignment. A hash, not a coin flip: a retried
  * webhook or a lost write must never move a lead between arms, or the
@@ -233,4 +237,4 @@ export function summarizeGaps(leads, { limit = 8 } = {}) {
     return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, limit)
 }
 
-export default { OPENING_VARIANTS, ACTIVE_VARIANT_IDS, assignVariant, summarizeExperiments, summarizeGaps, findVariant }
+export default { OPENING_VARIANTS, ACTIVE_VARIANT_IDS, assignVariant, summarizeExperiments, summarizeGaps, findVariant, findActiveVariant }

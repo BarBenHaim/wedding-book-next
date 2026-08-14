@@ -348,9 +348,9 @@ async function compactIfNeeded(id) {
         if (Array.isArray(turns) && turns.length > MAX_TURNS * 2) {
             await ref(id).update({ turns: turns.slice(-MAX_TURNS) })
         }
-    } catch (err) {
+    } catch {
         // Compaction is housekeeping — never fail a customer reply over it.
-        console.warn('[salesAgent] compact failed', err?.message || err)
+        console.warn('[salesAgent] compact failed')
     }
 }
 
@@ -426,9 +426,9 @@ export async function findCustomerByPhone(rawPhone) {
         const doc = snap.docs[0]
         const d = doc.data() || {}
         return { weddingId: doc.id, ownerName: d.ownerName || null, ownerEmail: d.ownerEmail || null }
-    } catch (err) {
+    } catch {
         // A missing index or a malformed number must never stop a reply.
-        console.warn('[salesAgent] customer lookup failed', err?.message || err)
+        console.warn('[salesAgent] customer lookup failed')
         return null
     }
 }
@@ -601,8 +601,8 @@ export async function recordSpend({ provider, model, usd, usage, images = 0, tod
             usageRef(day).set({ date: day, ...patch }, { merge: true }),
             usageRef(TOTALS_DOC).set(patch, { merge: true }),
         ])
-    } catch (err) {
-        console.error('[sales-agent] recordSpend failed', err)
+    } catch {
+        console.error('[sales-agent] recordSpend failed')
     }
 }
 
@@ -631,8 +631,8 @@ export async function readSpend({ days = 30, todayISO } = {}) {
     let snaps
     try {
         snaps = await adminDb.getAll(...refs)
-    } catch (err) {
-        console.error('[sales-agent] readSpend failed', err)
+    } catch {
+        console.error('[sales-agent] readSpend failed')
         return null
     }
 
@@ -723,11 +723,11 @@ export async function listMedia({ fresh = false } = {}) {
         const items = snap.docs.map(d => ({ key: d.id, ...d.data() }))
         mediaCache = { at: Date.now(), items }
         return items
-    } catch (err) {
+    } catch {
         // A library that fails to load must degrade to the built-in
         // catalog, never to a broken reply. Serving a stale list is the
         // better failure here.
-        console.warn('[salesAgent] media list failed', err?.message || err)
+        console.warn('[salesAgent] media list failed')
         return mediaCache.items || []
     }
 }
@@ -777,8 +777,8 @@ const bump = async (keys, field, by = 1) => {
             batch.set(mediaRef(key), { [field]: FieldValue.increment(by) }, { merge: true })
         }
         await batch.commit()
-    } catch (err) {
-        console.warn(`[salesAgent] media ${field} failed`, err?.message || err)
+    } catch {
+        console.warn(`[salesAgent] media ${field} failed`)
     }
 }
 
@@ -826,8 +826,8 @@ async function clearPendingMedia(phone) {
     if (!id) return
     try {
         await ref(id).set({ pendingMediaKeys: [] }, { merge: true })
-    } catch (err) {
-        console.warn('[salesAgent] clear pending media failed', err?.message || err)
+    } catch {
+        console.warn('[salesAgent] clear pending media failed')
     }
 }
 
