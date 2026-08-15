@@ -101,15 +101,19 @@ export function findActiveVariant(id) {
  * measurement is quietly corrupted in the direction of whichever arm
  * happens to retry more.
  */
-export function assignVariant(phone) {
+export function assignVariant(phone, candidateIds = ACTIVE_VARIANT_IDS) {
+    const candidates = Array.isArray(candidateIds)
+        ? candidateIds.filter(id => ACTIVE_VARIANT_IDS.includes(id))
+        : []
+    const pool = candidates.length ? candidates : ACTIVE_VARIANT_IDS
     const s = String(phone || '')
-    if (!s) return ACTIVE_VARIANT_IDS[0]
+    if (!s) return pool[0]
     let h = 2166136261
     for (let i = 0; i < s.length; i++) {
         h ^= s.charCodeAt(i)
         h = Math.imul(h, 16777619) >>> 0
     }
-    return ACTIVE_VARIANT_IDS[h % ACTIVE_VARIANT_IDS.length]
+    return pool[h % pool.length]
 }
 
 /**

@@ -50,6 +50,8 @@ import { BUSINESS, MEDIA } from '@/lib/salesAgent/catalog'
 import { mergeMedia, performanceNote } from '@/lib/salesAgent/mediaLibrary'
 import { priceDodged, priceFallbackMessage } from '@/lib/salesAgent/selling'
 import { mediaGuard } from '@/lib/salesAgent/mediaGuard'
+import { DEFAULT_SALES_SETTINGS, resolveSalesSettings } from '@/lib/salesAgent/settings'
+import { readSalesSettings } from '@/lib/salesAgent/settingsStore'
 import { assignVariant, summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
 import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
@@ -435,11 +437,6 @@ export async function POST(req) {
     const lastMs = lead.lastInboundAt?.toMillis?.() || Number(lead.lastInboundAt) || 0
     const daysSinceLastMessage = lastMs ? Math.floor((Date.now() - lastMs) / 86400000) : null
 
-    // Which opening this lead is testing. Assigned from the phone number
-    // rather than drawn at random, so a retry can never move them to a
-    // different arm and quietly bias the comparison.
-    const variant = lead.variant || assignVariant(phone)
-
     // The library Lord uploaded, on top of the six built-in images. Read
     // through a one-minute cache, so this is roughly one Firestore query
     // per lambda per minute rather than one per message.
@@ -447,6 +444,23 @@ export async function POST(req) {
     const library = mergeMedia(MEDIA, custom)
     const stats = Object.fromEntries(custom.map(m => [m.key, m]))
     const perf = performanceNote(stats, library)
+    let settings
+    try {
+        settings = await readSalesSettings({ registeredMediaKeys: Object.keys(library) })
+    } catch {
+        console.warn('[sales-agent] settings read failed; using safe defaults')
+        settings = resolveSalesSettings(DEFAULT_SALES_SETTINGS, { registeredMediaKeys: Object.keys(library) })
+    }
+    if (!settings.enabled) {
+        return complete({
+            ok: true, shouldSend: false, sendText: '', hasImage: false, hasVideo: false,
+            handoff: false, noReply: true, skipped: 'agent-disabled',
+        })
+    }
+
+    // Which opening this lead is testing. Assignment uses the configured
+    // executable pool, while an existing lead keeps its historical arm.
+    const variant = lead.variant || assignVariant(phone, settings.activeOpeningIds)
 
     // They wrote back. If something was sent to them inside the last day,
     // that write-back is the only evidence we will ever get that it was
@@ -456,6 +470,8 @@ export async function POST(req) {
     const system = buildSystemPrompt({ ...lead, daysSinceLastMessage, variant }, today, {
         media: library,
         performanceNote: perf,
+        businessInstructions: settings.businessInstructions,
+        activeOpeningIds: settings.activeOpeningIds,
     })
     const messages = toApiMessages(lead.turns, text)
 
@@ -487,7 +503,10 @@ export async function POST(req) {
     let providerFailureCode = null
     let providerStarted = false
     try {
-        const { text: raw, usage, model, stopReason, provider } = await callClaude({ system, messages, deadlineAtMs: providerDeadlineAtMs })
+        const { text: raw, usage, model, stopReason, provider } = await callClaude({
+            system, messages, deadlineAtMs: providerDeadlineAtMs,
+            provider: settings.provider, model: settings.model,
+        })
         providerStarted = true
         // The merged keys, or every uploaded asset the model was just
         // told about gets nulled at parse. See parseAgentJson.
@@ -512,6 +531,8 @@ export async function POST(req) {
                     messages,
                     temperature: 0.3,
                     deadlineAtMs: providerDeadlineAtMs,
+                    provider: settings.provider,
+                    model: settings.model,
                 })
                 providerStarted = true
             } catch (err) {

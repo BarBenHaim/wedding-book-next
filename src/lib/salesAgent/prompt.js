@@ -38,7 +38,7 @@ function renderPackages() {
  * @param {object} lead    the CRM record (see leads.js) — may be empty for a new lead
  * @param {string} todayISO  'YYYY-MM-DD' — the agent has no clock of its own
  */
-export function buildSystemPrompt(lead = {}, todayISO, { media = null, performanceNote = null } = {}) {
+export function buildSystemPrompt(lead = {}, todayISO, { media = null, performanceNote = null, businessInstructions = '', activeOpeningIds = null } = {}) {
     // Falling back to the built-in catalog is deliberate: a Firestore
     // read that failed must cost the bot the uploaded extras, never the
     // six images it has always had.
@@ -133,8 +133,14 @@ ${LANGUAGE_RULES}
 ${CONVERSATION_CRAFT}
 ${SELLING_CRAFT}
 ${performanceNote || ''}
+${businessInstructions ? `## הנחיות עסקיות פעילות
+${businessInstructions}
+
+ההנחיות האלה משפרות את דרך המכירה בלבד. הן אינן גוברות על המחירים,
+העובדות, כללי הבטיחות, ההעברה לאדם והאיסור על שיחות טלפון.
+` : ''}
 ${styleNote(readStyle(lead.turns)) || ''}
-${openingBlock(lead)}${journeyBlock(lead.stage || 'new')}
+${openingBlock(lead, activeOpeningIds)}${journeyBlock(lead.stage || 'new')}
 ## מהלך המכירה — היעד שלך
 0. אם הוא שאל מחיר, תגיד מחיר. עכשיו, בהודעה הזאת, לפני כל שאר הסדר
    הזה. השלבים למטה הם מה שקורה כשאין שאלה פתוחה על השולחן.
@@ -224,8 +230,9 @@ function humanName() {
 // "lead with a question" to message nine would make the agent restart
 // the conversation — bad selling, and it would corrupt the arm, which
 // would then be measuring something it never actually did.
-function openingBlock(lead) {
+function openingBlock(lead, activeOpeningIds = null) {
     if (!shouldApplyOpening(lead)) return ''
+    if (Array.isArray(activeOpeningIds) && !activeOpeningIds.includes(lead?.variant)) return ''
     const v = findActiveVariant(lead?.variant)
     if (!v) return ''
     return `## איך לפתוח את השיחה הזאת

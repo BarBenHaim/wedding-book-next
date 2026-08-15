@@ -512,6 +512,11 @@ async function callOpenAI({ system, messages, model = DEFAULT_OPENAI_MODEL, maxT
 // credit balance or provider outage from turning every lead into a handoff.
 export async function callClaude(input) {
     const deadlineAtMs = input?.deadlineAtMs ?? providerDeadlineAt()
+    const selectedProvider = input?.provider === 'openai' ? 'openai' : input?.provider === 'anthropic' ? 'anthropic' : 'auto'
+    if (selectedProvider === 'openai') {
+        if (!process.env.OPENAI_API_KEY) throw providerCallError('provider_error', { provider: 'openai', providerStarted: false })
+        return callOpenAI({ ...input, model: input?.model || DEFAULT_OPENAI_MODEL, deadlineAtMs })
+    }
     let primaryError = null
     if (process.env.ANTHROPIC_API_KEY) {
         try {

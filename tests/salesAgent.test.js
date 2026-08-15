@@ -103,6 +103,31 @@ describe('provider body deadline', () => {
 })
 
 describe('sales model provider fallback', () => {
+    it('honors an explicit OpenAI model without first calling Anthropic', async () => {
+        process.env.ANTHROPIC_API_KEY = 'anthropic-secret-sentinel'
+        process.env.OPENAI_API_KEY = 'openai-secret-sentinel'
+        const fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: vi.fn().mockResolvedValue({
+                model: 'gpt-4.1-mini',
+                choices: [{ message: { content: '{"messages":["ok"],"stage":"engaged","handoff":false}' }, finish_reason: 'stop' }],
+                usage: { prompt_tokens: 10, completion_tokens: 5 },
+            }),
+        })
+        vi.stubGlobal('fetch', fetch)
+
+        const result = await callClaude({
+            system: 'system', messages: [], provider: 'openai', model: 'gpt-4.1-mini',
+            deadlineAtMs: Date.now() + 5_000,
+        })
+
+        expect(result.provider).toBe('openai')
+        expect(fetch).toHaveBeenCalledTimes(1)
+        expect(fetch.mock.calls[0][0]).toBe('https://api.openai.com/v1/chat/completions')
+        expect(JSON.parse(fetch.mock.calls[0][1].body).model).toBe('gpt-4.1-mini')
+    })
+
     it('keeps the conversation alive with OpenAI when Anthropic has no credit', async () => {
         process.env.ANTHROPIC_API_KEY = 'anthropic-secret-sentinel'
         process.env.OPENAI_API_KEY = 'openai-secret-sentinel'
@@ -208,6 +233,11 @@ describe('catalog — the only facts the agent may state', () => {
 })
 
 describe('system prompt — what actually reaches the model', () => {
+    it('adds the bounded owner instruction as a separate editable layer', () => {
+        const prompt = buildSystemPrompt({}, '2026-08-05', { businessInstructions: 'להציג מחיר מוקדם ולשאול שאלה אחת' })
+        expect(prompt).toContain('הנחיות עסקיות פעילות')
+        expect(prompt).toContain('להציג מחיר מוקדם ולשאול שאלה אחת')
+    })
     const today = '2026-08-05'
 
     it('injects every price and checkout link', () => {

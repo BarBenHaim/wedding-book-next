@@ -45,6 +45,7 @@ const mocks = vi.hoisted(() => ({
     sortLeads: vi.fn(),
     isoInIsrael: vi.fn(),
     buildDigest: vi.fn(),
+    readSalesSettings: vi.fn(),
 }))
 
 vi.mock('@/lib/salesAgent/prompt', () => ({ buildSystemPrompt: mocks.buildSystemPrompt, addDaysISO: mocks.addDaysISO }))
@@ -75,9 +76,15 @@ vi.mock('@/lib/salesAgent/catalog', () => ({ BUSINESS: { brand: 'Test Brand', ow
 vi.mock('@/lib/salesAgent/mediaLibrary', () => ({ mergeMedia: mocks.mergeMedia, performanceNote: mocks.performanceNote }))
 vi.mock('@/lib/salesAgent/selling', () => ({ priceDodged: mocks.priceDodged, priceFallbackMessage: mocks.priceFallbackMessage }))
 vi.mock('@/lib/salesAgent/mediaGuard', () => ({ mediaGuard: mocks.mediaGuard }))
-vi.mock('@/lib/salesAgent/experiments', () => ({ assignVariant: mocks.assignVariant, summarizeExperiments: mocks.summarizeExperiments, summarizeGaps: mocks.summarizeGaps }))
+vi.mock('@/lib/salesAgent/experiments', () => ({
+    ACTIVE_VARIANT_IDS: ['question_first', 'price_upfront', 'demo_first'],
+    assignVariant: mocks.assignVariant,
+    summarizeExperiments: mocks.summarizeExperiments,
+    summarizeGaps: mocks.summarizeGaps,
+}))
 vi.mock('@/lib/salesAgent/leadsView', () => ({ deriveLead: mocks.deriveLead, sortLeads: mocks.sortLeads, isoInIsrael: mocks.isoInIsrael }))
 vi.mock('@/lib/salesAgent/digest', () => ({ buildDigest: mocks.buildDigest }))
+vi.mock('@/lib/salesAgent/settingsStore', () => ({ readSalesSettings: mocks.readSalesSettings }))
 
 const lead = { isNew: false, stage: 'engaged', turns: [], followUpCount: 0, imagesSent: [], mediaSent: [] }
 const inbound = overrides => ({ eventId: 'event-token', phone: 'test-phone-token', text: '', messageType: 'text', ...overrides })
@@ -123,6 +130,11 @@ beforeEach(async () => {
     mocks.recordProviderSuccess.mockResolvedValue(undefined)
     mocks.recordInboundHeartbeat.mockResolvedValue(undefined)
     mocks.getLead.mockResolvedValue(lead)
+    mocks.readSalesSettings.mockResolvedValue({
+        revision: 1, enabled: true, provider: 'anthropic', model: 'claude-haiku-4-5',
+        fallbackModel: 'claude-haiku-4-5', businessInstructions: 'תשאל שאלה אחת',
+        activeOpeningIds: ['question_first'], openingMediaSequence: [],
+    })
     mocks.setHuman.mockResolvedValue(undefined)
     mocks.findCustomerByPhone.mockResolvedValue(null)
     mocks.isPausedForHuman.mockReturnValue(false)
@@ -410,10 +422,33 @@ describe('Anthropic outage handling', () => {
 
         await post(inbound({ text: 'שלום' }))
 
+        expect(mocks.buildSystemPrompt).toHaveBeenCalledWith(expect.any(Object), expect.any(String), expect.objectContaining({
+            businessInstructions: 'תשאל שאלה אחת', activeOpeningIds: ['question_first'],
+        }))
+        expect(mocks.callClaude).toHaveBeenCalledWith(expect.objectContaining({
+            provider: 'anthropic', model: 'claude-haiku-4-5',
+        }))
         expect(mocks.recordProviderSuccess).toHaveBeenCalledTimes(1)
         expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
         expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
         expect(mocks.compactLeadBestEffort).toHaveBeenCalledWith('test-phone-token')
+    })
+
+    it('completes an intentionally silent event while the bot is disabled', async () => {
+        prepareModelPath()
+        mocks.readSalesSettings.mockResolvedValue({
+            revision: 2, enabled: false, provider: 'auto', model: 'claude-sonnet-4-5',
+            businessInstructions: '', activeOpeningIds: ['question_first'], openingMediaSequence: [],
+        })
+
+        const result = await post(inbound({ text: 'שלום' }))
+
+        expect(result.body).toMatchObject({ ok: true, shouldSend: false, noReply: true, skipped: 'agent-disabled' })
+        expect(mocks.completeInboundEvent).toHaveBeenCalledWith(expect.objectContaining({
+            outcome: expect.objectContaining({ noReply: true, skipped: 'agent-disabled' }),
+        }))
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
     })
 
     it('attributes fallback model spend to OpenAI instead of Anthropic', async () => {
