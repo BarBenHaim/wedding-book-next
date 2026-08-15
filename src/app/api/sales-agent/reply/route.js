@@ -33,6 +33,7 @@ export const fetchCache = 'force-no-store'
 export const maxDuration = 30
 
 import { NextResponse } from 'next/server'
+import { createHash } from 'crypto'
 import { buildSystemPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, normalizePhone, resolveFollowUp } from '@/lib/salesAgent/agent'
 import {
@@ -630,8 +631,27 @@ export async function POST(req) {
         }
     }
 
-    // Resolved AFTER the guard, or the guard's pick could never reach
-    // sendImage below.
+    const alreadySeen = new Set([...(lead.imagesSent || []), ...(lead.mediaSent || [])])
+    const openingMediaParts = lead.isNew === true
+        ? (settings.openingMediaSequence || [])
+            .filter(key => library[key] && !alreadySeen.has(key))
+            .slice(0, 3)
+            .map((key, index) => ({
+                partId: createHash('sha256').update(`opening:${eventId}:${index}:${key}`).digest('hex').slice(0, 32),
+                order: index + 1,
+                key,
+                kind: library[key].kind === 'video' ? 'video' : 'image',
+                url: library[key].url,
+                caption: library[key].caption || '',
+            }))
+        : []
+    if (openingMediaParts.length) {
+        parsed.image = openingMediaParts[0].key
+        parsed.openingMediaKeys = openingMediaParts.map(part => part.key)
+    }
+
+    // Resolved AFTER both guards and the deterministic opening sequence,
+    // or the selected asset could never reach the existing Make branch.
     const media = parsed.image ? library[parsed.image] || null : null
     if (!media) parsed.image = null
 
@@ -677,6 +697,8 @@ export async function POST(req) {
         sendVideo: media && media.kind === 'video' ? media.url : null,
         sendVideoCaption: media && media.kind === 'video' ? media.caption : null,
         hasVideo: !!media && media.kind === 'video',
+        openingMediaCount: openingMediaParts.length,
+        openingMediaParts,
         stage: parsed.stage,
         handoff: parsed.handoff,
         followUpAt,
@@ -692,7 +714,8 @@ export async function POST(req) {
     try {
         const durable = await completeSuccessfulExchange({ eventId, claimToken: claim.claimToken, claimGeneration: claim.claimGeneration, exchange, outcome: responsePayload, deadlineAtMs: routeDeadlineAtMs })
         if (durable.action === 'completed') {
-            if (parsed.image) recordMediaSent(parsed.image).catch(() => {})
+            const mediaKeys = parsed.openingMediaKeys?.length ? parsed.openingMediaKeys : parsed.image ? [parsed.image] : []
+            for (const key of mediaKeys) recordMediaSent(key).catch(() => {})
             compactLeadBestEffort(phone)
             Promise.allSettled(spends).catch(() => {})
             return NextResponse.json(responsePayload)

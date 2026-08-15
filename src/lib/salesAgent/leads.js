@@ -425,10 +425,14 @@ export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, pr
     // reply credited to it) or do not (cleared, credited to nothing).
     // Without the timestamp beside it, a reply three weeks later would
     // count as a reaction to a picture nobody remembers seeing.
-    if (parsed.image) {
-        patch.imagesSent = FieldValue.arrayUnion(parsed.image)
-        patch.mediaSent = FieldValue.arrayUnion(parsed.image)
-        patch.pendingMediaKeys = [parsed.image]
+    const mediaKeys = [...new Set([
+        ...(Array.isArray(parsed.openingMediaKeys) ? parsed.openingMediaKeys : []),
+        ...(parsed.image ? [parsed.image] : []),
+    ].map(String).filter(Boolean))]
+    if (mediaKeys.length) {
+        patch.imagesSent = FieldValue.arrayUnion(...mediaKeys)
+        patch.mediaSent = FieldValue.arrayUnion(...mediaKeys)
+        patch.pendingMediaKeys = mediaKeys
         patch.lastMediaAt = now
     }
 

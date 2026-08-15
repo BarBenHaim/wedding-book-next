@@ -112,6 +112,12 @@ const parsed = {
     packageInterest: 'premium', notes: 'note', callbackPromised: '2026-11-11',
     objectionRaised: true, image: 'book_wedding', handoff: true, handoffReason: 'human',
 }
+
+const parsedWithOpeningMedia = {
+    ...parsed,
+    image: 'book_wedding',
+    openingMediaKeys: ['book_wedding', 'pages_wedding', 'book_open_spread'],
+}
 const exchange = {
     phone: 'test-lead-456', incomingText: 'customer', parsed, followUpAt: null,
     profileName: 'Profile', source: 'instagram', variant: 'question_first', isNew: true,
@@ -347,6 +353,13 @@ describe('Firestore atomic provider fallback matrix', () => {
 })
 
 describe('Firestore atomic successful exchange matrix', () => {
+    it('records every configured opening asset as seen in the same durable exchange', () => {
+        const result = buildExchangePatch({ ...exchange, parsed: parsedWithOpeningMedia })
+        expect(result.patch.imagesSent).toEqual({ arrayUnion: ['book_wedding', 'pages_wedding', 'book_open_spread'] })
+        expect(result.patch.mediaSent).toEqual({ arrayUnion: ['book_wedding', 'pages_wedding', 'book_open_spread'] })
+        expect(result.patch.pendingMediaKeys).toEqual(['book_wedding', 'pages_wedding', 'book_open_spread'])
+    })
+
     it('successful exchange commits the exact exchange and event pair', async () => {
         store.set(EVENT, processingEvent())
         const expected = buildExchangePatch(exchange)

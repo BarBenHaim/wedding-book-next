@@ -129,6 +129,7 @@ beforeEach(async () => {
     mocks.recordProviderFailure.mockResolvedValue(undefined)
     mocks.recordProviderSuccess.mockResolvedValue(undefined)
     mocks.recordInboundHeartbeat.mockResolvedValue(undefined)
+    mocks.recordMediaSent.mockResolvedValue(undefined)
     mocks.getLead.mockResolvedValue(lead)
     mocks.readSalesSettings.mockResolvedValue({
         revision: 1, enabled: true, provider: 'anthropic', model: 'claude-haiku-4-5',
@@ -491,6 +492,66 @@ describe('Anthropic outage handling', () => {
         expect(mocks.compactLeadBestEffort).toHaveBeenCalledWith('test-phone-token')
         expect(mocks.completeSuccessfulExchange.mock.invocationCallOrder[0]).toBeLessThan(mocks.recordMediaSent.mock.invocationCallOrder[0])
         expect(mocks.completeSuccessfulExchange.mock.invocationCallOrder[0]).toBeLessThan(mocks.compactLeadBestEffort.mock.invocationCallOrder[0])
+    })
+
+    it('returns an ordered, phone-free three-part opening media sequence once for a new lead', async () => {
+        prepareModelPath()
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true })
+        mocks.readSalesSettings.mockResolvedValue({
+            revision: 3, enabled: true, provider: 'anthropic', model: 'claude-sonnet-4-5',
+            businessInstructions: '', activeOpeningIds: ['question_first'],
+            openingMediaSequence: ['photo-one', 'video-two', 'photo-three'],
+        })
+        mocks.mergeMedia.mockReturnValue({
+            'photo-one': { kind: 'image', url: 'https://media.test/one.jpg', caption: 'one' },
+            'video-two': { kind: 'video', url: 'https://media.test/two.mp4', caption: 'two' },
+            'photo-three': { kind: 'image', url: 'https://media.test/three.jpg', caption: 'three' },
+        })
+        mocks.callClaude.mockResolvedValue({ text: 'valid', usage: null, model: 'test' })
+        mocks.parseAgentJson.mockReturnValue({
+            malformed: false, messages: ['שלום'], stage: 'engaged', handoff: false,
+            image: null, eventType: null, callbackPromised: null, followUpAt: null,
+        })
+
+        const result = await post(inbound({ text: 'שלום' }))
+
+        expect(result.body).toMatchObject({
+            sendImage: 'https://media.test/one.jpg',
+            hasImage: true,
+            openingMediaCount: 3,
+            openingMediaParts: [
+                expect.objectContaining({ key: 'photo-one', kind: 'image', order: 1 }),
+                expect.objectContaining({ key: 'video-two', kind: 'video', order: 2 }),
+                expect.objectContaining({ key: 'photo-three', kind: 'image', order: 3 }),
+            ],
+        })
+        const serialized = JSON.stringify(result.body.openingMediaParts)
+        expect(serialized).not.toContain('test-phone-token')
+        expect(new Set(result.body.openingMediaParts.map(part => part.partId)).size).toBe(3)
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            exchange: expect.objectContaining({
+                parsed: expect.objectContaining({ openingMediaKeys: ['photo-one', 'video-two', 'photo-three'] }),
+            }),
+        }))
+    })
+
+    it('does not attach the configured opening sequence to an existing lead', async () => {
+        prepareModelPath()
+        mocks.readSalesSettings.mockResolvedValue({
+            revision: 3, enabled: true, provider: 'anthropic', model: 'claude-sonnet-4-5',
+            businessInstructions: '', activeOpeningIds: ['question_first'], openingMediaSequence: ['photo-one'],
+        })
+        mocks.mergeMedia.mockReturnValue({ 'photo-one': { kind: 'image', url: 'https://media.test/one.jpg', caption: 'one' } })
+        mocks.callClaude.mockResolvedValue({ text: 'valid', usage: null, model: 'test' })
+        mocks.parseAgentJson.mockReturnValue({
+            malformed: false, messages: ['שלום'], stage: 'engaged', handoff: false,
+            image: null, eventType: null, callbackPromised: null, followUpAt: null,
+        })
+
+        const result = await post(inbound({ text: 'שלום' }))
+        expect(result.body.openingMediaCount).toBe(0)
+        expect(result.body.openingMediaParts).toEqual([])
+        expect(result.body.hasImage).toBe(false)
     })
 
     it.each([
