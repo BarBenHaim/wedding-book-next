@@ -118,6 +118,6 @@ describe('one-shot WhatsApp history sync probe', () => {
         await expect(handle(request())).resolves.toEqual({ status: 502, body: { ok: false, error: 'META_UNAVAILABLE' } })
 
         expect(timeout).toHaveBeenCalledTimes(2)
-        expect(timeout.mock.calls[0][0]).toBeLessThan(15_000)
+        expect(timeout.mock.calls[0][0]).toBeLessThan(9_000)
     })
 })

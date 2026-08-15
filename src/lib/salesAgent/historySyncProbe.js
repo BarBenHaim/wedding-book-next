@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'crypto'
 
 const GRAPH_BASE = 'https://graph.facebook.com/v25.0'
-const GRAPH_TIMEOUT_MS = 12_000
+const GRAPH_TIMEOUT_MS = 7_500
 const CONFIRMATION = 'REQUEST_180_DAY_HISTORY'
 
 function readConfig() {
@@ -76,4 +76,3 @@ export function createHistorySyncProbeHandler({ fetchFn = (...args) => fetch(...
 }
 
 export const handleHistorySyncProbe = createHistorySyncProbeHandler()
-
