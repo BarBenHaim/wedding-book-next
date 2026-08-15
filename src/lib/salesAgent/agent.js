@@ -21,6 +21,8 @@ import { PROVIDER_PATH_DEADLINE_MS } from './circuitBreaker'
 
 const API_URL = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
+export const DEFAULT_OPENAI_MODEL = process.env.OPENAI_SALES_MODEL || 'gpt-4.1-mini'
 
 // Sonnet, not Haiku. The original reasoning was that the conversation is
 // short and cost per lead matters more than eloquence, and on volume
@@ -308,9 +310,10 @@ export function providerDeadlineAt(nowMs = Date.now()) {
     return nowMs + PROVIDER_PATH_DEADLINE_MS
 }
 
-function attemptTimeoutMs(deadlineAtMs) {
+function attemptTimeoutMs(deadlineAtMs, hardCapMs = DEFAULT_TIMEOUT_MS) {
     const configured = Number(process.env.SALES_AGENT_TIMEOUT_MS)
-    const perAttempt = Number.isFinite(configured) && configured > 0 ? Math.min(configured, DEFAULT_TIMEOUT_MS) : DEFAULT_TIMEOUT_MS
+    const safeCap = Math.min(DEFAULT_TIMEOUT_MS, Math.max(1, Number(hardCapMs) || DEFAULT_TIMEOUT_MS))
+    const perAttempt = Number.isFinite(configured) && configured > 0 ? Math.min(configured, safeCap) : safeCap
     const remaining = Number(deadlineAtMs) - Date.now()
     return Math.max(0, Math.min(perAttempt, remaining))
 }
@@ -327,11 +330,13 @@ function attemptTimeoutMs(deadlineAtMs) {
 const MAX_TOKENS = Number(process.env.SALES_AGENT_MAX_TOKENS) || 2000
 
 class ProviderCallError extends Error {
-    constructor(errorCode, { providerStarted, status = null } = {}) {
+    constructor(errorCode, { provider = 'anthropic', providerStarted, status = null } = {}) {
         const hasStatus = status != null && Number.isFinite(Number(status))
         const statusText = hasStatus ? ` status ${Number(status)}` : ''
-        super(`anthropic ${String(errorCode || 'provider_error')}${statusText}`)
+        const safeProvider = provider === 'openai' ? 'openai' : 'anthropic'
+        super(`${safeProvider} ${String(errorCode || 'provider_error')}${statusText}`)
         this.name = 'ProviderCallError'
+        this.provider = safeProvider
         this.errorCode = String(errorCode || 'provider_error')
         this.providerStarted = providerStarted === true
         if (hasStatus) this.status = Number(status)
@@ -342,12 +347,12 @@ function providerCallError(errorCode, options) {
     return new ProviderCallError(errorCode, options)
 }
 
-export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxTokens = MAX_TOKENS, temperature = 0.6, deadlineAtMs = providerDeadlineAt() }) {
+async function callAnthropic({ system, messages, model = DEFAULT_MODEL, maxTokens = MAX_TOKENS, temperature = 0.6, deadlineAtMs = providerDeadlineAt(), attemptCapMs = DEFAULT_TIMEOUT_MS }) {
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) throw providerCallError('provider_error', { providerStarted: false })
 
     const controller = new AbortController()
-    const timeoutMs = attemptTimeoutMs(deadlineAtMs)
+    const timeoutMs = attemptTimeoutMs(deadlineAtMs, attemptCapMs)
     if (timeoutMs <= 0) {
         throw providerCallError('timeout', { providerStarted: false })
     }
@@ -385,7 +390,7 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
             if (res.status === 404 && model !== FALLBACK_MODEL && /model/i.test(body)) {
                 const next = model !== DEFAULT_MODEL ? DEFAULT_MODEL : FALLBACK_MODEL
                 console.error(`[sales-agent] unknown model ${model}, falling back to ${next}`)
-                return await callClaude({ system, messages, model: next, maxTokens, temperature, deadlineAtMs })
+                return await callAnthropic({ system, messages, model: next, maxTokens, temperature, deadlineAtMs, attemptCapMs })
             }
             const errorCode = res.status === 429
                 ? 'rate_limit'
@@ -405,7 +410,7 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
             .filter(b => b?.type === 'text')
             .map(b => b.text)
             .join('')
-        return { text, usage: data?.usage || null, model: data?.model || model, stopReason: data?.stop_reason || null }
+        return { text, usage: data?.usage || null, model: data?.model || model, stopReason: data?.stop_reason || null, provider: 'anthropic' }
     } catch (err) {
         // An abort surfaces as a generic AbortError; name it so the
         // handoff message to the owner says something useful.
@@ -421,6 +426,112 @@ export async function callClaude({ system, messages, model = DEFAULT_MODEL, maxT
         // Keep the controller alive through headers *and* body decoding.
         clearTimeout(timer)
     }
+}
+
+function classifyProviderBody(status, body) {
+    if (Number(status) === 429) return 'rate_limit'
+    if (/low.?credit|credit.?balance|insufficient.?credit|insufficient.?balance|billing.?quota/i.test(String(body || ''))) return 'low_credit'
+    return 'provider_error'
+}
+
+async function callOpenAI({ system, messages, model = DEFAULT_OPENAI_MODEL, maxTokens = MAX_TOKENS, temperature = 0.6, deadlineAtMs = providerDeadlineAt() }) {
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) throw providerCallError('provider_error', { provider: 'openai', providerStarted: false })
+
+    const timeoutMs = attemptTimeoutMs(deadlineAtMs, 10_000)
+    if (timeoutMs <= 0) throw providerCallError('timeout', { provider: 'openai', providerStarted: false })
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let providerStarted = false
+    try {
+        providerStarted = true
+        const res = await fetch(OPENAI_API_URL, {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+                'content-type': 'application/json',
+                Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+                model,
+                max_tokens: maxTokens,
+                temperature,
+                response_format: { type: 'json_object' },
+                messages: [{ role: 'system', content: system }, ...(Array.isArray(messages) ? messages : [])],
+            }),
+        })
+        if (!res.ok) {
+            const body = await res.text().catch(err => {
+                if (err?.name === 'AbortError') throw err
+                return ''
+            })
+            throw providerCallError(classifyProviderBody(res.status, body), {
+                provider: 'openai', providerStarted: true, status: res.status,
+            })
+        }
+        let data
+        try {
+            data = await res.json()
+        } catch (err) {
+            if (err?.name === 'AbortError') throw err
+            throw providerCallError('invalid_json', { provider: 'openai', providerStarted: true, status: res.status })
+        }
+        const rawUsage = data?.usage
+        const cachedInputTokens = Number(rawUsage?.prompt_tokens_details?.cached_tokens) || 0
+        const usage = rawUsage ? {
+            // OpenAI includes cached input in prompt_tokens. The shared
+            // meter expects ordinary input and cache reads separately,
+            // matching Anthropic's usage shape, so subtract it once here.
+            input_tokens: Math.max(0, (Number(rawUsage.prompt_tokens) || 0) - cachedInputTokens),
+            output_tokens: Number(rawUsage.completion_tokens) || 0,
+            cache_read_input_tokens: cachedInputTokens,
+        } : null
+        const text = typeof data?.choices?.[0]?.message?.content === 'string' ? data.choices[0].message.content : ''
+        return {
+            text,
+            usage,
+            model: typeof data?.model === 'string' ? data.model : model,
+            stopReason: data?.choices?.[0]?.finish_reason || null,
+            provider: 'openai',
+        }
+    } catch (err) {
+        if (err?.name === 'AbortError') throw providerCallError('timeout', { provider: 'openai', providerStarted: true })
+        if (err instanceof ProviderCallError) {
+            err.providerStarted = providerStarted || err.providerStarted
+            throw err
+        }
+        throw providerCallError('provider_error', { provider: 'openai', providerStarted })
+    } finally {
+        clearTimeout(timer)
+    }
+}
+
+// Anthropic remains the primary sales model. OpenAI is a hot fallback,
+// not a second opinion: it is used only when the primary provider cannot
+// produce an answer. That keeps tone consistent while preventing a low
+// credit balance or provider outage from turning every lead into a handoff.
+export async function callClaude(input) {
+    const deadlineAtMs = input?.deadlineAtMs ?? providerDeadlineAt()
+    let primaryError = null
+    if (process.env.ANTHROPIC_API_KEY) {
+        try {
+            return await callAnthropic({
+                ...input,
+                deadlineAtMs,
+                // Leave a useful slice of the shared 20s route budget for
+                // the alternate provider instead of timing both out in turn.
+                attemptCapMs: process.env.OPENAI_API_KEY ? 9_000 : DEFAULT_TIMEOUT_MS,
+            })
+        } catch (err) {
+            primaryError = err
+        }
+    }
+
+    if (process.env.OPENAI_API_KEY && Date.now() < Number(deadlineAtMs)) {
+        return callOpenAI({ ...input, deadlineAtMs })
+    }
+    if (primaryError) throw primaryError
+    throw providerCallError('provider_error', { provider: 'anthropic', providerStarted: false })
 }
 
 export default { callClaude, parseAgentJson, normalizePhone, resolveFollowUp, sanitizeReply }

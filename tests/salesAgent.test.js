@@ -15,6 +15,8 @@ import { toApiMessages, trimTurns, isPausedForHuman, isOwnEcho, parseOwnerComman
 afterEach(() => {
     vi.unstubAllGlobals()
     delete process.env.ANTHROPIC_API_KEY
+    delete process.env.OPENAI_API_KEY
+    delete process.env.OPENAI_SALES_MODEL
 })
 
 describe('provider body deadline', () => {
@@ -97,6 +99,83 @@ describe('provider body deadline', () => {
             system: 'system', messages: [], model: 'unknown-model', deadlineAtMs: 100,
         })).rejects.toMatchObject({ providerStarted: true })
         expect(fetch).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('sales model provider fallback', () => {
+    it('keeps the conversation alive with OpenAI when Anthropic has no credit', async () => {
+        process.env.ANTHROPIC_API_KEY = 'anthropic-secret-sentinel'
+        process.env.OPENAI_API_KEY = 'openai-secret-sentinel'
+        const fetch = vi.fn()
+            .mockResolvedValueOnce({
+                ok: false,
+                status: 400,
+                text: vi.fn().mockResolvedValue('credit balance is too low provider-body-sentinel'),
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: vi.fn().mockResolvedValue({
+                    model: 'gpt-4.1-mini-2025-04-14',
+                    choices: [{ message: { content: '{"messages":["fallback-ok"],"stage":"engaged","handoff":false}' }, finish_reason: 'stop' }],
+                    usage: { prompt_tokens: 120, completion_tokens: 30, prompt_tokens_details: { cached_tokens: 20 } },
+                }),
+            })
+        vi.stubGlobal('fetch', fetch)
+
+        const result = await callClaude({ system: 'system', messages: [{ role: 'user', content: 'hello' }], deadlineAtMs: Date.now() + 5_000 })
+
+        expect(result).toMatchObject({
+            text: expect.stringContaining('fallback-ok'),
+            provider: 'openai',
+            model: 'gpt-4.1-mini-2025-04-14',
+            usage: { input_tokens: 100, output_tokens: 30, cache_read_input_tokens: 20 },
+        })
+        expect(fetch).toHaveBeenCalledTimes(2)
+        expect(fetch.mock.calls[0][0]).toBe('https://api.anthropic.com/v1/messages')
+        expect(fetch.mock.calls[1][0]).toBe('https://api.openai.com/v1/chat/completions')
+        const openAiRequest = JSON.parse(fetch.mock.calls[1][1].body)
+        expect(openAiRequest).toMatchObject({
+            model: 'gpt-4.1-mini',
+            response_format: { type: 'json_object' },
+            messages: [{ role: 'system', content: 'system' }, { role: 'user', content: 'hello' }],
+        })
+    })
+
+    it('uses OpenAI when the Anthropic key is absent without claiming an Anthropic fetch', async () => {
+        process.env.OPENAI_API_KEY = 'openai-secret-sentinel'
+        const fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: vi.fn().mockResolvedValue({
+                model: 'gpt-4.1-mini',
+                choices: [{ message: { content: '{"messages":["ok"],"stage":"engaged","handoff":false}' }, finish_reason: 'stop' }],
+                usage: { prompt_tokens: 10, completion_tokens: 5 },
+            }),
+        })
+        vi.stubGlobal('fetch', fetch)
+
+        const result = await callClaude({ system: 'system', messages: [], deadlineAtMs: Date.now() + 5_000 })
+
+        expect(result.provider).toBe('openai')
+        expect(fetch).toHaveBeenCalledTimes(1)
+        expect(fetch.mock.calls[0][0]).toBe('https://api.openai.com/v1/chat/completions')
+    })
+
+    it('normalizes both-provider failures without leaking either body, prompt, or secret', async () => {
+        process.env.ANTHROPIC_API_KEY = 'anthropic-secret-sentinel'
+        process.env.OPENAI_API_KEY = 'openai-secret-sentinel'
+        vi.stubGlobal('fetch', vi.fn()
+            .mockResolvedValueOnce({ ok: false, status: 500, text: vi.fn().mockResolvedValue('anthropic-body-sentinel') })
+            .mockResolvedValueOnce({ ok: false, status: 500, text: vi.fn().mockResolvedValue('openai-body-sentinel') }))
+
+        const error = await callClaude({ system: 'prompt-sentinel', messages: [], deadlineAtMs: Date.now() + 5_000 }).catch(err => err)
+
+        expect(error).toMatchObject({ providerStarted: true, errorCode: 'provider_error', provider: 'openai' })
+        expect(error.message).toBe('openai provider_error status 500')
+        for (const secret of ['anthropic-body-sentinel', 'openai-body-sentinel', 'prompt-sentinel', 'anthropic-secret-sentinel', 'openai-secret-sentinel']) {
+            expect(error.message).not.toContain(secret)
+        }
     })
 })
 

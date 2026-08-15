@@ -472,18 +472,18 @@ export async function POST(req) {
     // waiting on this request, and a Firestore write for accounting must
     // never be on the path between them and an answer.
     const spends = []
-    const meter = (usage, model) => {
+    const meter = (usage, model, provider = 'anthropic') => {
         if (!usage) return
         const { usd, known } = costOfClaudeUsage(usage, model)
         if (!known) console.warn('[sales-agent] no price known for model', model)
-        spends.push(recordSpend({ provider: 'anthropic', model, usd, usage, todayISO: today }))
+        spends.push(recordSpend({ provider: provider === 'openai' ? 'openai' : 'anthropic', model, usd, usage, todayISO: today }))
     }
 
     let parsed
     let providerFailureCode = null
     let providerStarted = false
     try {
-        const { text: raw, usage, model, stopReason } = await callClaude({ system, messages, deadlineAtMs: providerDeadlineAtMs })
+        const { text: raw, usage, model, stopReason, provider } = await callClaude({ system, messages, deadlineAtMs: providerDeadlineAtMs })
         providerStarted = true
         // The merged keys, or every uploaded asset the model was just
         // told about gets nulled at parse. See parseAgentJson.
@@ -492,7 +492,7 @@ export async function POST(req) {
         // Metered here rather than after the retry, because a retry is a
         // second billed call and hiding it would make the failure look
         // free. See pricing.js.
-        meter(usage, model)
+        meter(usage, model, provider)
 
         // ONE retry on unparseable output before giving up on the customer.
         // A handoff is the safe fallback, not a good one: it pulls a human
@@ -515,7 +515,7 @@ export async function POST(req) {
                 providerFailureCode = err?.providerStarted === false ? 'invalid_json' : normalizeProviderError(err)
             }
             if (retry) {
-                meter(retry.usage, retry.model)
+                meter(retry.usage, retry.model, retry.provider)
                 const second = parseAgentJson(retry.text, { mediaKeys: Object.keys(library) })
                 if (!second.malformed) parsed = second
             }

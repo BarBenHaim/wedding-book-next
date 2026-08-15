@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-    PRICES, ratesFor, costOfClaudeUsage, costOfImageUsage, formatUsd, unitEconomics,
+    PRICES, ratesFor, costOfClaudeUsage, costOfTextUsage, costOfImageUsage, formatUsd, unitEconomics,
 } from '@/lib/salesAgent/pricing'
 
 // A cost display is trusted more than it is checked, which makes a wrong
@@ -70,6 +70,16 @@ describe('costOfClaudeUsage', () => {
         expect(costOfClaudeUsage(null, 'claude-haiku-4-5').usd).toBe(0)
         expect(costOfClaudeUsage({}, 'claude-haiku-4-5').usd).toBe(0)
         expect(costOfClaudeUsage({ output_tokens: 100 }, 'claude-haiku-4-5').usd).toBeGreaterThan(0)
+    })
+})
+
+describe('costOfTextUsage', () => {
+    it('prices an OpenAI fallback response using normalized text usage', () => {
+        expect(costOfTextUsage({
+            input_tokens: 1_000_000,
+            output_tokens: 1_000_000,
+            cache_read_input_tokens: 1_000_000,
+        }, 'gpt-4.1-mini')).toEqual({ usd: 2.1, known: true })
     })
 })
 

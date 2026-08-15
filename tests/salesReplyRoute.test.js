@@ -414,6 +414,26 @@ describe('Anthropic outage handling', () => {
         expect(mocks.compactLeadBestEffort).toHaveBeenCalledWith('test-phone-token')
     })
 
+    it('attributes fallback model spend to OpenAI instead of Anthropic', async () => {
+        prepareModelPath()
+        const usage = { input_tokens: 120, output_tokens: 30, cache_read_input_tokens: 20 }
+        mocks.costOfClaudeUsage.mockReturnValue({ usd: 0.0001, known: true })
+        mocks.recordSpend.mockResolvedValue(undefined)
+        mocks.callClaude.mockResolvedValue({
+            text: 'valid', usage, model: 'gpt-4.1-mini', provider: 'openai', stopReason: 'stop',
+        })
+        mocks.parseAgentJson.mockReturnValue({
+            malformed: false, messages: ['שלום'], stage: 'engaged', handoff: false,
+            image: null, eventType: null, callbackPromised: null, followUpAt: null,
+        })
+
+        await post(inbound({ text: 'שלום' }))
+
+        expect(mocks.recordSpend).toHaveBeenCalledWith(expect.objectContaining({
+            provider: 'openai', model: 'gpt-4.1-mini', usage,
+        }))
+    })
+
     it('runs media analytics and compaction only after the durable exchange completes', async () => {
         prepareModelPath()
         mocks.mergeMedia.mockReturnValue({

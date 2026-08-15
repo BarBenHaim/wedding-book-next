@@ -52,6 +52,18 @@ export const PRICES = {
         cacheWrite: 3.75,
         cacheRead: 0.3,
     },
+    'gpt-4.1-mini': {
+        provider: 'openai',
+        input: 0.4,
+        output: 1.6,
+        cacheRead: 0.1,
+    },
+    'gpt-4.1-mini-2025-04-14': {
+        provider: 'openai',
+        input: 0.4,
+        output: 1.6,
+        cacheRead: 0.1,
+    },
     // Image models are billed per token like everything else; the
     // per-picture figure people quote is that arithmetic already done.
     // Text in and image in are different rates, which is why the image
@@ -92,13 +104,13 @@ export function ratesFor(model) {
 const per = (tokens, rate) => (Number(tokens) || 0) * (Number(rate) || 0) / 1_000_000
 
 /**
- * Cost of one Messages API call, from the `usage` block it returned.
+ * Cost of one text-model call, from the normalized `usage` block it returned.
  *
- * Anthropic's `input_tokens` already EXCLUDES cache reads and writes,
- * so the three are added rather than subtracted from each other. Getting
- * that backwards is the classic way to double-count a cached prompt.
+ * `input_tokens` excludes cache reads and writes for every provider at this
+ * boundary, so the three are added rather than subtracted from each other.
+ * Getting that normalization backwards double-counts a cached prompt.
  */
-export function costOfClaudeUsage(usage, model) {
+export function costOfTextUsage(usage, model) {
     const rates = ratesFor(model)
     if (!usage || !rates) return { usd: 0, known: false }
     const usd =
@@ -108,6 +120,9 @@ export function costOfClaudeUsage(usage, model) {
         per(usage.cache_read_input_tokens, rates.cacheRead)
     return { usd, known: true }
 }
+
+// Kept for callers and reports that predate the provider fallback.
+export const costOfClaudeUsage = costOfTextUsage
 
 /**
  * Cost of one image call.
@@ -159,4 +174,4 @@ export function unitEconomics({ usd, leads, won }) {
     }
 }
 
-export default { PRICES, ratesFor, costOfClaudeUsage, costOfImageUsage, formatUsd, unitEconomics, RATES_CHECKED_ON }
+export default { PRICES, ratesFor, costOfClaudeUsage, costOfTextUsage, costOfImageUsage, formatUsd, unitEconomics, RATES_CHECKED_ON }
