@@ -3,6 +3,7 @@ import { INBOUND_HEARTBEAT_BUDGET_MS } from '@/lib/salesAgent/circuitBreaker'
 
 const mocks = vi.hoisted(() => ({
     buildSystemPrompt: vi.fn(),
+    addDaysISO: vi.fn(() => '2026-08-17'),
     callClaude: vi.fn(),
     parseAgentJson: vi.fn(),
     normalizePhone: vi.fn(value => String(value || '')),
@@ -46,7 +47,7 @@ const mocks = vi.hoisted(() => ({
     buildDigest: vi.fn(),
 }))
 
-vi.mock('@/lib/salesAgent/prompt', () => ({ buildSystemPrompt: mocks.buildSystemPrompt, addDaysISO: vi.fn() }))
+vi.mock('@/lib/salesAgent/prompt', () => ({ buildSystemPrompt: mocks.buildSystemPrompt, addDaysISO: mocks.addDaysISO }))
 vi.mock('@/lib/salesAgent/agent', () => ({
     callClaude: mocks.callClaude,
     parseAgentJson: mocks.parseAgentJson,
@@ -247,6 +248,7 @@ describe('Anthropic outage handling', () => {
         expect(mocks.completeProviderFallback).toHaveBeenCalledWith(expect.objectContaining({
             eventId: 'event-token', claimToken: 'claim-token', claimGeneration: 1,
             phone: 'test-phone-token', reason: 'תקלה בשירות ה-AI',
+            recoveryFollowUpAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
             outcome: expect.objectContaining({ sendText: safeFallback, handoff: true, stage: 'handoff' }),
         }))
         expect(result.body.notifyOwner).toContain('תקלה בשירות ה-AI')

@@ -230,6 +230,10 @@ export async function POST(req) {
                 claimGeneration: claim.claimGeneration,
                 phone,
                 reason: AI_OUTAGE_REASON,
+                // This is a technical handoff, not a customer request for a
+                // person. Keep the 48-hour human-pause safety window, then let
+                // the normal WhatsApp follow-up ladder recover the sale.
+                recoveryFollowUpAt: addDaysISO(today, 2),
                 outcome: {
                     sendText: AI_OUTAGE_REPLY,
                     stage: 'handoff',

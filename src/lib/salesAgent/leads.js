@@ -238,7 +238,7 @@ export async function releaseProviderProbe(probeId, deadlineAtMs = null) {
  * Commit a provider fallback as one fenced transaction. A stale outbound
  * worker cannot pause a lead after its inbound lease was reclaimed.
  */
-export async function completeProviderFallback({ eventId, claimToken, claimGeneration, phone, reason, outcome, deadlineAtMs = null }) {
+export async function completeProviderFallback({ eventId, claimToken, claimGeneration, phone, reason, recoveryFollowUpAt = null, outcome, deadlineAtMs = null }) {
     assertBeforeDeadline(deadlineAtMs)
     const ownedClaimToken = assertInboundClaimToken(claimToken)
     const cleanOutcome = sanitizeInboundOutcome(outcome)
@@ -258,10 +258,14 @@ export async function completeProviderFallback({ eventId, claimToken, claimGener
         if (Number(stored.claimGeneration) !== expectedGeneration) return { action: 'stale' }
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
 
+        const safeRecoveryDate = /^\d{4}-\d{2}-\d{2}$/.test(String(recoveryFollowUpAt || ''))
+            ? String(recoveryFollowUpAt)
+            : null
         tx.set(leadRef, {
             human: true,
             humanSince: FieldValue.serverTimestamp(),
             handoffReason: String(reason || '').slice(0, 120) || null,
+            ...(safeRecoveryDate ? { followUpAt: safeRecoveryDate } : {}),
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true })
         tx.set(eventRef, {

@@ -102,6 +102,7 @@ const processingEvent = (overrides = {}) => ({
 const fallbackArgs = (overrides = {}) => ({
     eventId: 'event-token', claimToken: 'claim-token', claimGeneration: 1, phone: 'test-phone-123',
     reason: 'תקלה בשירות ה-AI',
+    recoveryFollowUpAt: '2026-08-17',
     outcome: { sendText: 'קיבלתי את ההודעה שלך. מישהו מהצוות יחזור אליך בהקדם.', handoff: true },
     ...overrides,
 })
@@ -288,7 +289,11 @@ describe('Firestore atomic provider fallback matrix', () => {
 
         await expect(completeProviderFallback(fallbackArgs())).resolves.toMatchObject({ action: 'completed' })
 
-        expect(store.entries().find(([key]) => key.startsWith('sales_leads/'))?.[1]).toMatchObject({ human: true, handoffReason: 'תקלה בשירות ה-AI' })
+        expect(store.entries().find(([key]) => key.startsWith('sales_leads/'))?.[1]).toMatchObject({
+            human: true,
+            handoffReason: 'תקלה בשירות ה-AI',
+            followUpAt: '2026-08-17',
+        })
         expect(store.get(EVENT)).toMatchObject({ status: 'completed', outcome: { handoff: true } })
         expect(store.committed().map(write => write.key).sort()).toEqual([EVENT, 'sales_leads/123'].sort())
     })
