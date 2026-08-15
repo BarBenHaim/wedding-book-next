@@ -99,7 +99,7 @@ describe('one-shot WhatsApp history sync probe', () => {
 
         const result = await handle(request())
 
-        expect(result).toEqual({ status: 502, body: { ok: false, error: 'META_REJECTED', metaCode: 135000 } })
+        expect(result).toEqual({ status: 200, body: { ok: false, error: 'META_REJECTED', metaCode: 135000 } })
         const visible = JSON.stringify(result)
         expect(visible).not.toContain('private provider body fixture')
         expect(visible).not.toContain('private account fixture')
@@ -112,10 +112,10 @@ describe('one-shot WhatsApp history sync probe', () => {
         const handle = createHistorySyncProbeHandler({ getConfig: () => configured })
 
         fetch.mockRejectedValueOnce(new DOMException('private timeout fixture', 'TimeoutError'))
-        await expect(handle(request())).resolves.toEqual({ status: 504, body: { ok: false, error: 'META_TIMEOUT' } })
+        await expect(handle(request())).resolves.toEqual({ status: 200, body: { ok: false, error: 'META_TIMEOUT' } })
 
         fetch.mockRejectedValueOnce(new Error('private network fixture'))
-        await expect(handle(request())).resolves.toEqual({ status: 502, body: { ok: false, error: 'META_UNAVAILABLE' } })
+        await expect(handle(request())).resolves.toEqual({ status: 200, body: { ok: false, error: 'META_UNAVAILABLE' } })
 
         expect(timeout).toHaveBeenCalledTimes(2)
         expect(timeout.mock.calls[0][0]).toBeLessThan(9_000)

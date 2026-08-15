@@ -55,20 +55,20 @@ export function createHistorySyncProbeHandler({ fetchFn = (...args) => fetch(...
             })
         } catch (error) {
             if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
-                return reply(504, { ok: false, error: 'META_TIMEOUT' })
+                return reply(200, { ok: false, error: 'META_TIMEOUT' })
             }
-            return reply(502, { ok: false, error: 'META_UNAVAILABLE' })
+            return reply(200, { ok: false, error: 'META_UNAVAILABLE' })
         }
 
         const providerBody = await response.json().catch(() => null)
         if (!response.ok) {
             const metaCode = providerBody?.error?.code
             const safeCode = Number.isSafeInteger(metaCode) && metaCode >= 0 ? { metaCode } : {}
-            return reply(502, { ok: false, error: 'META_REJECTED', ...safeCode })
+            return reply(200, { ok: false, error: 'META_REJECTED', ...safeCode })
         }
 
         if (providerBody?.success !== true) {
-            return reply(502, { ok: false, error: 'META_RESPONSE_INVALID' })
+            return reply(200, { ok: false, error: 'META_RESPONSE_INVALID' })
         }
 
         return reply(200, { ok: true, result: 'HISTORY_REQUEST_ACCEPTED' })
