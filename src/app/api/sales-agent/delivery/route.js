@@ -29,9 +29,20 @@ export async function POST(req) {
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
     try {
-        const event = parsed.event.outboundId
-            ? parsed.event
-            : { ...parsed.event, outboundId: await resolveProviderMessageOutboundId(parsed.event.providerMessageId) }
+        let event = parsed.event
+        if (!event.outboundId) {
+            try {
+                event = { ...event, outboundId: await resolveProviderMessageOutboundId(event.providerMessageId) }
+            } catch (error) {
+                if (error?.code === 'PROVIDER_MESSAGE_ID_NOT_FOUND') {
+                    return NextResponse.json({
+                        accepted: true,
+                        result: { action: 'noop', reason: 'PROVIDER_MESSAGE_ID_NOT_FOUND' },
+                    }, { status: 202 })
+                }
+                throw error
+            }
+        }
         const result = await recordDeliveryEvent(event)
         return NextResponse.json({ accepted: true, result }, { status: 202 })
     } catch (error) {

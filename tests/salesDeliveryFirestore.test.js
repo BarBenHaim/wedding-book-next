@@ -807,7 +807,7 @@ describe('privacy-safe provider message correlation', () => {
         }))).rejects.toMatchObject({ code: 'PROVIDER_MESSAGE_ID_MISMATCH' })
     })
 
-    it('fails closed for an ambiguous or missing correlation record', async () => {
+    it('fails closed for an ambiguous correlation record', async () => {
         const ambiguousId = 'wamid-ambiguous-fixture'
         store.set(`sales_delivery_provider_ids/${providerMessageCorrelationId(ambiguousId)}`, {
             outboundIds: ['phone-free-outbound-a:text', 'phone-free-outbound-b:text'],
@@ -815,7 +815,18 @@ describe('privacy-safe provider message correlation', () => {
 
         await expect(resolveProviderMessageOutboundId(ambiguousId))
             .rejects.toMatchObject({ code: 'PROVIDER_MESSAGE_ID_AMBIGUOUS' })
-        await expect(resolveProviderMessageOutboundId('wamid-missing-fixture'))
+    })
+
+    it('does not write or retain an unknown provider correlation', async () => {
+        const providerMessageId = 'non-dialable-missing-provider-sentinel'
+        const beforeEntries = store.entries()
+        const beforeWrites = store.writes()
+
+        await expect(resolveProviderMessageOutboundId(providerMessageId))
             .rejects.toMatchObject({ code: 'PROVIDER_MESSAGE_ID_NOT_FOUND' })
+
+        expect(store.entries()).toEqual(beforeEntries)
+        expect(store.writes()).toEqual(beforeWrites)
+        expect(JSON.stringify(store.entries())).not.toContain(providerMessageId)
     })
 })

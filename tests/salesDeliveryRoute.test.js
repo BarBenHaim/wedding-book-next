@@ -112,15 +112,46 @@ describe('delivery acknowledgement route', () => {
         expect(mocks.recordDeliveryEvent).not.toHaveBeenCalled()
     })
 
-    it('rejects a mismatched or regressive callback without leaking details', async () => {
+    it('acknowledges an unknown provider-only status as an explicit private no-op', async () => {
+        const error = new Error('private unknown provider correlation detail')
+        error.code = 'PROVIDER_MESSAGE_ID_NOT_FOUND'
+        mocks.resolveProviderMessageOutboundId.mockRejectedValue(error)
+        const unknownProviderEvent = {
+            eventId: 'meta-status-unknown-provider',
+            channel: 'make',
+            status: 'delivered',
+            providerMessageId: 'non-dialable-unknown-provider-sentinel',
+            occurredAt: '2026-08-15T10:05:00.000Z',
+        }
+
+        const response = await POST(request(unknownProviderEvent))
+        const responseText = await response.text()
+
+        expect(response.status).toBe(202)
+        expect(JSON.parse(responseText)).toEqual({
+            accepted: true,
+            result: { action: 'noop', reason: 'PROVIDER_MESSAGE_ID_NOT_FOUND' },
+        })
+        expect(mocks.recordDeliveryEvent).not.toHaveBeenCalled()
+        expect(responseText).not.toContain(unknownProviderEvent.providerMessageId)
+        expect(responseText).not.toContain('private unknown provider correlation detail')
+    })
+
+    it.each([
+        'PROVIDER_MESSAGE_ID_MISMATCH',
+        'EVENT_ID_CONFLICT',
+        'DELIVERY_STATE_REGRESSION',
+    ])('keeps %s callbacks as private conflicts', async code => {
         const error = new Error('provider body and private fixture must not escape')
-        error.code = 'PROVIDER_MESSAGE_ID_MISMATCH'
+        error.code = code
         mocks.recordDeliveryEvent.mockRejectedValue(error)
 
         const response = await POST(request(valid))
 
         expect(response.status).toBe(409)
-        expect(await response.json()).toEqual({ error: 'PROVIDER_MESSAGE_ID_MISMATCH' })
+        const responseText = await response.text()
+        expect(JSON.parse(responseText)).toEqual({ error: code })
+        expect(responseText).not.toContain('provider body and private fixture must not escape')
     })
 
     it('normalizes unexpected persistence failures', async () => {
