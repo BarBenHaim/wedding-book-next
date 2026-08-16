@@ -197,7 +197,10 @@ describe('filtering', () => {
 describe('summary', () => {
     const rows = [
         lead({ phone: '1', stage: 'closed_won', amount: 950, updatedAt: NOW - 1 * DAY }),
-        lead({ phone: '2', stage: 'closed_won', amount: 690, updatedAt: NOW - 2 * DAY }),
+        lead({
+            phone: '2', stage: 'closed_won', amount: 690, updatedAt: NOW - 2 * DAY,
+            paymentVerified: true, verifiedOrderId: 'verified-order-two',
+        }),
         lead({ phone: '3', stage: 'closed_lost', updatedAt: NOW - 3 * DAY }),
         lead({ phone: '4', stage: 'offer_sent', followUpAt: TODAY, updatedAt: NOW - 1 * DAY }),
         lead({ phone: '5', stage: 'handoff', updatedAt: NOW - 40 * DAY }),
@@ -215,18 +218,19 @@ describe('summary', () => {
         const s = summarizeLeads(rows, { sinceMs: NOW - 7 * DAY })
         expect(s.inWindow).toBe(4)
         expect(s.byStage.handoff).toBe(0)
-        expect(s.won).toBe(2)
+        expect(s.won).toBe(1)
+        expect(s.unverifiedWon).toBe(1)
         expect(s.lost).toBe(1)
     })
 
-    it('sums revenue from closed-won leads only', () => {
-        expect(summarizeLeads(rows, { sinceMs: NOW - 7 * DAY }).revenue).toBe(1640)
+    it('sums revenue from verified paid leads only', () => {
+        expect(summarizeLeads(rows, { sinceMs: NOW - 7 * DAY }).revenue).toBe(690)
     })
 
     it('computes the close rate over decided leads, not over everyone', () => {
-        // 2 won, 1 lost → 67%. Dividing by all 4 in-window leads would
-        // read as 50% and understate the business.
-        expect(summarizeLeads(rows, { sinceMs: NOW - 7 * DAY }).closeRate).toBe(67)
+        // 1 verified win, 1 loss → 50%. The manual close is unresolved
+        // financially and cannot make the business look healthier.
+        expect(summarizeLeads(rows, { sinceMs: NOW - 7 * DAY }).closeRate).toBe(50)
     })
 
     it('returns null rather than 0% when nothing has been decided yet', () => {

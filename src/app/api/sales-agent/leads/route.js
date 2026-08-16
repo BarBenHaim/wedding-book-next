@@ -31,6 +31,7 @@ import { unitEconomics, RATES_CHECKED_ON } from '@/lib/salesAgent/pricing'
 import { deriveLead, sortLeads, summarizeLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { STAGES } from '@/lib/salesAgent/catalog'
 import { summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
+import { isVerifiedPayment } from '@/lib/salesAgent/paymentTruth'
 
 // Same door as /api/sales-agent/control: the shared secret for machines,
 // a verified super-admin ID token for a human at a browser.
@@ -158,7 +159,7 @@ export async function GET(req) {
             ...unitEconomics({
                 usd: spend.total,
                 leads: items.length,
-                won: items.filter(i => i.stage === 'closed_won').length,
+                won: items.filter(isVerifiedPayment).length,
             }),
             ratesCheckedOn: RATES_CHECKED_ON,
         },

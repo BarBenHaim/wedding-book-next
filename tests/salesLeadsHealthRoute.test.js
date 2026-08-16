@@ -49,6 +49,29 @@ beforeEach(async () => {
 })
 
 describe('sales leads health response', () => {
+    it('exposes aggregate verified-payment experiment metrics without customer data', async () => {
+        mocks.listLeads.mockResolvedValue([
+            {
+                phone: 'non-dialable-experiment-one', variant: 'answer_first', userTurns: 2,
+                stage: 'closed_won', paymentVerified: true, verifiedOrderId: 'order-private-one', amount: 117,
+            },
+            {
+                phone: 'non-dialable-experiment-two', variant: 'answer_first', userTurns: 2,
+                stage: 'closed_won', amount: 117,
+            },
+        ])
+        const response = await GET(new Request('http://localhost/api/sales-agent/leads', {
+            headers: { 'x-wt-secret': 'health-route-secret' },
+        }))
+        const body = await response.json()
+        const row = body.experiments.rows.find(item => item.id === 'answer_first')
+        expect(row).toMatchObject({
+            leads: 2, replied: 2, reachedOffer: 2, paymentIntent: 2,
+            verifiedWins: 1, unverifiedClosedWon: 1, verifiedRevenue: 117,
+        })
+        expect(JSON.stringify(body.experiments)).not.toMatch(/phone|transcript|messageText|order-private/)
+    })
+
     it('aggregates real runtime and due queue data into a sanitized health object', async () => {
         mocks.readDueFollowUpHealth.mockResolvedValue({ dueFollowUps: 26, scanSaturated: true, scanned: 78 })
 

@@ -21,6 +21,7 @@
 // as single-line parts for template parameters.
 
 import { relativeHe } from './leadsView'
+import { isVerifiedPayment } from './paymentTruth'
 
 const DAY_MS = 86400000
 
@@ -77,7 +78,7 @@ export function buildDigest(items = [], { todayISO, nowMs = Date.now(), experime
 
     const activeYesterday = items.filter(l => inYesterday(l.lastInboundMs))
     const newYesterday = items.filter(l => inYesterday(l.createdAtMs))
-    const wonYesterday = items.filter(l => l.stage === 'closed_won' && inYesterday(l.updatedMs))
+    const wonYesterday = items.filter(l => isVerifiedPayment(l) && inYesterday(l.updatedMs))
 
     // A quiet day is a real thing and must not generate a message. The
     // test is "is there anything to do, or anything that happened" — not

@@ -332,8 +332,8 @@ function SalesLeadsContent() {
                 <div className='grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4'>
                     <Stat icon={Users} label='לידים ב-7 ימים' value={w7?.inWindow ?? 0} />
                     <Stat icon={Sparkles} label='הצעות נשלחו' value={(w7?.byStage?.offer_sent || 0) + (w7?.byStage?.ready_to_pay || 0)} />
-                    <Stat icon={Check} label='נסגרו (7 ימים)' value={w7?.won ?? 0} />
-                    <Stat icon={TrendingUp} label='אחוז סגירה' value={w7?.closeRate == null ? '—' : `${w7.closeRate}%`} hint='מתוך לידים שהוכרעו' />
+                    <Stat icon={Check} label='תשלומים מאומתים (7 ימים)' value={w7?.won ?? 0} />
+                    <Stat icon={TrendingUp} label='המרה מאומתת' value={w7?.closeRate == null ? '—' : `${w7.closeRate}%`} hint='תשלומים מאומתים מתוך תשלומים והפסדים שהוכרעו' />
                 </div>
 
                 <Spend data={data?.spend} />
@@ -486,6 +486,8 @@ function Experiments({ data, gaps }) {
     const [open, setOpen] = useState(false)
     if (!data) return null
     const pct = v => (v == null ? '—' : `${Math.round(v * 100)}%`)
+    const shekels = value => `₪${(Number(value) || 0).toLocaleString('he-IL')}`
+    const unverifiedTotal = data.rows.reduce((sum, row) => sum + (Number(row.unverifiedClosedWon) || 0), 0)
 
     return (
         <div className='rounded-2xl mb-4 overflow-hidden' style={CARD}>
@@ -503,8 +505,8 @@ function Experiments({ data, gaps }) {
             {open && (
                 <div className='px-4 pb-4 border-t border-[#f0e8d4] pt-3'>
                     <p className='text-[11.5px] text-[#7a6a52] leading-relaxed mb-3'>
-                        כל ליד חדש מקבל פתיחה אחת מתוך ארבע, לצמיתות, לפי המספר שלו. אנחנו מודדים כמה מהם
-                        ענו אחרי ההודעה הראשונה, כמה הגיעו להצעה וכמה סגרו.{' '}
+                        כל ליד חדש מקבל אחת משתי פתיחות פעילות, ונשאר איתה לכל השיחה. ההשוואה נקבעת רק לפי
+                        תשלום שאומת ב-WooCommerce; תגובה, הצעה וכוונת תשלום הן תחנות אבחון בדרך.{' '}
                         {data.verdict === 'collecting' && data.needed > 0 && (
                             <span className='text-[#b8893d] font-semibold'>
                                 צריך עוד כ-{data.needed} לידים לפני שיש פה משהו לקרוא.
@@ -512,41 +514,50 @@ function Experiments({ data, gaps }) {
                         )}
                         {data.verdict === 'too-close' && (
                             <span className='text-[#b8893d] font-semibold'>
-                                ההפרש בין המובילות עדיין קטן מהרעש. אל תחליף פתיחה על סמך זה.
+                                ההפרש בתשלומים המאומתים עדיין קטן מהרעש. אל תחליף פתיחה על סמך זה.
                             </span>
                         )}
                     </p>
 
-                    <div className='overflow-x-auto'>
-                        <table className='w-full text-[11.5px]'>
-                            <thead>
-                                <tr className='text-[10.5px] uppercase tracking-widest text-[#a89378] text-right'>
-                                    <th className='font-semibold pb-1.5'>פתיחה</th>
-                                    <th className='font-semibold pb-1.5'>לידים</th>
-                                    <th className='font-semibold pb-1.5'>ענו</th>
-                                    <th className='font-semibold pb-1.5'>הגיעו להצעה</th>
-                                    <th className='font-semibold pb-1.5'>סגרו</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {data.rows.map(r => (
-                                    <tr key={r.id} className='border-t border-[#f4ece0]'>
-                                        <td className='py-2 pl-2'>
-                                            <div className='flex items-center gap-1.5'>
-                                                <span className='font-bold text-[#3d2e1a]'>{r.label}</span>
-                                                {data.winner === r.id && <Badge tone='emerald'>מוביל</Badge>}
-                                                {!r.enough && <Badge tone='gray'>מדגם קטן</Badge>}
-                                            </div>
-                                            <div className='text-[10px] text-[#a89378] mt-0.5'>{r.hypothesis}</div>
-                                        </td>
-                                        <td className='py-2 tabular-nums text-[#5a4d3a]'>{r.leads}</td>
-                                        <td className='py-2 tabular-nums font-bold text-[#1a1410]'>{pct(r.replyRate)}</td>
-                                        <td className='py-2 tabular-nums text-[#5a4d3a]'>{pct(r.offerRate)}</td>
-                                        <td className='py-2 tabular-nums text-[#5a4d3a]'>{r.won}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                    {unverifiedTotal > 0 && (
+                        <div className='mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800'>
+                            <AlertTriangle size={13} aria-hidden='true' />
+                            <span className='font-semibold'>סגירות ידניות שממתינות לאימות תשלום</span>
+                            <Badge tone='amber'>{unverifiedTotal}</Badge>
+                        </div>
+                    )}
+
+                    <div className='space-y-2'>
+                        {data.rows.map(r => (
+                            <article key={r.id} className='rounded-xl border border-[#eee3cc] bg-[#fffdfa] p-3'>
+                                <div className='mb-2.5 flex flex-wrap items-start justify-between gap-2'>
+                                    <div className='min-w-0'>
+                                        <div className='flex flex-wrap items-center gap-1.5'>
+                                            <span className='font-bold text-[12px] text-[#3d2e1a]'>{r.label}</span>
+                                            {data.winner === r.id && <Badge tone='emerald'>מוביל בתשלום</Badge>}
+                                            {!r.enough && <Badge tone='gray'>מדגם קטן</Badge>}
+                                        </div>
+                                        <p className='mt-0.5 text-[10px] leading-snug text-[#a89378]'>{r.hypothesis}</p>
+                                    </div>
+                                    <span className='text-[10.5px] font-bold text-[#147a52]'>המרה {pct(r.winRate)}</span>
+                                </div>
+                                <div className='grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6'>
+                                    {[
+                                        ['לידים ששויכו', r.leads],
+                                        ['תגובה שנייה', `${r.replied} · ${pct(r.replyRate)}`],
+                                        ['הגיעו להצעה', `${r.reachedOffer} · ${pct(r.offerRate)}`],
+                                        ['כוונת תשלום', r.paymentIntent],
+                                        ['תשלומים מאומתים', r.verifiedWins],
+                                        ['הכנסה מאומתת', shekels(r.verifiedRevenue)],
+                                    ].map(([label, value]) => (
+                                        <div key={label} className='min-w-0 rounded-lg border border-[#f1e8d8] bg-white px-2.5 py-2'>
+                                            <p className='text-[9.5px] leading-tight text-[#9d8b72]'>{label}</p>
+                                            <p className='mt-1 truncate text-[12px] font-black tabular-nums text-[#2e2419]'>{value}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </article>
+                        ))}
                     </div>
 
                     {gaps?.length > 0 && (

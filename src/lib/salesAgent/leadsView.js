@@ -29,6 +29,7 @@
 // stop opening.
 
 import { STAGES, TERMINAL_STAGES } from './catalog'
+import { isVerifiedPayment } from './paymentTruth'
 
 const DAY_MS = 86400000
 
@@ -187,6 +188,7 @@ export function summarizeLeads(leads, { sinceMs = 0 } = {}) {
 
     let inWindow = 0
     let won = 0
+    let unverifiedWon = 0
     let lost = 0
     let revenue = 0
     let openLeads = 0
@@ -200,8 +202,12 @@ export function summarizeLeads(leads, { sinceMs = 0 } = {}) {
         inWindow++
         byStage[l.stage] = (byStage[l.stage] || 0) + 1
         if (l.stage === 'closed_won') {
-            won++
-            revenue += Number(l.amount) || 0
+            if (isVerifiedPayment(l)) {
+                won++
+                revenue += Number(l.amount) || 0
+            } else {
+                unverifiedWon++
+            }
         }
         if (l.stage === 'closed_lost') lost++
     }
@@ -214,6 +220,7 @@ export function summarizeLeads(leads, { sinceMs = 0 } = {}) {
         buckets,
         byStage,
         won,
+        unverifiedWon,
         lost,
         revenue,
         // Close rate over DECIDED leads only. Dividing by every lead in

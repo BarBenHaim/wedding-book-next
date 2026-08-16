@@ -85,6 +85,18 @@ describe('what the message says', () => {
         expect(d.counts.newYesterday).toBe(1)
     })
 
+    it('reports only verified payments as yesterday sales', () => {
+        const rows = [
+            { ...mk({ phone: 'manual-close', stage: 'closed_won' }), updatedMs: YESTERDAY_NOON },
+            {
+                ...mk({ phone: 'verified-close', stage: 'closed_won', paymentVerified: true, verifiedOrderId: 'order-one' }),
+                updatedMs: YESTERDAY_NOON,
+            },
+        ]
+        const digest = buildDigest(rows, { todayISO: TODAY, nowMs: NOW })
+        expect(digest.counts.wonYesterday).toBe(1)
+    })
+
     it('passes on the experiment verdict without overclaiming', () => {
         const tooClose = buildDigest([mk({ stage: 'handoff' })], {
             todayISO: TODAY, nowMs: NOW, experiments: { verdict: 'too-close', rows: [], needed: 0 },
