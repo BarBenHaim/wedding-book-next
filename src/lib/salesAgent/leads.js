@@ -25,7 +25,7 @@ import { isoInIsrael } from './leadsView'
 import { assertCompletableInboundOutcome, assertInboundClaimToken, decideInboundCompletion, INBOUND_LEASE_MS, sanitizeInboundOutcome, startInboundClaim } from './inboundEventsCore'
 import { reserveHalfOpenProbe, resolveProviderFailure, resolveProviderSuccess, sanitizeBreakerRuntimeState } from './circuitBreaker'
 import { DELIVERY_ERROR_CODES, DELIVERY_REQUEST_LEASE_MS, decideDeliveryTransition, deliveryEventFingerprint, deliveryEventLedgerId, isDeliveryPending, providerMessageCorrelationId } from './delivery'
-import { pendingFollowUpStatus } from './followupPolicy'
+import { isDueFollowUpCandidate, pendingFollowUpStatus, rankDueFollowUps } from './followupPolicy'
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
 // importing this file boots the Admin SDK, which needs credentials.
@@ -823,29 +823,19 @@ export async function recordDigestOutcome({ status, errorCode = null, outboundId
 // Leads due for a follow-up today. `stage` filters are applied in memory
 // because Firestore would need a composite index for the combination and
 // the daily volume here is tiny.
-function isDueFollowUpCandidate(lead) {
-    if (!lead.followUpAt) return false
-    if (lead.stage === 'closed_won' || lead.stage === 'closed_lost') return false
-    if (isPausedForHuman(lead)) return false
-    if ((lead.followUpCount || 0) >= 3) return false
-    if (['pending', 'requested'].includes(pendingFollowUpStatus(lead))) return false
-    return true
-}
-
 export async function dueFollowUps(todayISO, limit = 40) {
     const snap = await adminDb
         .collection(COLLECTION)
         .where('followUpAt', '<=', todayISO)
-        .limit(limit * 3)
+        .limit(Math.max(500, limit * 3))
         .get()
     const out = []
     for (const doc of snap.docs) {
         const lead = { phone: doc.id, ...doc.data() }
-        if (!isDueFollowUpCandidate(lead)) continue
+        if (!isDueFollowUpCandidate(lead, todayISO)) continue
         out.push(lead)
-        if (out.length >= limit) break
     }
-    return out
+    return rankDueFollowUps(out, todayISO).slice(0, limit)
 }
 
 // Health needs only enough information to distinguish 25 from 26 due rows,
@@ -865,7 +855,7 @@ export async function readDueFollowUpHealth(todayISO) {
     let dueFollowUps = 0
     for (const doc of docs) {
         const lead = { phone: doc.id, ...doc.data() }
-        if (!isDueFollowUpCandidate(lead)) continue
+        if (!isDueFollowUpCandidate(lead, todayISO)) continue
         dueFollowUps += 1
         if (dueFollowUps >= FOLLOWUP_HEALTH_RED_COUNT) break
     }

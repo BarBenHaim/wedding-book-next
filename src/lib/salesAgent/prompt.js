@@ -23,6 +23,7 @@ import { journeyBlock, LANGUAGE_RULES } from './journey'
 import { CONVERSATION_CRAFT, readStyle, styleNote } from './conversation'
 import { SELLING_CRAFT } from './selling'
 import { mergeMedia } from './mediaLibrary'
+import { followUpEvidence } from './followupEvidence'
 
 const ils = n => `₪${Number(n).toLocaleString('he-IL')}`
 
@@ -280,11 +281,29 @@ export function buildFollowUpPrompt(lead, todayISO, { isFinal = false, media = n
 ובלי "רק רציתי לוודא". משפט או שניים, וזהו. stage="closed_lost".`
         : ''
 
-    return `${buildSystemPrompt(lead, todayISO, { media, performanceNote })}
+    const evidence = followUpEvidence(lead)
+    const unprovenDemo = ['demo_sent', 'offer_sent'].includes(lead?.stage) && !evidence.hasDemoEvidence
+    const groundedLead = unprovenDemo ? { ...lead, stage: 'engaged' } : lead
+    const truthBlock = unprovenDemo
+        ? `
+
+## אמת על הדמו
+אין ראיה שנשלח דמו בפועל. אסור לכתוב כאילו הלקוח ראה דמו או לשאול מה חשב עליו.
+הצעד היחיד: הצע לשלוח עכשיו דוגמה אמיתית או שתי תמונות אמיתיות מהספר.`
+        : ''
+    const paymentBlock = lead?.stage === 'ready_to_pay'
+        ? `
+
+## ליד שכבר הגיע לתשלום
+שאל מה עצר את התשלום: תקלה, שאלה על החבילה או תזמון. אל תשלח שוב קישור תשלום אלא אם הלקוח מבקש אותו במפורש.`
+        : ''
+
+    return `${buildSystemPrompt(groundedLead, todayISO, { media, performanceNote })}
 
 ## המשימה עכשיו שונה
 הלקוח לא ענה. אתה כותב פולו-אפ יזום — לא תשובה.
 זה הפולו-אפ מספר ${(lead.followUpCount || 0) + 1}.${finalBlock}
+${truthBlock}${paymentBlock}
 
 כללים לפולו-אפ:
 - התחבר למשהו ספציפי שנאמר בשיחה. "רק בודק מה קורה" זו הודעה שנמחקת.

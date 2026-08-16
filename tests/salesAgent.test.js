@@ -307,6 +307,18 @@ describe('system prompt — what actually reaches the model', () => {
         expect(f).toContain(findPackage('printed').checkout) // still grounded
         expect(f).toContain('פולו-אפ מספר 3')
     })
+
+    it('never claims a demo was seen when the conversation has no demo evidence', () => {
+        const f = buildFollowUpPrompt({ stage: 'demo_sent', followUpCount: 0, turns: [] }, today)
+        expect(f).toContain('אין ראיה שנשלח דמו בפועל')
+        expect(f).toContain('אסור לכתוב כאילו הלקוח ראה דמו')
+    })
+
+    it('asks a ready-to-pay lead for the blocker instead of repeating the checkout link', () => {
+        const f = buildFollowUpPrompt({ stage: 'ready_to_pay', followUpCount: 0 }, today)
+        expect(f).toContain('שאל מה עצר את התשלום')
+        expect(f).toContain('אל תשלח שוב קישור תשלום')
+    })
 })
 
 describe('addDaysISO', () => {

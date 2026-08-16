@@ -3,6 +3,7 @@ import {
     MAX_ATTEMPTS, nextFollowUpDate, urgencyFor, daysUntil, isFinalAttempt,
     sendableNow, israelClock,
     pendingFollowUpStatus,
+    followUpEvidence, isDueFollowUpCandidate, rankDueFollowUps,
 } from '@/lib/salesAgent/followupPolicy'
 
 // This file guards the difference between a helpful nudge and the reason
@@ -211,5 +212,32 @@ describe('provider-pending suppression', () => {
         const lead = { lastDeliveryStatus: 'requested', deliveryRequestUntilMs: pendingUntil }
         expect(pendingFollowUpStatus(lead, pendingUntil - 1)).toBe('requested')
         expect(pendingFollowUpStatus(lead, pendingUntil)).toBe('stale-requested')
+    })
+})
+
+describe('revenue-first follow-up truth', () => {
+    it('treats a CRM stage as a label, not proof that a demo was actually sent', () => {
+        expect(followUpEvidence({ stage: 'demo_sent', turns: [] }).hasDemoEvidence).toBe(false)
+        expect(followUpEvidence({
+            stage: 'demo_sent',
+            turns: [{ role: 'assistant', text: 'https://app.weddingtales.co.il/demo' }],
+        }).hasDemoEvidence).toBe(true)
+        expect(followUpEvidence({ stage: 'offer_sent', mediaSent: ['book-one'] }).hasDemoEvidence).toBe(true)
+    })
+
+    it('refuses paid leads and events that have already passed', () => {
+        expect(isDueFollowUpCandidate({ followUpAt: TODAY, stage: 'engaged', paymentVerified: true }, TODAY)).toBe(false)
+        expect(isDueFollowUpCandidate({ followUpAt: TODAY, stage: 'engaged', eventDate: '2026-08-09' }, TODAY)).toBe(false)
+        expect(isDueFollowUpCandidate({ followUpAt: TODAY, stage: 'engaged', eventDate: '2026-08-11' }, TODAY)).toBe(true)
+    })
+
+    it('puts money and event urgency before a generic stale conversation', () => {
+        const ranked = rankDueFollowUps([
+            { id: 'ordinary', stage: 'engaged', eventDate: null },
+            { id: 'proof', stage: 'demo_sent', eventDate: null },
+            { id: 'soon', stage: 'engaged', eventDate: '2026-08-14' },
+            { id: 'money', stage: 'ready_to_pay', eventDate: null },
+        ], TODAY)
+        expect(ranked.map(row => row.id)).toEqual(['money', 'soon', 'proof', 'ordinary'])
     })
 })

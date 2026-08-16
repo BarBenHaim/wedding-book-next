@@ -32,6 +32,9 @@
 // quoted is pressure; the same nudge three days later is service.
 
 import { addDaysISO } from './prompt'
+import { followUpEvidence } from './followupEvidence'
+
+export { followUpEvidence }
 
 export const MAX_ATTEMPTS = 3
 
@@ -143,6 +146,40 @@ export function pendingFollowUpStatus(lead, nowMs = Date.now()) {
     return pendingUntil > Number(nowMs) ? 'pending' : 'stale'
 }
 
+function pausedForHuman(lead, nowMs) {
+    if (!lead?.human) return false
+    const since = lead.humanSince?.toMillis ? lead.humanSince.toMillis() : Number(lead.humanSince) || 0
+    return !since || Number(nowMs) - since < 48 * 3600 * 1000
+}
+
+export function isDueFollowUpCandidate(lead, todayISO, nowMs = Date.now()) {
+    if (!lead?.followUpAt || !todayISO || lead.followUpAt > todayISO) return false
+    if (lead.paymentVerified === true) return false
+    if (['closed_won', 'closed_lost', 'handoff'].includes(lead.stage)) return false
+    if (pausedForHuman(lead, nowMs)) return false
+    if ((lead.followUpCount || 0) >= MAX_ATTEMPTS) return false
+    if (['pending', 'requested'].includes(pendingFollowUpStatus(lead, nowMs))) return false
+    if (daysUntil(lead.eventDate, todayISO) < 0) return false
+    return true
+}
+
+function revenuePriority(lead, todayISO) {
+    if (lead.stage === 'ready_to_pay') return 10_000
+    const eventDays = daysUntil(lead.eventDate, todayISO)
+    if (eventDays != null && eventDays >= 0 && eventDays <= 30) return 9_000 - eventDays
+    if (['objection', 'commit_later'].includes(lead.stage)) return 8_000
+    if (['offer_sent', 'demo_sent'].includes(lead.stage)) return 7_000
+    if (lead.stage === 'engaged') return 6_000
+    return 5_000
+}
+
+export function rankDueFollowUps(leads, todayISO) {
+    return (Array.isArray(leads) ? leads : [])
+        .map((lead, index) => ({ lead, index, priority: revenuePriority(lead, todayISO) }))
+        .sort((left, right) => right.priority - left.priority || left.index - right.index)
+        .map(row => row.lead)
+}
+
 // ── When not to send ────────────────────────────────────────────────
 //
 // Times are read in Asia/Jerusalem rather than computed from an offset,
@@ -211,7 +248,7 @@ export const MAX_PER_RUN = 25
 
 const followupPolicy = {
     MAX_ATTEMPTS, MAX_PER_RUN, nextFollowUpDate, urgencyFor, daysUntil,
-    isFinalAttempt, pendingFollowUpStatus, sendableNow, israelClock,
+    isFinalAttempt, pendingFollowUpStatus, followUpEvidence, isDueFollowUpCandidate, rankDueFollowUps, sendableNow, israelClock,
 }
 
 export default followupPolicy
