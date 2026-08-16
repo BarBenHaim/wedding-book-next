@@ -51,6 +51,16 @@ describe('conversation-learned sales decision policy', () => {
 })
 
 describe('deterministic WhatsApp reply contract', () => {
+    it('never lets model output claim a paid sale without payment verification', () => {
+        const lead = { stage: 'engaged' }
+        const incomingText = 'מעולה נשמע טוב'
+        const decision = decideSalesTurn({ incomingText, lead })
+        const result = enforceSalesReply({
+            parsed: { messages: ['מעולה'], stage: 'closed_won' }, decision, lead, incomingText,
+        })
+        expect(result.stage).not.toBe('closed_won')
+    })
+
     const decisionFor = (incomingText, lead = {}) => decideSalesTurn({ incomingText, lead })
 
     it('sends one message, keeps one question and stays within 180 characters', () => {

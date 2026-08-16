@@ -222,6 +222,11 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         messages: [message],
         noReply: false,
     }
+    // The model can recognize buying intent; it cannot observe money.
+    // Only the paid WooCommerce boundary may persist closed_won.
+    if (result.stage === 'closed_won' && lead.paymentVerified !== true) {
+        result.stage = decision.intent === 'payment_intent' ? 'ready_to_pay' : (lead.stage || 'engaged')
+    }
     if (decision.nextBestAction === 'close_lost') {
         result.stage = 'closed_lost'
         result.handoff = false

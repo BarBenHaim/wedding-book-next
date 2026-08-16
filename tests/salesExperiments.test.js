@@ -142,14 +142,31 @@ describe('summary — counting', () => {
         expect(rows.find(x => x.id === 'question_first').reachedOffer).toBe(1)
     })
 
-    it('sums revenue and wins', () => {
+    it('counts revenue and wins only from a verified order', () => {
         const rows = summarizeExperiments([
-            lead({ phone: '1', stage: 'closed_won', amount: 950 }),
-            lead({ phone: '2', stage: 'closed_won', amount: 690 }),
+            lead({ phone: 'manual-win', stage: 'closed_won', amount: 950 }),
+            lead({
+                phone: 'verified-win', stage: 'closed_won', paymentVerified: true,
+                verifiedOrderId: 'order-two', amount: 690,
+            }),
         ]).rows
         const r = rows.find(x => x.id === 'question_first')
-        expect(r.won).toBe(2)
-        expect(r.revenue).toBe(1640)
+        expect(r.verifiedWins).toBe(1)
+        expect(r.unverifiedClosedWon).toBe(1)
+        expect(r.verifiedRevenue).toBe(690)
+        expect(r.won).toBe(1)
+        expect(r.revenue).toBe(690)
+        expect(r.winRate).toBe(0.5)
+    })
+
+    it('treats payment intent as a diagnostic, never as a sale', () => {
+        const row = summarizeExperiments([
+            lead({ stage: 'ready_to_pay' }),
+            lead({ stage: 'closed_won', paymentVerified: true, amount: 117 }),
+        ]).rows.find(x => x.id === 'question_first')
+        expect(row.paymentIntent).toBe(2)
+        expect(row.verifiedWins).toBe(0)
+        expect(row.unverifiedClosedWon).toBe(1)
     })
 
     it('ignores leads with no variant or a retired one', () => {
@@ -198,6 +215,14 @@ describe('summary — counting', () => {
 describe('summary — refusing to lie about small numbers', () => {
     const arm = (variant, n, repliedCount) =>
         Array.from({ length: n }, (_, i) => lead({ phone: `${variant}-${i}`, variant, userTurns: i < repliedCount ? 3 : 1 }))
+    const paidArm = (variant, n, paidCount) =>
+        Array.from({ length: n }, (_, i) => lead({
+            phone: `${variant}-paid-${i}`, variant, userTurns: 2,
+            ...(i < paidCount ? {
+                stage: 'closed_won', paymentVerified: true,
+                verifiedOrderId: `${variant}-order-${i}`, amount: 117,
+            } : {}),
+        }))
 
     it('names no winner while the sample is small, however lopsided', () => {
         // 5/5 vs 0/5 is a 100-point gap and means nothing.
@@ -212,15 +237,14 @@ describe('summary — refusing to lie about small numbers', () => {
         expect(s.needed).toBeGreaterThan(0)
     })
 
-    it('still refuses a winner when the sample is big but the gap is noise', () => {
-        // 50% vs 46% over 50 each. Real dashboards call this a winner.
-        const s = summarizeExperiments([...arm('question_first', 50, 25), ...arm('demo_first', 50, 23)])
+    it('still refuses a payment winner when the sample is big but the gap is noise', () => {
+        const s = summarizeExperiments([...paidArm('question_first', 50, 10), ...paidArm('demo_first', 50, 9)])
         expect(s.verdict).toBe('too-close')
         expect(s.winner).toBeNull()
     })
 
-    it('names a winner once the gap is genuinely bigger than the noise', () => {
-        const s = summarizeExperiments([...arm('question_first', 100, 70), ...arm('demo_first', 100, 30)])
+    it('names a winner once verified-payment conversion beats the noise', () => {
+        const s = summarizeExperiments([...paidArm('question_first', 100, 30), ...paidArm('demo_first', 100, 5)])
         expect(s.verdict).toBe('winner')
         expect(s.winner).toBe('question_first')
     })
@@ -233,8 +257,8 @@ describe('summary — refusing to lie about small numbers', () => {
         expect(s2.rows.find(r => r.id === 'question_first').enough).toBe(true)
     })
 
-    it('sorts the best reply rate first so the table reads top-down', () => {
-        const s = summarizeExperiments([...arm('question_first', 40, 10), ...arm('demo_first', 40, 30)])
+    it('sorts the best verified-payment rate first so the table reads top-down', () => {
+        const s = summarizeExperiments([...paidArm('question_first', 40, 3), ...paidArm('demo_first', 40, 10)])
         expect(s.rows[0].id).toBe('demo_first')
     })
 })

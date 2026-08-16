@@ -9,6 +9,27 @@ import crypto from 'crypto'
 import { adminDb as db, adminAuth } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { generateSlug } from '@/lib/generateSlug'
+import { isVerifiedWooOrder } from '@/lib/salesAgent/paymentTruth'
+
+export { isVerifiedWooOrder }
+
+export async function recordVerifiedSalesOutcome(order, closeLead) {
+    if (!isVerifiedWooOrder(order) || typeof closeLead !== 'function') return false
+    const phone = String(order?.billing?.phone || '').trim()
+    if (!phone) return false
+    const firstItem = Array.isArray(order?.line_items) ? order.line_items[0] : null
+    const packageId = String(firstItem?.sku || firstItem?.product_id || '').trim() || null
+    const amount = Number(order?.total)
+    const orderId = String(order.id).trim()
+    await closeLead({
+        phone,
+        orderId,
+        weddingId: orderId,
+        amount: Number.isFinite(amount) ? amount : null,
+        packageId,
+    })
+    return true
+}
 
 export async function POST(req) {
     try {
@@ -47,9 +68,19 @@ export async function POST(req) {
         })
 
         // --- 4. בדיקת סטטוס תשלום ---
-        if (!['processing', 'completed'].includes(status)) {
+        if (!isVerifiedWooOrder(body)) {
             console.log(`⏭️ Skipping order ${orderId} due to status: ${status}`)
             return NextResponse.json({ skipped: true, reason: 'wrong_status' })
+        }
+
+        // Payment truth is recorded before the wedding idempotency exits.
+        // If CRM persistence failed on the first webhook, a replay gets a
+        // real chance to repair it even though the wedding already exists.
+        try {
+            const { closeLeadOnPurchase } = await import('@/lib/salesAgent/leads')
+            await recordVerifiedSalesOutcome(body, closeLeadOnPurchase)
+        } catch {
+            console.warn('[createWedding] verified sales outcome write failed')
         }
 
         // --- 5. מניעת כפילויות (Idempotency) ---
@@ -131,27 +162,6 @@ export async function POST(req) {
         )
 
         console.log('💾 Wedding created →', weddingId)
-
-        // --- 7b. סגירת הליד בבוט המכירות ---
-        // הרגע שבו התשלום נקלט הוא גם הרגע שבו הבוט חייב להפסיק למכור.
-        // בלי זה, לקוח שהרגע שילם מקבל למחרת בבוקר "עוד מתלבטים?" —
-        // הדבר הכי מזיק שמשפך אוטומטי יכול לעשות. עטוף ב-try/catch
-        // כי יצירת האירוע חשובה יותר מעדכון ה-CRM ואסור שתיפול בגללו.
-        try {
-            const leadPhone = (billing?.phone || '').trim()
-            if (leadPhone) {
-                const { closeLeadOnPurchase } = await import('@/lib/salesAgent/leads')
-                await closeLeadOnPurchase({
-                    phone: leadPhone,
-                    orderId,
-                    weddingId,
-                    amount: body?.total ?? null,
-                })
-                console.log('🤝 Sales lead closed →', leadPhone)
-            }
-        } catch (leadErr) {
-            console.warn('[createWedding] closing the sales lead failed:', leadErr?.message || leadErr)
-        }
 
         // קישורים למייל — כניסה למערכת (עם פרטי גישה) + צפייה ללא-התחברות.
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://app.weddingtales.co.il'

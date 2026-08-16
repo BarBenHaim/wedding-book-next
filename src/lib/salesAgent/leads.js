@@ -39,6 +39,7 @@ const ANTHROPIC_RUNTIME_ID = 'anthropic'
 const DELIVERY_EVENTS_COLLECTION = 'sales_delivery_events'
 const DELIVERY_EVENT_IDS_COLLECTION = 'sales_delivery_event_ids'
 const DELIVERY_PROVIDER_IDS_COLLECTION = 'sales_delivery_provider_ids'
+const VERIFIED_ORDERS_COLLECTION = 'sales_verified_orders'
 
 function ref(phone) {
     return adminDb.collection(COLLECTION).doc(phone)
@@ -62,6 +63,11 @@ function deliveryEventIdRef(eventId) {
 
 function deliveryProviderIdRef(providerMessageId) {
     return adminDb.collection(DELIVERY_PROVIDER_IDS_COLLECTION).doc(providerMessageCorrelationId(providerMessageId))
+}
+
+function verifiedOrderRef(orderId) {
+    const id = crypto.createHash('sha256').update(String(orderId)).digest('hex')
+    return adminDb.collection(VERIFIED_ORDERS_COLLECTION).doc(id)
 }
 
 function correlationOutboundId(value) {
@@ -987,24 +993,46 @@ export async function closeLeadOnPurchase({ phone, orderId, weddingId, amount, p
         closedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
     }
-    if (orderId) patch.orderId = String(orderId)
+    const verifiedOrderId = String(orderId || '').trim()
+    if (verifiedOrderId) patch.orderId = verifiedOrderId
     if (weddingId) patch.weddingId = String(weddingId)
     if (amount != null && Number.isFinite(Number(amount))) patch.amount = Number(amount)
     if (packageId) patch.packageInterest = packageId
 
-    // Every asset this conversation saw gets the win, not just the last
-    // one. Last-touch attribution in this funnel would hand the credit
-    // to whatever happened to be sent nearest the payment link, which is
-    // the one thing guaranteed not to have caused the sale.
-    //
-    // Read before the write, because the write does not change the list
-    // and a failure here must not block closing the lead.
-    try {
-        const seen = await mediaSeenBy(id)
-        if (seen.length) creditMediaWin(seen).catch(() => {})
-    } catch { /* attribution is never worth a lost close */ }
+    // Legacy/manual callers may still close a lead, but without an order
+    // identity they can never create a payment fact or train experiments.
+    if (!verifiedOrderId) {
+        await ref(id).set(patch, { merge: true })
+        return id
+    }
 
-    await ref(id).set(patch, { merge: true })
+    const leadRef = ref(id)
+    const markerRef = verifiedOrderRef(verifiedOrderId)
+    const outcome = await adminDb.runTransaction(async tx => {
+        const [markerSnap, leadSnap] = await Promise.all([tx.get(markerRef), tx.get(leadRef)])
+        if (markerSnap.exists) return { credited: false, media: [] }
+
+        const lead = leadSnap.exists ? leadSnap.data() || {} : {}
+        const media = [...new Set([...(lead.imagesSent || []), ...(lead.mediaSent || [])])]
+        tx.set(leadRef, {
+            ...patch,
+            paymentVerified: true,
+            paymentVerifiedAt: FieldValue.serverTimestamp(),
+            verifiedOrderId,
+        }, { merge: true })
+        // The document id is already the order hash. No phone, order id,
+        // transcript, or provider payload is duplicated into this ledger.
+        tx.set(markerRef, {
+            verifiedAt: FieldValue.serverTimestamp(),
+            leadHash: crypto.createHash('sha256').update(id).digest('hex'),
+        })
+        return { credited: true, media }
+    })
+
+    // Attribution is diagnostic and intentionally happens after the
+    // durable sale. A replay cannot increment it twice because the
+    // order-keyed transaction above owns the single credit decision.
+    if (outcome.credited && outcome.media.length) await creditMediaWin(outcome.media)
     return id
 }
 

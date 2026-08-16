@@ -175,7 +175,10 @@ const reached = (lead, stages) => {
 export function summarizeExperiments(leads, { minSample = MIN_SAMPLE } = {}) {
     const byVariant = new Map()
     for (const v of OPENING_VARIANTS) {
-        byVariant.set(v.id, { ...v, leads: 0, replied: 0, reachedOffer: 0, won: 0, revenue: 0 })
+        byVariant.set(v.id, {
+            ...v, leads: 0, replied: 0, reachedOffer: 0, paymentIntent: 0,
+            verifiedWins: 0, unverifiedClosedWon: 0, verifiedRevenue: 0,
+        })
     }
 
     for (const l of leads || []) {
@@ -185,30 +188,39 @@ export function summarizeExperiments(leads, { minSample = MIN_SAMPLE } = {}) {
         row.leads++
         if ((Number(l.userTurns) || 0) >= 2) row.replied++
         if (reached(l, ['offer_sent', 'ready_to_pay', 'closed_won'])) row.reachedOffer++
-        if (l.stage === 'closed_won') {
-            row.won++
-            row.revenue += Number(l.amount) || 0
+        if (reached(l, ['ready_to_pay', 'closed_won'])) row.paymentIntent++
+        const verified = l.paymentVerified === true
+            && typeof l.verifiedOrderId === 'string'
+            && l.verifiedOrderId.trim().length > 0
+        if (verified) {
+            row.verifiedWins++
+            row.verifiedRevenue += Number(l.amount) || 0
         }
+        if (l.stage === 'closed_won' && !verified) row.unverifiedClosedWon++
     }
 
     const rows = [...byVariant.values()].map(r => ({
         ...r,
         replyRate: rate(r.replied, r.leads),
         offerRate: rate(r.reachedOffer, r.leads),
-        winRate: rate(r.won, r.leads),
+        // `won` and `revenue` remain as compatibility aliases for older
+        // UI/digest consumers, but their source is verified payment only.
+        won: r.verifiedWins,
+        revenue: r.verifiedRevenue,
+        winRate: rate(r.verifiedWins, r.leads),
         enough: r.leads >= minSample,
     }))
 
     // A winner is only named when (a) both it and the runner-up have a
     // real sample, and (b) the gap is wider than the two standard errors
     // combined. Anything less is a coin that landed heads twice.
-    const ranked = rows.filter(r => r.enough && r.replyRate != null).sort((a, b) => b.replyRate - a.replyRate)
+    const ranked = rows.filter(r => r.enough && r.winRate != null).sort((a, b) => b.winRate - a.winRate)
     let winner = null
     let verdict = 'collecting'
     if (ranked.length >= 2) {
         const [first, second] = ranked
-        const margin = stderr(first.replyRate, first.leads) + stderr(second.replyRate, second.leads)
-        if (first.replyRate - second.replyRate > margin) {
+        const margin = stderr(first.winRate, first.leads) + stderr(second.winRate, second.leads)
+        if (first.winRate - second.winRate > margin) {
             winner = first.id
             verdict = 'winner'
         } else {
@@ -218,7 +230,8 @@ export function summarizeExperiments(leads, { minSample = MIN_SAMPLE } = {}) {
 
     const totalAssigned = rows.reduce((s, r) => s + r.leads, 0)
     return {
-        rows: rows.sort((a, b) => (b.replyRate ?? -1) - (a.replyRate ?? -1)),
+        rows: rows.sort((a, b) => (b.winRate ?? -1) - (a.winRate ?? -1)
+            || (b.replyRate ?? -1) - (a.replyRate ?? -1)),
         winner,
         verdict, // 'collecting' | 'too-close' | 'winner'
         totalAssigned,
