@@ -132,6 +132,10 @@ export async function GET(req) {
     const health = summarizeSalesHealth({
         nowMs: now,
         ...healthRuntime,
+        // The deterministic catalog-grounded engine keeps replying when
+        // the optional phrasing provider is unavailable. Surface that
+        // degraded-but-selling state instead of a false total outage.
+        catalogFallbackEnabled: true,
         dueFollowUps: dueHealth.dueFollowUps,
         followupsScanSaturated: dueHealth.scanSaturated,
     })

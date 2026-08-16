@@ -102,6 +102,24 @@ describe('sales health summary', () => {
         })).followups).toMatchObject({ status: 'unknown', reason: 'scan-saturated', due: null, scanSaturated: true })
     })
 
+    it('shows the catalog sales fallback as amber when the phrasing provider is down', () => {
+        const health = summarizeSalesHealth(healthyInput({
+            catalogFallbackEnabled: true,
+            breaker: { consecutiveFailures: 3, openUntilMs: NOW + HOUR, lastFailureAtMs: NOW - 1 },
+        }))
+
+        expect(health.anthropic).toMatchObject({
+            status: 'amber',
+            reason: 'catalog-fallback-active',
+            providerStatus: 'red',
+            catalogFallbackActive: true,
+        })
+        const stage = salesHealthStageView(health).find(item => item.key === 'anthropic')
+        expect(stage).toMatchObject({ label: 'מנוע תשובות', status: 'amber' })
+        expect(stage.metric).toContain('קטלוגי')
+        expect(stage.action).toContain('AI')
+    })
+
     it('returns only sanitized counts, booleans, enums, and timestamps', () => {
         const health = summarizeSalesHealth(healthyInput({
             token: 'secret-health-token-sentinel',

@@ -194,7 +194,7 @@ function summarizeInbound(input, nowMs) {
     return { status, reason, makeStatus, operationsStatus, lastHeartbeatAtMs, activationAtMs, ageMs }
 }
 
-function summarizeAnthropic(input, nowMs) {
+function summarizeAnthropic(input, nowMs, catalogFallbackEnabled = false) {
     const source = input && typeof input === 'object' ? input : null
     if (!source) {
         return {
@@ -218,7 +218,31 @@ function summarizeAnthropic(input, nowMs) {
         status = 'amber'
         reason = consecutiveFailures >= 3 ? 'half-open-recovery' : 'consecutive-failures'
     }
-    return { status, reason, consecutiveFailures, openUntilMs, lastFailureAtMs, lastSuccessAtMs, lastErrorCode }
+    const providerStatus = status
+    if (catalogFallbackEnabled === true && providerStatus === 'red') {
+        return {
+            status: 'amber',
+            reason: 'catalog-fallback-active',
+            providerStatus,
+            catalogFallbackActive: true,
+            consecutiveFailures,
+            openUntilMs,
+            lastFailureAtMs,
+            lastSuccessAtMs,
+            lastErrorCode,
+        }
+    }
+    return {
+        status,
+        reason,
+        providerStatus,
+        catalogFallbackActive: false,
+        consecutiveFailures,
+        openUntilMs,
+        lastFailureAtMs,
+        lastSuccessAtMs,
+        lastErrorCode,
+    }
 }
 
 function summarizeWhatsapp(attempts, nowMs, operationsStatus) {
@@ -294,7 +318,7 @@ export function summarizeSalesHealth(input = {}) {
     return {
         generatedAtMs: nowMs,
         inbound,
-        anthropic: summarizeAnthropic(input.breaker, nowMs),
+        anthropic: summarizeAnthropic(input.breaker, nowMs, input.catalogFallbackEnabled),
         whatsapp: summarizeWhatsapp(input.deliveryAttempts, nowMs, inbound.operationsStatus),
         followups: summarizeFollowups(input.dueFollowUps, input.followupsLastRunAtMs, input.followupsScanSaturated),
     }
@@ -323,10 +347,14 @@ export function salesHealthStageView(health = {}) {
             action: inbound.status === 'red' ? 'בדקו שהתרחיש פעיל ושנותרו פעולות ב־Make.' : null,
         },
         {
-            key: 'anthropic', label: 'AI', status: anthropic.status || 'unknown', statusLabel: statusLabel(anthropic),
-            metric: `${anthropic.consecutiveFailures || 0} כשלים רצופים`,
+            key: 'anthropic', label: 'מנוע תשובות', status: anthropic.status || 'unknown', statusLabel: statusLabel(anthropic),
+            metric: anthropic.catalogFallbackActive
+                ? 'מענה קטלוגי פעיל · ספק AI לא זמין'
+                : `${anthropic.consecutiveFailures || 0} כשלים רצופים`,
             evidenceAtMs: anthropic.lastSuccessAtMs || anthropic.lastFailureAtMs || null,
-            action: anthropic.status === 'red' ? 'המתינו לסגירת מפסק ההגנה ובדקו את יתרת הספק.' : null,
+            action: anthropic.catalogFallbackActive
+                ? 'המכירות ממשיכות. חברו מפתח AI תקין לשיפור הניסוח.'
+                : anthropic.status === 'red' ? 'המתינו לסגירת מפסק ההגנה ובדקו את יתרת הספק.' : null,
         },
         {
             key: 'whatsapp', label: 'WhatsApp', status: whatsapp.status || 'unknown',
