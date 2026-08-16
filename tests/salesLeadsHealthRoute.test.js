@@ -49,6 +49,15 @@ beforeEach(async () => {
 })
 
 describe('sales leads health response', () => {
+    it('accepts the shared machine secret through the standard Bearer header', async () => {
+        const response = await GET(new Request('http://localhost/api/sales-agent/leads', {
+            headers: { authorization: 'Bearer health-route-secret' },
+        }))
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toMatchObject({ ok: true })
+    })
+
     it('exposes aggregate verified-payment experiment metrics without customer data', async () => {
         mocks.listLeads.mockResolvedValue([
             {

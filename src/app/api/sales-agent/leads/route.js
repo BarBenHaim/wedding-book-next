@@ -40,8 +40,10 @@ async function authorized(req) {
     if (shared && (req.headers.get('x-wt-secret') || '') === shared) return true
     const header = req.headers.get('authorization') || ''
     if (header.startsWith('Bearer ')) {
+        const bearer = header.slice(7).trim()
+        if (shared && bearer === shared) return true
         try {
-            const decoded = await adminAuth.verifyIdToken(header.slice(7).trim())
+            const decoded = await adminAuth.verifyIdToken(bearer)
             if (isSuperAdmin(decoded.email)) return true
         } catch {
             /* fall through to 401 */
