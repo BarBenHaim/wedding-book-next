@@ -877,6 +877,36 @@ describe('non-text inbound media', () => {
         expect(mocks.callClaude).not.toHaveBeenCalled()
         expectNoProviderWork()
     })
+
+    it('answers conflicting text once and keeps the duplicate delivery silent', async () => {
+        prepareDecisionPath()
+        const body = inbound({
+            text: 'שלום! אפשר לקבל מידע נוסף על זה?',
+            messageType: 'document',
+            mediaId: '',
+        })
+
+        const first = await post(body)
+        mocks.claimInboundEvent.mockResolvedValueOnce({
+            action: 'cached',
+            outcome: { sendText: first.body.sendText, handoff: false, stage: first.body.stage },
+        })
+        const duplicate = await post(body)
+
+        expect(first.body).toMatchObject({
+            sendText: 'model draft',
+            send: ['model draft'],
+            handoff: false,
+        })
+        expect(duplicate.body).toMatchObject({
+            duplicate: true,
+            shouldSend: false,
+            sendText: '',
+            handoff: false,
+        })
+        expect(mocks.callClaude).toHaveBeenCalledTimes(1)
+        expect(mocks.setHuman).not.toHaveBeenCalled()
+    })
 })
 
 describe('silent terminal outcomes keep their real meaning', () => {

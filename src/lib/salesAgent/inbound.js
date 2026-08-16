@@ -57,8 +57,11 @@ function normalizeInboundBody(input) {
     body.phone = String(body.phone || '')
     body.text = String(body.text || '')
     body.profileName = String(body.profileName || '')
-    body.messageType = MESSAGE_TYPES.has(requestedType) ? requestedType : 'document'
     body.mediaId = String(body.mediaId || '')
+    const hasStandaloneText = Boolean(body.text.trim()) && !body.mediaId.trim()
+    body.messageType = hasStandaloneText
+        ? 'text'
+        : MESSAGE_TYPES.has(requestedType) ? requestedType : 'document'
     body.occurredAt = String(body.occurredAt || '')
     body.conversationId = String(body.conversationId || '')
 

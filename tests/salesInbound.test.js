@@ -57,6 +57,32 @@ describe('valid JSON', () => {
             referral: { campaignId: '120', adId: '122', sourceUrl: 'https://fb.me/ad' },
         })
     })
+
+    it('treats non-empty text without media as text when Make reports a conflicting type', () => {
+        const raw = JSON.stringify({
+            eventId: 'wamid.conflicting-type', phone: 'test-phone-token',
+            text: 'שלום! אפשר לקבל מידע נוסף על זה?', messageType: 'document', mediaId: '',
+        })
+
+        expect(parseInboundBody(raw).body).toMatchObject({
+            text: 'שלום! אפשר לקבל מידע נוסף על זה?',
+            messageType: 'text',
+            mediaId: '',
+        })
+    })
+
+    it('keeps a real media event as media when it also carries a caption', () => {
+        const raw = JSON.stringify({
+            eventId: 'wamid.real-document', phone: 'test-phone-token',
+            text: 'הקובץ שביקשתם', messageType: 'document', mediaId: 'media-token',
+        })
+
+        expect(parseInboundBody(raw).body).toMatchObject({
+            text: 'הקובץ שביקשתם',
+            messageType: 'document',
+            mediaId: 'media-token',
+        })
+    })
 })
 
 describe('the message that broke it', () => {
