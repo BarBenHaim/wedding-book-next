@@ -74,7 +74,17 @@ export function normalizeSalesSettings(input = {}, { registeredMediaKeys = [] } 
 }
 
 export function resolveSalesSettings(stored = {}, options = {}) {
-    const normalized = normalizeSalesSettings({ ...DEFAULT_SALES_SETTINGS, ...stored }, options)
+    const executableStoredIds = Array.isArray(stored.activeOpeningIds)
+        ? stored.activeOpeningIds.filter(id => ACTIVE_VARIANT_IDS.includes(id))
+        : []
+    const normalized = normalizeSalesSettings({
+        ...DEFAULT_SALES_SETTINGS,
+        ...stored,
+        // A retired experiment may still be present in Firestore after a
+        // deploy. Runtime reads migrate it in memory instead of disabling
+        // the agent or silently reviving a historical arm.
+        activeOpeningIds: executableStoredIds.length ? executableStoredIds : DEFAULT_SALES_SETTINGS.activeOpeningIds,
+    }, options)
     return {
         ...DEFAULT_SALES_SETTINGS,
         ...normalized,

@@ -40,7 +40,7 @@ describe('sales settings Firestore store', () => {
     it('saves with optimistic concurrency and snapshots the prior version', async () => {
         store.set('sales_agent_settings/active', {
             revision: 2, enabled: true, provider: 'auto', model: 'claude-sonnet-4-5',
-            businessInstructions: '', activeOpeningIds: ['question_first'], openingMediaSequence: [],
+            businessInstructions: '', activeOpeningIds: ['answer_first'], openingMediaSequence: [],
         })
 
         const saved = await saveSalesSettings({
@@ -49,7 +49,7 @@ describe('sales settings Firestore store', () => {
             provider: 'anthropic',
             model: 'claude-haiku-4-5',
             businessInstructions: 'תשאל שאלה אחת',
-            activeOpeningIds: ['demo_first'],
+            activeOpeningIds: ['value_question'],
             openingMediaSequence: ['photo-a'],
             changeNote: 'ניסוי',
         }, { updatedBy: 'owner@example.test', registeredMediaKeys: ['photo-a'] })

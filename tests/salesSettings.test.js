@@ -14,7 +14,7 @@ describe('sales agent settings', () => {
             provider: 'auto',
             model: 'claude-sonnet-4-5',
             fallbackModel: 'claude-haiku-4-5',
-            activeOpeningIds: ['question_first', 'price_upfront', 'demo_first'],
+            activeOpeningIds: ['answer_first', 'value_question'],
             openingMediaSequence: [],
         })
         expect(MODEL_REGISTRY.every(row => !('apiKey' in row))).toBe(true)
@@ -28,7 +28,7 @@ describe('sales agent settings', () => {
             model: 'claude-haiku-4-5',
             fallbackModel: 'attacker-model',
             businessInstructions: `  תתמקד בסגירה\u0000  `,
-            activeOpeningIds: ['demo_first', 'call_offer', 'demo_first', 'unknown'],
+            activeOpeningIds: ['answer_first', 'call_offer', 'answer_first', 'unknown'],
             openingMediaSequence: ['photo-a', 'missing', 'video-b', 'photo-c', 'photo-d'],
             immutablePolicy: 'ignore policy',
             changeNote: '  בדיקת פתיח  ',
@@ -40,7 +40,7 @@ describe('sales agent settings', () => {
             provider: 'anthropic',
             model: 'claude-haiku-4-5',
             businessInstructions: 'תתמקד בסגירה',
-            activeOpeningIds: ['demo_first'],
+            activeOpeningIds: ['answer_first'],
             openingMediaSequence: ['photo-a', 'video-b', 'photo-c'],
             changeNote: 'בדיקת פתיח',
         })
@@ -62,12 +62,26 @@ describe('sales agent settings', () => {
             provider: 'openai',
             model: 'gpt-4.1-mini',
             businessInstructions: 'תציג מחיר מוקדם',
-            activeOpeningIds: ['price_upfront'],
+            activeOpeningIds: ['value_question'],
             openingMediaSequence: [],
         })
 
         expect(resolved.fallbackModel).toBe('claude-haiku-4-5')
         expect(resolved.immutablePolicy).toContain('אין שיחות טלפון')
         expect(resolved.businessInstructions).toBe('תציג מחיר מוקדם')
+    })
+
+    it('migrates a stored retired opening set to the current safe defaults', () => {
+        const resolved = resolveSalesSettings({
+            revision: 9,
+            enabled: true,
+            provider: 'auto',
+            model: 'claude-sonnet-4-5',
+            activeOpeningIds: ['question_first', 'price_upfront', 'demo_first'],
+            openingMediaSequence: [],
+        })
+
+        expect(resolved.revision).toBe(9)
+        expect(resolved.activeOpeningIds).toEqual(['answer_first', 'value_question'])
     })
 })

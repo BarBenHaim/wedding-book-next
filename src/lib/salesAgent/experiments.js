@@ -23,10 +23,24 @@
 // a lead can never be re-rolled into a different arm by a retry, a lost
 // write, or a replayed webhook. Same customer, same arm, forever.
 
-// Seven historical openings encode genuinely different beliefs about why
-// people buy this product. Reporting keeps every arm so old leads do not
-// disappear; assignment below intentionally focuses new leads on three.
+// Historical openings remain forever for honest reporting. Only the two
+// answer-first arms at the top are executable for new leads; changing the
+// active set never rewrites what older conversations actually received.
 export const OPENING_VARIANTS = [
+    {
+        id: 'answer_first',
+        label: 'תשובה ואז צעד',
+        hypothesis: 'תשובה ישירה ועוד צעד רלוונטי אחד מקטינים נטישה בלי להפוך את הפתיחה לתשאול',
+        directive: `ענה מיד ובמלואו על מה שנשאל. אחר כך הצע רק צעד אחד שרלוונטי
+לרגע הזה. אם התשובה עצמה כבר יוצרת בחירה טבעית, אל תשאל שום שאלה.`,
+    },
+    {
+        id: 'value_question',
+        label: 'ערך ושאלה קלה',
+        hypothesis: 'בהודעה כללית, ערך מוחשי אחד ושאלה קלה אחת מרוויחים עוד תור בלי לחץ',
+        directive: `אם ההודעה כללית ולא נשאלה שאלה ישירה, תן במשפט אחד ערך מוחשי
+של המוצר ואז שאלה קלה אחת בלבד. אם נשאלה שאלה ישירה, ענה עליה קודם ואל תכפה שאלה.`,
+    },
     {
         id: 'question_first',
         label: 'קצר ושאלה',
@@ -85,7 +99,7 @@ image, עם משפט אחד לצידה על מה שרואים. ההנחיה הז
 ]
 
 export const VARIANT_IDS = OPENING_VARIANTS.map(v => v.id)
-export const ACTIVE_VARIANT_IDS = ['question_first', 'price_upfront', 'demo_first']
+export const ACTIVE_VARIANT_IDS = ['answer_first', 'value_question']
 
 export function findVariant(id) {
     return OPENING_VARIANTS.find(v => v.id === id) || null

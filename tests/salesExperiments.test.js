@@ -11,7 +11,7 @@ import { buildSystemPrompt } from '@/lib/salesAgent/prompt'
 // its owner a good opener. These tests exist to keep it honest.
 
 const lead = over => ({ phone: 'test-lead-default', variant: 'question_first', ...over })
-const approvedVariantIds = ['question_first', 'price_upfront', 'demo_first']
+const approvedVariantIds = ['answer_first', 'value_question']
 
 describe('variants', () => {
     it('defines genuinely different openings, each with a stated hypothesis', () => {
@@ -31,7 +31,11 @@ describe('variants', () => {
 
     it('resolves a known id and refuses an unknown one', () => {
         expect(findVariant('demo_first').label).toBe('דמו מיד')
-        expect(findActiveVariant('demo_first').label).toBe('דמו מיד')
+        expect(findActiveVariant('answer_first').label).toBeTruthy()
+        expect(findActiveVariant('value_question').label).toBeTruthy()
+        expect(findActiveVariant('demo_first')).toBeNull()
+        expect(findActiveVariant('price_upfront')).toBeNull()
+        expect(findActiveVariant('question_first')).toBeNull()
         expect(findActiveVariant('call_offer')).toBeNull()
         expect(findActiveVariant('photo_sample')).toBeNull()
         expect(findVariant('nope')).toBeNull()
@@ -47,7 +51,7 @@ describe('assignment', () => {
         for (let i = 0; i < 20; i++) expect(assignVariant('test-lead-stable')).toBe(a)
     })
 
-    it('assigns new leads only to the three approved arms', () => {
+    it('assigns new leads only to the two approved arms', () => {
         expect(ACTIVE_VARIANT_IDS).toEqual(approvedVariantIds)
         const assigned = new Set(Array.from({ length: 500 }, (_, i) => assignVariant(`test-lead-${i}`)))
         expect([...assigned].sort()).toEqual([...approvedVariantIds].sort())
@@ -96,11 +100,11 @@ describe('when the opening directive applies', () => {
     })
 
     it('puts the directive in the prompt only at the opening', () => {
-        const first = buildSystemPrompt({ isNew: true, variant: 'price_upfront' }, '2026-08-07')
+        const first = buildSystemPrompt({ isNew: true, variant: 'answer_first' }, '2026-08-07')
         expect(first).toContain('איך לפתוח את השיחה הזאת')
-        expect(first).toContain('690')
+        expect(first).toContain(findVariant('answer_first').directive)
 
-        const later = buildSystemPrompt({ isNew: false, userTurns: 5, variant: 'price_upfront' }, '2026-08-07')
+        const later = buildSystemPrompt({ isNew: false, userTurns: 5, variant: 'answer_first' }, '2026-08-07')
         expect(later).not.toContain('איך לפתוח את השיחה הזאת')
     })
 
@@ -179,12 +183,13 @@ describe('summary — counting', () => {
             'question_first', 'demo_first', 'photo_sample', 'call_offer',
             'assistant_intro', 'pics_first', 'price_upfront',
         ]
-        const result = summarizeExperiments(historicalIds.map((variant, i) => ({
+        const allIds = [...historicalIds, 'answer_first', 'value_question']
+        const result = summarizeExperiments(allIds.map((variant, i) => ({
             phone: `historical-lead-${i}`, variant, userTurns: 2,
         })))
 
-        expect(result.rows.map(row => row.id).sort()).toEqual([...historicalIds].sort())
-        for (const id of historicalIds) {
+        expect(result.rows.map(row => row.id).sort()).toEqual([...allIds].sort())
+        for (const id of allIds) {
             expect(result.rows.find(row => row.id === id)).toMatchObject({ leads: 1, replied: 1 })
         }
     })
