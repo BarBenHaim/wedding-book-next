@@ -57,6 +57,7 @@ import { assignVariant, summarizeExperiments, summarizeGaps } from '@/lib/salesA
 import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
 import { normalizeProviderError, INBOUND_ROUTE_DEADLINE_MS, INBOUND_HEARTBEAT_BUDGET_MS, FALLBACK_COMMIT_RESERVE_MS } from '@/lib/salesAgent/circuitBreaker'
+import { decideInboundAge } from '@/lib/salesAgent/transportPolicy'
 
 // What the customer sees when the machinery breaks. Deliberately honest
 // and short — no apology theatre, no invented reason.
@@ -219,6 +220,24 @@ export async function POST(req) {
             console.error('[sales-agent] event completion failed')
             return NextResponse.json({ error: 'event-completion-failed' }, { status: 503 })
         }
+    }
+
+    // A provider queue can survive an outage longer than the customer's
+    // context. Replaying those records as fresh conversations produces the
+    // worst possible recovery: a surprise sales reply hours later. Complete
+    // the event durably so provider retries stay silent, but do no lead,
+    // media, breaker, or model work.
+    const inboundAge = decideInboundAge({ occurredAt: body.occurredAt })
+    if (inboundAge.action === 'skip-stale') {
+        return complete({
+            ok: true,
+            shouldSend: false,
+            send: [],
+            sendText: '',
+            handoff: false,
+            noReply: true,
+            skipped: 'stale-inbound',
+        })
     }
 
     // A breaker fallback is not durable until the handoff state and inbound

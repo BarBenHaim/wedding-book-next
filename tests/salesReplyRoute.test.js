@@ -150,6 +150,79 @@ afterEach(() => {
 })
 
 describe('inbound event duplicate fencing', () => {
+    it('durably suppresses an inbound event older than fifteen minutes before lead or provider work', async () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date('2026-08-16T12:00:00.000Z'))
+
+        const result = await post(inbound({
+            text: 'stale private fixture',
+            occurredAt: '2026-08-16T11:44:59.999Z',
+        }))
+
+        expect(result).toEqual({
+            status: 200,
+            body: {
+                ok: true,
+                shouldSend: false,
+                send: [],
+                sendText: '',
+                handoff: false,
+                noReply: true,
+                skipped: 'stale-inbound',
+            },
+        })
+        expect(mocks.completeInboundEvent).toHaveBeenCalledWith(expect.objectContaining({
+            eventId: 'event-token',
+            claimToken: 'claim-token',
+            outcome: expect.objectContaining({
+                sendText: '', handoff: false, noReply: true, skipped: 'stale-inbound',
+            }),
+        }))
+        expect(mocks.getLead).not.toHaveBeenCalled()
+        expect(mocks.listMedia).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it('processes an event exactly fifteen minutes old instead of classifying it as stale', async () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date('2026-08-16T12:00:00.000Z'))
+
+        const result = await post(inbound({
+            text: '',
+            messageType: 'image',
+            occurredAt: '2026-08-16T11:45:00.000Z',
+        }))
+
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({ stage: 'handoff', handoff: true })
+        expect(result.body.skipped).toBeUndefined()
+        expect(mocks.getLead).toHaveBeenCalledTimes(1)
+        expect(mocks.setHuman).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps a replay of a completed stale event silent', async () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date('2026-08-16T12:00:00.000Z'))
+        const body = inbound({ text: 'stale replay fixture', occurredAt: '2026-08-16T11:40:00.000Z' })
+
+        const first = await post(body)
+        mocks.claimInboundEvent.mockResolvedValueOnce({
+            action: 'cached',
+            outcome: { sendText: '', handoff: false, noReply: true, skipped: 'stale-inbound' },
+        })
+        const duplicate = await post(body)
+
+        expect(first.body).toMatchObject({ shouldSend: false, noReply: true, skipped: 'stale-inbound' })
+        expect(duplicate.body).toMatchObject({ duplicate: true, shouldSend: false, sendText: '', handoff: false })
+        expect(duplicate.body.cachedOutcome).toEqual({
+            sendText: '', handoff: false, noReply: true, skipped: 'stale-inbound',
+        })
+        expect(mocks.completeInboundEvent).toHaveBeenCalledTimes(1)
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
     it('records one privacy-safe inbound heartbeat on the existing authenticated request path', async () => {
         mocks.claimInboundEvent.mockResolvedValue({ action: 'cached', outcome: { sendText: '', handoff: false } })
 
