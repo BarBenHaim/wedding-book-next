@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decideSalesTurn, detectSalesIntent, TURN_LIMITS } from '@/lib/salesAgent/decisionPolicy'
+import { decideSalesTurn, detectSalesIntent, enforceSalesReply, TURN_LIMITS } from '@/lib/salesAgent/decisionPolicy'
 
 describe('conversation-learned sales decision policy', () => {
     it.each([
@@ -47,5 +47,116 @@ describe('conversation-learned sales decision policy', () => {
             nextBestAction: 'silence',
             modelEligible: false,
         })
+    })
+})
+
+describe('deterministic WhatsApp reply contract', () => {
+    const decisionFor = (incomingText, lead = {}) => decideSalesTurn({ incomingText, lead })
+
+    it('sends one message, keeps one question and stays within 180 characters', () => {
+        const decision = decisionFor('אשמח לעוד פרטים')
+        const result = enforceSalesReply({
+            parsed: {
+                messages: [
+                    `זה פתרון שמרכז את כל הברכות והתמונות במקום אחד ${'מאוד '.repeat(45)}מה הכי חשוב לכם? ומתי האירוע?`,
+                    'והנה עוד הודעה שלא צריכה להישלח',
+                ],
+                stage: 'engaged',
+                handoff: false,
+            },
+            decision,
+            lead: {},
+            incomingText: 'אשמח לעוד פרטים',
+        })
+        expect(result.messages).toHaveLength(1)
+        expect(result.messages[0].length).toBeLessThanOrEqual(180)
+        expect(result.messages[0].match(/\?/g) || []).toHaveLength(1)
+    })
+
+    it('answers a price question from the catalog when the model dodges it', () => {
+        const incomingText = 'כמה עולה הספר?'
+        const result = enforceSalesReply({
+            parsed: { messages: ['זה משתנה לפי החבילה, אשמח להסביר'], stage: 'engaged', handoff: false },
+            decision: decisionFor(incomingText),
+            lead: {},
+            incomingText,
+        })
+        expect(result.messages).toHaveLength(1)
+        expect(result.messages[0]).toContain('₪950')
+        expect(result.messages[0].length).toBeLessThanOrEqual(180)
+    })
+
+    it('does not repeat questions about facts already known', () => {
+        const lead = { eventType: 'bar_mitzvah', eventDate: '2026-11-05' }
+        const result = enforceSalesReply({
+            parsed: { messages: ['בשמחה, לאיזה אירוע זה ומתי האירוע?'], stage: 'engaged', handoff: false },
+            decision: decisionFor('אפשר עוד פרטים?', lead),
+            lead,
+            incomingText: 'אפשר עוד פרטים?',
+        })
+        expect(result.messages[0]).not.toMatch(/איזה אירוע|לאיזה אירוע|מתי האירוע/)
+        expect(result.messages[0]).toBeTruthy()
+    })
+
+    it('diagnoses checkout friction without resending a known payment link', () => {
+        const lead = { paymentLinkSentAt: 1, packageInterest: 'printed' }
+        const incomingText = 'לא הצלחתי להשלים את ההזמנה'
+        const result = enforceSalesReply({
+            parsed: { messages: ['הנה שוב https://weddingtales.co.il/checkout/?add-to-cart=6271'], stage: 'ready_to_pay', handoff: false },
+            decision: decisionFor(incomingText, lead),
+            lead,
+            incomingText,
+        })
+        expect(result.messages[0]).not.toContain('https://')
+        expect(result.messages[0]).toMatch(/איפה|באיזה שלב/)
+        expect(result.messages[0].match(/\?/g) || []).toHaveLength(1)
+    })
+
+    it('uses the exact catalog checkout link once for a first payment intent', () => {
+        const incomingText = 'אני רוצה להזמין את המודפס'
+        const result = enforceSalesReply({
+            parsed: { messages: ['מעולה, הנה קישור'], stage: 'engaged', packageInterest: 'printed', handoff: false },
+            decision: decisionFor(incomingText),
+            lead: {},
+            incomingText,
+        })
+        expect(result.messages[0]).toContain('https://weddingtales.co.il/checkout/?add-to-cart=6271')
+        expect(result.messages[0].match(/https:\/\//g)).toHaveLength(1)
+        expect(result.stage).toBe('ready_to_pay')
+    })
+
+    it('closes a clean negative exit without handoff or owner escalation', () => {
+        const incomingText = 'החלטנו לוותר תודה'
+        const result = enforceSalesReply({
+            parsed: { messages: ['אעביר אותך לנציג'], stage: 'handoff', handoff: true },
+            decision: decisionFor(incomingText),
+            lead: {},
+            incomingText,
+        })
+        expect(result).toMatchObject({ stage: 'closed_lost', handoff: false, noReply: false })
+        expect(result.messages).toHaveLength(1)
+        expect(result.notifyOwner).toBeUndefined()
+    })
+
+    it('keeps an active handoff silent and never calls the model through this contract', () => {
+        const lead = { human: true, stage: 'handoff' }
+        const result = enforceSalesReply({
+            parsed: { messages: ['אני עדיין כאן'], stage: 'engaged', handoff: false },
+            decision: decisionFor('יש עדכון?', lead),
+            lead,
+            incomingText: 'יש עדכון?',
+        })
+        expect(result).toMatchObject({ messages: [], noReply: true, handoff: false, stage: 'handoff' })
+    })
+
+    it('replaces phone-call language because this funnel is WhatsApp only', () => {
+        const incomingText = 'אפשר עוד פרטים?'
+        const result = enforceSalesReply({
+            parsed: { messages: ['בשמחה, מתי נוח שאתקשר אליך בטלפון?'], stage: 'engaged', handoff: false },
+            decision: decisionFor(incomingText),
+            lead: {},
+            incomingText,
+        })
+        expect(result.messages[0]).not.toMatch(/אתקשר|טלפון|שיחת טלפון/)
     })
 })

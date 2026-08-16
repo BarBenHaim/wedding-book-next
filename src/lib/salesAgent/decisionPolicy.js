@@ -2,6 +2,9 @@
 // move. This policy turns the current message and durable lead facts into
 // one small, testable instruction before any provider is called.
 
+import { PACKAGES } from './catalog'
+import { hasPrice, priceFallbackMessage } from './selling'
+
 export const TURN_LIMITS = Object.freeze({
     maxMessages: 1,
     maxChars: 180,
@@ -58,9 +61,17 @@ function paymentLinkWasSent(lead) {
     )
 }
 
-function nextAction(intent, lead) {
+function explicitlyRequestsPaymentLink(text) {
+    return /(שלח|תשלח|אפשר|צריך).{0,18}(קישור|לינק)|(קישור|לינק).{0,12}(שוב|מחדש)/.test(normalizedText(text))
+}
+
+function nextAction(intent, lead, incomingText) {
     if (intent === 'negative_exit') return 'close_lost'
-    if (intent === 'payment_intent') return paymentLinkWasSent(lead) ? 'diagnose_checkout' : 'send_payment_link'
+    if (intent === 'payment_intent') {
+        return paymentLinkWasSent(lead) && !explicitlyRequestsPaymentLink(incomingText)
+            ? 'diagnose_checkout'
+            : 'send_payment_link'
+    }
     if (intent === 'price' || intent === 'process') return 'answer'
     if (intent === 'demo') return 'show_proof'
     if (intent === 'positive_signal') return 'recommend_package'
@@ -101,9 +112,126 @@ export function decideSalesTurn({ lead = {}, incomingText = '', isExistingCustom
         ...base,
         conversationKind: 'sales',
         intent,
-        nextBestAction: nextAction(intent, lead),
+        nextBestAction: nextAction(intent, lead, incomingText),
         modelEligible: true,
     }
+}
+
+const CALL_LANGUAGE = /(שיחת\s+טלפון|בטלפון|אתקשר|להתקשר|נדבר\s+בטלפון|אחזור\s+אליך)/
+const KNOWN_QUESTION_PATTERNS = Object.freeze({
+    name: /(איך\s+קוראים\s+לך|מה\s+השם)/,
+    eventType: /(איזה\s+אירוע|לאיזה\s+אירוע|סוג\s+האירוע)/,
+    eventDate: /(מתי\s+האירוע|מה\s+התאריך|תאריך\s+האירוע)/,
+    celebrantName: /(איך\s+קוראים\s+לחוגג|מה\s+שם\s+החוגג|שם\s+החוגג)/,
+    packageInterest: /(איזו\s+חבילה|איזה\s+מסלול|איזה\s+ספר\s+בחר)/,
+})
+
+function packageFor({ parsed, lead, incomingText }) {
+    const text = normalizedText(incomingText)
+    let id = parsed?.packageInterest || lead?.packageInterest || lead?.package_interest || null
+    if (/פרימיום|מלכותי/.test(text)) id = 'premium'
+    else if (/דיגיטל/.test(text)) id = 'digital'
+    else if (/מודפס|הדפס/.test(text)) id = 'printed'
+    return PACKAGES.find(item => item.id === id) || PACKAGES.find(item => item.recommended) || PACKAGES[0]
+}
+
+function deterministicMessage({ parsed, decision, lead, incomingText }) {
+    if (decision.nextBestAction === 'close_lost') return 'תודה שעדכנת, שמחתי לעזור. אם זה יחזור להיות רלוונטי, אנחנו כאן.'
+    if (decision.nextBestAction === 'diagnose_checkout') return 'איפה זה נתקע לך, בפתיחת הקישור או בשלב התשלום?'
+    if (decision.nextBestAction === 'send_payment_link') {
+        const selected = packageFor({ parsed, lead, incomingText })
+        return `${selected.name} עולה ₪${selected.price} וכולל מע״מ. לתשלום מאובטח: ${selected.checkout}`
+    }
+    if (decision.intent === 'price') return priceFallbackMessage()
+    if (decision.nextBestAction === 'show_proof') return 'בטח, מצרף דוגמה מתוך ספר אמיתי. מה חשוב לך לראות, את הכריכה או את העמודים מבפנים?'
+    if (decision.nextBestAction === 'recommend_package') return 'החבילה המודפסת היא הבחירה של רוב המשפחות, ספר כריכה קשה שמגיע עד הבית. לשלוח לך את הפרטים שלה?'
+    if (decision.nextBestAction === 'handle_objection') return 'מבין. מה בעיקר עוצר אותך, המחיר או החשש איך הספר ייצא?'
+    if (decision.intent === 'process') return 'האורחים סורקים QR, כותבים ברכה ומעלים תמונה בלי אפליקציה. בסוף מאשרים הכול ומקבלים ספר.'
+    return 'הספר מרכז את הברכות והתמונות מהאירוע למזכרת אחת. מה הכי חשוב לך, החוויה לאורחים או הספר המודפס?'
+}
+
+function containsRepeatedKnownQuestion(message, decision) {
+    return (decision.forbiddenRepeats || []).some(field => KNOWN_QUESTION_PATTERNS[field]?.test(normalizedText(message)))
+}
+
+function keepOneQuestion(message, maxQuestions) {
+    if (maxQuestions < 1) return message.replace(/\?/g, '.')
+    let seen = 0
+    return message.replace(/\?/g, () => (++seen <= maxQuestions ? '?' : '.'))
+}
+
+function compactMessage(message) {
+    return String(message || '').replace(/\s*\n+\s*/g, ' ').replace(/\s{2,}/g, ' ').trim()
+}
+
+function clipMessage(message, maxChars, fallback) {
+    if (message.length <= maxChars) return message
+    const url = /https?:\/\/\S+/g
+    for (const match of message.matchAll(url)) {
+        const start = match.index || 0
+        const end = start + match[0].length
+        if (start < maxChars && end > maxChars) return fallback
+    }
+    const clipped = message.slice(0, maxChars + 1)
+    const boundary = clipped.lastIndexOf(' ')
+    return clipped.slice(0, boundary >= Math.floor(maxChars * 0.65) ? boundary : maxChars).replace(/[,:;\s]+$/, '').trim()
+}
+
+/**
+ * Enforce the customer-visible contract after the model has returned.
+ * The result is the only object the route may persist or deliver.
+ */
+export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingText = '' } = {}) {
+    if (!decision) return parsed
+    if (decision.nextBestAction === 'silence' || decision.conversationKind === 'paused') {
+        return {
+            ...parsed,
+            messages: [],
+            stage: lead.stage || 'handoff',
+            handoff: false,
+            handoffReason: null,
+            noReply: true,
+        }
+    }
+
+    const fallback = deterministicMessage({ parsed, decision, lead, incomingText })
+    let message = compactMessage(parsed.messages?.[0])
+    const mustUseDeterministic = (
+        decision.nextBestAction === 'close_lost'
+        || decision.nextBestAction === 'diagnose_checkout'
+        || decision.nextBestAction === 'send_payment_link'
+        || (decision.intent === 'price' && !hasPrice(message))
+        || !message
+        || CALL_LANGUAGE.test(normalizedText(message))
+        || containsRepeatedKnownQuestion(message, decision)
+    )
+    if (mustUseDeterministic) message = fallback
+
+    message = keepOneQuestion(compactMessage(message), decision.maxQuestions)
+    const beforeClip = message
+    message = clipMessage(message, decision.maxChars, compactMessage(fallback))
+    if (beforeClip.includes('?') && !message.includes('?') && fallback.includes('?')) {
+        message = compactMessage(fallback)
+    }
+    if (!message) message = clipMessage(compactMessage(fallback), decision.maxChars, '')
+
+    const result = {
+        ...parsed,
+        messages: [message],
+        noReply: false,
+    }
+    if (decision.nextBestAction === 'close_lost') {
+        result.stage = 'closed_lost'
+        result.handoff = false
+        result.handoffReason = null
+        delete result.notifyOwner
+    } else if (decision.nextBestAction === 'send_payment_link') {
+        result.stage = 'ready_to_pay'
+        result.handoff = false
+        result.handoffReason = null
+        result.packageInterest = packageFor({ parsed, lead, incomingText }).id
+    }
+    return result
 }
 
 export default decideSalesTurn

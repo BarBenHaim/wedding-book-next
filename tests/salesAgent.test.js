@@ -233,6 +233,25 @@ describe('catalog — the only facts the agent may state', () => {
 })
 
 describe('system prompt — what actually reaches the model', () => {
+    it('injects the exact deterministic turn contract before wording', () => {
+        const turnDecision = {
+            conversationKind: 'sales',
+            intent: 'price',
+            nextBestAction: 'answer',
+            maxMessages: 1,
+            maxChars: 180,
+            maxQuestions: 1,
+            knownFacts: ['eventType', 'eventDate'],
+            forbiddenRepeats: ['eventType', 'eventDate'],
+            modelEligible: true,
+        }
+        const prompt = buildSystemPrompt({ eventType: 'bar_mitzvah', eventDate: '2026-11-05' }, '2026-08-16', { turnDecision })
+        expect(prompt).toContain('## החלטת המכירה לתור הזה')
+        expect(prompt).toContain(JSON.stringify(turnDecision, null, 2))
+        expect(prompt).not.toContain('מתי יהיה לך נוח שנדבר?')
+        expect(prompt).not.toContain('שיחת טלפון')
+    })
+
     it('adds the bounded owner instruction as a separate editable layer', () => {
         const prompt = buildSystemPrompt({}, '2026-08-05', { businessInstructions: 'להציג מחיר מוקדם ולשאול שאלה אחת' })
         expect(prompt).toContain('הנחיות עסקיות פעילות')

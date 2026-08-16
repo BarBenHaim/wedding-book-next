@@ -38,7 +38,7 @@ function renderPackages() {
  * @param {object} lead    the CRM record (see leads.js) — may be empty for a new lead
  * @param {string} todayISO  'YYYY-MM-DD' — the agent has no clock of its own
  */
-export function buildSystemPrompt(lead = {}, todayISO, { media = null, performanceNote = null, businessInstructions = '', activeOpeningIds = null } = {}) {
+export function buildSystemPrompt(lead = {}, todayISO, { media = null, performanceNote = null, businessInstructions = '', activeOpeningIds = null, turnDecision = null } = {}) {
     // Falling back to the built-in catalog is deliberate: a Firestore
     // read that failed must cost the bot the uploaded extras, never the
     // six images it has always had.
@@ -140,6 +140,11 @@ ${businessInstructions}
 העובדות, כללי הבטיחות, ההעברה לאדם והאיסור על שיחות טלפון.
 ` : ''}
 ${styleNote(readStyle(lead.turns)) || ''}
+${turnDecision ? `## החלטת המכירה לתור הזה
+זו החלטה מחייבת שנקבעה לפני הניסוח. אל תבחר צעד אחר ואל תוסיף צעד נוסף.
+${JSON.stringify(turnDecision, null, 2)}
+
+` : ''}
 ${openingBlock(lead, activeOpeningIds)}${journeyBlock(lead.stage || 'new')}
 ## מהלך המכירה — היעד שלך
 0. אם הוא שאל מחיר, תגיד מחיר. עכשיו, בהודעה הזאת, לפני כל שאר הסדר
