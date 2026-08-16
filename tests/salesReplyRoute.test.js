@@ -46,6 +46,8 @@ const mocks = vi.hoisted(() => ({
     isoInIsrael: vi.fn(),
     buildDigest: vi.fn(),
     readSalesSettings: vi.fn(),
+    decideSalesTurn: vi.fn(),
+    enforceSalesReply: vi.fn(),
 }))
 
 vi.mock('@/lib/salesAgent/prompt', () => ({ buildSystemPrompt: mocks.buildSystemPrompt, addDaysISO: mocks.addDaysISO }))
@@ -85,6 +87,10 @@ vi.mock('@/lib/salesAgent/experiments', () => ({
 vi.mock('@/lib/salesAgent/leadsView', () => ({ deriveLead: mocks.deriveLead, sortLeads: mocks.sortLeads, isoInIsrael: mocks.isoInIsrael }))
 vi.mock('@/lib/salesAgent/digest', () => ({ buildDigest: mocks.buildDigest }))
 vi.mock('@/lib/salesAgent/settingsStore', () => ({ readSalesSettings: mocks.readSalesSettings }))
+vi.mock('@/lib/salesAgent/decisionPolicy', () => ({
+    decideSalesTurn: mocks.decideSalesTurn,
+    enforceSalesReply: mocks.enforceSalesReply,
+}))
 
 const lead = { isNew: false, stage: 'engaged', turns: [], followUpCount: 0, imagesSent: [], mediaSent: [] }
 const inbound = overrides => ({ eventId: 'event-token', phone: 'test-phone-token', text: '', messageType: 'text', ...overrides })
@@ -115,6 +121,22 @@ async function postRaw(raw) {
     return { status: response.status, body: await response.json() }
 }
 
+function prepareDecisionPath() {
+    mocks.listMedia.mockResolvedValue([])
+    mocks.mergeMedia.mockReturnValue({})
+    mocks.performanceNote.mockReturnValue(null)
+    mocks.creditPendingMedia.mockResolvedValue(undefined)
+    mocks.buildSystemPrompt.mockReturnValue('system')
+    mocks.toApiMessages.mockReturnValue([])
+    mocks.priceDodged.mockReturnValue(false)
+    mocks.mediaGuard.mockReturnValue(null)
+    mocks.callClaude.mockResolvedValue({ text: 'valid', usage: null, model: 'test' })
+    mocks.parseAgentJson.mockReturnValue({
+        malformed: false, messages: ['model draft'], stage: 'engaged', handoff: false,
+        image: null, eventType: null, callbackPromised: null, followUpAt: null,
+    })
+}
+
 beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
@@ -141,7 +163,96 @@ beforeEach(async () => {
     mocks.isPausedForHuman.mockReturnValue(false)
     mocks.isOwnEcho.mockReturnValue(false)
     mocks.parseOwnerCommand.mockReturnValue(null)
+    mocks.decideSalesTurn.mockReturnValue({
+        conversationKind: 'sales', intent: 'general', nextBestAction: 'answer_then_qualify',
+        maxMessages: 1, maxChars: 180, maxQuestions: 1, knownFacts: [], forbiddenRepeats: [], modelEligible: true,
+    })
+    mocks.enforceSalesReply.mockImplementation(({ parsed }) => parsed)
     ;({ POST } = await import('@/app/api/sales-agent/reply/route'))
+})
+
+describe('conversation-learned decision contract', () => {
+    it.each([
+        ['price', 'כמה עולה הספר?', 'answer', 'המודפס עולה ₪950'],
+        ['known facts', 'אפשר עוד פרטים?', 'answer_then_qualify', 'המודפס כולל כריכה קשה'],
+        ['positive signal', 'וואו זה בדיוק מה שחיפשנו', 'recommend_package', 'המודפס הוא הבחירה המתאימה'],
+        ['checkout friction', 'לא הצלחתי להשלים את התשלום', 'diagnose_checkout', 'איפה זה נתקע לך?'],
+    ])('persists and sends only the enforced %s result', async (_name, text, nextBestAction, message) => {
+        prepareDecisionPath()
+        const decision = {
+            conversationKind: 'sales', intent: _name, nextBestAction,
+            maxMessages: 1, maxChars: 180, maxQuestions: 1,
+            knownFacts: ['eventType'], forbiddenRepeats: ['eventType'], modelEligible: true,
+        }
+        const enforced = {
+            malformed: false, messages: [message], stage: nextBestAction === 'diagnose_checkout' ? 'ready_to_pay' : 'engaged',
+            handoff: false, image: null, eventType: 'bar_mitzvah', callbackPromised: null, followUpAt: null,
+        }
+        mocks.getLead.mockResolvedValue({ ...lead, eventType: 'bar_mitzvah' })
+        mocks.decideSalesTurn.mockReturnValue(decision)
+        mocks.enforceSalesReply.mockReturnValue(enforced)
+
+        const result = await post(inbound({ text }))
+
+        expect(mocks.decideSalesTurn).toHaveBeenCalledWith({
+            lead: expect.objectContaining({ eventType: 'bar_mitzvah' }), incomingText: text, isExistingCustomer: false,
+        })
+        expect(mocks.buildSystemPrompt).toHaveBeenCalledWith(expect.any(Object), expect.any(String), expect.objectContaining({ turnDecision: decision }))
+        expect(mocks.enforceSalesReply).toHaveBeenCalledWith(expect.objectContaining({
+            parsed: expect.objectContaining({ messages: ['model draft'] }), decision,
+            lead: expect.objectContaining({ eventType: 'bar_mitzvah' }), incomingText: text,
+        }))
+        expect(result.body).toMatchObject({ send: [message], sendText: message, stage: enforced.stage, handoff: false })
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            exchange: expect.objectContaining({ parsed: enforced }),
+            outcome: expect.objectContaining({ sendText: message, stage: enforced.stage, handoff: false }),
+        }))
+    })
+
+    it('closes a clean no without handoff, owner notice, or pre-guard persistence', async () => {
+        prepareDecisionPath()
+        const decision = {
+            conversationKind: 'sales', intent: 'negative_exit', nextBestAction: 'close_lost',
+            maxMessages: 1, maxChars: 180, maxQuestions: 1, knownFacts: [], forbiddenRepeats: [], modelEligible: true,
+        }
+        const enforced = {
+            malformed: false, messages: ['תודה שעדכנת, אנחנו כאן אם זה יחזור להיות רלוונטי.'],
+            stage: 'closed_lost', handoff: false, handoffReason: null, image: null,
+            eventType: null, callbackPromised: null, followUpAt: null,
+        }
+        mocks.decideSalesTurn.mockReturnValue(decision)
+        mocks.enforceSalesReply.mockReturnValue(enforced)
+
+        const result = await post(inbound({ text: 'החלטנו לוותר תודה' }))
+
+        expect(result.body).toMatchObject({ stage: 'closed_lost', handoff: false, notifyOwner: null })
+        expect(mocks.setHuman).not.toHaveBeenCalled()
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            exchange: expect.objectContaining({ parsed: enforced }),
+            outcome: expect.objectContaining({ stage: 'closed_lost', handoff: false, notifyOwner: null }),
+        }))
+    })
+
+    it('keeps an active human handoff outside the decision model', async () => {
+        mocks.isPausedForHuman.mockReturnValue(true)
+
+        const result = await post(inbound({ text: 'יש עדכון?' }))
+
+        expect(result.body).toMatchObject({ noReply: true, paused: true, handoff: false })
+        expect(mocks.decideSalesTurn).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+    })
+
+    it('keeps an existing customer outside the decision model', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true })
+        mocks.findCustomerByPhone.mockResolvedValue({ weddingId: 'test-wedding', ownerName: 'לקוח בדיקה' })
+
+        const result = await post(inbound({ text: 'צריך עזרה בספר שכבר קניתי' }))
+
+        expect(result.body).toMatchObject({ customer: true, handoff: true })
+        expect(mocks.decideSalesTurn).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+    })
 })
 
 afterEach(() => {

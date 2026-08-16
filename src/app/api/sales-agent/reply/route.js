@@ -58,6 +58,7 @@ import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
 import { normalizeProviderError, INBOUND_ROUTE_DEADLINE_MS, INBOUND_HEARTBEAT_BUDGET_MS, FALLBACK_COMMIT_RESERVE_MS } from '@/lib/salesAgent/circuitBreaker'
 import { decideInboundAge } from '@/lib/salesAgent/transportPolicy'
+import { decideSalesTurn, enforceSalesReply } from '@/lib/salesAgent/decisionPolicy'
 
 // What the customer sees when the machinery breaks. Deliberately honest
 // and short — no apology theatre, no invented reason.
@@ -481,6 +482,7 @@ export async function POST(req) {
     // Which opening this lead is testing. Assignment uses the configured
     // executable pool, while an existing lead keeps its historical arm.
     const variant = lead.variant || assignVariant(phone, settings.activeOpeningIds)
+    const turnDecision = decideSalesTurn({ lead, incomingText: text, isExistingCustomer: false })
 
     // They wrote back. If something was sent to them inside the last day,
     // that write-back is the only evidence we will ever get that it was
@@ -492,6 +494,7 @@ export async function POST(req) {
         performanceNote: perf,
         businessInstructions: settings.businessInstructions,
         activeOpeningIds: settings.activeOpeningIds,
+        turnDecision,
     })
     const messages = toApiMessages(lead.turns, text)
 
@@ -650,8 +653,16 @@ export async function POST(req) {
         }
     }
 
+    // The provider wrote a draft; this is the only object allowed to
+    // leave the route. It enforces the one-message WhatsApp contract,
+    // known-fact repetition, truthful links, clean losses, and the exact
+    // next action selected before the model call.
+    parsed = enforceSalesReply({ parsed, decision: turnDecision, lead, incomingText: text })
+
     const alreadySeen = new Set([...(lead.imagesSent || []), ...(lead.mediaSent || [])])
     const openingMediaParts = lead.isNew === true
+        && parsed.messages.length > 0
+        && !['close_lost', 'diagnose_checkout', 'send_payment_link'].includes(turnDecision.nextBestAction)
         ? (settings.openingMediaSequence || [])
             .filter(key => library[key] && !alreadySeen.has(key))
             .slice(0, 3)

@@ -224,12 +224,19 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         result.stage = 'closed_lost'
         result.handoff = false
         result.handoffReason = null
+        result.image = null
+        result.openingMediaKeys = []
         delete result.notifyOwner
     } else if (decision.nextBestAction === 'send_payment_link') {
         result.stage = 'ready_to_pay'
         result.handoff = false
         result.handoffReason = null
+        result.image = null
+        result.openingMediaKeys = []
         result.packageInterest = packageFor({ parsed, lead, incomingText }).id
+    } else if (decision.nextBestAction === 'diagnose_checkout') {
+        result.image = null
+        result.openingMediaKeys = []
     }
     return result
 }
