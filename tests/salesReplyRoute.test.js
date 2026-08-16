@@ -446,7 +446,7 @@ describe('Anthropic outage handling', () => {
         expect(mocks.completeProviderFallback).not.toHaveBeenCalled()
     })
 
-    const safeFallback = 'קיבלתי את ההודעה שלך. מישהו מהצוות יחזור אליך בהקדם.'
+    const deterministicFallback = 'המחירים מתחילים ב-₪690.'
 
     function prepareModelPath() {
         mocks.listMedia.mockResolvedValue([])
@@ -460,20 +460,16 @@ describe('Anthropic outage handling', () => {
         mocks.saveExchange.mockResolvedValue(undefined)
     }
 
-    it('completes a simulated fourth, open-breaker claim with a safe fallback and makes no model call', async () => {
+    it('completes an open-breaker claim with a deterministic catalog reply and makes no model call', async () => {
         prepareModelPath()
         mocks.acquireProviderCircuit.mockResolvedValue({ allow: false, mode: 'open' })
 
         const result = await post(inbound({ text: 'צריך מחיר' }))
 
-        expect(result.body).toMatchObject({ sendText: safeFallback, handoff: true })
-        expect(mocks.completeProviderFallback).toHaveBeenCalledWith(expect.objectContaining({
-            eventId: 'event-token', claimToken: 'claim-token', claimGeneration: 1,
-            phone: 'test-phone-token', reason: 'תקלה בשירות ה-AI',
-            recoveryFollowUpAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-            outcome: expect.objectContaining({ sendText: safeFallback, handoff: true, stage: 'handoff' }),
-        }))
-        expect(result.body.notifyOwner).toContain('תקלה בשירות ה-AI')
+        expect(result.body).toMatchObject({ sendText: deterministicFallback, handoff: false, stage: 'engaged' })
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
+        expect(mocks.completeProviderFallback).not.toHaveBeenCalled()
+        expect(result.body.notifyOwner).toBeNull()
         expect(mocks.callClaude).not.toHaveBeenCalled()
     })
 
@@ -484,7 +480,7 @@ describe('Anthropic outage handling', () => {
 
         const result = await post(inbound({ text: 'צריך מחיר' }))
 
-        expect(result.body).toMatchObject({ sendText: safeFallback, handoff: true })
+        expect(result.body).toMatchObject({ sendText: deterministicFallback, handoff: false })
         expect(mocks.acquireProviderCircuit).not.toHaveBeenCalled()
         expect(mocks.callClaude).not.toHaveBeenCalled()
     })
@@ -493,20 +489,21 @@ describe('Anthropic outage handling', () => {
         [Object.assign(new Error('timed out'), { name: 'AbortError' }), 'timeout'],
         [new Error('anthropic 429: busy'), 'rate_limit'],
         [new Error('anthropic 400: credit_balance exhausted'), 'low_credit'],
-    ])('records a normalized %s provider failure before safely handing off', async (error, code) => {
+    ])('records a normalized %s provider failure before using the catalog reply', async (error, code) => {
         prepareModelPath()
         mocks.callClaude.mockRejectedValue(error)
         vi.spyOn(console, 'error').mockImplementation(() => {})
 
         const result = await post(inbound({ text: 'צריך מחיר' }))
 
-        expect(result.body).toMatchObject({ sendText: safeFallback, handoff: true })
+        expect(result.body).toMatchObject({ sendText: deterministicFallback, handoff: false })
         expect(mocks.recordProviderFailure).toHaveBeenCalledWith(code, null, expect.any(Number))
         expect(console.error).toHaveBeenCalledWith('[sales-agent] model provider failure', code)
-        expect(mocks.completeProviderFallback).toHaveBeenCalledWith(expect.objectContaining({ outcome: expect.objectContaining({ sendText: safeFallback, handoff: true }) }))
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
+        expect(mocks.completeProviderFallback).not.toHaveBeenCalled()
     })
 
-    it('counts two malformed model responses as one invalid-json failure and safely hands off', async () => {
+    it('counts two malformed model responses as one invalid-json failure and uses the catalog reply', async () => {
         prepareModelPath()
         mocks.callClaude.mockResolvedValue({ text: 'not json', usage: null, model: 'test' })
         mocks.parseAgentJson.mockReturnValue({ malformed: true, messages: [], handoff: true })
@@ -515,7 +512,7 @@ describe('Anthropic outage handling', () => {
 
         const result = await post(inbound({ text: 'צריך מחיר' }))
 
-        expect(result.body).toMatchObject({ sendText: safeFallback, handoff: true })
+        expect(result.body).toMatchObject({ sendText: deterministicFallback, handoff: false })
         expect(mocks.callClaude).toHaveBeenCalledTimes(2)
         const [firstCall, secondCall] = mocks.callClaude.mock.calls
         expect(firstCall[0].deadlineAtMs).toBe(secondCall[0].deadlineAtMs)
@@ -535,17 +532,17 @@ describe('Anthropic outage handling', () => {
 
         const first = await post(inbound({ text: 'צריך מחיר' }))
 
-        expect(first.body).toMatchObject({ sendText: safeFallback, handoff: true })
+        expect(first.body).toMatchObject({ sendText: deterministicFallback, handoff: false })
         expect(mocks.recordProviderFailure).toHaveBeenCalledTimes(1)
         expect(mocks.recordProviderFailure).toHaveBeenCalledWith('invalid_json', null, expect.any(Number))
         expect(mocks.releaseProviderProbe).not.toHaveBeenCalled()
-        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
 
-        mocks.claimInboundEvent.mockResolvedValueOnce({ action: 'cached', outcome: { sendText: safeFallback, handoff: true } })
+        mocks.claimInboundEvent.mockResolvedValueOnce({ action: 'cached', outcome: { sendText: deterministicFallback, handoff: false } })
         const duplicate = await post(inbound({ text: 'צריך מחיר' }))
         expect(duplicate.body).toMatchObject({ duplicate: true, shouldSend: false, sendText: '', handoff: false })
         expect(mocks.callClaude).toHaveBeenCalledTimes(2)
-        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
     })
 
     it('counts an unknown-model sequence whose recursive fallback expires before fetch', async () => {
@@ -556,17 +553,17 @@ describe('Anthropic outage handling', () => {
 
         const first = await post(inbound({ text: 'צריך מחיר' }))
 
-        expect(first.body).toMatchObject({ sendText: safeFallback, handoff: true })
+        expect(first.body).toMatchObject({ sendText: deterministicFallback, handoff: false })
         expect(mocks.recordProviderFailure).toHaveBeenCalledTimes(1)
         expect(mocks.recordProviderFailure).toHaveBeenCalledWith('timeout', null, expect.any(Number))
         expect(mocks.releaseProviderProbe).not.toHaveBeenCalled()
-        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
 
-        mocks.claimInboundEvent.mockResolvedValueOnce({ action: 'cached', outcome: { sendText: safeFallback, handoff: true } })
+        mocks.claimInboundEvent.mockResolvedValueOnce({ action: 'cached', outcome: { sendText: deterministicFallback, handoff: false } })
         const duplicate = await post(inbound({ text: 'צריך מחיר' }))
         expect(duplicate.body).toMatchObject({ duplicate: true, shouldSend: false, sendText: '', handoff: false })
         expect(mocks.callClaude).toHaveBeenCalledTimes(1)
-        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
     })
 
     it('releases a genuinely zero-fetch sequence without incrementing provider failures', async () => {
@@ -577,17 +574,17 @@ describe('Anthropic outage handling', () => {
 
         const first = await post(inbound({ text: 'צריך מחיר' }))
 
-        expect(first.body).toMatchObject({ sendText: safeFallback, handoff: true })
+        expect(first.body).toMatchObject({ sendText: deterministicFallback, handoff: false })
         expect(mocks.releaseProviderProbe).toHaveBeenCalledTimes(1)
         expect(mocks.releaseProviderProbe).toHaveBeenCalledWith('probe-token', expect.any(Number))
         expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
-        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
 
-        mocks.claimInboundEvent.mockResolvedValueOnce({ action: 'cached', outcome: { sendText: safeFallback, handoff: true } })
+        mocks.claimInboundEvent.mockResolvedValueOnce({ action: 'cached', outcome: { sendText: deterministicFallback, handoff: false } })
         const duplicate = await post(inbound({ text: 'צריך מחיר' }))
         expect(duplicate.body).toMatchObject({ duplicate: true, shouldSend: false, sendText: '', handoff: false })
         expect(mocks.callClaude).toHaveBeenCalledTimes(1)
-        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
     })
 
     it('releases a half-open probe when the API key is missing before fetch, then keeps the duplicate silent', async () => {
@@ -601,25 +598,21 @@ describe('Anthropic outage handling', () => {
 
         const first = await post(inbound({ text: 'צריך מחיר' }))
 
-        expect(first.body).toMatchObject({ sendText: safeFallback, stage: 'handoff', handoff: true })
+        expect(first.body).toMatchObject({ sendText: deterministicFallback, stage: 'engaged', handoff: false })
         expect(mocks.releaseProviderProbe).toHaveBeenCalledTimes(1)
         expect(mocks.releaseProviderProbe).toHaveBeenCalledWith('missing-key-probe', expect.any(Number))
         expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
         expect(mocks.recordProviderSuccess).not.toHaveBeenCalled()
-        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
-        expect(mocks.completeProviderFallback).toHaveBeenCalledWith(expect.objectContaining({
-            eventId: 'event-token', claimToken: 'claim-token', claimGeneration: 1,
-            phone: 'test-phone-token', reason: 'תקלה בשירות ה-AI',
-            outcome: expect.objectContaining({ sendText: safeFallback, stage: 'handoff', handoff: true }),
-        }))
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
+        expect(mocks.completeProviderFallback).not.toHaveBeenCalled()
 
-        mocks.claimInboundEvent.mockResolvedValueOnce({ action: 'cached', outcome: { sendText: safeFallback, handoff: true } })
+        mocks.claimInboundEvent.mockResolvedValueOnce({ action: 'cached', outcome: { sendText: deterministicFallback, handoff: false } })
         const duplicate = await post(inbound({ text: 'צריך מחיר' }))
 
         expect(duplicate.body).toMatchObject({ duplicate: true, shouldSend: false, sendText: '', handoff: false })
         expect(mocks.callClaude).toHaveBeenCalledTimes(1)
         expect(mocks.releaseProviderProbe).toHaveBeenCalledTimes(1)
-        expect(mocks.completeProviderFallback).toHaveBeenCalledTimes(1)
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
     })
 
     it('resets the breaker only after a valid model result', async () => {
@@ -806,40 +799,40 @@ describe('Anthropic outage handling', () => {
         expect(mocks.compactLeadBestEffort).not.toHaveBeenCalled()
     })
 
-    it('does not run success bookkeeping on the provider-fallback path', async () => {
+    it('persists deterministic fallback through the normal durable success path', async () => {
         prepareModelPath()
         mocks.callClaude.mockRejectedValue(Object.assign(new Error('anthropic timeout'), { providerStarted: true }))
         vi.spyOn(console, 'error').mockImplementation(() => {})
 
         const result = await post(inbound({ text: 'שלום' }))
 
-        expect(result.body).toMatchObject({ sendText: safeFallback, handoff: true })
-        expect(mocks.completeSuccessfulExchange).not.toHaveBeenCalled()
+        expect(result.body).toMatchObject({ sendText: deterministicFallback, handoff: false })
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
         expect(mocks.recordMediaSent).not.toHaveBeenCalled()
-        expect(mocks.compactLeadBestEffort).not.toHaveBeenCalled()
+        expect(mocks.compactLeadBestEffort).toHaveBeenCalledTimes(1)
     })
 
-    it('returns an honest no-send 503 when the atomic fallback commit fails', async () => {
+    it('returns an honest no-send 503 when deterministic exchange persistence fails', async () => {
         prepareModelPath()
         mocks.acquireProviderCircuit.mockResolvedValue({ allow: false, mode: 'open' })
-        mocks.completeProviderFallback.mockRejectedValue(new Error('persistence unavailable'))
+        mocks.completeSuccessfulExchange.mockRejectedValue(new Error('persistence unavailable'))
         vi.spyOn(console, 'error').mockImplementation(() => {})
 
         const result = await post(inbound({ text: 'צריך מחיר' }))
 
-        expect(result).toEqual({ status: 503, body: { error: 'provider-fallback-commit-failed' } })
+        expect(result).toEqual({ status: 503, body: { error: 'success-commit-failed' } })
         expect(mocks.setHuman).not.toHaveBeenCalled()
         expect(mocks.callClaude).not.toHaveBeenCalled()
     })
 
-    it('returns an honest no-send 503 for a stale fallback claim', async () => {
+    it('returns an honest no-send 503 for a stale deterministic claim', async () => {
         prepareModelPath()
         mocks.acquireProviderCircuit.mockResolvedValue({ allow: false, mode: 'open' })
-        mocks.completeProviderFallback.mockResolvedValue({ action: 'stale' })
+        mocks.completeSuccessfulExchange.mockResolvedValue({ action: 'stale' })
 
         const result = await post(inbound({ text: 'צריך מחיר' }))
 
-        expect(result).toEqual({ status: 503, body: { error: 'provider-fallback-stale' } })
+        expect(result).toEqual({ status: 503, body: { error: 'success-commit-stale' } })
         expect(mocks.callClaude).not.toHaveBeenCalled()
     })
 })

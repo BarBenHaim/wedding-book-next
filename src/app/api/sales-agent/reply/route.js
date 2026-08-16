@@ -509,110 +509,100 @@ export async function POST(req) {
     const spends = []
 
     if (!parsed) {
-        // Reserve only once all non-provider preparation is complete. An
-        // exhausted preparation budget therefore cannot be counted as an
-        // Anthropic failure or strand a half-open probe.
-        let circuit
-        try {
-            if (Date.now() >= providerDeadlineAtMs) return completeProviderFallback()
-            circuit = await acquireProviderCircuit({ deadlineAtMs: providerDeadlineAtMs })
-        } catch {
-            console.error('[sales-agent] provider breaker check failed')
-            return NextResponse.json({ error: 'provider-breaker-unavailable' }, { status: 503 })
-        }
-        if (!circuit.allow) return completeProviderFallback()
-
-        // Cost bookkeeping. Fire-and-forget on purpose: the customer is
-        // waiting on this request, and a Firestore write for accounting must
-        // never be on the path between them and an answer.
-        const meter = (usage, model, provider = 'anthropic') => {
-            if (!usage) return
-            const { usd, known } = costOfClaudeUsage(usage, model)
-            if (!known) console.warn('[sales-agent] no price known for model', model)
-            spends.push(recordSpend({ provider: provider === 'openai' ? 'openai' : 'anthropic', model, usd, usage, todayISO: today }))
-        }
-
-        let providerFailureCode = null
-        let providerStarted = false
-        try {
-        const { text: raw, usage, model, stopReason, provider } = await callClaude({
-            system, messages, deadlineAtMs: providerDeadlineAtMs,
-            provider: settings.provider, model: settings.model,
-        })
-        providerStarted = true
-        // The merged keys, or every uploaded asset the model was just
-        // told about gets nulled at parse. See parseAgentJson.
-        parsed = parseAgentJson(raw, { mediaKeys: Object.keys(library) })
-        if (usage) console.log('[sales-agent] usage', usage.input_tokens, usage.output_tokens, stopReason)
-        // Metered here rather than after the retry, because a retry is a
-        // second billed call and hiding it would make the failure look
-        // free. See pricing.js.
-        meter(usage, model, provider)
-
-        // ONE retry on unparseable output before giving up on the customer.
-        // A handoff is the safe fallback, not a good one: it pulls a human
-        // into a conversation the bot could have handled. A single retry
-        // costs a couple of agorot and recovers the common cases — a
-        // truncated answer, or a model that wrapped the JSON in prose.
-        if (parsed.malformed) {
-            console.warn('[sales-agent] unparseable output, retrying once', 'stop:', stopReason)
-            let retry
+        // Provider enrichment is optional; the deterministic sales policy is
+        // the durable engine. A missing key, open breaker, or provider error
+        // must not turn a catalog question into a human handoff.
+        let circuit = null
+        if (Date.now() >= providerDeadlineAtMs) {
+            parsed = buildDeterministicSalesReply({ decision: turnDecision, lead, incomingText: text })
+        } else {
             try {
-                retry = await callClaude({
-                    system: `${system}\n\nחשוב: התשובה הקודמת שלך לא הייתה JSON תקין. החזר עכשיו אך ורק אובייקט JSON יחיד, בלי טקסט לפניו או אחריו, ושמור על התשובה ללקוח קצרה.`,
-                    messages,
-                    temperature: 0.3,
-                    deadlineAtMs: providerDeadlineAtMs,
-                    provider: settings.provider,
-                    model: settings.model,
+                circuit = await acquireProviderCircuit({ deadlineAtMs: providerDeadlineAtMs })
+            } catch {
+                console.error('[sales-agent] provider breaker check failed')
+                return NextResponse.json({ error: 'provider-breaker-unavailable' }, { status: 503 })
+            }
+            if (!circuit.allow) {
+                parsed = buildDeterministicSalesReply({ decision: turnDecision, lead, incomingText: text })
+            }
+        }
+
+        if (!parsed) {
+            const meter = (usage, model, provider = 'anthropic') => {
+                if (!usage) return
+                const { usd, known } = costOfClaudeUsage(usage, model)
+                if (!known) console.warn('[sales-agent] no price known for model', model)
+                spends.push(recordSpend({ provider: provider === 'openai' ? 'openai' : 'anthropic', model, usd, usage, todayISO: today }))
+            }
+
+            let providerFailureCode = null
+            let providerStarted = false
+            try {
+                const { text: raw, usage, model, stopReason, provider } = await callClaude({
+                    system, messages, deadlineAtMs: providerDeadlineAtMs,
+                    provider: settings.provider, model: settings.model,
                 })
                 providerStarted = true
+                parsed = parseAgentJson(raw, { mediaKeys: Object.keys(library) })
+                if (usage) console.log('[sales-agent] usage', usage.input_tokens, usage.output_tokens, stopReason)
+                meter(usage, model, provider)
+
+                if (parsed.malformed) {
+                    console.warn('[sales-agent] unparseable output, retrying once', 'stop:', stopReason)
+                    let retry
+                    try {
+                        retry = await callClaude({
+                            system: `${system}\n\nחשוב: התשובה הקודמת שלך לא הייתה JSON תקין. החזר עכשיו אך ורק אובייקט JSON יחיד, בלי טקסט לפניו או אחריו, ושמור על התשובה ללקוח קצרה.`,
+                            messages,
+                            temperature: 0.3,
+                            deadlineAtMs: providerDeadlineAtMs,
+                            provider: settings.provider,
+                            model: settings.model,
+                        })
+                        providerStarted = true
+                    } catch (err) {
+                        providerStarted = providerStarted || err?.providerStarted !== false
+                        providerFailureCode = err?.providerStarted === false ? 'invalid_json' : normalizeProviderError(err)
+                    }
+                    if (retry) {
+                        meter(retry.usage, retry.model, retry.provider)
+                        const second = parseAgentJson(retry.text, { mediaKeys: Object.keys(library) })
+                        if (!second.malformed) parsed = second
+                    }
+                }
+                if (parsed.malformed && !providerFailureCode) providerFailureCode = 'invalid_json'
             } catch (err) {
                 providerStarted = providerStarted || err?.providerStarted !== false
-                providerFailureCode = err?.providerStarted === false ? 'invalid_json' : normalizeProviderError(err)
+                providerFailureCode = providerFailureCode || normalizeProviderError(err)
             }
-            if (retry) {
-                meter(retry.usage, retry.model, retry.provider)
-                const second = parseAgentJson(retry.text, { mediaKeys: Object.keys(library) })
-                if (!second.malformed) parsed = second
+
+            if (!providerStarted) {
+                try {
+                    const released = await releaseProviderProbe(circuit.probeId || null, routeDeadlineAtMs)
+                    if (released.action === 'deadline') return NextResponse.json({ error: 'provider-probe-release-deadline-exhausted' }, { status: 503 })
+                } catch {
+                    return NextResponse.json({ error: 'provider-probe-release-failed' }, { status: 503 })
+                }
+                parsed = buildDeterministicSalesReply({ decision: turnDecision, lead, incomingText: text })
+            } else if (providerFailureCode) {
+                console.error('[sales-agent] model provider failure', providerFailureCode)
+                try {
+                    if (Date.now() >= routeDeadlineAtMs) return NextResponse.json({ error: 'provider-failure-deadline-exhausted' }, { status: 503 })
+                    await recordProviderFailure(providerFailureCode, circuit.probeId || null, routeDeadlineAtMs)
+                } catch {
+                    console.error('[sales-agent] provider breaker failure record failed')
+                    return NextResponse.json({ error: 'provider-failure-record-failed' }, { status: 503 })
+                }
+                parsed = buildDeterministicSalesReply({ decision: turnDecision, lead, incomingText: text })
+            } else {
+                try {
+                    if (Date.now() >= routeDeadlineAtMs) return NextResponse.json({ error: 'provider-success-deadline-exhausted' }, { status: 503 })
+                    await recordProviderSuccess(circuit.probeId || null, routeDeadlineAtMs)
+                } catch {
+                    console.error('[sales-agent] provider breaker success record failed')
+                    return NextResponse.json({ error: 'provider-success-record-failed' }, { status: 503 })
+                }
             }
-        }
-        if (parsed.malformed && !providerFailureCode) providerFailureCode = 'invalid_json'
-        } catch (err) {
-            providerStarted = providerStarted || err?.providerStarted !== false
-            providerFailureCode = providerFailureCode || normalizeProviderError(err)
-        }
-
-        if (!providerStarted) {
-            try {
-                const released = await releaseProviderProbe(circuit.probeId || null, routeDeadlineAtMs)
-                if (released.action === 'deadline') return NextResponse.json({ error: 'provider-probe-release-deadline-exhausted' }, { status: 503 })
-            } catch {
-                return NextResponse.json({ error: 'provider-probe-release-failed' }, { status: 503 })
-            }
-            return completeProviderFallback()
-        }
-
-        if (providerFailureCode) {
-        // Provider payloads can contain prompt fragments and customer text.
-        // The runtime state and logs retain only the fixed classification.
-        console.error('[sales-agent] model provider failure', providerFailureCode)
-        try {
-            if (Date.now() >= routeDeadlineAtMs) return completeProviderFallback()
-            await recordProviderFailure(providerFailureCode, circuit.probeId || null, routeDeadlineAtMs)
-        } catch {
-            console.error('[sales-agent] provider breaker failure record failed')
-            return NextResponse.json({ error: 'provider-failure-record-failed' }, { status: 503 })
-        }
-            return completeProviderFallback()
-        }
-
-        try {
-            if (Date.now() >= routeDeadlineAtMs) return completeProviderFallback()
-            await recordProviderSuccess(circuit.probeId || null, routeDeadlineAtMs)
-        } catch {
-            console.error('[sales-agent] provider breaker success record failed')
-            return NextResponse.json({ error: 'provider-success-record-failed' }, { status: 503 })
         }
     }
 
