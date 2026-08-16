@@ -23,6 +23,11 @@ function normalizedText(text) {
     return String(text || '').trim().toLowerCase()
 }
 
+function hasCheckoutFriction(text) {
+    const value = normalizedText(text)
+    return /(לא\s+הצלח|לא\s+עובד|נתקע|בעיה|תקלה).{0,30}(תשלום|לשלם|קישור|הזמנה)|(תשלום|לשלם|קישור).{0,30}(לא\s+עובד|בעיה|תקלה|נתקע)/.test(value)
+}
+
 export function detectSalesIntent(text = '') {
     const value = normalizedText(text)
 
@@ -32,7 +37,7 @@ export function detectSalesIntent(text = '') {
 
     // Checkout trouble has to beat both the word "מחיר" and a second
     // payment-link send. The useful move is diagnosis, not another pitch.
-    if (/(לא\s+הצלח|לא\s+עובד|נתקע|בעיה|תקלה).{0,30}(תשלום|לשלם|קישור|הזמנה)|(תשלום|קישור).{0,30}(לא\s+עובד|בעיה|תקלה|נתקע)/.test(value)) return 'payment_intent'
+    if (hasCheckoutFriction(value)) return 'payment_intent'
     if (/רוצה\s+להזמין|רוצ[הים]\s+לסגור|איך\s+משלמ|אפשר\s+לשלם|קישור.{0,12}תשלום|אקח\s+את|נלך\s+על|אפשר\s+להזמין/.test(value)) return 'payment_intent'
 
     if (/מחיר|כמה.{0,12}עולה|עלות|חבילות|טווח\s+מחירים/.test(value)) return 'price'
@@ -68,6 +73,7 @@ function explicitlyRequestsPaymentLink(text) {
 function nextAction(intent, lead, incomingText) {
     if (intent === 'negative_exit') return 'close_lost'
     if (intent === 'payment_intent') {
+        if (hasCheckoutFriction(incomingText)) return 'diagnose_checkout'
         return paymentLinkWasSent(lead) && !explicitlyRequestsPaymentLink(incomingText)
             ? 'diagnose_checkout'
             : 'send_payment_link'

@@ -27,6 +27,15 @@ describe('conversation-learned sales decision policy', () => {
         expect(detectSalesIntent('המחיר בסדר אבל היתה לי תקלה בתשלום')).toBe('payment_intent')
     })
 
+    it('diagnoses a broken checkout link after an attempted payment instead of sending it again', () => {
+        const text = 'ניסיתי לשלם אבל הקישור לא עובד'
+        const lead = { stage: 'new' }
+        const decision = decideSalesTurn({ incomingText: text, lead })
+        expect(decision).toMatchObject({ intent: 'payment_intent', nextBestAction: 'diagnose_checkout' })
+        const reply = buildDeterministicSalesReply({ decision, lead, incomingText: text })
+        expect(reply.messages[0]).not.toMatch(/https?:\/\//)
+    })
+
     it('does not ask for known event facts again', () => {
         const decision = decideSalesTurn({
             incomingText: 'אפשר עוד פרטים?',
