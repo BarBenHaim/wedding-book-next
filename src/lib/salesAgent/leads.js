@@ -24,8 +24,9 @@ import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerComman
 import { isoInIsrael } from './leadsView'
 import { assertCompletableInboundOutcome, assertInboundClaimToken, decideInboundCompletion, INBOUND_LEASE_MS, sanitizeInboundOutcome, startInboundClaim } from './inboundEventsCore'
 import { reserveHalfOpenProbe, resolveProviderFailure, resolveProviderSuccess, sanitizeBreakerRuntimeState } from './circuitBreaker'
-import { DELIVERY_ERROR_CODES, DELIVERY_REQUEST_LEASE_MS, decideDeliveryTransition, deliveryEventFingerprint, deliveryEventLedgerId, isDeliveryPending, providerMessageCorrelationId } from './delivery'
+import { createOutboundId, DELIVERY_ERROR_CODES, DELIVERY_REQUEST_LEASE_MS, decideDeliveryTransition, deliveryEventFingerprint, deliveryEventLedgerId, isDeliveryPending, providerMessageCorrelationId } from './delivery'
 import { isDueFollowUpCandidate, pendingFollowUpStatus, rankDueFollowUps } from './followupPolicy'
+import { isDemoEvidenceContent } from './followupEvidence'
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
 // importing this file boots the Admin SDK, which needs credentials.
@@ -294,6 +295,16 @@ export async function completeSuccessfulExchange({ eventId, claimToken, claimGen
     const eventRef = inboundEventRef(eventId)
     const { id, patch } = buildExchangePatch(exchange)
     const leadRef = ref(id)
+    const inboundAttemptId = createOutboundId({ scope: 'inbound', subject: eventId, attempt: 0, part: 'reply' })
+    const replyParts = [
+        { part: 'text', enabled: !!String(outcome?.sendText || '').trim(), text: outcome?.sendText },
+        { part: 'image', enabled: !!String(outcome?.sendImage || '').trim() },
+        { part: 'video', enabled: !!String(outcome?.sendVideo || '').trim() },
+    ].filter(item => item.enabled).map(item => ({
+        ...item,
+        demoEvidence: isDemoEvidenceContent(item),
+        outboundId: createOutboundId({ scope: 'inbound', subject: eventId, attempt: 0, part: item.part }),
+    }))
     return adminDb.runTransaction(async tx => {
         const [eventSnap] = await Promise.all([tx.get(eventRef), tx.get(leadRef)])
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
@@ -304,6 +315,23 @@ export async function completeSuccessfulExchange({ eventId, claimToken, claimGen
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
         tx.set(leadRef, patch, { merge: true })
         tx.set(eventRef, { status: 'completed', leaseUntilMs: null, outcome: cleanOutcome, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+        for (const replyPart of replyParts) {
+            tx.set(deliveryEventRef(replyPart.outboundId), {
+                outboundId: replyPart.outboundId,
+                channel: 'make',
+                status: 'requested',
+                leadId: id,
+                part: replyPart.part,
+                deliveryRole: 'secondary',
+                advanceOnDelivery: false,
+                logicalAttemptId: inboundAttemptId,
+                advancesFollowUp: false,
+                demoEvidence: replyPart.demoEvidence,
+                requestedAtMs: Date.now(),
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: false })
+        }
         return { action: 'completed', outcome: cleanOutcome }
     })
 }
@@ -529,6 +557,7 @@ export async function prepareFollowUpDelivery({
     nextFollowUpAt = null,
     stage = null,
     advancesFollowUp = true,
+    demoEvidence = false,
     logicalAttemptId = outboundId,
     templateName = null,
     requestedAt = new Date().toISOString(),
@@ -572,6 +601,7 @@ export async function prepareFollowUpDelivery({
             advanceOnDelivery: !!advancesFollowUp,
             logicalAttemptId: String(logicalAttemptId),
             advancesFollowUp: !!advancesFollowUp,
+            demoEvidence: demoEvidence === true,
             attemptNumber,
             nextFollowUpAt: nextFollowUpAt || null,
             stage: stage || null,
@@ -697,6 +727,19 @@ export async function recordDeliveryEvent(event) {
             tx.set(correlationRef, {
                 outboundId: String(event.outboundId),
                 ...(!correlationSnap?.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
+                updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true })
+        }
+
+        if (
+            leadRef
+            && stored?.demoEvidence === true
+            && (decision.nextStatus === 'delivered' || decision.nextStatus === 'read')
+            && lead.demoEvidenceDelivered !== true
+        ) {
+            tx.set(leadRef, {
+                demoEvidenceDelivered: true,
+                demoEvidenceDeliveredAt: event.occurredAt,
                 updatedAt: FieldValue.serverTimestamp(),
             }, { merge: true })
         }

@@ -56,6 +56,7 @@ import { mergeMedia, performanceNote } from '@/lib/salesAgent/mediaLibrary'
 import { findOrphans, findStaleHandoffs, handoffAlert } from '@/lib/salesAgent/sweep'
 import { canSendWhatsApp, sendWhatsAppText, sendWhatsAppImage, sendWhatsAppTemplate, FOLLOWUP_TEMPLATE } from '@/lib/salesAgent/whatsapp'
 import { createOutboundId } from '@/lib/salesAgent/delivery'
+import { isDemoEvidenceContent } from '@/lib/salesAgent/followupEvidence'
 
 const WINDOW_MS = 24 * 3600 * 1000
 
@@ -269,6 +270,7 @@ export async function GET(req) {
                 nextFollowUpAt,
                 stage: parsed.stage,
                 advancesFollowUp,
+                demoEvidence: isDemoEvidenceContent({ part, text: advancesFollowUp ? text : '' }),
                 logicalAttemptId,
                 templateName: part === 'template' ? FOLLOWUP_TEMPLATE : null,
                 requestedAt,

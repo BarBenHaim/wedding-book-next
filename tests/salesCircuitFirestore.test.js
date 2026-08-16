@@ -92,6 +92,7 @@ import {
     recordProviderSuccess,
     releaseProviderProbe,
 } from '@/lib/salesAgent/leads'
+import { createOutboundId } from '@/lib/salesAgent/delivery'
 
 const RUNTIME = 'sales_runtime/anthropic'
 const EVENT = 'sales_inbound_events/event-token'
@@ -360,15 +361,55 @@ describe('Firestore atomic successful exchange matrix', () => {
         expect(result.patch.pendingMediaKeys).toEqual(['book_wedding', 'pages_wedding', 'book_open_spread'])
     })
 
-    it('successful exchange commits the exact exchange and event pair', async () => {
+    it('successful exchange commits the exchange, event, and requested text delivery atomically', async () => {
         store.set(EVENT, processingEvent())
         const expected = buildExchangePatch(exchange)
+        // Literal parity with the active Make formula:
+        // inbound-${sha256(inboundMessageId).slice(0, 24)}-0:text
+        const textOutboundId = 'inbound-01639857c87ca59d2f08e31b-0:text'
 
         await expect(completeSuccessfulExchange(successArgs())).resolves.toMatchObject({ action: 'completed' })
 
         expect(store.get(`sales_leads/${expected.id}`)).toEqual(expected.patch)
         expect(store.get(EVENT)).toMatchObject({ status: 'completed', outcome: { sendText: 'answer', handoff: true } })
-        expect(store.committed().map(write => write.key).sort()).toEqual([EVENT, `sales_leads/${expected.id}`].sort())
+        expect(store.get(`sales_delivery_events/${textOutboundId}`)).toMatchObject({
+            outboundId: textOutboundId,
+            leadId: expected.id,
+            channel: 'make',
+            status: 'requested',
+            part: 'text',
+            deliveryRole: 'secondary',
+            advanceOnDelivery: false,
+            demoEvidence: false,
+        })
+        expect(store.committed().map(write => write.key).sort()).toEqual([
+            EVENT,
+            `sales_leads/${expected.id}`,
+            `sales_delivery_events/${textOutboundId}`,
+        ].sort())
+    })
+
+    it('prepares exact Make-correlated media delivery records without storing media URLs', async () => {
+        store.set(EVENT, processingEvent())
+        const outcome = {
+            sendText: 'הנה דוגמה',
+            sendImage: 'https://assets.invalid/private-image-fixture.jpg',
+            sendVideo: 'https://assets.invalid/private-video-fixture.mp4',
+            handoff: false,
+        }
+
+        await completeSuccessfulExchange(successArgs({ outcome }))
+
+        const records = ['text', 'image', 'video'].map(part => {
+            const outboundId = createOutboundId({ scope: 'inbound', subject: 'event-token', attempt: 0, part })
+            return store.get(`sales_delivery_events/${outboundId}`)
+        })
+        expect(records).toEqual([
+            expect.objectContaining({ part: 'text', demoEvidence: false }),
+            expect.objectContaining({ part: 'image', demoEvidence: true }),
+            expect.objectContaining({ part: 'video', demoEvidence: true }),
+        ])
+        expect(JSON.stringify(records)).not.toContain('assets.invalid')
     })
 
     it('successful exchange stale generation writes neither lead nor event', async () => {
@@ -412,7 +453,12 @@ describe('Firestore atomic successful exchange matrix', () => {
 
         await expect(completeSuccessfulExchange(successArgs())).rejects.toThrow('injected commit failure')
 
-        expect(store.staged().map(write => write.key).sort()).toEqual([EVENT, 'sales_leads/456'].sort())
+        const textOutboundId = 'inbound-01639857c87ca59d2f08e31b-0:text'
+        expect(store.staged().map(write => write.key).sort()).toEqual([
+            EVENT,
+            'sales_leads/456',
+            `sales_delivery_events/${textOutboundId}`,
+        ].sort())
         expect(store.committed()).toEqual([])
         expect(store.get(EVENT)).toEqual(processingEvent())
         expect(store.get('sales_leads/456')).toBeUndefined()

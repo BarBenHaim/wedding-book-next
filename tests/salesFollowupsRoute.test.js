@@ -195,8 +195,12 @@ describe('truthful follow-up transport', () => {
 
         expect(mocks.sendWhatsAppText).toHaveBeenCalledWith(lead.phone, 'follow-up')
         expect(mocks.sendWhatsAppImage).toHaveBeenCalledWith(lead.phone, 'https://cdn.example/book.jpg', 'book fixture')
-        expect(mocks.prepareFollowUpDelivery).toHaveBeenCalledWith(expect.objectContaining({ part: 'text', advancesFollowUp: true }))
-        expect(mocks.prepareFollowUpDelivery).toHaveBeenCalledWith(expect.objectContaining({ part: 'image', advancesFollowUp: false }))
+        expect(mocks.prepareFollowUpDelivery).toHaveBeenCalledWith(expect.objectContaining({
+            part: 'text', advancesFollowUp: true, demoEvidence: false,
+        }))
+        expect(mocks.prepareFollowUpDelivery).toHaveBeenCalledWith(expect.objectContaining({
+            part: 'image', advancesFollowUp: false, demoEvidence: true,
+        }))
         const preparedParts = mocks.prepareFollowUpDelivery.mock.calls.map(([delivery]) => delivery)
         expect(preparedParts[0].logicalAttemptId).toBe('outbound-fixture:logical')
         expect(preparedParts[1].logicalAttemptId).toBe(preparedParts[0].logicalAttemptId)

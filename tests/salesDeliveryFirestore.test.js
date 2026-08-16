@@ -298,11 +298,13 @@ describe('transactional follow-up delivery truth', () => {
                 part: 'image',
                 text: '',
                 advancesFollowUp: false,
+                demoEvidence: true,
             }))
             expect(store.get(`sales_delivery_events/${imageOutboundId}`)).toMatchObject({
                 deliveryRole: 'secondary',
                 advanceOnDelivery: false,
                 logicalAttemptId: 'followup-logical-attempt-1',
+                demoEvidence: true,
             })
             await recordDeliveryEvent(event('delivered', { eventId: 'primary-delivered-before-image' }))
             await recordDeliveryEvent(event('read', { eventId: 'primary-read-before-image' }))
@@ -328,6 +330,72 @@ describe('transactional follow-up delivery truth', () => {
             expect(store.get(LEAD)).toEqual(leadBeforeImage)
         },
     )
+
+    it('records acknowledged demo evidence only after a secondary media part is delivered', async () => {
+        const outboundId = 'inbound-demo-fixture-0:image'
+        const deliveryKey = `sales_delivery_events/${outboundId}`
+        store.set(deliveryKey, {
+            outboundId,
+            channel: 'make',
+            status: 'requested',
+            leadId: '41',
+            part: 'image',
+            deliveryRole: 'secondary',
+            advanceOnDelivery: false,
+            logicalAttemptId: 'inbound-demo-fixture-0',
+            advancesFollowUp: false,
+            demoEvidence: true,
+            requestedAtMs: Date.parse('2026-08-14T10:00:00.000Z'),
+        })
+
+        await recordDeliveryEvent(event('accepted', {
+            eventId: 'demo-image-accepted',
+            outboundId,
+            channel: 'make',
+            providerMessageId: 'wamid-demo-image-fixture',
+        }))
+        expect(store.get(LEAD).demoEvidenceDelivered).toBeUndefined()
+
+        await recordDeliveryEvent(event('delivered', {
+            eventId: 'demo-image-delivered',
+            outboundId,
+            channel: 'make',
+            providerMessageId: 'wamid-demo-image-fixture',
+            occurredAt: '2026-08-14T10:02:00.000Z',
+        }))
+        expect(store.get(LEAD)).toMatchObject({
+            demoEvidenceDelivered: true,
+            demoEvidenceDeliveredAt: '2026-08-14T10:02:00.000Z',
+            followUpCount: 0,
+            followUpAt: '2026-08-14',
+        })
+    })
+
+    it('does not claim demo evidence when a prepared media delivery fails', async () => {
+        const outboundId = 'inbound-demo-failed-fixture-0:image'
+        store.set(`sales_delivery_events/${outboundId}`, {
+            outboundId,
+            channel: 'make',
+            status: 'requested',
+            leadId: '41',
+            part: 'image',
+            deliveryRole: 'secondary',
+            advanceOnDelivery: false,
+            logicalAttemptId: 'inbound-demo-failed-fixture-0',
+            advancesFollowUp: false,
+            demoEvidence: true,
+        })
+
+        await recordDeliveryEvent(event('failed', {
+            eventId: 'demo-image-failed',
+            outboundId,
+            channel: 'make',
+            providerMessageId: undefined,
+            errorCode: 'PROVIDER_FAILED',
+        }))
+
+        expect(store.get(LEAD).demoEvidenceDelivered).toBeUndefined()
+    })
 
     it.each(['accepted', 'failed'])(
         'a newer same-attempt primary %s callback cannot overwrite truth after the older primary advances',
