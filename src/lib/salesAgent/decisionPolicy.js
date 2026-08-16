@@ -150,6 +150,26 @@ function deterministicMessage({ parsed, decision, lead, incomingText }) {
     return 'הספר מרכז את הברכות והתמונות מהאירוע למזכרת אחת. מה הכי חשוב לך, החוויה לאורחים או הספר המודפס?'
 }
 
+export function buildDeterministicSalesReply({ decision, lead = {}, incomingText = '' } = {}) {
+    return enforceSalesReply({
+        parsed: {
+            malformed: false,
+            messages: [],
+            stage: lead.stage || 'engaged',
+            handoff: false,
+            handoffReason: null,
+            image: null,
+            openingMediaKeys: [],
+            eventType: lead.eventType || null,
+            callbackPromised: null,
+            followUpAt: null,
+        },
+        decision,
+        lead,
+        incomingText,
+    })
+}
+
 function containsRepeatedKnownQuestion(message, decision) {
     return (decision.forbiddenRepeats || []).some(field => KNOWN_QUESTION_PATTERNS[field]?.test(normalizedText(message)))
 }

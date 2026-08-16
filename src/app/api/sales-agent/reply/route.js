@@ -58,7 +58,7 @@ import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
 import { normalizeProviderError, INBOUND_ROUTE_DEADLINE_MS, INBOUND_HEARTBEAT_BUDGET_MS, FALLBACK_COMMIT_RESERVE_MS } from '@/lib/salesAgent/circuitBreaker'
 import { decideInboundAge } from '@/lib/salesAgent/transportPolicy'
-import { decideSalesTurn, enforceSalesReply } from '@/lib/salesAgent/decisionPolicy'
+import { buildDeterministicSalesReply, decideSalesTurn, enforceSalesReply } from '@/lib/salesAgent/decisionPolicy'
 
 // What the customer sees when the machinery breaks. Deliberately honest
 // and short — no apology theatre, no invented reason.
@@ -489,43 +489,52 @@ export async function POST(req) {
     // worth sending, so it is credited before anything else can fail.
     creditPendingMedia(lead).catch(() => {})
 
-    const system = buildSystemPrompt({ ...lead, daysSinceLastMessage, variant }, today, {
+    const providerKeyAvailable = settings.provider === 'anthropic'
+        ? !!String(process.env.ANTHROPIC_API_KEY || '').trim()
+        : settings.provider === 'openai'
+            ? !!String(process.env.OPENAI_API_KEY || '').trim()
+            : !!String(process.env.ANTHROPIC_API_KEY || '').trim() || !!String(process.env.OPENAI_API_KEY || '').trim()
+    let parsed = providerKeyAvailable
+        ? null
+        : buildDeterministicSalesReply({ decision: turnDecision, lead, incomingText: text })
+
+    const system = parsed ? '' : buildSystemPrompt({ ...lead, daysSinceLastMessage, variant }, today, {
         media: library,
         performanceNote: perf,
         businessInstructions: settings.businessInstructions,
         activeOpeningIds: settings.activeOpeningIds,
         turnDecision,
     })
-    const messages = toApiMessages(lead.turns, text)
-
-    // Reserve only once all non-provider preparation is complete. An
-    // exhausted preparation budget therefore cannot be counted as an
-    // Anthropic failure or strand a half-open probe.
-    let circuit
-    try {
-        if (Date.now() >= providerDeadlineAtMs) return completeProviderFallback()
-        circuit = await acquireProviderCircuit({ deadlineAtMs: providerDeadlineAtMs })
-    } catch {
-        console.error('[sales-agent] provider breaker check failed')
-        return NextResponse.json({ error: 'provider-breaker-unavailable' }, { status: 503 })
-    }
-    if (!circuit.allow) return completeProviderFallback()
-
-    // Cost bookkeeping. Fire-and-forget on purpose: the customer is
-    // waiting on this request, and a Firestore write for accounting must
-    // never be on the path between them and an answer.
+    const messages = parsed ? [] : toApiMessages(lead.turns, text)
     const spends = []
-    const meter = (usage, model, provider = 'anthropic') => {
-        if (!usage) return
-        const { usd, known } = costOfClaudeUsage(usage, model)
-        if (!known) console.warn('[sales-agent] no price known for model', model)
-        spends.push(recordSpend({ provider: provider === 'openai' ? 'openai' : 'anthropic', model, usd, usage, todayISO: today }))
-    }
 
-    let parsed
-    let providerFailureCode = null
-    let providerStarted = false
-    try {
+    if (!parsed) {
+        // Reserve only once all non-provider preparation is complete. An
+        // exhausted preparation budget therefore cannot be counted as an
+        // Anthropic failure or strand a half-open probe.
+        let circuit
+        try {
+            if (Date.now() >= providerDeadlineAtMs) return completeProviderFallback()
+            circuit = await acquireProviderCircuit({ deadlineAtMs: providerDeadlineAtMs })
+        } catch {
+            console.error('[sales-agent] provider breaker check failed')
+            return NextResponse.json({ error: 'provider-breaker-unavailable' }, { status: 503 })
+        }
+        if (!circuit.allow) return completeProviderFallback()
+
+        // Cost bookkeeping. Fire-and-forget on purpose: the customer is
+        // waiting on this request, and a Firestore write for accounting must
+        // never be on the path between them and an answer.
+        const meter = (usage, model, provider = 'anthropic') => {
+            if (!usage) return
+            const { usd, known } = costOfClaudeUsage(usage, model)
+            if (!known) console.warn('[sales-agent] no price known for model', model)
+            spends.push(recordSpend({ provider: provider === 'openai' ? 'openai' : 'anthropic', model, usd, usage, todayISO: today }))
+        }
+
+        let providerFailureCode = null
+        let providerStarted = false
+        try {
         const { text: raw, usage, model, stopReason, provider } = await callClaude({
             system, messages, deadlineAtMs: providerDeadlineAtMs,
             provider: settings.provider, model: settings.model,
@@ -569,22 +578,22 @@ export async function POST(req) {
             }
         }
         if (parsed.malformed && !providerFailureCode) providerFailureCode = 'invalid_json'
-    } catch (err) {
-        providerStarted = providerStarted || err?.providerStarted !== false
-        providerFailureCode = providerFailureCode || normalizeProviderError(err)
-    }
-
-    if (!providerStarted) {
-        try {
-            const released = await releaseProviderProbe(circuit.probeId || null, routeDeadlineAtMs)
-            if (released.action === 'deadline') return NextResponse.json({ error: 'provider-probe-release-deadline-exhausted' }, { status: 503 })
-        } catch {
-            return NextResponse.json({ error: 'provider-probe-release-failed' }, { status: 503 })
+        } catch (err) {
+            providerStarted = providerStarted || err?.providerStarted !== false
+            providerFailureCode = providerFailureCode || normalizeProviderError(err)
         }
-        return completeProviderFallback()
-    }
 
-    if (providerFailureCode) {
+        if (!providerStarted) {
+            try {
+                const released = await releaseProviderProbe(circuit.probeId || null, routeDeadlineAtMs)
+                if (released.action === 'deadline') return NextResponse.json({ error: 'provider-probe-release-deadline-exhausted' }, { status: 503 })
+            } catch {
+                return NextResponse.json({ error: 'provider-probe-release-failed' }, { status: 503 })
+            }
+            return completeProviderFallback()
+        }
+
+        if (providerFailureCode) {
         // Provider payloads can contain prompt fragments and customer text.
         // The runtime state and logs retain only the fixed classification.
         console.error('[sales-agent] model provider failure', providerFailureCode)
@@ -595,15 +604,16 @@ export async function POST(req) {
             console.error('[sales-agent] provider breaker failure record failed')
             return NextResponse.json({ error: 'provider-failure-record-failed' }, { status: 503 })
         }
-        return completeProviderFallback()
-    }
+            return completeProviderFallback()
+        }
 
-    try {
-        if (Date.now() >= routeDeadlineAtMs) return completeProviderFallback()
-        await recordProviderSuccess(circuit.probeId || null, routeDeadlineAtMs)
-    } catch {
-        console.error('[sales-agent] provider breaker success record failed')
-        return NextResponse.json({ error: 'provider-success-record-failed' }, { status: 503 })
+        try {
+            if (Date.now() >= routeDeadlineAtMs) return completeProviderFallback()
+            await recordProviderSuccess(circuit.probeId || null, routeDeadlineAtMs)
+        } catch {
+            console.error('[sales-agent] provider breaker success record failed')
+            return NextResponse.json({ error: 'provider-success-record-failed' }, { status: 503 })
+        }
     }
 
     // A handoff with no words leaves the customer staring at silence.

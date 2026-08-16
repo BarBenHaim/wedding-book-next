@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decideSalesTurn, detectSalesIntent, enforceSalesReply, TURN_LIMITS } from '@/lib/salesAgent/decisionPolicy'
+import { buildDeterministicSalesReply, decideSalesTurn, detectSalesIntent, enforceSalesReply, TURN_LIMITS } from '@/lib/salesAgent/decisionPolicy'
 
 describe('conversation-learned sales decision policy', () => {
     it.each([
@@ -51,6 +51,17 @@ describe('conversation-learned sales decision policy', () => {
 })
 
 describe('deterministic WhatsApp reply contract', () => {
+    it('builds a catalog-grounded price reply when no model is configured', () => {
+        const lead = { stage: 'engaged' }
+        const incomingText = 'כמה עולה הספר?'
+        const decision = decideSalesTurn({ incomingText, lead })
+        const result = buildDeterministicSalesReply({ decision, lead, incomingText })
+        expect(result).toMatchObject({ handoff: false, noReply: false })
+        expect(result.messages).toHaveLength(1)
+        expect(result.messages[0]).toMatch(/690|950|1,?490|₪/)
+        expect(result.messages[0].length).toBeLessThanOrEqual(180)
+    })
+
     it('never lets model output claim a paid sale without payment verification', () => {
         const lead = { stage: 'engaged' }
         const incomingText = 'מעולה נשמע טוב'

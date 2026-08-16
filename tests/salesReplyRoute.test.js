@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => ({
     readSalesSettings: vi.fn(),
     decideSalesTurn: vi.fn(),
     enforceSalesReply: vi.fn(),
+    buildDeterministicSalesReply: vi.fn(),
 }))
 
 vi.mock('@/lib/salesAgent/prompt', () => ({ buildSystemPrompt: mocks.buildSystemPrompt, addDaysISO: mocks.addDaysISO }))
@@ -90,6 +91,7 @@ vi.mock('@/lib/salesAgent/settingsStore', () => ({ readSalesSettings: mocks.read
 vi.mock('@/lib/salesAgent/decisionPolicy', () => ({
     decideSalesTurn: mocks.decideSalesTurn,
     enforceSalesReply: mocks.enforceSalesReply,
+    buildDeterministicSalesReply: mocks.buildDeterministicSalesReply,
 }))
 
 const lead = { isNew: false, stage: 'engaged', turns: [], followUpCount: 0, imagesSent: [], mediaSent: [] }
@@ -141,6 +143,8 @@ beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     process.env.SALES_AGENT_SECRET = 'route-test-secret'
+    process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
+    process.env.OPENAI_API_KEY = 'test-openai-key'
     process.env.SALES_AGENT_OWNER_PHONE = 'owner-token'
     mocks.claimInboundEvent.mockResolvedValue({ action: 'process', claimToken: 'claim-token', claimGeneration: 1 })
     mocks.completeInboundEvent.mockResolvedValue({ action: 'completed' })
@@ -168,6 +172,10 @@ beforeEach(async () => {
         maxMessages: 1, maxChars: 180, maxQuestions: 1, knownFacts: [], forbiddenRepeats: [], modelEligible: true,
     })
     mocks.enforceSalesReply.mockImplementation(({ parsed }) => parsed)
+    mocks.buildDeterministicSalesReply.mockReturnValue({
+        malformed: false, messages: ['המחירים מתחילים ב-₪690.'], stage: 'engaged',
+        handoff: false, image: null, eventType: null, callbackPromised: null, followUpAt: null,
+    })
     ;({ POST } = await import('@/app/api/sales-agent/reply/route'))
 })
 
@@ -421,6 +429,23 @@ describe('inbound event duplicate fencing', () => {
 })
 
 describe('Anthropic outage handling', () => {
+    it('uses a durable catalog reply instead of a human handoff when no provider key exists', async () => {
+        prepareModelPath()
+        delete process.env.ANTHROPIC_API_KEY
+        delete process.env.OPENAI_API_KEY
+
+        const result = await post(inbound({ text: 'כמה עולה הספר?' }))
+
+        expect(result.body).toMatchObject({ send: ['המחירים מתחילים ב-₪690.'], handoff: false, stage: 'engaged' })
+        expect(mocks.buildDeterministicSalesReply).toHaveBeenCalledWith(expect.objectContaining({
+            incomingText: 'כמה עולה הספר?', lead,
+        }))
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.acquireProviderCircuit).not.toHaveBeenCalled()
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
+        expect(mocks.completeProviderFallback).not.toHaveBeenCalled()
+    })
+
     const safeFallback = 'קיבלתי את ההודעה שלך. מישהו מהצוות יחזור אליך בהקדם.'
 
     function prepareModelPath() {
