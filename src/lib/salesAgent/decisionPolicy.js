@@ -183,7 +183,9 @@ function clipMessage(message, maxChars, fallback) {
  */
 export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingText = '' } = {}) {
     if (!decision) return parsed
-    if (decision.nextBestAction === 'silence' || decision.conversationKind === 'paused') {
+    if (decision.nextBestAction === 'silence'
+        || decision.conversationKind === 'paused'
+        || decision.conversationKind === 'customer') {
         return {
             ...parsed,
             messages: [],
