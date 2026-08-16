@@ -827,7 +827,6 @@ export async function dueFollowUps(todayISO, limit = 40) {
     const snap = await adminDb
         .collection(COLLECTION)
         .where('followUpAt', '<=', todayISO)
-        .limit(Math.max(500, limit * 3))
         .get()
     const out = []
     for (const doc of snap.docs) {

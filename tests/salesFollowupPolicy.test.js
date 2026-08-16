@@ -221,8 +221,9 @@ describe('revenue-first follow-up truth', () => {
         expect(followUpEvidence({
             stage: 'demo_sent',
             turns: [{ role: 'assistant', text: 'https://app.weddingtales.co.il/demo' }],
-        }).hasDemoEvidence).toBe(true)
-        expect(followUpEvidence({ stage: 'offer_sent', mediaSent: ['book-one'] }).hasDemoEvidence).toBe(true)
+        }).hasDemoEvidence).toBe(false)
+        expect(followUpEvidence({ stage: 'offer_sent', mediaSent: ['book-one'] }).hasDemoEvidence).toBe(false)
+        expect(followUpEvidence({ stage: 'offer_sent', deliveredMediaKeys: ['book-one'] }).hasDemoEvidence).toBe(true)
     })
 
     it('refuses paid leads and events that have already passed', () => {
