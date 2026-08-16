@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: {}, adminAuth: {} }))
 vi.mock('firebase-admin/firestore', () => ({ FieldValue: { serverTimestamp: () => 'SERVER_TIME' } }))
 
-import { isVerifiedWooOrder, recordVerifiedSalesOutcome } from '@/app/api/createWedding/route'
+import { isVerifiedWooOrder, recordVerifiedSalesOutcome } from '@/lib/salesAgent/paymentTruth'
 
 const paidOrder = status => ({
     id: 'woo-order-test', status, total: '117.00',

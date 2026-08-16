@@ -9,27 +9,7 @@ import crypto from 'crypto'
 import { adminDb as db, adminAuth } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { generateSlug } from '@/lib/generateSlug'
-import { isVerifiedWooOrder } from '@/lib/salesAgent/paymentTruth'
-
-export { isVerifiedWooOrder }
-
-export async function recordVerifiedSalesOutcome(order, closeLead) {
-    if (!isVerifiedWooOrder(order) || typeof closeLead !== 'function') return false
-    const phone = String(order?.billing?.phone || '').trim()
-    if (!phone) return false
-    const firstItem = Array.isArray(order?.line_items) ? order.line_items[0] : null
-    const packageId = String(firstItem?.sku || firstItem?.product_id || '').trim() || null
-    const amount = Number(order?.total)
-    const orderId = String(order.id).trim()
-    await closeLead({
-        phone,
-        orderId,
-        weddingId: orderId,
-        amount: Number.isFinite(amount) ? amount : null,
-        packageId,
-    })
-    return true
-}
+import { isVerifiedWooOrder, recordVerifiedSalesOutcome } from '@/lib/salesAgent/paymentTruth'
 
 export async function POST(req) {
     try {

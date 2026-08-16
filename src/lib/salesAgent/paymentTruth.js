@@ -11,4 +11,23 @@ export function isVerifiedPayment(lead) {
         && lead.verifiedOrderId.trim().length > 0
 }
 
-export default { isVerifiedWooOrder, isVerifiedPayment }
+export async function recordVerifiedSalesOutcome(order, closeLead) {
+    if (!isVerifiedWooOrder(order) || typeof closeLead !== 'function') return false
+    const phone = String(order?.billing?.phone || '').trim()
+    if (!phone) return false
+    const firstItem = Array.isArray(order?.line_items) ? order.line_items[0] : null
+    const packageId = String(firstItem?.sku || firstItem?.product_id || '').trim() || null
+    const amount = Number(order?.total)
+    const orderId = String(order.id).trim()
+    await closeLead({
+        phone,
+        orderId,
+        weddingId: orderId,
+        amount: Number.isFinite(amount) ? amount : null,
+        packageId,
+    })
+    return true
+}
+
+const paymentTruth = { isVerifiedWooOrder, isVerifiedPayment, recordVerifiedSalesOutcome }
+export default paymentTruth
