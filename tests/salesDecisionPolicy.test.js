@@ -57,6 +57,24 @@ describe('conversation-learned sales decision policy', () => {
             modelEligible: false,
         })
     })
+
+    it('honours an expired handoff pause instead of muting the lead forever', () => {
+        const lead = { human: true, stage: 'handoff' }
+        expect(decideSalesTurn({ incomingText: 'היי, חזרתם אליי?', lead, pausedForHuman: false })).toMatchObject({
+            conversationKind: 'sales',
+            modelEligible: true,
+        })
+        expect(decideSalesTurn({ incomingText: 'היי?', lead, pausedForHuman: true })).toMatchObject({
+            conversationKind: 'paused',
+            nextBestAction: 'silence',
+        })
+    })
+
+    it('recognises the full how-much vocabulary as price intent', () => {
+        expect(detectSalesIntent('כמה זה יוצא?')).toBe('price')
+        expect(detectSalesIntent('כמה כסף זה?')).toBe('price')
+        expect(detectSalesIntent('how much is it?')).toBe('price')
+    })
 })
 
 describe('deterministic WhatsApp reply contract', () => {
@@ -68,7 +86,7 @@ describe('deterministic WhatsApp reply contract', () => {
         expect(result).toMatchObject({ handoff: false, noReply: false })
         expect(result.messages).toHaveLength(1)
         expect(result.messages[0]).toMatch(/690|950|1,?490|₪/)
-        expect(result.messages[0].length).toBeLessThanOrEqual(180)
+        expect(result.messages[0].length).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
     })
 
     it('never lets model output claim a paid sale without payment verification', () => {
@@ -83,13 +101,14 @@ describe('deterministic WhatsApp reply contract', () => {
 
     const decisionFor = (incomingText, lead = {}) => decideSalesTurn({ incomingText, lead })
 
-    it('sends one message, keeps one question and stays within 180 characters', () => {
+    it('keeps at most two messages, one question total, within the char limit', () => {
         const decision = decisionFor('אשמח לעוד פרטים')
         const result = enforceSalesReply({
             parsed: {
                 messages: [
                     `זה פתרון שמרכז את כל הברכות והתמונות במקום אחד ${'מאוד '.repeat(45)}מה הכי חשוב לכם? ומתי האירוע?`,
-                    'והנה עוד הודעה שלא צריכה להישלח',
+                    'ואפשר גם להוסיף עוד פרט קטן על הספר. מה דעתך?',
+                    'הודעה שלישית שנחתכת כי המגבלה היא שתיים',
                 ],
                 stage: 'engaged',
                 handoff: false,
@@ -98,9 +117,42 @@ describe('deterministic WhatsApp reply contract', () => {
             lead: {},
             incomingText: 'אשמח לעוד פרטים',
         })
+        expect(result.messages).toHaveLength(2)
+        for (const m of result.messages) expect(m.length).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
+        const questions = result.messages.join(' ').match(/\?/g) || []
+        expect(questions).toHaveLength(1)
+    })
+
+    it('lets a price answered in the second message stand instead of forcing the fallback', () => {
+        const incomingText = 'כמה זה יוצא?'
+        const result = enforceSalesReply({
+            parsed: {
+                messages: ['שאלה מצוינת, יש שלוש חבילות', 'המודפסת שרוב המשפחות בוחרות עולה ₪950 כולל משלוח'],
+                stage: 'engaged',
+                handoff: false,
+            },
+            decision: decisionFor(incomingText),
+            lead: {},
+            incomingText,
+        })
+        expect(result.messages).toHaveLength(2)
+        expect(result.messages.join(' ')).toContain('₪950')
+    })
+
+    it('drops a second message with phone-call language but keeps the first', () => {
+        const incomingText = 'אפשר עוד פרטים?'
+        const result = enforceSalesReply({
+            parsed: {
+                messages: ['בשמחה, הספר מרכז את כל הברכות מהאירוע', 'ואם נוח לך, אתקשר אליך בטלפון'],
+                stage: 'engaged',
+                handoff: false,
+            },
+            decision: decisionFor(incomingText),
+            lead: {},
+            incomingText,
+        })
         expect(result.messages).toHaveLength(1)
-        expect(result.messages[0].length).toBeLessThanOrEqual(180)
-        expect(result.messages[0].match(/\?/g) || []).toHaveLength(1)
+        expect(result.messages[0]).not.toMatch(/אתקשר|טלפון/)
     })
 
     it('answers a price question from the catalog when the model dodges it', () => {
@@ -113,7 +165,7 @@ describe('deterministic WhatsApp reply contract', () => {
         })
         expect(result.messages).toHaveLength(1)
         expect(result.messages[0]).toContain('₪950')
-        expect(result.messages[0].length).toBeLessThanOrEqual(180)
+        expect(result.messages[0].length).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
     })
 
     it('does not repeat questions about facts already known', () => {

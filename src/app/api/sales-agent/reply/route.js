@@ -482,7 +482,15 @@ export async function POST(req) {
     // Which opening this lead is testing. Assignment uses the configured
     // executable pool, while an existing lead keeps its historical arm.
     const variant = lead.variant || assignVariant(phone, settings.activeOpeningIds)
-    const turnDecision = decideSalesTurn({ lead, incomingText: text, isExistingCustomer: false })
+    // The route already returned above while the 48h handoff pause was
+    // live; passing the expiry-aware value keeps the decision layer from
+    // re-muting an expired handoff forever.
+    const turnDecision = decideSalesTurn({
+        lead,
+        incomingText: text,
+        isExistingCustomer: false,
+        pausedForHuman: isPausedForHuman(lead),
+    })
 
     // They wrote back. If something was sent to them inside the last day,
     // that write-back is the only evidence we will ever get that it was

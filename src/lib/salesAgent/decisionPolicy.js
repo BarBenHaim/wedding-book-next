@@ -3,11 +3,14 @@
 // one small, testable instruction before any provider is called.
 
 import { PACKAGES } from './catalog'
-import { hasPrice, priceFallbackMessage } from './selling'
+import { asksPrice, hasPrice, priceFallbackMessage } from './selling'
 
+// Two messages, not one: a real seller answers, then adds one step. A
+// single 180-char bubble forced almost every model reply through the
+// deterministic fallback, which reads as a script because it is one.
 export const TURN_LIMITS = Object.freeze({
-    maxMessages: 1,
-    maxChars: 180,
+    maxMessages: 2,
+    maxChars: 420,
     maxQuestions: 1,
 })
 
@@ -40,7 +43,11 @@ export function detectSalesIntent(text = '') {
     if (hasCheckoutFriction(value)) return 'payment_intent'
     if (/רוצה\s+להזמין|רוצ[הים]\s+לסגור|איך\s+משלמ|אפשר\s+לשלם|קישור.{0,12}תשלום|אקח\s+את|נלך\s+על|אפשר\s+להזמין/.test(value)) return 'payment_intent'
 
-    if (/מחיר|כמה.{0,12}עולה|עלות|חבילות|טווח\s+מחירים/.test(value)) return 'price'
+    // asksPrice carries the full "how much" vocabulary ("כמה זה יוצא",
+    // "כמה כסף", "how much"); the regex keeps the broader topic words.
+    // The two must agree or the dodge-guard repairs a reply the enforcer
+    // then throws away.
+    if (asksPrice(value) || /מחיר|כמה.{0,12}עולה|עלות|חבילות|טווח\s+מחירים/.test(value)) return 'price'
     if (/דוגמ|תמונה|תמונות|סרטון|וידאו|לראות.{0,18}(ספר|איך|מוצר)|איך\s+זה\s+נראה/.test(value)) return 'demo'
     if (/וואו|מדהים|אהבתי|נראה.{0,8}אש|מושלם|יפה\s+ממש|זה\s+בדיוק/.test(value)) return 'positive_signal'
     if (/יקר|להתייעץ|לחשוב|אחשוב|נדבר\s+על\s+זה|רחוק|לא\s+בטוח|מתלבט/.test(value)) return 'objection'
@@ -85,7 +92,7 @@ function nextAction(intent, lead, incomingText) {
     return 'answer_then_qualify'
 }
 
-export function decideSalesTurn({ lead = {}, incomingText = '', isExistingCustomer = false } = {}) {
+export function decideSalesTurn({ lead = {}, incomingText = '', isExistingCustomer = false, pausedForHuman = null } = {}) {
     const facts = knownFacts(lead)
     const base = {
         ...TURN_LIMITS,
@@ -103,7 +110,14 @@ export function decideSalesTurn({ lead = {}, incomingText = '', isExistingCustom
         }
     }
 
-    if (lead?.human === true || lead?.stage === 'handoff') {
+    // The raw flags are the legacy check. A caller that knows whether the
+    // 48h handoff pause is still running (isPausedForHuman) passes it in;
+    // otherwise a lead handed off once would stay mute forever even after
+    // the documented expiry.
+    const paused = pausedForHuman === null
+        ? (lead?.human === true || lead?.stage === 'handoff')
+        : pausedForHuman === true
+    if (paused) {
         return {
             ...base,
             conversationKind: 'paused',
@@ -223,29 +237,55 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
     }
 
     const fallback = deterministicMessage({ parsed, decision, lead, incomingText })
-    let message = compactMessage(parsed.messages?.[0])
+    const candidates = (Array.isArray(parsed.messages) ? parsed.messages : [])
+        .map(compactMessage)
+        .filter(Boolean)
+        .slice(0, Math.max(1, decision.maxMessages || 1))
+
+    // The first message carries the reply; if it is unusable the whole
+    // turn falls back to the deterministic line, exactly as before.
+    // A later message that misbehaves is merely dropped — no reason to
+    // throw away a good answer over a bad postscript.
     const mustUseDeterministic = (
         decision.nextBestAction === 'close_lost'
         || decision.nextBestAction === 'diagnose_checkout'
         || decision.nextBestAction === 'send_payment_link'
-        || (decision.intent === 'price' && !hasPrice(message))
-        || !message
-        || CALL_LANGUAGE.test(normalizedText(message))
-        || containsRepeatedKnownQuestion(message, decision)
+        || (decision.intent === 'price' && !hasPrice(candidates.join('\n')))
+        || candidates.length === 0
+        || CALL_LANGUAGE.test(normalizedText(candidates[0]))
+        || containsRepeatedKnownQuestion(candidates[0], decision)
     )
-    if (mustUseDeterministic) message = fallback
+    let messages = mustUseDeterministic
+        ? [fallback]
+        : [
+            candidates[0],
+            ...candidates.slice(1).filter(m =>
+                !CALL_LANGUAGE.test(normalizedText(m))
+                && !containsRepeatedKnownQuestion(m, decision)),
+        ]
 
-    message = keepOneQuestion(compactMessage(message), decision.maxQuestions)
-    const beforeClip = message
-    message = clipMessage(message, decision.maxChars, compactMessage(fallback))
-    if (beforeClip.includes('?') && !message.includes('?') && fallback.includes('?')) {
-        message = compactMessage(fallback)
+    // One question budget for the whole reply, not per bubble.
+    let questionBudget = decision.maxQuestions
+    messages = messages.map(m => {
+        const kept = keepOneQuestion(compactMessage(m), questionBudget)
+        questionBudget = Math.max(0, questionBudget - (kept.match(/\?/g) || []).length)
+        return kept
+    })
+
+    const hadQuestion = messages.some(m => m.includes('?'))
+    const first = clipMessage(messages[0], decision.maxChars, compactMessage(fallback))
+    const rest = messages.slice(1)
+        .map(m => clipMessage(m, decision.maxChars, ''))
+        .filter(Boolean)
+    let out = [first, ...rest]
+    if (hadQuestion && !out.some(m => m.includes('?')) && fallback.includes('?')) {
+        out = [compactMessage(fallback)]
     }
-    if (!message) message = clipMessage(compactMessage(fallback), decision.maxChars, '')
+    if (!out[0]) out = [clipMessage(compactMessage(fallback), decision.maxChars, '')].filter(Boolean)
 
     const result = {
         ...parsed,
-        messages: [message],
+        messages: out,
         noReply: false,
     }
     // The model can recognize buying intent; it cannot observe money.

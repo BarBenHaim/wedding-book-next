@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decideSalesTurn, enforceSalesReply } from '@/lib/salesAgent/decisionPolicy'
+import { decideSalesTurn, enforceSalesReply, TURN_LIMITS } from '@/lib/salesAgent/decisionPolicy'
 import { SALES_CONVERSATION_PATTERNS } from './fixtures/salesConversationPatterns'
 
 const PHONE_CALL_LANGUAGE = /(שיחת\s+טלפון|בטלפון|אתקשר|להתקשר|אחזור\s+אליך)/
@@ -21,18 +21,16 @@ describe('privacy-safe replay of observed WhatsApp failure patterns', () => {
         expect(decision).toMatchObject({
             intent: fixture.expected.intent,
             nextBestAction: fixture.expected.nextBestAction,
-            maxMessages: 1,
-            maxChars: 180,
-            maxQuestions: 1,
+            ...TURN_LIMITS,
         })
         expect(enforced).toMatchObject({
             stage: fixture.expected.stage,
             handoff: fixture.expected.handoff,
             ...(fixture.expected.noReply === true ? { noReply: true } : {}),
         })
-        expect(enforced.messages.length).toBeLessThanOrEqual(1)
+        expect(enforced.messages.length).toBeLessThanOrEqual(TURN_LIMITS.maxMessages)
         for (const message of enforced.messages) {
-            expect(message.length).toBeLessThanOrEqual(180)
+            expect(message.length).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
             expect((message.match(/\?/g) || []).length).toBeLessThanOrEqual(1)
             expect(message).not.toMatch(PHONE_CALL_LANGUAGE)
         }
