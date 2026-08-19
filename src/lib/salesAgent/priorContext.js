@@ -1,6 +1,9 @@
 const DEFAULT_BUSINESS_OS_URL = 'https://businessos-control.vercel.app'
 const DEFAULT_TIMEOUT_MS = 400
-const SAFE_STAGES = new Set(['new', 'engaged', 'qualified', 'demo_sent', 'checkout', 'closed_won', 'closed_lost', 'handoff'])
+const SAFE_STAGES = new Set([
+    'new', 'engaged', 'qualified', 'demo_sent', 'offer_sent', 'objection',
+    'commit_later', 'ready_to_pay', 'checkout', 'closed_won', 'closed_lost', 'handoff',
+])
 
 const boundedString = (value, max) => typeof value === 'string' && value.trim() && value.trim().length <= max
     ? value.trim()
