@@ -64,6 +64,24 @@ function knownFacts(lead) {
     return facts
 }
 
+function qualificationTarget(lead = {}) {
+    if (!lead.eventType && !lead.eventDate) return 'eventTypeAndDate'
+    if (!lead.eventType) return 'eventType'
+    if (!lead.eventDate) return 'eventDate'
+    return null
+}
+
+function openingFields(lead = {}) {
+    const blocked = lead.isNew !== true
+        || lead.human === true
+        || lead.paymentVerified === true
+        || ['handoff', 'closed_won', 'closed_lost'].includes(lead.stage)
+    return {
+        openingBundleRequired: !blocked,
+        qualificationTarget: blocked ? null : qualificationTarget(lead),
+    }
+}
+
 function paymentLinkWasSent(lead) {
     return Boolean(
         lead?.paymentLinkSentAt
@@ -98,11 +116,14 @@ export function decideSalesTurn({ lead = {}, incomingText = '', isExistingCustom
         ...TURN_LIMITS,
         knownFacts: facts,
         forbiddenRepeats: [...facts],
+        ...openingFields(lead),
     }
 
     if (isExistingCustomer) {
         return {
             ...base,
+            openingBundleRequired: false,
+            qualificationTarget: null,
             conversationKind: 'customer',
             intent: 'support',
             nextBestAction: 'route_existing_customer',
@@ -120,6 +141,8 @@ export function decideSalesTurn({ lead = {}, incomingText = '', isExistingCustom
     if (paused) {
         return {
             ...base,
+            openingBundleRequired: false,
+            qualificationTarget: null,
             conversationKind: 'paused',
             intent: 'handoff_active',
             nextBestAction: 'silence',

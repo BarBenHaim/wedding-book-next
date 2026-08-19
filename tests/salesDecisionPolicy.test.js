@@ -45,6 +45,27 @@ describe('conversation-learned sales decision policy', () => {
         expect(decision.forbiddenRepeats).toEqual(expect.arrayContaining(['eventType', 'eventDate', 'celebrantName']))
     })
 
+    it('requires the opening bundle and identifies exactly which event fact is missing', () => {
+        expect(decideSalesTurn({ incomingText: 'אפשר פרטים?', lead: { isNew: true } })).toMatchObject({
+            openingBundleRequired: true,
+            qualificationTarget: 'eventTypeAndDate',
+        })
+        expect(decideSalesTurn({ incomingText: 'אפשר פרטים?', lead: { isNew: true, eventType: 'bar_mitzvah' } })).toMatchObject({
+            openingBundleRequired: true,
+            qualificationTarget: 'eventDate',
+        })
+        expect(decideSalesTurn({ incomingText: 'אפשר פרטים?', lead: { isNew: true, eventDate: '2026-11-05' } })).toMatchObject({
+            openingBundleRequired: true,
+            qualificationTarget: 'eventType',
+        })
+    })
+
+    it('never requires an opening bundle for an existing, paused or terminal lead', () => {
+        expect(decideSalesTurn({ incomingText: 'אפשר פרטים?', lead: { isNew: false } }).openingBundleRequired).toBe(false)
+        expect(decideSalesTurn({ incomingText: 'יש עדכון?', lead: { isNew: true, human: true } }).openingBundleRequired).toBe(false)
+        expect(decideSalesTurn({ incomingText: 'תודה', lead: { isNew: true, stage: 'closed_won', paymentVerified: true } }).openingBundleRequired).toBe(false)
+    })
+
     it('routes existing customers and active handoffs outside the sales model', () => {
         expect(decideSalesTurn({ incomingText: 'צריך עזרה בספר שכבר קניתי', lead: {}, isExistingCustomer: true })).toMatchObject({
             conversationKind: 'customer',
