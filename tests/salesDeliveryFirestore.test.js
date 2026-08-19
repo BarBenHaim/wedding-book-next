@@ -371,6 +371,48 @@ describe('transactional follow-up delivery truth', () => {
         })
     })
 
+    it('credits an opening image and marks it seen exactly once only after delivered or read evidence', async () => {
+        const outboundId = 'b'.repeat(32)
+        const deliveryKey = `sales_delivery_events/${outboundId}`
+        store.set(deliveryKey, {
+            outboundId,
+            channel: 'make',
+            status: 'requested',
+            leadId: '41',
+            part: 'image',
+            order: 2,
+            mediaKey: 'cover_personalised',
+            deliveryRole: 'secondary',
+            advanceOnDelivery: false,
+            logicalAttemptId: 'inbound-opening-fixture',
+            advancesFollowUp: false,
+            demoEvidence: true,
+        })
+
+        await recordDeliveryEvent(event('accepted', {
+            eventId: 'opening-image-accepted', outboundId, channel: 'make', providerMessageId: 'wamid-opening-image',
+        }))
+        expect(store.get(LEAD).imagesSent).toBeUndefined()
+        expect(store.get('sales_media/cover_personalised')).toBeUndefined()
+
+        await recordDeliveryEvent(event('delivered', {
+            eventId: 'opening-image-delivered', outboundId, channel: 'make', providerMessageId: 'wamid-opening-image',
+            occurredAt: '2026-08-14T10:02:00.000Z',
+        }))
+        expect(store.get(LEAD)).toMatchObject({
+            imagesSent: ['cover_personalised'],
+            mediaSent: ['cover_personalised'],
+            pendingMediaKeys: ['cover_personalised'],
+        })
+        expect(store.get('sales_media/cover_personalised')).toMatchObject({ delivered: 1 })
+
+        await recordDeliveryEvent(event('read', {
+            eventId: 'opening-image-read', outboundId, channel: 'make', providerMessageId: 'wamid-opening-image',
+            occurredAt: '2026-08-14T10:03:00.000Z',
+        }))
+        expect(store.get('sales_media/cover_personalised')).toMatchObject({ delivered: 1 })
+    })
+
     it('does not claim demo evidence when a prepared media delivery fails', async () => {
         const outboundId = 'inbound-demo-failed-fixture-0:image'
         store.set(`sales_delivery_events/${outboundId}`, {

@@ -49,6 +49,8 @@ const mocks = vi.hoisted(() => ({
     decideSalesTurn: vi.fn(),
     enforceSalesReply: vi.fn(),
     buildDeterministicSalesReply: vi.fn(),
+    buildOpeningPlan: vi.fn(),
+    readPriorConversationContext: vi.fn(),
 }))
 
 vi.mock('@/lib/salesAgent/prompt', () => ({ buildSystemPrompt: mocks.buildSystemPrompt, addDaysISO: mocks.addDaysISO }))
@@ -93,6 +95,8 @@ vi.mock('@/lib/salesAgent/decisionPolicy', () => ({
     enforceSalesReply: mocks.enforceSalesReply,
     buildDeterministicSalesReply: mocks.buildDeterministicSalesReply,
 }))
+vi.mock('@/lib/salesAgent/openingPlan', () => ({ buildOpeningPlan: mocks.buildOpeningPlan }))
+vi.mock('@/lib/salesAgent/priorContext', () => ({ readPriorConversationContext: mocks.readPriorConversationContext }))
 
 const lead = { isNew: false, stage: 'engaged', turns: [], followUpCount: 0, imagesSent: [], mediaSent: [] }
 const inbound = overrides => ({ eventId: 'event-token', phone: 'test-phone-token', text: '', messageType: 'text', ...overrides })
@@ -176,10 +180,63 @@ beforeEach(async () => {
         malformed: false, messages: ['המחירים מתחילים ב-₪690.'], stage: 'engaged',
         handoff: false, image: null, eventType: null, callbackPromised: null, followUpAt: null,
     })
+    mocks.buildOpeningPlan.mockReturnValue({
+        eligible: false, qualificationTarget: null, closingText: '', mediaParts: [],
+    })
+    mocks.readPriorConversationContext.mockResolvedValue({ state: 'none', hasPriorConversation: false })
     ;({ POST } = await import('@/app/api/sales-agent/reply/route'))
 })
 
 describe('conversation-learned decision contract', () => {
+    it('continues a historical conversation from known facts and never builds a new-lead opening', async () => {
+        prepareDecisionPath()
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true })
+        mocks.readPriorConversationContext.mockResolvedValue({
+            state: 'found', hasPriorConversation: true, eventType: 'בר מצווה', eventDate: '2026-10-20',
+            celebrantName: 'יואב', stage: 'qualified', messageCount: 8,
+        })
+
+        const result = await post(inbound({ text: 'אפשר להמשיך?' }))
+
+        expect(result.status).toBe(200)
+        expect(mocks.decideSalesTurn).toHaveBeenCalledWith(expect.objectContaining({
+            lead: expect.objectContaining({
+                isNew: false, hasPriorConversation: true, eventType: 'בר מצווה', eventDate: '2026-10-20',
+            }),
+        }))
+        expect(mocks.buildOpeningPlan).toHaveBeenCalledWith(expect.objectContaining({
+            lead: expect.objectContaining({ isNew: false, hasPriorConversation: true }),
+        }))
+        expect(result.body.openingSequenceParts).toEqual([])
+    })
+
+    it('suppresses the opening bundle on an unavailable history check but still answers once', async () => {
+        prepareDecisionPath()
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true })
+        mocks.readPriorConversationContext.mockResolvedValue({ state: 'unknown', hasPriorConversation: true })
+
+        const result = await post(inbound({ text: 'כמה עולה?' }))
+
+        expect(result.status).toBe(200)
+        expect(result.body.sendText).toBeTruthy()
+        expect(result.body.openingSequenceParts).toEqual([])
+        expect(mocks.buildOpeningPlan).toHaveBeenCalledWith(expect.objectContaining({
+            lead: expect.objectContaining({ hasPriorConversation: true }),
+        }))
+    })
+
+    it('allows the opening plan only after history proves the phone has no prior conversation', async () => {
+        prepareDecisionPath()
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true })
+        mocks.readPriorConversationContext.mockResolvedValue({ state: 'none', hasPriorConversation: false })
+
+        await post(inbound({ text: 'שלום' }))
+
+        expect(mocks.buildOpeningPlan).toHaveBeenCalledWith(expect.objectContaining({
+            lead: expect.objectContaining({ isNew: true, hasPriorConversation: false }),
+        }))
+    })
+
     it.each([
         ['price', 'כמה עולה הספר?', 'answer', 'המודפס עולה ₪950'],
         ['known facts', 'אפשר עוד פרטים?', 'answer_then_qualify', 'המודפס כולל כריכה קשה'],
@@ -674,7 +731,7 @@ describe('Anthropic outage handling', () => {
         }))
     })
 
-    it('runs media analytics and compaction only after the durable exchange completes', async () => {
+    it('does not credit media before delivery and compacts only after the durable exchange completes', async () => {
         prepareModelPath()
         mocks.mergeMedia.mockReturnValue({
             'image-key': { kind: 'image', url: '/test-image.jpg', caption: 'catalog caption' },
@@ -690,49 +747,72 @@ describe('Anthropic outage handling', () => {
 
         expect(result.body).toMatchObject({ sendImage: '/test-image.jpg', hasImage: true })
         expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
-        expect(mocks.recordMediaSent).toHaveBeenCalledWith('image-key')
+        expect(mocks.recordMediaSent).not.toHaveBeenCalled()
         expect(mocks.compactLeadBestEffort).toHaveBeenCalledWith('test-phone-token')
-        expect(mocks.completeSuccessfulExchange.mock.invocationCallOrder[0]).toBeLessThan(mocks.recordMediaSent.mock.invocationCallOrder[0])
         expect(mocks.completeSuccessfulExchange.mock.invocationCallOrder[0]).toBeLessThan(mocks.compactLeadBestEffort.mock.invocationCallOrder[0])
     })
 
-    it('returns an ordered, phone-free three-part opening media sequence once for a new lead', async () => {
+    it('returns direct answer, two images, then demo qualification as one phone-free ordered sequence', async () => {
         prepareModelPath()
         mocks.getLead.mockResolvedValue({ ...lead, isNew: true })
         mocks.readSalesSettings.mockResolvedValue({
             revision: 3, enabled: true, provider: 'anthropic', model: 'claude-sonnet-4-5',
             businessInstructions: '', activeOpeningIds: ['question_first'],
-            openingMediaSequence: ['photo-one', 'video-two', 'photo-three'],
+            openingMediaSequence: ['photo-one', 'photo-two'],
         })
         mocks.mergeMedia.mockReturnValue({
             'photo-one': { kind: 'image', url: 'https://media.test/one.jpg', caption: 'one' },
-            'video-two': { kind: 'video', url: 'https://media.test/two.mp4', caption: 'two' },
-            'photo-three': { kind: 'image', url: 'https://media.test/three.jpg', caption: 'three' },
+            'photo-two': { kind: 'image', url: 'https://media.test/two.jpg', caption: 'two' },
+        })
+        mocks.buildOpeningPlan.mockReturnValue({
+            eligible: true,
+            qualificationTarget: 'eventTypeAndDate',
+            closingText: 'אפשר לנסות דמו: https://app.weddingtales.co.il/wedding/demo/photo\n\nלאיזה אירוע ומתי הוא מתקיים?',
+            mediaParts: [
+                { partId: '11111111111111111111111111111111', order: 2, key: 'photo-one', mediaKey: 'photo-one', kind: 'image', url: 'https://media.test/one.jpg', caption: 'one', demoEvidence: true },
+                { partId: '22222222222222222222222222222222', order: 3, key: 'photo-two', mediaKey: 'photo-two', kind: 'image', url: 'https://media.test/two.jpg', caption: 'two', demoEvidence: true },
+            ],
         })
         mocks.callClaude.mockResolvedValue({ text: 'valid', usage: null, model: 'test' })
         mocks.parseAgentJson.mockReturnValue({
-            malformed: false, messages: ['שלום'], stage: 'engaged', handoff: false,
+            malformed: false, messages: ['הספר המודפס עולה ₪950 כולל משלוח'], stage: 'engaged', handoff: false,
             image: null, eventType: null, callbackPromised: null, followUpAt: null,
         })
 
-        const result = await post(inbound({ text: 'שלום' }))
+        const result = await post(inbound({ text: 'כמה עולה הספר?' }))
 
         expect(result.body).toMatchObject({
             sendImage: 'https://media.test/one.jpg',
             hasImage: true,
-            openingMediaCount: 3,
+            openingMediaCount: 2,
             openingMediaParts: [
-                expect.objectContaining({ key: 'photo-one', kind: 'image', order: 1 }),
-                expect.objectContaining({ key: 'video-two', kind: 'video', order: 2 }),
-                expect.objectContaining({ key: 'photo-three', kind: 'image', order: 3 }),
+                expect.objectContaining({ key: 'photo-one', kind: 'image', order: 2 }),
+                expect.objectContaining({ key: 'photo-two', kind: 'image', order: 3 }),
             ],
+            postOpeningText: expect.stringContaining('לאיזה אירוע ומתי'),
         })
-        const serialized = JSON.stringify(result.body.openingMediaParts)
+        expect(result.body.openingSequenceParts.map(part => part.kind)).toEqual(['text', 'image', 'image', 'text'])
+        expect(result.body.openingSequenceParts.map(part => part.order)).toEqual([1, 2, 3, 4])
+        expect(result.body.openingSequenceParts[0].text).toContain('₪950')
+        expect(result.body.openingSequenceParts[3].text).toContain('/photo')
+        expect(result.body.openingSequenceParts[3].text).toContain('לאיזה אירוע ומתי')
+        expect(result.body).toMatchObject({
+            openingAnswerId: result.body.openingSequenceParts[0].partId,
+            openingAnswerText: result.body.openingSequenceParts[0].text,
+            openingImage1Id: '11111111111111111111111111111111',
+            openingImage1Url: 'https://media.test/one.jpg',
+            openingImage2Id: '22222222222222222222222222222222',
+            openingImage2Url: 'https://media.test/two.jpg',
+            openingClosingId: result.body.openingSequenceParts[3].partId,
+            openingClosingText: result.body.openingSequenceParts[3].text,
+        })
+        const serialized = JSON.stringify(result.body.openingSequenceParts)
         expect(serialized).not.toContain('test-phone-token')
-        expect(new Set(result.body.openingMediaParts.map(part => part.partId)).size).toBe(3)
+        expect(new Set(result.body.openingSequenceParts.map(part => part.partId)).size).toBe(4)
         expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            outcome: expect.objectContaining({ openingSequenceParts: result.body.openingSequenceParts }),
             exchange: expect.objectContaining({
-                parsed: expect.objectContaining({ openingMediaKeys: ['photo-one', 'video-two', 'photo-three'] }),
+                parsed: expect.objectContaining({ openingMediaKeys: ['photo-one', 'photo-two'] }),
             }),
         }))
     })

@@ -296,15 +296,24 @@ export async function completeSuccessfulExchange({ eventId, claimToken, claimGen
     const { id, patch } = buildExchangePatch(exchange)
     const leadRef = ref(id)
     const inboundAttemptId = createOutboundId({ scope: 'inbound', subject: eventId, attempt: 0, part: 'reply' })
-    const replyParts = [
-        { part: 'text', enabled: !!String(outcome?.sendText || '').trim(), text: outcome?.sendText },
-        { part: 'image', enabled: !!String(outcome?.sendImage || '').trim() },
-        { part: 'video', enabled: !!String(outcome?.sendVideo || '').trim() },
-    ].filter(item => item.enabled).map(item => ({
-        ...item,
-        demoEvidence: isDemoEvidenceContent(item),
-        outboundId: createOutboundId({ scope: 'inbound', subject: eventId, attempt: 0, part: item.part }),
-    }))
+    const orderedOpeningParts = cleanOutcome.openingSequenceParts || []
+    const replyParts = orderedOpeningParts.length
+        ? orderedOpeningParts.map(item => ({
+            part: item.kind,
+            order: item.order,
+            mediaKey: item.mediaKey,
+            demoEvidence: item.demoEvidence,
+            outboundId: item.partId,
+        }))
+        : [
+            { part: 'text', enabled: !!String(outcome?.sendText || '').trim(), text: outcome?.sendText },
+            { part: 'image', enabled: !!String(outcome?.sendImage || '').trim(), mediaKey: exchange?.parsed?.image || null },
+            { part: 'video', enabled: !!String(outcome?.sendVideo || '').trim() },
+        ].filter(item => item.enabled).map(item => ({
+            ...item,
+            demoEvidence: isDemoEvidenceContent(item),
+            outboundId: createOutboundId({ scope: 'inbound', subject: eventId, attempt: 0, part: item.part }),
+        }))
     return adminDb.runTransaction(async tx => {
         const [eventSnap] = await Promise.all([tx.get(eventRef), tx.get(leadRef)])
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
@@ -322,6 +331,8 @@ export async function completeSuccessfulExchange({ eventId, claimToken, claimGen
                 status: 'requested',
                 leadId: id,
                 part: replyPart.part,
+                ...(replyPart.order == null ? {} : { order: replyPart.order }),
+                ...(replyPart.mediaKey ? { mediaKey: replyPart.mediaKey } : {}),
                 deliveryRole: 'secondary',
                 advanceOnDelivery: false,
                 logicalAttemptId: inboundAttemptId,
@@ -451,24 +462,9 @@ export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, pr
     if (parsed.callbackPromised) patch.callbackPromised = parsed.callbackPromised
     if (source) patch.source = String(source).slice(0, 60)
     if (parsed.objectionRaised) patch.objectionCount = FieldValue.increment(1)
-    // Which media this lead has already seen, so neither the prompt nor
-    // the route can send one twice.
-    //
-    // `pendingMediaKeys` is the other half of the measurement: it holds
-    // what was just sent until they either write back within a day (a
-    // reply credited to it) or do not (cleared, credited to nothing).
-    // Without the timestamp beside it, a reply three weeks later would
-    // count as a reaction to a picture nobody remembers seeing.
-    const mediaKeys = [...new Set([
-        ...(Array.isArray(parsed.openingMediaKeys) ? parsed.openingMediaKeys : []),
-        ...(parsed.image ? [parsed.image] : []),
-    ].map(String).filter(Boolean))]
-    if (mediaKeys.length) {
-        patch.imagesSent = FieldValue.arrayUnion(...mediaKeys)
-        patch.mediaSent = FieldValue.arrayUnion(...mediaKeys)
-        patch.pendingMediaKeys = mediaKeys
-        patch.lastMediaAt = now
-    }
+    // Media is deliberately not marked seen here. This transaction only
+    // prepares delivery records; the provider's delivered/read callback is
+    // the first truthful evidence that the customer actually received it.
 
     // followUpAt null means "stop chasing" and must be written, not skipped.
     patch.followUpAt = followUpAt || null
@@ -731,17 +727,26 @@ export async function recordDeliveryEvent(event) {
             }, { merge: true })
         }
 
-        if (
-            leadRef
-            && stored?.demoEvidence === true
-            && (decision.nextStatus === 'delivered' || decision.nextStatus === 'read')
-            && lead.demoEvidenceDelivered !== true
-        ) {
-            tx.set(leadRef, {
-                demoEvidenceDelivered: true,
-                demoEvidenceDeliveredAt: event.occurredAt,
-                updatedAt: FieldValue.serverTimestamp(),
-            }, { merge: true })
+        const firstDeliveryEvidence = (decision.nextStatus === 'delivered' || decision.nextStatus === 'read')
+            && stored?.status !== 'delivered'
+            && stored?.status !== 'read'
+        if (leadRef && firstDeliveryEvidence && (stored?.demoEvidence === true || stored?.mediaKey)) {
+            const evidencePatch = { updatedAt: FieldValue.serverTimestamp() }
+            if (stored?.demoEvidence === true && lead.demoEvidenceDelivered !== true) {
+                evidencePatch.demoEvidenceDelivered = true
+                evidencePatch.demoEvidenceDeliveredAt = event.occurredAt
+            }
+            if (stored?.mediaKey) {
+                evidencePatch.imagesSent = FieldValue.arrayUnion(String(stored.mediaKey))
+                evidencePatch.mediaSent = FieldValue.arrayUnion(String(stored.mediaKey))
+                evidencePatch.pendingMediaKeys = FieldValue.arrayUnion(String(stored.mediaKey))
+                evidencePatch.lastMediaAt = Date.parse(event.occurredAt)
+                tx.set(mediaRef(String(stored.mediaKey)), {
+                    delivered: FieldValue.increment(1),
+                    updatedAt: FieldValue.serverTimestamp(),
+                }, { merge: true })
+            }
+            tx.set(leadRef, evidencePatch, { merge: true })
         }
 
         if (leadRef && advanceOnDelivery) {

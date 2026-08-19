@@ -78,6 +78,7 @@ describe('proof-first opening plan', () => {
 
     it.each([
         ['existing lead', { isNew: false }],
+        ['new CRM row with prior WhatsApp history', { isNew: true, hasPriorConversation: true }],
         ['active handoff', { isNew: true, stage: 'handoff', human: true }],
         ['verified customer', { isNew: true, stage: 'closed_won', paymentVerified: true }],
         ['cleanly lost lead', { isNew: true, stage: 'closed_lost' }],

@@ -39,7 +39,7 @@ import { callClaude, parseAgentJson, normalizePhone, resolveFollowUp } from '@/l
 import {
     getLead, toApiMessages, isPausedForHuman,
     isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone, listLeads, recordSpend,
-    listMedia, recordMediaSent, creditPendingMedia,
+    listMedia, creditPendingMedia,
     claimInboundEvent, completeInboundEvent,
     acquireProviderCircuit, recordProviderFailure, recordProviderSuccess, releaseProviderProbe, completeProviderFallback as persistProviderFallback, completeSuccessfulExchange, compactLeadBestEffort,
     recordInboundHeartbeat,
@@ -59,6 +59,8 @@ import { buildDigest } from '@/lib/salesAgent/digest'
 import { normalizeProviderError, INBOUND_ROUTE_DEADLINE_MS, INBOUND_HEARTBEAT_BUDGET_MS, FALLBACK_COMMIT_RESERVE_MS } from '@/lib/salesAgent/circuitBreaker'
 import { decideInboundAge } from '@/lib/salesAgent/transportPolicy'
 import { buildDeterministicSalesReply, decideSalesTurn, enforceSalesReply } from '@/lib/salesAgent/decisionPolicy'
+import { buildOpeningPlan } from '@/lib/salesAgent/openingPlan'
+import { readPriorConversationContext } from '@/lib/salesAgent/priorContext'
 
 // What the customer sees when the machinery breaks. Deliberately honest
 // and short — no apology theatre, no invented reason.
@@ -377,6 +379,31 @@ export async function POST(req) {
         return complete({ ok: true, send: [reply], sendText: reply, skipped: 'owner-command' })
     }
 
+    // Firestore only knows conversations that already passed through this
+    // agent. BusinessOS also holds the historical WhatsApp import. Before a
+    // locally-new phone is allowed to receive the opening bundle, prove that
+    // it has no older conversation there. An unavailable check is treated as
+    // prior history: the normal answer may continue, but never a cold reset.
+    if (lead.isNew === true) {
+        const prior = await readPriorConversationContext(phone)
+        if (prior.state === 'found') {
+            lead = {
+                ...lead,
+                isNew: false,
+                hasPriorConversation: true,
+                eventType: lead.eventType || prior.eventType,
+                eventDate: lead.eventDate || prior.eventDate,
+                name: lead.name || prior.celebrantName,
+                stage: prior.stage || lead.stage,
+                notes: lead.notes || prior.summary,
+                historicalMessageCount: prior.messageCount,
+                historicalLastMessageAt: prior.lastMessageAt,
+            }
+        } else {
+            lead = { ...lead, hasPriorConversation: prior.hasPriorConversation === true }
+        }
+    }
+
     // A human already took this conversation. The bot must not talk over
     // Lord mid-negotiation — that is the fastest way to lose a warm lead.
     if (isPausedForHuman(lead)) {
@@ -667,22 +694,8 @@ export async function POST(req) {
     // next action selected before the model call.
     parsed = enforceSalesReply({ parsed, decision: turnDecision, lead, incomingText: text })
 
-    const alreadySeen = new Set([...(lead.imagesSent || []), ...(lead.mediaSent || [])])
-    const openingMediaParts = lead.isNew === true
-        && parsed.messages.length > 0
-        && !['close_lost', 'diagnose_checkout', 'send_payment_link'].includes(turnDecision.nextBestAction)
-        ? (settings.openingMediaSequence || [])
-            .filter(key => library[key] && !alreadySeen.has(key))
-            .slice(0, 3)
-            .map((key, index) => ({
-                partId: createHash('sha256').update(`opening:${eventId}:${index}:${key}`).digest('hex').slice(0, 32),
-                order: index + 1,
-                key,
-                kind: library[key].kind === 'video' ? 'video' : 'image',
-                url: library[key].url,
-                caption: library[key].caption || '',
-            }))
-        : []
+    const openingPlan = buildOpeningPlan({ lead, decision: turnDecision, settings, library, stats, eventId })
+    const openingMediaParts = openingPlan.eligible ? openingPlan.mediaParts : []
     if (openingMediaParts.length) {
         parsed.image = openingMediaParts[0].key
         parsed.openingMediaKeys = openingMediaParts.map(part => part.key)
@@ -700,6 +713,28 @@ export async function POST(req) {
         addDays: addDaysISO,
     })
 
+    const directAnswer = parsed.messages.join('\n\n')
+    const openingSequenceParts = openingPlan.eligible && directAnswer
+        ? [
+            {
+                partId: createHash('sha256').update(`opening:${eventId}:answer`).digest('hex').slice(0, 32),
+                order: 1,
+                kind: 'text',
+                text: directAnswer,
+                mediaKey: null,
+                demoEvidence: false,
+            },
+            ...openingMediaParts,
+            ...(openingPlan.closingText ? [{
+                partId: createHash('sha256').update(`opening:${eventId}:closing`).digest('hex').slice(0, 32),
+                order: openingMediaParts.length + 2,
+                kind: 'text',
+                text: openingPlan.closingText,
+                mediaKey: null,
+                demoEvidence: true,
+            }] : []),
+        ]
+        : []
     const responsePayload = {
         ok: true,
         send: parsed.messages,
@@ -712,7 +747,7 @@ export async function POST(req) {
         // ops/month) that is the difference between ~28 and ~55 real
         // conversations. Nicer typography is not worth halving the number
         // of customers the bot can talk to.
-        sendText: parsed.messages.join('\n\n'),
+        sendText: directAnswer,
         // The photo, if the agent asked for one. Make sends it as a second
         // message right after the text, gated on `hasImage`.
         //
@@ -737,6 +772,22 @@ export async function POST(req) {
         hasVideo: !!media && media.kind === 'video',
         openingMediaCount: openingMediaParts.length,
         openingMediaParts,
+        openingSequenceParts,
+        postOpeningText: openingPlan.eligible ? openingPlan.closingText : '',
+        openingAnswerId: openingSequenceParts[0]?.partId || null,
+        openingAnswerText: openingSequenceParts[0]?.text || null,
+        openingImage1Id: openingMediaParts[0]?.partId || null,
+        openingImage1Url: openingMediaParts[0]?.url || null,
+        openingImage1Caption: openingMediaParts[0]?.caption || null,
+        openingImage2Id: openingMediaParts[1]?.partId || null,
+        openingImage2Url: openingMediaParts[1]?.url || null,
+        openingImage2Caption: openingMediaParts[1]?.caption || null,
+        openingClosingId: openingSequenceParts.at(-1)?.kind === 'text' && openingSequenceParts.length > 1
+            ? openingSequenceParts.at(-1).partId
+            : null,
+        openingClosingText: openingSequenceParts.at(-1)?.kind === 'text' && openingSequenceParts.length > 1
+            ? openingSequenceParts.at(-1).text
+            : null,
         stage: parsed.stage,
         handoff: parsed.handoff,
         followUpAt,
@@ -752,8 +803,6 @@ export async function POST(req) {
     try {
         const durable = await completeSuccessfulExchange({ eventId, claimToken: claim.claimToken, claimGeneration: claim.claimGeneration, exchange, outcome: responsePayload, deadlineAtMs: routeDeadlineAtMs })
         if (durable.action === 'completed') {
-            const mediaKeys = parsed.openingMediaKeys?.length ? parsed.openingMediaKeys : parsed.image ? [parsed.image] : []
-            for (const key of mediaKeys) recordMediaSent(key).catch(() => {})
             compactLeadBestEffort(phone)
             Promise.allSettled(spends).catch(() => {})
             return NextResponse.json(responsePayload)

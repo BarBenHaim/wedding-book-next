@@ -23,6 +23,7 @@ function qualificationQuestion(target) {
 function openingEligible(lead, decision) {
     return lead?.isNew === true
         && decision?.openingBundleRequired === true
+        && lead?.hasPriorConversation !== true
         && lead?.human !== true
         && lead?.paymentVerified !== true
         && !TERMINAL_STAGES.has(lead?.stage)

@@ -62,6 +62,7 @@ describe('conversation-learned sales decision policy', () => {
 
     it('never requires an opening bundle for an existing, paused or terminal lead', () => {
         expect(decideSalesTurn({ incomingText: 'אפשר פרטים?', lead: { isNew: false } }).openingBundleRequired).toBe(false)
+        expect(decideSalesTurn({ incomingText: 'חזרתי אליכם', lead: { isNew: true, hasPriorConversation: true } }).openingBundleRequired).toBe(false)
         expect(decideSalesTurn({ incomingText: 'יש עדכון?', lead: { isNew: true, human: true } }).openingBundleRequired).toBe(false)
         expect(decideSalesTurn({ incomingText: 'תודה', lead: { isNew: true, stage: 'closed_won', paymentVerified: true } }).openingBundleRequired).toBe(false)
     })

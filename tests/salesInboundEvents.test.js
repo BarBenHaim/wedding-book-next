@@ -47,6 +47,7 @@ describe('sanitizeInboundOutcome', () => {
             followUpAt: '2026-08-15',
             notifyOwner: 'טלפון: test-phone-token',
             phone: 'test-phone-token',
+            openingSequenceParts: [],
         })).toEqual({
             sendText: 'שלום',
             sendImage: 'https://cdn.example/book.jpg',
@@ -59,7 +60,25 @@ describe('sanitizeInboundOutcome', () => {
             stage: 'demo_sent',
             followUpAt: '2026-08-15',
             notifyOwner: 'טלפון: [redacted]',
+            openingSequenceParts: [],
         })
+    })
+
+    it('keeps only bounded operational metadata for an ordered opening sequence', () => {
+        const result = sanitizeInboundOutcome({
+            sendText: 'תשובה',
+            handoff: false,
+            openingSequenceParts: [
+                { partId: 'a'.repeat(32), order: 1, kind: 'text', text: 'private answer', url: 'https://private.invalid/a', demoEvidence: false },
+                { partId: 'b'.repeat(32), order: 2, kind: 'image', mediaKey: 'cover_personalised', caption: 'private caption', url: 'https://private.invalid/b', demoEvidence: true },
+            ],
+        })
+
+        expect(result.openingSequenceParts).toEqual([
+            { partId: 'a'.repeat(32), order: 1, kind: 'text', mediaKey: null, demoEvidence: false },
+            { partId: 'b'.repeat(32), order: 2, kind: 'image', mediaKey: 'cover_personalised', demoEvidence: true },
+        ])
+        expect(JSON.stringify(result.openingSequenceParts)).not.toContain('private')
     })
 
     it('keeps a truthful terminal noReply outcome without granting handoff', () => {

@@ -73,6 +73,7 @@ function qualificationTarget(lead = {}) {
 
 function openingFields(lead = {}) {
     const blocked = lead.isNew !== true
+        || lead.hasPriorConversation === true
         || lead.human === true
         || lead.paymentVerified === true
         || ['handoff', 'closed_won', 'closed_lost'].includes(lead.stage)

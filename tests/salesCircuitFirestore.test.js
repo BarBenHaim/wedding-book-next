@@ -356,9 +356,10 @@ describe('Firestore atomic provider fallback matrix', () => {
 describe('Firestore atomic successful exchange matrix', () => {
     it('records every configured opening asset as seen in the same durable exchange', () => {
         const result = buildExchangePatch({ ...exchange, parsed: parsedWithOpeningMedia })
-        expect(result.patch.imagesSent).toEqual({ arrayUnion: ['book_wedding', 'pages_wedding', 'book_open_spread'] })
-        expect(result.patch.mediaSent).toEqual({ arrayUnion: ['book_wedding', 'pages_wedding', 'book_open_spread'] })
-        expect(result.patch.pendingMediaKeys).toEqual(['book_wedding', 'pages_wedding', 'book_open_spread'])
+        expect(result.patch.imagesSent).toBeUndefined()
+        expect(result.patch.mediaSent).toBeUndefined()
+        expect(result.patch.pendingMediaKeys).toBeUndefined()
+        expect(result.patch.lastMediaAt).toBeUndefined()
     })
 
     it('successful exchange commits the exchange, event, and requested text delivery atomically', async () => {
@@ -410,6 +411,30 @@ describe('Firestore atomic successful exchange matrix', () => {
             expect.objectContaining({ part: 'video', demoEvidence: true }),
         ])
         expect(JSON.stringify(records)).not.toContain('assets.invalid')
+    })
+
+    it('atomically prepares every ordered opening part without storing customer text or media URLs', async () => {
+        store.set(EVENT, processingEvent())
+        const openingSequenceParts = [
+            { partId: 'a'.repeat(32), order: 1, kind: 'text', text: 'private answer', demoEvidence: false },
+            { partId: 'b'.repeat(32), order: 2, kind: 'image', mediaKey: 'cover_personalised', url: 'https://assets.invalid/cover.jpg', demoEvidence: true },
+            { partId: 'c'.repeat(32), order: 3, kind: 'image', mediaKey: 'book_open_spread', url: 'https://assets.invalid/spread.jpg', demoEvidence: true },
+            { partId: 'd'.repeat(32), order: 4, kind: 'text', text: 'private demo question', demoEvidence: true },
+        ]
+
+        await completeSuccessfulExchange(successArgs({
+            outcome: { sendText: 'private answer', handoff: false, openingSequenceParts },
+        }))
+
+        const records = openingSequenceParts.map(part => store.get(`sales_delivery_events/${part.partId}`))
+        expect(records).toEqual([
+            expect.objectContaining({ outboundId: 'a'.repeat(32), part: 'text', order: 1, demoEvidence: false }),
+            expect.objectContaining({ outboundId: 'b'.repeat(32), part: 'image', order: 2, mediaKey: 'cover_personalised', demoEvidence: true }),
+            expect.objectContaining({ outboundId: 'c'.repeat(32), part: 'image', order: 3, mediaKey: 'book_open_spread', demoEvidence: true }),
+            expect.objectContaining({ outboundId: 'd'.repeat(32), part: 'text', order: 4, demoEvidence: true }),
+        ])
+        expect(JSON.stringify(records)).not.toMatch(/private|assets\.invalid/)
+        expect(store.committed().map(write => write.key).filter(key => key.startsWith('sales_delivery_events/'))).toHaveLength(4)
     })
 
     it('successful exchange stale generation writes neither lead nor event', async () => {

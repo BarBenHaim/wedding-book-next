@@ -5,6 +5,29 @@ const redactPhoneNumber = text => text
     .replace(/(?:\+?972|0)(?:[\s()\-]*\d){8,}/g, '[redacted]')
     .replace(/(טלפון:\s*)[^\n]+/g, '$1[redacted]')
 
+const OPENING_PART_ID = /^[a-f0-9]{32}$/i
+const OPENING_KINDS = new Set(['text', 'image', 'video'])
+
+function sanitizeOpeningSequenceParts(parts) {
+    if (!Array.isArray(parts)) return []
+    return parts.slice(0, 5).flatMap(part => {
+        const partId = String(part?.partId || '')
+        const order = Number(part?.order)
+        const kind = String(part?.kind || '')
+        if (!OPENING_PART_ID.test(partId) || !Number.isInteger(order) || order < 1 || order > 5 || !OPENING_KINDS.has(kind)) return []
+        const mediaKey = typeof part?.mediaKey === 'string' && part.mediaKey.length <= 100
+            ? part.mediaKey
+            : null
+        return [{
+            partId,
+            order,
+            kind,
+            mediaKey,
+            demoEvidence: part?.demoEvidence === true,
+        }]
+    })
+}
+
 // Completed-event records must be safe to return inside the duplicate
 // wrapper. They describe the original result but never include `ok`, a
 // `send` array, delivery gates, phone numbers, or anything else that could
@@ -24,6 +47,7 @@ export function sanitizeInboundOutcome(outcome = {}) {
         stage: cachedText(outcome.stage),
         followUpAt: cachedText(outcome.followUpAt),
         notifyOwner: cachedText(outcome.notifyOwner) ? redactPhoneNumber(cachedText(outcome.notifyOwner)) : null,
+        openingSequenceParts: sanitizeOpeningSequenceParts(outcome.openingSequenceParts),
     }
 }
 
