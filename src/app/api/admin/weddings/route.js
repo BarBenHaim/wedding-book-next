@@ -164,6 +164,9 @@ export async function PATCH(req) {
             'amountPaid', 'currency',
             // Per-event max blessing length (210 default, capped 50–1200).
             'blessingMaxChars',
+            // Event date — editable after creation (drives status badges,
+            // sorting and the email automations' before/after triggers).
+            'weddingDate',
             // Production stage. The board that managed it was removed;
             // the field is still written by the wedding editor.
             'productionStatus',
@@ -250,6 +253,15 @@ export async function PATCH(req) {
             if (key === 'blessingMaxChars') {
                 const n = Number(v)
                 clean[key] = Number.isFinite(n) ? Math.max(50, Math.min(1200, Math.round(n))) : 210
+                continue
+            }
+
+            if (key === 'weddingDate') {
+                // Stored as 'YYYY-MM-DD' (same shape the create form writes).
+                // Empty/invalid clears the date; GET normalizes legacy
+                // Timestamp values, so a plain string here is safe everywhere.
+                const t = typeof v === 'string' ? v.trim() : ''
+                clean[key] = /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null
                 continue
             }
 

@@ -444,6 +444,11 @@ function EventTypeEditor({ wedding, onSave }) {
         // the legacy behavior for every wedding doc that predates i18n.
         locale: w.locale || 'he',
         themeColor: w.themeColor || null,
+        // Event date for <input type=date> — doc may hold 'YYYY-MM-DD' or a
+        // legacy ISO timestamp string; either way the first 10 chars are the day.
+        weddingDate: typeof w.weddingDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(w.weddingDate)
+            ? w.weddingDate.slice(0, 10)
+            : '',
         brideName: w.brideName || '',
         brideNameHe: w.brideNameHe || '',
         groomName: w.groomName || '',
@@ -510,6 +515,8 @@ function EventTypeEditor({ wedding, onSave }) {
             designVariant: draft.designVariant,
             locale: draft.locale,
             themeColor: draft.themeColor, // null → server stores null = inherit
+            // Always sent so clearing the date also persists ('' → null).
+            weddingDate: draft.weddingDate || null,
         }
         if (showBrideGroom) {
             patch.brideName = draft.brideName
@@ -579,6 +586,18 @@ function EventTypeEditor({ wedding, onSave }) {
                         <option key={t} value={t}>{getEventConfig(t).hebrewLabel}</option>
                     ))}
                 </select>
+            </div>
+
+            {/* Event date — drives the status badges, the table sorting and
+                the email automations' before/after-event triggers. */}
+            <div className='mb-3'>
+                <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>תאריך האירוע</label>
+                <input
+                    type='date'
+                    value={draft.weddingDate}
+                    onChange={e => set('weddingDate', e.target.value)}
+                    className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                />
             </div>
 
             {/* Max blessing length — per event. Higher limits make the
