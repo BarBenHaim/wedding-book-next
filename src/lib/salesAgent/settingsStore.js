@@ -19,7 +19,8 @@ export async function saveSalesSettings(input, { updatedBy, registeredMediaKeys 
         const currentRevision = Number(current.revision) || 0
         if (Number(input?.revision) !== currentRevision) throw new Error('STALE_REVISION')
 
-        const normalized = normalizeSalesSettings({ ...current, ...input, revision: currentRevision }, { registeredMediaKeys })
+        const migratedCurrent = resolveSalesSettings(current, { registeredMediaKeys })
+        const normalized = normalizeSalesSettings({ ...migratedCurrent, ...input, revision: currentRevision }, { registeredMediaKeys })
         const next = {
             ...normalized,
             revision: currentRevision + 1,

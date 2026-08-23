@@ -65,4 +65,24 @@ describe('sales settings Firestore store', () => {
         expect(store.get('sales_agent_settings/active')).toMatchObject({ revision: 4 })
         expect(store.get('sales_agent_settings_history/revision-4')).toBeUndefined()
     })
+
+    it('migrates a retired opening arm while saving an opening-only control change', async () => {
+        store.set('sales_agent_settings/active', {
+            revision: 5,
+            enabled: true,
+            provider: 'auto',
+            model: 'claude-sonnet-4-5',
+            activeOpeningIds: ['call_offer'],
+            openingMediaSequence: [],
+        })
+
+        const saved = await saveSalesSettings({
+            revision: 5,
+            enabled: false,
+            openingText: 'פתיחה מבוקרת',
+        }, { updatedBy: 'owner@example.test' })
+
+        expect(saved).toMatchObject({ revision: 6, enabled: false, openingText: 'פתיחה מבוקרת' })
+        expect(saved.activeOpeningIds).not.toContain('call_offer')
+    })
 })
