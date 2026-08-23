@@ -50,6 +50,7 @@ const mocks = vi.hoisted(() => ({
     enforceSalesReply: vi.fn(),
     buildDeterministicSalesReply: vi.fn(),
     buildOpeningPlan: vi.fn(),
+    buildOpeningOnlyPlan: vi.fn(),
     readPriorConversationContext: vi.fn(),
 }))
 
@@ -96,6 +97,7 @@ vi.mock('@/lib/salesAgent/decisionPolicy', () => ({
     buildDeterministicSalesReply: mocks.buildDeterministicSalesReply,
 }))
 vi.mock('@/lib/salesAgent/openingPlan', () => ({ buildOpeningPlan: mocks.buildOpeningPlan }))
+vi.mock('@/lib/salesAgent/openingOnly', () => ({ buildOpeningOnlyPlan: mocks.buildOpeningOnlyPlan }))
 vi.mock('@/lib/salesAgent/priorContext', () => ({ readPriorConversationContext: mocks.readPriorConversationContext }))
 
 const lead = { isNew: false, stage: 'engaged', turns: [], followUpCount: 0, imagesSent: [], mediaSent: [] }
@@ -183,8 +185,128 @@ beforeEach(async () => {
     mocks.buildOpeningPlan.mockReturnValue({
         eligible: false, qualificationTarget: null, closingText: '', mediaParts: [],
     })
+    mocks.buildOpeningOnlyPlan.mockReturnValue({
+        eligible: false, text: '', mediaParts: [], sequenceParts: [],
+    })
     mocks.readPriorConversationContext.mockResolvedValue({ state: 'none', hasPriorConversation: false })
     ;({ POST } = await import('@/app/api/sales-agent/reply/route'))
+})
+
+describe('owner-controlled opening-only mode', () => {
+    it('sends the exact configured opening once with ordered media and does zero model or breaker work', async () => {
+        const exactText = 'היי, כיף שכתבת 😊\nצירפתי דוגמאות. לאיזה אירוע ומתי הוא מתקיים?'
+        const sequenceParts = [
+            { partId: 'text-part-id', order: 1, kind: 'text', text: exactText, mediaKey: null, demoEvidence: false },
+            { partId: 'image-part-id', order: 2, kind: 'image', mediaKey: 'cover', url: 'https://media.test/cover.jpg', caption: 'כריכה', demoEvidence: true },
+            { partId: 'video-part-id', order: 3, kind: 'video', mediaKey: 'demo', url: 'https://media.test/demo.mp4', caption: 'דמו', demoEvidence: true },
+        ]
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true, stage: 'new' })
+        mocks.readSalesSettings.mockResolvedValue({
+            revision: 2, enabled: true, mode: 'opening_only', openingText: exactText,
+            provider: 'anthropic', model: 'claude-haiku-4-5', fallbackModel: 'claude-haiku-4-5',
+            businessInstructions: '', activeOpeningIds: ['question_first'], openingMediaSequence: ['cover', 'demo'],
+        })
+        mocks.listMedia.mockResolvedValue([])
+        mocks.mergeMedia.mockReturnValue({
+            cover: { kind: 'image', url: 'https://media.test/cover.jpg', caption: 'כריכה' },
+            demo: { kind: 'video', url: 'https://media.test/demo.mp4', caption: 'דמו' },
+        })
+        mocks.buildOpeningOnlyPlan.mockReturnValue({
+            eligible: true,
+            text: exactText,
+            mediaParts: sequenceParts.slice(1),
+            sequenceParts,
+        })
+
+        const result = await post(inbound({ text: 'אפשר פרטים?' }))
+
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({
+            shouldSend: true,
+            sendText: exactText,
+            send: [exactText],
+            openingSequenceParts: sequenceParts,
+            openingMediaCount: 2,
+            followUpAt: null,
+            handoff: false,
+        })
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.buildSystemPrompt).not.toHaveBeenCalled()
+        expectNoProviderWork()
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            exchange: expect.objectContaining({
+                parsed: expect.objectContaining({ messages: [exactText], openingMediaKeys: ['cover', 'demo'] }),
+            }),
+            outcome: expect.objectContaining({ openingSequenceParts: sequenceParts }),
+        }))
+    })
+
+    it.each([
+        ['existing lead', { ...lead, isNew: false }, { state: 'none', hasPriorConversation: false }],
+        ['prior conversation', { ...lead, isNew: true }, { state: 'found', hasPriorConversation: true, messageCount: 8 }],
+    ])('never answers an %s and completes the inbound event as intentional silence', async (_name, storedLead, prior) => {
+        mocks.getLead.mockResolvedValue(storedLead)
+        mocks.readPriorConversationContext.mockResolvedValue(prior)
+        mocks.readSalesSettings.mockResolvedValue({
+            revision: 2, enabled: true, mode: 'opening_only', openingText: 'פתיחה מדויקת',
+            provider: 'anthropic', model: 'claude-haiku-4-5', fallbackModel: 'claude-haiku-4-5',
+            businessInstructions: '', activeOpeningIds: ['question_first'], openingMediaSequence: [],
+        })
+        mocks.listMedia.mockResolvedValue([])
+        mocks.mergeMedia.mockReturnValue({})
+
+        const result = await post(inbound({ text: 'אפשר להמשיך?' }))
+
+        expect(result.body).toMatchObject({ shouldSend: false, sendText: '', noReply: true, skipped: 'opening-only-existing' })
+        expect(mocks.completeInboundEvent).toHaveBeenCalledWith(expect.objectContaining({
+            outcome: expect.objectContaining({ noReply: true, handoff: false, skipped: 'opening-only-existing' }),
+        }))
+        expect(mocks.completeSuccessfulExchange).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it('keeps a previously paying customer silent instead of sending the legacy support reply', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true, stage: 'new' })
+        mocks.findCustomerByPhone.mockResolvedValue({ weddingId: 'existing-order', ownerName: 'לקוח קיים' })
+        mocks.readSalesSettings.mockResolvedValue({
+            revision: 2, enabled: true, mode: 'opening_only', openingText: 'פתיחה מדויקת',
+            provider: 'anthropic', model: 'claude-haiku-4-5', fallbackModel: 'claude-haiku-4-5',
+            businessInstructions: '', activeOpeningIds: ['question_first'], openingMediaSequence: [],
+        })
+        mocks.listMedia.mockResolvedValue([])
+        mocks.mergeMedia.mockReturnValue({})
+
+        const result = await post(inbound({ text: 'שאלה על ההזמנה שלי' }))
+
+        expect(result.body).toMatchObject({
+            customer: true, shouldSend: false, sendText: '', noReply: true,
+            skipped: 'opening-only-customer',
+        })
+        expect(result.body.send).toEqual([])
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it('fails silent when lead state is unavailable rather than sending an uncontrolled fallback', async () => {
+        mocks.getLead.mockRejectedValue(new Error('private-database-error'))
+        mocks.readSalesSettings.mockResolvedValue({
+            revision: 2, enabled: true, mode: 'opening_only', openingText: 'פתיחה מדויקת',
+            provider: 'anthropic', model: 'claude-haiku-4-5', fallbackModel: 'claude-haiku-4-5',
+            businessInstructions: '', activeOpeningIds: ['question_first'], openingMediaSequence: [],
+        })
+        mocks.listMedia.mockResolvedValue([])
+        mocks.mergeMedia.mockReturnValue({})
+
+        const result = await post(inbound({ text: 'אפשר פרטים?' }))
+
+        expect(result.body).toMatchObject({
+            shouldSend: false, sendText: '', noReply: true, skipped: 'opening-only-state-unavailable',
+        })
+        expect(result.body.send).toEqual([])
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
 })
 
 describe('conversation-learned decision contract', () => {

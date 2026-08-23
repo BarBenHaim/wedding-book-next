@@ -11,6 +11,8 @@ describe('sales agent settings', () => {
         expect(DEFAULT_SALES_SETTINGS).toMatchObject({
             revision: 0,
             enabled: true,
+            mode: 'opening_only',
+            openingText: expect.stringContaining('לאיזה אירוע'),
             provider: 'auto',
             model: 'claude-sonnet-4-5',
             fallbackModel: 'claude-haiku-4-5',
@@ -24,6 +26,8 @@ describe('sales agent settings', () => {
         const normalized = normalizeSalesSettings({
             revision: 7,
             enabled: false,
+            mode: 'opening_only',
+            openingText: '  היי!\n\nצירפתי דוגמה.  ',
             provider: 'anthropic',
             model: 'claude-haiku-4-5',
             fallbackModel: 'attacker-model',
@@ -37,6 +41,8 @@ describe('sales agent settings', () => {
         expect(normalized).toEqual({
             revision: 7,
             enabled: false,
+            mode: 'opening_only',
+            openingText: 'היי!\n\nצירפתי דוגמה.',
             provider: 'anthropic',
             model: 'claude-haiku-4-5',
             businessInstructions: 'תתמקד בסגירה',
@@ -53,6 +59,9 @@ describe('sales agent settings', () => {
         expect(() => normalizeSalesSettings({ revision: 1, provider: 'other' })).toThrow('INVALID_PROVIDER')
         expect(() => normalizeSalesSettings({ revision: 1, model: 'made-up' })).toThrow('INVALID_MODEL')
         expect(() => normalizeSalesSettings({ revision: 1, businessInstructions: 'א'.repeat(4001) })).toThrow('INSTRUCTIONS_TOO_LONG')
+        expect(() => normalizeSalesSettings({ revision: 1, openingText: '' })).toThrow('OPENING_TEXT_REQUIRED')
+        expect(() => normalizeSalesSettings({ revision: 1, openingText: 'א'.repeat(1501) })).toThrow('OPENING_TEXT_TOO_LONG')
+        expect(() => normalizeSalesSettings({ revision: 1, mode: 'full_conversation' })).toThrow('INVALID_MODE')
     })
 
     it('resolves immutable policy and fallback on the server', () => {

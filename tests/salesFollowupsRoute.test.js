@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
     sendWhatsAppImage: vi.fn(),
     sendWhatsAppTemplate: vi.fn(),
     createOutboundId: vi.fn(),
+    readSalesSettings: vi.fn(),
 }))
 
 vi.mock('@/lib/firebaseAdmin', () => ({ adminAuth: { verifyIdToken: mocks.verifyIdToken } }))
@@ -54,6 +55,7 @@ vi.mock('@/lib/salesAgent/whatsapp', () => ({
 vi.mock('@/lib/salesAgent/delivery', () => ({
     createOutboundId: mocks.createOutboundId,
 }))
+vi.mock('@/lib/salesAgent/settingsStore', () => ({ readSalesSettings: mocks.readSalesSettings }))
 
 const lead = {
     phone: 'private-phone-sentinel',
@@ -110,7 +112,38 @@ beforeEach(async () => {
     mocks.sendWhatsAppImage.mockResolvedValue({ accepted: true, providerMessageId: 'wamid-image-fixture' })
     mocks.sendWhatsAppTemplate.mockResolvedValue({ accepted: true, providerMessageId: 'wamid-template-fixture' })
     mocks.recordDeliveryEvent.mockResolvedValue({ action: 'applied', status: 'accepted', advanced: false })
+    mocks.readSalesSettings.mockResolvedValue({ enabled: true, mode: 'full_conversation' })
     ;({ GET } = await import('@/app/api/sales-agent/followups/route'))
+})
+
+describe('opening-only mode', () => {
+    it('suppresses the complete follow-up pipeline before reads, model calls, or transport', async () => {
+        mocks.readSalesSettings.mockResolvedValue({ enabled: true, mode: 'opening_only' })
+
+        const result = await runCron()
+
+        expect(result).toMatchObject({
+            status: 200,
+            body: { ok: true, skipped: 'opening-only-mode', delivery: 'none', count: 0, items: [] },
+        })
+        expect(mocks.listLeads).not.toHaveBeenCalled()
+        expect(mocks.dueFollowUps).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
+    })
+
+    it('fails closed before customer work when the mode cannot be read', async () => {
+        mocks.readSalesSettings.mockRejectedValue(new Error('private-settings-error'))
+
+        const result = await runCron()
+
+        expect(result).toEqual({ status: 503, body: { error: 'SETTINGS_READ_FAILED' } })
+        expect(mocks.dueFollowUps).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
+    })
 })
 
 describe('follow-up failure privacy', () => {

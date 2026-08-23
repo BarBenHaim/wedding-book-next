@@ -93,7 +93,10 @@ export async function PUT(req) {
     } catch (error) {
         const code = String(error?.message || '')
         if (code === 'STALE_REVISION') return NextResponse.json({ error: code }, { status: 409 })
-        const known = ['INVALID_REVISION', 'INVALID_PROVIDER', 'INVALID_MODEL', 'INSTRUCTIONS_TOO_LONG', 'NO_ACTIVE_OPENING']
+        const known = [
+            'INVALID_REVISION', 'INVALID_PROVIDER', 'INVALID_MODEL', 'INVALID_MODE',
+            'OPENING_TEXT_REQUIRED', 'OPENING_TEXT_TOO_LONG', 'INSTRUCTIONS_TOO_LONG', 'NO_ACTIVE_OPENING',
+        ]
         if (known.includes(code)) return NextResponse.json({ error: code }, { status: 400 })
         return NextResponse.json({ error: 'SETTINGS_SAVE_FAILED' }, { status: 503 })
     }

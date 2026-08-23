@@ -57,6 +57,7 @@ import { findOrphans, findStaleHandoffs, handoffAlert } from '@/lib/salesAgent/s
 import { canSendWhatsApp, sendWhatsAppText, sendWhatsAppImage, sendWhatsAppTemplate, FOLLOWUP_TEMPLATE } from '@/lib/salesAgent/whatsapp'
 import { createOutboundId } from '@/lib/salesAgent/delivery'
 import { isDemoEvidenceContent } from '@/lib/salesAgent/followupEvidence'
+import { readSalesSettings } from '@/lib/salesAgent/settingsStore'
 
 const WINDOW_MS = 24 * 3600 * 1000
 
@@ -122,14 +123,43 @@ async function sweep(today) {
 export async function GET(req) {
     if (!(await authorized(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const today = todayISO()
+    let settings
+    try {
+        settings = await readSalesSettings()
+    } catch {
+        console.error('[sales-agent/followups] settings read failed')
+        return NextResponse.json({ error: 'SETTINGS_READ_FAILED' }, { status: 503 })
+    }
+
+    if (!settings.enabled) {
+        return NextResponse.json({
+            ok: true,
+            skipped: 'agent-disabled',
+            delivery: 'none',
+            date: today,
+            count: 0,
+            items: [],
+        })
+    }
+
+    if (settings.mode === 'opening_only') {
+        return NextResponse.json({
+            ok: true,
+            skipped: 'opening-only-mode',
+            delivery: 'none',
+            date: today,
+            count: 0,
+            items: [],
+        })
+    }
+
     // ?dry=1 — compose everything and report it WITHOUT marking anything
     // as sent or reviving anything. Use it on the first few days: you
     // get to read what the bot would have written before any customer
     // does. A dry run also ignores quiet hours, because the point of it
     // is to look, and looking at 23:00 is fine.
     const dry = new URL(req.url).searchParams.get('dry') === '1'
-    const today = todayISO()
-
     // ── Who actually delivers ────────────────────────────────────────
     //
     // Two legitimate callers, two delivery models. Make calls with the

@@ -60,6 +60,7 @@ import { normalizeProviderError, INBOUND_ROUTE_DEADLINE_MS, INBOUND_HEARTBEAT_BU
 import { decideInboundAge } from '@/lib/salesAgent/transportPolicy'
 import { buildDeterministicSalesReply, decideSalesTurn, enforceSalesReply } from '@/lib/salesAgent/decisionPolicy'
 import { buildOpeningPlan } from '@/lib/salesAgent/openingPlan'
+import { buildOpeningOnlyPlan } from '@/lib/salesAgent/openingOnly'
 import { readPriorConversationContext } from '@/lib/salesAgent/priorContext'
 
 // What the customer sees when the machinery breaks. Deliberately honest
@@ -295,12 +296,40 @@ export async function POST(req) {
         return complete({ ok: true, send: [], sendText: '', handoff: false, noReply: true, skipped: 'empty-text' })
     }
 
+    // Load the owner-controlled mode before any branch that could create a
+    // customer-visible fallback. In opening-only mode the configured opening
+    // is the sole permitted automated message; database or settings trouble
+    // must therefore fail silent, never invent a support/handoff reply.
+    let custom = []
+    try {
+        const mediaRows = await listMedia()
+        custom = Array.isArray(mediaRows) ? mediaRows : []
+    } catch {
+        console.warn('[sales-agent] media library read failed; using built-ins')
+    }
+    const library = mergeMedia(MEDIA, custom) || MEDIA || {}
+    const stats = Object.fromEntries(custom.map(m => [m.key, m]))
+    const perf = performanceNote(stats, library)
+    let settings
+    try {
+        settings = await readSalesSettings({ registeredMediaKeys: Object.keys(library) })
+    } catch {
+        console.warn('[sales-agent] settings read failed; using safe defaults')
+        settings = resolveSalesSettings(DEFAULT_SALES_SETTINGS, { registeredMediaKeys: Object.keys(library) })
+    }
     const today = todayISO()
     let lead
     try {
         lead = await getLead(phone)
     } catch {
         console.error('[sales-agent] lead read failed')
+        if (!settings.enabled || settings.mode === 'opening_only') {
+            return complete({
+                ok: true, shouldSend: false, send: [], sendText: '', hasImage: false, hasVideo: false,
+                handoff: false, noReply: true,
+                skipped: settings.enabled ? 'opening-only-state-unavailable' : 'agent-disabled',
+            })
+        }
         return complete({ ok: true, send: [FALLBACK_REPLY], sendText: FALLBACK_REPLY, handoff: true, notifyOwner: ownerPing(phone, 'שגיאת מסד נתונים — הבוט לא הצליח לקרוא את הליד') })
     }
 
@@ -379,6 +408,13 @@ export async function POST(req) {
         return complete({ ok: true, send: [reply], sendText: reply, skipped: 'owner-command' })
     }
 
+    if (!settings.enabled) {
+        return complete({
+            ok: true, shouldSend: false, send: [], sendText: '', hasImage: false, hasVideo: false,
+            handoff: false, noReply: true, skipped: 'agent-disabled',
+        })
+    }
+
     // Firestore only knows conversations that already passed through this
     // agent. BusinessOS also holds the historical WhatsApp import. Before a
     // locally-new phone is allowed to receive the opening bundle, prove that
@@ -434,6 +470,23 @@ export async function POST(req) {
         } catch {
             console.error('[sales-agent] customer mute failed')
         }
+        if (settings.mode === 'opening_only') {
+            return complete({
+                ok: true,
+                shouldSend: false,
+                send: [],
+                sendText: '',
+                handoff: false,
+                noReply: true,
+                customer: true,
+                skipped: 'opening-only-customer',
+                notifyOwner: ownerPing(phone, 'לקוח קיים כתב — האוטומציה נשארה שקטה', {
+                    name: customer.ownerName || lead.name,
+                    stage: lead.stage,
+                    lastText: text,
+                }),
+            })
+        }
         return complete({
             ok: true,
             send: [CUSTOMER_REPLY],
@@ -485,25 +538,107 @@ export async function POST(req) {
     const lastMs = lead.lastInboundAt?.toMillis?.() || Number(lead.lastInboundAt) || 0
     const daysSinceLastMessage = lastMs ? Math.floor((Date.now() - lastMs) / 86400000) : null
 
-    // The library Lord uploaded, on top of the six built-in images. Read
-    // through a one-minute cache, so this is roughly one Firestore query
-    // per lambda per minute rather than one per message.
-    const custom = await listMedia()
-    const library = mergeMedia(MEDIA, custom)
-    const stats = Object.fromEntries(custom.map(m => [m.key, m]))
-    const perf = performanceNote(stats, library)
-    let settings
-    try {
-        settings = await readSalesSettings({ registeredMediaKeys: Object.keys(library) })
-    } catch {
-        console.warn('[sales-agent] settings read failed; using safe defaults')
-        settings = resolveSalesSettings(DEFAULT_SALES_SETTINGS, { registeredMediaKeys: Object.keys(library) })
-    }
-    if (!settings.enabled) {
-        return complete({
-            ok: true, shouldSend: false, sendText: '', hasImage: false, hasVideo: false,
-            handoff: false, noReply: true, skipped: 'agent-disabled',
-        })
+    if (settings.mode === 'opening_only') {
+        const opening = buildOpeningOnlyPlan({ lead, settings, library, eventId })
+        if (!opening.eligible) {
+            return complete({
+                ok: true, shouldSend: false, sendText: '', hasImage: false, hasVideo: false,
+                handoff: false, noReply: true, skipped: 'opening-only-existing', stage: lead.stage || 'engaged',
+            })
+        }
+
+        const images = opening.mediaParts.filter(part => part.kind === 'image')
+        const videos = opening.mediaParts.filter(part => part.kind === 'video')
+        const parsed = {
+            malformed: false,
+            messages: [opening.text],
+            stage: 'engaged',
+            handoff: false,
+            handoffReason: null,
+            image: images[0]?.mediaKey || null,
+            openingMediaKeys: opening.mediaParts.map(part => part.mediaKey),
+            eventType: lead.eventType || null,
+            eventDate: lead.eventDate || null,
+            callbackPromised: null,
+            followUpAt: null,
+        }
+        const responsePayload = {
+            ok: true,
+            shouldSend: true,
+            send: [opening.text],
+            sendText: opening.text,
+            sendImage: images[0]?.url || null,
+            sendImageCaption: images[0]?.caption || null,
+            hasImage: images.length > 0,
+            sendVideo: videos[0]?.url || null,
+            sendVideoCaption: videos[0]?.caption || null,
+            hasVideo: videos.length > 0,
+            openingMediaCount: opening.mediaParts.length,
+            openingMediaParts: opening.mediaParts,
+            openingSequenceParts: opening.sequenceParts,
+            postOpeningText: '',
+            openingAnswerId: opening.sequenceParts[0]?.partId || null,
+            openingAnswerText: opening.text,
+            openingImage1Id: images[0]?.partId || null,
+            openingImage1Url: images[0]?.url || null,
+            openingImage1Caption: images[0]?.caption || null,
+            openingImage2Id: images[1]?.partId || null,
+            openingImage2Url: images[1]?.url || null,
+            openingImage2Caption: images[1]?.caption || null,
+            openingClosingId: null,
+            openingClosingText: null,
+            ...Object.fromEntries(opening.mediaParts.flatMap((part, index) => {
+                const slot = index + 1
+                return [
+                    [`openingMedia${slot}Id`, part.partId],
+                    [`openingMedia${slot}Kind`, part.kind],
+                    [`openingMedia${slot}Url`, part.url],
+                    [`openingMedia${slot}Caption`, part.caption],
+                ]
+            })),
+            stage: 'engaged',
+            handoff: false,
+            followUpAt: null,
+            notifyOwner: null,
+        }
+        const exchange = {
+            phone,
+            incomingText: text,
+            parsed,
+            followUpAt: null,
+            profileName: body?.profileName,
+            source: resolveSource({ isNew: true, text, existing: lead.source, fallback: body?.source }),
+            variant: null,
+            isNew: true,
+        }
+        try {
+            const durable = await completeSuccessfulExchange({
+                eventId,
+                claimToken: claim.claimToken,
+                claimGeneration: claim.claimGeneration,
+                exchange,
+                outcome: responsePayload,
+                deadlineAtMs: routeDeadlineAtMs,
+            })
+            if (durable.action === 'completed') {
+                compactLeadBestEffort(phone)
+                return NextResponse.json(responsePayload)
+            }
+            if (durable.action === 'cached') {
+                return NextResponse.json({
+                    ok: true, duplicate: true, shouldSend: false, cachedOutcome: durable.outcome,
+                    sendText: '', hasImage: false, hasVideo: false, handoff: false,
+                })
+            }
+            return NextResponse.json({
+                error: durable.action === 'deadline'
+                    ? 'success-commit-deadline-exhausted'
+                    : 'success-commit-stale',
+            }, { status: 503 })
+        } catch {
+            console.error('[sales-agent] opening-only commit failed')
+            return NextResponse.json({ error: 'success-commit-failed' }, { status: 503 })
+        }
     }
 
     // Which opening this lead is testing. Assignment uses the configured

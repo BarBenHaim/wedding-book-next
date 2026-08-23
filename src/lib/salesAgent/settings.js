@@ -11,6 +11,11 @@ const MODEL_IDS = MODEL_REGISTRY.map(row => row.id)
 const FALLBACK_MODEL = 'claude-haiku-4-5'
 const MAX_INSTRUCTIONS = 4_000
 const MAX_CHANGE_NOTE = 240
+const MAX_OPENING_TEXT = 1_500
+
+export const DEFAULT_OPENING_TEXT = `היי, כיף שכתבת 😊
+Wedding Tales הוא ספר ברכות מודפס שנוצר מהברכות והתמונות שהאורחים מעלים מהטלפון.
+צירפתי דוגמה אמיתית. לאיזה אירוע ומתי הוא מתקיים?`
 
 export const IMMUTABLE_SALES_POLICY = `אין שיחות טלפון ואין הצעת שיחה. המכירה מתנהלת בהודעות WhatsApp בלבד.
 מחירים, חבילות, עובדות וקישורי תשלום מגיעים מהקטלוג בקוד ואינם ניתנים לעריכה כאן.
@@ -20,6 +25,8 @@ export const IMMUTABLE_SALES_POLICY = `אין שיחות טלפון ואין ה�
 export const DEFAULT_SALES_SETTINGS = Object.freeze({
     revision: 0,
     enabled: true,
+    mode: 'opening_only',
+    openingText: DEFAULT_OPENING_TEXT,
     provider: 'auto',
     model: 'claude-sonnet-4-5',
     fallbackModel: FALLBACK_MODEL,
@@ -37,6 +44,21 @@ const cleanText = (value, max) => String(value || '')
     .trim()
     .slice(0, max)
 
+function cleanOpeningText(value) {
+    const raw = String(value ?? '')
+    if (raw.length > MAX_OPENING_TEXT) throw new Error('OPENING_TEXT_TOO_LONG')
+    const cleaned = raw
+        .replace(/\r\n?/g, '\n')
+        .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' ')
+        .split('\n')
+        .map(line => line.replace(/[\t ]+/g, ' ').trim())
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+    if (!cleaned) throw new Error('OPENING_TEXT_REQUIRED')
+    return cleaned
+}
+
 function assertProviderModel(provider, model) {
     if (!PROVIDERS.includes(provider)) throw new Error('INVALID_PROVIDER')
     if (!MODEL_IDS.includes(model)) throw new Error('INVALID_MODEL')
@@ -50,6 +72,11 @@ export function normalizeSalesSettings(input = {}, { registeredMediaKeys = [] } 
     const provider = String(input.provider || DEFAULT_SALES_SETTINGS.provider)
     const model = String(input.model || DEFAULT_SALES_SETTINGS.model)
     assertProviderModel(provider, model)
+    const mode = String(input.mode || DEFAULT_SALES_SETTINGS.mode)
+    if (mode !== 'opening_only') throw new Error('INVALID_MODE')
+    const openingText = cleanOpeningText(input.openingText === undefined
+        ? DEFAULT_SALES_SETTINGS.openingText
+        : input.openingText)
 
     const rawInstructions = String(input.businessInstructions || '')
     if (rawInstructions.length > MAX_INSTRUCTIONS) throw new Error('INSTRUCTIONS_TOO_LONG')
@@ -64,6 +91,8 @@ export function normalizeSalesSettings(input = {}, { registeredMediaKeys = [] } 
     return {
         revision,
         enabled: input.enabled !== false,
+        mode,
+        openingText,
         provider,
         model,
         businessInstructions: cleanText(rawInstructions, MAX_INSTRUCTIONS),
