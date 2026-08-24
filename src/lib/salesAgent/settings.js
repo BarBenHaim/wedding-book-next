@@ -1,4 +1,5 @@
 import { ACTIVE_VARIANT_IDS } from './experiments'
+import { DEFAULT_OPENING_EXPERIMENT, normalizeOpeningExperiment } from './openingExperiment'
 
 export const MODEL_REGISTRY = Object.freeze([
     { id: 'claude-sonnet-4-5', provider: 'anthropic', label: 'Claude Sonnet 4.5', role: 'primary' },
@@ -33,6 +34,7 @@ export const DEFAULT_SALES_SETTINGS = Object.freeze({
     businessInstructions: '',
     activeOpeningIds: [...ACTIVE_VARIANT_IDS],
     openingMediaSequence: [],
+    openingExperiment: DEFAULT_OPENING_EXPERIMENT,
     updatedAt: null,
     updatedBy: null,
     changeNote: '',
@@ -66,7 +68,7 @@ function assertProviderModel(provider, model) {
     if (provider !== 'auto' && entry?.provider !== provider) throw new Error('INVALID_MODEL')
 }
 
-export function normalizeSalesSettings(input = {}, { registeredMediaKeys = [] } = {}) {
+export function normalizeSalesSettings(input = {}, { registeredMediaKeys = [], registeredMedia = null } = {}) {
     const revision = Number(input.revision)
     if (!Number.isInteger(revision) || revision < 0) throw new Error('INVALID_REVISION')
     const provider = String(input.provider || DEFAULT_SALES_SETTINGS.provider)
@@ -87,6 +89,10 @@ export function normalizeSalesSettings(input = {}, { registeredMediaKeys = [] } 
     const openingMediaSequence = [...new Set(Array.isArray(input.openingMediaSequence) ? input.openingMediaSequence.map(String) : [])]
         .filter(key => mediaKeys.has(key))
         .slice(0, 3)
+    const openingExperiment = normalizeOpeningExperiment(
+        input.openingExperiment === undefined ? DEFAULT_OPENING_EXPERIMENT : input.openingExperiment,
+        { registeredMedia: registeredMedia || registeredMediaKeys },
+    )
 
     return {
         revision,
@@ -98,6 +104,7 @@ export function normalizeSalesSettings(input = {}, { registeredMediaKeys = [] } 
         businessInstructions: cleanText(rawInstructions, MAX_INSTRUCTIONS),
         activeOpeningIds,
         openingMediaSequence,
+        openingExperiment,
         changeNote: cleanText(input.changeNote, MAX_CHANGE_NOTE),
     }
 }
