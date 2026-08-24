@@ -35,7 +35,7 @@ import { TEXTURES_REGISTRY } from '@/lib/studioPresets'
 import { buildPageIndex, pageLabel } from '@/lib/bookPageIndex'
 import { sanitizePageStyle, overriddenKeys, mergePageStyle } from '@/lib/pageStyle'
 import { getBlessingText } from '@/lib/normalizeText'
-import { pageFitFactor, effectiveFontPercent, nameFontPercent } from '@/lib/fontFit'
+import { pageFitFactor, effectiveFontPercent, nameFontPercent, DEFAULT_MIN_FACTOR } from '@/lib/fontFit'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
 
 const GOLD = '#AA8840'
@@ -114,6 +114,15 @@ export default function PageStyleControls({
     const [photoBusy, setPhotoBusy] = useState(false)
     const photoInput = useRef(null)
     const timer = useRef(null)
+    // What is waiting on the debounce, and which page it belongs to.
+    const pending = useRef(null)
+    const flushRef = useRef(null)
+    const alive = useRef(true)
+
+    useEffect(() => {
+        alive.current = true
+        return () => { alive.current = false }
+    }, [])
 
     const selected = useMemo(() => entries.find(e => e.id === selectedId) || null, [entries, selectedId])
 
@@ -126,6 +135,9 @@ export default function PageStyleControls({
     // change would fight the user: the optimistic update writes back into
     // entries, which would reset the draft mid-drag.
     useEffect(() => {
+        // Whatever the page we are LEAVING still had on the debounce
+        // goes out now, before the draft is replaced under it.
+        flushRef.current?.()
         setDraft(sanitizePageStyle(entries.find(e => e.id === selectedId)?.pageStyle))
         setError(null)
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -144,36 +156,64 @@ export default function PageStyleControls({
     // Replace, not merge: the browser holds the whole override, so an
     // unpin is simply a draft with one fewer key. Merging server-side
     // would make removal impossible to express.
-    const flush = useCallback(async next => {
-        if (!selectedId) return
+    // The entry id travels WITH the payload instead of being read from
+    // state at send time. A write still on the debounce when the
+    // operator clicks another page has to land on the page they edited,
+    // not on the one they are now looking at.
+    const flush = useCallback(async (next, entryId) => {
+        if (!entryId) return
         setSaving(true)
         try {
             const token = await getIdToken(auth.currentUser)
             const res = await fetch('/api/entries/page-style', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ weddingId, entryId: selectedId, pageStyle: next, replace: true }),
+                body: JSON.stringify({ weddingId, entryId, pageStyle: next, replace: true }),
             })
             const data = await res.json().catch(() => ({}))
             if (!data?.ok) throw new Error(data?.error || `HTTP ${res.status}`)
-            setError(null)
+            if (alive.current) setError(null)
         } catch (err) {
             // The page still looks right — the change is in local state —
             // so say so plainly rather than reverting under their hands.
-            setError(`${err?.message || 'שגיאה'} · השינוי לא נשמר`)
+            if (alive.current) setError(`${err?.message || 'שגיאה'} · השינוי לא נשמר`)
         } finally {
-            setSaving(false)
+            if (alive.current) setSaving(false)
         }
-    }, [selectedId, weddingId])
+    }, [weddingId])
+
+    const send = useCallback(() => {
+        const p = pending.current
+        pending.current = null
+        if (p) flush(p.style, p.entryId)
+    }, [flush])
+
+    /**
+     * Push whatever is waiting on the debounce, immediately.
+     *
+     * 450ms is invisible while a slider is being dragged and fatal the
+     * moment it stops. Click a control, hit סיום, refresh — and the
+     * write had never left the browser. Worse, the old unmount cleanup
+     * CANCELLED the pending timer, so closing the rail actively threw
+     * the last change away. Every exit from a page now goes through
+     * here: סיום, switching pages, and unmount.
+     */
+    const flushNow = useCallback(() => {
+        clearTimeout(timer.current)
+        send()
+    }, [send])
+    flushRef.current = flushNow
 
     const apply = useCallback(next => {
         setDraft(next)
         onEntriesChange?.(selectedId, next) // the book redraws now
+        pending.current = { entryId: selectedId, style: next }
         clearTimeout(timer.current)
-        timer.current = setTimeout(() => flush(next), SAVE_DEBOUNCE_MS)
-    }, [selectedId, onEntriesChange, flush])
+        timer.current = setTimeout(send, SAVE_DEBOUNCE_MS)
+    }, [selectedId, onEntriesChange, send])
 
-    useEffect(() => () => clearTimeout(timer.current), [])
+    // The exit nobody clicks.
+    useEffect(() => () => flushRef.current?.(), [])
 
     const set = (key, value) => apply({ ...draft, [key]: value })
     const setImage = (key, value) => apply({ ...draft, imageStyle: { ...(draft.imageStyle || {}), [key]: value } })
@@ -350,7 +390,7 @@ export default function PageStyleControls({
                             אפס
                         </button>
                     )}
-                    <button onClick={() => onSelect?.(null)} className='text-[11px] font-bold text-gray-400 hover:text-gray-600'>
+                    <button onClick={() => { flushNow(); onSelect?.(null) }} className='text-[11px] font-bold text-gray-400 hover:text-gray-600'>
                         סיום
                     </button>
                 </div>
@@ -506,9 +546,17 @@ export default function PageStyleControls({
                             ? `כרגע מוקטן ל־${fontFit.shown.toFixed(1)}% · ״להשאיר בגודל״ מכבד את הסליידר במדויק, ובטקסט ארוך מאוד זה עלול לחרוג מהעמוד`
                             : '״להשאיר בגודל״ מכבד את הסליידר במדויק — בטקסט ארוך מאוד זה עלול לחרוג מהעמוד'}
                     >
+                        {/* BOTH sides pin. Wiring 'shrink' to unpin looked
+                            elegant — the same state the page inherits —
+                            but it means the click stores nothing, and on
+                            a book whose global design says "do not
+                            shrink" it does nothing at all and survives no
+                            refresh. Every other control here pins on
+                            change and unpins through ״חזרה לספר״; this
+                            one had no business being different. */}
                         <Choice
                             value={effective.fontMinFactor >= 1 ? 'off' : 'on'}
-                            onChange={v => (v === 'off' ? set('fontMinFactor', 1) : unpin('fontMinFactor'))}
+                            onChange={v => set('fontMinFactor', v === 'off' ? 1 : DEFAULT_MIN_FACTOR)}
                             options={[
                                 { value: 'on', label: 'להקטין כדי להיכנס' },
                                 { value: 'off', label: 'להשאיר בגודל' },
