@@ -83,6 +83,13 @@ function variableReference(raw, variableKeys) {
     return variableKey
 }
 
+function variableVersionReference(raw) {
+    const value = String(raw?.variableVersionId || '').trim()
+    if (!value) return null
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(value)) throw new Error('INVALID_OPENING_VARIABLE_VERSION')
+    return value
+}
+
 function normalizeBlock(raw, mediaKeys, variableKeys) {
     const id = String(raw?.id || '').trim().slice(0, 80)
     const type = String(raw?.type || '')
@@ -91,14 +98,22 @@ function normalizeBlock(raw, mediaKeys, variableKeys) {
         const hasText = raw?.text != null && String(raw.text).trim() !== ''
         const hasVariable = raw?.variableKey != null && String(raw.variableKey).trim() !== ''
         if (hasText && hasVariable) throw new Error('AMBIGUOUS_OPENING_VARIABLE')
-        if (hasVariable) return { id, type, variableKey: variableReference(raw, variableKeys) }
+        if (hasVariable) {
+            const variableKey = variableReference(raw, variableKeys)
+            const variableVersionId = variableVersionReference(raw)
+            return { id, type, variableKey, ...(variableVersionId ? { variableVersionId } : {}) }
+        }
         return { id, type, text: cleanText(raw.text) }
     }
     if (type === 'media') {
         const hasMedia = raw?.mediaKey != null && String(raw.mediaKey).trim() !== ''
         const hasVariable = raw?.variableKey != null && String(raw.variableKey).trim() !== ''
         if (hasMedia && hasVariable) throw new Error('AMBIGUOUS_OPENING_VARIABLE')
-        if (hasVariable) return { id, type, variableKey: variableReference(raw, variableKeys) }
+        if (hasVariable) {
+            const variableKey = variableReference(raw, variableKeys)
+            const variableVersionId = variableVersionReference(raw)
+            return { id, type, variableKey, ...(variableVersionId ? { variableVersionId } : {}) }
+        }
         const mediaKey = String(raw?.mediaKey || '').trim()
         if (!mediaKey || !mediaKeys.has(mediaKey)) throw new Error('INVALID_OPENING_MEDIA')
         return { id, type, mediaKey }
@@ -256,16 +271,38 @@ export function runOpeningFlow({ flow, state = { cursor: 0, waitingFor: null }, 
     while (cursor < flow.blocks.length) {
         const block = flow.blocks[cursor]
         if (block.type === 'text') {
-            parts.push({ partId: partId(eventId, block.id), blockId: block.id, order: parts.length + 1, kind: 'text', text: block.text })
+            const variable = block.variableKey ? library?.[`${block.variableKey}:${block.variableVersionId}`] : null
+            if (block.variableKey && (!variable || variable.kind !== 'text' || typeof variable.resolveText !== 'function')) {
+                throw new Error('OPENING_VARIABLE_VERSION_MISSING')
+            }
+            parts.push({
+                partId: partId(eventId, block.id),
+                blockId: block.id,
+                order: parts.length + 1,
+                kind: 'text',
+                text: variable ? variable.resolveText() : block.text,
+                ...(variable ? { variableKey: block.variableKey, variableVersionId: block.variableVersionId } : {}),
+            })
             cursor += 1
             continue
         }
         if (block.type === 'media') {
-            const media = library?.[block.mediaKey]
+            const media = block.variableKey
+                ? library?.[`${block.variableKey}:${block.variableVersionId}`]
+                : library?.[block.mediaKey]
             if (!media) throw new Error('OPENING_MEDIA_UNAVAILABLE')
+            if (block.variableKey && media.kind === 'text') throw new Error('OPENING_VARIABLE_KIND_MISMATCH')
             parts.push({
                 partId: partId(eventId, block.id), blockId: block.id, order: parts.length + 1,
-                kind: media.kind, mediaKey: block.mediaKey, url: media.url || null, caption: media.caption || '',
+                kind: media.kind,
+                ...(block.mediaKey ? { mediaKey: block.mediaKey } : {}),
+                ...(block.variableKey ? {
+                    variableKey: block.variableKey,
+                    variableVersionId: block.variableVersionId,
+                    objectPath: media.objectPath,
+                    voiceNote: media.kind === 'audio' && media.voiceNote === true,
+                } : { url: media.url || null }),
+                caption: media.caption || '',
             })
             cursor += 1
             continue

@@ -11,9 +11,9 @@ import { decideOpeningApproval, generateOpeningApproval, listOpeningApprovals } 
 import { openingLeadRow, summarizeOpeningExperiment } from '@/lib/salesAgent/openingAnalytics'
 import {
     listSalesSettingsHistory,
+    publishSalesSettingsSnapshot,
     readSalesSettings,
     restoreSalesSettingsRevision,
-    saveSalesSettings,
 } from '@/lib/salesAgent/settingsStore'
 
 const MAX_BODY_CHARS = 100_000
@@ -69,8 +69,12 @@ async function bodyFor(settings, custom, history = null) {
 
 function failure(error) {
     const code = String(error?.message || '')
-    if (code === 'STALE_REVISION') return NextResponse.json({ error: code }, { status: 409 })
-    if (code === 'REVISION_NOT_FOUND') return NextResponse.json({ error: code }, { status: 404 })
+    if (['STALE_REVISION', 'STALE_VARIABLE_DRAFT'].includes(code)) {
+        return NextResponse.json({ error: code }, { status: 409 })
+    }
+    if (['REVISION_NOT_FOUND', 'OPENING_VARIABLE_NOT_FOUND', 'OPENING_VARIABLE_VERSION_MISSING'].includes(code)) {
+        return NextResponse.json({ error: code }, { status: 404 })
+    }
     const bad = new Set([
         'INVALID_REVISION', 'INVALID_OPENING_BLOCK', 'INVALID_OPENING_MEDIA',
         'DUPLICATE_OPENING_BLOCK', 'TOO_MANY_OPENING_BLOCKS',
@@ -78,6 +82,8 @@ function failure(error) {
         'NO_ACTIVE_OPENING_VARIANT', 'INVALID_OPENING_VARIANT',
         'INVALID_OPENING_WEIGHT', 'INVALID_OPENING_REVISION',
         'INVALID_OPENING_SAMPLE', 'INVALID_OPENING_TEXT', 'INVALID_OPENING_TEMPLATE',
+        'INVALID_OPENING_VARIABLE', 'INVALID_OPENING_VARIABLE_VERSION', 'AMBIGUOUS_OPENING_VARIABLE',
+        'OPENING_VARIABLE_ARCHIVED', 'OPENING_VARIABLE_UNPUBLISHED', 'OPENING_VARIABLE_KIND_MISMATCH',
     ])
     if (bad.has(code)) return NextResponse.json({ error: code }, { status: 400 })
     if (['APPROVAL_NOT_FOUND'].includes(code)) return NextResponse.json({ error: code }, { status: 404 })
@@ -122,9 +128,13 @@ export async function POST(req) {
         const { custom, registeredMediaKeys } = await mediaContext()
         let settings
         if (input.action === 'publish') {
-            settings = await saveSalesSettings({
+            settings = await publishSalesSettingsSnapshot({
                 revision: Number(input.revision),
                 openingExperiment: input.experiment,
+                expectedVariableDrafts: input.expectedVariableDrafts && typeof input.expectedVariableDrafts === 'object'
+                    && !Array.isArray(input.expectedVariableDrafts)
+                    ? input.expectedVariableDrafts
+                    : {},
                 changeNote: typeof input.changeNote === 'string' ? input.changeNote : '',
             }, { updatedBy, registeredMediaKeys })
         } else if (input.action === 'restore') {

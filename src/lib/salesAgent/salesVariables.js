@@ -146,7 +146,7 @@ function deepFreeze(value) {
     return value
 }
 
-export function bindOpeningVariables(experiment, variables = {}) {
+export function bindOpeningVariables(experiment, variables = {}, { registeredMedia = [] } = {}) {
     const registry = registryOf(variables)
     const referencedKeys = (Array.isArray(experiment?.variants) ? experiment.variants : [])
         .flatMap(variant => Array.isArray(variant?.blocks) ? variant.blocks : [])
@@ -154,6 +154,7 @@ export function bindOpeningVariables(experiment, variables = {}) {
         .filter(Boolean)
     const normalized = normalizeOpeningExperiment(experiment, {
         registeredVariables: [...new Set([...registry.keys(), ...referencedKeys])],
+        registeredMedia,
     })
     const variants = normalized.variants.map(variant => ({
         ...variant,

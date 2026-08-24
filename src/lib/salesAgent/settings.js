@@ -68,7 +68,19 @@ function assertProviderModel(provider, model) {
     if (provider !== 'auto' && entry?.provider !== provider) throw new Error('INVALID_MODEL')
 }
 
-export function normalizeSalesSettings(input = {}, { registeredMediaKeys = [], registeredMedia = null } = {}) {
+function boundVariableKeys(experiment) {
+    return (Array.isArray(experiment?.variants) ? experiment.variants : [])
+        .flatMap(variant => Array.isArray(variant?.blocks) ? variant.blocks : [])
+        .filter(block => block?.variableVersionId)
+        .map(block => String(block.variableKey || ''))
+        .filter(Boolean)
+}
+
+export function normalizeSalesSettings(input = {}, {
+    registeredMediaKeys = [],
+    registeredMedia = null,
+    registeredVariables = [],
+} = {}) {
     const revision = Number(input.revision)
     if (!Number.isInteger(revision) || revision < 0) throw new Error('INVALID_REVISION')
     const provider = String(input.provider || DEFAULT_SALES_SETTINGS.provider)
@@ -91,7 +103,13 @@ export function normalizeSalesSettings(input = {}, { registeredMediaKeys = [], r
         .slice(0, 3)
     const openingExperiment = normalizeOpeningExperiment(
         input.openingExperiment === undefined ? DEFAULT_OPENING_EXPERIMENT : input.openingExperiment,
-        { registeredMedia: registeredMedia || registeredMediaKeys },
+        {
+            registeredMedia: registeredMedia || registeredMediaKeys,
+            registeredVariables: [...new Set([
+                ...(registeredVariables || []).map(String),
+                ...boundVariableKeys(input.openingExperiment),
+            ])],
+        },
     )
 
     return {

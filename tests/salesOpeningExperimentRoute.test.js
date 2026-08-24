@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
     isSuperAdmin: vi.fn(),
     readSalesSettings: vi.fn(),
     saveSalesSettings: vi.fn(),
+    publishSalesSettingsSnapshot: vi.fn(),
     restoreSalesSettingsRevision: vi.fn(),
     listSalesSettingsHistory: vi.fn(),
     listMedia: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock('@/lib/superAdmin', () => ({ isSuperAdmin: mocks.isSuperAdmin }))
 vi.mock('@/lib/salesAgent/settingsStore', () => ({
     readSalesSettings: mocks.readSalesSettings,
     saveSalesSettings: mocks.saveSalesSettings,
+    publishSalesSettingsSnapshot: mocks.publishSalesSettingsSnapshot,
     restoreSalesSettingsRevision: mocks.restoreSalesSettingsRevision,
     listSalesSettingsHistory: mocks.listSalesSettingsHistory,
 }))
@@ -51,6 +53,7 @@ beforeEach(async () => {
     process.env.SALES_AGENT_SECRET = 'experiment-route-secret'
     mocks.readSalesSettings.mockResolvedValue(settings)
     mocks.saveSalesSettings.mockResolvedValue({ ...settings, revision: 8 })
+    mocks.publishSalesSettingsSnapshot.mockResolvedValue({ ...settings, revision: 8 })
     mocks.restoreSalesSettingsRevision.mockResolvedValue({ ...settings, revision: 8 })
     mocks.listSalesSettingsHistory.mockResolvedValue([{ revision: 6, updatedAt: 123, updatedBy: 'owner', changeNote: 'copy' }])
     mocks.listMedia.mockResolvedValue([{ key: 'owner-voice', kind: 'audio', url: 'https://storage.test/voice.ogg' }])
@@ -107,15 +110,17 @@ describe('opening experiment route', () => {
             action: 'publish', revision: 7, experiment, changeNote: 'מפעיל ניסוי', ignored: 'attacker-value',
         }))
         expect(response.status).toBe(200)
-        expect(mocks.saveSalesSettings).toHaveBeenCalledWith({
+        expect(mocks.publishSalesSettingsSnapshot).toHaveBeenCalledWith({
             revision: 7,
             openingExperiment: experiment,
+            expectedVariableDrafts: {},
             changeNote: 'מפעיל ניסוי',
         }, expect.objectContaining({
             updatedBy: 'shared-secret',
             registeredMediaKeys: expect.arrayContaining(['owner-voice']),
         }))
-        expect(JSON.stringify(mocks.saveSalesSettings.mock.calls[0])).not.toContain('attacker-value')
+        expect(mocks.saveSalesSettings).not.toHaveBeenCalled()
+        expect(JSON.stringify(mocks.publishSalesSettingsSnapshot.mock.calls[0])).not.toContain('attacker-value')
     })
 
     it('restores a historical revision as a new current revision', async () => {
@@ -125,6 +130,24 @@ describe('opening experiment route', () => {
             expectedRevision: 7,
             updatedBy: 'shared-secret',
         }))
+    })
+
+    it('returns actionable private publication conflicts without leaking storage details', async () => {
+        mocks.publishSalesSettingsSnapshot.mockRejectedValueOnce(new Error('STALE_VARIABLE_DRAFT'))
+        const stale = await POST(request('POST', {
+            action: 'publish', revision: 7, experiment: DEFAULT_OPENING_EXPERIMENT,
+            expectedVariableDrafts: { voice_intro: 'v2' },
+        }))
+        expect(stale.status).toBe(409)
+        expect(await stale.json()).toEqual({ error: 'STALE_VARIABLE_DRAFT' })
+
+        mocks.publishSalesSettingsSnapshot.mockRejectedValueOnce(new Error('OPENING_VARIABLE_VERSION_MISSING'))
+        const missing = await POST(request('POST', {
+            action: 'publish', revision: 7, experiment: DEFAULT_OPENING_EXPERIMENT,
+            expectedVariableDrafts: { voice_intro: 'v2' },
+        }))
+        expect(missing.status).toBe(404)
+        expect(await missing.json()).toEqual({ error: 'OPENING_VARIABLE_VERSION_MISSING' })
     })
 
     it.each([
@@ -152,7 +175,7 @@ describe('opening experiment route', () => {
         expect((await POST(request('POST', '{bad'))).status).toBe(400)
         expect((await POST(request('POST', 'x'.repeat(100_001)))).status).toBe(413)
         expect((await POST(request('POST', { action: 'delete-all', revision: 7 }))).status).toBe(400)
-        mocks.saveSalesSettings.mockRejectedValueOnce(new Error('STALE_REVISION'))
+        mocks.publishSalesSettingsSnapshot.mockRejectedValueOnce(new Error('STALE_REVISION'))
         const stale = await POST(request('POST', { action: 'publish', revision: 6, experiment: DEFAULT_OPENING_EXPERIMENT }))
         expect(stale.status).toBe(409)
         expect(await stale.json()).toEqual({ error: 'STALE_REVISION' })

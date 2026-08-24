@@ -18,12 +18,21 @@ function sanitizeOpeningSequenceParts(parts) {
         const mediaKey = typeof part?.mediaKey === 'string' && part.mediaKey.length <= 100
             ? part.mediaKey
             : null
+        const variableKey = typeof part?.variableKey === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(part.variableKey)
+            ? part.variableKey
+            : null
+        const variableVersionId = typeof part?.variableVersionId === 'string'
+            && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(part.variableVersionId)
+            ? part.variableVersionId
+            : null
         return [{
             partId,
             order,
             kind,
             mediaKey,
             demoEvidence: part?.demoEvidence === true,
+            ...(variableKey && variableVersionId ? { variableKey, variableVersionId } : {}),
+            voiceNote: kind === 'audio' && part?.voiceNote === true,
             ...(typeof part?.blockId === 'string' && part.blockId.length <= 80 ? { blockId: part.blockId } : {}),
         }]
     })

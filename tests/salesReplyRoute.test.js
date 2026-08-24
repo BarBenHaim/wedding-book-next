@@ -52,6 +52,8 @@ const mocks = vi.hoisted(() => ({
     buildOpeningPlan: vi.fn(),
     buildOpeningOnlyPlan: vi.fn(),
     prepareOpeningRuntime: vi.fn(),
+    loadOpeningVariableVersions: vi.fn(),
+    signOpeningVariableDownload: vi.fn(),
     readPriorConversationContext: vi.fn(),
 }))
 
@@ -100,6 +102,10 @@ vi.mock('@/lib/salesAgent/decisionPolicy', () => ({
 vi.mock('@/lib/salesAgent/openingPlan', () => ({ buildOpeningPlan: mocks.buildOpeningPlan }))
 vi.mock('@/lib/salesAgent/openingOnly', () => ({ buildOpeningOnlyPlan: mocks.buildOpeningOnlyPlan }))
 vi.mock('@/lib/salesAgent/openingRuntime', () => ({ prepareOpeningRuntime: mocks.prepareOpeningRuntime }))
+vi.mock('@/lib/salesAgent/openingVariableRuntimeStore', () => ({
+    loadOpeningVariableVersions: mocks.loadOpeningVariableVersions,
+    signOpeningVariableDownload: mocks.signOpeningVariableDownload,
+}))
 vi.mock('@/lib/salesAgent/priorContext', () => ({ readPriorConversationContext: mocks.readPriorConversationContext }))
 
 const lead = { isNew: false, stage: 'engaged', turns: [], followUpCount: 0, imagesSent: [], mediaSent: [] }
@@ -191,6 +197,8 @@ beforeEach(async () => {
         eligible: false, text: '', mediaParts: [], sequenceParts: [],
     })
     mocks.prepareOpeningRuntime.mockReturnValue({ eligible: false, reason: 'experiment-stopped' })
+    mocks.loadOpeningVariableVersions.mockResolvedValue({})
+    mocks.signOpeningVariableDownload.mockResolvedValue('https://storage.test/signed')
     mocks.readPriorConversationContext.mockResolvedValue({ state: 'none', hasPriorConversation: false })
     ;({ POST } = await import('@/app/api/sales-agent/reply/route'))
 })
@@ -238,6 +246,52 @@ describe('deterministic opening experiment runtime', () => {
         }))
         expect(mocks.callClaude).not.toHaveBeenCalled()
         expectNoProviderWork()
+    })
+
+    it('serializes an audio variable as a voice-note media slot with immutable attribution', async () => {
+        const parts = [
+            {
+                partId: 'a'.repeat(32), blockId: 'a-copy', order: 1, kind: 'text', text: 'שלום נועה',
+                variableKey: 'opening_copy', variableVersionId: 'v4',
+            },
+            {
+                partId: 'b'.repeat(32), blockId: 'a-audio', order: 2, kind: 'audio',
+                url: 'https://storage.test/signed', caption: 'הסבר', voiceNote: true,
+                variableKey: 'voice_intro', variableVersionId: 'v2',
+            },
+        ]
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true, stage: 'new', name: 'נועה' })
+        mocks.readSalesSettings.mockResolvedValue({
+            revision: 9, enabled: true, mode: 'opening_only', openingText: 'legacy',
+            openingExperiment: { enabled: true, variants: [] },
+        })
+        mocks.loadOpeningVariableVersions.mockResolvedValue({ 'voice_intro:v2': { id: 'v2' } })
+        mocks.prepareOpeningRuntime.mockResolvedValue({
+            eligible: true,
+            expectedStateVersion: 0,
+            enrollment: { variantId: 'A', variantRevision: 4, flow: { id: 'A', revision: 4, blocks: [] } },
+            result: { action: 'completed', state: { cursor: 3, waitingFor: null }, parts, captures: {}, completed: true },
+        })
+
+        const result = await post(inbound({ text: 'אשמח לפרטים', profileName: 'נועה' }))
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({
+            hasAudio: true,
+            sendAudio: 'https://storage.test/signed',
+            sendAudioCaption: 'הסבר',
+            sendAudioVoiceNote: true,
+            openingMediaCount: 1,
+            openingMedia1Kind: 'audio',
+            openingMedia1VoiceNote: true,
+        })
+        expect(mocks.prepareOpeningRuntime).toHaveBeenCalledWith(expect.objectContaining({
+            variableVersions: { 'voice_intro:v2': { id: 'v2' } },
+            signDownload: mocks.signOpeningVariableDownload,
+            leadContext: expect.objectContaining({ first_name: 'נועה' }),
+        }))
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            outcome: expect.objectContaining({ openingSequenceParts: parts }),
+        }))
     })
 
     it('accepts the awaited child photo without triggering the generic media handoff', async () => {
@@ -668,6 +722,8 @@ describe('inbound event duplicate fencing', () => {
         expect(mocks.callClaude).not.toHaveBeenCalled()
         expect(mocks.recordMediaSent).not.toHaveBeenCalled()
         expect(mocks.compactLeadBestEffort).not.toHaveBeenCalled()
+        expect(mocks.loadOpeningVariableVersions).not.toHaveBeenCalled()
+        expect(mocks.signOpeningVariableDownload).not.toHaveBeenCalled()
         expectNoProviderWork()
     })
 

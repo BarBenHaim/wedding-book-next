@@ -313,6 +313,9 @@ export async function completeSuccessfulExchange({ eventId, claimToken, claimGen
             mediaKey: item.mediaKey,
             blockId: item.blockId,
             demoEvidence: item.demoEvidence,
+            variableKey: item.variableKey,
+            variableVersionId: item.variableVersionId,
+            voiceNote: item.voiceNote === true,
             outboundId: item.partId,
         }))
         : [
@@ -365,6 +368,11 @@ export async function completeSuccessfulExchange({ eventId, claimToken, claimGen
                 ...(replyPart.order == null ? {} : { order: replyPart.order }),
                 ...(replyPart.mediaKey ? { mediaKey: replyPart.mediaKey } : {}),
                 ...(replyPart.blockId ? { openingBlockId: replyPart.blockId } : {}),
+                ...(replyPart.variableKey && replyPart.variableVersionId ? {
+                    variableKey: replyPart.variableKey,
+                    variableVersionId: replyPart.variableVersionId,
+                } : {}),
+                ...(replyPart.part === 'audio' ? { voiceNote: replyPart.voiceNote === true } : {}),
                 ...(exchange?.openingRuntime ? {
                     openingVariantId: exchange.openingRuntime.variantId,
                     openingVariantRevision: exchange.openingRuntime.variantRevision,

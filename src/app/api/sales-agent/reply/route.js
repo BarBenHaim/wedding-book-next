@@ -62,6 +62,10 @@ import { buildDeterministicSalesReply, decideSalesTurn, enforceSalesReply } from
 import { buildOpeningPlan } from '@/lib/salesAgent/openingPlan'
 import { buildOpeningOnlyPlan } from '@/lib/salesAgent/openingOnly'
 import { prepareOpeningRuntime } from '@/lib/salesAgent/openingRuntime'
+import {
+    loadOpeningVariableVersions,
+    signOpeningVariableDownload,
+} from '@/lib/salesAgent/openingVariableRuntimeStore'
 import { readPriorConversationContext } from '@/lib/salesAgent/priorContext'
 
 // What the customer sees when the machinery breaks. Deliberately honest
@@ -505,20 +509,39 @@ export async function POST(req) {
     // The published A/B/C opening experiment is deterministic and has no
     // model dependency. A lead is enrolled only once; subsequent inbound
     // events resume the pinned revision and state instead of restarting.
-    const openingRuntime = prepareOpeningRuntime({
-        lead,
-        experiment: settings.openingExperiment,
-        leadKey: phone,
-        inbound: { kind: messageType, text, mediaId: body.mediaId },
-        library,
-        eventId,
-    })
+    let openingRuntime
+    try {
+        const variableVersions = await loadOpeningVariableVersions(settings.openingExperiment)
+        openingRuntime = await prepareOpeningRuntime({
+            lead,
+            experiment: settings.openingExperiment,
+            leadKey: phone,
+            inbound: { kind: messageType, text, mediaId: body.mediaId },
+            library,
+            variableVersions,
+            leadContext: {
+                first_name: body?.profileName || lead.name || null,
+                event_type: lead.eventType || null,
+                event_date: lead.eventDate || null,
+                child_name: lead.childName || null,
+                days_to_event: lead.daysToEvent ?? null,
+                payment_link: lead.paymentLink || null,
+            },
+            signDownload: signOpeningVariableDownload,
+            eventId,
+        })
+    } catch {
+        console.error('[sales-agent] opening variable resolution failed')
+        return NextResponse.json({ error: 'opening-variable-resolution-failed' }, { status: 503 })
+    }
     if (openingRuntime.eligible) {
         const { result, enrollment, expectedStateVersion, replyToExposure } = openingRuntime
         const sequenceParts = result.parts || []
         const textParts = sequenceParts.filter(part => part.kind === 'text' && String(part.text || '').trim())
         const images = sequenceParts.filter(part => part.kind === 'image')
         const videos = sequenceParts.filter(part => part.kind === 'video')
+        const audios = sequenceParts.filter(part => part.kind === 'audio')
+        const mediaParts = sequenceParts.filter(part => ['image', 'video', 'audio'].includes(part.kind))
         const variantId = enrollment?.variantId || lead.openingVariantId
         const variantRevision = enrollment?.variantRevision || lead.openingVariantRevision
         const shouldSend = sequenceParts.length > 0
@@ -546,6 +569,22 @@ export async function POST(req) {
             sendVideo: videos[0]?.url || null,
             sendVideoCaption: videos[0]?.caption || null,
             hasVideo: videos.length > 0,
+            sendAudio: audios[0]?.url || null,
+            sendAudioCaption: audios[0]?.caption || null,
+            sendAudioVoiceNote: audios[0]?.voiceNote === true,
+            hasAudio: audios.length > 0,
+            openingMediaCount: mediaParts.length,
+            openingMediaParts: mediaParts,
+            ...Object.fromEntries(mediaParts.flatMap((part, index) => {
+                const slot = index + 1
+                return [
+                    [`openingMedia${slot}Id`, part.partId],
+                    [`openingMedia${slot}Kind`, part.kind],
+                    [`openingMedia${slot}Url`, part.url],
+                    [`openingMedia${slot}Caption`, part.caption || ''],
+                    [`openingMedia${slot}VoiceNote`, part.kind === 'audio' && part.voiceNote === true],
+                ]
+            })),
             openingSequenceParts: sequenceParts,
             openingExperiment: { variantId, variantRevision, action: result.action },
             stage: parsed.stage,
@@ -593,7 +632,7 @@ export async function POST(req) {
             if (durable.action === 'cached') {
                 return NextResponse.json({
                     ok: true, duplicate: true, shouldSend: false, cachedOutcome: durable.outcome,
-                    sendText: '', hasImage: false, hasVideo: false, handoff: false,
+                    sendText: '', hasImage: false, hasVideo: false, hasAudio: false, handoff: false,
                 })
             }
             return NextResponse.json({ error: 'opening-experiment-commit-stale' }, { status: 503 })

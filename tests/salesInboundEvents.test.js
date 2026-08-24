@@ -69,14 +69,28 @@ describe('sanitizeInboundOutcome', () => {
             sendText: 'תשובה',
             handoff: false,
             openingSequenceParts: [
-                { partId: 'a'.repeat(32), order: 1, kind: 'text', text: 'private answer', url: 'https://private.invalid/a', demoEvidence: false },
-                { partId: 'b'.repeat(32), order: 2, kind: 'image', mediaKey: 'cover_personalised', caption: 'private caption', url: 'https://private.invalid/b', demoEvidence: true },
+                {
+                    partId: 'a'.repeat(32), order: 1, kind: 'text', text: 'private answer',
+                    url: 'https://private.invalid/a', demoEvidence: false,
+                    variableKey: 'opening_copy', variableVersionId: 'v4',
+                },
+                {
+                    partId: 'b'.repeat(32), order: 2, kind: 'audio', mediaKey: null,
+                    caption: 'private caption', url: 'https://private.invalid/b', demoEvidence: true,
+                    variableKey: 'voice_intro', variableVersionId: 'v2', voiceNote: true,
+                },
             ],
         })
 
         expect(result.openingSequenceParts).toEqual([
-            { partId: 'a'.repeat(32), order: 1, kind: 'text', mediaKey: null, demoEvidence: false },
-            { partId: 'b'.repeat(32), order: 2, kind: 'image', mediaKey: 'cover_personalised', demoEvidence: true },
+            {
+                partId: 'a'.repeat(32), order: 1, kind: 'text', mediaKey: null, demoEvidence: false,
+                variableKey: 'opening_copy', variableVersionId: 'v4', voiceNote: false,
+            },
+            {
+                partId: 'b'.repeat(32), order: 2, kind: 'audio', mediaKey: null, demoEvidence: true,
+                variableKey: 'voice_intro', variableVersionId: 'v2', voiceNote: true,
+            },
         ])
         expect(JSON.stringify(result.openingSequenceParts)).not.toContain('private')
     })

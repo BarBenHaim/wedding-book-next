@@ -13,8 +13,8 @@ const active = {
 }
 
 describe('prepareOpeningRuntime', () => {
-    it('enrolls only a genuinely new conversation and pins its executable revision', () => {
-        const runtime = prepareOpeningRuntime({
+    it('enrolls only a genuinely new conversation and pins its executable revision', async () => {
+        const runtime = await prepareOpeningRuntime({
             lead: { isNew: true, hasPriorConversation: false },
             experiment: active,
             leadKey: 'non-dialable-lead-a',
@@ -33,18 +33,18 @@ describe('prepareOpeningRuntime', () => {
     it.each([
         ['existing lead', { isNew: false }],
         ['historical conversation', { isNew: true, hasPriorConversation: true }],
-    ])('does not enroll an %s', (_label, lead) => {
-        expect(prepareOpeningRuntime({
+    ])('does not enroll an %s', async (_label, lead) => {
+        await expect(prepareOpeningRuntime({
             lead,
             experiment: active,
             leadKey: 'non-dialable-lead-b',
             inbound: { kind: 'text', text: 'שלום' },
             library,
             eventId: 'opening-event-b',
-        })).toEqual({ eligible: false, reason: 'not-enrolled' })
+        })).resolves.toEqual({ eligible: false, reason: 'not-enrolled' })
     })
 
-    it('continues a pinned photo wait without reassigning or restarting the opening', () => {
+    it('continues a pinned photo wait without reassigning or restarting the opening', async () => {
         const pinnedFlow = active.variants.find(item => item.id === 'A')
         const lead = {
             isNew: false,
@@ -56,7 +56,7 @@ describe('prepareOpeningRuntime', () => {
             openingExposedAt: '2026-08-24T08:00:00.000Z',
         }
 
-        const runtime = prepareOpeningRuntime({
+        const runtime = await prepareOpeningRuntime({
             lead,
             experiment: active,
             leadKey: 'non-dialable-lead-c',
@@ -76,7 +76,7 @@ describe('prepareOpeningRuntime', () => {
         })
     })
 
-    it('fails closed when the experiment or the pinned arm is stopped', () => {
+    it('fails closed when the experiment or the pinned arm is stopped', async () => {
         const pinned = {
             isNew: false,
             openingVariantId: 'B',
@@ -85,24 +85,24 @@ describe('prepareOpeningRuntime', () => {
             openingState: { cursor: 4, waitingFor: 'event' },
             openingStateVersion: 2,
         }
-        expect(prepareOpeningRuntime({ ...{
+        await expect(prepareOpeningRuntime({ ...{
             lead: pinned, leadKey: 'non-dialable-lead-d', inbound: { kind: 'text', text: 'בר מצווה 12/12/2026' },
             library, eventId: 'opening-event-d',
-        }, experiment: { ...active, enabled: false } })).toEqual({ eligible: false, reason: 'experiment-stopped' })
+        }, experiment: { ...active, enabled: false } })).resolves.toEqual({ eligible: false, reason: 'experiment-stopped' })
 
         const armStopped = {
             ...active,
             variants: active.variants.map(item => item.id === 'B' ? { ...item, enabled: false, weight: 0 } : item),
         }
-        expect(prepareOpeningRuntime({
+        await expect(prepareOpeningRuntime({
             lead: pinned, experiment: armStopped, leadKey: 'non-dialable-lead-d',
             inbound: { kind: 'text', text: 'בר מצווה 12/12/2026' }, library, eventId: 'opening-event-d',
-        })).toEqual({ eligible: false, reason: 'variant-stopped' })
+        })).resolves.toEqual({ eligible: false, reason: 'variant-stopped' })
     })
 
-    it('keeps ambiguous event details waiting and never invents qualification', () => {
+    it('keeps ambiguous event details waiting and never invents qualification', async () => {
         const flow = active.variants.find(item => item.id === 'C')
-        const runtime = prepareOpeningRuntime({
+        const runtime = await prepareOpeningRuntime({
             lead: {
                 isNew: false, openingVariantId: 'C', openingVariantRevision: 1, openingFlow: flow,
                 openingState: { cursor: 1, waitingFor: 'event' }, openingStateVersion: 1,

@@ -3,6 +3,7 @@ import {
     normalizeOpeningExperiment,
     runOpeningFlow,
 } from './openingExperiment'
+import { normalizeSalesVariableVersion, renderSalesTemplate } from './salesVariables'
 
 function pinnedFlow(lead) {
     const flow = lead?.openingFlow
@@ -15,10 +16,66 @@ function pinnedFlow(lead) {
     }
 }
 
-export function prepareOpeningRuntime({ lead = {}, experiment, leadKey, inbound, library = {}, eventId } = {}) {
+const boundKeys = experiment => [...new Set((Array.isArray(experiment?.variants) ? experiment.variants : [])
+    .flatMap(variant => Array.isArray(variant?.blocks) ? variant.blocks : [])
+    .map(block => String(block?.variableKey || ''))
+    .filter(Boolean))]
+
+function normalizedVariableLibrary(variableVersions, leadContext) {
+    const library = {}
+    for (const [identity, raw] of Object.entries(variableVersions || {})) {
+        const version = normalizeSalesVariableVersion(raw)
+        if (version.status !== 'published') throw new Error('OPENING_VARIABLE_UNPUBLISHED')
+        library[identity] = version.kind === 'text'
+            ? { ...version, resolveText: () => renderSalesTemplate(version.value, leadContext) }
+            : version
+    }
+    return library
+}
+
+export async function resolveOpeningSnapshotParts({
+    flow,
+    state = { cursor: 0, waitingFor: null },
+    inbound = null,
+    variableVersions = {},
+    leadContext = {},
+    eventId = '',
+    signDownload = null,
+    legacyLibrary = {},
+} = {}) {
+    const library = { ...legacyLibrary, ...normalizedVariableLibrary(variableVersions, leadContext) }
+    const result = runOpeningFlow({ flow, state, inbound, library, eventId })
+    const parts = await Promise.all(result.parts.map(async part => {
+        if (!part.variableKey || part.kind === 'text') return part
+        const version = library[`${part.variableKey}:${part.variableVersionId}`]
+        if (!version) throw new Error('OPENING_VARIABLE_VERSION_MISSING')
+        if (version.kind !== part.kind) throw new Error('OPENING_VARIABLE_KIND_MISMATCH')
+        if (typeof signDownload !== 'function') throw new Error('OPENING_VARIABLE_SIGNER_MISSING')
+        const url = await signDownload(version)
+        if (typeof url !== 'string' || !url.startsWith('https://')) throw new Error('OPENING_VARIABLE_SIGNING_FAILED')
+        const { objectPath: _privatePath, ...safePart } = part
+        return { ...safePart, url }
+    }))
+    return { ...result, parts }
+}
+
+export async function prepareOpeningRuntime({
+    lead = {},
+    experiment,
+    leadKey,
+    inbound,
+    library = {},
+    variableVersions = {},
+    leadContext = {},
+    signDownload = null,
+    eventId,
+} = {}) {
     let normalized
     try {
-        normalized = normalizeOpeningExperiment(experiment, { registeredMedia: Object.keys(library) })
+        normalized = normalizeOpeningExperiment(experiment, {
+            registeredMedia: Object.keys(library),
+            registeredVariables: boundKeys(experiment),
+        })
     } catch {
         return { eligible: false, reason: 'invalid-experiment' }
     }
@@ -48,17 +105,20 @@ export function prepareOpeningRuntime({ lead = {}, experiment, leadKey, inbound,
     const expectedStateVersion = Number.isInteger(lead?.openingStateVersion)
         ? lead.openingStateVersion
         : 0
-    const result = runOpeningFlow({
+    const result = await resolveOpeningSnapshotParts({
         flow,
         state: lead?.openingState || { cursor: 0, waitingFor: null },
         inbound,
-        library,
+        legacyLibrary: library,
+        variableVersions,
+        leadContext,
+        signDownload,
         eventId,
     })
     const replyToExposure = !!lead?.openingExposedAt && !lead?.openingFirstReplyAt
     return { eligible: true, flow, enrollment, expectedStateVersion, replyToExposure, result }
 }
 
-const openingRuntime = { prepareOpeningRuntime }
+const openingRuntime = { prepareOpeningRuntime, resolveOpeningSnapshotParts }
 
 export default openingRuntime

@@ -420,6 +420,10 @@ describe('Firestore atomic successful exchange matrix', () => {
             { partId: 'b'.repeat(32), order: 2, kind: 'image', mediaKey: 'cover_personalised', url: 'https://assets.invalid/cover.jpg', demoEvidence: true },
             { partId: 'c'.repeat(32), order: 3, kind: 'image', mediaKey: 'book_open_spread', url: 'https://assets.invalid/spread.jpg', demoEvidence: true },
             { partId: 'd'.repeat(32), order: 4, kind: 'text', text: 'private demo question', demoEvidence: true },
+            {
+                partId: 'e'.repeat(32), order: 5, kind: 'audio', url: 'https://assets.invalid/private.ogg',
+                variableKey: 'voice_intro', variableVersionId: 'v2', voiceNote: true, demoEvidence: true,
+            },
         ]
 
         await completeSuccessfulExchange(successArgs({
@@ -432,9 +436,13 @@ describe('Firestore atomic successful exchange matrix', () => {
             expect.objectContaining({ outboundId: 'b'.repeat(32), part: 'image', order: 2, mediaKey: 'cover_personalised', demoEvidence: true }),
             expect.objectContaining({ outboundId: 'c'.repeat(32), part: 'image', order: 3, mediaKey: 'book_open_spread', demoEvidence: true }),
             expect.objectContaining({ outboundId: 'd'.repeat(32), part: 'text', order: 4, demoEvidence: true }),
+            expect.objectContaining({
+                outboundId: 'e'.repeat(32), part: 'audio', order: 5, demoEvidence: true,
+                variableKey: 'voice_intro', variableVersionId: 'v2', voiceNote: true,
+            }),
         ])
         expect(JSON.stringify(records)).not.toMatch(/private|assets\.invalid/)
-        expect(store.committed().map(write => write.key).filter(key => key.startsWith('sales_delivery_events/'))).toHaveLength(4)
+        expect(store.committed().map(write => write.key).filter(key => key.startsWith('sales_delivery_events/'))).toHaveLength(5)
     })
 
     it('pins the assigned journey and advances its state under an optimistic version fence', async () => {
