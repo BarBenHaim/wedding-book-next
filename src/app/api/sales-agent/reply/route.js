@@ -61,6 +61,7 @@ import { decideInboundAge } from '@/lib/salesAgent/transportPolicy'
 import { buildDeterministicSalesReply, decideSalesTurn, enforceSalesReply } from '@/lib/salesAgent/decisionPolicy'
 import { buildOpeningPlan } from '@/lib/salesAgent/openingPlan'
 import { buildOpeningOnlyPlan } from '@/lib/salesAgent/openingOnly'
+import { prepareOpeningRuntime } from '@/lib/salesAgent/openingRuntime'
 import { readPriorConversationContext } from '@/lib/salesAgent/priorContext'
 
 // What the customer sees when the machinery breaks. Deliberately honest
@@ -499,6 +500,107 @@ export async function POST(req) {
                 lastText: text,
             }),
         })
+    }
+
+    // The published A/B/C opening experiment is deterministic and has no
+    // model dependency. A lead is enrolled only once; subsequent inbound
+    // events resume the pinned revision and state instead of restarting.
+    const openingRuntime = prepareOpeningRuntime({
+        lead,
+        experiment: settings.openingExperiment,
+        leadKey: phone,
+        inbound: { kind: messageType, text, mediaId: body.mediaId },
+        library,
+        eventId,
+    })
+    if (openingRuntime.eligible) {
+        const { result, enrollment, expectedStateVersion, replyToExposure } = openingRuntime
+        const sequenceParts = result.parts || []
+        const textParts = sequenceParts.filter(part => part.kind === 'text' && String(part.text || '').trim())
+        const images = sequenceParts.filter(part => part.kind === 'image')
+        const videos = sequenceParts.filter(part => part.kind === 'video')
+        const variantId = enrollment?.variantId || lead.openingVariantId
+        const variantRevision = enrollment?.variantRevision || lead.openingVariantRevision
+        const shouldSend = sequenceParts.length > 0
+        const parsed = {
+            malformed: false,
+            messages: textParts.map(part => part.text),
+            stage: result.completed ? 'opening_completed' : 'engaged',
+            handoff: false,
+            handoffReason: null,
+            image: images[0]?.mediaKey || null,
+            openingMediaKeys: sequenceParts.flatMap(part => part.mediaKey ? [part.mediaKey] : []),
+            eventType: result.captures?.eventType || lead.eventType || null,
+            eventDate: result.captures?.eventDate || lead.eventDate || null,
+            callbackPromised: null,
+            followUpAt: null,
+        }
+        const responsePayload = {
+            ok: true,
+            shouldSend,
+            send: textParts.map(part => part.text),
+            sendText: textParts[0]?.text || '',
+            sendImage: images[0]?.url || null,
+            sendImageCaption: images[0]?.caption || null,
+            hasImage: images.length > 0,
+            sendVideo: videos[0]?.url || null,
+            sendVideoCaption: videos[0]?.caption || null,
+            hasVideo: videos.length > 0,
+            openingSequenceParts: sequenceParts,
+            openingExperiment: { variantId, variantRevision, action: result.action },
+            stage: parsed.stage,
+            handoff: false,
+            noReply: !shouldSend,
+            followUpAt: null,
+            notifyOwner: null,
+        }
+        const exchange = {
+            phone,
+            incomingText: text || `[${messageType}]`,
+            parsed,
+            followUpAt: null,
+            profileName: body?.profileName,
+            source: resolveSource({ isNew: !!lead.isNew, text, existing: lead.source, fallback: body?.source }),
+            variant: null,
+            isNew: !!lead.isNew,
+            openingRuntime: {
+                expectedStateVersion,
+                enrollment,
+                state: result.state,
+                captures: result.captures,
+                approvalRequest: result.approvalRequest,
+                completed: result.completed,
+                action: result.action,
+                variantId,
+                variantRevision,
+                replyToExposure,
+                exposedAt: lead.openingExposedAt || null,
+            },
+        }
+        try {
+            const durable = await completeSuccessfulExchange({
+                eventId,
+                claimToken: claim.claimToken,
+                claimGeneration: claim.claimGeneration,
+                exchange,
+                outcome: responsePayload,
+                deadlineAtMs: routeDeadlineAtMs,
+            })
+            if (durable.action === 'completed') {
+                compactLeadBestEffort(phone)
+                return NextResponse.json(responsePayload)
+            }
+            if (durable.action === 'cached') {
+                return NextResponse.json({
+                    ok: true, duplicate: true, shouldSend: false, cachedOutcome: durable.outcome,
+                    sendText: '', hasImage: false, hasVideo: false, handoff: false,
+                })
+            }
+            return NextResponse.json({ error: 'opening-experiment-commit-stale' }, { status: 503 })
+        } catch {
+            console.error('[sales-agent] opening experiment commit failed')
+            return NextResponse.json({ error: 'opening-experiment-commit-failed' }, { status: 503 })
+        }
     }
 
     // A photo, video, voice note, or document cannot be interpreted

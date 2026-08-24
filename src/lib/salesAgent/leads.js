@@ -302,6 +302,7 @@ export async function completeSuccessfulExchange({ eventId, claimToken, claimGen
             part: item.kind,
             order: item.order,
             mediaKey: item.mediaKey,
+            blockId: item.blockId,
             demoEvidence: item.demoEvidence,
             outboundId: item.partId,
         }))
@@ -315,12 +316,16 @@ export async function completeSuccessfulExchange({ eventId, claimToken, claimGen
             outboundId: createOutboundId({ scope: 'inbound', subject: eventId, attempt: 0, part: item.part }),
         }))
     return adminDb.runTransaction(async tx => {
-        const [eventSnap] = await Promise.all([tx.get(eventRef), tx.get(leadRef)])
+        const [eventSnap, leadSnap] = await Promise.all([tx.get(eventRef), tx.get(leadRef)])
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
         const stored = eventSnap.exists ? eventSnap.data() : null
         const decision = decideInboundCompletion(stored, ownedClaimToken, Date.now())
         if (decision.action !== 'complete') return decision
         if (Number(stored.claimGeneration) !== Number(claimGeneration)) return { action: 'stale' }
+        if (exchange?.openingRuntime) {
+            const storedStateVersion = Number(leadSnap.exists ? leadSnap.data()?.openingStateVersion || 0 : 0)
+            if (storedStateVersion !== Number(exchange.openingRuntime.expectedStateVersion || 0)) return { action: 'stale' }
+        }
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
         tx.set(leadRef, patch, { merge: true })
         tx.set(eventRef, { status: 'completed', leaseUntilMs: null, outcome: cleanOutcome, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
@@ -333,6 +338,12 @@ export async function completeSuccessfulExchange({ eventId, claimToken, claimGen
                 part: replyPart.part,
                 ...(replyPart.order == null ? {} : { order: replyPart.order }),
                 ...(replyPart.mediaKey ? { mediaKey: replyPart.mediaKey } : {}),
+                ...(replyPart.blockId ? { openingBlockId: replyPart.blockId } : {}),
+                ...(exchange?.openingRuntime ? {
+                    openingVariantId: exchange.openingRuntime.variantId,
+                    openingVariantRevision: exchange.openingRuntime.variantRevision,
+                    openingExposure: !!exchange.openingRuntime.enrollment && replyPart.order === 1,
+                } : {}),
                 deliveryRole: 'secondary',
                 advanceOnDelivery: false,
                 logicalAttemptId: inboundAttemptId,
@@ -417,7 +428,7 @@ export async function getLead(rawPhone) {
  * Persist one exchange. Undefined values are stripped — the Firestore
  * client rejects them, and a half-written lead is worse than a stale one.
  */
-export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, profileName, source, variant, isNew }) {
+export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, profileName, source, variant, isNew, openingRuntime = null }) {
     const id = normalizePhone(phone)
     if (!id) throw new Error('bad phone')
 
@@ -473,6 +484,49 @@ export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, pr
         patch.human = true
         patch.humanSince = now
         patch.handoffReason = parsed.handoffReason || null
+    }
+
+    if (openingRuntime) {
+        const expectedVersion = Number(openingRuntime.expectedStateVersion || 0)
+        patch.openingStateVersion = expectedVersion + 1
+        patch.openingState = {
+            cursor: Number(openingRuntime.state?.cursor || 0),
+            waitingFor: openingRuntime.state?.waitingFor || null,
+        }
+        patch.openingStatus = openingRuntime.completed === true ? 'completed' : String(openingRuntime.action || 'active').slice(0, 40)
+        patch.openingVariantId = String(openingRuntime.variantId || '').slice(0, 1)
+        patch.openingVariantRevision = Number(openingRuntime.variantRevision || 1)
+        if (openingRuntime.enrollment?.flow) patch.openingFlow = openingRuntime.enrollment.flow
+        const captures = openingRuntime.captures || {}
+        if (captures.eventType) patch.eventType = String(captures.eventType).slice(0, 40)
+        if (captures.eventDate) patch.eventDate = String(captures.eventDate).slice(0, 10)
+        if (captures.qualificationNeedsReview === true) patch.openingQualificationNeedsReview = true
+        if (captures.childPhotoReceived === true) {
+            patch.childPhotoReceived = true
+            patch.childPhotoMediaId = String(captures.childPhotoMediaId || '').slice(0, 500)
+            patch.openingPhotoReceivedAt = now
+        }
+        if (captures.designApproved === true) {
+            patch.openingDesignApproved = true
+            patch.openingApprovalId = String(captures.approvalId || '').slice(0, 160)
+        }
+        if (openingRuntime.approvalRequest) {
+            patch.openingApprovalRequest = {
+                templateId: String(openingRuntime.approvalRequest.templateId || '').slice(0, 80),
+                mediaId: String(openingRuntime.approvalRequest.mediaId || '').slice(0, 500),
+                status: 'pending',
+            }
+        }
+        if (openingRuntime.enrollment) patch.openingEnrolledAt = now
+        if (openingRuntime.completed === true) patch.openingCompletedAt = now
+        if (openingRuntime.replyToExposure === true) {
+            patch.openingFirstReplyAt = now
+            const exposedAtMs = Date.parse(String(openingRuntime.exposedAt || ''))
+            if (Number.isFinite(exposedAtMs)) patch.openingFirstReplyLatencyMs = Math.max(0, Date.now() - exposedAtMs)
+        }
+        if (captures.childPhotoReceived === true || captures.eventType || captures.eventDate) {
+            patch.openingContinuedAt = now
+        }
     }
 
     return { id, patch }
@@ -730,8 +784,14 @@ export async function recordDeliveryEvent(event) {
         const firstDeliveryEvidence = (decision.nextStatus === 'delivered' || decision.nextStatus === 'read')
             && stored?.status !== 'delivered'
             && stored?.status !== 'read'
-        if (leadRef && firstDeliveryEvidence && (stored?.demoEvidence === true || stored?.mediaKey)) {
+        if (leadRef && firstDeliveryEvidence && (stored?.demoEvidence === true || stored?.mediaKey || stored?.openingExposure === true)) {
             const evidencePatch = { updatedAt: FieldValue.serverTimestamp() }
+            if (stored?.openingExposure === true && !lead.openingExposedAt) {
+                evidencePatch.openingVariantId = String(stored.openingVariantId || '').slice(0, 1)
+                evidencePatch.openingVariantRevision = Number(stored.openingVariantRevision || 1)
+                evidencePatch.openingExposedAt = event.occurredAt
+                evidencePatch.openingExposureOutboundId = String(event.outboundId)
+            }
             if (stored?.demoEvidence === true && lead.demoEvidenceDelivered !== true) {
                 evidencePatch.demoEvidenceDelivered = true
                 evidencePatch.demoEvidenceDeliveredAt = event.occurredAt

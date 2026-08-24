@@ -413,6 +413,45 @@ describe('transactional follow-up delivery truth', () => {
         expect(store.get('sales_media/cover_personalised')).toMatchObject({ delivered: 1 })
     })
 
+    it('counts an experiment exposure once and only after delivered or read evidence', async () => {
+        const outboundId = 'f'.repeat(32)
+        store.set(`sales_delivery_events/${outboundId}`, {
+            outboundId,
+            status: 'requested',
+            leadId: '41',
+            part: 'text',
+            deliveryRole: 'secondary',
+            advanceOnDelivery: false,
+            logicalAttemptId: 'opening-exposure-attempt',
+            advancesFollowUp: false,
+            openingVariantId: 'C',
+            openingVariantRevision: 7,
+            openingExposure: true,
+        })
+
+        await recordDeliveryEvent(event('accepted', {
+            eventId: 'opening-exposure-accepted', outboundId, channel: 'make', providerMessageId: 'wamid-opening-exposure',
+        }))
+        expect(store.get(LEAD).openingExposedAt).toBeUndefined()
+
+        await recordDeliveryEvent(event('delivered', {
+            eventId: 'opening-exposure-delivered', outboundId, channel: 'make', providerMessageId: 'wamid-opening-exposure',
+            occurredAt: '2026-08-14T10:02:00.000Z',
+        }))
+        expect(store.get(LEAD)).toMatchObject({
+            openingVariantId: 'C',
+            openingVariantRevision: 7,
+            openingExposedAt: '2026-08-14T10:02:00.000Z',
+            openingExposureOutboundId: outboundId,
+        })
+
+        await recordDeliveryEvent(event('read', {
+            eventId: 'opening-exposure-read', outboundId, channel: 'make', providerMessageId: 'wamid-opening-exposure',
+            occurredAt: '2026-08-14T10:03:00.000Z',
+        }))
+        expect(store.get(LEAD).openingExposedAt).toBe('2026-08-14T10:02:00.000Z')
+    })
+
     it('does not claim demo evidence when a prepared media delivery fails', async () => {
         const outboundId = 'inbound-demo-failed-fixture-0:image'
         store.set(`sales_delivery_events/${outboundId}`, {
