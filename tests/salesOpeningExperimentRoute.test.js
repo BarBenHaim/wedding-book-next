@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
     restoreSalesSettingsRevision: vi.fn(),
     listSalesSettingsHistory: vi.fn(),
     listMedia: vi.fn(),
+    listLeads: vi.fn(),
+    summarizeOpeningExperiment: vi.fn(),
+    openingLeadRow: vi.fn(),
     listOpeningApprovals: vi.fn(),
     generateOpeningApproval: vi.fn(),
     decideOpeningApproval: vi.fn(),
@@ -22,7 +25,11 @@ vi.mock('@/lib/salesAgent/settingsStore', () => ({
     restoreSalesSettingsRevision: mocks.restoreSalesSettingsRevision,
     listSalesSettingsHistory: mocks.listSalesSettingsHistory,
 }))
-vi.mock('@/lib/salesAgent/leads', () => ({ listMedia: mocks.listMedia }))
+vi.mock('@/lib/salesAgent/leads', () => ({ listMedia: mocks.listMedia, listLeads: mocks.listLeads }))
+vi.mock('@/lib/salesAgent/openingAnalytics', () => ({
+    summarizeOpeningExperiment: mocks.summarizeOpeningExperiment,
+    openingLeadRow: mocks.openingLeadRow,
+}))
 vi.mock('@/lib/salesAgent/openingApprovals', () => ({
     listOpeningApprovals: mocks.listOpeningApprovals,
     generateOpeningApproval: mocks.generateOpeningApproval,
@@ -47,6 +54,9 @@ beforeEach(async () => {
     mocks.restoreSalesSettingsRevision.mockResolvedValue({ ...settings, revision: 8 })
     mocks.listSalesSettingsHistory.mockResolvedValue([{ revision: 6, updatedAt: 123, updatedBy: 'owner', changeNote: 'copy' }])
     mocks.listMedia.mockResolvedValue([{ key: 'owner-voice', kind: 'audio', url: 'https://storage.test/voice.ogg' }])
+    mocks.listLeads.mockResolvedValue([{ phone: 'private-phone', openingVariantId: 'A' }])
+    mocks.summarizeOpeningExperiment.mockReturnValue({ trendReady: false, variants: {} })
+    mocks.openingLeadRow.mockReturnValue({ id: 'safe-row', phone: '•••1234', variantId: 'A' })
     mocks.listOpeningApprovals.mockResolvedValue([])
     mocks.generateOpeningApproval.mockResolvedValue({ id: 'a'.repeat(32), status: 'ready' })
     mocks.decideOpeningApproval.mockResolvedValue({ id: 'a'.repeat(32), status: 'sent' })
@@ -79,11 +89,15 @@ describe('opening experiment route', () => {
             experiment: DEFAULT_OPENING_EXPERIMENT,
             history: [{ revision: 6, updatedAt: 123, updatedBy: 'owner', changeNote: 'copy' }],
             media: [{ key: 'owner-voice', kind: 'audio', url: 'https://storage.test/voice.ogg', caption: '', when: '', source: 'upload' }],
-            metrics: null,
-            leads: [],
+            metrics: { trendReady: false, variants: {} },
+            leads: [{ id: 'safe-row', phone: '•••1234', variantId: 'A' }],
             approvals: [],
         })
         expect(JSON.stringify(body)).not.toMatch(/transcript|mediaId|experiment-route-secret/)
+        expect(mocks.summarizeOpeningExperiment).toHaveBeenCalledWith(
+            [{ phone: 'private-phone', openingVariantId: 'A' }],
+            expect.objectContaining({ experiment: DEFAULT_OPENING_EXPERIMENT }),
+        )
     })
 
     it('publishes an allowlisted experiment against the expected revision', async () => {

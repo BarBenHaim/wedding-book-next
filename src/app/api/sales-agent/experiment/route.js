@@ -6,8 +6,9 @@ import { NextResponse } from 'next/server'
 import { adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { MEDIA } from '@/lib/salesAgent/catalog'
-import { listMedia } from '@/lib/salesAgent/leads'
+import { listLeads, listMedia } from '@/lib/salesAgent/leads'
 import { decideOpeningApproval, generateOpeningApproval, listOpeningApprovals } from '@/lib/salesAgent/openingApprovals'
+import { openingLeadRow, summarizeOpeningExperiment } from '@/lib/salesAgent/openingAnalytics'
 import {
     listSalesSettingsHistory,
     readSalesSettings,
@@ -46,10 +47,13 @@ async function mediaContext() {
 }
 
 async function bodyFor(settings, custom, history = null) {
-    const [rows, approvals] = await Promise.all([
+    const [rows, approvals, rawLeads] = await Promise.all([
         history || listSalesSettingsHistory({ limit: 20 }),
         listOpeningApprovals({ limit: 30 }),
+        listLeads({ limit: 500 }),
     ])
+    const experimentLeads = rawLeads.filter(lead => typeof lead?.openingVariantId === 'string')
+    const nowMs = Date.now()
     return {
         ok: true,
         revision: settings.revision,
@@ -57,8 +61,8 @@ async function bodyFor(settings, custom, history = null) {
         experiment: settings.openingExperiment,
         history: rows,
         media: publicMedia(custom),
-        metrics: null,
-        leads: [],
+        metrics: summarizeOpeningExperiment(experimentLeads, { experiment: settings.openingExperiment, nowMs }),
+        leads: experimentLeads.map(lead => openingLeadRow(lead, nowMs)).slice(0, 500),
         approvals,
     }
 }
