@@ -23,6 +23,7 @@
 import { getBlessingText } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
+import { duoFitFactor } from '@/lib/fontFit'
 import FramedPhoto from '../FramedPhoto/FramedPhoto'
 
 const detectDir = t => {
@@ -46,10 +47,7 @@ function DuoBlock({ entry, styleSettings, w, h, solo }) {
 
     // Per-block font fit — half a page holds less, so the shrink starts
     // earlier than the classic page (tighter target), same floor.
-    const len = (cleanText || '').length
-    const fitTarget = hasImage ? 110 : 200
-    const minFactor = Number.isFinite(styleSettings.fontMinFactor) ? styleSettings.fontMinFactor : 0.62
-    const fit = Math.max(minFactor, Math.min(1, Math.sqrt(fitTarget / Math.max(len, fitTarget))))
+    const fit = duoFitFactor({ textLength: (cleanText || '').length, hasImage, styleSettings })
 
     const baseFont = (styleSettings.fontSizePercent ?? 3) * 0.82
     const nameFont =

@@ -6,6 +6,7 @@ import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
 import { resolvePhotoStyle } from '@/lib/bookDesignSchema'
 import { mergePageStyle, pageStyleOf } from '@/lib/pageStyle'
+import { pageFitFactor } from '@/lib/fontFit'
 import FramedPhoto from '../FramedPhoto/FramedPhoto'
 import PolaroidPageLayout from '../PolaroidPageLayout/PolaroidPageLayout'
 import ScrapbookPageLayout from '../ScrapbookPageLayout/ScrapbookPageLayout'
@@ -143,11 +144,9 @@ export default function BookPageTemplate({ entry, styleSettings: incomingStyle, 
     // Both are tunable per-preset from the studio so the owner can balance
     // text size against the photo (a long blessing + photo no longer
     // collapses to an unreadable size).
-    const _fitTarget = Number.isFinite(styleSettings.fontFitTarget)
-        ? styleSettings.fontFitTarget
-        : (hasImage ? 230 : 360)
-    const _minFactor = Number.isFinite(styleSettings.fontMinFactor) ? styleSettings.fontMinFactor : 0.62
-    const fontFitFactor = Math.max(_minFactor, Math.min(1, Math.sqrt(_fitTarget / Math.max(_blessingLen, _fitTarget))))
+    // Shared with DuoPageLayout and with the per-page editor, which has
+    // to show the operator the size their slider actually produces.
+    const fontFitFactor = pageFitFactor({ textLength: _blessingLen, hasImage, styleSettings })
 
     // Per-blessing text direction — detect the dominant script so a Hebrew
     // blessing flows RTL and an English one LTR. Critical for mixed books

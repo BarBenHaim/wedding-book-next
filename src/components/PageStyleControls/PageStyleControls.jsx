@@ -34,6 +34,8 @@ import { PHOTO_FRAMES } from '@/lib/photoFrames'
 import { TEXTURES_REGISTRY } from '@/lib/studioPresets'
 import { buildPageIndex, pageLabel } from '@/lib/bookPageIndex'
 import { sanitizePageStyle, overriddenKeys, mergePageStyle } from '@/lib/pageStyle'
+import { getBlessingText } from '@/lib/normalizeText'
+import { pageFitFactor, effectiveFontPercent } from '@/lib/fontFit'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
 
 const GOLD = '#AA8840'
@@ -262,6 +264,29 @@ export default function PageStyleControls({
         }
     }, [selected, weddingId, onEntryPatch])
 
+    // ── What the font slider will really do ─────────────────────────
+    //
+    // A long blessing is shrunk to fit by the template, and the shrink
+    // multiplies whatever the slider says. Without this readout the
+    // control lies: drag a long page to 5% and the book renders 3.1%,
+    // the slider still reads 5, and nothing on screen explains why the
+    // text did not move. The book's own formula, imported, not copied.
+    const fontFit = useMemo(() => {
+        if (!selected) return { factor: 1, shown: 0, longText: false }
+        const of = {
+            textLength: String(getBlessingText(selected) || '').length,
+            hasImage: Boolean(selected.imageUrl),
+        }
+        const factor = pageFitFactor({ ...of, styleSettings: effective })
+        // Whether the blessing is long enough for the fit logic to
+        // engage AT ALL — asked with the floor removed. Keying the
+        // switch's visibility on the shrink actually happening would
+        // make the switch delete itself on the first click, since
+        // turning the shrink off is precisely what it does.
+        const longText = pageFitFactor({ ...of, styleSettings: { ...effective, fontMinFactor: 0 } }) < 0.995
+        return { factor, shown: effectiveFontPercent(effective, factor), longText }
+    }, [selected, effective])
+
     const pinnedPages = useMemo(
         () => entries.filter(e => overriddenKeys(e.pageStyle).length > 0).length,
         [entries],
@@ -390,6 +415,61 @@ export default function PageStyleControls({
 
                 <Row label='ריווח הברכה מלמעלה' pinned={pinned.has('textMarginTop')} onUnpin={() => unpin('textMarginTop')}>
                     <Slider value={effective.textMarginTop ?? 0} min={0} max={20} onChange={v => set('textMarginTop', v)} suffix='%' />
+                </Row>
+
+                <Row
+                    label='גודל הפונט של הברכה'
+                    pinned={pinned.has('fontSizePercent')}
+                    onUnpin={() => unpin('fontSizePercent')}
+                    hint={fontFit.factor < 0.995
+                        ? `הברכה ארוכה, אז הספר מקטין אותה בפועל ל־${fontFit.shown.toFixed(1)}%`
+                        : undefined}
+                >
+                    <Slider
+                        value={effective.fontSizePercent ?? 3}
+                        min={1.5} max={6} step={0.1}
+                        onChange={v => set('fontSizePercent', v)}
+                        suffix='%'
+                    />
+                </Row>
+
+                {/* Only for blessings long enough that the fit logic
+                    engages. A switch for something that cannot happen is
+                    noise, and this one can push text off the page — it
+                    should appear exactly where it is the answer to a
+                    visible problem, and nowhere else. */}
+                {fontFit.longText && (
+                    <Row
+                        label='הקטנה אוטומטית לטקסט ארוך'
+                        pinned={pinned.has('fontMinFactor')}
+                        onUnpin={() => unpin('fontMinFactor')}
+                        hint={fontFit.factor < 0.995
+                            ? `כרגע מוקטן ל־${fontFit.shown.toFixed(1)}% · ״להשאיר בגודל״ מכבד את הסליידר במדויק, ובטקסט ארוך מאוד זה עלול לחרוג מהעמוד`
+                            : '״להשאיר בגודל״ מכבד את הסליידר במדויק — בטקסט ארוך מאוד זה עלול לחרוג מהעמוד'}
+                    >
+                        <Choice
+                            value={effective.fontMinFactor >= 1 ? 'off' : 'on'}
+                            onChange={v => (v === 'off' ? set('fontMinFactor', 1) : unpin('fontMinFactor'))}
+                            options={[
+                                { value: 'on', label: 'להקטין כדי להיכנס' },
+                                { value: 'off', label: 'להשאיר בגודל' },
+                            ]}
+                        />
+                    </Row>
+                )}
+
+                <Row
+                    label='רוחב מקסימלי לברכה'
+                    pinned={pinned.has('textMaxWidth')}
+                    onUnpin={() => unpin('textMaxWidth')}
+                    hint='צר יותר = שורות קצרות וקריאות; רחב יותר = פחות שורות'
+                >
+                    <Slider
+                        value={effective.textMaxWidth ?? 85}
+                        min={40} max={100}
+                        onChange={v => set('textMaxWidth', v)}
+                        suffix='%'
+                    />
                 </Row>
 
                 <Row label='ריפוד העמוד' pinned={pinned.has('pagePadding')} onUnpin={() => unpin('pagePadding')}>
