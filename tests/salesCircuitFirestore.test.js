@@ -437,6 +437,75 @@ describe('Firestore atomic successful exchange matrix', () => {
         expect(store.committed().map(write => write.key).filter(key => key.startsWith('sales_delivery_events/'))).toHaveLength(4)
     })
 
+    it('pins the assigned journey and advances its state under an optimistic version fence', async () => {
+        store.set(EVENT, processingEvent())
+        const openingRuntime = {
+            expectedStateVersion: 0,
+            enrollment: {
+                variantId: 'A', variantRevision: 3,
+                flow: { id: 'A', label: 'דוגמה אישית', revision: 3, blocks: [{ id: 'a-stop', type: 'stop' }] },
+            },
+            state: { cursor: 4, waitingFor: 'approval' },
+            captures: { childPhotoReceived: true, childPhotoMediaId: 'opaque-provider-id' },
+            approvalRequest: { templateId: 'bar-mitzvah-v1', mediaId: 'opaque-provider-id' },
+            completed: false, action: 'approval_pending',
+            variantId: 'A', variantRevision: 3,
+        }
+
+        await expect(completeSuccessfulExchange(successArgs({
+            exchange: { ...exchange, openingRuntime },
+            outcome: {
+                sendText: 'שלחי תמונה', handoff: false,
+                openingSequenceParts: [{
+                    partId: 'e'.repeat(32), blockId: 'a-photo', order: 1, kind: 'text', text: 'שלחי תמונה',
+                }],
+            },
+        }))).resolves.toEqual(expect.objectContaining({ action: 'completed' }))
+
+        expect(store.get('sales_leads/456')).toMatchObject({
+            openingVariantId: 'A',
+            openingVariantRevision: 3,
+            openingFlow: openingRuntime.enrollment.flow,
+            openingState: { cursor: 4, waitingFor: 'approval' },
+            openingStateVersion: 1,
+            openingStatus: 'approval_pending',
+        })
+        expect(store.get(`sales_delivery_events/${'e'.repeat(32)}`)).toMatchObject({
+            openingVariantId: 'A', openingVariantRevision: 3,
+            openingBlockId: 'a-photo', openingExposure: true,
+        })
+        const approvals = store.entries().filter(([key]) => key.startsWith('sales_opening_approvals/'))
+        expect(approvals).toHaveLength(1)
+        expect(approvals[0][1]).toMatchObject({
+            status: 'pending_generation', leadId: '456', stateVersion: 1,
+            mediaId: 'opaque-provider-id', templateId: 'bar-mitzvah-v1',
+            variantId: 'A', variantRevision: 3, storagePath: null,
+        })
+        expect(JSON.stringify(approvals[0][1])).not.toContain('http')
+    })
+
+    it('rejects a stale opening state version without mutating lead, event, or deliveries', async () => {
+        store.set(EVENT, processingEvent())
+        store.set('sales_leads/456', { openingStateVersion: 2, openingVariantId: 'A' })
+        const existingLead = structuredClone(store.get('sales_leads/456'))
+
+        await expect(completeSuccessfulExchange(successArgs({
+            exchange: {
+                ...exchange,
+                openingRuntime: {
+                    expectedStateVersion: 1, enrollment: null,
+                    state: { cursor: 4, waitingFor: 'approval' }, captures: {}, approvalRequest: null,
+                    completed: false, action: 'approval_pending', variantId: 'A', variantRevision: 3,
+                },
+            },
+            outcome: { sendText: '', handoff: false, noReply: true, openingSequenceParts: [] },
+        }))).resolves.toEqual({ action: 'stale' })
+
+        expect(store.get('sales_leads/456')).toEqual(existingLead)
+        expect(store.get(EVENT)).toEqual(processingEvent())
+        expectNoWrites()
+    })
+
     it('successful exchange stale generation writes neither lead nor event', async () => {
         const newer = processingEvent({ claimGeneration: 2 })
         store.set(EVENT, newer)

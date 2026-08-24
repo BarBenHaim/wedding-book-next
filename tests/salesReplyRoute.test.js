@@ -51,6 +51,7 @@ const mocks = vi.hoisted(() => ({
     buildDeterministicSalesReply: vi.fn(),
     buildOpeningPlan: vi.fn(),
     buildOpeningOnlyPlan: vi.fn(),
+    prepareOpeningRuntime: vi.fn(),
     readPriorConversationContext: vi.fn(),
 }))
 
@@ -98,6 +99,7 @@ vi.mock('@/lib/salesAgent/decisionPolicy', () => ({
 }))
 vi.mock('@/lib/salesAgent/openingPlan', () => ({ buildOpeningPlan: mocks.buildOpeningPlan }))
 vi.mock('@/lib/salesAgent/openingOnly', () => ({ buildOpeningOnlyPlan: mocks.buildOpeningOnlyPlan }))
+vi.mock('@/lib/salesAgent/openingRuntime', () => ({ prepareOpeningRuntime: mocks.prepareOpeningRuntime }))
 vi.mock('@/lib/salesAgent/priorContext', () => ({ readPriorConversationContext: mocks.readPriorConversationContext }))
 
 const lead = { isNew: false, stage: 'engaged', turns: [], followUpCount: 0, imagesSent: [], mediaSent: [] }
@@ -188,8 +190,93 @@ beforeEach(async () => {
     mocks.buildOpeningOnlyPlan.mockReturnValue({
         eligible: false, text: '', mediaParts: [], sequenceParts: [],
     })
+    mocks.prepareOpeningRuntime.mockReturnValue({ eligible: false, reason: 'experiment-stopped' })
     mocks.readPriorConversationContext.mockResolvedValue({ state: 'none', hasPriorConversation: false })
     ;({ POST } = await import('@/app/api/sales-agent/reply/route'))
+})
+
+describe('deterministic opening experiment runtime', () => {
+    it('persists and returns an ordered published journey without model work', async () => {
+        const parts = [
+            { partId: 'a'.repeat(32), blockId: 'a-explain', order: 1, kind: 'text', text: 'כך הספר עובד' },
+            { partId: 'b'.repeat(32), blockId: 'a-photo', order: 2, kind: 'text', text: 'שלחי תמונה של הבן שלך' },
+        ]
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true, stage: 'new' })
+        mocks.readSalesSettings.mockResolvedValue({
+            revision: 8, enabled: true, mode: 'opening_only', openingText: 'legacy',
+            openingExperiment: { enabled: true, variants: [] },
+        })
+        mocks.prepareOpeningRuntime.mockReturnValue({
+            eligible: true,
+            expectedStateVersion: 0,
+            enrollment: { variantId: 'A', variantRevision: 3, flow: { id: 'A', revision: 3, blocks: [] } },
+            result: {
+                action: 'wait_photo', state: { cursor: 2, waitingFor: 'photo' }, parts,
+                captures: {}, approvalRequest: null, completed: false,
+            },
+        })
+
+        const result = await post(inbound({ text: 'אשמח לפרטים' }))
+
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({
+            shouldSend: true,
+            send: ['כך הספר עובד', 'שלחי תמונה של הבן שלך'],
+            sendText: 'כך הספר עובד',
+            openingSequenceParts: parts,
+            openingExperiment: { variantId: 'A', variantRevision: 3, action: 'wait_photo' },
+        })
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            exchange: expect.objectContaining({
+                openingRuntime: expect.objectContaining({
+                    expectedStateVersion: 0,
+                    enrollment: expect.objectContaining({ variantId: 'A', variantRevision: 3 }),
+                    state: { cursor: 2, waitingFor: 'photo' },
+                }),
+            }),
+            outcome: expect.objectContaining({ openingSequenceParts: parts }),
+        }))
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it('accepts the awaited child photo without triggering the generic media handoff', async () => {
+        mocks.getLead.mockResolvedValue({
+            ...lead,
+            openingVariantId: 'A', openingVariantRevision: 3, openingFlow: { id: 'A', blocks: [] },
+            openingState: { cursor: 2, waitingFor: 'photo' }, openingStateVersion: 4,
+        })
+        mocks.readSalesSettings.mockResolvedValue({
+            revision: 8, enabled: true, mode: 'opening_only', openingExperiment: { enabled: true, variants: [] },
+        })
+        mocks.prepareOpeningRuntime.mockReturnValue({
+            eligible: true, enrollment: null, expectedStateVersion: 4,
+            result: {
+                action: 'approval_pending', state: { cursor: 4, waitingFor: 'approval' }, parts: [],
+                captures: { childPhotoReceived: true, childPhotoMediaId: 'opaque-media-id' },
+                approvalRequest: { templateId: 'bar-mitzvah-v1', mediaId: 'opaque-media-id' }, completed: false,
+            },
+        })
+
+        const result = await post(inbound({ text: '', messageType: 'image', mediaId: 'opaque-media-id' }))
+
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({
+            shouldSend: false, noReply: true,
+            openingExperiment: { variantId: 'A', action: 'approval_pending' },
+        })
+        expect(mocks.setHuman).not.toHaveBeenCalled()
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            exchange: expect.objectContaining({
+                openingRuntime: expect.objectContaining({
+                    expectedStateVersion: 4,
+                    captures: expect.objectContaining({ childPhotoReceived: true }),
+                    approvalRequest: expect.objectContaining({ templateId: 'bar-mitzvah-v1' }),
+                }),
+            }),
+        }))
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+    })
 })
 
 describe('owner-controlled opening-only mode', () => {

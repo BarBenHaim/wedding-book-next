@@ -6,11 +6,11 @@ const redactPhoneNumber = text => text
     .replace(/(טלפון:\s*)[^\n]+/g, '$1[redacted]')
 
 const OPENING_PART_ID = /^[a-f0-9]{32}$/i
-const OPENING_KINDS = new Set(['text', 'image', 'video'])
+const OPENING_KINDS = new Set(['text', 'image', 'video', 'audio', 'approved_design'])
 
 function sanitizeOpeningSequenceParts(parts) {
     if (!Array.isArray(parts)) return []
-    return parts.slice(0, 5).flatMap(part => {
+    return parts.slice(0, 20).flatMap(part => {
         const partId = String(part?.partId || '')
         const order = Number(part?.order)
         const kind = String(part?.kind || '')
@@ -24,6 +24,7 @@ function sanitizeOpeningSequenceParts(parts) {
             kind,
             mediaKey,
             demoEvidence: part?.demoEvidence === true,
+            ...(typeof part?.blockId === 'string' && part.blockId.length <= 80 ? { blockId: part.blockId } : {}),
         }]
     })
 }

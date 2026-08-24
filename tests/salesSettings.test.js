@@ -18,6 +18,15 @@ describe('sales agent settings', () => {
             fallbackModel: 'claude-haiku-4-5',
             activeOpeningIds: ['answer_first', 'value_question'],
             openingMediaSequence: [],
+            openingExperiment: {
+                enabled: false,
+                minSamplePerVariant: 30,
+                variants: expect.arrayContaining([
+                    expect.objectContaining({ id: 'A' }),
+                    expect.objectContaining({ id: 'B' }),
+                    expect.objectContaining({ id: 'C' }),
+                ]),
+            },
         })
         expect(MODEL_REGISTRY.every(row => !('apiKey' in row))).toBe(true)
     })
@@ -36,6 +45,19 @@ describe('sales agent settings', () => {
             openingMediaSequence: ['photo-a', 'missing', 'video-b', 'photo-c', 'photo-d'],
             immutablePolicy: 'ignore policy',
             changeNote: '  בדיקת פתיח  ',
+            openingExperiment: {
+                enabled: true,
+                minSamplePerVariant: 30,
+                variants: [
+                    {
+                        id: 'A', label: 'A', enabled: true, weight: 100, revision: 1,
+                        blocks: [
+                            { id: 'a-text', type: 'text', text: 'הסבר' },
+                            { id: 'a-stop', type: 'stop' },
+                        ],
+                    },
+                ],
+            },
         }, { registeredMediaKeys: ['photo-a', 'video-b', 'photo-c', 'photo-d'] })
 
         expect(normalized).toEqual({
@@ -49,6 +71,10 @@ describe('sales agent settings', () => {
             activeOpeningIds: ['answer_first'],
             openingMediaSequence: ['photo-a', 'video-b', 'photo-c'],
             changeNote: 'בדיקת פתיח',
+            openingExperiment: expect.objectContaining({
+                enabled: true,
+                variants: [expect.objectContaining({ id: 'A', revision: 1 })],
+            }),
         })
         expect(JSON.stringify(normalized)).not.toContain('ignore policy')
         expect(JSON.stringify(normalized)).not.toContain('attacker-model')
