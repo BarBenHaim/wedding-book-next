@@ -40,6 +40,27 @@ describe('opening experiment contract', () => {
         expect(normalized).not.toBe(input)
     })
 
+    it('accepts typed variable blocks and rejects ambiguous literal bindings', () => {
+        const input = structuredClone(DEFAULT_OPENING_EXPERIMENT)
+        input.variants[1].blocks[0] = { id: 'b-copy', type: 'text', variableKey: 'opening_copy' }
+        input.variants[1].blocks[1] = { id: 'b-demo', type: 'media', variableKey: 'demo_video' }
+
+        const normalized = normalizeOpeningExperiment(input, {
+            registeredMedia: media,
+            registeredVariables: ['opening_copy', 'demo_video'],
+        })
+        expect(normalized.variants[1].blocks.slice(0, 2)).toEqual([
+            { id: 'b-copy', type: 'text', variableKey: 'opening_copy' },
+            { id: 'b-demo', type: 'media', variableKey: 'demo_video' },
+        ])
+
+        input.variants[1].blocks[0].text = 'אסור גם וגם'
+        expect(() => normalizeOpeningExperiment(input, {
+            registeredMedia: media,
+            registeredVariables: ['opening_copy', 'demo_video'],
+        })).toThrow('AMBIGUOUS_OPENING_VARIABLE')
+    })
+
     it.each([
         ['unknown block', experiment => { experiment.variants[0].blocks[0].type = 'javascript' }, 'INVALID_OPENING_BLOCK'],
         ['unregistered media', experiment => { experiment.variants[1].blocks[1].mediaKey = 'attacker-url' }, 'INVALID_OPENING_MEDIA'],

@@ -70,12 +70,35 @@ function registeredKeys(value) {
     return keys
 }
 
-function normalizeBlock(raw, mediaKeys) {
+function registeredVariableKeys(value) {
+    const keys = new Set()
+    if (Array.isArray(value)) value.forEach(key => keys.add(String(key)))
+    else if (value && typeof value === 'object') Object.keys(value).forEach(key => keys.add(String(key)))
+    return keys
+}
+
+function variableReference(raw, variableKeys) {
+    const variableKey = String(raw?.variableKey || '').trim().toLowerCase()
+    if (!variableKey || !variableKeys.has(variableKey)) throw new Error('INVALID_OPENING_VARIABLE')
+    return variableKey
+}
+
+function normalizeBlock(raw, mediaKeys, variableKeys) {
     const id = String(raw?.id || '').trim().slice(0, 80)
     const type = String(raw?.type || '')
     if (!id || !BLOCK_TYPES.has(type)) throw new Error('INVALID_OPENING_BLOCK')
-    if (TEXT_BLOCKS.has(type)) return { id, type, text: cleanText(raw.text) }
+    if (TEXT_BLOCKS.has(type)) {
+        const hasText = raw?.text != null && String(raw.text).trim() !== ''
+        const hasVariable = raw?.variableKey != null && String(raw.variableKey).trim() !== ''
+        if (hasText && hasVariable) throw new Error('AMBIGUOUS_OPENING_VARIABLE')
+        if (hasVariable) return { id, type, variableKey: variableReference(raw, variableKeys) }
+        return { id, type, text: cleanText(raw.text) }
+    }
     if (type === 'media') {
+        const hasMedia = raw?.mediaKey != null && String(raw.mediaKey).trim() !== ''
+        const hasVariable = raw?.variableKey != null && String(raw.variableKey).trim() !== ''
+        if (hasMedia && hasVariable) throw new Error('AMBIGUOUS_OPENING_VARIABLE')
+        if (hasVariable) return { id, type, variableKey: variableReference(raw, variableKeys) }
         const mediaKey = String(raw?.mediaKey || '').trim()
         if (!mediaKey || !mediaKeys.has(mediaKey)) throw new Error('INVALID_OPENING_MEDIA')
         return { id, type, mediaKey }
@@ -99,7 +122,7 @@ function validateDesignOrder(blocks) {
     }
 }
 
-function normalizeVariant(raw, mediaKeys) {
+function normalizeVariant(raw, mediaKeys, variableKeys) {
     const id = String(raw?.id || '')
     if (!VARIANT_IDS.has(id)) throw new Error('INVALID_OPENING_VARIANT')
     const label = String(raw?.label || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 60)
@@ -112,7 +135,7 @@ function normalizeVariant(raw, mediaKeys) {
     if (!Number.isInteger(revision) || revision < 1) throw new Error('INVALID_OPENING_REVISION')
     if (!Array.isArray(raw?.blocks) || raw.blocks.length < 1) throw new Error('INVALID_OPENING_BLOCK')
     if (raw.blocks.length > MAX_BLOCKS) throw new Error('TOO_MANY_OPENING_BLOCKS')
-    const blocks = raw.blocks.map(block => normalizeBlock(block, mediaKeys))
+    const blocks = raw.blocks.map(block => normalizeBlock(block, mediaKeys, variableKeys))
     const ids = new Set()
     for (const block of blocks) {
         if (ids.has(block.id)) throw new Error('DUPLICATE_OPENING_BLOCK')
@@ -125,7 +148,7 @@ function normalizeVariant(raw, mediaKeys) {
     return { id, label, enabled, weight, revision, blocks }
 }
 
-export function normalizeOpeningExperiment(input = DEFAULT_OPENING_EXPERIMENT, { registeredMedia = [] } = {}) {
+export function normalizeOpeningExperiment(input = DEFAULT_OPENING_EXPERIMENT, { registeredMedia = [], registeredVariables = [] } = {}) {
     const source = input && typeof input === 'object' && !Array.isArray(input) ? input : DEFAULT_OPENING_EXPERIMENT
     const minSample = Number(source.minSamplePerVariant ?? 30)
     if (!Number.isInteger(minSample) || minSample < 10 || minSample > 1_000) throw new Error('INVALID_OPENING_SAMPLE')
@@ -133,7 +156,8 @@ export function normalizeOpeningExperiment(input = DEFAULT_OPENING_EXPERIMENT, {
         throw new Error('INVALID_OPENING_VARIANT')
     }
     const mediaKeys = registeredKeys(registeredMedia)
-    const variants = source.variants.map(variant => normalizeVariant(variant, mediaKeys))
+    const variableKeys = registeredVariableKeys(registeredVariables)
+    const variants = source.variants.map(variant => normalizeVariant(variant, mediaKeys, variableKeys))
     if (new Set(variants.map(variant => variant.id)).size !== variants.length) throw new Error('INVALID_OPENING_VARIANT')
     if (!variants.some(variant => variant.enabled && variant.weight > 0)) throw new Error('NO_ACTIVE_OPENING_VARIANT')
     return {
