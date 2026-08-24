@@ -445,8 +445,10 @@ describe('Firestore atomic successful exchange matrix', () => {
                 variantId: 'A', variantRevision: 3,
                 flow: { id: 'A', label: 'דוגמה אישית', revision: 3, blocks: [{ id: 'a-stop', type: 'stop' }] },
             },
-            state: { cursor: 2, waitingFor: 'photo' },
-            captures: {}, approvalRequest: null, completed: false, action: 'wait_photo',
+            state: { cursor: 4, waitingFor: 'approval' },
+            captures: { childPhotoReceived: true, childPhotoMediaId: 'opaque-provider-id' },
+            approvalRequest: { templateId: 'bar-mitzvah-v1', mediaId: 'opaque-provider-id' },
+            completed: false, action: 'approval_pending',
             variantId: 'A', variantRevision: 3,
         }
 
@@ -464,14 +466,22 @@ describe('Firestore atomic successful exchange matrix', () => {
             openingVariantId: 'A',
             openingVariantRevision: 3,
             openingFlow: openingRuntime.enrollment.flow,
-            openingState: { cursor: 2, waitingFor: 'photo' },
+            openingState: { cursor: 4, waitingFor: 'approval' },
             openingStateVersion: 1,
-            openingStatus: 'wait_photo',
+            openingStatus: 'approval_pending',
         })
         expect(store.get(`sales_delivery_events/${'e'.repeat(32)}`)).toMatchObject({
             openingVariantId: 'A', openingVariantRevision: 3,
             openingBlockId: 'a-photo', openingExposure: true,
         })
+        const approvals = store.entries().filter(([key]) => key.startsWith('sales_opening_approvals/'))
+        expect(approvals).toHaveLength(1)
+        expect(approvals[0][1]).toMatchObject({
+            status: 'pending_generation', leadId: '456', stateVersion: 1,
+            mediaId: 'opaque-provider-id', templateId: 'bar-mitzvah-v1',
+            variantId: 'A', variantRevision: 3, storagePath: null,
+        })
+        expect(JSON.stringify(approvals[0][1])).not.toContain('http')
     })
 
     it('rejects a stale opening state version without mutating lead, event, or deliveries', async () => {

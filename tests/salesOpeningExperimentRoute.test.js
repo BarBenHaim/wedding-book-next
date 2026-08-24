@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
     restoreSalesSettingsRevision: vi.fn(),
     listSalesSettingsHistory: vi.fn(),
     listMedia: vi.fn(),
+    listOpeningApprovals: vi.fn(),
+    generateOpeningApproval: vi.fn(),
+    decideOpeningApproval: vi.fn(),
 }))
 
 vi.mock('@/lib/firebaseAdmin', () => ({ adminAuth: { verifyIdToken: mocks.verifyIdToken } }))
@@ -20,6 +23,11 @@ vi.mock('@/lib/salesAgent/settingsStore', () => ({
     listSalesSettingsHistory: mocks.listSalesSettingsHistory,
 }))
 vi.mock('@/lib/salesAgent/leads', () => ({ listMedia: mocks.listMedia }))
+vi.mock('@/lib/salesAgent/openingApprovals', () => ({
+    listOpeningApprovals: mocks.listOpeningApprovals,
+    generateOpeningApproval: mocks.generateOpeningApproval,
+    decideOpeningApproval: mocks.decideOpeningApproval,
+}))
 
 let GET, POST
 
@@ -39,6 +47,9 @@ beforeEach(async () => {
     mocks.restoreSalesSettingsRevision.mockResolvedValue({ ...settings, revision: 8 })
     mocks.listSalesSettingsHistory.mockResolvedValue([{ revision: 6, updatedAt: 123, updatedBy: 'owner', changeNote: 'copy' }])
     mocks.listMedia.mockResolvedValue([{ key: 'owner-voice', kind: 'audio', url: 'https://storage.test/voice.ogg' }])
+    mocks.listOpeningApprovals.mockResolvedValue([])
+    mocks.generateOpeningApproval.mockResolvedValue({ id: 'a'.repeat(32), status: 'ready' })
+    mocks.decideOpeningApproval.mockResolvedValue({ id: 'a'.repeat(32), status: 'sent' })
     ;({ GET, POST } = await import('@/app/api/sales-agent/experiment/route'))
 })
 
@@ -100,6 +111,27 @@ describe('opening experiment route', () => {
             expectedRevision: 7,
             updatedBy: 'shared-secret',
         }))
+    })
+
+    it.each([
+        ['generate_approval', mocks.generateOpeningApproval, undefined],
+        ['approve', mocks.decideOpeningApproval, 'approve'],
+        ['reject', mocks.decideOpeningApproval, 'reject'],
+    ])('runs the authenticated %s action against one bounded approval id', async (action, handler, decision) => {
+        const approvalId = 'a'.repeat(32)
+        const response = await POST(request('POST', { action, approvalId, ignored: 'private-value' }))
+        expect(response.status).toBe(200)
+        if (decision) expect(handler).toHaveBeenCalledWith(approvalId, decision)
+        else expect(handler).toHaveBeenCalledWith(approvalId)
+        expect(JSON.stringify(handler.mock.calls)).not.toContain('private-value')
+    })
+
+    it('does not run approval actions without authentication or with an invalid id', async () => {
+        const denied = await POST(request('POST', { action: 'approve', approvalId: 'a'.repeat(32) }, 'wrong'))
+        expect(denied.status).toBe(401)
+        const invalid = await POST(request('POST', { action: 'approve', approvalId: 'not-safe' }))
+        expect(invalid.status).toBe(400)
+        expect(mocks.decideOpeningApproval).not.toHaveBeenCalled()
     })
 
     it('rejects malformed, oversized, unsupported, and stale requests with fixed errors', async () => {

@@ -41,6 +41,7 @@ const DELIVERY_EVENTS_COLLECTION = 'sales_delivery_events'
 const DELIVERY_EVENT_IDS_COLLECTION = 'sales_delivery_event_ids'
 const DELIVERY_PROVIDER_IDS_COLLECTION = 'sales_delivery_provider_ids'
 const VERIFIED_ORDERS_COLLECTION = 'sales_verified_orders'
+const OPENING_APPROVALS_COLLECTION = 'sales_opening_approvals'
 
 function ref(phone) {
     return adminDb.collection(COLLECTION).doc(phone)
@@ -64,6 +65,14 @@ function deliveryEventIdRef(eventId) {
 
 function deliveryProviderIdRef(providerMessageId) {
     return adminDb.collection(DELIVERY_PROVIDER_IDS_COLLECTION).doc(providerMessageCorrelationId(providerMessageId))
+}
+
+function openingApprovalIdentity(leadId, stateVersion) {
+    const id = crypto.createHash('sha256')
+        .update(`opening-approval:${String(leadId)}:${Number(stateVersion) || 0}`)
+        .digest('hex')
+        .slice(0, 32)
+    return { id, ref: adminDb.collection(OPENING_APPROVALS_COLLECTION).doc(id) }
 }
 
 function verifiedOrderRef(orderId) {
@@ -329,6 +338,23 @@ export async function completeSuccessfulExchange({ eventId, claimToken, claimGen
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
         tx.set(leadRef, patch, { merge: true })
         tx.set(eventRef, { status: 'completed', leaseUntilMs: null, outcome: cleanOutcome, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+        if (exchange?.openingRuntime?.approvalRequest) {
+            const stateVersion = Number(exchange.openingRuntime.expectedStateVersion || 0) + 1
+            const approval = openingApprovalIdentity(id, stateVersion)
+            tx.set(approval.ref, {
+                id: approval.id,
+                leadId: id,
+                stateVersion,
+                mediaId: String(exchange.openingRuntime.approvalRequest.mediaId || '').slice(0, 500),
+                templateId: String(exchange.openingRuntime.approvalRequest.templateId || '').slice(0, 80),
+                variantId: String(exchange.openingRuntime.variantId || '').slice(0, 1),
+                variantRevision: Number(exchange.openingRuntime.variantRevision || 1),
+                status: 'pending_generation',
+                storagePath: null,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: false })
+        }
         for (const replyPart of replyParts) {
             tx.set(deliveryEventRef(replyPart.outboundId), {
                 outboundId: replyPart.outboundId,
