@@ -56,3 +56,5 @@ _to_delete/
 
 # Local isolated worktrees used during feature development.
 .worktrees/
+
+.vercel

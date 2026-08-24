@@ -710,7 +710,7 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                         </h2>
                         <p className='sectionSub'>
                             בלי הדמיות ובלי סטוק. כל ברכה, תמונה ועמוד שתראו כאן הועלו על ידי
-                            אורחים אמיתיים — ואפשר לפתוח ולדפדף בספר המלא.
+                            אורחים אמיתיים באירועים אמיתיים.
                         </p>
                     </div>
                 </div>
@@ -941,13 +941,11 @@ export default function LandingClient({ liveWedding = null, chapters: chaptersPr
                 .statList li + li::before { content: '·'; margin-inline-end: 18px; opacity: 0.5; }
                 .pull { font-size: clamp(18px, 2.8vw, 23px); font-weight: 600; line-height: 1.65; margin: 0 0 22px; padding: 0; }
                 .pull cite { display: block; font-size: 12.5px; font-style: normal; font-weight: 600; letter-spacing: 0.1em; opacity: 0.65; margin-top: 10px; }
-                .chActions { display: flex; gap: 10px; flex-wrap: wrap; }
                 .filmstrip { display: flex; gap: 14px; overflow-x: auto; padding: clamp(20px, 3vw, 34px) 4px 14px; scroll-snap-type: x mandatory; scrollbar-width: thin; scrollbar-color: #c9a44e transparent; overscroll-behavior-x: contain; }
                 .filmstrip::-webkit-scrollbar { height: 5px; }
                 .filmstrip::-webkit-scrollbar-thumb { background: #c9a44e; border-radius: 3px; }
                 .frame { height: clamp(210px, 30vw, 320px); width: auto; border-radius: 8px; flex-shrink: 0; scroll-snap-align: center; background: #fff; box-shadow: 0 22px 46px -20px rgba(60,44,20,0.5), 0 0 0 1px rgba(180,148,90,0.3); transition: transform 0.28s ease, box-shadow 0.28s ease; }
                 .frame:hover { transform: translateY(-8px) rotate(-0.6deg); box-shadow: 0 34px 60px -22px rgba(60,44,20,0.62), 0 0 0 1px rgba(180,148,90,0.45); }
-                .embedWrap { margin-top: 18px; border-radius: 14px; overflow: hidden; border: 1px solid #c9a44e; box-shadow: 0 30px 70px -30px rgba(50,36,16,0.6); background: #14100c; }
 
                 /* DEMO */
                 .demo { padding-bottom: clamp(20px, 3vw, 40px); }
