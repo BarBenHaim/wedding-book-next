@@ -134,7 +134,25 @@ function formatDate(isoString) {
     try { return new Date(isoString).toLocaleDateString('he-IL') } catch { return isoString }
 }
 
-import { eventTypeOf, eventTypeLabel, matchesSearch, amountOf, compareByAmount, countByEventType, EVENT_TYPES } from '@/lib/adminEventsView'
+import { eventTypeOf, eventTypeLabel, matchesSearch, amountOf, compareByAmount, countByEventType, EVENT_TYPES, rowUrgency, countdownLabel, SOON_WINDOW_DAYS } from '@/lib/adminEventsView'
+
+// How a row is tinted by how close its event is.
+//
+// Classes, not inline styles, on purpose: an inline backgroundColor
+// beats every hover rule in the sheet, so a tinted row would have gone
+// dead under the cursor — the one row you are reaching for would be the
+// one that stopped responding.
+const URGENCY_ROW = {
+    soon: 'bg-amber-100/70 hover:bg-amber-100',
+    nodate: 'bg-rose-50 hover:bg-rose-100',
+    default: 'hover:bg-[#AA8840]/[0.07]',
+}
+const URGENCY_CARD = {
+    soon: 'bg-amber-100/70 active:bg-amber-100',
+    nodate: 'bg-rose-50 active:bg-rose-100',
+    default: 'active:bg-[#AA8840]/[0.06]',
+}
+const urgencyClass = (map, w, nowMs) => map[rowUrgency(w, nowMs)] || map.default
 
 function coupleLabel(w) {
     if (w.brideName || w.groomName) return [w.brideName, w.groomName].filter(Boolean).join(' & ')
@@ -2020,6 +2038,7 @@ function AdminDashboardContent() {
     // Stats
     const totalGreetings = weddings.reduce((sum, w) => sum + (w.greetingsCount ?? 0), 0)
     const totalRevenue = weddings.reduce((sum, w) => { const n = Number(w.amountPaid); return sum + (Number.isFinite(n) && n > 0 ? n : 0) }, 0)
+    const nowMs = Date.now()
     const todayCount = weddings.filter(w => getWeddingStatus(w.weddingDate) === 'today').length
     const upcomingCount = weddings.filter(w => getWeddingStatus(w.weddingDate) === 'upcoming').length
 
@@ -2536,6 +2555,24 @@ function AdminDashboardContent() {
                         </div>
                     )}
 
+                    {/* What the two row colours mean. A colour with no key is
+                        a puzzle, and this one has to be readable by someone
+                        who did not ask for it — including Lord in six
+                        months. Renders the real classes, so it can never
+                        drift from the rows above it. */}
+                    {status === 'ok' && sorted.length > 0 && (
+                        <div className='px-4 sm:px-6 pb-2 flex items-center gap-4 text-[10.5px] text-[#a89378]' dir='rtl'>
+                            <span className='inline-flex items-center gap-1.5'>
+                                <span className='w-3.5 h-3.5 rounded bg-amber-100/70 border border-amber-300' />
+                                אירוע בתוך {SOON_WINDOW_DAYS} ימים
+                            </span>
+                            <span className='inline-flex items-center gap-1.5'>
+                                <span className='w-3.5 h-3.5 rounded bg-rose-50 border border-rose-200' />
+                                בלי תאריך אירוע
+                            </span>
+                        </div>
+                    )}
+
                     {/* Quick status filters — also a "needs attention" shortcut
                         (unpaid / not-printed / no-blessings). Horizontally
                         scrollable so it stays tidy on mobile. */}
@@ -2659,7 +2696,7 @@ function AdminDashboardContent() {
                         {/* Mobile: tap-friendly cards (the wide table is desktop-only) */}
                         <div className='md:hidden divide-y divide-[#f0e8d4]'>
                             {sorted.map((w) => (
-                                <div key={w.id} onClick={() => setSelectedWedding(w)} className='p-4 active:bg-[#AA8840]/[0.06] cursor-pointer'>
+                                <div key={w.id} onClick={() => setSelectedWedding(w)} className={`p-4 cursor-pointer transition-colors ${urgencyClass(URGENCY_CARD, w, nowMs)}`}>
                                     <div className='flex items-start justify-between gap-2'>
                                         <div className='min-w-0'>
                                             <div className='flex items-center gap-2 flex-wrap'>
@@ -2672,6 +2709,9 @@ function AdminDashboardContent() {
                                     </div>
                                     <div className='flex items-center gap-2 flex-wrap mt-2 text-xs text-[#7a6a52]'>
                                         <span className='inline-flex items-center gap-1 tabular-nums'><CalendarDays size={12} /> {formatDate(w.weddingDate)}</span>
+                                        {rowUrgency(w, nowMs) === 'soon' && (
+                                            <span className='font-bold text-amber-800'>{countdownLabel(w, nowMs)}</span>
+                                        )}
                                         <GreetingsBadge count={w.greetingsCount} />
                                         <PrintBadge printOrder={w.printOrder} />
                                         {formatAmount(w) && <span className='font-bold text-[#3d7a3e] tabular-nums'>{formatAmount(w)}</span>}
@@ -2728,7 +2768,7 @@ function AdminDashboardContent() {
                                     {sorted.map((w, i) => (
                                         <tr key={w.id}
                                             onClick={() => setSelectedWedding(w)}
-                                            className='group hover:bg-[#AA8840]/[0.07] transition-colors cursor-pointer'>
+                                            className={`group transition-colors cursor-pointer ${urgencyClass(URGENCY_ROW, w, nowMs)}`}>
                                             <td className='px-6 py-4'>
                                                 <div className='w-7 h-7 rounded-full bg-[#AA8840]/10 flex items-center justify-center text-[#AA8840]/60 text-xs font-bold group-hover:bg-[#AA8840]/20 transition-colors'>
                                                     {i + 1}
@@ -2765,7 +2805,12 @@ function AdminDashboardContent() {
                                                     ) : <div className='text-xs text-[#c4b9a4] mt-1'>—</div>}
                                                 </div>
                                             </td>
-                                            <td className='px-6 py-4 text-[#7a6a52] whitespace-nowrap text-sm tabular-nums'>{formatDate(w.weddingDate)}</td>
+                                            <td className='px-6 py-4 text-[#7a6a52] whitespace-nowrap text-sm tabular-nums'>
+                                                {formatDate(w.weddingDate)}
+                                                {rowUrgency(w, nowMs) === 'soon' && (
+                                                    <span className='block text-[10px] font-bold text-amber-800'>{countdownLabel(w, nowMs)}</span>
+                                                )}
+                                            </td>
                                             <td className='px-6 py-4 text-[#7a6a52] whitespace-nowrap text-sm tabular-nums'>{w.createdAt ? formatDate(w.createdAt) : '—'}</td>
                                             <td className='px-6 py-4 text-center'><StatusBadge weddingDate={w.weddingDate} /></td>
                                             <td className='px-6 py-4 text-center'><GreetingsBadge count={w.greetingsCount} /></td>

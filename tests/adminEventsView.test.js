@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
     eventTypeOf, eventTypeLabel, matchesSearch, searchableText,
     amountOf, isPaid, compareByAmount, filterEvents, countByEventType,
+    eventDateMs, daysUntilEvent, rowUrgency, countdownLabel,
 } from '@/lib/adminEventsView'
 
 const barMitzvah = {
@@ -181,5 +182,93 @@ describe('countByEventType', () => {
 
     it('survives junk', () => {
         expect(countByEventType(null).all).toBe(0)
+    })
+})
+
+describe('rowUrgency / daysUntilEvent', () => {
+    // A fixed local "now" so the maths is deterministic wherever the
+    // suite runs. Local Date construction (not an ISO string) on both
+    // sides, so no test depends on the runner's timezone.
+    const NOW = new Date(2026, 7, 24, 14, 30).getTime()
+    const at = (y, m, d) => ({ weddingDate: new Date(y, m, d) })
+
+    it('counts whole days from today, not from now', () => {
+        // 14:30 today to 09:00 tomorrow is 18 hours and still "1 day".
+        expect(daysUntilEvent({ weddingDate: new Date(2026, 7, 25, 9, 0) }, NOW)).toBe(1)
+        expect(daysUntilEvent({ weddingDate: new Date(2026, 7, 24, 23, 59) }, NOW)).toBe(0)
+    })
+
+    it('colours everything inside the two-week window', () => {
+        for (const day of [24, 25, 30, 31]) {
+            expect(rowUrgency(at(2026, 7, day), NOW), `aug ${day}`).toBe('soon')
+        }
+        // Day 14 is the last one in.
+        expect(daysUntilEvent(at(2026, 8, 7), NOW)).toBe(14)
+        expect(rowUrgency(at(2026, 8, 7), NOW)).toBe('soon')
+    })
+
+    it('leaves day 15 and beyond alone', () => {
+        expect(daysUntilEvent(at(2026, 8, 8), NOW)).toBe(15)
+        expect(rowUrgency(at(2026, 8, 8), NOW)).toBeNull()
+        expect(rowUrgency(at(2026, 11, 1), NOW)).toBeNull()
+    })
+
+    it('leaves past events alone — they are done, not urgent', () => {
+        expect(rowUrgency(at(2026, 7, 23), NOW)).toBeNull()
+        expect(rowUrgency(at(2025, 1, 1), NOW)).toBeNull()
+    })
+
+    it('flags a missing date as its own thing, not as calm', () => {
+        // The reason it gets a colour at all: every deadline in this
+        // system is computed from weddingDate, so a missing one opts the
+        // customer out of the status badge, the upcoming filter and the
+        // date sort at once. It does not look late. It looks fine.
+        for (const v of [undefined, null, '', 'לא ידוע', {}, NaN]) {
+            expect(rowUrgency({ weddingDate: v }, NOW), String(v)).toBe('nodate')
+        }
+        expect(rowUrgency({}, NOW)).toBe('nodate')
+        expect(rowUrgency(null, NOW)).toBe('nodate')
+    })
+
+    it('reads the shapes the date actually arrives in', () => {
+        const target = new Date(2026, 7, 29)
+        const ms = target.getTime()
+        expect(daysUntilEvent({ weddingDate: ms }, NOW)).toBe(5)
+        expect(daysUntilEvent({ weddingDate: target }, NOW)).toBe(5)
+        expect(daysUntilEvent({ weddingDate: { toDate: () => target } }, NOW)).toBe(5)
+        expect(daysUntilEvent({ weddingDate: { seconds: Math.floor(ms / 1000) } }, NOW)).toBe(5)
+        expect(daysUntilEvent({ weddingDate: { _seconds: Math.floor(ms / 1000) } }, NOW)).toBe(5)
+    })
+
+    it('reads the ISO string the admin form stores', () => {
+        // Asserted as a classification rather than an exact count: an
+        // ISO date parses as UTC midnight, so the local calendar day can
+        // land either side depending on the runner's offset. Both are
+        // inside the window, and the window is what the colour means.
+        expect(rowUrgency({ weddingDate: '2026-08-29' }, NOW)).toBe('soon')
+        expect(rowUrgency({ weddingDate: '2026-08-29T18:00:00Z' }, NOW)).toBe('soon')
+        expect(rowUrgency({ weddingDate: '2026-12-01' }, NOW)).toBeNull()
+    })
+
+    it('does not mistake an unparseable date for a real one', () => {
+        expect(eventDateMs({ weddingDate: 'בקרוב' })).toBeNull()
+        expect(eventDateMs({ weddingDate: { toDate: () => { throw new Error('x') } } })).toBeNull()
+        expect(rowUrgency({ weddingDate: 'בקרוב' }, NOW)).toBe('nodate')
+    })
+})
+
+describe('countdownLabel', () => {
+    const NOW = new Date(2026, 7, 24, 14, 30).getTime()
+
+    it('names the near days instead of counting them', () => {
+        expect(countdownLabel({ weddingDate: new Date(2026, 7, 24) }, NOW)).toBe('היום')
+        expect(countdownLabel({ weddingDate: new Date(2026, 7, 25) }, NOW)).toBe('מחר')
+        expect(countdownLabel({ weddingDate: new Date(2026, 7, 26) }, NOW)).toBe('מחרתיים')
+        expect(countdownLabel({ weddingDate: new Date(2026, 7, 31) }, NOW)).toBe('בעוד 7 ימים')
+    })
+
+    it('says nothing for a past event and says so for a missing date', () => {
+        expect(countdownLabel({ weddingDate: new Date(2026, 7, 20) }, NOW)).toBeNull()
+        expect(countdownLabel({}, NOW)).toBe('בלי תאריך')
     })
 })

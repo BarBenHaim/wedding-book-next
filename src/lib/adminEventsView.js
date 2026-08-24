@@ -154,9 +154,105 @@ export function countByEventType(list) {
     return counts
 }
 
+
+// ── Which rows need looking at ──────────────────────────────────────
+//
+// "Colour the row if the event is in the next two weeks, and colour the
+// ones with no date differently."
+//
+// Both halves are the same question — what has to be dealt with now —
+// asked from opposite ends. An event fourteen days out is the last
+// moment to chase blessings and send the book to print. An event with
+// no date at all is worse than urgent: it is invisible. Every deadline
+// this system knows how to compute runs off `weddingDate`, so a missing
+// one silently opts that customer out of the status badge, the upcoming
+// filter, the follow-up ladder and the date sort. It does not look
+// late. It looks fine, right up until it is not.
+//
+// So a missing date gets its own colour rather than being lumped in
+// with the calm rows. It is a to-do, not a state.
+
+/** How far ahead counts as "coming up". */
+export const SOON_WINDOW_DAYS = 14
+
+/**
+ * The event date as a local-midnight timestamp, or null.
+ *
+ * Accepts the shapes this field actually arrives in: an ISO string from
+ * the API, a Date, epoch millis, and a Firestore Timestamp — whether it
+ * still has `toDate()` or has been through JSON and is down to
+ * `{ seconds }`. Anything else is null rather than a guess, because a
+ * guessed date here paints a row the wrong colour and a wrong colour is
+ * worse than no colour: it gets trusted.
+ *
+ * Normalised the same way getWeddingStatus() does it, deliberately. A
+ * row tinted "coming up" while the badge beside it says something else
+ * would be a worse bug than either behaviour on its own.
+ */
+export function eventDateMs(w) {
+    const raw = w?.weddingDate
+    if (raw === null || raw === undefined || raw === '') return null
+
+    let d = null
+    if (raw instanceof Date) d = new Date(raw.getTime())
+    else if (typeof raw === 'number') d = new Date(raw)
+    else if (typeof raw === 'string') d = new Date(raw)
+    else if (typeof raw?.toDate === 'function') { try { d = raw.toDate() } catch { return null } }
+    else if (Number.isFinite(raw?.seconds)) d = new Date(raw.seconds * 1000)
+    else if (Number.isFinite(raw?._seconds)) d = new Date(raw._seconds * 1000)
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return null
+
+    d.setHours(0, 0, 0, 0)
+    return d.getTime()
+}
+
+/**
+ * Whole days from today to the event. Negative is past, null is unknown.
+ *
+ * Rounded, not floored: a clock change makes one day 23 or 25 hours
+ * long, and flooring turns "in exactly 7 days" into 6 twice a year.
+ */
+export function daysUntilEvent(w, nowMs = Date.now()) {
+    const ms = eventDateMs(w)
+    if (ms === null) return null
+    const today = new Date(nowMs)
+    today.setHours(0, 0, 0, 0)
+    return Math.round((ms - today.getTime()) / 86400000)
+}
+
+/**
+ * 'soon' | 'nodate' | null — what colour this row deserves.
+ *
+ * Past events are null on purpose. They are done; tinting them would
+ * spend the strongest signal on the table on the rows that need nothing.
+ */
+export function rowUrgency(w, nowMs = Date.now()) {
+    const days = daysUntilEvent(w, nowMs)
+    if (days === null) return 'nodate'
+    if (days < 0 || days > SOON_WINDOW_DAYS) return null
+    return 'soon'
+}
+
+/**
+ * A short Hebrew countdown, or null when there is nothing to count to.
+ *
+ * The colour says "this one", the countdown says "this one first" —
+ * without it, fourteen amber rows all look equally urgent.
+ */
+export function countdownLabel(w, nowMs = Date.now()) {
+    const days = daysUntilEvent(w, nowMs)
+    if (days === null) return 'בלי תאריך'
+    if (days < 0) return null
+    if (days === 0) return 'היום'
+    if (days === 1) return 'מחר'
+    if (days === 2) return 'מחרתיים'
+    return `בעוד ${days} ימים`
+}
+
 export { EVENT_TYPES }
 export default {
     EVENT_TYPES, EVENT_TYPE_LABEL, eventTypeOf, eventTypeLabel,
     searchableText, matchesSearch, amountOf, isPaid, compareByAmount,
     filterEvents, countByEventType,
+    SOON_WINDOW_DAYS, eventDateMs, daysUntilEvent, rowUrgency, countdownLabel,
 }
