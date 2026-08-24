@@ -11,13 +11,13 @@
 import BarMitzvahPricingClient from './BarMitzvahPricingClient'
 
 const CONFIG = {
-    // מחיר החבילה כפי שמופיע בחנות (מוצר 5480). לעדכון — שנו רק כאן.
+    // מחיר החבילה כפי שמופיע בחנות (מוצר 6271). לעדכון — שנו רק כאן.
     price: '990',
     priceNote: 'כולל הכל — בלי הפתעות',
     // קישור הוואטסאפ הקיים שלך
     whatsapp: 'https://wa.link/nkf9u5',
     // קישור ישיר לתשלום בחנות (חבילת ספר הברכות לבר המצווה)
-    checkout: 'https://weddingtales.co.il/checkout/?add-to-cart=5480',
+    checkout: 'https://weddingtales.co.il/checkout/?add-to-cart=6271',
     // קישורי דמו — אירוע הדמו החי של "איתי" (demo@weddingtales.co.il)
     demoGuest: 'https://app.weddingtales.co.il/w/4dgd5v',
     demoBook: 'https://app.weddingtales.co.il/wedding/28iAvV2jOCWFmnAPLtoy/book/b95d184c-c74a-43bf-84b0-4f01913d1419',
@@ -214,12 +214,12 @@ export default function BarMitzvahPage() {
             )}
 
             {/* ═══ Package + Price (interactive) ═══ */}
-            <BarMitzvahPricingClient whatsappUrl={CONFIG.whatsapp} />
+            <BarMitzvahPricingClient checkoutBase={CONFIG.checkout} whatsappUrl={CONFIG.whatsapp} />
 
             {/* ═══ What's included — a quiet reminder under the pricing ═══ */}
             <section className='mx-auto max-w-3xl px-5 pb-6 -mt-4'>
                 <div className='rounded-2xl border border-[#2b4a7a]/10 bg-white/70 p-5 text-center'>
-                    <p className='text-sm font-bold text-[#1a2540]'>בכל חבילה כלול:</p>
+                    <p className='text-sm font-bold text-[#1a2540]'>בחבילה כלול:</p>
                     <ul className='mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[13px] text-[#49577a]'>
                         {PACKAGE_ITEMS.map((item, i) => (
                             <li key={item} className='inline-flex items-center gap-1.5'>

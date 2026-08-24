@@ -17,55 +17,27 @@
 
 import { useMemo, useState } from 'react'
 
-const PACKAGES = [
+export const PACKAGES = [
     {
-        id: 'digital',
-        title: 'דיגיטלי בלבד',
-        subtitle: 'ספר הברכות שנפתח מכל נייד',
-        price: 290,
-        includes: [
-            'עמוד ברכות אישי לאורחים',
-            'מערכת ניהול — רואים כל ברכה בזמן אמת',
-            'ספר דיגיטלי לשיתוף עוד באותו לילה',
-            'עיצוב אישי לאירוע',
-        ],
-    },
-    {
-        id: 'digital_plus_print',
-        title: 'דיגיטלי + עותק מודפס',
-        subtitle: 'ספר דיגיטלי + כריכה קשה עד הבית',
-        price: 490,
-        includes: [
-            'כל מה שיש בחבילה הדיגיטלית',
-            'ספר כריכה קשה — הדפסה יוקרתית על נייר ארכיב',
-            'משלוח עד הבית',
-        ],
-    },
-    {
-        id: 'grandma',
-        title: 'חבילת סבתא-סבתא',
-        subtitle: 'ספר דיגיטלי + 3 עותקים מודפסים',
-        price: 690,
-        strike: 870, // 490 + 2× ~190 “additional print” — displays as savings
+        id: 'printed',
+        title: 'ספר ברכות מודפס + דיגיטלי',
+        subtitle: 'כל הברכות והתמונות בספר אישי בכריכה קשה',
+        price: 990,
+        strike: 1190,
         recommended: true,
-        badge: '⭐ מומלץ',
-        savings: 'חוסכים ₪180',
+        badge: 'החבילה המלאה',
+        savings: 'מחיר השקה — חוסכים ₪200',
         includes: [
-            'כל מה שיש בחבילה עם ההדפסה',
-            '2 עותקים מודפסים נוספים — לסבים וסבתות',
-            'עדיפות בסבב ההדפסה',
+            'עמוד ברכות אישי לאורחים — בלי אפליקציה',
+            'פוסטר QR בעיצוב אישי לאירוע',
+            'ספר דיגיטלי מעוצב לשיתוף ולהורדה',
+            'ספר מודפס בכריכה קשה עד הבית',
+            'עיצוב כל עמוד ואישור מלא לפני הדפסה',
         ],
     },
 ]
 
-const ADDONS = [
-    {
-        id: 'qr_stand',
-        label: 'עמדת QR באירוע — כרזה מעוצבת + מעמד אקרילי',
-        note: 'האורחים סורקים ישר מהשולחן, בלי שאלות',
-        price: 250,
-    },
-]
+export const ADDONS = []
 
 // Configure ONE of these to activate self-serve checkout:
 //   • NEXT_PUBLIC_BAR_MITZVAH_CHECKOUT — a Meshulam / Grow / Bit URL
@@ -85,46 +57,50 @@ function buildSummary(pkg, addonIds, total) {
     return `היי! אני רוצה להזמין את חבילת "${pkg.title}"${addonsPart}. סה"כ: ${fmt(total)}. שלחו לי בבקשה קישור לתשלום 🙏`
 }
 
+export function buildCheckoutHref({ pkg, addonIds, checkoutBase, whatsappUrl }) {
+    const total = pkg.price + addonIds.reduce((sum, id) => sum + (ADDONS.find(a => a.id === id)?.price || 0), 0)
+    if (checkoutBase) {
+        const qs = new URLSearchParams({
+            pkg: pkg.id,
+            addons: addonIds.join(','),
+            amount: String(total),
+            label: pkg.title,
+        })
+        const sep = checkoutBase.includes('?') ? '&' : '?'
+        return { href: `${checkoutBase}${sep}${qs.toString()}`, isWhatsApp: false, total }
+    }
+    return {
+        href: `${whatsappUrl}?text=${encodeURIComponent(buildSummary(pkg, addonIds, total))}`,
+        isWhatsApp: true,
+        total,
+    }
+}
+
 export default function BarMitzvahPricingClient({ checkoutBase = '', whatsappUrl = DEFAULT_WHATSAPP }) {
-    const [pkgId, setPkgId] = useState('grandma') // "recommended" pre-selected
+    const [pkgId, setPkgId] = useState('printed')
     const [addons, setAddons] = useState([])
     const pkg = PACKAGES.find(p => p.id === pkgId) || PACKAGES[0]
 
-    const total = useMemo(() => {
-        return pkg.price + addons.reduce((sum, id) => sum + (ADDONS.find(a => a.id === id)?.price || 0), 0)
-    }, [pkg.price, addons])
-
-    // Real checkout when a base URL is provided (via env or prop); WhatsApp
-    // fallback otherwise. Both open in the same tab — this is the primary
-    // conversion action.
-    const checkoutHref = useMemo(() => {
-        const base = checkoutBase || process.env.NEXT_PUBLIC_BAR_MITZVAH_CHECKOUT || ''
-        if (base) {
-            const qs = new URLSearchParams({
-                pkg: pkg.id,
-                addons: addons.join(','),
-                amount: String(total),
-                label: pkg.title,
-            })
-            const sep = base.includes('?') ? '&' : '?'
-            return `${base}${sep}${qs.toString()}`
-        }
-        return `${whatsappUrl}?text=${encodeURIComponent(buildSummary(pkg, addons, total))}`
-    }, [pkg, addons, total, checkoutBase, whatsappUrl])
-    const isWhatsApp = !checkoutHref.startsWith(process.env.NEXT_PUBLIC_BAR_MITZVAH_CHECKOUT || 'https://__never__')
+    const checkout = useMemo(() => buildCheckoutHref({
+        pkg,
+        addonIds: addons,
+        checkoutBase: checkoutBase || process.env.NEXT_PUBLIC_BAR_MITZVAH_CHECKOUT || '',
+        whatsappUrl,
+    }), [pkg, addons, checkoutBase, whatsappUrl])
+    const { href: checkoutHref, isWhatsApp, total } = checkout
 
     return (
         <section className='mx-auto max-w-5xl px-5 py-14' id='pricing'>
             <div className='rounded-3xl border border-[#AA8840]/25 bg-white p-6 shadow-xl shadow-blue-900/5 sm:p-10'>
                 <div className='text-center'>
-                    <p className='text-sm font-bold tracking-wide text-[#AA8840]'>בחרו חבילה</p>
+                    <p className='text-sm font-bold tracking-wide text-[#AA8840]'>החבילה המלאה</p>
                     <h2 className='mt-1 text-2xl font-[800] text-[#1a2540] sm:text-4xl'>מחיר קבוע. בלי אותיות קטנות.</h2>
-                    <p className='mt-2 text-[#49577a]'>כולם כוללים את מערכת הניהול, העיצוב האישי והתמיכה עד ליום האירוע.</p>
+                    <p className='mt-2 text-[#49577a]'>הכול כבר כלול: דיגיטלי, כריכה קשה, עיצוב אישי ומשלוח עד הבית.</p>
                 </div>
 
                 {/* Package radio cards */}
-                <fieldset className='mt-8 grid gap-4 sm:grid-cols-3'>
-                    <legend className='sr-only'>בחרו חבילה</legend>
+                <fieldset className='mx-auto mt-8 grid max-w-xl gap-4'>
+                    <legend className='sr-only'>פרטי החבילה</legend>
                     {PACKAGES.map(p => {
                         const on = pkgId === p.id
                         return (
