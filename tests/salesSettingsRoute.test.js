@@ -25,6 +25,7 @@ const settings = {
     fallbackModel: 'claude-haiku-4-5', businessInstructions: '',
     activeOpeningIds: ['question_first'], openingMediaSequence: [],
     immutablePolicy: 'אין שיחות טלפון', updatedAt: null, updatedBy: null,
+    openingExperiment: { enabled: false, minSamplePerVariant: 30, variants: [] },
 }
 
 beforeEach(async () => {
@@ -68,6 +69,7 @@ describe('sales agent settings route', () => {
             revision: 3, enabled: true, provider: 'auto', model: 'claude-sonnet-4-5',
             businessInstructions: 'להציג מחיר מוקדם', activeOpeningIds: ['price_upfront'],
             openingMediaSequence: ['photo-a'], changeNote: 'ניסוי',
+            openingExperiment: { enabled: false, minSamplePerVariant: 30, variants: [] },
         }))
 
         expect(response.status).toBe(200)

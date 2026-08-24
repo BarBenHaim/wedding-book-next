@@ -41,7 +41,7 @@ async function context() {
 function publicMedia(library) {
     return Object.entries(library).map(([key, value]) => ({
         key,
-        kind: value.kind === 'video' ? 'video' : 'image',
+        kind: ['image', 'video', 'audio'].includes(value.kind) ? value.kind : 'image',
         url: value.url,
         caption: value.caption || '',
         when: value.when || '',
@@ -96,6 +96,11 @@ export async function PUT(req) {
         const known = [
             'INVALID_REVISION', 'INVALID_PROVIDER', 'INVALID_MODEL', 'INVALID_MODE',
             'OPENING_TEXT_REQUIRED', 'OPENING_TEXT_TOO_LONG', 'INSTRUCTIONS_TOO_LONG', 'NO_ACTIVE_OPENING',
+            'INVALID_OPENING_BLOCK', 'INVALID_OPENING_MEDIA', 'DUPLICATE_OPENING_BLOCK',
+            'TOO_MANY_OPENING_BLOCKS', 'INVALID_OPENING_TERMINAL',
+            'INVALID_OPENING_DESIGN_ORDER', 'NO_ACTIVE_OPENING_VARIANT',
+            'INVALID_OPENING_VARIANT', 'INVALID_OPENING_WEIGHT', 'INVALID_OPENING_REVISION',
+            'INVALID_OPENING_SAMPLE', 'INVALID_OPENING_TEXT', 'INVALID_OPENING_TEMPLATE',
         ]
         if (known.includes(code)) return NextResponse.json({ error: code }, { status: 400 })
         return NextResponse.json({ error: 'SETTINGS_SAVE_FAILED' }, { status: 503 })

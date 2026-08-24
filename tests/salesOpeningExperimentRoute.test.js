@@ -1,0 +1,114 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { DEFAULT_OPENING_EXPERIMENT } from '@/lib/salesAgent/openingExperiment'
+
+const mocks = vi.hoisted(() => ({
+    verifyIdToken: vi.fn(),
+    isSuperAdmin: vi.fn(),
+    readSalesSettings: vi.fn(),
+    saveSalesSettings: vi.fn(),
+    restoreSalesSettingsRevision: vi.fn(),
+    listSalesSettingsHistory: vi.fn(),
+    listMedia: vi.fn(),
+}))
+
+vi.mock('@/lib/firebaseAdmin', () => ({ adminAuth: { verifyIdToken: mocks.verifyIdToken } }))
+vi.mock('@/lib/superAdmin', () => ({ isSuperAdmin: mocks.isSuperAdmin }))
+vi.mock('@/lib/salesAgent/settingsStore', () => ({
+    readSalesSettings: mocks.readSalesSettings,
+    saveSalesSettings: mocks.saveSalesSettings,
+    restoreSalesSettingsRevision: mocks.restoreSalesSettingsRevision,
+    listSalesSettingsHistory: mocks.listSalesSettingsHistory,
+}))
+vi.mock('@/lib/salesAgent/leads', () => ({ listMedia: mocks.listMedia }))
+
+let GET, POST
+
+const settings = {
+    revision: 7,
+    enabled: false,
+    mode: 'opening_only',
+    openingExperiment: DEFAULT_OPENING_EXPERIMENT,
+}
+
+beforeEach(async () => {
+    vi.resetModules()
+    vi.clearAllMocks()
+    process.env.SALES_AGENT_SECRET = 'experiment-route-secret'
+    mocks.readSalesSettings.mockResolvedValue(settings)
+    mocks.saveSalesSettings.mockResolvedValue({ ...settings, revision: 8 })
+    mocks.restoreSalesSettingsRevision.mockResolvedValue({ ...settings, revision: 8 })
+    mocks.listSalesSettingsHistory.mockResolvedValue([{ revision: 6, updatedAt: 123, updatedBy: 'owner', changeNote: 'copy' }])
+    mocks.listMedia.mockResolvedValue([{ key: 'owner-voice', kind: 'audio', url: 'https://storage.test/voice.ogg' }])
+    ;({ GET, POST } = await import('@/app/api/sales-agent/experiment/route'))
+})
+
+const request = (method, body, secret = 'experiment-route-secret') => new Request('http://localhost/api/sales-agent/experiment', {
+    method,
+    headers: { 'x-wt-secret': secret, 'content-type': 'application/json' },
+    body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
+})
+
+describe('opening experiment route', () => {
+    it('authenticates before reading settings, history, or media', async () => {
+        const response = await GET(request('GET', undefined, 'wrong'))
+        expect(response.status).toBe(401)
+        expect(mocks.readSalesSettings).not.toHaveBeenCalled()
+        expect(mocks.listSalesSettingsHistory).not.toHaveBeenCalled()
+        expect(mocks.listMedia).not.toHaveBeenCalled()
+    })
+
+    it('returns only versioned experiment control truth and registered media metadata', async () => {
+        const response = await GET(request('GET'))
+        const body = await response.json()
+        expect(response.status).toBe(200)
+        expect(body).toEqual({
+            ok: true,
+            revision: 7,
+            enabled: false,
+            experiment: DEFAULT_OPENING_EXPERIMENT,
+            history: [{ revision: 6, updatedAt: 123, updatedBy: 'owner', changeNote: 'copy' }],
+            media: [{ key: 'owner-voice', kind: 'audio', url: 'https://storage.test/voice.ogg', caption: '', when: '', source: 'upload' }],
+            metrics: null,
+            leads: [],
+            approvals: [],
+        })
+        expect(JSON.stringify(body)).not.toMatch(/transcript|mediaId|experiment-route-secret/)
+    })
+
+    it('publishes an allowlisted experiment against the expected revision', async () => {
+        const experiment = structuredClone(DEFAULT_OPENING_EXPERIMENT)
+        experiment.enabled = true
+        const response = await POST(request('POST', {
+            action: 'publish', revision: 7, experiment, changeNote: 'מפעיל ניסוי', ignored: 'attacker-value',
+        }))
+        expect(response.status).toBe(200)
+        expect(mocks.saveSalesSettings).toHaveBeenCalledWith({
+            revision: 7,
+            openingExperiment: experiment,
+            changeNote: 'מפעיל ניסוי',
+        }, expect.objectContaining({
+            updatedBy: 'shared-secret',
+            registeredMediaKeys: expect.arrayContaining(['owner-voice']),
+        }))
+        expect(JSON.stringify(mocks.saveSalesSettings.mock.calls[0])).not.toContain('attacker-value')
+    })
+
+    it('restores a historical revision as a new current revision', async () => {
+        const response = await POST(request('POST', { action: 'restore', revision: 7, restoreRevision: 3 }))
+        expect(response.status).toBe(200)
+        expect(mocks.restoreSalesSettingsRevision).toHaveBeenCalledWith(3, expect.objectContaining({
+            expectedRevision: 7,
+            updatedBy: 'shared-secret',
+        }))
+    })
+
+    it('rejects malformed, oversized, unsupported, and stale requests with fixed errors', async () => {
+        expect((await POST(request('POST', '{bad'))).status).toBe(400)
+        expect((await POST(request('POST', 'x'.repeat(100_001)))).status).toBe(413)
+        expect((await POST(request('POST', { action: 'delete-all', revision: 7 }))).status).toBe(400)
+        mocks.saveSalesSettings.mockRejectedValueOnce(new Error('STALE_REVISION'))
+        const stale = await POST(request('POST', { action: 'publish', revision: 6, experiment: DEFAULT_OPENING_EXPERIMENT }))
+        expect(stale.status).toBe(409)
+        expect(await stale.json()).toEqual({ error: 'STALE_REVISION' })
+    })
+})

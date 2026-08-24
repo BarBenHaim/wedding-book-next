@@ -27,7 +27,8 @@ const store = vi.hoisted(() => {
 vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: store.db }))
 vi.mock('firebase-admin/firestore', () => ({ FieldValue: { serverTimestamp: () => 'SERVER_TIME' } }))
 
-import { readSalesSettings, saveSalesSettings } from '@/lib/salesAgent/settingsStore'
+import { readSalesSettings, restoreSalesSettingsRevision, saveSalesSettings } from '@/lib/salesAgent/settingsStore'
+import { DEFAULT_OPENING_EXPERIMENT } from '@/lib/salesAgent/openingExperiment'
 
 beforeEach(() => store.reset())
 
@@ -57,6 +58,44 @@ describe('sales settings Firestore store', () => {
         expect(saved).toMatchObject({ revision: 3, enabled: false, updatedBy: 'owner@example.test' })
         expect(store.get('sales_agent_settings/active')).toMatchObject({ revision: 3, updatedAt: 'SERVER_TIME' })
         expect(store.get('sales_agent_settings_history/revision-2')).toMatchObject({ revision: 2, replacedByRevision: 3 })
+    })
+
+    it('publishes the normalized experiment and restores an old snapshot as a new revision', async () => {
+        const oldExperiment = structuredClone(DEFAULT_OPENING_EXPERIMENT)
+        oldExperiment.enabled = false
+        const currentExperiment = structuredClone(DEFAULT_OPENING_EXPERIMENT)
+        currentExperiment.enabled = true
+        currentExperiment.variants[0].label = 'גרסה נוכחית'
+        store.set('sales_agent_settings/active', {
+            revision: 5, enabled: false, mode: 'opening_only', openingText: 'פתיחה',
+            provider: 'auto', model: 'claude-sonnet-4-5', activeOpeningIds: ['answer_first'],
+            openingMediaSequence: [], openingExperiment: currentExperiment,
+        })
+        store.set('sales_agent_settings_history/revision-2', {
+            revision: 2, enabled: false, mode: 'opening_only', openingText: 'פתיחה ישנה',
+            provider: 'auto', model: 'claude-sonnet-4-5', activeOpeningIds: ['answer_first'],
+            openingMediaSequence: [], openingExperiment: oldExperiment,
+        })
+
+        const restored = await restoreSalesSettingsRevision(2, {
+            expectedRevision: 5,
+            updatedBy: 'owner@example.test',
+            registeredMediaKeys: ['cover_personalised', 'book_open_spread'],
+        })
+
+        expect(restored).toMatchObject({ revision: 6, openingText: 'פתיחה ישנה', updatedBy: 'owner@example.test' })
+        expect(restored.openingExperiment.enabled).toBe(false)
+        expect(store.get('sales_agent_settings_history/revision-5')).toMatchObject({ revision: 5, replacedByRevision: 6 })
+        expect(store.get('sales_agent_settings/active')).toMatchObject({ revision: 6, restoredFromRevision: 2 })
+    })
+
+    it('rejects a missing or stale restore without changing the active revision', async () => {
+        store.set('sales_agent_settings/active', {
+            revision: 5, enabled: false, provider: 'auto', model: 'claude-sonnet-4-5',
+        })
+        await expect(restoreSalesSettingsRevision(2, { expectedRevision: 4 })).rejects.toThrow('STALE_REVISION')
+        await expect(restoreSalesSettingsRevision(2, { expectedRevision: 5 })).rejects.toThrow('REVISION_NOT_FOUND')
+        expect(store.get('sales_agent_settings/active')).toMatchObject({ revision: 5 })
     })
 
     it('rejects a stale save without writing either document', async () => {
