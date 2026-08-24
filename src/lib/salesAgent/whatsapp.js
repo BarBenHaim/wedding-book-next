@@ -95,6 +95,26 @@ export function sendWhatsAppImage(to, url, caption = '') {
     })
 }
 
+/** A video by URL, with an optional caption. Only valid inside the 24-hour window. */
+export function sendWhatsAppVideo(to, url, caption = '') {
+    return post({
+        messaging_product: 'whatsapp',
+        to: String(to),
+        type: 'video',
+        video: { link: String(url), caption: String(caption || '').slice(0, 1024) },
+    })
+}
+
+/** An audio file by URL. Graph determines the rendered audio presentation from the media. */
+export function sendWhatsAppAudio(to, url, _voiceNote = false) {
+    return post({
+        messaging_product: 'whatsapp',
+        to: String(to),
+        type: 'audio',
+        audio: { link: String(url) },
+    })
+}
+
 /** Business-initiated messages may use only the two approved templates. */
 export function sendWhatsAppTemplate(to, templateName, parameters = []) {
     const expected = TEMPLATE_PARAMETERS.get(templateName)
@@ -127,8 +147,10 @@ const whatsapp = {
     FOLLOWUP_TEMPLATE,
     DAILY_DIGEST_TEMPLATE,
     canSendWhatsApp,
+    sendWhatsAppAudio,
     sendWhatsAppText,
     sendWhatsAppImage,
+    sendWhatsAppVideo,
     sendWhatsAppTemplate,
 }
 

@@ -2,8 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
     DAILY_DIGEST_TEMPLATE,
     FOLLOWUP_TEMPLATE,
+    sendWhatsAppAudio,
+    sendWhatsAppImage,
     sendWhatsAppTemplate,
     sendWhatsAppText,
+    sendWhatsAppVideo,
 } from '@/lib/salesAgent/whatsapp'
 
 const providerBody = {
@@ -75,6 +78,20 @@ describe('direct WhatsApp Graph evidence', () => {
         expect(visible).not.toContain('non-dialable-recipient-fixture')
         expect(visible).not.toContain('private-token-fixture')
         expect(visible).not.toContain('private transcript fixture')
+    })
+
+    it('sends image, video, and audio test parts with exact allowlisted Graph shapes', async () => {
+        fetch.mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue(providerBody) })
+
+        await sendWhatsAppImage('non-dialable-recipient-fixture', 'https://media.example/image.jpg', 'image caption')
+        await sendWhatsAppVideo('non-dialable-recipient-fixture', 'https://media.example/video.mp4', 'video caption')
+        await sendWhatsAppAudio('non-dialable-recipient-fixture', 'https://media.example/audio.ogg', true)
+
+        expect(fetch.mock.calls.map(([, init]) => JSON.parse(init.body))).toEqual([
+            { messaging_product: 'whatsapp', to: 'non-dialable-recipient-fixture', type: 'image', image: { link: 'https://media.example/image.jpg', caption: 'image caption' } },
+            { messaging_product: 'whatsapp', to: 'non-dialable-recipient-fixture', type: 'video', video: { link: 'https://media.example/video.mp4', caption: 'video caption' } },
+            { messaging_product: 'whatsapp', to: 'non-dialable-recipient-fixture', type: 'audio', audio: { link: 'https://media.example/audio.ogg' } },
+        ])
     })
 })
 
