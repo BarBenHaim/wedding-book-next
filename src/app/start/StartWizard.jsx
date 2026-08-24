@@ -21,6 +21,7 @@
 // cookie via /api/login, create-event API, postMessage to the mobile
 // app's WebView on completion.
 
+import { nameFontPercent } from '@/lib/fontFit'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -103,7 +104,7 @@ function BookPreview({ data, presetValues, mode = 'cover' }) {
         const imgW = PAGE * ((Number(v.imageStyle?.width) || 80) / 100)
         const imgH = imgW * 0.75 // the book's 4:3 photo lock
         const textSize = pct(v.fontSizePercent ?? 3)
-        const nameSize = pct(v.nameFontSizePercent ?? (v.fontSizePercent ? v.fontSizePercent * 0.7 : 2.1))
+        const nameSize = pct(nameFontPercent(v))
         const bodyFont = v.fontClass || frankRuhl.className
         return (
             <div className='pp'>

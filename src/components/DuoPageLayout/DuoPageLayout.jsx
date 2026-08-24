@@ -23,7 +23,7 @@
 import { getBlessingText } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
-import { duoFitFactor } from '@/lib/fontFit'
+import { duoFitFactor, nameFontPercent } from '@/lib/fontFit'
 import FramedPhoto from '../FramedPhoto/FramedPhoto'
 
 const detectDir = t => {
@@ -50,9 +50,7 @@ function DuoBlock({ entry, styleSettings, w, h, solo }) {
     const fit = duoFitFactor({ textLength: (cleanText || '').length, hasImage, styleSettings })
 
     const baseFont = (styleSettings.fontSizePercent ?? 3) * 0.82
-    const nameFont =
-        (styleSettings.nameFontSizePercent ??
-            (styleSettings.fontSizePercent ? styleSettings.fontSizePercent * 0.7 : 2.1)) * 0.85
+    const nameFont = nameFontPercent(styleSettings, 0.85)
 
     const slotW = w((styleSettings.imageStyle?.width ?? 80) * 0.62)
 

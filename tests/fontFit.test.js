@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
     fitFactor, minFactorOf, pageFitFactor, duoFitFactor, effectiveFontPercent,
-    DEFAULT_MIN_FACTOR, PAGE_FIT_TARGET, DUO_FIT_TARGET,
+    nameFontPercent,
+    DEFAULT_MIN_FACTOR, PAGE_FIT_TARGET, DUO_FIT_TARGET, NAME_TO_BODY_RATIO,
 } from '@/lib/fontFit'
 
 describe('fitFactor', () => {
@@ -118,5 +119,45 @@ describe('effectiveFontPercent', () => {
 
     it('treats a missing factor as no shrink rather than NaN', () => {
         expect(effectiveFontPercent({ fontSizePercent: 4 }, undefined)).toBe(4)
+    })
+})
+
+describe('nameFontPercent', () => {
+    it('follows the blessing at 70% when nobody set a name size', () => {
+        // The reason the page editor shows a derived number instead of a
+        // constant: raise the blessing on one page and the name goes
+        // with it, so a slider reading a fixed 2.1 would be wrong the
+        // moment the font-size slider above it moved.
+        expect(nameFontPercent({ fontSizePercent: 4 })).toBeCloseTo(2.8, 10)
+        expect(nameFontPercent({ fontSizePercent: 3 })).toBeCloseTo(3 * NAME_TO_BODY_RATIO, 10)
+    })
+
+    it('falls back to 2.1 when there is no body size to follow', () => {
+        expect(nameFontPercent({})).toBe(2.1)
+        expect(nameFontPercent(null)).toBe(2.1)
+        expect(nameFontPercent({ fontSizePercent: null })).toBe(2.1)
+        expect(nameFontPercent({ fontSizePercent: 0 })).toBe(2.1)
+    })
+
+    it('an explicit size wins and stops following', () => {
+        expect(nameFontPercent({ fontSizePercent: 5, nameFontSizePercent: 2 })).toBe(2)
+    })
+
+    it('keeps an explicit zero instead of treating it as unset', () => {
+        // != null, not truthiness. A stored 0 is strange but deliberate,
+        // and silently replacing it with 2.1 would make the control
+        // impossible to trust.
+        expect(nameFontPercent({ fontSizePercent: 4, nameFontSizePercent: 0 })).toBe(0)
+    })
+
+    it('takes the duo scale', () => {
+        expect(nameFontPercent({ nameFontSizePercent: 2 }, 0.85)).toBeCloseTo(1.7, 10)
+    })
+
+    it('reproduces what the templates computed before it existed', () => {
+        for (const v of [{ fontSizePercent: 2.6 }, { fontSizePercent: 3.6 }, { nameFontSizePercent: 2.4 }, {}]) {
+            const old = v.nameFontSizePercent ?? (v.fontSizePercent ? v.fontSizePercent * 0.7 : 2.1)
+            expect(nameFontPercent(v), JSON.stringify(v)).toBeCloseTo(old, 12)
+        }
     })
 })

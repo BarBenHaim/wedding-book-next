@@ -92,7 +92,36 @@ export function effectiveFontPercent(styleSettings, factor, scale = 1) {
     return base * scale * f
 }
 
+/** The guest name rides at this share of the body text by default. */
+export const NAME_TO_BODY_RATIO = 0.7
+
+/** And this when there is no body size to ride on. */
+export const BASE_NAME_PERCENT = 2.1
+
+/**
+ * The guest name's size in page-height percent.
+ *
+ * The name has no size of its own unless someone sets one: it follows
+ * the body text at 70%, so raising the blessing size raises the name
+ * with it and the page keeps its proportions. That rule was written out
+ * in four files — both page templates, the start wizard and the studio
+ * slider — which is four chances for a book to render one thing while a
+ * control claims another.
+ *
+ * `!= null` rather than a truthiness check, matching the `??` the
+ * templates used: a stored 0 is a deliberate (if strange) choice, while
+ * null means "unset, follow the body".
+ */
+export function nameFontPercent(styleSettings, scale = 1) {
+    const explicit = styleSettings?.nameFontSizePercent
+    if (explicit !== null && explicit !== undefined) return explicit * scale
+    const body = styleSettings?.fontSizePercent
+    return (body ? body * NAME_TO_BODY_RATIO : BASE_NAME_PERCENT) * scale
+}
+
 export default {
     DEFAULT_MIN_FACTOR, PAGE_FIT_TARGET, DUO_FIT_TARGET, BASE_FONT_PERCENT,
+    NAME_TO_BODY_RATIO, BASE_NAME_PERCENT,
     fitFactor, minFactorOf, pageFitFactor, duoFitFactor, effectiveFontPercent,
+    nameFontPercent,
 }

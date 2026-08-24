@@ -6,7 +6,7 @@ import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
 import { resolvePhotoStyle } from '@/lib/bookDesignSchema'
 import { mergePageStyle, pageStyleOf } from '@/lib/pageStyle'
-import { pageFitFactor } from '@/lib/fontFit'
+import { pageFitFactor, nameFontPercent } from '@/lib/fontFit'
 import FramedPhoto from '../FramedPhoto/FramedPhoto'
 import PolaroidPageLayout from '../PolaroidPageLayout/PolaroidPageLayout'
 import ScrapbookPageLayout from '../ScrapbookPageLayout/ScrapbookPageLayout'
@@ -283,10 +283,7 @@ export default function BookPageTemplate({ entry, styleSettings: incomingStyle, 
                 <div
                     className={styleSettings.nameFontClass || styleSettings.fontClass}
                     style={{
-                        fontSize: h(
-                            styleSettings.nameFontSizePercent ??
-                                (styleSettings.fontSizePercent ? styleSettings.fontSizePercent * 0.7 : 2.1)
-                        ),
+                        fontSize: h(nameFontPercent(styleSettings)),
                         // fontWeight is applied numerically (300/400/500/600/700)
                         // so next/font/local picks the closest available weight
                         // file. nameFontWeight overrides; falls back to fontWeight,

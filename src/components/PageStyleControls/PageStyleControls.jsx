@@ -35,7 +35,7 @@ import { TEXTURES_REGISTRY } from '@/lib/studioPresets'
 import { buildPageIndex, pageLabel } from '@/lib/bookPageIndex'
 import { sanitizePageStyle, overriddenKeys, mergePageStyle } from '@/lib/pageStyle'
 import { getBlessingText } from '@/lib/normalizeText'
-import { pageFitFactor, effectiveFontPercent } from '@/lib/fontFit'
+import { pageFitFactor, effectiveFontPercent, nameFontPercent } from '@/lib/fontFit'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
 
 const GOLD = '#AA8840'
@@ -287,6 +287,30 @@ export default function PageStyleControls({
         return { factor, shown: effectiveFontPercent(effective, factor), longText }
     }, [selected, effective])
 
+    // ── Is there a name on this page at all? ────────────────────────
+    //
+    // The template renders the name block when there IS a name, and
+    // also when there is a photo but no name — an invisible ghost that
+    // holds the exact line and margins so the photo lands at the same
+    // height as on a signed page. On a page with neither, the block is
+    // not rendered and these controls change nothing at all.
+    //
+    // Worth saying out loud rather than letting four sliders sit there
+    // looking operational.
+    const nameState = useMemo(() => {
+        const hasName = Boolean(selected?.name)
+        const hasImage = Boolean(selected?.imageUrl)
+        if (hasName) return { hint: undefined }
+        if (hasImage) return { hint: 'אין שם בברכה הזאת — הפקדים שומרים על המקום שלו כדי שהתמונה תישאר באותו גובה' }
+        return { hint: 'אין שם ואין תמונה בברכה הזאת — הפקדים לא ישנו כלום בעמוד' }
+    }, [selected])
+
+    // The name has no size of its own until it is pinned: it follows the
+    // blessing at 70%. Showing the derived number rather than a constant
+    // means the slider still reads true after the font-size slider above
+    // it has been moved. Rounded because 3 × 0.7 is 2.0999999999999996.
+    const nameSizeValue = Math.round(nameFontPercent(effective) * 10) / 10
+
     const pinnedPages = useMemo(
         () => entries.filter(e => overriddenKeys(e.pageStyle).length > 0).length,
         [entries],
@@ -339,6 +363,41 @@ export default function PageStyleControls({
             )}
 
             <div className='px-4 pb-3 max-h-[46vh] overflow-y-auto'>
+                <Row
+                    label='גודל שם האורח'
+                    pinned={pinned.has('nameFontSizePercent')}
+                    onUnpin={() => unpin('nameFontSizePercent')}
+                    hint={nameState.hint || (pinned.has('nameFontSizePercent') ? undefined : 'עוקב אחרי גודל הברכה (70%) עד שנוגעים בו')}
+                >
+                    <Slider
+                        value={nameSizeValue}
+                        min={1} max={5} step={0.1}
+                        onChange={v => set('nameFontSizePercent', v)}
+                        suffix='%'
+                    />
+                </Row>
+
+                <Row label='יישור שם האורח' pinned={pinned.has('nameAlign')} onUnpin={() => unpin('nameAlign')}>
+                    <Choice
+                        value={effective.nameAlign ?? 'center'}
+                        onChange={v => set('nameAlign', v)}
+                        options={[
+                            { value: 'right', label: 'ימין' },
+                            { value: 'center', label: 'מרכז' },
+                            { value: 'left', label: 'שמאל' },
+                            { value: 'auto', label: 'לפי השפה' },
+                        ]}
+                    />
+                </Row>
+
+                <Row label='ריווח השם מלמעלה' pinned={pinned.has('nameMarginTop')} onUnpin={() => unpin('nameMarginTop')}>
+                    <Slider value={effective.nameMarginTop ?? 1} min={0} max={20} onChange={v => set('nameMarginTop', v)} suffix='%' />
+                </Row>
+
+                <Row label='ריווח השם מלמטה' pinned={pinned.has('nameMarginBottom')} onUnpin={() => unpin('nameMarginBottom')}>
+                    <Slider value={effective.nameMarginBottom ?? 1} min={0} max={20} onChange={v => set('nameMarginBottom', v)} suffix='%' />
+                </Row>
+
                 <Row label='ריווח תמונה מלמעלה' pinned={pinned.has('imageMarginTop')} onUnpin={() => unpin('imageMarginTop')}>
                     <Slider value={effective.imageMarginTop ?? 2} min={0} max={25} onChange={v => set('imageMarginTop', v)} suffix='%' />
                 </Row>
