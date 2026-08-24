@@ -3,7 +3,7 @@
 // one small, testable instruction before any provider is called.
 
 import { PACKAGES } from './catalog'
-import { asksPrice, hasPrice, priceFallbackMessage } from './selling'
+import { asksPrice, priceFallbackMessage } from './selling'
 
 // Two messages, not one: a real seller answers, then adds one step. A
 // single 180-char bubble forced almost every model reply through the
@@ -228,6 +228,13 @@ function compactMessage(message) {
     return String(message || '').replace(/\s*\n+\s*/g, ' ').replace(/\s{2,}/g, ' ').trim()
 }
 
+function hasOnlyCurrentCatalogPrices(message) {
+    const prices = [...String(message || '').replace(/,/g, '').matchAll(/(?:^|\D)(\d{3,4})(?=\D|$)/g)]
+        .map(match => Number(match[1]))
+    const current = new Set(PACKAGES.map(item => item.price))
+    return prices.length > 0 && prices.every(price => current.has(price))
+}
+
 function clipMessage(message, maxChars, fallback) {
     if (message.length <= maxChars) return message
     const url = /https?:\/\/\S+/g
@@ -274,7 +281,7 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         decision.nextBestAction === 'close_lost'
         || decision.nextBestAction === 'diagnose_checkout'
         || decision.nextBestAction === 'send_payment_link'
-        || (decision.intent === 'price' && !hasPrice(candidates.join('\n')))
+        || (decision.intent === 'price' && !hasOnlyCurrentCatalogPrices(candidates.join('\n')))
         || candidates.length === 0
         || CALL_LANGUAGE.test(normalizedText(candidates[0]))
         || containsRepeatedKnownQuestion(candidates[0], decision)

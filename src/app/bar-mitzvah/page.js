@@ -12,7 +12,7 @@ import BarMitzvahPricingClient from './BarMitzvahPricingClient'
 
 const CONFIG = {
     // מחיר החבילה כפי שמופיע בחנות (מוצר 5480). לעדכון — שנו רק כאן.
-    price: '950',
+    price: '990',
     priceNote: 'כולל הכל — בלי הפתעות',
     // קישור הוואטסאפ הקיים שלך
     whatsapp: 'https://wa.link/nkf9u5',

@@ -64,7 +64,7 @@ export const PACKAGES = [
     {
         id: 'printed',
         name: 'ספר מודפס',
-        price: 950,
+        price: 990,
         wasPrice: 1190,
         checkout: 'https://weddingtales.co.il/checkout/?add-to-cart=6271',
         pitch: 'מזכרת שעוברת מדור לדור',

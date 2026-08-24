@@ -67,7 +67,7 @@ export function eventTypeLabel(t) {
 
 export const PACKAGE_LABELS = {
     digital: 'דיגיטלי ₪690',
-    printed: 'מודפס ₪950',
+    printed: 'מודפס ₪990',
     premium: 'פרימיום ₪1490',
 }
 

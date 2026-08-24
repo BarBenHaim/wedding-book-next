@@ -107,7 +107,7 @@ describe('deterministic WhatsApp reply contract', () => {
         const result = buildDeterministicSalesReply({ decision, lead, incomingText })
         expect(result).toMatchObject({ handoff: false, noReply: false })
         expect(result.messages).toHaveLength(1)
-        expect(result.messages[0]).toMatch(/690|950|1,?490|₪/)
+        expect(result.messages[0]).toMatch(/690|990|1,?490|₪/)
         expect(result.messages[0].length).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
     })
 
@@ -149,7 +149,7 @@ describe('deterministic WhatsApp reply contract', () => {
         const incomingText = 'כמה זה יוצא?'
         const result = enforceSalesReply({
             parsed: {
-                messages: ['שאלה מצוינת, יש שלוש חבילות', 'המודפסת שרוב המשפחות בוחרות עולה ₪950 כולל משלוח'],
+                messages: ['שאלה מצוינת, יש שלוש חבילות', 'המודפסת שרוב המשפחות בוחרות עולה ₪990 כולל משלוח'],
                 stage: 'engaged',
                 handoff: false,
             },
@@ -158,7 +158,23 @@ describe('deterministic WhatsApp reply contract', () => {
             incomingText,
         })
         expect(result.messages).toHaveLength(2)
-        expect(result.messages.join(' ')).toContain('₪950')
+        expect(result.messages.join(' ')).toContain('₪990')
+    })
+
+    it('replaces a stale model price with the current catalog price', () => {
+        const incomingText = 'כמה זה יוצא?'
+        const result = enforceSalesReply({
+            parsed: {
+                messages: ['המודפסת עולה ₪950 כולל משלוח'],
+                stage: 'engaged',
+                handoff: false,
+            },
+            decision: decisionFor(incomingText),
+            lead: {},
+            incomingText,
+        })
+        expect(result.messages.join(' ')).toContain('₪990')
+        expect(result.messages.join(' ')).not.toContain('₪950')
     })
 
     it('drops a second message with phone-call language but keeps the first', () => {
@@ -186,7 +202,7 @@ describe('deterministic WhatsApp reply contract', () => {
             incomingText,
         })
         expect(result.messages).toHaveLength(1)
-        expect(result.messages[0]).toContain('₪950')
+        expect(result.messages[0]).toContain('₪990')
         expect(result.messages[0].length).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
     })
 
