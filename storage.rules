@@ -55,6 +55,13 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    // Versioned sales variables are private. Uploads and previews use
+    // short-lived server-created signed URLs, so Firebase client rules
+    // never grant direct access to this namespace.
+    match /sales-variable-media/{variableKey}/{filename} {
+      allow read, write: if false;
+    }
+
     // Anything else — admin SDK only.
     match /{path=**} {
       allow read, write: if false;
