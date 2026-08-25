@@ -531,7 +531,7 @@ export async function POST(req) {
             eventId,
         })
     } catch {
-        console.error('[sales-agent] opening variable resolution failed')
+        console.warn('[sales-agent] opening terminal opening-variable-resolution-failed')
         return NextResponse.json({ error: 'opening-variable-resolution-failed' }, { status: 503 })
     }
     if (openingRuntime.eligible) {
@@ -635,9 +635,10 @@ export async function POST(req) {
                     sendText: '', hasImage: false, hasVideo: false, hasAudio: false, handoff: false,
                 })
             }
+            console.warn(`[sales-agent] opening terminal opening-experiment-${String(durable.action || 'unknown')}`)
             return NextResponse.json({ error: 'opening-experiment-commit-stale' }, { status: 503 })
         } catch {
-            console.error('[sales-agent] opening experiment commit failed')
+            console.warn('[sales-agent] opening terminal opening-experiment-commit-failed')
             return NextResponse.json({ error: 'opening-experiment-commit-failed' }, { status: 503 })
         }
     }
