@@ -1,5 +1,5 @@
 const DEFAULT_BUSINESS_OS_URL = 'https://businessos-control.vercel.app'
-const DEFAULT_TIMEOUT_MS = 400
+const DEFAULT_TIMEOUT_MS = 2_500
 const SAFE_STAGES = new Set([
     'new', 'engaged', 'qualified', 'demo_sent', 'offer_sent', 'objection',
     'commit_later', 'ready_to_pay', 'checkout', 'closed_won', 'closed_lost', 'handoff',
@@ -58,7 +58,7 @@ export async function readPriorConversationContext(phone, {
     const unknown = { state: 'unknown', hasPriorConversation: true }
     if (!String(phone || '').trim() || !String(secret || '').trim()) return unknown
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(Number(timeoutMs) || DEFAULT_TIMEOUT_MS, 1_000)))
+    const timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(Number(timeoutMs) || DEFAULT_TIMEOUT_MS, 3_000)))
     try {
         const eventTimestamp = safeTimestamp(occurredAt)
         const requestBody = { phone: String(phone) }

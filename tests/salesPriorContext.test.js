@@ -87,6 +87,28 @@ describe('readPriorConversationContext', () => {
         })).resolves.toEqual({ state: 'unknown', hasPriorConversation: true })
     })
 
+    it('allows a normal cold-start response more than 400ms without classifying the lead as historical', async () => {
+        vi.useFakeTimers()
+        try {
+            const fetcher = vi.fn((_url, { signal }) => new Promise((resolve, reject) => {
+                const timer = setTimeout(() => resolve(response({ found: false })), 750)
+                signal.addEventListener('abort', () => {
+                    clearTimeout(timer)
+                    reject(new DOMException('Aborted', 'AbortError'))
+                })
+            }))
+            const result = readPriorConversationContext('phone-token', {
+                fetcher,
+                baseUrl: 'https://businessos-control.vercel.app',
+                secret: 'shared-secret',
+            })
+            await vi.advanceTimersByTimeAsync(800)
+            await expect(result).resolves.toEqual({ state: 'none', hasPriorConversation: false })
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
     it('drops invalid fact values while keeping the conversation block', async () => {
         const fetcher = vi.fn().mockResolvedValue(response({
             found: true,
