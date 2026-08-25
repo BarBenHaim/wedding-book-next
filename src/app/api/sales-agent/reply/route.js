@@ -558,12 +558,19 @@ export async function POST(req) {
         const variantId = enrollment?.variantId || lead.openingVariantId
         const variantRevision = enrollment?.variantRevision || lead.openingVariantRevision
         const shouldSend = sequenceParts.length > 0
+        const manualPhotoHandoff = result.completed === true
+            && result.captures?.childPhotoReceived === true
+            && !result.approvalRequest
+            && result.captures?.designApproved !== true
+        const manualPhotoHandoffReason = manualPhotoHandoff
+            ? 'התקבלה תמונת ילד — בר מכין את הדוגמה וממשיך ידנית'
+            : null
         const parsed = {
             malformed: false,
             messages: transportMessages,
-            stage: result.completed ? 'opening_completed' : 'engaged',
-            handoff: false,
-            handoffReason: null,
+            stage: manualPhotoHandoff ? 'handoff' : result.completed ? 'opening_completed' : 'engaged',
+            handoff: manualPhotoHandoff,
+            handoffReason: manualPhotoHandoffReason,
             image: images[0]?.mediaKey || null,
             openingMediaKeys: sequenceParts.flatMap(part => part.mediaKey ? [part.mediaKey] : []),
             eventType: result.captures?.eventType || lead.eventType || null,
@@ -605,10 +612,12 @@ export async function POST(req) {
             openingClosingText: closingText || null,
             openingExperiment: { variantId, variantRevision, action: result.action },
             stage: parsed.stage,
-            handoff: false,
+            handoff: manualPhotoHandoff,
             noReply: !shouldSend,
             followUpAt: null,
-            notifyOwner: null,
+            notifyOwner: manualPhotoHandoff
+                ? ownerPing(phone, manualPhotoHandoffReason, { name: body?.profileName || lead.name })
+                : null,
         }
         const exchange = {
             phone,

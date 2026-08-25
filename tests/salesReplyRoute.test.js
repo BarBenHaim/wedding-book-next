@@ -362,6 +362,61 @@ describe('deterministic opening experiment runtime', () => {
         }))
         expect(mocks.callClaude).not.toHaveBeenCalled()
     })
+
+    it('hands a completed photo journey to the owner after the fixed acknowledgement', async () => {
+        const acknowledgement = 'קיבלתי, תודה 😊 אני מכין לך דוגמה אישית ואחזור אלייך כאן.'
+        mocks.getLead.mockResolvedValue({
+            ...lead,
+            openingVariantId: 'A', openingVariantRevision: 3, openingFlow: { id: 'A', blocks: [] },
+            openingState: { cursor: 3, waitingFor: 'photo' }, openingStateVersion: 5,
+        })
+        mocks.readSalesSettings.mockResolvedValue({
+            revision: 9, enabled: true, mode: 'opening_only', openingExperiment: { enabled: true, variants: [] },
+        })
+        mocks.prepareOpeningRuntime.mockReturnValue({
+            eligible: true, enrollment: null, expectedStateVersion: 5,
+            result: {
+                action: 'completed', state: { cursor: 5, waitingFor: null },
+                parts: [{
+                    partId: 'f'.repeat(32), blockId: 'a-manual-handoff-v3', order: 1,
+                    kind: 'text', text: acknowledgement,
+                }],
+                captures: { childPhotoReceived: true, childPhotoMediaId: 'opaque-media-id' },
+                approvalRequest: null, completed: true,
+            },
+        })
+
+        const result = await post(inbound({ text: '', messageType: 'image', mediaId: 'opaque-media-id' }))
+
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({
+            shouldSend: true,
+            send: [acknowledgement],
+            sendText: acknowledgement,
+            stage: 'handoff',
+            handoff: true,
+            noReply: false,
+            openingExperiment: { variantId: 'A', variantRevision: 3, action: 'completed' },
+        })
+        expect(result.body.notifyOwner).toBeTruthy()
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            exchange: expect.objectContaining({
+                parsed: expect.objectContaining({
+                    stage: 'handoff',
+                    handoff: true,
+                    handoffReason: 'התקבלה תמונת ילד — בר מכין את הדוגמה וממשיך ידנית',
+                }),
+                openingRuntime: expect.objectContaining({
+                    expectedStateVersion: 5,
+                    captures: expect.objectContaining({ childPhotoReceived: true }),
+                    approvalRequest: null,
+                    completed: true,
+                }),
+            }),
+        }))
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
 })
 
 describe('owner-controlled opening-only mode', () => {
