@@ -30,6 +30,45 @@ describe('prepareOpeningRuntime', () => {
         expect(runtime.result.parts.length).toBeGreaterThan(0)
     })
 
+    it('enrolls a new lead into a published variable-backed opening', async () => {
+        const experiment = {
+            enabled: true,
+            minSamplePerVariant: 30,
+            variants: [{
+                id: 'A', label: 'variable opening', enabled: true, weight: 100, revision: 1,
+                blocks: [
+                    { id: 'intro', type: 'text', text: 'היי' },
+                    { id: 'demo', type: 'media', variableKey: 'demo_image', variableVersionId: 'v1' },
+                    { id: 'stop', type: 'stop' },
+                ],
+            }],
+        }
+        const runtime = await prepareOpeningRuntime({
+            lead: { isNew: true, hasPriorConversation: false },
+            experiment,
+            leadKey: 'non-dialable-variable-lead',
+            inbound: { kind: 'text', text: 'אשמח לפרטים' },
+            variableVersions: {
+                'demo_image:v1': {
+                    id: 'v1', kind: 'image', status: 'published', createdAtMs: 1,
+                    objectPath: 'sales-variable-media/demo.jpg', contentType: 'image/jpeg',
+                    bytes: 123, checksum: 'a'.repeat(64), caption: 'דוגמה', when: '',
+                },
+            },
+            signDownload: async () => 'https://media.example/signed-demo.jpg',
+            eventId: 'opening-variable-event',
+        })
+
+        expect(runtime).toMatchObject({
+            eligible: true,
+            enrollment: { variantId: 'A', variantRevision: 1 },
+            result: { parts: [
+                expect.objectContaining({ kind: 'text', text: 'היי' }),
+                expect.objectContaining({ kind: 'image', url: 'https://media.example/signed-demo.jpg' }),
+            ] },
+        })
+    })
+
     it.each([
         ['existing lead', { isNew: false }],
         ['historical conversation', { isNew: true, hasPriorConversation: true }],

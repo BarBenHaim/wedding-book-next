@@ -182,8 +182,8 @@ export function normalizeOpeningExperiment(input = DEFAULT_OPENING_EXPERIMENT, {
     }
 }
 
-export function assignOpeningVariant({ leadKey, experiment }) {
-    const normalized = normalizeOpeningExperiment(experiment)
+export function assignOpeningVariant({ leadKey, experiment, registeredMedia = [], registeredVariables = [] }) {
+    const normalized = normalizeOpeningExperiment(experiment, { registeredMedia, registeredVariables })
     const variants = normalized.variants.filter(variant => variant.enabled && variant.weight > 0)
     const total = variants.reduce((sum, variant) => sum + variant.weight, 0)
     if (!total) throw new Error('NO_ACTIVE_OPENING_VARIANT')

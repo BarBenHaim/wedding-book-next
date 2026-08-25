@@ -90,7 +90,12 @@ export async function prepareOpeningRuntime({
         if (lead?.isNew !== true || lead?.hasPriorConversation === true) {
             return { eligible: false, reason: 'not-enrolled' }
         }
-        const assignment = assignOpeningVariant({ leadKey, experiment: normalized })
+        const assignment = assignOpeningVariant({
+            leadKey,
+            experiment: normalized,
+            registeredMedia: Object.keys(library),
+            registeredVariables: boundKeys(normalized),
+        })
         const selected = normalized.variants.find(item => item.id === assignment.variantId)
         if (!selected) return { eligible: false, reason: 'variant-unavailable' }
         flow = {
