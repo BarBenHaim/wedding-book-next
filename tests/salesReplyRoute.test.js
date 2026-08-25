@@ -294,6 +294,37 @@ describe('deterministic opening experiment runtime', () => {
         }))
     })
 
+    it('collapses later copy and the qualification question into one durable closing message after media', async () => {
+        const parts = [
+            { partId: 'a'.repeat(32), blockId: 'b-intro', order: 1, kind: 'text', text: 'כך זה עובד' },
+            { partId: 'b'.repeat(32), blockId: 'b-video', order: 2, kind: 'video', url: 'https://storage.test/demo.mp4', caption: 'דמו' },
+            { partId: 'c'.repeat(32), blockId: 'b-image', order: 3, kind: 'image', url: 'https://storage.test/book.jpg', caption: 'ספר פתוח' },
+            { partId: 'd'.repeat(32), blockId: 'b-price', order: 4, kind: 'text', text: 'המחיר 990 ₪' },
+            { partId: 'e'.repeat(32), blockId: 'b-event', order: 5, kind: 'text', text: 'לאיזה אירוע ומה התאריך?' },
+        ]
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true, stage: 'new' })
+        mocks.readSalesSettings.mockResolvedValue({
+            revision: 10, enabled: true, mode: 'opening_only', openingExperiment: { enabled: true, variants: [] },
+        })
+        mocks.prepareOpeningRuntime.mockReturnValue({
+            eligible: true, expectedStateVersion: 0,
+            enrollment: { variantId: 'B', variantRevision: 2, flow: { id: 'B', revision: 2, blocks: [] } },
+            result: { action: 'wait_event', state: { cursor: 5, waitingFor: 'event' }, parts, captures: {}, completed: false },
+        })
+
+        const result = await post(inbound({ text: 'אשמח לפרטים' }))
+
+        expect(result.status).toBe(200)
+        expect(result.body.openingSequenceParts.map(part => part.kind)).toEqual(['text', 'video', 'image', 'text'])
+        expect(result.body.openingSequenceParts.map(part => part.order)).toEqual([1, 2, 3, 4])
+        expect(result.body.openingAnswerText).toBe('כך זה עובד')
+        expect(result.body.openingClosingText).toBe('המחיר 990 ₪\n\nלאיזה אירוע ומה התאריך?')
+        expect(result.body.openingClosingId).toBe('d'.repeat(32))
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            outcome: expect.objectContaining({ openingSequenceParts: result.body.openingSequenceParts }),
+        }))
+    })
+
     it('accepts the awaited child photo without triggering the generic media handoff', async () => {
         mocks.getLead.mockResolvedValue({
             ...lead,

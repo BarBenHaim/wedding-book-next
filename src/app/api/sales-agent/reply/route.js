@@ -542,12 +542,25 @@ export async function POST(req) {
         const videos = sequenceParts.filter(part => part.kind === 'video')
         const audios = sequenceParts.filter(part => part.kind === 'audio')
         const mediaParts = sequenceParts.filter(part => ['image', 'video', 'audio'].includes(part.kind))
+        const answerPart = textParts[0] || null
+        const closingParts = textParts.slice(1)
+        const closingText = closingParts.map(part => String(part.text || '').trim()).filter(Boolean).join('\n\n')
+        const transportSequenceParts = [
+            ...(answerPart ? [{ ...answerPart, order: 1 }] : []),
+            ...mediaParts.map((part, index) => ({ ...part, order: index + (answerPart ? 2 : 1) })),
+            ...(closingText ? [{
+                ...closingParts[0],
+                order: mediaParts.length + (answerPart ? 2 : 1),
+                text: closingText,
+            }] : []),
+        ]
+        const transportMessages = [answerPart?.text, closingText].filter(Boolean)
         const variantId = enrollment?.variantId || lead.openingVariantId
         const variantRevision = enrollment?.variantRevision || lead.openingVariantRevision
         const shouldSend = sequenceParts.length > 0
         const parsed = {
             malformed: false,
-            messages: textParts.map(part => part.text),
+            messages: transportMessages,
             stage: result.completed ? 'opening_completed' : 'engaged',
             handoff: false,
             handoffReason: null,
@@ -561,8 +574,8 @@ export async function POST(req) {
         const responsePayload = {
             ok: true,
             shouldSend,
-            send: textParts.map(part => part.text),
-            sendText: textParts[0]?.text || '',
+            send: transportMessages,
+            sendText: answerPart?.text || '',
             sendImage: images[0]?.url || null,
             sendImageCaption: images[0]?.caption || null,
             hasImage: images.length > 0,
@@ -585,7 +598,11 @@ export async function POST(req) {
                     [`openingMedia${slot}VoiceNote`, part.kind === 'audio' && part.voiceNote === true],
                 ]
             })),
-            openingSequenceParts: sequenceParts,
+            openingSequenceParts: transportSequenceParts,
+            openingAnswerId: answerPart?.partId || null,
+            openingAnswerText: answerPart?.text || null,
+            openingClosingId: closingText ? closingParts[0]?.partId || null : null,
+            openingClosingText: closingText || null,
             openingExperiment: { variantId, variantRevision, action: result.action },
             stage: parsed.stage,
             handoff: false,
