@@ -492,9 +492,13 @@ describe('conversation-learned decision contract', () => {
         prepareDecisionPath()
         mocks.getLead.mockResolvedValue({ ...lead, isNew: true })
         mocks.readPriorConversationContext.mockResolvedValue({ state: 'none', hasPriorConversation: false })
+        const occurredAt = new Date().toISOString()
 
-        await post(inbound({ text: 'שלום' }))
+        await post(inbound({ text: 'שלום', occurredAt }))
 
+        expect(mocks.readPriorConversationContext).toHaveBeenCalledWith('test-phone-token', {
+            occurredAt,
+        })
         expect(mocks.buildOpeningPlan).toHaveBeenCalledWith(expect.objectContaining({
             lead: expect.objectContaining({ isNew: true, hasPriorConversation: false }),
         }))

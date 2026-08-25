@@ -24,6 +24,7 @@ describe('readPriorConversationContext', () => {
             fetcher,
             baseUrl: 'https://businessos-control.vercel.app',
             secret: 'shared-secret',
+            occurredAt: '2026-08-25T10:00:30.000Z',
         })).resolves.toEqual({
             state: 'found',
             hasPriorConversation: true,
@@ -38,7 +39,7 @@ describe('readPriorConversationContext', () => {
         expect(fetcher).toHaveBeenCalledWith('https://businessos-control.vercel.app/api/crm/whatsapp-leads/context', expect.objectContaining({
             method: 'POST',
             headers: expect.objectContaining({ authorization: 'Bearer shared-secret' }),
-            body: JSON.stringify({ phone: '972500000000' }),
+            body: JSON.stringify({ phone: '972500000000', occurredAt: '2026-08-25T10:00:30.000Z' }),
         }))
         expect(fetcher.mock.calls[0][0]).not.toContain('972500000000')
     })
@@ -49,6 +50,17 @@ describe('readPriorConversationContext', () => {
             baseUrl: 'https://businessos-control.vercel.app',
             secret: 'shared-secret',
         })).resolves.toEqual({ state: 'none', hasPriorConversation: false })
+    })
+
+    it('drops an invalid event timestamp rather than sending ambiguous history input', async () => {
+        const fetcher = vi.fn().mockResolvedValue(response({ found: false }))
+        await readPriorConversationContext('phone-token', {
+            fetcher,
+            baseUrl: 'https://businessos-control.vercel.app',
+            secret: 'shared-secret',
+            occurredAt: 'not-a-time',
+        })
+        expect(fetcher.mock.calls[0][1].body).toBe(JSON.stringify({ phone: 'phone-token' }))
     })
 
     it.each([

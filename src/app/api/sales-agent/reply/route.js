@@ -426,7 +426,7 @@ export async function POST(req) {
     // it has no older conversation there. An unavailable check is treated as
     // prior history: the normal answer may continue, but never a cold reset.
     if (lead.isNew === true) {
-        const prior = await readPriorConversationContext(phone)
+        const prior = await readPriorConversationContext(phone, { occurredAt: body.occurredAt })
         if (prior.state === 'found') {
             lead = {
                 ...lead,

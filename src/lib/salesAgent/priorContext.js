@@ -53,19 +53,23 @@ export async function readPriorConversationContext(phone, {
     baseUrl = process.env.BUSINESS_OS_URL || DEFAULT_BUSINESS_OS_URL,
     secret = process.env.SALES_AGENT_SECRET,
     timeoutMs = DEFAULT_TIMEOUT_MS,
+    occurredAt = null,
 } = {}) {
     const unknown = { state: 'unknown', hasPriorConversation: true }
     if (!String(phone || '').trim() || !String(secret || '').trim()) return unknown
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(Number(timeoutMs) || DEFAULT_TIMEOUT_MS, 1_000)))
     try {
+        const eventTimestamp = safeTimestamp(occurredAt)
+        const requestBody = { phone: String(phone) }
+        if (eventTimestamp) requestBody.occurredAt = eventTimestamp
         const res = await fetcher(endpoint(baseUrl), {
             method: 'POST',
             headers: {
                 authorization: `Bearer ${secret}`,
                 'content-type': 'application/json',
             },
-            body: JSON.stringify({ phone: String(phone) }),
+            body: JSON.stringify(requestBody),
             signal: controller.signal,
             cache: 'no-store',
         })
