@@ -169,7 +169,10 @@ const LAYOUT_KEYS = [
     // Typography and the shortened empty photo well travel with
     // the frame too: a serif title and a hairline rule belong to a
     // lit glass panel and would be costume on a plain ivory page.
-    'titleFont', 'titleRule', 'shortPhotoWell',
+    'titleFont', 'titleRule',
+    // The ceiling that makes "it cannot leave the panel" a property
+    // of the layout rather than a claim about the content.
+    'formMaxHeight',
 ]
 
 describe('framed variants carry their own layout', () => {

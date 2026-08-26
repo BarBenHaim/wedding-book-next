@@ -1865,7 +1865,27 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                 devices. */}
             <div
                 className={`relative z-10 w-full max-w-[26rem] animate-scaleIn${theme.formMaxWidth ? ' flex flex-col' : ''}`}
-                style={theme.formMaxWidth ? { maxWidth: theme.formMaxWidth } : undefined}
+                style={
+                    theme.formMaxWidth
+                        ? {
+                              maxWidth: theme.formMaxWidth,
+                              // The panel's inner band, from the same
+                              // measured rails as formPaddingTop. Every
+                              // other number here was tuned against the
+                              // EMPTY form; this one holds when an error
+                              // line appears, when the browser renders
+                              // larger type, when a returning guest's
+                              // strip loads. Normally nothing reaches
+                              // it and there is no scrollbar to notice.
+                              maxHeight: theme.formMaxHeight,
+                              overflowY: theme.formMaxHeight ? 'auto' : undefined,
+                              // Keep a swipe inside the form from
+                              // dragging the page behind it once the
+                              // ceiling is actually in play.
+                              overscrollBehavior: theme.formMaxHeight ? 'contain' : undefined,
+                          }
+                        : undefined
+                }
             >
                 {/* "Blessings you already sent from this phone" — shows only
                     when this device has prior submissions (else renders null).
@@ -2566,17 +2586,16 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 Poker → dark recessed felt; everything
                                 else → cream paper. */}
                             <div
-                                // 4:3 is the shape of a PHOTO, and it
-                                // still becomes that the moment there is
-                                // one. Empty, it holds a disc and two
-                                // buttons in a lot of air — and inside a
-                                // fixed-height panel that air is the
-                                // blessing box's height. Both literals
-                                // stay in this file so Tailwind sees
-                                // them.
-                                className={`relative w-full ${
-                                    !photoUrl && !cameraOpen && theme.shortPhotoWell ? 'aspect-[3/2]' : 'aspect-[4/3]'
-                                } rounded-2xl overflow-hidden group`}
+                                // 4:3 in EVERY state, deliberately. It
+                                // is what the cropper produces and what
+                                // the book prints, so a preview in any
+                                // other box is a preview of something
+                                // else. It also means the card does not
+                                // change height when a photo arrives —
+                                // and a card that grows mid-form is a
+                                // card that grows straight through the
+                                // bottom of the panel.
+                                className='relative w-full aspect-[4/3] rounded-2xl overflow-hidden group'
                                 style={{
                                     background: theme.photoWellBg || (isPoker ? theme.inputBg : '#fbf6ec'),
                                     border: `1px solid ${theme.photoWellBorder || (isPoker ? theme.inputBorder : '#ead9b3')}`,

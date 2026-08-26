@@ -133,7 +133,11 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
                 // would drift against the rails on every other phone.
                 // 37vh leaves an even margin inside them.
                 formPaddingTop: '16vh',
-                formMaxWidth: 'min(88vw, 37vh, 380px)',
+                // 35.5vh, not 37: on a 360×800 the form was 9px over its
+                // band, and the photo well is 4:3 of the column's width
+                // — so a slightly narrower column pays those 9px out of
+                // empty photo well rather than out of the writing box.
+                formMaxWidth: 'min(88vw, 35.5vh, 380px)',
                 titleFont: 'frankRuhl',
                 titleRule: true,
                 titleFontSize: '23px',
@@ -141,11 +145,17 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
                 hideSubtitle: true,
                 hideNameField: true,
                 hideTrust: true,
-                shortPhotoWell: true,
-                // The smaller of the two panels, so the smaller box.
-                // Measured: at 96px the form clears the bottom rail on
-                // a 360×800 by 7px; at 112 it crosses it.
-                textareaHeight: '96px',
+                // Rails at 14.4% and 86.5%, form starting at 16vh, so
+                // 70vh of usable band. This is the ceiling, not a
+                // target — the form is sized to sit inside it with room
+                // to spare and only ever reaches it in the edge cases
+                // no amount of tuning covers.
+                formMaxHeight: '70.5vh',
+                // In vh, because the panel is. A fixed pixel height was
+                // tuned on one phone: too tall on a 360×800, needlessly
+                // small on a 430×932. The floor keeps it usable if the
+                // viewport is ever short enough for vh to go silly.
+                textareaHeight: 'max(84px, 11.4vh)',
                 // ── Night-only: the photo card is a window ──────────
                 //
                 // Every other variant makes both cards the same
@@ -219,9 +229,10 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
                   hideSubtitle: true,
                   hideNameField: true,
                   hideTrust: true,
-                  shortPhotoWell: true,
-                  // A taller panel than night's buys 32px more here.
-                  textareaHeight: '128px',
+                  // Rails at 10.2% and 89%, form starting at 11.5vh.
+                  formMaxHeight: '77.5vh',
+                  // A taller panel than night's buys a bigger box.
+                  textareaHeight: 'max(104px, 15.2vh)',
                   photoCardBg: 'rgba(255,253,247,0.42)',
                   photoCardBorder: '2px dashed rgba(165,118,47,0.70)',
                   photoWellBg: 'rgba(255,252,244,0.35)',
