@@ -371,7 +371,10 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     // Palette lives in src/lib/guestPageTheme.js — shared with the
     // marketing landing's live form replica so both render the exact
     // same design from the same wedding-doc fields.
-    const { theme } = buildGuestPageTheme({ eventType, designVariant, guestDesign })
+    // `framed` = night | dawn: the designs whose background is a
+    // photograph of a glass panel, and whose whole layout is measured
+    // against that panel.
+    const { theme, framed } = buildGuestPageTheme({ eventType, designVariant, guestDesign })
 
     // ── Page title (personalised) ───────────────────────────────────────
     // Build the "Leave a blessing for X" headline from the doc's names:
@@ -887,11 +890,19 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     // so we toggle their visibility via DOM manipulation in an
     // effect. Cleanup restores the original display value when the
     // user navigates away (or the variant changes).
-    const isMomentLayout = !isPoker && !isRomantic
+    // The framed designs render the CLASSIC two-card layout, not the
+    // moment one. That is the layout every theme key they declare
+    // belongs to, and the layout their geometry was measured against —
+    // the moment layout builds its own `md` object inline and never
+    // calls buildGuestPageTheme, so a framed design routed here would
+    // (and did) come out looking like nothing had changed.
+    const isMomentLayout = !isPoker && !isRomantic && !framed
     // Both poker AND moment layout take the full viewport (100vh).
     // The global Header + Footer are hidden via DOM toggle so the
     // backdrop reaches every edge of the screen.
-    const hideChrome = isPoker || isMomentLayout
+    // Framed too: the site header and footer would sit above and below
+    // the glass panel, which is the one thing this design cannot have.
+    const hideChrome = isPoker || isMomentLayout || framed
     useEffect(() => {
         if (!hideChrome || typeof document === 'undefined') return
         const header = document.querySelector('body > header')
@@ -1815,8 +1826,13 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                 // env(safe-area-inset-bottom) keeps the submit
                 // button above the iOS home-indicator strip on
                 // notch-era iPhones.
-                minHeight: isPoker ? '100vh' : 'calc(100vh - 4rem)',
-                minBlockSize: isPoker ? '100svh' : 'calc(100svh - 4rem)',
+                // The 4rem is room for the global header + footer.
+                // Framed hides them (see hideChrome), so it takes the
+                // whole viewport — otherwise the panel is scaled to fit
+                // a shell that is no longer there and every rail
+                // measurement shifts.
+                minHeight: isPoker || framed ? '100vh' : 'calc(100vh - 4rem)',
+                minBlockSize: isPoker || framed ? '100svh' : 'calc(100svh - 4rem)',
                 // A variant whose background is a PHOTOGRAPH of a frame
                 // has to start the form below that frame's top rail —
                 // otherwise the title floats above it, outside the
