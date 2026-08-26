@@ -11,6 +11,17 @@
 //   • Night → lit glass panel on a Jerusalem terrace at dusk; cream
 //     paper card, gold rules, and a photo card that stays a WINDOW
 //     rather than becoming a second sheet of paper
+//   • Dawn → the same panel at the Kotel in the morning. Same idea,
+//     inverted: warm-white card and deep bronze on pale stone, because
+//     gold-on-cream is invisible and a cream card on a cream wall is
+//     not a card
+//
+// The two framed variants also carry their LAYOUT, not just colour:
+// their background is a photograph of a frame, so the form has to sit
+// inside that frame, and each asset's panel is in a different place.
+// The form reads formPaddingTop / formMaxWidth / titleFontSize /
+// titleShadow / hideSubtitle / textareaHeight and knows nothing about
+// which variant is on. Every one falls back.
 //   • Romantic wedding → botanical floral arch photo bg + cream form
 //     card + dusty-pink accents + forest-green button
 //   • Default (wedding/birthday/bar/bat/travel) → champagne-ivory
@@ -22,6 +33,7 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
     // 'romantic' is gated would have hidden it from the event it was
     // designed for.
     const isNight = designVariant === 'night'
+    const isDawn = designVariant === 'dawn'
     const isRomantic = eventType === 'wedding' && designVariant === 'romantic'
 
     const baseTheme = isPoker
@@ -105,6 +117,18 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
                 trustText: 'rgba(233,215,171,0.60)',
                 showCrown: false,
                 showRings: false,
+                // ── Layout, measured off the asset ──────────────────
+                //
+                // The panel's top rail is at 13.5% of the image height
+                // and it spans 77.6% of the width. Arrived at by
+                // rendering the real form over the real asset at
+                // 390×844 and 360×800 and looking at it.
+                formPaddingTop: '15vh',
+                formMaxWidth: 'min(84vw, 380px)',
+                titleFontSize: '22px',
+                titleShadow: '0 2px 14px rgba(0,0,0,0.65)',
+                hideSubtitle: true,
+                textareaHeight: '112px',
                 // ── Night-only: the photo card is a window ──────────
                 //
                 // Every other variant makes both cards the same
@@ -118,8 +142,67 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
                 photoWellBg: 'rgba(8,16,40,0.28)',
                 photoWellBorder: 'rgba(217,184,119,0.38)',
             }
-          : isRomantic
+          : isDawn
             ? {
+                  // The Kotel at golden hour. Everything the night
+                  // variant does, inverted — a bright scene cannot
+                  // carry gold type or a cream card, because both
+                  // disappear into pale limestone. Deep bronze on
+                  // warm white instead, and the button goes dark so it
+                  // still reads as the one thing to press.
+                  pageBg: '#efe6d5',
+                  pageBgImage: [
+                      // A pale scrim, not a dark one: it lifts the
+                      // busy stone away from the form without touching
+                      // the sunlight, which is the whole photograph.
+                      'linear-gradient(180deg, rgba(255,250,240,0.20) 0%, rgba(255,250,240,0.00) 30%, rgba(255,250,240,0.18) 78%, rgba(255,250,240,0.42) 100%)',
+                      'url(/backgrounds/dawnglass.webp)',
+                  ].join(', '),
+                  pageBgSize: 'cover',
+                  pageBgPosition: 'center center',
+                  pageBgRepeat: 'no-repeat',
+                  orbA: 'transparent',
+                  orbB: 'transparent',
+                  titleColor: '#4a3a24',
+                  subtitleColor: 'rgba(74,58,36,0.70)',
+                  accentColor: '#a5762f',
+                  cardBg: 'linear-gradient(180deg, rgba(255,253,247,0.96) 0%, rgba(251,245,234,0.93) 100%)',
+                  cardBorder: '1.5px solid rgba(165,118,47,0.35)',
+                  cardShadow:
+                      '0 18px 44px -18px rgba(80,60,30,0.45), 0 4px 14px -6px rgba(80,60,30,0.20), inset 0 1px 0 rgba(255,255,255,0.90)',
+                  cardLabelColor: '#4a3a24',
+                  cardCounterColor: '#9a8768',
+                  inputBg: 'transparent',
+                  inputBorder: 'rgba(165,118,47,0.32)',
+                  inputFocusBorder: '#a5762f',
+                  inputTextColor: '#2f2517',
+                  inputPlaceholderColor: '#a2937a',
+                  dividerLine: 'rgba(165,118,47,0.28)',
+                  // Dark bronze with white type. The night variant's
+                  // pale gold button would vanish into this stone —
+                  // the one control that must never be hard to find.
+                  buttonGradient: 'linear-gradient(180deg, #c9a44e 0%, #a5762f 55%, #83581f 100%)',
+                  buttonShadow:
+                      '0 16px 34px -12px rgba(131,88,31,0.50), 0 4px 10px -4px rgba(80,60,30,0.25), inset 0 1px 0 rgba(255,255,255,0.35)',
+                  trustText: 'rgba(74,58,36,0.62)',
+                  showCrown: false,
+                  showRings: false,
+                  // Panel rails at 8.6% / 91.4% of the width and a top
+                  // rail at 10.2% — a wider, higher panel than night's,
+                  // which is exactly why these are theme values.
+                  formPaddingTop: '11vh',
+                  formMaxWidth: 'min(87vw, 400px)',
+                  titleFontSize: '24px',
+                  titleShadow: '0 1px 14px rgba(255,252,244,0.90), 0 1px 2px rgba(255,255,255,0.80)',
+                  hideSubtitle: true,
+                  textareaHeight: '112px',
+                  photoCardBg: 'rgba(255,253,247,0.42)',
+                  photoCardBorder: '2px dashed rgba(165,118,47,0.70)',
+                  photoWellBg: 'rgba(255,252,244,0.35)',
+                  photoWellBorder: 'rgba(165,118,47,0.30)',
+              }
+            : isRomantic
+              ? {
                 // Botanical floral arch photograph (white roses,
                 // eucalyptus, dusty pink florals, hanging lights).
                 pageBg: '#1f3527',
@@ -150,7 +233,7 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
                 showCrown: false,
                 showRings: true,
             }
-            : {
+              : {
                 pageBg: '#f8f4ec',
                 pageBgImage: [
                     'radial-gradient(ellipse 900px 480px at 50% -10%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 55%)',
@@ -191,5 +274,5 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
     const theme =
         guestDesign && typeof guestDesign === 'object' ? { ...baseTheme, ...guestDesign } : baseTheme
 
-    return { theme, isPoker, isRomantic, isNight }
+    return { theme, isPoker, isRomantic, isNight, isDawn }
 }

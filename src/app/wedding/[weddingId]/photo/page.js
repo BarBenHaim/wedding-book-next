@@ -331,8 +331,6 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     // still wins over both.
     const isPoker = eventType === 'poker'
     const isRomantic = eventType === 'wedding' && designVariant === 'romantic'
-    // Available to every event type — see the note in guestPageTheme.
-    const isNight = designVariant === 'night'
     // Page direction follows the event language: Hebrew is RTL, every
     // other language (English/Spanish/Italian) is LTR. Without this the
     // page inherits the app's global RTL and English punctuation (?, …)
@@ -1805,11 +1803,13 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                 // notch-era iPhones.
                 minHeight: isPoker ? '100vh' : 'calc(100vh - 4rem)',
                 minBlockSize: isPoker ? '100svh' : 'calc(100svh - 4rem)',
-                // Night: the glass panel's top rail sits at 13.5% of the
-                // asset's height, so the default pt-8 would float the
-                // title in the string lights ABOVE the frame instead of
-                // inside it. Inline, so it beats the class.
-                ...(isNight ? { paddingTop: '15vh' } : {}),
+                // A variant whose background is a PHOTOGRAPH of a frame
+                // has to start the form below that frame's top rail —
+                // otherwise the title floats above it, outside the
+                // panel it is supposed to sit inside. The number belongs
+                // to the asset, so the theme carries it. Inline, so it
+                // beats the pt-8 class.
+                ...(theme.formPaddingTop ? { paddingTop: theme.formPaddingTop } : {}),
                 paddingBottom: 'calc(32px + env(safe-area-inset-bottom, 0px))',
                 // Premium ivory wash — base is a near-white warm neutral
                 // (#f8f4ec, "fine paper"). Two very low-opacity radial
@@ -1828,13 +1828,14 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
             {/* Layout container — narrower max-width matches the mockup's
                 phone-first composition. Each section sits directly on the
                 champagne wash. */}
-            {/* Night narrows the column: the panel in the asset is
-                77.6% of the frame's width, and a 26rem card would spill
-                over its side rails. `cover` crops top and bottom on a
-                phone, never the sides, so this holds across devices. */}
+            {/* Framed variants narrow the column to the width of the
+                panel in their own asset, so the card cannot spill over
+                its side rails. `cover` crops top and bottom on a phone,
+                never the sides, so a width expressed in vw holds across
+                devices. */}
             <div
                 className='relative z-10 w-full max-w-[26rem] animate-scaleIn'
-                style={isNight ? { maxWidth: 'min(84vw, 380px)' } : undefined}
+                style={theme.formMaxWidth ? { maxWidth: theme.formMaxWidth } : undefined}
             >
                 {/* "Blessings you already sent from this phone" — shows only
                     when this device has prior submissions (else renders null).
@@ -2002,16 +2003,20 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                           : {
                                                 color: theme.titleColor,
                                                 // 26px wraps to two lines
-                                                // in the narrower night
-                                                // column, and the second
-                                                // line lands on the top
-                                                // rail.
-                                                fontSize: isNight ? '22px' : '26px',
+                                                // in a narrowed column,
+                                                // and the second line
+                                                // lands on the panel's
+                                                // top rail.
+                                                fontSize: theme.titleFontSize || '26px',
                                                 letterSpacing: '-0.01em',
                                                 // Over a photograph the
                                                 // title has no flat
-                                                // surface to sit on.
-                                                textShadow: isNight ? '0 2px 14px rgba(0,0,0,0.65)' : 'none',
+                                                // surface to sit on. A
+                                                // dark scene wants a dark
+                                                // shadow, a bright one a
+                                                // light halo — so the
+                                                // value, not a flag.
+                                                textShadow: theme.titleShadow || 'none',
                                             }
                                 }
                             >
@@ -2020,16 +2025,17 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                             <p
                                 className='leading-relaxed relative'
                                 style={{
-                                    // Hidden on night. The panel has a
-                                    // fixed height and every line spent
-                                    // above the form pushes the submit
-                                    // button past the fold; the headline
-                                    // already says what this page is.
-                                    display: isNight ? 'none' : undefined,
+                                    // Hidden inside a framed panel. The
+                                    // panel has a fixed height and every
+                                    // line spent above the form pushes
+                                    // the submit button past the fold;
+                                    // the headline already says what
+                                    // this page is.
+                                    display: theme.hideSubtitle ? 'none' : undefined,
                                     color: theme.subtitleColor,
                                     fontSize: isRomantic ? '14.5px' : '13.5px',
                                     letterSpacing: isRomantic ? '0.01em' : 'normal',
-                                    textShadow: isRomantic || isNight ? '0 1px 5px rgba(0,0,0,0.4)' : 'none',
+                                    textShadow: isRomantic ? '0 1px 5px rgba(0,0,0,0.4)' : 'none',
                                     // Match the title — keep the
                                     // subtitle on top of the dark blob.
                                     zIndex: isRomantic ? 1 : 'auto',
@@ -2200,12 +2206,12 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                         // comment above. iOS Safari otherwise
                                         // zooms in on focus and breaks the layout.
                                         fontSize: '16px',
-                                        // Night trades 16px of textarea
-                                        // for the submit button staying
-                                        // on the first screen. It still
-                                        // holds ~4 lines, and the box
-                                        // scrolls past that.
-                                        height: isNight ? '112px' : '128px',
+                                        // A framed variant trades 16px
+                                        // of textarea for the submit
+                                        // button staying on the first
+                                        // screen. It still holds ~4
+                                        // lines, and scrolls past that.
+                                        height: theme.textareaHeight || '128px',
                                     }}
                                     onFocus={e => (e.currentTarget.style.borderColor = theme.inputFocusBorder)}
                                     onBlur={e => (e.currentTarget.style.borderColor = theme.inputBorder)}

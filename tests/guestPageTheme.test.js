@@ -116,3 +116,93 @@ describe('every variant returns a complete surface', () => {
         }
     })
 })
+
+// ── The framed variants ──────────────────────────────────────────────
+//
+// 'night' and 'dawn' put the form inside a glass panel that is part of
+// a PHOTOGRAPH. That makes their layout a property of the asset, not of
+// the form, which is why they carry geometry as well as colour.
+
+const FRAMED = ['night', 'dawn']
+const UNFRAMED = [{}, { eventType: 'poker' }, { eventType: 'wedding' }, { eventType: 'wedding', designVariant: 'romantic' }]
+const LAYOUT_KEYS = ['formPaddingTop', 'formMaxWidth', 'titleFontSize', 'titleShadow', 'hideSubtitle', 'textareaHeight']
+
+describe('framed variants carry their own layout', () => {
+    it('is offered to every event type, like night', () => {
+        for (const eventType of ['wedding', 'bar_mitzvah', 'birthday', undefined]) {
+            const r = buildGuestPageTheme({ eventType, designVariant: 'dawn' })
+            expect(r.isDawn, String(eventType)).toBe(true)
+            expect(r.theme.pageBgImage).toContain('dawnglass')
+        }
+    })
+
+    it('declares every layout key, because the form has no fallback worth having', () => {
+        // The form reads these and knows nothing about which variant is
+        // on. A framed variant that forgot one would inherit a number
+        // measured against a different photograph.
+        for (const designVariant of FRAMED) {
+            const { theme } = buildGuestPageTheme({ eventType: 'bar_mitzvah', designVariant })
+            for (const key of LAYOUT_KEYS) {
+                expect(theme[key], `${designVariant} → ${key}`).toBeDefined()
+            }
+        }
+    })
+
+    it('leaves the layout keys unset on every unframed variant', () => {
+        // These exist so the default layout stays the default. A stray
+        // value here would move a card that nobody asked to move.
+        for (const args of UNFRAMED) {
+            const { theme } = buildGuestPageTheme(args)
+            for (const key of LAYOUT_KEYS) {
+                expect(theme[key], `${JSON.stringify(args)} → ${key}`).toBeUndefined()
+            }
+        }
+    })
+
+    it('never places two framed variants in the same spot', () => {
+        // The whole reason the numbers moved out of the form: the two
+        // assets have panels in different places. If these ever match,
+        // one of them was copied rather than measured.
+        const night = buildGuestPageTheme({ designVariant: 'night' }).theme
+        const dawn = buildGuestPageTheme({ designVariant: 'dawn' }).theme
+        expect(dawn.formPaddingTop).not.toBe(night.formPaddingTop)
+        expect(dawn.formMaxWidth).not.toBe(night.formMaxWidth)
+    })
+
+    it('gives a bright scene a light halo and a dark scene a dark shadow', () => {
+        // titleShadow is a value rather than a flag precisely here: the
+        // night shadow on the Kotel would smear grey under the title.
+        const night = buildGuestPageTheme({ designVariant: 'night' }).theme
+        const dawn = buildGuestPageTheme({ designVariant: 'dawn' }).theme
+        expect(night.titleShadow).toContain('rgba(0,0,0')
+        expect(dawn.titleShadow).toContain('rgba(255')
+    })
+
+    it('inverts the palette rather than reusing it', () => {
+        // Gold type and a cream card disappear into pale limestone, and
+        // night's pale button would be the hardest thing on the page to
+        // find. Different scene, different answers.
+        const night = buildGuestPageTheme({ designVariant: 'night' }).theme
+        const dawn = buildGuestPageTheme({ designVariant: 'dawn' }).theme
+        for (const key of ['titleColor', 'cardBg', 'buttonGradient', 'trustText', 'inputTextColor']) {
+            expect(dawn[key], key).not.toBe(night[key])
+        }
+    })
+
+    it('keeps the photo card a window in both', () => {
+        for (const designVariant of FRAMED) {
+            const { theme } = buildGuestPageTheme({ designVariant })
+            expect(theme.photoCardBorder, designVariant).toContain('dashed')
+            expect(theme.photoCardBg, designVariant).not.toBe(theme.cardBg)
+        }
+    })
+
+    it('still reports exactly one variant flag', () => {
+        const r = buildGuestPageTheme({ eventType: 'bar_mitzvah', designVariant: 'dawn' })
+        expect([r.isPoker, r.isRomantic, r.isNight, r.isDawn].filter(Boolean)).toHaveLength(1)
+    })
+
+    it('still leaves poker alone, because poker is the event', () => {
+        expect(buildGuestPageTheme({ eventType: 'poker', designVariant: 'dawn' }).isPoker).toBe(true)
+    })
+})
