@@ -134,11 +134,17 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
                 // 37vh leaves an even margin inside them.
                 formPaddingTop: '16vh',
                 formMaxWidth: 'min(88vw, 37vh, 380px)',
-                titleFontSize: '22px',
+                titleFont: 'frankRuhl',
+                titleRule: true,
+                titleFontSize: '23px',
                 titleShadow: '0 2px 14px rgba(0,0,0,0.65)',
                 hideSubtitle: true,
                 hideNameField: true,
                 hideTrust: true,
+                shortPhotoWell: true,
+                // The smaller of the two panels, so the smaller box.
+                // Measured: at 96px the form clears the bottom rail on
+                // a 360×800 by 7px; at 112 it crosses it.
                 textareaHeight: '96px',
                 // ── Night-only: the photo card is a window ──────────
                 //
@@ -206,12 +212,16 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
                   // rather than 37 and 11.5vh rather than 16.
                   formPaddingTop: '11.5vh',
                   formMaxWidth: 'min(90vw, 39vh, 400px)',
-                  titleFontSize: '24px',
+                  titleFont: 'frankRuhl',
+                  titleRule: true,
+                  titleFontSize: '25px',
                   titleShadow: '0 1px 14px rgba(255,252,244,0.90), 0 1px 2px rgba(255,255,255,0.80)',
                   hideSubtitle: true,
                   hideNameField: true,
                   hideTrust: true,
-                  textareaHeight: '96px',
+                  shortPhotoWell: true,
+                  // A taller panel than night's buys 32px more here.
+                  textareaHeight: '128px',
                   photoCardBg: 'rgba(255,253,247,0.42)',
                   photoCardBorder: '2px dashed rgba(165,118,47,0.70)',
                   photoWellBg: 'rgba(255,252,244,0.35)',

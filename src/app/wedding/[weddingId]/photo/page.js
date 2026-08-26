@@ -19,6 +19,12 @@ import BlessingAssist from '@/components/BlessingAssist/BlessingAssist'
 import { recordSubmission } from '@/lib/mySubmissions'
 import MySubmissions from '@/components/MySubmissions/MySubmissions'
 import BookLoader from '@/components/BookLoader/BookLoader'
+import { frankRuhl } from '@/app/fonts'
+
+// Themes name a font; this file owns the mapping. guestPageTheme.js
+// stays a plain data module that vitest can import — pulling
+// next/font/google into it would break the whole suite at collection.
+const TITLE_FONTS = { frankRuhl: frankRuhl.className }
 
 // ── Image compression settings ──
 // Targeted at the highest-resolution book layout (notebook at 75% page
@@ -1967,7 +1973,16 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 </div>
                             )}
                             <h2
-                                className='font-bold mb-2 leading-[1.15] relative'
+                                // A serif at 500 rather than a bold
+                                // sans: inside a lit glass panel the
+                                // default weight reads as a form label,
+                                // and Frank Ruhl is the Hebrew serif
+                                // that carries this kind of frame.
+                                className={
+                                    theme.titleFont
+                                        ? `mb-2 leading-[1.15] relative ${TITLE_FONTS[theme.titleFont] || ''}`
+                                        : 'font-bold mb-2 leading-[1.15] relative'
+                                }
                                 style={
                                     isPoker
                                         ? {
@@ -2017,7 +2032,13 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                                 // lands on the panel's
                                                 // top rail.
                                                 fontSize: theme.titleFontSize || '26px',
-                                                letterSpacing: '-0.01em',
+                                                // Explicit, because the
+                                                // serif only ships 400
+                                                // and 700 — an inherited
+                                                // bold would snap to 700
+                                                // and lose the point.
+                                                fontWeight: theme.titleFont ? 400 : undefined,
+                                                letterSpacing: theme.titleFont ? '0.005em' : '-0.01em',
                                                 // Over a photograph the
                                                 // title has no flat
                                                 // surface to sit on. A
@@ -2031,6 +2052,33 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                             >
                                 {pageTitle}
                             </h2>
+
+                            {/* Hairline, diamond, hairline — the same
+                                ornament the cards use between sections,
+                                so the title belongs to the page rather
+                                than sitting on top of it. */}
+                            {theme.titleRule && (
+                                <div className='flex items-center justify-center gap-2 mb-1' aria-hidden='true'>
+                                    <span
+                                        className='block h-px w-10'
+                                        style={{ background: `linear-gradient(to left, transparent, ${theme.accentColor})` }}
+                                    />
+                                    <span
+                                        className='block'
+                                        style={{
+                                            width: 5,
+                                            height: 5,
+                                            transform: 'rotate(45deg)',
+                                            background: theme.accentColor,
+                                            opacity: 0.9,
+                                        }}
+                                    />
+                                    <span
+                                        className='block h-px w-10'
+                                        style={{ background: `linear-gradient(to right, transparent, ${theme.accentColor})` }}
+                                    />
+                                </div>
+                            )}
                             <p
                                 className='leading-relaxed relative'
                                 style={{
@@ -2494,7 +2542,17 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 Poker → dark recessed felt; everything
                                 else → cream paper. */}
                             <div
-                                className='relative w-full aspect-[4/3] rounded-2xl overflow-hidden group'
+                                // 4:3 is the shape of a PHOTO, and it
+                                // still becomes that the moment there is
+                                // one. Empty, it holds a disc and two
+                                // buttons in a lot of air — and inside a
+                                // fixed-height panel that air is the
+                                // blessing box's height. Both literals
+                                // stay in this file so Tailwind sees
+                                // them.
+                                className={`relative w-full ${
+                                    !photoUrl && !cameraOpen && theme.shortPhotoWell ? 'aspect-[3/2]' : 'aspect-[4/3]'
+                                } rounded-2xl overflow-hidden group`}
                                 style={{
                                     background: theme.photoWellBg || (isPoker ? theme.inputBg : '#fbf6ec'),
                                     border: `1px solid ${theme.photoWellBorder || (isPoker ? theme.inputBorder : '#ead9b3')}`,

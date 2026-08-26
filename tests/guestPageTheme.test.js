@@ -132,6 +132,10 @@ const LAYOUT_KEYS = [
     // is ~145px, and that is exactly what makes the form fit between
     // the panel's rails instead of running onto the plinth below it.
     'hideSubtitle', 'hideNameField', 'hideTrust', 'textareaHeight',
+    // Typography and the shortened empty photo well travel with
+    // the frame too: a serif title and a hairline rule belong to a
+    // lit glass panel and would be costume on a plain ivory page.
+    'titleFont', 'titleRule', 'shortPhotoWell',
 ]
 
 describe('framed variants carry their own layout', () => {
