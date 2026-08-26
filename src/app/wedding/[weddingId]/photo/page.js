@@ -169,8 +169,13 @@ export default function TextPage() {
             // Live-preview override from the studio editor: ?gd=<base64 JSON>.
             let previewGd = null
             let previewCopy = null
+            // ?dv=night | dawn | romantic — look at a design without
+            // saving it onto a live event whose guests are scanning that
+            // QR right now. Read-only, this page load only.
+            let previewVariant = ''
             try {
                 const sp = new URLSearchParams(window.location.search)
+                previewVariant = (sp.get('dv') || '').trim()
                 const raw = sp.get('gd')
                 if (raw) previewGd = JSON.parse(decodeURIComponent(escape(atob(raw))))
                 const rawc = sp.get('gc')
@@ -185,7 +190,10 @@ export default function TextPage() {
                     const data = snap.data()
                     setLocale(normalizeLocale(data.locale))
                     if (data.eventType) setEventType(data.eventType)
-                    if (data.designVariant) setDesignVariant(data.designVariant)
+                    // The URL wins, so the preview also works on an
+                    // event that already has a design saved.
+                    if (previewVariant) setDesignVariant(previewVariant)
+                    else if (data.designVariant) setDesignVariant(data.designVariant)
                     if (data.blessingMaxChars) setMaxChars(Number(data.blessingMaxChars) || 210)
                     // Prefer the Hebrew-script names for the headline
                     // ("השאירו ברכה ל..."). Fall back to the original

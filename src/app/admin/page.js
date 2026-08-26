@@ -717,6 +717,8 @@ function EventTypeEditor({ wedding, onSave }) {
                     </select>
                     <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>
                         משפיע רק על עמוד יצירת הברכה לאורחים. <b>ברירת המחדל</b> היא העיצוב הפרחוני העדכני. &quot;ערב&quot; ו&quot;בוקר&quot; הם לוח הזכוכית — נוף לילי או הכותל באור יום. שניהם זמינים לכל סוג אירוע.
+                        <br />
+                        <b>לתצוגה מקדימה בלי לשמור:</b> פתחו את עמוד הברכה של האירוע והוסיפו לכתובת <code>?dv=night</code> או <code>?dv=dawn</code>.
                     </p>
                 </div>
             </div>
