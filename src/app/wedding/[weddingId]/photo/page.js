@@ -1834,14 +1834,23 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                 never the sides, so a width expressed in vw holds across
                 devices. */}
             <div
-                className='relative z-10 w-full max-w-[26rem] animate-scaleIn'
+                className={`relative z-10 w-full max-w-[26rem] animate-scaleIn${theme.formMaxWidth ? ' flex flex-col' : ''}`}
                 style={theme.formMaxWidth ? { maxWidth: theme.formMaxWidth } : undefined}
             >
                 {/* "Blessings you already sent from this phone" — shows only
                     when this device has prior submissions (else renders null).
                     Sits ABOVE the form so a returning guest can edit, while the
                     full new-blessing form stays right below it. */}
-                <div className='mb-6'>
+                {/* "Blessings you already sent from this phone" moves
+                    BELOW the form on a framed variant. It renders null
+                    for a first-time guest, but a returning one would
+                    otherwise get a strip above the title that pushes the
+                    whole composition down past the panel's bottom rail —
+                    the form would literally leave the acrylic. order-last
+                    keeps the DOM (and the reading order for a returning
+                    guest, who came back for exactly this) while fixing
+                    where it lands. */}
+                <div className={theme.formMaxWidth ? 'order-last mt-6' : 'mb-6'}>
                     <MySubmissions weddingId={weddingId} locale={locale} />
                 </div>
 
@@ -2078,8 +2087,21 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 ...(isRomantic ? { aspectRatio: '130 / 190' } : {}),
                             }}
                         >
-                            {/* Name section */}
-                            <div className='relative z-10'>
+                            {/* Name section — hidden where the theme
+                                says so (the framed variants ask for a
+                                blessing and a photo, nothing else).
+                                Hidden, not removed: `name` still holds
+                                whatever a personalised ?g= link supplied,
+                                and that still reaches the book. With no
+                                such link the blessing arrives unsigned,
+                                which the page template already handles —
+                                it draws an invisible placeholder so the
+                                photo lands at the same height as on a
+                                signed page. */}
+                            <div
+                                className='relative z-10'
+                                style={theme.hideNameField ? { display: 'none' } : undefined}
+                            >
                                 <div className='flex items-center justify-between mb-2.5'>
                                     <span
                                         style={{
@@ -2134,7 +2156,10 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                             {/* Divider — heart for warm themes, spade for
                                 poker. Lines on each side use theme.dividerLine
                                 so they read on both light and dark cards. */}
-                            <div className='flex items-center justify-center gap-2.5 my-5'>
+                            <div
+                                className='flex items-center justify-center gap-2.5 my-5'
+                                style={theme.hideNameField ? { display: 'none' } : undefined}
+                            >
                                 <span
                                     className='block h-px flex-1'
                                     style={{
@@ -2372,6 +2397,11 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                         <div
                             className='flex items-center justify-center gap-1.5 mt-4'
                             style={{
+                                // Inside a fixed-height panel this line
+                                // is the cheapest 28px to give back, and
+                                // it sits between the two cards where it
+                                // reads as clutter rather than comfort.
+                                display: theme.hideTrust ? 'none' : undefined,
                                 color: theme.trustText,
                                 fontSize: isRomantic ? '12px' : '11px',
                                 textShadow: isRomantic ? '0 1px 5px rgba(0,0,0,0.4)' : 'none',

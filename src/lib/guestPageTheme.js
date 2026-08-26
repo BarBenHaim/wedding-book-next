@@ -123,12 +123,23 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
                 // and it spans 77.6% of the width. Arrived at by
                 // rendering the real form over the real asset at
                 // 390×844 and 360×800 and looking at it.
-                formPaddingTop: '15vh',
-                formMaxWidth: 'min(84vw, 380px)',
+                // Rails measured off the asset: top 14.4%, bottom
+                // ~86.5%, sides 10.5% / 89.6% — a panel 79.1% wide.
+                //
+                // The width is part vh on purpose. `cover` on a tall
+                // screen scales by HEIGHT, so the panel's on-screen
+                // width is a fraction of the viewport's height, not its
+                // width: 0.791 × 0.563 = 44.5vh. A column in vw alone
+                // would drift against the rails on every other phone.
+                // 37vh leaves an even margin inside them.
+                formPaddingTop: '16vh',
+                formMaxWidth: 'min(88vw, 37vh, 380px)',
                 titleFontSize: '22px',
                 titleShadow: '0 2px 14px rgba(0,0,0,0.65)',
                 hideSubtitle: true,
-                textareaHeight: '112px',
+                hideNameField: true,
+                hideTrust: true,
+                textareaHeight: '96px',
                 // ── Night-only: the photo card is a window ──────────
                 //
                 // Every other variant makes both cards the same
@@ -190,12 +201,17 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
                   // Panel rails at 8.6% / 91.4% of the width and a top
                   // rail at 10.2% — a wider, higher panel than night's,
                   // which is exactly why these are theme values.
-                  formPaddingTop: '11vh',
-                  formMaxWidth: 'min(87vw, 400px)',
+                  // Rails: top 10.2%, bottom ~89%, sides 8.6% / 91.4%
+                  // — a wider, higher panel than night's, hence 39vh
+                  // rather than 37 and 11.5vh rather than 16.
+                  formPaddingTop: '11.5vh',
+                  formMaxWidth: 'min(90vw, 39vh, 400px)',
                   titleFontSize: '24px',
                   titleShadow: '0 1px 14px rgba(255,252,244,0.90), 0 1px 2px rgba(255,255,255,0.80)',
                   hideSubtitle: true,
-                  textareaHeight: '112px',
+                  hideNameField: true,
+                  hideTrust: true,
+                  textareaHeight: '96px',
                   photoCardBg: 'rgba(255,253,247,0.42)',
                   photoCardBorder: '2px dashed rgba(165,118,47,0.70)',
                   photoWellBg: 'rgba(255,252,244,0.35)',

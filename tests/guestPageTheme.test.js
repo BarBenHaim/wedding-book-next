@@ -125,7 +125,14 @@ describe('every variant returns a complete surface', () => {
 
 const FRAMED = ['night', 'dawn']
 const UNFRAMED = [{}, { eventType: 'poker' }, { eventType: 'wedding' }, { eventType: 'wedding', designVariant: 'romantic' }]
-const LAYOUT_KEYS = ['formPaddingTop', 'formMaxWidth', 'titleFontSize', 'titleShadow', 'hideSubtitle', 'textareaHeight']
+const LAYOUT_KEYS = [
+    'formPaddingTop', 'formMaxWidth', 'titleFontSize', 'titleShadow',
+    // The framed designs ask for a blessing and a photo and nothing
+    // else. Dropping the name field, its ornament and the trust line
+    // is ~145px, and that is exactly what makes the form fit between
+    // the panel's rails instead of running onto the plinth below it.
+    'hideSubtitle', 'hideNameField', 'hideTrust', 'textareaHeight',
+]
 
 describe('framed variants carry their own layout', () => {
     it('is offered to every event type, like night', () => {
