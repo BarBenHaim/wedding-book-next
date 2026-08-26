@@ -8,12 +8,20 @@
 //
 // Variants:
 //   • Poker → dark felt-green page (real photo bg) + house-red button
+//   • Night → lit glass panel on a Jerusalem terrace at dusk; cream
+//     paper card, gold rules, and a photo card that stays a WINDOW
+//     rather than becoming a second sheet of paper
 //   • Romantic wedding → botanical floral arch photo bg + cream form
 //     card + dusty-pink accents + forest-green button
 //   • Default (wedding/birthday/bar/bat/travel) → champagne-ivory
 //     premium look
 export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = {}) {
     const isPoker = eventType === 'poker'
+    // Not gated on eventType: a lit glass panel at dusk suits a wedding,
+    // a bar mitzvah and a birthday equally, and gating it the way
+    // 'romantic' is gated would have hidden it from the event it was
+    // designed for.
+    const isNight = designVariant === 'night'
     const isRomantic = eventType === 'wedding' && designVariant === 'romantic'
 
     const baseTheme = isPoker
@@ -50,8 +58,68 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
               showCrown: true,
               showRings: false,
           }
-        : isRomantic
+        : isNight
           ? {
+                // A photograph, used as a photograph: the frame, the
+                // string lights and the stone are IN the asset, and the
+                // form sits inside them. Nothing here redraws the panel
+                // in CSS — a second frame fighting the baked one is the
+                // failure mode this variant exists to avoid.
+                pageBg: '#0a1330',
+                // Two layers: a scrim over the photo. Darkest at the
+                // very top and bottom, almost absent across the middle
+                // where the panel is — the gold type needs the contrast
+                // and the string lights must survive.
+                pageBgImage: [
+                    'linear-gradient(180deg, rgba(8,16,40,0.30) 0%, rgba(8,16,40,0.10) 22%, rgba(8,16,40,0.35) 70%, rgba(8,16,40,0.72) 100%)',
+                    'url(/backgrounds/nightglass.webp)',
+                ].join(', '),
+                pageBgSize: 'cover',
+                pageBgPosition: 'center center',
+                pageBgRepeat: 'no-repeat',
+                orbA: 'transparent',
+                orbB: 'transparent',
+                titleColor: '#e9d7ab',
+                subtitleColor: 'rgba(233,215,171,0.72)',
+                accentColor: '#d9b877',
+                // Warm paper, lit from above. The gradient is what stops
+                // it reading as a flat beige rectangle pasted on a photo.
+                cardBg: 'linear-gradient(180deg, #efe7d3 0%, #e6dcc4 100%)',
+                cardBorder: '1.5px solid rgba(201,164,78,0.85)',
+                cardShadow:
+                    '0 18px 40px -16px rgba(0,0,0,0.65), 0 4px 12px -6px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.35)',
+                cardLabelColor: '#4a3c26',
+                cardCounterColor: '#8b7f68',
+                // The inputs do not draw their own boxes: on paper this
+                // thin a nested border reads as a form inside a form.
+                // A hairline rule is enough to say "type here".
+                inputBg: 'transparent',
+                inputBorder: 'rgba(201,164,78,0.40)',
+                inputFocusBorder: '#c9a44e',
+                inputTextColor: '#2a2118',
+                inputPlaceholderColor: '#8b7f68',
+                dividerLine: 'rgba(201,164,78,0.38)',
+                buttonGradient: 'linear-gradient(180deg, #e6cd8d 0%, #c9a44e 55%, #ab8639 100%)',
+                buttonShadow:
+                    '0 16px 34px -12px rgba(201,164,78,0.55), 0 4px 10px -4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.45)',
+                trustText: 'rgba(233,215,171,0.60)',
+                showCrown: false,
+                showRings: false,
+                // ── Night-only: the photo card is a window ──────────
+                //
+                // Every other variant makes both cards the same
+                // surface. Here the second one must not: a cream slab
+                // where the city view should be would block the only
+                // part of the scene the guest can still see, and the
+                // dashed gold edge is what makes it read as "drop a
+                // photo here" instead of "another form".
+                photoCardBg: 'rgba(10,20,48,0.22)',
+                photoCardBorder: '2px dashed rgba(217,184,119,0.75)',
+                photoWellBg: 'rgba(8,16,40,0.28)',
+                photoWellBorder: 'rgba(217,184,119,0.38)',
+            }
+          : isRomantic
+            ? {
                 // Botanical floral arch photograph (white roses,
                 // eucalyptus, dusty pink florals, hanging lights).
                 pageBg: '#1f3527',
@@ -82,7 +150,7 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
                 showCrown: false,
                 showRings: true,
             }
-          : {
+            : {
                 pageBg: '#f8f4ec',
                 pageBgImage: [
                     'radial-gradient(ellipse 900px 480px at 50% -10%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 55%)',
@@ -123,5 +191,5 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
     const theme =
         guestDesign && typeof guestDesign === 'object' ? { ...baseTheme, ...guestDesign } : baseTheme
 
-    return { theme, isPoker, isRomantic }
+    return { theme, isPoker, isRomantic, isNight }
 }

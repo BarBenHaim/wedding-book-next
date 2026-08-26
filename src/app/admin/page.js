@@ -695,7 +695,12 @@ function EventTypeEditor({ wedding, onSave }) {
                 arch); other types only have one for now so the dropdown
                 is hidden until we add more. Empty value = use the type's
                 default variant on the guest side. */}
-            {draft.eventType === 'wedding' && (
+            {/* Shown for every event type now, not just weddings: the
+                night design was made for a bar mitzvah, and the old
+                wedding-only gate would have hidden it from exactly the
+                events it suits. 'romantic' stays wedding-only — its
+                copy and its floral asset are wedding-specific. */}
+            <div className='mb-3'>
                 <div className='mb-3'>
                     <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>סגנון העיצוב</label>
                     <select
@@ -704,13 +709,16 @@ function EventTypeEditor({ wedding, onSave }) {
                         className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
                     >
                         <option value='classic'>רגע אחד — עיצוב פרחוני עדכני (ברירת מחדל)</option>
-                        <option value='romantic'>סגנון ישן — &quot;מי משאיר לנו ברכה?&quot;</option>
+                        {draft.eventType === 'wedding' && (
+                            <option value='romantic'>סגנון ישן — &quot;מי משאיר לנו ברכה?&quot;</option>
+                        )}
+                        <option value='night'>ערב — זכוכית מוארת, אורות ונוף לילי</option>
                     </select>
                     <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>
-                        משפיע רק על עמוד יצירת הברכה לאורחים. <b>ברירת המחדל</b> היא העיצוב הפרחוני העדכני (&quot;רגע אחד&quot;, &quot;שם&quot;/&quot;הברכה שלכם&quot;). &quot;סגנון ישן&quot; הוא הלייאאוט הקודם (כהה, עם placeholders) — מומלץ להשאיר על ברירת המחדל.
+                        משפיע רק על עמוד יצירת הברכה לאורחים. <b>ברירת המחדל</b> היא העיצוב הפרחוני העדכני. &quot;ערב&quot; הוא הלוח המואר עם הנוף הירושלמי — מתאים לאירועי ערב בכל סוג אירוע.
                     </p>
                 </div>
-            )}
+            </div>
 
             {/* Interface language — drives the language shown to the
                 couple/celebrant in their portal AND to guests on the
