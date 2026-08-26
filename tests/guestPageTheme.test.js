@@ -78,23 +78,57 @@ describe('the night photo card is a window, not paper', () => {
     })
 })
 
-describe('a saved studio preset still wins', () => {
-    it('merges over the night base rather than replacing it', () => {
-        const { theme } = build({
-            eventType: 'bar_mitzvah',
-            designVariant: 'night',
-            guestDesign: { titleColor: '#ffffff' },
-        })
-        expect(theme.titleColor).toBe('#ffffff')
-        expect(theme.pageBgImage).toContain('nightglass')
-        expect(theme.photoCardBorder).toContain('dashed')
+describe('a saved studio preset', () => {
+    // A flat, ivory-page palette of the kind the studio's guest-design
+    // screen saves.
+    const preset = { pageBg: '#fdf0f3', pageBgImage: 'none', titleColor: '#5a2a3a', cardBg: '#ffffff' }
+
+    it('still wins on every flat design, exactly as before', () => {
+        for (const args of [{ eventType: 'wedding' }, { eventType: 'poker' }, { eventType: 'wedding', designVariant: 'romantic' }]) {
+            const { theme } = buildGuestPageTheme({ ...args, guestDesign: preset })
+            expect(theme.titleColor, JSON.stringify(args)).toBe('#5a2a3a')
+            expect(theme.pageBgImage, JSON.stringify(args)).toBe('none')
+        }
+    })
+
+    it('does NOT apply to a framed design — it was burying it whole', () => {
+        // The bug this rule exists for: on an event with a saved palette,
+        // choosing 'night' changed nothing you could see, because
+        // pageBgImage, pageBg, cardBg and every colour came from the
+        // preset instead.
+        for (const designVariant of ['night', 'dawn']) {
+            const { theme } = buildGuestPageTheme({ designVariant, guestDesign: preset })
+            expect(theme.pageBgImage, designVariant).toContain('glass')
+            expect(theme.titleColor, designVariant).not.toBe('#5a2a3a')
+            expect(theme.cardBg, designVariant).not.toBe('#ffffff')
+        }
+    })
+
+    it('does not apply PART of it either', () => {
+        // Half is worse than none. The preset is coherent against a flat
+        // page — its dark-brown title is dark because the page behind it
+        // is ivory. Over the night photograph that title is gone.
+        const { theme } = buildGuestPageTheme({ designVariant: 'night', guestDesign: { titleColor: '#5a2a3a' } })
+        expect(theme.titleColor).toBe('#e9d7ab')
+    })
+
+    it('destroys nothing — the same doc renders the preset again on a flat design', () => {
+        const framed = buildGuestPageTheme({ eventType: 'wedding', designVariant: 'night', guestDesign: preset }).theme
+        const flat = buildGuestPageTheme({ eventType: 'wedding', designVariant: '', guestDesign: preset }).theme
+        expect(framed.titleColor).not.toBe(flat.titleColor)
+        expect(flat.titleColor).toBe('#5a2a3a')
+    })
+
+    it('reports whether the design is framed', () => {
+        expect(buildGuestPageTheme({ designVariant: 'night' }).framed).toBe(true)
+        expect(buildGuestPageTheme({ designVariant: 'dawn' }).framed).toBe(true)
+        expect(buildGuestPageTheme({ eventType: 'wedding' }).framed).toBe(false)
     })
 
     it('ignores a non-object override', () => {
-        expect(build({ designVariant: 'night', guestDesign: 'nope' }).theme.titleColor).toBe('#e9d7ab')
+        expect(buildGuestPageTheme({ eventType: 'wedding', guestDesign: 'nope' }).theme.pageBg).toBe('#f8f4ec')
     })
 })
-
 describe('every variant returns a complete surface', () => {
     it('never leaves the form without the values it renders with', () => {
         const required = [

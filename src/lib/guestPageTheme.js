@@ -297,8 +297,27 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
     // `guestDesign`, or a live ?gd= preview) overrides the built-in
     // palette — merged over the eventType/variant base so a preset only
     // needs to specify the fields it changes.
+    //
+    // EXCEPT on the framed designs, and this is the whole point of the
+    // exception: a preset there was burying the design completely.
+    // pageBgImage, pageBg, cardBg and every colour come from the preset,
+    // so choosing 'night' on an event with a saved palette changed
+    // nothing you could see.
+    //
+    // Applying part of it is not a better answer. A studio preset is a
+    // coherent palette authored against a FLAT page — its titleColor is
+    // dark brown because the page behind it is ivory. Over a night
+    // photograph that title is gone. There is no subset of those keys
+    // that survives the move to a photographic frame, so none of them
+    // does.
+    //
+    // Nothing is destroyed: `guestDesign` stays on the doc untouched and
+    // comes back the moment the event is switched to a flat design.
+    const framed = isNight || isDawn
     const theme =
-        guestDesign && typeof guestDesign === 'object' ? { ...baseTheme, ...guestDesign } : baseTheme
+        !framed && guestDesign && typeof guestDesign === 'object'
+            ? { ...baseTheme, ...guestDesign }
+            : baseTheme
 
-    return { theme, isPoker, isRomantic, isNight, isDawn }
+    return { theme, isPoker, isRomantic, isNight, isDawn, framed }
 }
