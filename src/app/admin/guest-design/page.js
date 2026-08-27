@@ -9,8 +9,28 @@ import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import { listGuestPresets, saveGuestPreset, deleteGuestPreset } from '@/lib/guestDesignPresets'
 import { Lock, Palette, Save, RefreshCw, Eye, Check, Upload, Smartphone, Tablet, Monitor, Type, Plus, Trash2 } from 'lucide-react'
 
+// A preset is normally a PALETTE (`design`). The two framed designs are
+// not: they are whole designs — photograph, layout, geometry, type — and
+// they ignore palettes on purpose, so a palette entry for them would be
+// a swatch that does nothing. They carry `variant` instead, and the
+// screen treats them as a different kind of choice throughout.
 const PRESETS = [
     { id: 'classic', name: 'קלאסי (ברירת מחדל)', swatch: '#c9a44e', design: {} },
+    {
+        id: 'night',
+        name: 'ערב — זכוכית ונוף לילי',
+        variant: 'night',
+        // The design itself as the swatch, since that is what it is.
+        swatchImage: '/backgrounds/nightglass.webp',
+        swatch: '#0a1330',
+    },
+    {
+        id: 'dawn',
+        name: 'בוקר — זכוכית והכותל',
+        variant: 'dawn',
+        swatchImage: '/backgrounds/dawnglass.webp',
+        swatch: '#efe6d5',
+    },
     {
         id: 'bar_mitzvah', name: 'בר מצווה — כחול וזהב', swatch: '#16243d',
         design: {
@@ -145,6 +165,8 @@ function Editor() {
     const [weddings, setWeddings] = useState([])
     const [selWedding, setSelWedding] = useState('')
     const [design, setDesign] = useState({})
+    // '' = a colour design; 'night' | 'dawn' = a whole framed design.
+    const [variant, setVariant] = useState('')
     const [copy, setCopy] = useState({})
     const [savedPresets, setSavedPresets] = useState([])
     const [bgImage, setBgImage] = useState('')
@@ -167,6 +189,7 @@ function Editor() {
                     if (list[0]) {
                         setSelWedding(list[0].id)
                         if (list[0].guestDesign) setDesign(list[0].guestDesign)
+                        setVariant(list[0].designVariant || '')
                     }
                 }
             } catch {
@@ -183,6 +206,7 @@ function Editor() {
         setSelWedding(id)
         const w = weddings.find(x => x.id === id)
         setDesign(w?.guestDesign || {})
+        setVariant(w?.designVariant || '')
         setCopy({})
         setBgImage('')
         setBtnImg('')
@@ -194,10 +218,17 @@ function Editor() {
             return
         }
         const t = setTimeout(() => {
-            setPreviewSrc(`/wedding/${selWedding}/photo?gd=${b64(design)}&gc=${b64(nonEmpty(copy))}`)
+            // A framed design previews through ?dv= — the palette in
+            // ?gd= would not reach it, so sending it would show a
+            // preview of a page nobody will see.
+            setPreviewSrc(
+                variant
+                    ? `/wedding/${selWedding}/photo?dv=${variant}&gc=${b64(nonEmpty(copy))}`
+                    : `/wedding/${selWedding}/photo?gd=${b64(design)}&gc=${b64(nonEmpty(copy))}`
+            )
         }, 450)
         return () => clearTimeout(t)
-    }, [design, copy, selWedding])
+    }, [design, copy, variant, selWedding])
 
     const setField = (key, value) => setDesign(prev => ({ ...prev, [key]: value }))
     const onPageBg = value => setDesign(prev => ({ ...prev, pageBg: value, pageBgImage: bgImage ? prev.pageBgImage : 'none' }))
@@ -272,6 +303,7 @@ function Editor() {
             next.buttonGradient = design.buttonGradient
         }
         setDesign(next)
+        setVariant('')
         const bgM = typeof next.pageBgImage === 'string' ? next.pageBgImage.match(/url\((.*?)\)/) : null
         setBgImage(bgM ? bgM[1] : '')
         const btnM = typeof next.buttonGradient === 'string' ? next.buttonGradient.match(/url\((.*?)\)/) : null
@@ -311,7 +343,11 @@ function Editor() {
         if (!selWedding) return flash('בחרו אירוע', 'error')
         setBusy(true)
         try {
-            const patch = { guestDesign: design }
+            // A framed design writes the variant and LEAVES the palette
+            // alone. It is ignored while the variant is on, and it is
+            // the operator's work — switching designs is a choice, not
+            // a delete. Switching back restores it exactly.
+            const patch = variant ? { designVariant: variant } : { designVariant: '', guestDesign: design }
             for (const [key, , docKey] of COPY_FIELDS) {
                 if (copy[key] && String(copy[key]).trim()) patch[docKey] = copy[key]
             }
@@ -321,7 +357,13 @@ function Editor() {
                 body: JSON.stringify({ weddingId: selWedding, patch }),
             })
             if (!res.ok) throw new Error('שמירה נכשלה')
-            setWeddings(prev => prev.map(w => (w.id === selWedding ? { ...w, guestDesign: design } : w)))
+            setWeddings(prev =>
+                prev.map(w =>
+                    w.id === selWedding
+                        ? { ...w, designVariant: variant, ...(variant ? {} : { guestDesign: design }) }
+                        : w
+                )
+            )
             setSaved(true)
             setTimeout(() => setSaved(false), 2500)
             flash('הוחל על האירוע ✓')
@@ -370,12 +412,27 @@ function Editor() {
                                 </button>
                             </div>
                             <div className='grid grid-cols-2 sm:grid-cols-4 gap-2'>
-                                {PRESETS.map(p => (
-                                    <button key={p.id} onClick={() => loadPreset(p)} className='rounded-xl border border-[#e7dcc6] p-2 hover:border-[#AA8840] transition-colors text-center'>
-                                        <span className='block w-full h-8 rounded-lg mb-1.5' style={{ background: p.swatch }} />
-                                        <span className='text-[11px] font-bold text-[#5a4a32]'>{p.name}</span>
-                                    </button>
-                                ))}
+                                {PRESETS.map(p => {
+                                    const active = p.variant ? variant === p.variant : !variant && p.id === 'classic' && !Object.keys(design).length
+                                    return (
+                                        <button
+                                            key={p.id}
+                                            onClick={() => (p.variant ? setVariant(p.variant) : loadPreset(p))}
+                                            className='rounded-xl border p-2 transition-colors text-center'
+                                            style={{ borderColor: active ? '#AA8840' : '#e7dcc6', background: active ? '#AA88400f' : undefined }}
+                                        >
+                                            <span
+                                                className='block w-full h-8 rounded-lg mb-1.5 bg-cover bg-center'
+                                                style={
+                                                    p.swatchImage
+                                                        ? { backgroundImage: `url(${p.swatchImage})` }
+                                                        : { background: p.swatch }
+                                                }
+                                            />
+                                            <span className='text-[11px] font-bold text-[#5a4a32]'>{p.name}</span>
+                                        </button>
+                                    )
+                                })}
                                 {savedPresets.map(p => (
                                     <div key={p.id} className='relative'>
                                         <button onClick={() => loadPreset(p)} title={p.name} className='w-full rounded-xl border border-[#e7dcc6] p-2 hover:border-[#AA8840] transition-colors text-center'>
@@ -389,6 +446,11 @@ function Editor() {
                                 ))}
                             </div>
                             <p className='text-[10.5px] text-[#a89378] mt-2 leading-relaxed'>עצב אירוע כרצונך (כולל תמונות רקע/כפתור) ולחץ &quot;שמור עיצוב נוכחי כפריסט&quot; — כדי להשתמש בו שוב בכל אירוע.</p>
+                            {variant && (
+                                <div className='mt-3 rounded-xl px-3 py-2.5 text-[11px] leading-relaxed' style={{ background: '#fdf6e6', border: '1px solid #e7dcc6', color: '#6b5a3c' }}>
+                                    <b>{variant === 'night' ? '״ערב״' : '״בוקר״'} פעיל.</b> זה עיצוב שלם — רקע, פריסה וטיפוגרפיה — ולכן <b>פקדי הצבע למטה לא משפיעים עליו</b>. הצבעים שלך נשמרים ויחזרו אם תבחר עיצוב צבעוני. לחץ &quot;החל על האירוע&quot; כדי לשמור.
+                                </div>
+                            )}
                         </div>
 
                         {GROUPS.map(g => (
