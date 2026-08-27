@@ -160,7 +160,11 @@ describe('every variant returns a complete surface', () => {
 const FRAMED = ['night', 'dawn']
 const UNFRAMED = [{}, { eventType: 'poker' }, { eventType: 'wedding' }, { eventType: 'wedding', designVariant: 'romantic' }]
 const LAYOUT_KEYS = [
-    'formPaddingTop', 'formMaxWidth', 'titleFontSize', 'titleShadow',
+    // The asset's own geometry. Where the form sits is derived from
+    // these at runtime instead of being tuned per device — which is what
+    // stopped it both scrolling inside the panel and spilling out of it.
+    'frameAssetW', 'frameAssetH', 'frameRails', 'framePadPct',
+    'titleFontSize', 'titleShadow',
     // The framed designs ask for a blessing and a photo and nothing
     // else. Dropping the name field, its ornament and the trust line
     // is ~145px, and that is exactly what makes the form fit between
@@ -172,7 +176,6 @@ const LAYOUT_KEYS = [
     'titleFont', 'titleRule',
     // The ceiling that makes "it cannot leave the panel" a property
     // of the layout rather than a claim about the content.
-    'formMaxHeight',
 ]
 
 describe('framed variants carry their own layout', () => {
@@ -213,8 +216,9 @@ describe('framed variants carry their own layout', () => {
         // one of them was copied rather than measured.
         const night = buildGuestPageTheme({ designVariant: 'night' }).theme
         const dawn = buildGuestPageTheme({ designVariant: 'dawn' }).theme
-        expect(dawn.formPaddingTop).not.toBe(night.formPaddingTop)
-        expect(dawn.formMaxWidth).not.toBe(night.formMaxWidth)
+        expect(dawn.frameRails).not.toEqual(night.frameRails)
+        expect(dawn.frameRails.top).not.toBe(night.frameRails.top)
+        expect(dawn.frameRails.left).not.toBe(night.frameRails.left)
     })
 
     it('gives a bright scene a light halo and a dark scene a dark shadow', () => {

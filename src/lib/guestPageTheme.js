@@ -19,7 +19,7 @@
 // The two framed variants also carry their LAYOUT, not just colour:
 // their background is a photograph of a frame, so the form has to sit
 // inside that frame, and each asset's panel is in a different place.
-// The form reads formPaddingTop / formMaxWidth / titleFontSize /
+// The form reads frameAssetW / frameAssetH / frameRails / framePadPct
 // titleShadow / hideSubtitle / textareaHeight and knows nothing about
 // which variant is on. Every one falls back.
 //   • Romantic wedding → botanical floral arch photo bg + cream form
@@ -132,12 +132,15 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
                 // width: 0.791 × 0.563 = 44.5vh. A column in vw alone
                 // would drift against the rails on every other phone.
                 // 37vh leaves an even margin inside them.
-                formPaddingTop: '16vh',
-                // 35.5vh, not 37: on a 360×800 the form was 9px over its
-                // band, and the photo well is 4:3 of the column's width
-                // — so a slightly narrower column pays those 9px out of
-                // empty photo well rather than out of the writing box.
-                formMaxWidth: 'min(88vw, 35.5vh, 380px)',
+                // The asset and its rails, measured off the image
+                // itself. Where the form goes is derived from these at
+                // runtime (lib/framedPanel.js). No tuned offsets — tuned
+                // offsets are what produced a scrollbar on one phone and
+                // a spill on another.
+                frameAssetW: 1080,
+                frameAssetH: 1919,
+                frameRails: { top: 14.4, bottom: 86.5, left: 10.5, right: 89.6 },
+                framePadPct: 6,
                 titleFont: 'frankRuhl',
                 titleRule: true,
                 titleFontSize: '23px',
@@ -145,17 +148,11 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
                 hideSubtitle: true,
                 hideNameField: true,
                 hideTrust: true,
-                // Rails at 14.4% and 86.5%, form starting at 16vh, so
-                // 70vh of usable band. This is the ceiling, not a
-                // target — the form is sized to sit inside it with room
-                // to spare and only ever reaches it in the edge cases
-                // no amount of tuning covers.
-                formMaxHeight: '70.5vh',
                 // In vh, because the panel is. A fixed pixel height was
                 // tuned on one phone: too tall on a 360×800, needlessly
                 // small on a 430×932. The floor keeps it usable if the
                 // viewport is ever short enough for vh to go silly.
-                textareaHeight: 'max(84px, 11.4vh)',
+                textareaHeight: '120px',
                 // ── Night-only: the photo card is a window ──────────
                 //
                 // Every other variant makes both cards the same
@@ -220,8 +217,10 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
                   // Rails: top 10.2%, bottom ~89%, sides 8.6% / 91.4%
                   // — a wider, higher panel than night's, hence 39vh
                   // rather than 37 and 11.5vh rather than 16.
-                  formPaddingTop: '11.5vh',
-                  formMaxWidth: 'min(90vw, 39vh, 400px)',
+                  frameAssetW: 1080,
+                  frameAssetH: 1919,
+                  frameRails: { top: 10.2, bottom: 89, left: 8.6, right: 91.4 },
+                  framePadPct: 5.5,
                   titleFont: 'frankRuhl',
                   titleRule: true,
                   titleFontSize: '25px',
@@ -229,10 +228,8 @@ export function buildGuestPageTheme({ eventType, designVariant, guestDesign } = 
                   hideSubtitle: true,
                   hideNameField: true,
                   hideTrust: true,
-                  // Rails at 10.2% and 89%, form starting at 11.5vh.
-                  formMaxHeight: '77.5vh',
                   // A taller panel than night's buys a bigger box.
-                  textareaHeight: 'max(104px, 15.2vh)',
+                  textareaHeight: '140px',
                   photoCardBg: 'rgba(255,253,247,0.42)',
                   photoCardBorder: '2px dashed rgba(165,118,47,0.70)',
                   photoWellBg: 'rgba(255,252,244,0.35)',

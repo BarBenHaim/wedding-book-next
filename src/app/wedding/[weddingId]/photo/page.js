@@ -20,6 +20,12 @@ import { recordSubmission } from '@/lib/mySubmissions'
 import MySubmissions from '@/components/MySubmissions/MySubmissions'
 import BookLoader from '@/components/BookLoader/BookLoader'
 import { frankRuhl } from '@/app/fonts'
+import { panelRect, fitScale } from '@/lib/framedPanel'
+
+// The width the framed form is AUTHORED at. It is drawn at whatever
+// size the panel turns out to be, so this is a design decision and
+// never a device measurement.
+const FRAMED_DESIGN_W = 360
 
 // Themes name a font; this file owns the mapping. guestPageTheme.js
 // stays a plain data module that vitest can import — pulling
@@ -345,6 +351,8 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     // still wins over both.
     const isPoker = eventType === 'poker'
     const isRomantic = eventType === 'wedding' && designVariant === 'romantic'
+    const framedRef = useRef(null)
+    const [framedBox, setFramedBox] = useState(null)
     // Page direction follows the event language: Hebrew is RTL, every
     // other language (English/Spanish/Italian) is LTR. Without this the
     // page inherits the app's global RTL and English punctuation (?, …)
@@ -375,6 +383,63 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     // photograph of a glass panel, and whose whole layout is measured
     // against that panel.
     const { theme, framed } = buildGuestPageTheme({ eventType, designVariant, guestDesign })
+
+    // ── Fitting the form to the panel in the photograph ──────────────
+    useEffect(() => {
+        if (!framed || typeof window === 'undefined') return undefined
+        const measure = () => {
+            const rect = panelRect({
+                // innerHeight, not visualViewport: on iOS the visual
+                // viewport collapses when the keyboard opens, and
+                // following it would shrink the form to a stamp exactly
+                // while someone is typing into it. The layout holds
+                // still and the keyboard covers the bottom, like every
+                // other app.
+                viewportW: window.innerWidth,
+                viewportH: window.innerHeight,
+                assetW: theme.frameAssetW,
+                assetH: theme.frameAssetH,
+                rails: theme.frameRails,
+            })
+            if (!rect) return
+            // rect.visible, not rect: in landscape `cover` pushes most
+            // of the panel off screen, and fitting to the full panel
+            // gives a form that sits perfectly inside rails nobody can
+            // see — and is clipped by the window. On a phone the two
+            // rectangles are identical.
+            const box = rect.visible
+            setFramedBox({
+                rect: box,
+                fit: fitScale({
+                    panelW: box.width,
+                    panelH: box.height,
+                    padPct: theme.framePadPct,
+                    designW: FRAMED_DESIGN_W,
+                    // scrollHeight, not getBoundingClientRect: the
+                    // element is already transformed, and only the
+                    // untransformed layout height can say by how much.
+                    contentH: framedRef.current?.scrollHeight || 0,
+                }),
+            })
+        }
+        measure()
+        window.addEventListener('resize', measure)
+        window.addEventListener('orientationchange', measure)
+        // The form grows as it is used — an error line, a photo preview.
+        // Re-fit rather than let it push past the rails. scale() does
+        // not affect the observed content box, so this cannot feed back
+        // on itself.
+        const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+        if (ro && framedRef.current) ro.observe(framedRef.current)
+        return () => {
+            window.removeEventListener('resize', measure)
+            window.removeEventListener('orientationchange', measure)
+            ro?.disconnect()
+        }
+        // designVariant, not theme: the theme object is rebuilt every
+        // render and would restart this effect forever.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [framed, designVariant])
 
     // ── Page title (personalised) ───────────────────────────────────────
     // Build the "Leave a blessing for X" headline from the doc's names:
@@ -1833,13 +1898,14 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                 // measurement shifts.
                 minHeight: isPoker || framed ? '100vh' : 'calc(100vh - 4rem)',
                 minBlockSize: isPoker || framed ? '100svh' : 'calc(100svh - 4rem)',
-                // A variant whose background is a PHOTOGRAPH of a frame
-                // has to start the form below that frame's top rail —
-                // otherwise the title floats above it, outside the
-                // panel it is supposed to sit inside. The number belongs
-                // to the asset, so the theme carries it. Inline, so it
-                // beats the pt-8 class.
-                ...(theme.formPaddingTop ? { paddingTop: theme.formPaddingTop } : {}),
+                // Framed: the page IS the viewport and never scrolls.
+                // The form is positioned into the panel and scaled to
+                // it, so there is nothing to scroll to — and a scrollbar
+                // inside the acrylic was the most visible symptom of the
+                // approach this replaces.
+                ...(framed
+                    ? { height: '100dvh', minHeight: 0, minBlockSize: 0, overflow: 'hidden', paddingTop: 0 }
+                    : {}),
                 paddingBottom: 'calc(32px + env(safe-area-inset-bottom, 0px))',
                 // Premium ivory wash — base is a near-white warm neutral
                 // (#f8f4ec, "fine paper"). Two very low-opacity radial
@@ -1858,31 +1924,26 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
             {/* Layout container — narrower max-width matches the mockup's
                 phone-first composition. Each section sits directly on the
                 champagne wash. */}
-            {/* Framed variants narrow the column to the width of the
-                panel in their own asset, so the card cannot spill over
-                its side rails. `cover` crops top and bottom on a phone,
-                never the sides, so a width expressed in vw holds across
-                devices. */}
+            {/* Framed: this same element IS the form, pinned to the
+                centre of the panel's real rectangle and scaled to fill
+                it. No wrapper, no max-height, no overflow — the size is
+                the answer rather than a clamp on the symptom. Hidden
+                until the first measurement lands, which is one frame,
+                so nothing is ever painted at the wrong size. */}
             <div
-                className={`relative z-10 w-full max-w-[26rem] animate-scaleIn${theme.formMaxWidth ? ' flex flex-col' : ''}`}
+                ref={framed ? framedRef : undefined}
+                className={`relative z-10 w-full max-w-[26rem] animate-scaleIn${framed ? ' flex flex-col' : ''}`}
                 style={
-                    theme.formMaxWidth
+                    framed
                         ? {
-                              maxWidth: theme.formMaxWidth,
-                              // The panel's inner band, from the same
-                              // measured rails as formPaddingTop. Every
-                              // other number here was tuned against the
-                              // EMPTY form; this one holds when an error
-                              // line appears, when the browser renders
-                              // larger type, when a returning guest's
-                              // strip loads. Normally nothing reaches
-                              // it and there is no scrollbar to notice.
-                              maxHeight: theme.formMaxHeight,
-                              overflowY: theme.formMaxHeight ? 'auto' : undefined,
-                              // Keep a swipe inside the form from
-                              // dragging the page behind it once the
-                              // ceiling is actually in play.
-                              overscrollBehavior: theme.formMaxHeight ? 'contain' : undefined,
+                              position: 'fixed',
+                              width: FRAMED_DESIGN_W,
+                              maxWidth: 'none',
+                              left: framedBox ? framedBox.rect.left + framedBox.rect.width / 2 : '50%',
+                              top: framedBox ? framedBox.rect.top + framedBox.rect.height / 2 : '50%',
+                              transform: `translate(-50%, -50%) scale(${framedBox?.fit?.scale ?? 1})`,
+                              transformOrigin: 'center center',
+                              visibility: framedBox ? 'visible' : 'hidden',
                           }
                         : undefined
                 }
@@ -1900,7 +1961,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                     keeps the DOM (and the reading order for a returning
                     guest, who came back for exactly this) while fixing
                     where it lands. */}
-                <div className={theme.formMaxWidth ? 'order-last mt-6' : 'mb-6'}>
+                <div className={framed ? 'order-last mt-6' : 'mb-6'}>
                     <MySubmissions weddingId={weddingId} locale={locale} />
                 </div>
 
