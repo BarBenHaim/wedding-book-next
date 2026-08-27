@@ -14,6 +14,7 @@
 // pipeline both render — guarantees what the user sees here is what
 // will print, modulo DPI scaling.
 
+import { DEFAULT_SLICE_PCT, MIN_SLICE_PCT, MAX_SLICE_PCT } from '@/lib/nineSlice'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import Link from 'next/link'
 import {
@@ -1849,6 +1850,7 @@ function PropertiesPanel({
                             label='מסגרת לתמונה'
                             frameId={v.photoFrame ?? null}
                             frameUrl={v.photoFrameUrl ?? null}
+                            frameSlice={v.photoFrameSlice ?? null}
                             frameInset={v.photoFrameInset}
                             disabled={!editable}
                             onChange={patch => onValuesChange(patch)}
@@ -2568,8 +2570,10 @@ function PresetWizard({ backgrounds, onClose, onCreate }) {
                                 <h3 className='text-[15px] font-bold' style={{ color: '#3a2d1a' }}>המסגרת של התמונה</h3>
                                 <PropertyPhotoFramePicker
                                     label='בחרו מסגרת'
+                                    frameSlice={values.photoFrameSlice ?? null}
                                     frameId={values.photoFrame ?? null}
                                     frameUrl={values.photoFrameUrl ?? null}
+                                    frameSlice={values.photoFrameSlice ?? null}
                                     frameInset={values.photoFrameInset}
                                     disabled={false}
                                     onChange={p => patch(p)}
@@ -2627,7 +2631,7 @@ function PresetWizard({ backgrounds, onClose, onCreate }) {
 // uploaded overlay artwork (PNG/SVG with a transparent window) with an
 // upload tile + per-frame delete. Selecting an overlay reveals the
 // window-inset slider.
-function PropertyPhotoFramePicker({ label, frameId, frameUrl, frameInset, disabled, onChange }) {
+function PropertyPhotoFramePicker({ label, frameId, frameUrl, frameInset, frameSlice, disabled, onChange }) {
     const [uploaded, setUploaded] = useState([])
     const [uploading, setUploading] = useState(false)
     const [uploadErr, setUploadErr] = useState('')
@@ -2650,7 +2654,9 @@ function PropertyPhotoFramePicker({ label, frameId, frameUrl, frameInset, disabl
         try {
             const added = await uploadPhotoFrameAsset(file, { uid: auth.currentUser?.uid })
             setUploaded(prev => [added, ...prev])
-            onChange({ photoFrame: null, photoFrameUrl: added.url })
+            // New uploads are nine-sliced. Frames already saved keep
+            // photoFrameSlice absent and keep their old rendering.
+            onChange({ photoFrame: null, photoFrameUrl: added.url, photoFrameSlice: DEFAULT_SLICE_PCT })
         } catch (err) {
             setUploadErr(err?.message || 'ההעלאה נכשלה')
         } finally {
@@ -2663,7 +2669,7 @@ function PropertyPhotoFramePicker({ label, frameId, frameUrl, frameInset, disabl
         try {
             await deletePhotoFrameAsset(item.id, item.storagePath)
             setUploaded(prev => prev.filter(x => x.id !== item.id))
-            if (frameUrl === item.url) onChange({ photoFrame: null, photoFrameUrl: null })
+            if (frameUrl === item.url) onChange({ photoFrame: null, photoFrameUrl: null, photoFrameSlice: null })
         } catch (err) {
             alert('המחיקה נכשלה: ' + (err?.message || err))
         }
@@ -2684,7 +2690,7 @@ function PropertyPhotoFramePicker({ label, frameId, frameUrl, frameInset, disabl
                 {/* none */}
                 <button
                     type='button'
-                    onClick={() => !disabled && onChange({ photoFrame: null, photoFrameUrl: null })}
+                    onClick={() => !disabled && onChange({ photoFrame: null, photoFrameUrl: null, photoFrameSlice: null })}
                     disabled={disabled}
                     className={chipCls(!frameId && !frameUrl)}
                 >
@@ -2701,7 +2707,7 @@ function PropertyPhotoFramePicker({ label, frameId, frameUrl, frameInset, disabl
                         <button
                             key={f.id}
                             type='button'
-                            onClick={() => !disabled && onChange({ photoFrame: f.id, photoFrameUrl: null })}
+                            onClick={() => !disabled && onChange({ photoFrame: f.id, photoFrameUrl: null, photoFrameSlice: null })}
                             disabled={disabled}
                             title={f.label}
                             className={chipCls(active)}
@@ -2723,7 +2729,7 @@ function PropertyPhotoFramePicker({ label, frameId, frameUrl, frameInset, disabl
                         <div key={item.id} className='relative group'>
                             <button
                                 type='button'
-                                onClick={() => !disabled && onChange({ photoFrame: null, photoFrameUrl: item.url })}
+                                onClick={() => !disabled && onChange({ photoFrame: null, photoFrameUrl: item.url, photoFrameSlice: item.slicePct ?? DEFAULT_SLICE_PCT })}
                                 disabled={disabled}
                                 title={item.label}
                                 className={`w-full ${chipCls(active)}`}
@@ -2771,19 +2777,41 @@ function PropertyPhotoFramePicker({ label, frameId, frameUrl, frameInset, disabl
                         <Upload className='w-4 h-4' style={{ color: '#b8893d' }} />
                     )}
                     <span className='text-[9.5px] text-center leading-tight' style={{ color: '#8a6d30' }}>
-                        {uploading ? 'מעלה…' : 'העלאת מסגרת (PNG שקוף)'}
+                        {uploading ? 'מעלה…' : 'העלאת מסגרת (כל תמונה, כל גודל)'}
                     </span>
                 </button>
             </div>
             <input ref={fileRef} type='file' accept='image/png,image/webp,image/svg+xml' className='hidden' onChange={handleUpload} />
             {uploadErr && <p className='text-[10px] mt-1' style={{ color: '#b3402e' }}>{uploadErr}</p>}
 
+            {/* How much of the UPLOADED picture is the border. The one
+                number nine-slice cannot infer: only the person looking
+                at the artwork knows where its frame ends. */}
+            {frameUrl && frameSlice != null && (
+                <div className='mt-2'>
+                    <PropertySlider
+                        icon={Frame}
+                        label='כמה מהתמונה שהעליתם היא המסגרת'
+                        value={Number.isFinite(frameSlice) ? frameSlice : DEFAULT_SLICE_PCT}
+                        min={MIN_SLICE_PCT}
+                        max={MAX_SLICE_PCT}
+                        step={1}
+                        unit='%'
+                        disabled={disabled}
+                        onChange={n => onChange({ photoFrameSlice: n })}
+                    />
+                    <p className='text-[10px] mt-1 leading-relaxed' style={{ color: '#8a7a5c' }}>
+                        האמצע של התמונה שהעליתם לא מצויר בכלל — לכן לא צריך שקיפות, ולא משנה באיזה גודל או יחס היא.
+                    </p>
+                </div>
+            )}
+
             {/* Overlay window inset — how far the photo tucks under the artwork */}
             {frameUrl && (
                 <div className='mt-2'>
                     <PropertySlider
                         icon={Frame}
-                        label='עומק חלון המסגרת'
+                        label={frameSlice != null ? 'עובי המסגרת בעמוד' : 'עומק חלון המסגרת'}
                         value={Number.isFinite(frameInset) ? frameInset : 6}
                         min={0}
                         max={16}

@@ -92,6 +92,7 @@ function DuoBlock({ entry, styleSettings, w, h, solo }) {
                     maxSlotH={h(solo ? (hasText ? 50 : 70) : hasText ? 26 : 36)}
                     frameId={styleSettings.photoFrame}
                     frameUrl={styleSettings.photoFrameUrl}
+                    frameSlice={styleSettings.photoFrameSlice}
                     frameInset={styleSettings.photoFrameInset}
                     objectPosition={entry.photoPosition || 'center'}
                     rotation={entry.photoRotation || 0}

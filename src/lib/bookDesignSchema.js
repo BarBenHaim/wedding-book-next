@@ -116,6 +116,7 @@ export const CANONICAL_STYLE_DEFAULTS = {
     albumPhoto: null,
     photoFrame: null, // built-in frame id from PHOTO_FRAMES (null = none)
     photoFrameUrl: null, // uploaded overlay PNG/SVG (wins over photoFrame)
+    photoFrameSlice: null, // % of the uploaded artwork that is border
     photoFrameInset: 6, // % of slot width the photo insets under an overlay
 
     // ── Text block ───────────────────────────────────────────────────

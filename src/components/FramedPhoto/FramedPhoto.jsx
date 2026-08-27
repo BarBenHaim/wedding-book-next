@@ -19,6 +19,8 @@
 
 'use client'
 
+import { normalizeSlice, nineSliceInner } from '@/lib/nineSlice'
+import NineSliceFrame from '../NineSliceFrame/NineSliceFrame'
 import EntryPhoto from '../EntryPhoto/EntryPhoto'
 import { photoFrameGeometry, photoOverlayGeometry } from '@/lib/photoFrames'
 import useImageAspect from '@/lib/useImageAspect'
@@ -54,6 +56,9 @@ function Corner({ size, stroke, color, rotate, pos }) {
 
 export default function FramedPhoto({
     src,
+    // Set → the uploaded artwork is nine-sliced instead of stretched.
+    // Absent → the legacy overlay, untouched.
+    frameSlice = null,
     slotW, // full footprint width in px (imageStyle.width resolved)
     slotH = null, // explicit slot height (smart album: slotW / imgAspect)
     frameId = null,
@@ -130,7 +135,37 @@ export default function FramedPhoto({
             />
         )
 
-    // ── Uploaded overlay frame — wins when present ────────────────────
+    // ── Uploaded frame, nine-sliced ──────────────────────────────────
+    //
+    // The artwork is cut into corners and edges and the middle is never
+    // drawn, so it needs no transparency and no particular proportions.
+    // frameInset doubles as the ring's thickness: the frame eats inward
+    // and the photo shrinks inside it, which is the same contract the
+    // built-in frames keep, so page composition does not move.
+    if (frameUrl && normalizeSlice(frameSlice)) {
+        const geo = photoOverlayGeometry(boxW, frameInset, windowAspect)
+        const inner = nineSliceInner({ boxW, boxH: geo.slotH, borderPx: geo.inset })
+        return (
+            <div style={{ width: boxW, height: geo.slotH, position: 'relative', ...style }}>
+                <div style={{ position: 'absolute', top: inner.y, left: inner.x }}>
+                    {photoEl(inner.w, inner.h, Math.max(2, geo.inset * 0.2))}
+                </div>
+                <NineSliceFrame
+                    src={frameUrl}
+                    width={boxW}
+                    height={geo.slotH}
+                    slicePct={frameSlice}
+                    borderPx={geo.inset}
+                />
+            </div>
+        )
+    }
+
+    // ── Uploaded overlay frame — the pre-nine-slice path ──────────────
+    //
+    // Kept exactly as it was. Every frame uploaded before this change
+    // was DRAWN for it: transparent middle, stretched to the slot.
+    // Re-slicing those would break books that are already printed-proof.
     if (frameUrl) {
         const geo = photoOverlayGeometry(boxW, frameInset, windowAspect)
         return (

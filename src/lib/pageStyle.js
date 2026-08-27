@@ -37,6 +37,7 @@ const PAGE_SURFACE_KEYS = [
 const PHOTO_KEYS = [
     'photoFit', 'imageStyle', 'imageMarginTop', 'imageMarginBottom',
     'imageAlign', 'photoFrame', 'photoFrameUrl', 'photoFrameInset',
+    'photoFrameSlice',
     'albumPhoto',
 ]
 

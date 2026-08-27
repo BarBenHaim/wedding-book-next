@@ -352,6 +352,7 @@ export default function BookPageTemplate({ entry, styleSettings: incomingStyle, 
                         maxSlotH={maxSlotH}
                         frameId={styleSettings.photoFrame}
                         frameUrl={styleSettings.photoFrameUrl}
+                        frameSlice={styleSettings.photoFrameSlice}
                         frameInset={styleSettings.photoFrameInset}
                         objectPosition={entry.photoPosition || 'center'}
                         rotation={entry.photoRotation || 0}
