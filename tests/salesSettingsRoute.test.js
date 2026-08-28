@@ -69,13 +69,23 @@ describe('sales agent settings route', () => {
             revision: 3, enabled: true, provider: 'auto', model: 'claude-sonnet-4-5',
             businessInstructions: 'להציג מחיר מוקדם', activeOpeningIds: ['price_upfront'],
             openingMediaSequence: ['photo-a'], changeNote: 'ניסוי',
-            openingExperiment: { enabled: false, minSamplePerVariant: 30, variants: [] },
         }))
 
         expect(response.status).toBe(200)
         expect(mocks.saveSalesSettings).toHaveBeenCalledWith(expect.objectContaining({ revision: 3 }), expect.objectContaining({
             updatedBy: 'shared-secret', registeredMediaKeys: expect.arrayContaining(['photo-a']),
         }))
+    })
+
+    it('requires the dedicated immutable-snapshot endpoint for opening experiment changes', async () => {
+        const response = await PUT(request('PUT', {
+            revision: 3,
+            openingExperiment: { enabled: true, minSamplePerVariant: 30, variants: [] },
+        }))
+
+        expect(response.status).toBe(400)
+        expect(await response.json()).toEqual({ error: 'OPENING_EXPERIMENT_REQUIRES_PUBLISH' })
+        expect(mocks.saveSalesSettings).not.toHaveBeenCalled()
     })
 
     it('returns a private stale-revision conflict', async () => {

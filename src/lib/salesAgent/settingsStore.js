@@ -32,11 +32,15 @@ const toMs = value => {
     return null
 }
 
-const journeySignature = variant => JSON.stringify(Array.isArray(variant?.blocks) ? variant.blocks : [])
+const journeySignature = variant => JSON.stringify((Array.isArray(variant?.blocks) ? variant.blocks : [])
+    .map(({ id: _operationalId, ...customerFacing }) => customerFacing))
 
 function applyOpeningVariantRevisions(currentExperiment, nextExperiment) {
     const currentById = new Map((Array.isArray(currentExperiment?.variants) ? currentExperiment.variants : [])
         .map(variant => [variant.id, variant]))
+    const currentIds = [...currentById.keys()].sort()
+    const nextIds = nextExperiment.variants.map(variant => variant.id).sort()
+    if (JSON.stringify(currentIds) !== JSON.stringify(nextIds)) throw new Error('OPENING_VARIANT_SET_CHANGED')
     return {
         ...nextExperiment,
         variants: nextExperiment.variants.map(variant => {
@@ -150,6 +154,9 @@ export async function publishSalesSettingsSnapshot(input, {
 }
 
 export async function saveSalesSettings(input, { updatedBy, registeredMediaKeys = [] } = {}) {
+    if (input && Object.prototype.hasOwnProperty.call(input, 'openingExperiment')) {
+        throw new Error('OPENING_EXPERIMENT_REQUIRES_PUBLISH')
+    }
     return adminDb.runTransaction(async tx => {
         const ref = activeRef()
         const snap = await tx.get(ref)

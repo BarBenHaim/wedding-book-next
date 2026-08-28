@@ -86,6 +86,9 @@ export async function PUT(req) {
     } catch {
         return NextResponse.json({ error: 'BAD_JSON' }, { status: 400 })
     }
+    if (body && Object.prototype.hasOwnProperty.call(body, 'openingExperiment')) {
+        return NextResponse.json({ error: 'OPENING_EXPERIMENT_REQUIRES_PUBLISH' }, { status: 400 })
+    }
     try {
         const { library, registeredMediaKeys } = await context()
         const settings = await saveSalesSettings(body, { updatedBy, registeredMediaKeys })
@@ -101,6 +104,7 @@ export async function PUT(req) {
             'INVALID_OPENING_DESIGN_ORDER', 'NO_ACTIVE_OPENING_VARIANT',
             'INVALID_OPENING_VARIANT', 'INVALID_OPENING_WEIGHT', 'INVALID_OPENING_REVISION',
             'INVALID_OPENING_SAMPLE', 'INVALID_OPENING_TEXT', 'INVALID_OPENING_TEMPLATE',
+            'OPENING_EXPERIMENT_REQUIRES_PUBLISH', 'OPENING_VARIANT_SET_CHANGED',
         ]
         if (known.includes(code)) return NextResponse.json({ error: code }, { status: 400 })
         return NextResponse.json({ error: 'SETTINGS_SAVE_FAILED' }, { status: 503 })

@@ -154,7 +154,9 @@ describe('sales settings Firestore store', () => {
                     { id: 'a-audio', type: 'media', variableKey: 'voice_intro' },
                     { id: 'a-stop', type: 'stop' },
                 ],
-            }],
+            }, ...structuredClone(DEFAULT_OPENING_EXPERIMENT.variants.slice(1)).map(variant => ({
+                ...variant, enabled: false, weight: 0,
+            }))],
         }
 
         const published = await publishSalesSettingsSnapshot({
@@ -164,15 +166,11 @@ describe('sales settings Firestore store', () => {
             changeNote: 'פתיח קולי',
         }, { updatedBy: 'owner@example.test' })
 
-        expect(published).toMatchObject({
-            revision: 8,
-            openingExperiment: {
-                variants: [{ blocks: [
-                    { id: 'a-audio', type: 'media', variableKey: 'voice_intro', variableVersionId: 'v2' },
-                    { id: 'a-stop', type: 'stop' },
-                ] }],
-            },
-        })
+        expect(published).toMatchObject({ revision: 8 })
+        expect(published.openingExperiment.variants[0].blocks).toEqual([
+            { id: 'a-audio', type: 'media', variableKey: 'voice_intro', variableVersionId: 'v2' },
+            { id: 'a-stop', type: 'stop' },
+        ])
         expect(store.get('sales_variables/voice_intro')).toMatchObject({
             draftVersionId: 'v2', publishedVersionId: 'v2',
         })
@@ -205,6 +203,58 @@ describe('sales settings Firestore store', () => {
 
         expect(published.openingExperiment.variants.map(row => row.revision)).toEqual([1, 2, 2])
         expect(store.get('sales_agent_settings/active').openingExperiment.variants.map(row => row.revision)).toEqual([1, 2, 2])
+    })
+
+    it('keeps a cohort when only operational block IDs change', async () => {
+        const currentExperiment = structuredClone(DEFAULT_OPENING_EXPERIMENT)
+        store.set('sales_agent_settings/active', {
+            revision: 10, enabled: true, mode: 'opening_only', provider: 'auto', model: 'claude-sonnet-4-5',
+            openingText: 'פתיחה', activeOpeningIds: ['answer_first'], openingMediaSequence: [],
+            openingExperiment: currentExperiment,
+        })
+        const nextExperiment = structuredClone(currentExperiment)
+        nextExperiment.variants[0].blocks = nextExperiment.variants[0].blocks.map((block, index) => ({
+            ...block, id: `renamed-${index}`,
+        }))
+
+        const published = await publishSalesSettingsSnapshot({
+            revision: 10, openingExperiment: nextExperiment, expectedVariableDrafts: {},
+        }, { updatedBy: 'owner@example.test', registeredMediaKeys: ['cover_personalised', 'book_open_spread'] })
+
+        expect(published.openingExperiment.variants[0].revision).toBe(1)
+    })
+
+    it('rejects removing a fixed experiment arm so an old variant revision can never be reused', async () => {
+        const currentExperiment = structuredClone(DEFAULT_OPENING_EXPERIMENT)
+        store.set('sales_agent_settings/active', {
+            revision: 11, enabled: true, mode: 'opening_only', provider: 'auto', model: 'claude-sonnet-4-5',
+            openingText: 'פתיחה', activeOpeningIds: ['answer_first'], openingMediaSequence: [],
+            openingExperiment: currentExperiment,
+        })
+        const nextExperiment = structuredClone(currentExperiment)
+        nextExperiment.variants = nextExperiment.variants.slice(0, 2)
+
+        await expect(publishSalesSettingsSnapshot({
+            revision: 11, openingExperiment: nextExperiment, expectedVariableDrafts: {},
+        }, { updatedBy: 'owner@example.test', registeredMediaKeys: ['cover_personalised', 'book_open_spread'] }))
+            .rejects.toThrow('OPENING_VARIANT_SET_CHANGED')
+        expect(store.get('sales_agent_settings/active').revision).toBe(11)
+    })
+
+    it('rejects changing an opening journey through the legacy settings writer', async () => {
+        const currentExperiment = structuredClone(DEFAULT_OPENING_EXPERIMENT)
+        store.set('sales_agent_settings/active', {
+            revision: 12, enabled: true, mode: 'opening_only', provider: 'auto', model: 'claude-sonnet-4-5',
+            openingText: 'פתיחה', activeOpeningIds: ['answer_first'], openingMediaSequence: [],
+            openingExperiment: currentExperiment,
+        })
+        const bypass = structuredClone(currentExperiment)
+        bypass.variants[0].blocks[0].text = 'ניסיון עקיפה'
+        bypass.variants[0].revision = 999
+
+        await expect(saveSalesSettings({ revision: 12, openingExperiment: bypass }, { updatedBy: 'owner@example.test' }))
+            .rejects.toThrow('OPENING_EXPERIMENT_REQUIRES_PUBLISH')
+        expect(store.get('sales_agent_settings/active').openingExperiment).toEqual(currentExperiment)
     })
 
     it('refuses stale, missing, archived, or incompatible variable drafts without changing settings', async () => {
