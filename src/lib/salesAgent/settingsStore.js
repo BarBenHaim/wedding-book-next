@@ -32,6 +32,23 @@ const toMs = value => {
     return null
 }
 
+const journeySignature = variant => JSON.stringify(Array.isArray(variant?.blocks) ? variant.blocks : [])
+
+function applyOpeningVariantRevisions(currentExperiment, nextExperiment) {
+    const currentById = new Map((Array.isArray(currentExperiment?.variants) ? currentExperiment.variants : [])
+        .map(variant => [variant.id, variant]))
+    return {
+        ...nextExperiment,
+        variants: nextExperiment.variants.map(variant => {
+            const current = currentById.get(variant.id)
+            if (!current) return { ...variant, revision: 1 }
+            const revision = Number(current.revision)
+            const changed = journeySignature(current) !== journeySignature(variant)
+            return { ...variant, revision: changed ? revision + 1 : revision }
+        }),
+    }
+}
+
 export async function readSalesSettings({ registeredMediaKeys = [] } = {}) {
     const snap = await activeRef().get?.()
     if (!snap?.exists) return resolveSalesSettings(DEFAULT_SALES_SETTINGS, { registeredMediaKeys })
@@ -83,17 +100,21 @@ export async function publishSalesSettingsSnapshot(input, {
             archived: false,
             publishedVersion: record.version,
         }]))
-        const boundExperiment = bindOpeningVariables(input.openingExperiment, registry, {
-            registeredMedia: registeredMediaKeys,
-        })
         const migratedCurrent = resolveSalesSettings(current, {
             registeredMediaKeys,
             registeredVariables: variableKeys(current?.openingExperiment),
         })
+        const boundExperiment = bindOpeningVariables(input.openingExperiment, registry, {
+            registeredMedia: registeredMediaKeys,
+        })
+        const versionedExperiment = applyOpeningVariantRevisions(
+            migratedCurrent.openingExperiment,
+            boundExperiment,
+        )
         const normalized = normalizeSalesSettings({
             ...migratedCurrent,
             revision: currentRevision,
-            openingExperiment: boundExperiment,
+            openingExperiment: versionedExperiment,
             changeNote: typeof input.changeNote === 'string' ? input.changeNote : '',
         }, { registeredMediaKeys, registeredVariables: keys })
         const timestamp = FieldValue.serverTimestamp()

@@ -31,9 +31,9 @@ const experiment = {
     enabled: true,
     minSamplePerVariant: 30,
     variants: [
-        { id: 'A', label: 'דוגמה אישית', enabled: true },
-        { id: 'B', label: 'מדיה', enabled: true },
-        { id: 'C', label: 'אירוע', enabled: false },
+        { id: 'A', label: 'דוגמה אישית', enabled: true, revision: 3 },
+        { id: 'B', label: 'מדיה', enabled: true, revision: 3 },
+        { id: 'C', label: 'אירוע', enabled: false, revision: 3 },
     ],
 }
 
@@ -81,6 +81,26 @@ describe('summarizeOpeningExperiment', () => {
         expect(result.variants.C.reply24h).toEqual({ numerator: 0, denominator: 0, rate: null })
         expect(result.trendReady).toBe(false)
     })
+
+    it('measures only the published variant revision and treats photo or qualified-event progress as a reply', () => {
+        const result = summarizeOpeningExperiment([
+            lead({
+                phone: 'test-current-photo',
+                openingFirstReplyAt: null,
+                openingPhotoReceivedAt: exposed + 20 * 60_000,
+            }),
+            lead({
+                phone: 'test-current-event', openingVariantId: 'B', openingFirstReplyAt: null,
+                childPhotoReceived: false, openingDesignApproved: false, paymentLinkSentAt: null,
+                paymentVerified: false, verifiedOrderId: null, openingContinuedAt: exposed + 2 * HOUR,
+            }),
+            lead({ phone: 'test-old-copy', openingVariantRevision: 2 }),
+        ], { experiment, nowMs: NOW })
+
+        expect(result.variants.A.assigned).toBe(1)
+        expect(result.variants.A.reply1h).toEqual({ numerator: 1, denominator: 1, rate: 1 })
+        expect(result.variants.B.reply24h).toEqual({ numerator: 1, denominator: 1, rate: 1 })
+    })
 })
 
 describe('openingLeadRow', () => {
@@ -116,5 +136,13 @@ describe('openingLeadRow', () => {
             verifiedRevenue: 950,
         })
         expect(JSON.stringify(row)).not.toMatch(/private|972501234567|provider|transcript|notes/)
+    })
+
+    it('shows a delivered photo as the first response when the legacy reply timestamp is absent', () => {
+        const photoAt = exposed + 15 * 60_000
+        const row = openingLeadRow(lead({ openingFirstReplyAt: null, openingPhotoReceivedAt: photoAt }), NOW)
+
+        expect(row.repliedAt).toBe(photoAt)
+        expect(row.reply24h).toBe(true)
     })
 })

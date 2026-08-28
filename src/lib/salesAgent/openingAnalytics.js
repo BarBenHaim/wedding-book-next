@@ -35,13 +35,23 @@ function hasContinuation(lead) {
     )
 }
 
+function firstOpeningResponseAt(lead) {
+    const candidates = [toMs(lead.openingFirstReplyAt)]
+    if (lead.childPhotoReceived === true) {
+        candidates.push(toMs(lead.openingPhotoReceivedAt), toMs(lead.openingContinuedAt))
+    }
+    if (lead.eventType && lead.eventDate) candidates.push(toMs(lead.openingContinuedAt))
+    const valid = candidates.filter(value => value != null)
+    return valid.length ? Math.min(...valid) : null
+}
+
 function variantSummary(rows, nowMs) {
     const exposed = rows.filter(row => toMs(row.openingExposedAt) != null)
     const relevant = exposed.map(row => classifyOpeningLead(row, nowMs))
     const relevantCount = relevant.filter(item => item.state === 'relevant').length
     const notRelevantCount = relevant.filter(item => item.state === 'not_relevant').length
     const relevanceDenominator = relevantCount + notRelevantCount
-    const replied = hours => exposed.filter(row => within(toMs(row.openingExposedAt), toMs(row.openingFirstReplyAt), hours)).length
+    const replied = hours => exposed.filter(row => within(toMs(row.openingExposedAt), firstOpeningResponseAt(row), hours)).length
     const verified = exposed.filter(isVerifiedPayment)
     return {
         assigned: rows.length,
@@ -68,11 +78,14 @@ export function summarizeOpeningExperiment(leads = [], { experiment, nowMs = Dat
     const variants = {}
     const definitions = Array.isArray(experiment?.variants) ? experiment.variants : []
     for (const definition of definitions) {
+        const revision = Number(definition.revision)
         variants[definition.id] = {
             id: definition.id,
             label: String(definition.label || definition.id),
             enabled: definition.enabled === true,
-            ...variantSummary(leads.filter(lead => lead?.openingVariantId === definition.id), nowMs),
+            ...variantSummary(leads.filter(lead =>
+                lead?.openingVariantId === definition.id
+                && Number(lead?.openingVariantRevision) === revision), nowMs),
         }
     }
     const minSample = Number(experiment?.minSamplePerVariant || 30)
@@ -103,7 +116,7 @@ function maskedPhone(value) {
 export function openingLeadRow(lead = {}, nowMs = Date.now()) {
     const phone = String(lead.phone || '')
     const exposure = toMs(lead.openingExposedAt)
-    const reply = toMs(lead.openingFirstReplyAt)
+    const reply = firstOpeningResponseAt(lead)
     const relevance = classifyOpeningLead(lead, nowMs)
     const state = lead.openingState && typeof lead.openingState === 'object' ? lead.openingState : {}
     return {

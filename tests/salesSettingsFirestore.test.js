@@ -182,6 +182,31 @@ describe('sales settings Firestore store', () => {
         })
     })
 
+    it('increments only changed customer journeys and ignores client-supplied variant revision jumps', async () => {
+        const currentExperiment = structuredClone(DEFAULT_OPENING_EXPERIMENT)
+        currentExperiment.enabled = true
+        store.set('sales_agent_settings/active', {
+            revision: 9, enabled: true, mode: 'opening_only', provider: 'auto', model: 'claude-sonnet-4-5',
+            openingText: 'פתיחה', activeOpeningIds: ['answer_first'], openingMediaSequence: [],
+            openingExperiment: currentExperiment,
+        })
+        const nextExperiment = structuredClone(currentExperiment)
+        nextExperiment.variants[0].weight = 40
+        nextExperiment.variants[0].revision = 999
+        nextExperiment.variants[1].weight = 40
+        nextExperiment.variants[1].blocks[0].text = 'נוסח מחיר חדש'
+        nextExperiment.variants[2].weight = 20
+        nextExperiment.variants[2].label = 'מכירה ישירה'
+        nextExperiment.variants[2].blocks[0].text = 'מחיר וקישור תשלום'
+
+        const published = await publishSalesSettingsSnapshot({
+            revision: 9, openingExperiment: nextExperiment, expectedVariableDrafts: {},
+        }, { updatedBy: 'owner@example.test', registeredMediaKeys: ['cover_personalised', 'book_open_spread'] })
+
+        expect(published.openingExperiment.variants.map(row => row.revision)).toEqual([1, 2, 2])
+        expect(store.get('sales_agent_settings/active').openingExperiment.variants.map(row => row.revision)).toEqual([1, 2, 2])
+    })
+
     it('refuses stale, missing, archived, or incompatible variable drafts without changing settings', async () => {
         const current = {
             revision: 7, enabled: false, mode: 'opening_only', provider: 'auto', model: 'claude-sonnet-4-5',
