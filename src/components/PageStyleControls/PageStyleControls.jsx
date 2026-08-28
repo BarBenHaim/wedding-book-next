@@ -351,9 +351,22 @@ export default function PageStyleControls({
     // it has been moved. Rounded because 3 × 0.7 is 2.0999999999999996.
     const nameSizeValue = Math.round(nameFontPercent(effective) * 10) / 10
 
-    const pinnedPages = useMemo(
-        () => entries.filter(e => overriddenKeys(e.pageStyle).length > 0).length,
-        [entries],
+    // WHICH pages are pinned, not just how many. A page that quietly
+    // stops following the book design is the expensive kind of
+    // surprise: the rendering path is identical everywhere, so there is
+    // nothing to debug and nothing to see — you just open pages until
+    // you find it. The count alone was the wrong half of the answer.
+    const pinnedList = useMemo(
+        () =>
+            entries
+                .filter(e => overriddenKeys(e.pageStyle).length > 0)
+                .map(e => ({
+                    id: e.id,
+                    label: pageLabel(pageIndex.byEntry[e.id]) || '—',
+                    name: e.name || '',
+                    count: overriddenKeys(e.pageStyle).length,
+                })),
+        [entries, pageIndex],
     )
 
     // Closed state: a one-line invitation rather than a panel taking a
@@ -363,10 +376,28 @@ export default function PageStyleControls({
             <div className='shrink-0 border-t border-[#f0e6d2] bg-white/90 px-4 py-2.5'>
                 <p className='text-[11.5px] text-gray-500 leading-relaxed'>
                     לחץ על עמוד בספר כדי לערוך רק אותו.
-                    {pinnedPages > 0 && (
-                        <span className='font-bold' style={{ color: GOLD }}> {pinnedPages} עמודים כבר שונו.</span>
-                    )}
                 </p>
+                {pinnedList.length > 0 && (
+                    <div className='mt-1.5'>
+                        <p className='text-[10.5px] font-bold' style={{ color: GOLD }}>
+                            {pinnedList.length} עמודים לא עוקבים אחרי עיצוב הספר:
+                        </p>
+                        <div className='flex flex-wrap gap-1 mt-1'>
+                            {pinnedList.map(p => (
+                                <button
+                                    key={p.id}
+                                    onClick={() => onSelect?.(p.id)}
+                                    title={`${p.count} הגדרות נעולות · לחץ לפתיחה`}
+                                    className='px-1.5 py-0.5 rounded text-[10.5px] font-bold max-w-[150px] truncate'
+                                    style={{ background: '#f5efe3', color: GOLD, border: '1px solid #ead9b3' }}
+                                >
+                                    <span dir='ltr' className='tabular-nums'>{p.label}</span>
+                                    {p.name ? ` · ${p.name}` : ''}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
         )
     }
