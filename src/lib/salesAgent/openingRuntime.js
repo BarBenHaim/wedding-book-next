@@ -85,7 +85,7 @@ export async function prepareOpeningRuntime({
     let enrollment = null
     if (flow) {
         const executable = normalized.variants.find(item => item.id === lead.openingVariantId)
-        if (!executable?.enabled) return { eligible: false, reason: 'variant-stopped' }
+        if (executable && !executable.enabled) return { eligible: false, reason: 'variant-stopped' }
     } else {
         if (lead?.isNew !== true || lead?.hasPriorConversation === true) {
             return { eligible: false, reason: 'not-enrolled' }

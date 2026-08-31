@@ -115,6 +115,44 @@ describe('prepareOpeningRuntime', () => {
         })
     })
 
+    it('continues a deleted journey only for a lead that already owns its pinned snapshot', async () => {
+        const retiredId = 'v_aaaaaaaaaaaa'
+        const runtime = await prepareOpeningRuntime({
+            lead: {
+                isNew: false,
+                openingVariantId: retiredId,
+                openingVariantRevision: 2,
+                openingFlow: {
+                    id: retiredId,
+                    label: 'מסלול שנמחק',
+                    revision: 2,
+                    blocks: [
+                        { id: 'retired-text', type: 'text', text: 'המשך שמור' },
+                        { id: 'retired-stop', type: 'stop' },
+                    ],
+                },
+                openingState: { cursor: 0, waitingFor: null },
+                openingStateVersion: 3,
+            },
+            experiment: active,
+            leadKey: 'non-dialable-retired-lead',
+            inbound: { kind: 'text', text: 'המשך' },
+            library,
+            eventId: 'opening-retired-event',
+        })
+
+        expect(runtime).toMatchObject({
+            eligible: true,
+            enrollment: null,
+            expectedStateVersion: 3,
+            flow: { id: retiredId, revision: 2 },
+            result: { action: 'completed', completed: true },
+        })
+        expect(runtime.result.parts).toEqual([
+            expect.objectContaining({ kind: 'text', text: 'המשך שמור' }),
+        ])
+    })
+
     it('fails closed when the experiment or the pinned arm is stopped', async () => {
         const pinned = {
             isNew: false,

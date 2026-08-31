@@ -9,6 +9,16 @@ const experiment = {
     }],
 }
 
+const dynamicExperiment = {
+    enabled: false,
+    variants: [{
+        ...experiment.variants[0],
+        id: 'v_aaaaaaaaaaaa',
+        label: 'מסלול משוכפל',
+        revision: 1,
+    }],
+}
+
 const resolvedParts = [
     { partId: 'p1', order: 1, kind: 'text', text: 'שלום' },
     { partId: 'p2', order: 2, kind: 'image', url: 'https://media.example/image.jpg', caption: 'תמונה' },
@@ -46,6 +56,27 @@ describe('opening mobile test send', () => {
         expect(deps.resolveParts).toHaveBeenCalledWith(expect.objectContaining({ flow: expect.objectContaining({ id: 'B', revision: 7 }) }))
     })
 
+    it('sends a published dynamic variant by its exact stable id', async () => {
+        const deps = dependencies()
+
+        const result = await sendOpeningVariantTest({
+            variantId: 'v_aaaaaaaaaaaa',
+            recipient: '052-661-8184',
+            experiment: dynamicExperiment,
+            dependencies: deps,
+        })
+
+        expect(result).toMatchObject({
+            ok: true,
+            variantId: 'v_aaaaaaaaaaaa',
+            variantRevision: 1,
+            sentParts: 4,
+        })
+        expect(deps.resolveParts).toHaveBeenCalledWith(expect.objectContaining({
+            flow: expect.objectContaining({ id: 'v_aaaaaaaaaaaa', revision: 1 }),
+        }))
+    })
+
     it.each(['', '1234', '972126618184'])('fails closed for an invalid fixed test recipient', async recipient => {
         const deps = dependencies()
         await expect(sendOpeningVariantTest({ variantId: 'B', recipient, experiment, dependencies: deps })).rejects.toMatchObject({ code: 'TEST_RECIPIENT_NOT_CONFIGURED' })
@@ -57,6 +88,18 @@ describe('opening mobile test send', () => {
         const deps = dependencies()
         await expect(sendOpeningVariantTest({ variantId: 'A', recipient: '972526618184', experiment, dependencies: deps })).rejects.toMatchObject({ code: 'TEST_VARIANT_NOT_FOUND' })
         expect(deps.resolveParts).not.toHaveBeenCalled()
+    })
+
+    it('rejects a well-formed dynamic id that is absent from the published experiment', async () => {
+        const deps = dependencies()
+        await expect(sendOpeningVariantTest({
+            variantId: 'v_bbbbbbbbbbbb',
+            recipient: '972526618184',
+            experiment: dynamicExperiment,
+            dependencies: deps,
+        })).rejects.toMatchObject({ code: 'TEST_VARIANT_NOT_FOUND' })
+        expect(deps.resolveParts).not.toHaveBeenCalled()
+        expect(deps.sendText).not.toHaveBeenCalled()
     })
 
     it('reports a truthful partial send without exposing provider content', async () => {

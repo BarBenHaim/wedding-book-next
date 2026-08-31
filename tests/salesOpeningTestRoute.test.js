@@ -51,10 +51,32 @@ describe('opening mobile test route', () => {
         {},
         { variantId: 'D' },
         { variantId: 'A', phone: 'arbitrary-recipient' },
-    ])('accepts only an exact A/B/C request without a recipient override', async body => {
+        { variantId: 'v_short' },
+    ])('accepts only one exact valid variant id without a recipient override', async body => {
         const response = await POST(request(body))
         expect(response.status).toBe(400)
         expect(mocks.sendOpeningVariantTest).not.toHaveBeenCalled()
+    })
+
+    it('passes a dynamic id to the published-experiment sender', async () => {
+        const dynamicId = 'v_aaaaaaaaaaaa'
+        const dynamicExperiment = {
+            enabled: false,
+            variants: [{ id: dynamicId, revision: 1, blocks: [{ id: 'stop', type: 'stop' }] }],
+        }
+        mocks.readSalesSettings.mockResolvedValue({ openingExperiment: dynamicExperiment })
+        mocks.sendOpeningVariantTest.mockResolvedValue({
+            ok: true, variantId: dynamicId, variantRevision: 1, sentParts: 1, recipientMasked: '•••8184',
+        })
+
+        const response = await POST(request({ variantId: dynamicId }))
+
+        expect(response.status).toBe(200)
+        expect(mocks.sendOpeningVariantTest).toHaveBeenCalledWith(expect.objectContaining({
+            variantId: dynamicId,
+            experiment: dynamicExperiment,
+            recipient: '972526618184',
+        }))
     })
 
     it('sends only the published variant to the fixed configured test phone', async () => {

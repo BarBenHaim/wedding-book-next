@@ -9,14 +9,13 @@ import { isSuperAdmin } from '@/lib/superAdmin'
 import { MEDIA } from '@/lib/salesAgent/catalog'
 import { listMedia } from '@/lib/salesAgent/leads'
 import { mergeMedia } from '@/lib/salesAgent/mediaLibrary'
+import { isOpeningVariantId } from '@/lib/salesAgent/openingExperiment'
 import { sendOpeningVariantTest } from '@/lib/salesAgent/openingTestSend'
 import {
     loadOpeningVariableVersions,
     signOpeningVariableDownload,
 } from '@/lib/salesAgent/openingVariableRuntimeStore'
 import { readSalesSettings } from '@/lib/salesAgent/settingsStore'
-
-const VARIANTS = new Set(['A', 'B', 'C'])
 
 async function identity(req) {
     const shared = process.env.SALES_AGENT_SECRET
@@ -43,7 +42,7 @@ export async function POST(req) {
     }
     if (!input || typeof input !== 'object' || Array.isArray(input)
         || Object.keys(input).sort().join(',') !== 'variantId'
-        || !VARIANTS.has(String(input.variantId))) {
+        || !isOpeningVariantId(input.variantId)) {
         return NextResponse.json({ error: 'INVALID_TEST_REQUEST' }, { status: 400 })
     }
 

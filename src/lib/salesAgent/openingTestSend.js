@@ -1,12 +1,11 @@
 import { resolveOpeningSnapshotParts } from './openingRuntime'
+import { isOpeningVariantId } from './openingExperiment'
 import {
     sendWhatsAppAudio,
     sendWhatsAppImage,
     sendWhatsAppText,
     sendWhatsAppVideo,
 } from './whatsapp'
-
-const VARIANT_IDS = new Set(['A', 'B', 'C'])
 
 function testError(code) {
     const error = new Error('opening test send unavailable')
@@ -45,7 +44,7 @@ export async function sendOpeningVariantTest({
 } = {}) {
     const normalizedRecipient = normalizeRecipient(recipient)
     const id = String(variantId || '')
-    if (!VARIANT_IDS.has(id)) throw testError('TEST_VARIANT_NOT_FOUND')
+    if (!isOpeningVariantId(id)) throw testError('TEST_VARIANT_NOT_FOUND')
     const selected = Array.isArray(experiment?.variants)
         ? experiment.variants.find(variant => variant?.id === id)
         : null
