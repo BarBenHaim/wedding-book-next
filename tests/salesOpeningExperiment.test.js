@@ -13,6 +13,17 @@ const media = {
     owner_voice: { kind: 'audio' },
 }
 
+const simpleVariant = (id, { enabled = true, weight = 1 } = {}) => ({
+    id,
+    label: `מסלול ${id}`,
+    enabled,
+    weight,
+    revision: 1,
+    blocks: [{ id: `${id}-stop`, type: 'stop' }],
+})
+
+const dynamicId = number => `v_${number.toString(16).padStart(12, '0')}`
+
 describe('opening experiment contract', () => {
     it('ships three editable deterministic defaults that implement A, B and C', () => {
         expect(DEFAULT_OPENING_EXPERIMENT).toMatchObject({ enabled: false, minSamplePerVariant: 30 })
@@ -38,6 +49,49 @@ describe('opening experiment contract', () => {
         expect(normalized.variants[1].blocks[3]).toEqual({ id: 'b-voice', type: 'media', mediaKey: 'owner_voice' })
         expect(input.variants[1].blocks).toHaveLength(6)
         expect(normalized).not.toBe(input)
+    })
+
+    it('normalizes one to eight stable journeys including dynamic ids', () => {
+        const variants = ['A', 'B', 'C', ...Array.from({ length: 5 }, (_, index) => dynamicId(index + 1))]
+            .map(id => simpleVariant(id))
+
+        const normalized = normalizeOpeningExperiment({
+            enabled: true,
+            minSamplePerVariant: 30,
+            variants,
+        })
+
+        expect(normalized.variants.map(variant => variant.id)).toEqual(variants.map(variant => variant.id))
+        expect(normalized.variants).toHaveLength(8)
+    })
+
+    it.each([
+        ['zero journeys', []],
+        ['nine journeys', Array.from({ length: 9 }, (_, index) => simpleVariant(dynamicId(index + 1)))],
+        ['duplicate ids', [simpleVariant('A'), simpleVariant('A')]],
+        ['malformed dynamic id', [simpleVariant('v_not-valid')]],
+    ])('rejects %s', (_label, variants) => {
+        expect(() => normalizeOpeningExperiment({
+            enabled: true,
+            minSamplePerVariant: 30,
+            variants,
+        })).toThrow('INVALID_OPENING_VARIANT')
+    })
+
+    it('deterministically assigns a new lead to an enabled dynamic journey', () => {
+        const experiment = normalizeOpeningExperiment({
+            enabled: true,
+            minSamplePerVariant: 30,
+            variants: [
+                simpleVariant('A', { enabled: false, weight: 0 }),
+                simpleVariant('v_111111111111', { weight: 100 }),
+            ],
+        })
+
+        expect(assignOpeningVariant({ leadKey: 'non-dialable-dynamic-lead', experiment })).toEqual({
+            variantId: 'v_111111111111',
+            variantRevision: 1,
+        })
     })
 
     it('accepts typed variable blocks and rejects ambiguous literal bindings', () => {

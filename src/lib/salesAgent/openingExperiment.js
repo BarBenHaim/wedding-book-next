@@ -2,13 +2,20 @@ import { createHash } from 'crypto'
 
 const MAX_BLOCKS = 20
 const MAX_TEXT = 1_500
-const VARIANT_IDS = new Set(['A', 'B', 'C'])
+const MAX_VARIANTS = 8
+const LEGACY_VARIANT_IDS = new Set(['A', 'B', 'C'])
+const DYNAMIC_VARIANT_ID = /^v_[a-f0-9]{12}$/
 const TEXT_BLOCKS = new Set(['text', 'ask_event', 'ask_photo'])
 const BLOCK_TYPES = new Set([
     'text', 'media', 'ask_event', 'ask_photo', 'generate_design',
     'wait_owner_approval', 'send_approved_design', 'stop',
 ])
 const BUILT_IN_MEDIA = new Set(['cover_personalised', 'book_open_spread'])
+
+export const isOpeningVariantId = value => {
+    const id = String(value || '')
+    return LEGACY_VARIANT_IDS.has(id) || DYNAMIC_VARIANT_ID.test(id)
+}
 
 const A_EXPLANATION = `Wedding Tales הוא ספר ברכות מודפס ואישי לבר המצווה.
 האורחים מעלים ברכה ותמונה בקלות מהטלפון, ובסוף נשארת מזכרת אמיתית למשפחה.`
@@ -139,7 +146,7 @@ function validateDesignOrder(blocks) {
 
 function normalizeVariant(raw, mediaKeys, variableKeys) {
     const id = String(raw?.id || '')
-    if (!VARIANT_IDS.has(id)) throw new Error('INVALID_OPENING_VARIANT')
+    if (!isOpeningVariantId(id)) throw new Error('INVALID_OPENING_VARIANT')
     const label = String(raw?.label || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 60)
     if (!label) throw new Error('INVALID_OPENING_VARIANT')
     const weight = Number(raw?.weight)
@@ -167,7 +174,7 @@ export function normalizeOpeningExperiment(input = DEFAULT_OPENING_EXPERIMENT, {
     const source = input && typeof input === 'object' && !Array.isArray(input) ? input : DEFAULT_OPENING_EXPERIMENT
     const minSample = Number(source.minSamplePerVariant ?? 30)
     if (!Number.isInteger(minSample) || minSample < 10 || minSample > 1_000) throw new Error('INVALID_OPENING_SAMPLE')
-    if (!Array.isArray(source.variants) || source.variants.length < 1 || source.variants.length > 3) {
+    if (!Array.isArray(source.variants) || source.variants.length < 1 || source.variants.length > MAX_VARIANTS) {
         throw new Error('INVALID_OPENING_VARIANT')
     }
     const mediaKeys = registeredKeys(registeredMedia)
