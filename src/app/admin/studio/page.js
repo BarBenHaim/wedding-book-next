@@ -1640,6 +1640,43 @@ function PropertiesPanel({
                             tilts. Defaults preserve the original
                             handmade look: 15% from left, 12% from
                             bottom, tilted 6°. */}
+                        {/* Window-only. The photo runs to the trim edge
+                            and the uploaded shape is laid over it, so
+                            the only things to decide here are which
+                            shape, and whether the guest's name is
+                            printed on the picture page as well as
+                            beside the blessing opposite. */}
+                        {v.template === 'window' && (
+                            <>
+                                <PropertyWindowOverlayPicker
+                                    overlayUrl={v.windowOverlayUrl ?? null}
+                                    disabled={!editable}
+                                    onChange={onValuesChange}
+                                />
+                                <PropertyToggle
+                                    label='שם האורח על עמוד התמונה'
+                                    value={Boolean(v.windowShowName)}
+                                    disabled={!editable}
+                                    onChange={val => onValuesChange({ windowShowName: val })}
+                                    onLabel='מוצג'
+                                    offLabel='מוסתר'
+                                />
+                                {v.windowShowName && (
+                                    <PropertySlider
+                                        icon={Type}
+                                        label='גובה השם מהתחתית'
+                                        value={v.windowNameBottom ?? 6}
+                                        min={0}
+                                        max={40}
+                                        step={1}
+                                        unit='%'
+                                        disabled={!editable}
+                                        onChange={n => onValuesChange({ windowNameBottom: n })}
+                                    />
+                                )}
+                            </>
+                        )}
+
                         {v.template === 'collage' && (
                             <>
                                 <PropertySlider
@@ -2631,6 +2668,97 @@ function PresetWizard({ backgrounds, onClose, onCreate }) {
 // uploaded overlay artwork (PNG/SVG with a transparent window) with an
 // upload tile + per-frame delete. Selecting an overlay reveals the
 // window-inset slider.
+// The artwork for the 'window' template: a picture with a genuinely
+// transparent opening, laid over a full-bleed photo. Shares the frame
+// asset library — same storage, same uploader — because they are the
+// same kind of thing to whoever is managing them, and keeping two
+// libraries would mean two places to look for the file you uploaded.
+function PropertyWindowOverlayPicker({ overlayUrl, disabled, onChange }) {
+    const [assets, setAssets] = useState([])
+    const [uploading, setUploading] = useState(false)
+    const [err, setErr] = useState('')
+    const overlayFileRef = useRef(null)
+
+    useEffect(() => {
+        let cancelled = false
+        listPhotoFrameAssets().then(list => {
+            if (!cancelled) setAssets(Array.isArray(list) ? list : [])
+        }).catch(() => {})
+        return () => { cancelled = true }
+    }, [])
+
+    async function handleOverlayUpload(e) {
+        const file = e.target.files?.[0]
+        e.target.value = ''
+        if (!file || disabled) return
+        setErr('')
+        setUploading(true)
+        try {
+            const added = await uploadPhotoFrameAsset(file, { uid: auth.currentUser?.uid })
+            setAssets(prev => [added, ...prev])
+            onChange({ windowOverlayUrl: added.url })
+        } catch (e2) {
+            setErr(e2?.message || 'ההעלאה נכשלה')
+        } finally {
+            setUploading(false)
+        }
+    }
+
+    return (
+        <div className='mt-1'>
+            <PropertyHeader icon={Frame} label='הצורה שמעל התמונה' />
+            <div className='flex flex-wrap gap-1.5'>
+                <button
+                    type='button'
+                    onClick={() => !disabled && onChange({ windowOverlayUrl: null })}
+                    disabled={disabled}
+                    className='w-14 h-14 rounded-lg text-[9.5px] flex items-center justify-center disabled:opacity-50'
+                    style={{
+                        background: '#fff',
+                        border: `2px solid ${!overlayUrl ? '#b8893d' : 'rgba(212,184,103,0.35)'}`,
+                        color: '#7a6a52',
+                    }}
+                >
+                    בלי
+                </button>
+                {assets.map(a => (
+                    <button
+                        key={a.id || a.url}
+                        type='button'
+                        onClick={() => !disabled && onChange({ windowOverlayUrl: a.url })}
+                        disabled={disabled}
+                        title={a.label || ''}
+                        className='w-14 h-14 rounded-lg bg-center bg-contain bg-no-repeat disabled:opacity-50'
+                        style={{
+                            backgroundImage: `url(${a.url})`,
+                            // A tinted tile behind the thumbnail: the
+                            // opening is the whole point, and on white
+                            // you cannot tell a transparent hole from a
+                            // white one until it is already on a page.
+                            backgroundColor: '#efe6d6',
+                            border: `2px solid ${overlayUrl === a.url ? '#b8893d' : 'rgba(212,184,103,0.35)'}`,
+                        }}
+                    />
+                ))}
+            </div>
+            <input ref={overlayFileRef} type='file' accept='image/png,image/webp,image/svg+xml' className='hidden' onChange={handleOverlayUpload} />
+            <button
+                type='button'
+                onClick={() => !disabled && overlayFileRef.current?.click()}
+                disabled={disabled || uploading}
+                className='mt-2 text-[11px] font-bold px-2.5 py-1.5 rounded-lg disabled:opacity-50'
+                style={{ background: 'rgba(184,137,61,0.10)', color: '#8a6d40', border: '1px solid rgba(212,184,103,0.45)' }}
+            >
+                {uploading ? 'מעלה…' : 'העלאת צורה חדשה'}
+            </button>
+            {err && <p className='text-[10px] mt-1' style={{ color: '#b3402e' }}>{err}</p>}
+            <p className='text-[10px] mt-1.5 leading-relaxed' style={{ color: '#8a7a5c' }}>
+                כאן <b>כן</b> נדרשת שקיפות: הצורה מצוירת מעל התמונה, והפתח שבה חייב להיות שקוף באמת כדי שהצילום ייראה מבעדו. PNG, WebP או SVG — לא JPG.
+            </p>
+        </div>
+    )
+}
+
 function PropertyPhotoFramePicker({ label, frameId, frameUrl, frameInset, frameSlice, disabled, onChange }) {
     const [uploaded, setUploaded] = useState([])
     const [uploading, setUploading] = useState(false)
@@ -2777,11 +2905,11 @@ function PropertyPhotoFramePicker({ label, frameId, frameUrl, frameInset, frameS
                         <Upload className='w-4 h-4' style={{ color: '#b8893d' }} />
                     )}
                     <span className='text-[9.5px] text-center leading-tight' style={{ color: '#8a6d30' }}>
-                        {uploading ? 'מעלה…' : 'העלאת מסגרת (כל תמונה, כל גודל)'}
+                        {uploading ? 'מעלה…' : 'העלאת מסגרת (כל תמונה, כל גודל, גם JPG)'}
                     </span>
                 </button>
             </div>
-            <input ref={fileRef} type='file' accept='image/png,image/webp,image/svg+xml' className='hidden' onChange={handleUpload} />
+            <input ref={fileRef} type='file' accept='image/png,image/webp,image/svg+xml,image/jpeg' className='hidden' onChange={handleUpload} />
             {uploadErr && <p className='text-[10px] mt-1' style={{ color: '#b3402e' }}>{uploadErr}</p>}
 
             {/* How much of the UPLOADED picture is the border. The one
@@ -3015,6 +3143,7 @@ const TEMPLATE_OPTIONS = [
     { value: 'scrapbook', label: 'סקראפבוק' },
     { value: 'notebook', label: 'מחברת' },
     { value: 'collage', label: 'קולאז׳' },
+    { value: 'window', label: 'חלון בצורה' },
 ]
 
 function PropertyTemplatePicker({ label, value, disabled, onChange, hint }) {

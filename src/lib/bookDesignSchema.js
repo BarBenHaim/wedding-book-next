@@ -116,6 +116,13 @@ export const CANONICAL_STYLE_DEFAULTS = {
     albumPhoto: null,
     photoFrame: null, // built-in frame id from PHOTO_FRAMES (null = none)
     photoFrameUrl: null, // uploaded overlay PNG/SVG (wins over photoFrame)
+    // Shaped full-bleed page ('window' template). The overlay MUST have
+    // a transparent opening — unlike the nine-sliced frames, this one is
+    // drawn OVER the photo and the picture shows through the hole.
+    windowOverlayUrl: null,
+    windowShowName: false,
+    windowNameBottom: 6, // % of page height
+    windowNameColor: null,
     photoFrameSlice: null, // % of the uploaded artwork that is border
     photoFrameInset: 6, // % of slot width the photo insets under an overlay
 

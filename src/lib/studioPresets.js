@@ -741,9 +741,15 @@ const PHOTO_FRAMES_COLLECTION = 'studio_photo_frames'
 
 export async function uploadPhotoFrameAsset(file, { uid, label = '' } = {}) {
     if (!file) throw new Error('uploadPhotoFrameAsset: missing file')
-    const okTypes = ['image/png', 'image/webp', 'image/svg+xml']
+    // JPEG included on purpose. Nine-sliced frames never draw their
+    // middle, so they need no alpha at all — rejecting opaque files here
+    // made the "any picture, any size" promise false at the one dialog
+    // where it mattered. Window overlays DO need a transparent opening,
+    // but that is a property of the artwork, not of the file format, and
+    // the picker that uses them says so.
+    const okTypes = ['image/png', 'image/webp', 'image/svg+xml', 'image/jpeg']
     if (!okTypes.includes(file.type)) {
-        throw new Error('מסגרת חייבת רקע שקוף — רק PNG, WebP או SVG')
+        throw new Error('רק PNG, WebP, SVG או JPG')
     }
     if (file.size > 4 * 1024 * 1024) {
         throw new Error('הקובץ גדול מדי — מקסימום 4MB')
