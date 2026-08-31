@@ -35,6 +35,15 @@ import {
 } from '@/lib/salesAgent/settingsStore'
 import { DEFAULT_OPENING_EXPERIMENT } from '@/lib/salesAgent/openingExperiment'
 
+const dynamicVariant = (id, { label = 'מסלול משוכפל', revision = 1 } = {}) => ({
+    id,
+    label,
+    enabled: false,
+    weight: 0,
+    revision,
+    blocks: [{ id: `${id}-stop`, type: 'stop' }],
+})
+
 beforeEach(() => store.reset())
 
 describe('sales settings Firestore store', () => {
@@ -180,6 +189,38 @@ describe('sales settings Firestore store', () => {
         })
     })
 
+    it('restores a retired journey into a new lineage revision instead of reopening its old cohort', async () => {
+        const retiredId = 'v_aaaaaaaaaaaa'
+        store.set('sales_agent_settings/active', {
+            revision: 5, enabled: false, mode: 'opening_only', openingText: 'פתיחה נוכחית',
+            provider: 'auto', model: 'claude-sonnet-4-5', activeOpeningIds: ['answer_first'],
+            openingMediaSequence: [], openingExperiment: DEFAULT_OPENING_EXPERIMENT,
+            openingVariantLineages: { A: 1, B: 1, C: 1, [retiredId]: 3 },
+        })
+        store.set('sales_agent_settings_history/revision-2', {
+            revision: 2, enabled: false, mode: 'opening_only', openingText: 'פתיחה ישנה',
+            provider: 'auto', model: 'claude-sonnet-4-5', activeOpeningIds: ['answer_first'],
+            openingMediaSequence: [],
+            openingExperiment: {
+                enabled: true,
+                minSamplePerVariant: 30,
+                variants: [{ ...dynamicVariant(retiredId, { revision: 1 }), enabled: true, weight: 100 }],
+            },
+        })
+
+        const restored = await restoreSalesSettingsRevision(2, {
+            expectedRevision: 5,
+            updatedBy: 'owner@example.test',
+        })
+
+        expect(restored.openingExperiment.variants).toEqual([
+            expect.objectContaining({ id: retiredId, revision: 4 }),
+        ])
+        expect(store.get('sales_agent_settings/active').openingVariantLineages).toMatchObject({
+            A: 1, B: 1, C: 1, [retiredId]: 4,
+        })
+    })
+
     it('increments only changed customer journeys and ignores client-supplied variant revision jumps', async () => {
         const currentExperiment = structuredClone(DEFAULT_OPENING_EXPERIMENT)
         currentExperiment.enabled = true
@@ -224,7 +265,31 @@ describe('sales settings Firestore store', () => {
         expect(published.openingExperiment.variants[0].revision).toBe(1)
     })
 
-    it('rejects removing a fixed experiment arm so an old variant revision can never be reused', async () => {
+    it('publishes cloned journeys at revision one and ignores client-supplied lineage state', async () => {
+        const currentExperiment = structuredClone(DEFAULT_OPENING_EXPERIMENT)
+        const clonedId = 'v_111111111111'
+        store.set('sales_agent_settings/active', {
+            revision: 11, enabled: true, mode: 'opening_only', provider: 'auto', model: 'claude-sonnet-4-5',
+            openingText: 'פתיחה', activeOpeningIds: ['answer_first'], openingMediaSequence: [],
+            openingExperiment: currentExperiment,
+        })
+        const nextExperiment = structuredClone(currentExperiment)
+        nextExperiment.variants.push(dynamicVariant(clonedId, { revision: 999 }))
+
+        const published = await publishSalesSettingsSnapshot({
+            revision: 11,
+            openingExperiment: nextExperiment,
+            expectedVariableDrafts: {},
+            openingVariantLineages: { A: 999, [clonedId]: 999 },
+        }, { updatedBy: 'owner@example.test', registeredMediaKeys: ['cover_personalised', 'book_open_spread'] })
+
+        expect(published.openingExperiment.variants.at(-1)).toMatchObject({ id: clonedId, revision: 1 })
+        expect(store.get('sales_agent_settings/active').openingVariantLineages).toMatchObject({
+            A: 1, B: 1, C: 1, [clonedId]: 1,
+        })
+    })
+
+    it('allows deletion while retaining lineage and increments a removed id if it is submitted again', async () => {
         const currentExperiment = structuredClone(DEFAULT_OPENING_EXPERIMENT)
         store.set('sales_agent_settings/active', {
             revision: 11, enabled: true, mode: 'opening_only', provider: 'auto', model: 'claude-sonnet-4-5',
@@ -234,11 +299,43 @@ describe('sales settings Firestore store', () => {
         const nextExperiment = structuredClone(currentExperiment)
         nextExperiment.variants = nextExperiment.variants.slice(0, 2)
 
-        await expect(publishSalesSettingsSnapshot({
+        const deleted = await publishSalesSettingsSnapshot({
             revision: 11, openingExperiment: nextExperiment, expectedVariableDrafts: {},
+        }, { updatedBy: 'owner@example.test', registeredMediaKeys: ['cover_personalised', 'book_open_spread'] })
+
+        expect(deleted.openingExperiment.variants.map(variant => variant.id)).toEqual(['A', 'B'])
+        expect(store.get('sales_agent_settings/active').openingVariantLineages).toEqual({ A: 1, B: 1, C: 1 })
+
+        const readded = structuredClone(deleted.openingExperiment)
+        readded.variants.push(structuredClone(currentExperiment.variants[2]))
+        const published = await publishSalesSettingsSnapshot({
+            revision: 12, openingExperiment: readded, expectedVariableDrafts: {},
+        }, { updatedBy: 'owner@example.test', registeredMediaKeys: ['cover_personalised', 'book_open_spread'] })
+
+        expect(published.openingExperiment.variants.find(variant => variant.id === 'C')).toMatchObject({ revision: 2 })
+        expect(store.get('sales_agent_settings/active').openingVariantLineages.C).toBe(2)
+    })
+
+    it('fails closed before writes when a new journey would exceed the lineage capacity', async () => {
+        const lineages = Object.fromEntries([
+            ['A', 1], ['B', 1], ['C', 1],
+            ...Array.from({ length: 509 }, (_, index) => [`v_${index.toString(16).padStart(12, '0')}`, 1]),
+        ])
+        const currentExperiment = structuredClone(DEFAULT_OPENING_EXPERIMENT)
+        store.set('sales_agent_settings/active', {
+            revision: 15, enabled: true, mode: 'opening_only', provider: 'auto', model: 'claude-sonnet-4-5',
+            openingText: 'פתיחה', activeOpeningIds: ['answer_first'], openingMediaSequence: [],
+            openingExperiment: currentExperiment, openingVariantLineages: lineages,
+        })
+        const nextExperiment = structuredClone(currentExperiment)
+        nextExperiment.variants.push(dynamicVariant('v_ffffffffffff'))
+
+        await expect(publishSalesSettingsSnapshot({
+            revision: 15, openingExperiment: nextExperiment, expectedVariableDrafts: {},
         }, { updatedBy: 'owner@example.test', registeredMediaKeys: ['cover_personalised', 'book_open_spread'] }))
-            .rejects.toThrow('OPENING_VARIANT_SET_CHANGED')
-        expect(store.get('sales_agent_settings/active').revision).toBe(11)
+            .rejects.toThrow('OPENING_VARIANT_LINEAGE_LIMIT')
+        expect(store.get('sales_agent_settings/active')).toMatchObject({ revision: 15 })
+        expect(store.get('sales_agent_settings_history/revision-15')).toBeUndefined()
     })
 
     it('rejects changing an opening journey through the legacy settings writer', async () => {

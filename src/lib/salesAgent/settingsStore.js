@@ -1,7 +1,10 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebaseAdmin'
 import { DEFAULT_SALES_SETTINGS, normalizeSalesSettings, resolveSalesSettings } from './settings'
+import { isOpeningVariantId } from './openingExperiment'
 import { bindOpeningVariables } from './salesVariables'
+
+const MAX_OPENING_VARIANT_LINEAGES = 512
 
 const activeRef = () => adminDb.collection('sales_agent_settings').doc('active')
 const historyRef = revision => adminDb.collection('sales_agent_settings_history').doc(`revision-${revision}`)
@@ -35,21 +38,43 @@ const toMs = value => {
 const journeySignature = variant => JSON.stringify((Array.isArray(variant?.blocks) ? variant.blocks : [])
     .map(({ id: _operationalId, ...customerFacing }) => customerFacing))
 
-function applyOpeningVariantRevisions(currentExperiment, nextExperiment) {
+function trustedOpeningVariantLineages(stored, currentExperiment) {
+    const lineages = {}
+    if (stored && typeof stored === 'object' && !Array.isArray(stored)) {
+        for (const [id, rawRevision] of Object.entries(stored)) {
+            const revision = Number(rawRevision)
+            if (isOpeningVariantId(id) && Number.isInteger(revision) && revision >= 1) {
+                lineages[id] = revision
+            }
+        }
+    }
+    for (const variant of Array.isArray(currentExperiment?.variants) ? currentExperiment.variants : []) {
+        const revision = Number(variant?.revision)
+        if (!isOpeningVariantId(variant?.id) || !Number.isInteger(revision) || revision < 1) continue
+        lineages[variant.id] = Math.max(lineages[variant.id] || 0, revision)
+    }
+    return lineages
+}
+
+function applyOpeningVariantRevisions(currentExperiment, nextExperiment, storedLineages) {
     const currentById = new Map((Array.isArray(currentExperiment?.variants) ? currentExperiment.variants : [])
         .map(variant => [variant.id, variant]))
-    const currentIds = [...currentById.keys()].sort()
-    const nextIds = nextExperiment.variants.map(variant => variant.id).sort()
-    if (JSON.stringify(currentIds) !== JSON.stringify(nextIds)) throw new Error('OPENING_VARIANT_SET_CHANGED')
+    const openingVariantLineages = trustedOpeningVariantLineages(storedLineages, currentExperiment)
+    const variants = nextExperiment.variants.map(variant => {
+        const current = currentById.get(variant.id)
+        const currentRevision = Number(current?.revision) || 0
+        const priorRevision = Math.max(openingVariantLineages[variant.id] || 0, currentRevision)
+        const changed = current ? journeySignature(current) !== journeySignature(variant) : true
+        const revision = current && !changed ? Math.max(1, priorRevision) : priorRevision + 1
+        openingVariantLineages[variant.id] = revision
+        return { ...variant, revision }
+    })
+    if (Object.keys(openingVariantLineages).length > MAX_OPENING_VARIANT_LINEAGES) {
+        throw new Error('OPENING_VARIANT_LINEAGE_LIMIT')
+    }
     return {
-        ...nextExperiment,
-        variants: nextExperiment.variants.map(variant => {
-            const current = currentById.get(variant.id)
-            if (!current) return { ...variant, revision: 1 }
-            const revision = Number(current.revision)
-            const changed = journeySignature(current) !== journeySignature(variant)
-            return { ...variant, revision: changed ? revision + 1 : revision }
-        }),
+        openingExperiment: { ...nextExperiment, variants },
+        openingVariantLineages,
     }
 }
 
@@ -111,14 +136,15 @@ export async function publishSalesSettingsSnapshot(input, {
         const boundExperiment = bindOpeningVariables(input.openingExperiment, registry, {
             registeredMedia: registeredMediaKeys,
         })
-        const versionedExperiment = applyOpeningVariantRevisions(
+        const versioned = applyOpeningVariantRevisions(
             migratedCurrent.openingExperiment,
             boundExperiment,
+            current?.openingVariantLineages,
         )
         const normalized = normalizeSalesSettings({
             ...migratedCurrent,
             revision: currentRevision,
-            openingExperiment: versionedExperiment,
+            openingExperiment: versioned.openingExperiment,
             changeNote: typeof input.changeNote === 'string' ? input.changeNote : '',
         }, { registeredMediaKeys, registeredVariables: keys })
         const timestamp = FieldValue.serverTimestamp()
@@ -126,6 +152,7 @@ export async function publishSalesSettingsSnapshot(input, {
             ...normalized,
             revision: currentRevision + 1,
             fallbackModel: DEFAULT_SALES_SETTINGS.fallbackModel,
+            openingVariantLineages: versioned.openingVariantLineages,
             updatedAt: timestamp,
             updatedBy: String(updatedBy || 'system').slice(0, 160),
         }
@@ -166,10 +193,18 @@ export async function saveSalesSettings(input, { updatedBy, registeredMediaKeys 
 
         const migratedCurrent = resolveSalesSettings(current, { registeredMediaKeys })
         const normalized = normalizeSalesSettings({ ...migratedCurrent, ...input, revision: currentRevision }, { registeredMediaKeys })
+        const openingVariantLineages = trustedOpeningVariantLineages(
+            current?.openingVariantLineages,
+            migratedCurrent.openingExperiment,
+        )
+        if (Object.keys(openingVariantLineages).length > MAX_OPENING_VARIANT_LINEAGES) {
+            throw new Error('OPENING_VARIANT_LINEAGE_LIMIT')
+        }
         const next = {
             ...normalized,
             revision: currentRevision + 1,
             fallbackModel: DEFAULT_SALES_SETTINGS.fallbackModel,
+            openingVariantLineages,
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: String(updatedBy || 'system').slice(0, 160),
         }
@@ -202,6 +237,10 @@ export async function restoreSalesSettingsRevision(revision, {
         if (!historicalSnap.exists) throw new Error('REVISION_NOT_FOUND')
 
         const historicalData = historicalSnap.data()
+        const migratedCurrent = resolveSalesSettings(current, {
+            registeredMediaKeys,
+            registeredVariables: variableKeys(current?.openingExperiment),
+        })
         const bindings = variableBindings(historicalData?.openingExperiment)
         for (const binding of bindings) {
             if (!binding.versionId) throw new Error('OPENING_VARIABLE_VERSION_MISSING')
@@ -215,10 +254,17 @@ export async function restoreSalesSettingsRevision(revision, {
             revision: currentRevision,
             changeNote: `שחזור גרסה ${restoreRevision}`,
         }, { registeredMediaKeys, registeredVariables })
+        const versioned = applyOpeningVariantRevisions(
+            migratedCurrent.openingExperiment,
+            normalized.openingExperiment,
+            current?.openingVariantLineages,
+        )
         const next = {
             ...normalized,
+            openingExperiment: versioned.openingExperiment,
             revision: currentRevision + 1,
             fallbackModel: DEFAULT_SALES_SETTINGS.fallbackModel,
+            openingVariantLineages: versioned.openingVariantLineages,
             restoredFromRevision: restoreRevision,
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: String(updatedBy || 'system').slice(0, 160),
