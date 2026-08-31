@@ -27,6 +27,7 @@ import { reserveHalfOpenProbe, resolveProviderFailure, resolveProviderSuccess, s
 import { createOutboundId, DELIVERY_ERROR_CODES, DELIVERY_REQUEST_LEASE_MS, decideDeliveryTransition, deliveryEventFingerprint, deliveryEventLedgerId, isDeliveryPending, providerMessageCorrelationId } from './delivery'
 import { isDueFollowUpCandidate, pendingFollowUpStatus, rankDueFollowUps } from './followupPolicy'
 import { isDemoEvidenceContent } from './followupEvidence'
+import { normalizeOpeningVariantId } from './openingExperiment'
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
 // importing this file boots the Admin SDK, which needs credentials.
@@ -350,7 +351,7 @@ export async function completeSuccessfulExchange({ eventId, claimToken, claimGen
                 stateVersion,
                 mediaId: String(exchange.openingRuntime.approvalRequest.mediaId || '').slice(0, 500),
                 templateId: String(exchange.openingRuntime.approvalRequest.templateId || '').slice(0, 80),
-                variantId: String(exchange.openingRuntime.variantId || '').slice(0, 1),
+                variantId: normalizeOpeningVariantId(exchange.openingRuntime.variantId),
                 variantRevision: Number(exchange.openingRuntime.variantRevision || 1),
                 status: 'pending_generation',
                 storagePath: null,
@@ -528,7 +529,7 @@ export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, pr
             waitingFor: openingRuntime.state?.waitingFor || null,
         }
         patch.openingStatus = openingRuntime.completed === true ? 'completed' : String(openingRuntime.action || 'active').slice(0, 40)
-        patch.openingVariantId = String(openingRuntime.variantId || '').slice(0, 1)
+        patch.openingVariantId = normalizeOpeningVariantId(openingRuntime.variantId)
         patch.openingVariantRevision = Number(openingRuntime.variantRevision || 1)
         if (openingRuntime.enrollment?.flow) patch.openingFlow = openingRuntime.enrollment.flow
         const captures = openingRuntime.captures || {}
@@ -821,7 +822,7 @@ export async function recordDeliveryEvent(event) {
         if (leadRef && firstDeliveryEvidence && (stored?.demoEvidence === true || stored?.mediaKey || stored?.openingExposure === true)) {
             const evidencePatch = { updatedAt: FieldValue.serverTimestamp() }
             if (stored?.openingExposure === true && !lead.openingExposedAt) {
-                evidencePatch.openingVariantId = String(stored.openingVariantId || '').slice(0, 1)
+                evidencePatch.openingVariantId = normalizeOpeningVariantId(stored.openingVariantId)
                 evidencePatch.openingVariantRevision = Number(stored.openingVariantRevision || 1)
                 evidencePatch.openingExposedAt = event.occurredAt
                 evidencePatch.openingExposureOutboundId = String(event.outboundId)

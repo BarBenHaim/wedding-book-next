@@ -447,17 +447,18 @@ describe('Firestore atomic successful exchange matrix', () => {
 
     it('pins the assigned journey and advances its state under an optimistic version fence', async () => {
         store.set(EVENT, processingEvent())
+        const dynamicVariantId = 'v_aaaaaaaaaaaa'
         const openingRuntime = {
             expectedStateVersion: 0,
             enrollment: {
-                variantId: 'A', variantRevision: 3,
-                flow: { id: 'A', label: 'דוגמה אישית', revision: 3, blocks: [{ id: 'a-stop', type: 'stop' }] },
+                variantId: dynamicVariantId, variantRevision: 3,
+                flow: { id: dynamicVariantId, label: 'דוגמה אישית', revision: 3, blocks: [{ id: 'a-stop', type: 'stop' }] },
             },
             state: { cursor: 4, waitingFor: 'approval' },
             captures: { childPhotoReceived: true, childPhotoMediaId: 'opaque-provider-id' },
             approvalRequest: { templateId: 'bar-mitzvah-v1', mediaId: 'opaque-provider-id' },
             completed: false, action: 'approval_pending',
-            variantId: 'A', variantRevision: 3,
+            variantId: dynamicVariantId, variantRevision: 3,
         }
 
         await expect(completeSuccessfulExchange(successArgs({
@@ -471,7 +472,7 @@ describe('Firestore atomic successful exchange matrix', () => {
         }))).resolves.toEqual(expect.objectContaining({ action: 'completed' }))
 
         expect(store.get('sales_leads/456')).toMatchObject({
-            openingVariantId: 'A',
+            openingVariantId: dynamicVariantId,
             openingVariantRevision: 3,
             openingFlow: openingRuntime.enrollment.flow,
             openingState: { cursor: 4, waitingFor: 'approval' },
@@ -479,7 +480,7 @@ describe('Firestore atomic successful exchange matrix', () => {
             openingStatus: 'approval_pending',
         })
         expect(store.get(`sales_delivery_events/${'e'.repeat(32)}`)).toMatchObject({
-            openingVariantId: 'A', openingVariantRevision: 3,
+            openingVariantId: dynamicVariantId, openingVariantRevision: 3,
             openingBlockId: 'a-photo', openingExposure: true,
         })
         const approvals = store.entries().filter(([key]) => key.startsWith('sales_opening_approvals/'))
@@ -487,7 +488,7 @@ describe('Firestore atomic successful exchange matrix', () => {
         expect(approvals[0][1]).toMatchObject({
             status: 'pending_generation', leadId: '456', stateVersion: 1,
             mediaId: 'opaque-provider-id', templateId: 'bar-mitzvah-v1',
-            variantId: 'A', variantRevision: 3, storagePath: null,
+            variantId: dynamicVariantId, variantRevision: 3, storagePath: null,
         })
         expect(JSON.stringify(approvals[0][1])).not.toContain('http')
     })

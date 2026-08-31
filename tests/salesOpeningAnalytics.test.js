@@ -145,4 +145,10 @@ describe('openingLeadRow', () => {
         expect(row.repliedAt).toBe(photoAt)
         expect(row.reply24h).toBe(true)
     })
+
+    it('keeps the full dynamic journey id in the privacy-safe management row', () => {
+        const row = openingLeadRow(lead({ openingVariantId: 'v_aaaaaaaaaaaa' }), NOW)
+
+        expect(row.variantId).toBe('v_aaaaaaaaaaaa')
+    })
 })

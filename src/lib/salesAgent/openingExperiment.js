@@ -17,6 +17,11 @@ export const isOpeningVariantId = value => {
     return LEGACY_VARIANT_IDS.has(id) || DYNAMIC_VARIANT_ID.test(id)
 }
 
+export const normalizeOpeningVariantId = value => {
+    const id = String(value || '')
+    return isOpeningVariantId(id) ? id : ''
+}
+
 const A_EXPLANATION = `Wedding Tales הוא ספר ברכות מודפס ואישי לבר המצווה.
 האורחים מעלים ברכה ותמונה בקלות מהטלפון, ובסוף נשארת מזכרת אמיתית למשפחה.`
 const PHOTO_QUESTION = 'רוצה שאכין לך דוגמה אישית? שלחי תמונה של הבן שלך ואכין עיצוב לדוגמה.'

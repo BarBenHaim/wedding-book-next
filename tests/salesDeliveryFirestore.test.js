@@ -415,6 +415,7 @@ describe('transactional follow-up delivery truth', () => {
 
     it('counts an experiment exposure once and only after delivered or read evidence', async () => {
         const outboundId = 'f'.repeat(32)
+        const dynamicVariantId = 'v_aaaaaaaaaaaa'
         store.set(`sales_delivery_events/${outboundId}`, {
             outboundId,
             status: 'requested',
@@ -424,7 +425,7 @@ describe('transactional follow-up delivery truth', () => {
             advanceOnDelivery: false,
             logicalAttemptId: 'opening-exposure-attempt',
             advancesFollowUp: false,
-            openingVariantId: 'C',
+            openingVariantId: dynamicVariantId,
             openingVariantRevision: 7,
             openingExposure: true,
         })
@@ -439,7 +440,7 @@ describe('transactional follow-up delivery truth', () => {
             occurredAt: '2026-08-14T10:02:00.000Z',
         }))
         expect(store.get(LEAD)).toMatchObject({
-            openingVariantId: 'C',
+            openingVariantId: dynamicVariantId,
             openingVariantRevision: 7,
             openingExposedAt: '2026-08-14T10:02:00.000Z',
             openingExposureOutboundId: outboundId,

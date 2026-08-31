@@ -24,13 +24,16 @@ const ready = {
 describe('opening approvals', () => {
     it('derives a phone-free stable id and a private pending record', () => {
         const id = openingApprovalId('non-dialable-lead-41', 5)
+        const dynamicVariantId = 'v_aaaaaaaaaaaa'
         const record = createOpeningApprovalRecord({
             leadId: 'non-dialable-lead-41', stateVersion: 5, mediaId: 'opaque-provider-id',
-            templateId: 'bar-mitzvah-v1', variantId: 'A', variantRevision: 3,
+            templateId: 'bar-mitzvah-v1', variantId: dynamicVariantId, variantRevision: 3,
         })
         expect(id).toMatch(/^[a-f0-9]{32}$/)
         expect(id).not.toContain('41')
-        expect(record).toMatchObject({ id, status: 'pending_generation', mediaId: 'opaque-provider-id' })
+        expect(record).toMatchObject({
+            id, status: 'pending_generation', mediaId: 'opaque-provider-id', variantId: dynamicVariantId,
+        })
         expect(record).not.toHaveProperty('photoUrl')
     })
 
@@ -90,6 +93,28 @@ describe('opening approvals', () => {
         await expect(decideOpeningApproval(ready.id, 'approve', deps)).resolves.toEqual({ ...ready, status: 'sent', ...sent })
         expect(deps.updateDecision).toHaveBeenCalledWith(ready.id, 'approved')
         expect(deps.send).toHaveBeenCalledWith(expect.objectContaining({ id: ready.id, storagePath: ready.storagePath }))
+    })
+
+    it('lets a pinned approval finish after its route was deleted while still honoring a present disabled route', async () => {
+        const dynamicReady = { ...ready, variantId: 'v_aaaaaaaaaaaa' }
+        const sent = { accepted: true, outboundId: 'phone-free-deleted-route-outbound' }
+        const baseDeps = {
+            read: vi.fn().mockResolvedValue(dynamicReady),
+            updateDecision: vi.fn().mockResolvedValue({ ...dynamicReady, status: 'approved' }),
+            send: vi.fn().mockResolvedValue(sent),
+        }
+
+        await expect(decideOpeningApproval(dynamicReady.id, 'approve', {
+            ...baseDeps,
+            readSettings: vi.fn().mockResolvedValue({ openingExperiment: { enabled: true, variants: [] } }),
+        })).resolves.toEqual({ ...dynamicReady, status: 'sent', ...sent })
+
+        await expect(decideOpeningApproval(dynamicReady.id, 'approve', {
+            ...baseDeps,
+            readSettings: vi.fn().mockResolvedValue({
+                openingExperiment: { enabled: true, variants: [{ id: dynamicReady.variantId, enabled: false }] },
+            }),
+        })).rejects.toMatchObject({ code: 'OPENING_EXPERIMENT_STOPPED' })
     })
 
     it('rejects status and identity mismatches with fixed errors', async () => {

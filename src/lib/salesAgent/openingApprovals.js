@@ -5,6 +5,7 @@ import { downloadWhatsAppMedia, renderOpeningDesign } from './openingDesign'
 import { readSalesSettings } from './settingsStore'
 import { prepareFollowUpDelivery, recordDeliveryEvent } from './leads'
 import { sendWhatsAppImage } from './whatsapp'
+import { normalizeOpeningVariantId } from './openingExperiment'
 
 const COLLECTION = 'sales_opening_approvals'
 const GENERATION_LEASE_MS = 60_000
@@ -30,7 +31,7 @@ export function createOpeningApprovalRecord({ leadId, stateVersion, mediaId, tem
         stateVersion: Number(stateVersion),
         mediaId: String(mediaId || '').slice(0, 500),
         templateId: String(templateId || ''),
-        variantId: String(variantId || '').slice(0, 1),
+        variantId: normalizeOpeningVariantId(variantId),
         variantRevision: Number(variantRevision || 1),
         status: 'pending_generation',
         storagePath: null,
@@ -177,7 +178,7 @@ export async function decideOpeningApproval(id, decision, deps = {}) {
     const settings = await (deps.readSettings || readSalesSettings)()
     const experiment = settings?.openingExperiment
     const variant = experiment?.variants?.find(item => item.id === approval.variantId)
-    if (experiment?.enabled !== true || variant?.enabled !== true) throw approvalError('OPENING_EXPERIMENT_STOPPED')
+    if (experiment?.enabled !== true || (variant && variant.enabled !== true)) throw approvalError('OPENING_EXPERIMENT_STOPPED')
     const approved = await (deps.updateDecision || updateDecision)(id, 'approved')
     const sent = await (deps.send || sendApprovedOpeningDesign)(approved)
     if (deps.markSent) await deps.markSent(id, sent)

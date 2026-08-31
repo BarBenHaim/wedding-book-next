@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { classifyOpeningLead } from './openingExperiment'
+import { classifyOpeningLead, normalizeOpeningVariantId } from './openingExperiment'
 import { isVerifiedPayment } from './paymentTruth'
 
 const HOUR_MS = 3_600_000
@@ -125,7 +125,7 @@ export function openingLeadRow(lead = {}, nowMs = Date.now()) {
         name: String(lead.name || lead.profileName || '').slice(0, 80),
         source: String(lead.source || '').slice(0, 60),
         campaignId: String(lead.campaignId || '').slice(0, 120) || null,
-        variantId: String(lead.openingVariantId || '').slice(0, 1),
+        variantId: normalizeOpeningVariantId(lead.openingVariantId),
         variantRevision: Number(lead.openingVariantRevision || 0),
         eventType: String(lead.eventType || '').slice(0, 40) || null,
         eventDate: String(lead.eventDate || '').slice(0, 10) || null,
