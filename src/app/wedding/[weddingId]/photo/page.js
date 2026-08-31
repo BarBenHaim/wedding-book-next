@@ -1932,7 +1932,12 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                 so nothing is ever painted at the wrong size. */}
             <div
                 ref={framed ? framedRef : undefined}
-                className={`relative z-10 w-full max-w-[26rem] animate-scaleIn${framed ? ' flex flex-col' : ''}`}
+                // animate-scaleIn must not touch this element when it is
+                // framed: its inline transform is its position, and a
+                // keyframe that animates transform overrides an inline
+                // style — permanently, with `forwards`. animate-framedIn
+                // is the same entrance with opacity alone.
+                className={`relative z-10 w-full max-w-[26rem] ${framed ? 'animate-framedIn flex flex-col' : 'animate-scaleIn'}`}
                 style={
                     framed
                         ? {
