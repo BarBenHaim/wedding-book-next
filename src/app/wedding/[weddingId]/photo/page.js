@@ -928,19 +928,12 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     // Falls back gracefully if a translator hasn't added the key yet.
     const continueToTextLabel = isPoker ? t('continueToTextPoker') : ''
 
-    // Low-resolution print-quality warning. Triggered only when the user
-    // is in the upload+crop path AND the cropper has reported a chosen
-    // crop region whose longer edge is below 1500 px in source pixels.
-    // Threshold rationale: the highest-resolution book layout (notebook
-    // at 75% page width = 1913 px @ 300 DPI on the 8.5" trim) starts to
-    // visibly soften below ~235 DPI; 1500 px on that slot prints at
-    // ~235 DPI, so anything thinner is the right place to warn.
-    // Camera captures are not checked here — the camera path's blob is
-    // a center-cropped 4:3 region of the full sensor frame, which on
-    // every modern device is well above the threshold.
-    const lowResWarning =
-        isUpload && croppedAreaPixels && Math.max(croppedAreaPixels.width || 0, croppedAreaPixels.height || 0) < 1500
-    const lowResWarningText = t('lowResWarning')
+    // The low-resolution notice that used to live here was removed on
+    // purpose. It fired on the guest's last screen before sending and
+    // told them their photo might print blurry — a verdict they cannot
+    // act on, since they are sending the picture they have. The i18n
+    // key 'lowResWarning' is still translated in all four locales if it
+    // is ever wanted back.
 
     // The previous PokerCornerDecor (SVG chips + cards) was retired —
     // the new pokerbg.png asset already bakes those decorations into
@@ -1716,38 +1709,6 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                     </svg>
                                     <span>{formCopy?.momentTakeNow || t('momentTakeNow')}</span>
                                 </button>
-                            </div>
-                        )}
-
-                        {/* Low-res print-quality notice. Doesn't block
-                            submission — guests on small uploaded
-                            images can still send their blessing; the
-                            warning just sets expectations. */}
-                        {lowResWarning && (
-                            <div
-                                className='mt-2 flex items-start gap-2 px-3 py-2 rounded-lg'
-                                style={{
-                                    background: 'rgba(229,168,53,0.10)',
-                                    border: '1px solid rgba(229,168,53,0.35)',
-                                    color: '#a8843a',
-                                    fontSize: '11.5px',
-                                    lineHeight: 1.4,
-                                }}
-                            >
-                                <svg
-                                    viewBox='0 0 24 24'
-                                    className='w-[14px] h-[14px] mt-px shrink-0'
-                                    fill='none'
-                                    stroke='currentColor'
-                                    strokeWidth={2}
-                                >
-                                    <path
-                                        strokeLinecap='round'
-                                        strokeLinejoin='round'
-                                        d='M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z'
-                                    />
-                                </svg>
-                                <span>{lowResWarningText}</span>
                             </div>
                         )}
 
@@ -2874,37 +2835,6 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 )}
                             </div>
 
-                            {/* Low-res print-quality notice — same
-                                threshold + copy as the moment layout.
-                                Sits inside the photo card so it
-                                visually attaches to the well. */}
-                            {lowResWarning && (
-                                <div
-                                    className='mt-3 flex items-start gap-2 px-3 py-2 rounded-lg'
-                                    style={{
-                                        background: 'rgba(229,168,53,0.10)',
-                                        border: '1px solid rgba(229,168,53,0.35)',
-                                        color: isPoker ? '#e8c878' : '#a8843a',
-                                        fontSize: '11.5px',
-                                        lineHeight: 1.4,
-                                    }}
-                                >
-                                    <svg
-                                        viewBox='0 0 24 24'
-                                        className='w-[14px] h-[14px] mt-px shrink-0'
-                                        fill='none'
-                                        stroke='currentColor'
-                                        strokeWidth={2}
-                                    >
-                                        <path
-                                            strokeLinecap='round'
-                                            strokeLinejoin='round'
-                                            d='M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z'
-                                        />
-                                    </svg>
-                                    <span>{lowResWarningText}</span>
-                                </div>
-                            )}
                         </div>
                         {/* ── Action buttons (close out the photo card) ── */}
                         {photoUrl && !cameraOpen && (
