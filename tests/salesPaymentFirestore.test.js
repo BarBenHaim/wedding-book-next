@@ -81,4 +81,29 @@ describe('verified sales payment persistence', () => {
             paymentVerified: true, verifiedOrderId: 'order-replayed',
         })
     })
+
+    it('refreshes mutable Wedding facts on replay without crediting the order twice', async () => {
+        const initial = {
+            phone: 'non-dialable-payment-lead-four', orderId: 'manual-wedding:wedding-test-four',
+            weddingId: 'wedding-test-four', amount: 990, buyerName: 'דנה', paymentSource: 'wedding_app_manual',
+        }
+        await closeLeadOnPurchase(initial)
+        await closeLeadOnPurchase({ ...initial, amount: 1090, buyerName: 'דנה כהן' })
+
+        expect(store.get('sales_leads/non-dialable-payment-lead-four')).toMatchObject({
+            stage: 'closed_won', followUpAt: null, amount: 1090, name: 'דנה כהן',
+            weddingId: 'wedding-test-four', paymentSource: 'wedding_app_manual',
+            paymentVerified: true, verifiedOrderId: 'manual-wedding:wedding-test-four',
+        })
+        expect(store.writes().filter(write => write.key.startsWith('sales_verified_orders/'))).toHaveLength(1)
+    })
+
+    it('does not replace a useful lead name with an empty buyer name', async () => {
+        store.set('sales_leads/non-dialable-payment-lead-five', { name: 'לקוחה קיימת' })
+        await closeLeadOnPurchase({
+            phone: 'non-dialable-payment-lead-five', orderId: 'manual-wedding:wedding-test-five',
+            weddingId: 'wedding-test-five', amount: 990, buyerName: '   ', paymentSource: 'wedding_app_manual',
+        })
+        expect(store.get('sales_leads/non-dialable-payment-lead-five')).toMatchObject({ name: 'לקוחה קיימת' })
+    })
 })

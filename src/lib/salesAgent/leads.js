@@ -1116,7 +1116,7 @@ export async function adminPatchLead(phone, patch = {}) {
 // Called from the WooCommerce webhook the moment a payment lands. This
 // is what stops a paying customer from receiving "עוד מתלבטים?" the next
 // morning — the single most damaging thing an automated funnel can do.
-export async function closeLeadOnPurchase({ phone, orderId, weddingId, amount, packageId }) {
+export async function closeLeadOnPurchase({ phone, orderId, weddingId, amount, packageId, buyerName, paymentSource }) {
     const id = normalizePhone(phone)
     if (!id) return null
     const patch = {
@@ -1130,6 +1130,10 @@ export async function closeLeadOnPurchase({ phone, orderId, weddingId, amount, p
     if (weddingId) patch.weddingId = String(weddingId)
     if (amount != null && Number.isFinite(Number(amount))) patch.amount = Number(amount)
     if (packageId) patch.packageInterest = packageId
+    const normalizedBuyerName = typeof buyerName === 'string' ? buyerName.trim().slice(0, 160) : ''
+    if (normalizedBuyerName && normalizedBuyerName !== id) patch.name = normalizedBuyerName
+    const normalizedPaymentSource = typeof paymentSource === 'string' ? paymentSource.trim().slice(0, 48) : ''
+    if (normalizedPaymentSource) patch.paymentSource = normalizedPaymentSource
 
     // Legacy/manual callers may still close a lead, but without an order
     // identity they can never create a payment fact or train experiments.
@@ -1142,16 +1146,17 @@ export async function closeLeadOnPurchase({ phone, orderId, weddingId, amount, p
     const markerRef = verifiedOrderRef(verifiedOrderId)
     const outcome = await adminDb.runTransaction(async tx => {
         const [markerSnap, leadSnap] = await Promise.all([tx.get(markerRef), tx.get(leadRef)])
-        if (markerSnap.exists) return { credited: false, media: [] }
-
         const lead = leadSnap.exists ? leadSnap.data() || {} : {}
         const media = [...new Set([...(lead.imagesSent || []), ...(lead.mediaSent || [])])]
-        tx.set(leadRef, {
+        const verifiedPatch = {
             ...patch,
             paymentVerified: true,
-            paymentVerifiedAt: FieldValue.serverTimestamp(),
             verifiedOrderId,
-        }, { merge: true })
+        }
+        if (!markerSnap.exists) verifiedPatch.paymentVerifiedAt = FieldValue.serverTimestamp()
+        tx.set(leadRef, verifiedPatch, { merge: true })
+        if (markerSnap.exists) return { credited: false, media: [] }
+
         // The document id is already the order hash. No phone, order id,
         // transcript, or provider payload is duplicated into this ledger.
         tx.set(markerRef, {
