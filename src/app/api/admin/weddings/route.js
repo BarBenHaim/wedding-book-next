@@ -115,6 +115,37 @@ export async function GET(req) {
                     customTitle: data.customTitle ?? null,
                     customSubtitle: data.customSubtitle ?? null,
                     customDescription: data.customDescription ?? null,
+                    // Guest-page design. PATCH has always accepted both of
+                    // these; GET returned neither, so every editor loaded
+                    // blank and reported "nothing is selected" for an event
+                    // that had a design saved. Worse, the studio then sent
+                    // designVariant: '' back and cleared it.
+                    // designVariant is a short string — always sent.
+                    designVariant: data.designVariant ?? '',
+                    // guestDesign only when it holds something: it is capped
+                    // at 6KB on write, and most events have none, so an empty
+                    // one should not ride along on every row of the list.
+                    guestDesign: nonEmpty(data.guestDesign) ? data.guestDesign : null,
+                    locale: data.locale ?? null,
+                    noPhotoCrop: data.noPhotoCrop === true,
+                    adminNotes: data.adminNotes ?? null,
+                    // Per-event guest-page copy overrides. Same story as
+                    // designVariant: the editor writes them and could never
+                    // read them back, so every visit showed empty fields
+                    // over an event that had custom wording saved.
+                    customNameLabel: data.customNameLabel ?? null,
+                    customNamePlaceholder: data.customNamePlaceholder ?? null,
+                    customBlessingLabel: data.customBlessingLabel ?? null,
+                    customBlessingPlaceholder: data.customBlessingPlaceholder ?? null,
+                    customMomentSubtitle: data.customMomentSubtitle ?? null,
+                    customMomentPill: data.customMomentPill ?? null,
+                    customMomentPhotoTitle: data.customMomentPhotoTitle ?? null,
+                    customMomentPhotoCta: data.customMomentPhotoCta ?? null,
+                    customMomentPhotoCtaSub: data.customMomentPhotoCtaSub ?? null,
+                    customMomentTakeNow: data.customMomentTakeNow ?? null,
+                    customMomentChooseGallery: data.customMomentChooseGallery ?? null,
+                    customMomentSubmit: data.customMomentSubmit ?? null,
+                    customMomentSecurityNote: data.customMomentSecurityNote ?? null,
                 }
             })
         )

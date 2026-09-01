@@ -1007,3 +1007,28 @@ nine-slice ולכן **לא** צריכות אלפא — האמצע שם פשוט 
 ב-transform inline לא לובש אנימציה שנוגעת ב-transform, וגם לא נכנס
 לרשימת ה-reset של reduced-motion.
 `tests/framedEntrance.test.js` שומר על שני הצדדים.
+
+
+### "בוחר פריסט בעיצוב דף ברכה וזה לא נשמר"
+
+**זה כן נשמר. זה פשוט אף פעם לא נקרא בחזרה.**
+
+ה-PATCH ב-`/api/admin/weddings` תמיד קיבל וכתב `designVariant` ו-
+`guestDesign`. ה-GET באותו ראוט לא החזיר אף אחד מהם. לכן כל מסך שעורך
+את עיצוב דף הברכה נטען ריק, ולא משנה מה שמור על האירוע:
+
+- טבלת האדמין: `designVariant: w.designVariant || ''` → תמיד `''`,
+  ולכן ה-select תמיד מציג "קלאסי".
+- `/admin/guest-design`: `setVariant(w.designVariant || '')` → תמיד
+  `''`, ו-`setDesign(w.guestDesign || {})` → תמיד `{}`.
+
+**והחצי המסוכן, שהיה שקט:** כש-`variant` תקוע על `''`, הפונקציה
+`apply()` שולחת `{ designVariant: '', guestDesign: design }` — והראוט
+שומר `null`. כלומר עריכת **צבע** בסטודיו מחקה עיצוב ״ערב״/״בוקר״
+שמישהו הגדיר מהטבלה.
+
+`guestDesign` מוחזר רק כשיש בו תוכן — הוא חסום ל-6KB בכתיבה, ולרוב
+האירועים אין אחד, ואין סיבה שיסע על כל שורה ברשימה.
+
+`tests/adminWeddingsShape.test.js` שומר על כיוון אחד: מפתח שה-PATCH
+מקבל ושה-GET לא מחזיר הוא באג.
