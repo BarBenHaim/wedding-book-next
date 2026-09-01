@@ -504,6 +504,7 @@ function EventTypeEditor({ wedding, onSave }) {
         currency: w.currency || 'ILS',
         blessingMaxChars: w.blessingMaxChars || 210,
         // Customer contact (phone doubles as the /portal login credential).
+        ownerName: w.ownerName || '',
         ownerPhone: w.ownerPhone || '',
         ownerEmail: w.ownerEmail || '',
     })
@@ -567,6 +568,7 @@ function EventTypeEditor({ wedding, onSave }) {
         patch.customMomentSecurityNote = draft.customMomentSecurityNote
         // Super-admin private notes.
         patch.adminNotes = draft.adminNotes
+        patch.ownerName = draft.ownerName
         patch.ownerPhone = draft.ownerPhone
         patch.ownerEmail = draft.ownerEmail
         // Amount paid — '' clears it; otherwise the API coerces to a number.
@@ -639,6 +641,16 @@ function EventTypeEditor({ wedding, onSave }) {
             {/* Customer contact — the mobile number is ALSO the customer's
                 /portal login credential, so keeping it correct matters. */}
             <div className='mb-3'>
+                <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>שם הקונה</label>
+                <input
+                    type='text'
+                    value={draft.ownerName}
+                    onChange={e => set('ownerName', e.target.value)}
+                    placeholder='שם מלא'
+                    className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+                />
+            </div>
+            <div className='mb-3'>
                 <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>טלפון נייד של הלקוח (משמש לכניסה ב-/portal)</label>
                 <input
                     type='tel'
@@ -664,7 +676,12 @@ function EventTypeEditor({ wedding, onSave }) {
             {/* Amount paid — auto-captured from the order, editable here so
                 the super-admin can correct or fill it manually. */}
             <div className='mb-3'>
-                <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>סכום ששולם</label>
+                <div className='flex items-center justify-between gap-2 mb-1'>
+                    <label className='text-xs font-semibold text-[#7a6a52]'>סכום ששולם בפועל</label>
+                    {Number(draft.amountPaid) > 0 && !wedding.orderId && (
+                        <span className='rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700'>מכירה ידנית</span>
+                    )}
+                </div>
                 <div className='flex items-center gap-2'>
                     <input
                         type='number'

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
 import {
     eventTypeOf, eventTypeLabel, matchesSearch, searchableText,
     amountOf, isPaid, compareByAmount, filterEvents, countByEventType,
@@ -23,6 +24,20 @@ const wedding = {
     amountPaid: 1490,
 }
 const unset = { id: 'ghi789', celebrantName: 'אריאל' }
+
+describe('admin wedding buyer editor contract', () => {
+    const source = readFileSync(new URL('../src/app/admin/page.js', import.meta.url), 'utf8')
+
+    it('lets the owner edit the buyer name and sends it in the patch', () => {
+        expect(source).toContain("ownerName: w.ownerName || ''")
+        expect(source).toContain('patch.ownerName = draft.ownerName')
+        expect(source).toContain('שם הקונה')
+    })
+
+    it('labels the entered amount as money actually paid', () => {
+        expect(source).toContain('סכום ששולם בפועל')
+    })
+})
 
 describe('eventTypeOf', () => {
     it('reads a real type', () => {

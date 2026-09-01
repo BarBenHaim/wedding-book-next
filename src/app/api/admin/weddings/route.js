@@ -7,6 +7,9 @@ import { adminDb, adminAuth } from '@/lib/firebaseAdmin'
 import { normalizeEventType, normalizeThemeColor } from '@/lib/eventTypes'
 import { normalizeLocale } from '@/i18n/locales'
 import { isSuperAdmin } from '@/lib/superAdmin'
+import { FieldValue } from 'firebase-admin/firestore'
+import { closeLeadOnPurchase } from '@/lib/salesAgent/leads'
+import { reconcileWeddingSale } from '@/lib/salesAgent/weddingSalesReconciliation'
 
 // ─── Auth helper ─────────────────────────────────────────────────────────────
 async function verifySuperAdmin(req) {
@@ -185,7 +188,7 @@ export async function PATCH(req) {
             'brideName', 'brideNameHe', 'groomName', 'groomNameHe',
             // Customer contact — the super-admin can set/fix the owner's
             // mobile (also the /portal phone-login credential) and email.
-            'ownerPhone', 'ownerEmail',
+            'ownerName', 'ownerPhone', 'ownerEmail',
         ]
         const clean = {}
 
@@ -200,6 +203,12 @@ export async function PATCH(req) {
 
             if (key === 'ownerEmail') {
                 const t = typeof v === 'string' ? v.trim().toLowerCase() : ''
+                clean[key] = t || null
+                continue
+            }
+
+            if (key === 'ownerName') {
+                const t = typeof v === 'string' ? v.trim().slice(0, 160) : ''
                 clean[key] = t || null
                 continue
             }
@@ -312,10 +321,21 @@ export async function PATCH(req) {
             return NextResponse.json({ error: 'Wedding not found' }, { status: 404 })
         }
 
-        await ref.set(clean, { merge: true })
+        const updatedFields = Object.keys(clean)
+        await ref.set({ ...clean, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
 
-        console.log(`✏️  Wedding ${weddingId} updated by super admin:`, Object.keys(clean).join(', '))
-        return NextResponse.json({ success: true, updated: clean })
+        let reconciliation = 'not_applicable'
+        try {
+            const complete = await ref.get()
+            const result = await reconcileWeddingSale(weddingId, complete.data() || {}, { closeLeadOnPurchase })
+            if (result.action === 'closed') reconciliation = 'closed'
+        } catch {
+            reconciliation = 'deferred'
+            console.warn('[admin/weddings] SALES_RECONCILIATION_DEFERRED')
+        }
+
+        console.log('[admin/weddings] WEDDING_UPDATED', updatedFields.join(','))
+        return NextResponse.json({ success: true, updated: updatedFields, reconciliation })
     } catch (err) {
         console.error('[admin/weddings] PATCH error:', err)
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
