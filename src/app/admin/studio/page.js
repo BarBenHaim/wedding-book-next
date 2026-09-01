@@ -2573,7 +2573,6 @@ function PresetWizard({ backgrounds, onClose, onCreate }) {
                                     frameSlice={values.photoFrameSlice ?? null}
                                     frameId={values.photoFrame ?? null}
                                     frameUrl={values.photoFrameUrl ?? null}
-                                    frameSlice={values.photoFrameSlice ?? null}
                                     frameInset={values.photoFrameInset}
                                     disabled={false}
                                     onChange={p => patch(p)}
