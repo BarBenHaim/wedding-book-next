@@ -13,6 +13,7 @@ import {
     ChevronRight, Eye, Link2, Mail, Shield, HardDrive, RefreshCw,
     AlertTriangle, Copy, Clock, Printer, Package, Truck, UserPlus,
     Pencil, Save, PartyPopper, Wand2, QrCode, Phone, Wallet, Instagram,
+    Images,
 } from 'lucide-react'
 import {
     EVENT_TYPE_ORDER,
@@ -2382,6 +2383,19 @@ function AdminDashboardContent() {
                             }}
                         >
                             <Instagram size={14} style={{ color: '#c9a44e' }} /> תוכן לרשתות
+                        </a>
+                        <a
+                            href='/admin/album-studio'
+                            title='ספר תמונות מעוצב — כל תמונה בצורה שלה'
+                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
+                            style={{
+                                background: '#ffffff',
+                                border: '1px solid rgba(212,184,103,0.30)',
+                                color: '#7a6a52',
+                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
+                            }}
+                        >
+                            <Images size={14} style={{ color: '#c9a44e' }} /> סטודיו אלבומים
                         </a>
                         <a
                             href='/admin/guest-design'

@@ -126,6 +126,10 @@ export async function GET(req) {
                     // at 6KB on write, and most events have none, so an empty
                     // one should not ride along on every row of the list.
                     guestDesign: nonEmpty(data.guestDesign) ? data.guestDesign : null,
+                    // Same rule as guestDesign: only when it holds
+                    // something, so an event with no album adds nothing
+                    // to every row of the list.
+                    albumDesign: nonEmpty(data.albumDesign) ? data.albumDesign : null,
                     locale: data.locale ?? null,
                     noPhotoCrop: data.noPhotoCrop === true,
                     adminNotes: data.adminNotes ?? null,
@@ -203,6 +207,12 @@ export async function PATCH(req) {
             'productionStatus',
             // Guest /photo page design preset (managed from /admin/guest-design).
             'guestDesign',
+            // Photo album: preset, page shape and the ordered photo list
+            // (managed from /admin/album-studio). The layout itself is
+            // never stored — albumLayout.js is deterministic, so the
+            // pages are recomputed identically from this list every
+            // time, and a stored layout could only go stale.
+            'albumDesign',
             // Book interior design. Written via set(merge:true) so a PARTIAL
             // object deep-merges into the existing bookDesign — lets us
             // surgically reset stray fields (e.g. a stuck fontWeight:700)
@@ -307,6 +317,16 @@ export async function PATCH(req) {
                 // bad payload can't bloat the doc.
                 clean[key] =
                     v && typeof v === 'object' && !Array.isArray(v) && JSON.stringify(v).length < 6000 ? v : null
+                continue
+            }
+
+            if (key === 'albumDesign') {
+                // The photo list can be long: a 200-photo album at ~180
+                // bytes a row is around 36KB, comfortably inside
+                // Firestore's 1MB document limit but worth a ceiling so
+                // a runaway client cannot bloat the doc. null clears.
+                clean[key] =
+                    v && typeof v === 'object' && !Array.isArray(v) && JSON.stringify(v).length < 200000 ? v : null
                 continue
             }
 
