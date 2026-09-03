@@ -57,9 +57,11 @@ async function callStudioApi(op, payload = {}) {
 }
 import { heebo, frankRuhl, notoHebrew, gveretLevin, playpenSansHebrew } from '@/app/fonts'
 // Note: `secular`, `davidLibre`, `danaYad` exports still exist in
-// '@/app/fonts' for legacy consumers (PageLayouts, app/layout.js) but
-// are deliberately NOT registered here — the design studio's font
-// picker was pruned to a curated set per the spring 2026 redesign.
+// '@/app/fonts' (app/layout.js uses them) but are deliberately NOT
+// registered here — the design studio's font picker was pruned to a
+// curated set per the spring 2026 redesign. The other legacy consumer
+// this note used to name, PageLayouts, was deleted as dead code; if
+// nothing else claims these three, they can go too.
 
 // ── Frame URL registry ───────────────────────────────────────────────
 // Frames are next/image-imported PNGs from src/media/frames. Their

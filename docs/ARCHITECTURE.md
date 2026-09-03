@@ -284,17 +284,24 @@ WhatsApp Cloud → Make → POST /api/sales-agent/reply { phone, text }
 
 ## 12. חוב ידוע
 
-**~2,800 שורות קוד מת.** אחת-עשרה קומפוננטות פריסה ועוד `PageLayouts.jsx`
-מוגדרות ולא מיובאות **מאף מקום**:
+**~2,950 שורות קוד מת — נמחקו (ספטמבר 2026).** אחת-עשרה קומפוננטות פריסה,
+`PageLayouts.jsx`, `SmartImg`, `lib/ogCard.jsx`, `lib/apiClient.js`,
+`lib/unitUtils.js` — אף קובץ לא ייבא אותם. יחד איתם ירדו ארבע חבילות npm
+שאף שורה לא השתמשה בהן: `pdf-lib`, `@pdf-lib/fontkit`, `get-stream`,
+`react-draggable`.
 
-```
-ConfettiPageLayout   DiptychPageLayout   EditorialPageLayout
-FullbleedPageLayout  HeroPageLayout      KetubahPageLayout
-LocketPageLayout     MinimalCardPageLayout  PosterPageLayout
-StampPageLayout      StoryPageLayout     PageLayouts.jsx (674 שורות)
-```
-רק שש פריסות מיובאות בפועל, כולן ב-`BookPageTemplate`. אלה כנראה שרידים
-מגרסה מוקדמת של מערכת התבניות. הן לא מזיקות, אבל הן מטעות בחיפוש.
+**המלכודת ששווה לזכור מהניקוי הזה:** חיפוש טקסט סימן גם את `html2canvas`,
+`jspdf` ו-`jszip` כלא-בשימוש — והן הליבה של ייצוא הספר. הן מיובאות
+**דינמית** (`await import('html2canvas')`) בדיוק כדי שצפייה רגילה לא תשלם
+עליהן. אותו דבר בנכסים: `` `/app-screenshots/${s.id}-lg.webp` `` נראה
+כקובץ שאף אחד לא מזכיר. **בפרויקט הזה קוד מת וקוד שנטען דינמית נראים זהים
+לחיפוש טקסט** — כל מחיקה חייבת אימות ידני.
+
+**מה שנשאר, ודורש החלטה שלך ולא של הקוד:** כ-62MB ב-`public/imgs/`
+(`img9`–`img22` ו-`Cover img.jpg`; רק `img1`–`img8` בשימוש, בדף `/demo`),
+וספריות `.jpg` ישנות ב-`portfolio/` שהוחלפו ב-`.webp`. הרקעים ב-
+`/backgrounds/` **אינם** מועמדים למחיקה: הם נבחרים בזמן ריצה מ-Firestore,
+כך שקובץ שלא מוזכר בקוד עדיין יכול להיות הרקע של אירוע חי.
 
 **סביבת הפיתוח.** הריפו יושב תחת OneDrive, ש**לא מרשה `unlink`**. לכן git
 משאיר קבצי `.lock` אחרי כמעט כל פעולה, `lint-staged` נכשל, והאריזה של
