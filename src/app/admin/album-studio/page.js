@@ -26,9 +26,12 @@ import { auth, db, storage } from '@/lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import AlbumPage from '@/components/AlbumPage/AlbumPage'
+import AlbumScene from '@/components/AlbumScene/AlbumScene'
 import { planAlbum, toSpreads } from '@/lib/albumLayout'
 import { ALBUM_PRESETS, ALBUM_PRESET_ORDER, getAlbumPreset, albumGeometry } from '@/lib/albumPresets'
-import { Lock, Images, Upload, Trash2, ArrowRight, ArrowLeft, Save, RefreshCw, Loader2, BookOpen } from 'lucide-react'
+import { planAlbumScenes } from '@/lib/albumScene'
+import { LANGUAGES, LANGUAGE_ORDER, getLanguage } from '@/lib/albumLanguages'
+import { Lock, Images, Upload, Trash2, ArrowRight, ArrowLeft, Save, RefreshCw, Loader2, BookOpen, Wand2, LayoutGrid } from 'lucide-react'
 
 const UNIT = 1000
 
@@ -76,13 +79,39 @@ function Gate({ children }) {
 
 const token = () => auth.currentUser.getIdToken(false)
 
-/** Measure a photo's aspect ratio in the browser when we were not told it. */
-function measure(url) {
+/**
+ * One decode, two answers: the photograph's shape and its average colour.
+ *
+ * The colour is why this is worth doing here rather than at render time.
+ * A page that fills itself around an uncropped photograph needs a
+ * backdrop, and the usual answer — a blurred enlargement — cannot be
+ * rasterised by html2canvas, so it would look right on screen and print
+ * flat. A wash built from the picture's own tone prints exactly as it
+ * renders. Sampling it costs one 1x1 canvas draw, once, in the studio.
+ */
+function probe(url) {
     return new Promise(resolve => {
         const img = new window.Image()
         img.crossOrigin = 'anonymous'
-        img.onload = () => resolve(img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : null)
-        img.onerror = () => resolve(null)
+        img.onload = () => {
+            const aspect = img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : null
+            let tone = null
+            try {
+                const c = document.createElement('canvas')
+                c.width = 1
+                c.height = 1
+                const ctx = c.getContext('2d')
+                ctx.drawImage(img, 0, 0, 1, 1)
+                const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data
+                tone = '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')
+            } catch {
+                // A cross-origin image without CORS headers taints the
+                // canvas. The album still works — toneWash falls back to
+                // plain paper — so this is not worth failing over.
+            }
+            resolve({ aspect, tone })
+        }
+        img.onerror = () => resolve({ aspect: null, tone: null })
         img.src = url
     })
 }
@@ -92,6 +121,12 @@ function Studio() {
     const [sel, setSel] = useState('')
     const [photos, setPhotos] = useState([])
     const [preset, setPreset] = useState('magazine')
+    // 'designer' composes pages from the recipe library; 'engine' is the
+    // justified layout that can arrange anything. The designer falls back
+    // to the engine per page, so this switch is about intent, not risk.
+    const [mode, setMode] = useState('designer')
+    const [language, setLanguage] = useState('heritage')
+    const [albumTitle, setAlbumTitle] = useState('')
     const [shape, setShape] = useState('square')
     const [loading, setLoading] = useState(false)
     const [uploading, setUploading] = useState(false)
@@ -119,6 +154,9 @@ function Studio() {
         if (!row) return
         setSel(row.id)
         const saved = row.albumDesign
+        setMode(saved?.mode || 'designer')
+        setLanguage(saved?.language || 'heritage')
+        setAlbumTitle(saved?.title || '')
         if (saved && Array.isArray(saved.photos) && saved.photos.length) {
             setPhotos(saved.photos)
             setPreset(saved.preset || 'magazine')
@@ -147,13 +185,17 @@ function Studio() {
             const have = new Set(photos.map(p => p.url))
             const fresh = rows.filter(r => !have.has(r.imageUrl))
             const withAspect = await Promise.all(
-                fresh.map(async r => ({
-                    id: 'g_' + r.id,
-                    url: r.imageUrl,
-                    aspect: Number(r.imgAspect) > 0 ? Number(r.imgAspect) : await measure(r.imageUrl),
-                    from: 'guest',
-                    name: r.name || '',
-                })),
+                fresh.map(async r => {
+                    const probed = await probe(r.imageUrl)
+                    return {
+                        id: 'g_' + r.id,
+                        url: r.imageUrl,
+                        aspect: Number(r.imgAspect) > 0 ? Number(r.imgAspect) : probed.aspect,
+                        tone: probed.tone,
+                        from: 'guest',
+                        name: r.name || '',
+                    }
+                }),
             )
             setPhotos(prev => [...prev, ...withAspect])
             flash(withAspect.length ? `נוספו ${withAspect.length} תמונות של אורחים` : 'אין תמונות חדשות להוסיף')
@@ -176,7 +218,11 @@ function Studio() {
                 const r = storageRef(storage, `weddings/${sel}/album/${Date.now()}-${safe}`)
                 await uploadBytes(r, file, { contentType: file.type || 'image/jpeg' })
                 const url = await getDownloadURL(r)
-                added.push({ id: 'u_' + Math.random().toString(36).slice(2, 10), url, aspect: await measure(url), from: 'upload', name: '' })
+                const probed = await probe(url)
+                added.push({
+                    id: 'u_' + Math.random().toString(36).slice(2, 10),
+                    url, aspect: probed.aspect, tone: probed.tone, from: 'upload', name: '',
+                })
             }
             setPhotos(prev => [...prev, ...added])
             flash(`הועלו ${added.length} תמונות`)
@@ -201,7 +247,15 @@ function Studio() {
         () => planAlbum(photos, albumGeometry(preset, UNIT, UNIT * ratio)),
         [photos, preset, ratio],
     )
-    const spreads = useMemo(() => toSpreads(pages), [pages])
+    const scenes = useMemo(
+        () => planAlbumScenes(photos, {
+            languageId: language, pageW: UNIT, pageH: UNIT * ratio, title: albumTitle.trim() || null,
+        }),
+        [photos, language, ratio, albumTitle],
+    )
+    const units = mode === 'designer' ? scenes : pages
+    const spreads = useMemo(() => toSpreads(units), [units])
+    const surface = mode === 'designer' ? getLanguage(language).paper : getAlbumPreset(preset).pageBg
 
     async function save() {
         if (!sel) return flash('בחרו אירוע', 'err')
@@ -209,10 +263,15 @@ function Studio() {
         try {
             const patch = {
                 albumDesign: {
+                    mode,
+                    language,
+                    title: albumTitle.trim() || null,
                     preset,
                     shape,
-                    photos: photos.map(p => ({ id: p.id, url: p.url, aspect: p.aspect ?? null, from: p.from || 'guest' })),
-                    pageCount: pages.length,
+                    photos: photos.map(p => ({
+                        id: p.id, url: p.url, aspect: p.aspect ?? null, tone: p.tone ?? null, from: p.from || 'guest',
+                    })),
+                    pageCount: units.length,
                     updatedAt: new Date().toISOString(),
                 },
             }
@@ -300,6 +359,65 @@ function Studio() {
                         </div>
 
                         <div className='bg-white rounded-2xl border border-[#e7dcc6] p-4'>
+                            <label className='block text-xs font-bold text-[#7a6a52] mb-2'>איך לבנות את העמודים</label>
+                            <div className='flex gap-1 rounded-lg p-1 mb-3' style={{ background: '#fbf6ec', border: '1px solid #ead9b3' }}>
+                                {[['designer', 'מעצב', Wand2], ['engine', 'מנוע', LayoutGrid]].map(([id, label, Icon]) => (
+                                    <button
+                                        key={id}
+                                        onClick={() => setMode(id)}
+                                        className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-bold transition-all ${mode === id ? 'text-white shadow-sm' : 'text-[#7a6a52] hover:bg-white'}`}
+                                        style={mode === id ? { background: 'linear-gradient(180deg,#d3b46a,#b8893d)' } : undefined}
+                                    >
+                                        <Icon size={12} /> {label}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className='text-[10.5px] text-[#a89378] mb-3 leading-relaxed'>
+                                {mode === 'designer'
+                                    ? 'העמוד נבנה משכבות — רקע, קישוט, תמונות, טיפול וטיפוגרפיה. המערכת מנקדת כמה לייאאוטים מול הצורות שיש בפועל ובוחרת את המתאים. אם שום לייאאוט לא מתאים, העמוד נופל חזרה למנוע.'
+                                    : 'פריסה מיושרת בשורות. בלי קישוט ובלי הטיות — נקי, צפוי, ומסתדר עם כל אוסף תמונות.'}
+                            </p>
+
+                            {mode === 'designer' && (
+                                <>
+                                    <label className='block text-xs font-bold text-[#7a6a52] mb-2'>שפת עיצוב</label>
+                                    <div className='space-y-2 mb-3'>
+                                        {LANGUAGE_ORDER.map(id => {
+                                            const l = LANGUAGES[id]
+                                            const active = language === id
+                                            return (
+                                                <button
+                                                    key={id}
+                                                    onClick={() => setLanguage(id)}
+                                                    className='w-full text-right rounded-xl border p-2.5 transition-colors'
+                                                    style={{ borderColor: active ? '#AA8840' : '#e7dcc6', background: active ? '#AA88400d' : '#fff' }}
+                                                >
+                                                    <div className='flex items-center gap-2 mb-1'>
+                                                        <span className='flex rounded-md overflow-hidden border border-[#e7dcc6]' style={{ width: 34, height: 16 }}>
+                                                            {l.swatch.map(c => <span key={c} style={{ background: c, flex: 1 }} />)}
+                                                        </span>
+                                                        <span className='text-[12px] font-bold text-[#5a4a32]'>{l.label}</span>
+                                                    </div>
+                                                    <p className='text-[10.5px] text-[#a89378] leading-relaxed'>{l.hint}</p>
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                    <label className='block text-xs font-bold text-[#7a6a52] mb-1.5'>כותרת האלבום</label>
+                                    <input
+                                        value={albumTitle}
+                                        onChange={e => setAlbumTitle(e.target.value)}
+                                        placeholder='למשל: בר המצווה של נועם'
+                                        className='w-full rounded-xl border border-[#e7dcc6] px-3 py-2 text-sm bg-white outline-none focus:border-[#AA8840]'
+                                    />
+                                    <p className='text-[10.5px] text-[#a89378] mt-1.5 leading-relaxed'>
+                                        מופיעה בעמוד הראשון, ובשפת ״מסע״ גם בתוך חותמת הדרכון. בלי כותרת — החותמת פשוט לא מצוירת.
+                                    </p>
+                                </>
+                            )}
+                        </div>
+
+                        <div className={`bg-white rounded-2xl border border-[#e7dcc6] p-4${mode === 'designer' ? ' hidden' : ''}`}>
                             <label className='block text-xs font-bold text-[#7a6a52] mb-2.5'>סגנון</label>
                             <div className='space-y-2'>
                                 {ALBUM_PRESET_ORDER.map(id => {
@@ -340,7 +458,7 @@ function Studio() {
                                 ))}
                             </div>
                             <p className='text-[10.5px] text-[#a89378] mt-2 leading-relaxed'>
-                                {pages.length} עמודים · {spreads.length} כפולות · {photos.length} תמונות
+                                {units.length} עמודים · {spreads.length} כפולות · {photos.length} תמונות
                             </p>
                         </div>
 
@@ -383,8 +501,16 @@ function Studio() {
                                 {spreads.map((sp, i) => (
                                     <div key={i} className='flex gap-[2px] mx-auto w-fit' style={{ boxShadow: '0 3px 18px rgba(60,45,20,0.16)' }}>
                                         {[sp.left, sp.right].map((pg, k) => (
-                                            <div key={k} style={{ width: previewW, height: previewH, background: getAlbumPreset(preset).pageBg }}>
-                                                {pg && (
+                                            <div key={k} style={{ width: previewW, height: previewH, background: surface }}>
+                                                {pg && (mode === 'designer' ? (
+                                                    <AlbumScene
+                                                        scene={pg}
+                                                        languageId={language}
+                                                        width={previewW}
+                                                        height={previewH}
+                                                        unit={UNIT}
+                                                    />
+                                                ) : (
                                                     <AlbumPage
                                                         page={pg}
                                                         presetId={preset}
@@ -393,7 +519,7 @@ function Studio() {
                                                         unit={UNIT}
                                                         pageNumber={pg.index + 1}
                                                     />
-                                                )}
+                                                ))}
                                             </div>
                                         ))}
                                     </div>
