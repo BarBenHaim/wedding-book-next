@@ -33,7 +33,17 @@ const ALLOWED_EVENTS = new Set([
     'photo_upload',
     'blessing_sent_success',
     'blessing_sent_error',
+    // Sent by the mobile app. A push token on the doc says the app was
+    // installed once; these say somebody actually used it - and the
+    // second says they looked at the book itself, which is the question
+    // the admin table is really asking.
+    'app_open',
+    'app_book_open',
 ])
+
+// Events that also stamp a "last seen" field on the wedding doc, so the
+// table can answer without reading the whole scans subcollection.
+const STAMPS = { app_open: 'lastAppOpenAt', app_book_open: 'lastAppBookOpenAt' }
 
 // Best-effort GeoIP lookup. ipapi.co's free tier allows 1000 lookups/
 // day per source IP without an API key — comfortable for a wedding's
@@ -106,6 +116,17 @@ export async function POST(req) {
         const referer = (req.headers.get('referer') || '').slice(0, 200)
 
         const geo = await geoLookup(ip)
+
+        if (STAMPS[event]) {
+            // merge, and never let a failure here lose the scan row: an
+            // analytics endpoint must not be able to damage a wedding
+            // document, nor drop an event because a write raced.
+            await adminDb
+                .collection('weddings')
+                .doc(weddingId)
+                .set({ [STAMPS[event]]: FieldValue.serverTimestamp() }, { merge: true })
+                .catch(() => {})
+        }
 
         await adminDb
             .collection('weddings')

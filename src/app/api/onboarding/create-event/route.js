@@ -114,7 +114,13 @@ export async function POST(req) {
 
         const ref = db.collection('weddings').doc()
         const doc = {
-            ...buildWeddingDoc(check.value, { uid, email, name: body.ownerName }),
+            // The app identifies itself with a header, or a body field
+            // for a client that cannot set one. Anything else is web.
+            ...buildWeddingDoc(
+                check.value,
+                { uid, email, name: body.ownerName },
+                (req.headers.get('x-wt-client') || body.client) === 'app' ? 'app' : 'web',
+            ),
             createdAt: FieldValue.serverTimestamp(),
             slug,
             digitalTokens: [viewerToken],

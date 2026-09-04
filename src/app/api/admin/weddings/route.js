@@ -82,6 +82,9 @@ export async function GET(req) {
                 }
 
                 const nonEmpty = o => Boolean(o && typeof o === 'object' && Object.keys(o).length)
+                // Firestore Timestamps do not survive JSON; ISO strings do.
+                const tsToIso = v =>
+                    !v ? null : typeof v.toDate === 'function' ? v.toDate().toISOString() : typeof v === 'string' ? v : null
                 return {
                     id: doc.id,
                     // Work-board derived flags — computed HERE so the board
@@ -130,6 +133,17 @@ export async function GET(req) {
                     // something, so an event with no album adds nothing
                     // to every row of the list.
                     albumDesign: nonEmpty(data.albumDesign) ? data.albumDesign : null,
+                    // App presence and provenance. The push tokens
+                    // themselves never leave the server: they are
+                    // per-device addresses, useless to the table, and
+                    // shipping a hundred of them on every row would be
+                    // careless. The count is the whole signal.
+                    createdVia: data.createdVia ?? null,
+                    appDevices: Array.isArray(data.pushTokens)
+                        ? data.pushTokens.filter(t => typeof t === 'string' && t.startsWith('ExponentPushToken')).length
+                        : 0,
+                    lastAppOpenAt: tsToIso(data.lastAppOpenAt),
+                    lastAppBookOpenAt: tsToIso(data.lastAppBookOpenAt),
                     locale: data.locale ?? null,
                     noPhotoCrop: data.noPhotoCrop === true,
                     adminNotes: data.adminNotes ?? null,

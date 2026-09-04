@@ -13,7 +13,7 @@ import {
     ChevronRight, Eye, Link2, Mail, Shield, HardDrive, RefreshCw,
     AlertTriangle, Copy, Clock, Printer, Package, Truck, UserPlus,
     Pencil, Save, PartyPopper, Wand2, QrCode, Phone, Wallet, Instagram,
-    Images,
+    Images, Smartphone,
 } from 'lucide-react'
 import {
     EVENT_TYPE_ORDER,
@@ -135,7 +135,7 @@ function formatDate(isoString) {
     try { return new Date(isoString).toLocaleDateString('he-IL') } catch { return isoString }
 }
 
-import { eventTypeOf, eventTypeLabel, matchesSearch, amountOf, compareByAmount, countByEventType, EVENT_TYPES, rowUrgency, countdownLabel, SOON_WINDOW_DAYS } from '@/lib/adminEventsView'
+import { eventTypeOf, eventTypeLabel, matchesSearch, amountOf, compareByAmount, countByEventType, EVENT_TYPES, rowUrgency, countdownLabel, SOON_WINDOW_DAYS, originOf, originLabel, appPresence } from '@/lib/adminEventsView'
 
 // How a row is tinted by how close its event is.
 //
@@ -398,6 +398,60 @@ function StatCard({ icon: Icon, label, value, iconBg, iconColor, pulse = false }
 }
 
 // ─── Status Badge ────────────────────────────────────────────────────────────
+/**
+ * How this customer actually uses the product, in one cell.
+ *
+ * Two facts, ranked by how much they are worth knowing. The top line is
+ * whether the app has been used, because a customer who opened the book
+ * on their phone is a different customer from one who never installed
+ * anything - and "opened the book" is deliberately distinct from "app
+ * installed", since a push token proves an install and nothing more.
+ * The bottom line is where the event came from, which is the acquisition
+ * channel and is worth a glance rather than a stare.
+ */
+function AppBadge({ wedding }) {
+    const app = appPresence(wedding)
+    const origin = originOf(wedding)
+
+    const TOP = {
+        book: { text: 'נצפה באפליקציה', bg: 'rgba(45,122,62,0.10)', fg: '#2d7a3e', bd: 'rgba(45,122,62,0.30)' },
+        connected: { text: 'אפליקציה מותקנת', bg: 'rgba(184,137,61,0.10)', fg: '#8a6d40', bd: 'rgba(212,184,103,0.45)' },
+        none: { text: 'בלי אפליקציה', bg: 'transparent', fg: '#c0ad8e', bd: 'rgba(212,184,103,0.22)' },
+    }[app.state]
+
+    const ORIGIN_TONE = {
+        app: '#2d7a3e',
+        order: '#8a6d40',
+        self_serve: '#7a6a52',
+        unknown: '#c0ad8e',
+    }[origin]
+
+    const when = app.bookMs ?? app.openedMs
+    const title = [
+        `מקור: ${originLabel(wedding)}`,
+        app.devices ? `${app.devices} מכשירים מחוברים` : 'אין מכשיר מחובר',
+        app.bookMs ? `הספר נפתח: ${new Date(app.bookMs).toLocaleString('he-IL')}` : null,
+        app.openedMs ? `האפליקציה נפתחה: ${new Date(app.openedMs).toLocaleString('he-IL')}` : null,
+    ].filter(Boolean).join(' · ')
+
+    return (
+        <div className='inline-flex flex-col items-center gap-1' title={title}>
+            <span
+                className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold whitespace-nowrap'
+                style={{ background: TOP.bg, color: TOP.fg, border: `1px solid ${TOP.bd}` }}
+            >
+                <Smartphone size={10} />
+                {TOP.text}
+                {app.devices > 1 && <span className='tabular-nums opacity-70'>×{app.devices}</span>}
+            </span>
+            <span className='text-[10px] tabular-nums' style={{ color: ORIGIN_TONE }}>
+                {originLabel(wedding)}
+                {when ? <span className='opacity-60'> · {new Date(when).toLocaleDateString('he-IL')}</span> : null}
+            </span>
+        </div>
+    )
+}
+
 function StatusBadge({ weddingDate }) {
     const s = getWeddingStatus(weddingDate)
     if (s === 'today') return <span className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200'><span className='w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse' />היום</span>
@@ -2745,6 +2799,7 @@ function AdminDashboardContent() {
                                         )}
                                         <GreetingsBadge count={w.greetingsCount} />
                                         <PrintBadge printOrder={w.printOrder} />
+                                        <AppBadge wedding={w} />
                                         {formatAmount(w) && <span className='font-bold text-[#3d7a3e] tabular-nums'>{formatAmount(w)}</span>}
                                     </div>
                                     {contactName(w) && (
@@ -2780,7 +2835,7 @@ function AdminDashboardContent() {
                         </div>
                         {/* Desktop: full table */}
                         <div className='overflow-x-auto hidden md:block'>
-                            <table className='w-full text-sm text-right' style={{ minWidth: '1180px' }}>
+                            <table className='w-full text-sm text-right' style={{ minWidth: '1320px' }}>
                                 <thead>
                                     <tr className='border-b border-[#AA8840]/15 text-[11px] uppercase tracking-widest bg-[#AA8840]/5'>
                                         <th className='px-6 py-4 text-[#a89378] font-semibold w-12'>#</th>
@@ -2791,6 +2846,7 @@ function AdminDashboardContent() {
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'>סטטוס</th>
                                         <SortableHeader sortKey='greetings' currentSort={sort} onSort={setSort} justify='center'><MessageCircle size={11} /> ברכות</SortableHeader>
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'><span className='flex items-center gap-1.5 justify-center'><Printer size={11} /> הדפסה</span></th>
+                                        <th className='px-6 py-4 font-semibold text-[#a89378] text-center'><span className='flex items-center gap-1.5 justify-center'><Smartphone size={11} /> אפליקציה</span></th>
                                         <SortableHeader sortKey='amount' currentSort={sort} onSort={setSort} justify='center'><Wallet size={11} /> תשלום</SortableHeader>
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'>פעולות</th>
                                     </tr>
@@ -2846,6 +2902,7 @@ function AdminDashboardContent() {
                                             <td className='px-6 py-4 text-center'><StatusBadge weddingDate={w.weddingDate} /></td>
                                             <td className='px-6 py-4 text-center'><GreetingsBadge count={w.greetingsCount} /></td>
                                             <td className='px-6 py-4 text-center'><PrintBadge printOrder={w.printOrder} /></td>
+                                            <td className='px-6 py-4 text-center'><AppBadge wedding={w} /></td>
                                             <td className='px-6 py-4 text-center'>
                                                 {formatAmount(w)
                                                     ? <span className='text-sm font-bold text-[#3d7a3e] tabular-nums whitespace-nowrap'>{formatAmount(w)}</span>

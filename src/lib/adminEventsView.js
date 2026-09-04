@@ -173,6 +173,63 @@ export function countByEventType(list) {
 // with the calm rows. It is a to-do, not a state.
 
 /** How far ahead counts as "coming up". */
+// Where an event came from, and whether the app is on it.
+//
+// Provenance is written at creation and never edited, so the table can
+// trust it. 'unknown' is not a fourth kind of event - it is a legacy row
+// created before provenance was recorded, and saying so is better than
+// guessing 'order' and being wrong on the ones that were not.
+export const ORIGIN_LABEL = {
+    order: 'הזמנה',
+    self_serve: 'אתר',
+    app: 'אפליקציה',
+    unknown: '—',
+}
+
+export function originOf(w) {
+    const v = w?.createdVia
+    return v === 'order' || v === 'self_serve' || v === 'app' ? v : 'unknown'
+}
+
+export function originLabel(w) {
+    return ORIGIN_LABEL[originOf(w)]
+}
+
+/**
+ * Whether the mobile app is on this event, and when it was last used.
+ *
+ * `devices` counts the Expo push tokens the app registered on the doc -
+ * one per phone that signed in. Above zero means the app is installed
+ * and connected, whether or not anyone has opened the book since.
+ *
+ * The two timestamps are separate on purpose: opening the app and
+ * opening the BOOK inside it are different signals, and the second is
+ * the one that says the customer looked at what they bought.
+ */
+export function appPresence(w) {
+    const devices = Array.isArray(w?.pushTokens)
+        ? w.pushTokens.filter(t => typeof t === 'string' && t.startsWith('ExponentPushToken')).length
+        : Number.isFinite(w?.appDevices) ? w.appDevices : 0
+    const openedMs = toMs(w?.lastAppOpenAt)
+    const bookMs = toMs(w?.lastAppBookOpenAt)
+    return {
+        devices,
+        connected: devices > 0 || openedMs != null,
+        openedMs,
+        bookMs,
+        // Opening the book is the strongest state, then the app merely
+        // being connected, then nothing.
+        state: bookMs != null ? 'book' : (devices > 0 || openedMs != null) ? 'connected' : 'none',
+    }
+}
+
+function toMs(v) {
+    if (!v) return null
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null
+    const t = Date.parse(v)
+    return Number.isFinite(t) ? t : null
+}
+
 export const SOON_WINDOW_DAYS = 14
 
 /**
