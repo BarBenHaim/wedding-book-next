@@ -41,8 +41,9 @@
 import { safeAspect, planAlbum, solveRow } from './albumLayout'
 import { getLanguage } from './albumLanguages'
 import { resolveTreatment, chooseTreatment, toneWash } from './albumTreatments'
-import { ornamentUrl, rand, between } from './albumOrnaments'
+import { ornamentUrl, pageFrameUrl, rand, between } from './albumOrnaments'
 import { planPage, SCORE_FLOOR } from './albumScoring'
+import { mirrorRecipe } from './albumRecipes'
 
 /** Fit a photo inside a box, whole and centred. Never crops. */
 export function containBox(box, aspect) {
@@ -65,8 +66,12 @@ const areaToBox = (area, W, H) => ({ x: area[0] * W, y: area[1] * H, w: area[2] 
  * @param {Array}  photos  [{ id, url, aspect, tone }]
  * @param {object} opts    { languageId, pageW, pageH, index, title }
  */
-export function composeScene(recipe, photos, opts = {}) {
-    const { languageId = 'editorial', pageW = 1000, pageH = 1000, index = 0, title = null } = opts
+export function composeScene(rawRecipe, photos, opts = {}) {
+    const { languageId = 'editorial', pageW = 1000, pageH = 1000, index = 0, title = null, mirror = false } = opts
+    // A rough that opens left, opening right. Free variety: the same
+    // composition read the other way is a different page, and on facing
+    // pages it is what stops a spread looking like a photocopy.
+    const recipe = mirror && rawRecipe.mirrorable ? mirrorRecipe(rawRecipe) : rawRecipe
     const lang = getLanguage(languageId)
     const scale = pageW / 1000
     const layers = []
@@ -96,6 +101,17 @@ export function composeScene(recipe, photos, opts = {}) {
             layers.push({
                 type: 'ambient', z: 2, role: 'ambient',
                 style: { backgroundImage: toneWash(src.tone, lang.paper, 0.55) },
+            })
+        }
+    }
+
+    // ── the page's own frame ─────────────────────────────────────────
+    if (recipe.pageFrame && (lang.pageFrames || []).includes(recipe.pageFrame)) {
+        const url = pageFrameUrl(recipe.pageFrame, { w: pageW, h: pageH, color: lang.accent })
+        if (url) {
+            layers.push({
+                type: 'ornament', z: 4, name: 'pageFrame:' + recipe.pageFrame, url,
+                x: 0, y: 0, w: pageW, h: pageH, rotate: 0,
             })
         }
     }
@@ -190,7 +206,12 @@ export function composeScene(recipe, photos, opts = {}) {
         })
     }
 
-    return { index, recipeId: recipe.id, layers: layers.sort((a, b) => a.z - b.z) }
+    return {
+        index,
+        recipeId: recipe.id,
+        mirrored: Boolean(recipe.mirrored),
+        layers: layers.sort((a, b) => a.z - b.z),
+    }
 }
 
 /**
@@ -264,21 +285,25 @@ export function planAlbumScenes(photos, opts = {}) {
     const pageRatio = pageH / pageW
     const scenes = []
     const recent = []
+    const uses = {}
     let i = 0
     let guard = 0
 
     while (i < queue.length && guard++ < 5000) {
         const rest = queue.slice(i)
-        const best = planPage(rest, { pageRatio, recent, world: languageId })
+        const best = planPage(rest, { pageRatio, recent, world: languageId, pageIndex: scenes.length })
 
         if (best && best.raw >= SCORE_FLOOR) {
             const group = rest.slice(0, best.take)
+            // Every second use of a rough is its mirror image.
+            uses[best.recipe.id] = (uses[best.recipe.id] || 0) + 1
             scenes.push(composeScene(best.recipe, group, {
                 languageId, pageW, pageH, index: scenes.length,
+                mirror: uses[best.recipe.id] % 2 === 0,
                 title: !title ? null : titleOnFirstOnly ? (scenes.length === 0 ? title : null) : title,
             }))
             recent.push(best.recipe.id)
-            if (recent.length > 3) recent.shift()
+            if (recent.length > 5) recent.shift()
             i += best.take
             continue
         }
@@ -289,7 +314,7 @@ export function planAlbumScenes(photos, opts = {}) {
         const scene = fallbackScene(chunk, { languageId, pageW, pageH, index: scenes.length })
         scenes.push(scene)
         recent.push('__fallback')
-        if (recent.length > 3) recent.shift()
+        if (recent.length > 5) recent.shift()
         // Advance by what the fallback actually PLACED, not by what it
         // was offered. planAlbum may split five photographs over two
         // pages, and only the first becomes this scene — consuming all

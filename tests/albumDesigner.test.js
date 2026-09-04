@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { rand, ORNAMENTS, ornamentUrl } from '@/lib/albumOrnaments'
+import { rand, ORNAMENTS, ornamentUrl, PAGE_FRAMES, pageFrameUrl } from '@/lib/albumOrnaments'
 import { resolveTreatment, chooseTreatment, toneWash, TREATMENTS } from '@/lib/albumTreatments'
-import { RECIPES, recipesForCount, SUPPORTED_COUNTS } from '@/lib/albumRecipes'
-import { fitScore, coverage, scoreRecipeParts, planPage, explainPage, SCORE_FLOOR } from '@/lib/albumScoring'
+import { RECIPES, recipesForCount, SUPPORTED_COUNTS, mirrorRecipe } from '@/lib/albumRecipes'
+import { fitScore, coverage, scoreRecipeParts, planPage, explainPage, SCORE_FLOOR, tiebreak, FULLNESS } from '@/lib/albumScoring'
 import { composeScene, planAlbumScenes, containBox } from '@/lib/albumScene'
 import { LANGUAGES, LANGUAGE_ORDER, getLanguage } from '@/lib/albumLanguages'
 import { safeAspect } from '@/lib/albumLayout'
@@ -116,6 +116,87 @@ describe('the recipe library', () => {
     })
 })
 
+describe('the library is big enough to stop repeating', () => {
+    it('offers several genuinely different answers at every count', () => {
+        for (const n of SUPPORTED_COUNTS) {
+            expect(recipesForCount(n).length, `n=${n}`).toBeGreaterThanOrEqual(3)
+        }
+        expect(RECIPES.length).toBeGreaterThanOrEqual(30)
+    })
+
+    it('lays twenty photographs out without repeating a rough', () => {
+        // The failure this guards against is not in any one page: it is
+        // in the sequence. Twenty pictures over five pages of the same
+        // three roughs reads as a template however good each page is.
+        const aspects = [1.5, 0.667, 1.5, 1, 2.6, 0.75, 1.5, 1.333, 0.8, 1.5, 0.667, 1, 1.5, 0.7, 1.5, 1.5, 0.667, 1.78, 1, 0.75]
+        for (const languageId of LANGUAGE_ORDER) {
+            const scenes = planAlbumScenes(P(aspects), { ...PAGE, languageId })
+            const distinct = new Set(scenes.map(s => s.recipeId)).size
+            expect(distinct / scenes.length, languageId).toBeGreaterThanOrEqual(0.8)
+        }
+    })
+
+    it('varies how many photographs a page holds', () => {
+        const aspects = Array.from({ length: 30 }, (_, i) => [1.5, 0.667, 1, 1.33, 0.75, 1.78][i % 6])
+        const counts = new Set(
+            planAlbumScenes(P(aspects), { ...PAGE, languageId: 'heritage' })
+                .map(s => s.layers.filter(l => l.type === 'photo').length))
+        expect(counts.size).toBeGreaterThanOrEqual(3)
+    })
+
+    it('peaks its fullness bonus at four rather than always filling to six', () => {
+        expect(FULLNESS[4]).toBeGreaterThan(FULLNESS[2])
+        expect(FULLNESS[6]).toBeLessThan(FULLNESS[4])
+    })
+})
+
+describe('mirroring', () => {
+    it('flips a rough without moving it off the page', () => {
+        for (const r of RECIPES.filter(x => x.mirrorable)) {
+            for (const s of mirrorRecipe(r).slots) {
+                expect(s.area[0], r.id).toBeGreaterThanOrEqual(-0.001)
+                expect(s.area[0] + s.area[2], r.id).toBeLessThanOrEqual(1.001)
+            }
+        }
+    })
+
+    it('flips the side a photograph fades on, and the side a title sits on', () => {
+        const r = RECIPES.find(x => x.mirrorable && x.slots.some(s => s.fade === 'right'))
+        if (r) expect(mirrorRecipe(r).slots.find(s => s.fade).fade).toBe('left')
+        const t = RECIPES.find(x => x.mirrorable && x.title?.align === 'start')
+        if (t) expect(mirrorRecipe(t).title.align).toBe('end')
+    })
+
+    it('is its own inverse', () => {
+        const r = RECIPES.find(x => x.mirrorable)
+        const back = mirrorRecipe(mirrorRecipe(r))
+        back.slots.forEach((s, i) => {
+            s.area.forEach((v, k) => expect(v).toBeCloseTo(r.slots[i].area[k], 8))
+        })
+    })
+})
+
+describe('page frames', () => {
+    it('renders every kind without a network dependency', () => {
+        for (const kind of Object.keys(PAGE_FRAMES)) {
+            const url = pageFrameUrl(kind, { w: 1000, h: 1000 })
+            expect(url, kind).toMatch(/^data:image\/svg\+xml/)
+            expect(url, kind).not.toMatch(/https?:/)
+        }
+    })
+
+    it('draws only frames the language owns', () => {
+        for (const languageId of LANGUAGE_ORDER) {
+            const allowed = getLanguage(languageId).pageFrames || []
+            for (const scene of planAlbumScenes(P(Array.from({ length: 22 }, (_, i) => [1.5, 0.7, 1, 1.3][i % 4])), { ...PAGE, languageId })) {
+                for (const L of scene.layers.filter(l => String(l.name).startsWith('pageFrame:'))) {
+                    expect(allowed, languageId).toContain(L.name.split(':')[1])
+                }
+            }
+        }
+    })
+})
+
 describe('scoring', () => {
     it('rewards the shape a slot asked for', () => {
         expect(fitScore(1.5, 'landscape')).toBeGreaterThan(fitScore(0.6, 'landscape'))
@@ -149,6 +230,24 @@ describe('scoring', () => {
     it('prefers a fuller page over a stack of single plates', () => {
         const best = planPage(P([1.5, 1.4, 1.3, 1.45]), { world: 'editorial' })
         expect(best.take).toBeGreaterThan(1)
+    })
+
+    it('refuses a rough that would leave one photograph floating in an empty slot', () => {
+        // A page average hides one badly matched slot behind three good
+        // ones. Empty area inside a composed page reads as a mistake.
+        const tall = RECIPES.find(r => r.slots.some(s => s.area[3] > 0.7 && s.area[2] < 0.45))
+        if (tall) {
+            const good = scoreRecipeParts(tall, P(tall.slots.map(() => 0.6)), {})
+            const bad = scoreRecipeParts(tall, P(tall.slots.map(() => 3.0)), {})
+            expect(bad.base).toBeLessThan(good.base)
+        }
+    })
+
+    it('tiebreak is a hash, not a random number', () => {
+        expect(tiebreak('plate', 3)).toBe(tiebreak('plate', 3))
+        expect(tiebreak('plate', 3)).not.toBe(tiebreak('plate', 4))
+        expect(tiebreak('plate', 3)).toBeGreaterThanOrEqual(0)
+        expect(tiebreak('plate', 3)).toBeLessThan(1)
     })
 
     it('explains its choice, best first', () => {
@@ -224,7 +323,10 @@ describe('composed scenes', () => {
         for (const languageId of LANGUAGE_ORDER) {
             const lang = getLanguage(languageId)
             for (const scene of planAlbumScenes(P(ALBUMS.mixed), { ...PAGE, languageId, title: 'פריז' })) {
-                for (const L of scene.layers.filter(l => l.type === 'ornament')) {
+                // Page frames are ornament layers too, and they are the
+                // page's own border rather than something scattered on
+                // it — they have their own allow-list and their own test.
+                for (const L of scene.layers.filter(l => l.type === 'ornament' && !String(l.name).startsWith('pageFrame:'))) {
                     expect(lang.ornaments, languageId).toContain(L.name)
                 }
             }

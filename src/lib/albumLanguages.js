@@ -28,6 +28,10 @@ export const LANGUAGES = {
         accent: '#131417',
         frame: '#ffffff',
         ornaments: [],           // deliberately none
+        // A hairline rule and corner brackets are not decoration, they
+        // are measure — which is why the world with no ornaments still
+        // has frames.
+        pageFrames: ['rule', 'brackets', 'sides'],
         ornamentColor: '#131417',
         rotationBudget: 0,
         treatments: ['plain', 'soft-edge'],
@@ -52,6 +56,7 @@ export const LANGUAGES = {
         accent: '#8a5a3b',
         frame: '#fffdf7',
         ornaments: ['tape', 'stamp', 'mapLines', 'route', 'pin', 'tornStrip'],
+        pageFrames: ['double', 'brackets'],
         ornamentColor: '#8a5a3b',
         rotationBudget: 1,
         treatments: ['framed', 'card', 'soft-edge', 'plain'],
@@ -79,6 +84,7 @@ export const LANGUAGES = {
         accent: '#aa8840',
         frame: '#ffffff',
         ornaments: ['cornerRule', 'tornStrip'],
+        pageFrames: ['double', 'rule', 'brackets', 'sides'],
         ornamentColor: '#aa8840',
         rotationBudget: 0.35,
         treatments: ['framed', 'plain', 'soft-edge'],

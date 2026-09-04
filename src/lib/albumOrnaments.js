@@ -160,6 +160,68 @@ export function cornerRule({ size = 70, color = '#aa8840', weight = 1 } = {}) {
 </svg>`
 }
 
+/**
+ * Page frames — the border drawn on the PAGE rather than around a photo.
+ *
+ * Four of them, because a frame is a strong statement and one frame
+ * repeated on forty pages is wallpaper. They are generated at the page's
+ * own size so the inset stays proportional at any trim, and they take
+ * the language's ink, so an editorial book gets a hairline where a
+ * travel book gets a brown rule.
+ */
+export function frameRule({ w = 1000, h = 1000, inset = 0.045, color = '#000', weight = 1 } = {}) {
+    const i = Math.min(w, h) * inset
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+<rect x="${i.toFixed(1)}" y="${i.toFixed(1)}" width="${(w - i * 2).toFixed(1)}" height="${(h - i * 2).toFixed(1)}"
+ fill="none" stroke="${esc(color)}" stroke-opacity="0.42" stroke-width="${weight}"/>
+</svg>`
+}
+
+export function frameDouble({ w = 1000, h = 1000, inset = 0.04, gap = 0.014, color = '#000' } = {}) {
+    const m = Math.min(w, h)
+    const i = m * inset
+    const j = i + m * gap
+    const box = (k, op, sw) => `<rect x="${k.toFixed(1)}" y="${k.toFixed(1)}" width="${(w - k * 2).toFixed(1)}" height="${(h - k * 2).toFixed(1)}" fill="none" stroke="${esc(color)}" stroke-opacity="${op}" stroke-width="${sw}"/>`
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${box(i, 0.5, 1.6)}${box(j, 0.3, 0.8)}</svg>`
+}
+
+/** Four corner brackets. A frame that implies the rectangle without
+ *  closing it — quieter than a rule and much harder to get wrong. */
+export function frameBrackets({ w = 1000, h = 1000, inset = 0.05, arm = 0.1, color = '#000', weight = 1.2 } = {}) {
+    const m = Math.min(w, h)
+    const i = m * inset
+    const a = m * arm
+    const L = i, R = w - i, T = i, B = h - i
+    const paths = [
+        `M${L},${T + a} L${L},${T} L${L + a},${T}`,
+        `M${R - a},${T} L${R},${T} L${R},${T + a}`,
+        `M${R},${B - a} L${R},${B} L${R - a},${B}`,
+        `M${L + a},${B} L${L},${B} L${L},${B - a}`,
+    ]
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+${paths.map(d => `<path d="${d}" fill="none" stroke="${esc(color)}" stroke-opacity="0.5" stroke-width="${weight}"/>`).join('')}
+</svg>`
+}
+
+/** Two vertical rules. Reads as a column measure rather than a border,
+ *  which suits a page holding one tall photograph. */
+export function frameSides({ w = 1000, h = 1000, inset = 0.055, color = '#000', weight = 1 } = {}) {
+    const i = Math.min(w, h) * inset
+    const y0 = h * 0.08, y1 = h * 0.92
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+<line x1="${i.toFixed(1)}" y1="${y0}" x2="${i.toFixed(1)}" y2="${y1}" stroke="${esc(color)}" stroke-opacity="0.4" stroke-width="${weight}"/>
+<line x1="${(w - i).toFixed(1)}" y1="${y0}" x2="${(w - i).toFixed(1)}" y2="${y1}" stroke="${esc(color)}" stroke-opacity="0.4" stroke-width="${weight}"/>
+</svg>`
+}
+
+export const PAGE_FRAMES = { rule: frameRule, double: frameDouble, brackets: frameBrackets, sides: frameSides }
+
+/** A page frame as a data: URI, sized to the page it will cover. */
+export function pageFrameUrl(kind, opts = {}) {
+    const fn = PAGE_FRAMES[kind]
+    return fn ? 'data:image/svg+xml;utf8,' + encodeURIComponent(fn(opts)) : null
+}
+
 export const ORNAMENTS = { tape, stamp, mapLines, route, pin, tornStrip, cornerRule }
 
 /** An ornament as a data: URI, ready for a CSS background or an <img>. */

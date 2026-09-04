@@ -67,6 +67,10 @@ export function coverage(aspect, slotArea, pageRatio = 1) {
 // abandon the design system for that page.
 export const SCORE_FLOOR = 38
 
+/** What taking n photographs onto one page is worth, before the page is
+ *  scored on its own merits. Peaks at four; six has to earn its place. */
+export const FULLNESS = { 1: 0, 2: 6, 3: 11, 4: 14, 5: 11, 6: 7 }
+
 /**
  * Score one recipe against one ordered group of photographs.
  *
@@ -98,16 +102,29 @@ export function scoreRecipeParts(recipe, photos, opts = {}) {
     })
     let base = total / recipe.slots.length
 
+    // A per-slot floor, not just a page average. One photograph badly
+    // matched to a tall slot leaves it floating in an empty column, and
+    // the page average happily hides that behind three good slots. Empty
+    // area INSIDE a composed page reads as a mistake, not as air — this
+    // is the difference between a designed page and a page that merely
+    // scored well.
+    const worst = Math.min(...recipe.slots.map((slot, i) => coverage(photos[i].aspect, slot.area, pageRatio)))
+    if (worst < 0.40) base -= 34
+    else if (worst < 0.55) base -= 12
+
     // A panorama in a slot not asking for one wastes it; a panorama in a
     // 'wide' slot is already rewarded by fitScore.
     recipe.slots.forEach((slot, i) => {
         if (isPanorama(photos[i].aspect) && slot.prefer !== 'wide' && recipe.slots.length > 1) base -= 14
     })
 
-    // Variety. The most recent page matters more than the one before it.
+    // Variety. The most recent page matters most, and the memory runs
+    // five pages deep — with thirty-nine roughs there is always
+    // something else to reach for, and a reader notices a repeat long
+    // after two pages.
     let score = base
     const idx = recent.lastIndexOf(recipe.id)
-    if (idx >= 0) score -= [26, 14, 7][recent.length - 1 - idx] ?? 0
+    if (idx >= 0) score -= [34, 24, 16, 10, 5][recent.length - 1 - idx] ?? 0
 
     // A dense page beside another dense page makes a tiring spread.
     if (recipe.density === 'high' && recent[recent.length - 1] === recipe.id) score -= 8
@@ -122,8 +139,27 @@ export function scoreRecipeParts(recipe, photos, opts = {}) {
  * and the best score wins — with a nudge toward taking more photos, so
  * an album of forty does not become forty single-photo pages.
  */
+/**
+ * A stable pseudo-random nudge, keyed to the rough and the page.
+ *
+ * Two roughs that score within a point of each other are, for practical
+ * purposes, equally good — and without a tiebreak the same one wins
+ * every time the same shapes come round, which is how a long album falls
+ * into lockstep. This is not randomness: it is a hash, so the album
+ * plans identically every time, on screen and in the PDF.
+ */
+export function tiebreak(id, pageIndex) {
+    let h = 2166136261
+    const key = String(id) + ':' + pageIndex
+    for (let i = 0; i < key.length; i++) {
+        h ^= key.charCodeAt(i)
+        h = Math.imul(h, 16777619)
+    }
+    return ((h >>> 0) % 1000) / 1000
+}
+
 export function planPage(queue, opts = {}) {
-    const { pageRatio = 1, recent = [], world = null } = opts
+    const { pageRatio = 1, recent = [], world = null, pageIndex = 0 } = opts
     let best = null
     for (const n of SUPPORTED_COUNTS) {
         if (n > queue.length) continue
@@ -132,12 +168,23 @@ export function planPage(queue, opts = {}) {
         const group = queue.slice(0, n)
         for (const recipe of recipesForCount(n, world)) {
             const { base, score: ranked } = scoreRecipeParts(recipe, group, { pageRatio, recent })
-            // A fuller page is worth real points, not a rounding nudge.
-            // Without this the scorer drifts toward single-photo pages —
-            // one picture always covers a large area well, so it wins on
-            // coverage every time — and forty photographs become forty
-            // plates, which is a portfolio, not an album.
-            const score = ranked + (n - 1) * 6
+            // A fuller page is worth real points, but the curve PEAKS at
+            // four and falls away after. Without any bonus the scorer
+            // drifts to single-photo pages, because one picture always
+            // covers a large area well and wins on coverage every time —
+            // forty photographs become forty plates, which is a
+            // portfolio, not an album. With a bonus that keeps rising,
+            // it drifts the other way and every page holds six, which is
+            // a contact sheet. An album breathes in between.
+            let score = ranked + (FULLNESS[n] ?? 0)
+            // Among near-equals, let different pages prefer different
+            // roughs. Small enough that it never overrules a real fit.
+            score += tiebreak(recipe.id, pageIndex) * 2.5
+            // Endgame: when the album is nearly done, a rough that takes
+            // everything left is worth reaching for. Otherwise a tail of
+            // three photographs becomes three separate plates, which
+            // reads as having run out rather than having finished.
+            if (queue.length <= 6 && n === queue.length) score += 9
             if (!best || score > best.score) best = { score, raw: base, recipe, take: n }
         }
     }
