@@ -33,7 +33,24 @@ const ALLOWED_EVENTS = new Set([
     'photo_upload',
     'blessing_sent_success',
     'blessing_sent_error',
+    // Sent by the mobile app. A push token on the doc says the app was
+    // installed once; these say somebody actually used it - and the
+    // second says they looked at the book itself, which is the question
+    // the admin table is really asking.
+    'app_open',
+    'app_book_open',
 ])
+
+// Events that also stamp a "last seen" field on the wedding doc, so the
+// table can answer without reading the whole scans subcollection.
+const STAMPS = { app_open: 'lastAppOpenAt', app_book_open: 'lastAppBookOpenAt' }
+
+// Events sent by the owner's own app rather than by a guest. They are
+// not funnel analytics — they answer "has this customer used the app",
+// so neither the IP nor a city derived from it tells us anything we
+// asked. Skipping both keeps "approximate location" off the app's Play
+// Data Safety declaration, which is a category users read closely.
+const OWNER_EVENTS = new Set(['app_open', 'app_book_open'])
 
 // Best-effort GeoIP lookup. ipapi.co's free tier allows 1000 lookups/
 // day per source IP without an API key — comfortable for a wedding's
@@ -105,7 +122,19 @@ export async function POST(req) {
         const ip = ipHeader.split(',')[0].trim().slice(0, 64)
         const referer = (req.headers.get('referer') || '').slice(0, 200)
 
-        const geo = await geoLookup(ip)
+        const owner = OWNER_EVENTS.has(event)
+        const geo = owner ? {} : await geoLookup(ip)
+
+        if (STAMPS[event]) {
+            // merge, and never let a failure here lose the scan row: an
+            // analytics endpoint must not be able to damage a wedding
+            // document, nor drop an event because a write raced.
+            await adminDb
+                .collection('weddings')
+                .doc(weddingId)
+                .set({ [STAMPS[event]]: FieldValue.serverTimestamp() }, { merge: true })
+                .catch(() => {})
+        }
 
         await adminDb
             .collection('weddings')
@@ -116,7 +145,7 @@ export async function POST(req) {
                 meta: meta || null,
                 createdAt: FieldValue.serverTimestamp(),
                 userAgent,
-                ip,
+                ip: owner ? null : ip,
                 referer,
                 ...geo,
             })

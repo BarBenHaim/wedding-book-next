@@ -109,12 +109,16 @@ export function eventDisplayTitle(value) {
 
 // Shape the wedding document for a validated payload. Timestamps and
 // server-generated fields (slug, tokens) are the API route's job.
-export function buildWeddingDoc(value, owner = {}) {
+export function buildWeddingDoc(value, owner = {}, via = 'self_serve') {
     const doc = {
         ownerId: owner.uid || null,
         ownerEmail: owner.email || null,
         ownerName: cleanName(owner.name || '', 60) || null,
-        createdVia: 'self_serve',
+        // The web wizard and the mobile app create events through the
+        // same route, so the route has to say which one it was. Before
+        // this an App Store signup and a website signup were the same
+        // row, with no way to tell them apart afterwards.
+        createdVia: via === 'app' ? 'app' : 'self_serve',
         plan: 'free',
         locale: 'he',
         eventType: value.eventType,

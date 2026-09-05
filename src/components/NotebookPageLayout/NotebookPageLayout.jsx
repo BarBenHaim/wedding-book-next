@@ -4,7 +4,7 @@
 //
 // Production wedding-book layout — the "Notebook" template.
 //
-// Sister to StoryPageLayout, but the card is styled like a page torn from
+// A centred card layout, styled like a page torn from
 // a wedding journal — subtle horizontal "ruled lines" running across it
 // and a soft gold left-margin rule (like the red margin on a school
 // notebook, but in gold). Handwritten font for the blessing.

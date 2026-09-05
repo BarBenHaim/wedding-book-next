@@ -4,6 +4,9 @@ import {
     eventTypeOf, eventTypeLabel, matchesSearch, searchableText,
     amountOf, isPaid, compareByAmount, filterEvents, countByEventType,
     eventDateMs, daysUntilEvent, rowUrgency, countdownLabel,
+    originOf,
+    originLabel,
+    appPresence,
 } from '@/lib/adminEventsView'
 
 const barMitzvah = {
@@ -285,5 +288,63 @@ describe('countdownLabel', () => {
     it('says nothing for a past event and says so for a missing date', () => {
         expect(countdownLabel({ weddingDate: new Date(2026, 7, 20) }, NOW)).toBeNull()
         expect(countdownLabel({}, NOW)).toBe('בלי תאריך')
+    })
+})
+
+describe('originOf', () => {
+    it('reads the three provenances written at their own doors', () => {
+        expect(originOf({ createdVia: 'order' })).toBe('order')
+        expect(originOf({ createdVia: 'self_serve' })).toBe('self_serve')
+        expect(originOf({ createdVia: 'app' })).toBe('app')
+    })
+
+    it('calls a legacy row unknown rather than guessing', () => {
+        // Before provenance was recorded, a paid order was identifiable
+        // only by the ABSENCE of the field. Guessing 'order' here would
+        // be right for the old rows and wrong for every future one.
+        expect(originOf({})).toBe('unknown')
+        expect(originOf(null)).toBe('unknown')
+        expect(originOf({ createdVia: 'something-else' })).toBe('unknown')
+    })
+
+    it('labels every case in Hebrew', () => {
+        for (const via of ['order', 'self_serve', 'app', undefined]) {
+            expect(typeof originLabel({ createdVia: via })).toBe('string')
+        }
+    })
+})
+
+describe('appPresence', () => {
+    const TOKEN = 'ExponentPushToken[abc123]'
+
+    it('counts only real Expo tokens as devices', () => {
+        expect(appPresence({ pushTokens: [TOKEN, TOKEN] }).devices).toBe(2)
+        expect(appPresence({ pushTokens: ['garbage', null, 42] }).devices).toBe(0)
+        expect(appPresence({}).devices).toBe(0)
+    })
+
+    it('falls back to the count the API sends when tokens are withheld', () => {
+        // The list never leaves the server — the table gets a count.
+        expect(appPresence({ appDevices: 3 }).devices).toBe(3)
+    })
+
+    it('ranks having opened the book above merely having the app', () => {
+        expect(appPresence({ pushTokens: [TOKEN] }).state).toBe('connected')
+        expect(appPresence({ pushTokens: [TOKEN], lastAppBookOpenAt: '2026-09-01T10:00:00Z' }).state).toBe('book')
+        expect(appPresence({}).state).toBe('none')
+    })
+
+    it('treats a recorded app open as presence even with no token left', () => {
+        // A customer can revoke notifications and still use the app.
+        const p = appPresence({ lastAppOpenAt: '2026-09-01T10:00:00Z' })
+        expect(p.connected).toBe(true)
+        expect(p.devices).toBe(0)
+    })
+
+    it('accepts ISO strings and epoch millis, and ignores nonsense', () => {
+        expect(appPresence({ lastAppOpenAt: '2026-09-01T10:00:00Z' }).openedMs).toBe(Date.parse('2026-09-01T10:00:00Z'))
+        expect(appPresence({ lastAppOpenAt: 1756720800000 }).openedMs).toBe(1756720800000)
+        expect(appPresence({ lastAppOpenAt: 'not a date' }).openedMs).toBe(null)
+        expect(appPresence({ lastAppOpenAt: null }).openedMs).toBe(null)
     })
 })

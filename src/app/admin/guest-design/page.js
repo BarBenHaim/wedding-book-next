@@ -109,6 +109,19 @@ const COPY_FIELDS = [
     ['blessingPlaceholder', 'רמז בשדה הברכה', 'customBlessingPlaceholder'],
 ]
 
+// Pull the saved copy overrides off a wedding row into the shape the
+// editor's `copy` state uses. Until the GET returned these, the editor
+// opened every event with empty text boxes over saved wording.
+function copyFromWedding(w) {
+    const out = {}
+    if (!w) return out
+    for (const [key, , docKey] of COPY_FIELDS) {
+        const v = w[docKey]
+        if (typeof v === 'string' && v.trim()) out[key] = v
+    }
+    return out
+}
+
 function b64(obj) {
     try {
         return btoa(unescape(encodeURIComponent(JSON.stringify(obj))))
@@ -190,6 +203,7 @@ function Editor() {
                         setSelWedding(list[0].id)
                         if (list[0].guestDesign) setDesign(list[0].guestDesign)
                         setVariant(list[0].designVariant || '')
+                        setCopy(copyFromWedding(list[0]))
                     }
                 }
             } catch {
@@ -207,7 +221,7 @@ function Editor() {
         const w = weddings.find(x => x.id === id)
         setDesign(w?.guestDesign || {})
         setVariant(w?.designVariant || '')
-        setCopy({})
+        setCopy(copyFromWedding(w))
         setBgImage('')
         setBtnImg('')
     }
@@ -360,7 +374,7 @@ function Editor() {
             setWeddings(prev =>
                 prev.map(w =>
                     w.id === selWedding
-                        ? { ...w, designVariant: variant, ...(variant ? {} : { guestDesign: design }) }
+                        ? { ...w, designVariant: variant, ...(variant ? {} : { guestDesign: design }), ...patch }
                         : w
                 )
             )

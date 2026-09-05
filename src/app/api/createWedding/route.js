@@ -122,6 +122,11 @@ export async function POST(req) {
 
         await db.collection('weddings').doc(weddingId).set(
             {
+                // Provenance, written at the door. Before this a paid
+                // order was identifiable only by the ABSENCE of
+                // createdVia, which stops being true the moment any
+                // other path forgets to set it.
+                createdVia: 'order',
                 ownerId: userRecord.uid, // הקישור החשוב ללקוח במערכת
                 ownerEmail: email,
                 ownerName: name || null,

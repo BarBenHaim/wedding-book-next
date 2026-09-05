@@ -85,6 +85,9 @@ export async function GET(req) {
                 }
 
                 const nonEmpty = o => Boolean(o && typeof o === 'object' && Object.keys(o).length)
+                // Firestore Timestamps do not survive JSON; ISO strings do.
+                const tsToIso = v =>
+                    !v ? null : typeof v.toDate === 'function' ? v.toDate().toISOString() : typeof v === 'string' ? v : null
                 return {
                     id: doc.id,
                     // Work-board derived flags — computed HERE so the board
@@ -118,6 +121,52 @@ export async function GET(req) {
                     customTitle: data.customTitle ?? null,
                     customSubtitle: data.customSubtitle ?? null,
                     customDescription: data.customDescription ?? null,
+                    // Guest-page design. PATCH has always accepted both of
+                    // these; GET returned neither, so every editor loaded
+                    // blank and reported "nothing is selected" for an event
+                    // that had a design saved. Worse, the studio then sent
+                    // designVariant: '' back and cleared it.
+                    // designVariant is a short string — always sent.
+                    designVariant: data.designVariant ?? '',
+                    // guestDesign only when it holds something: it is capped
+                    // at 6KB on write, and most events have none, so an empty
+                    // one should not ride along on every row of the list.
+                    guestDesign: nonEmpty(data.guestDesign) ? data.guestDesign : null,
+                    // Same rule as guestDesign: only when it holds
+                    // something, so an event with no album adds nothing
+                    // to every row of the list.
+                    albumDesign: nonEmpty(data.albumDesign) ? data.albumDesign : null,
+                    // App presence and provenance. The push tokens
+                    // themselves never leave the server: they are
+                    // per-device addresses, useless to the table, and
+                    // shipping a hundred of them on every row would be
+                    // careless. The count is the whole signal.
+                    createdVia: data.createdVia ?? null,
+                    appDevices: Array.isArray(data.pushTokens)
+                        ? data.pushTokens.filter(t => typeof t === 'string' && t.startsWith('ExponentPushToken')).length
+                        : 0,
+                    lastAppOpenAt: tsToIso(data.lastAppOpenAt),
+                    lastAppBookOpenAt: tsToIso(data.lastAppBookOpenAt),
+                    locale: data.locale ?? null,
+                    noPhotoCrop: data.noPhotoCrop === true,
+                    adminNotes: data.adminNotes ?? null,
+                    // Per-event guest-page copy overrides. Same story as
+                    // designVariant: the editor writes them and could never
+                    // read them back, so every visit showed empty fields
+                    // over an event that had custom wording saved.
+                    customNameLabel: data.customNameLabel ?? null,
+                    customNamePlaceholder: data.customNamePlaceholder ?? null,
+                    customBlessingLabel: data.customBlessingLabel ?? null,
+                    customBlessingPlaceholder: data.customBlessingPlaceholder ?? null,
+                    customMomentSubtitle: data.customMomentSubtitle ?? null,
+                    customMomentPill: data.customMomentPill ?? null,
+                    customMomentPhotoTitle: data.customMomentPhotoTitle ?? null,
+                    customMomentPhotoCta: data.customMomentPhotoCta ?? null,
+                    customMomentPhotoCtaSub: data.customMomentPhotoCtaSub ?? null,
+                    customMomentTakeNow: data.customMomentTakeNow ?? null,
+                    customMomentChooseGallery: data.customMomentChooseGallery ?? null,
+                    customMomentSubmit: data.customMomentSubmit ?? null,
+                    customMomentSecurityNote: data.customMomentSecurityNote ?? null,
                 }
             })
         )
@@ -175,6 +224,12 @@ export async function PATCH(req) {
             'productionStatus',
             // Guest /photo page design preset (managed from /admin/guest-design).
             'guestDesign',
+            // Photo album: preset, page shape and the ordered photo list
+            // (managed from /admin/album-studio). The layout itself is
+            // never stored — albumLayout.js is deterministic, so the
+            // pages are recomputed identically from this list every
+            // time, and a stored layout could only go stale.
+            'albumDesign',
             // Book interior design. Written via set(merge:true) so a PARTIAL
             // object deep-merges into the existing bookDesign — lets us
             // surgically reset stray fields (e.g. a stuck fontWeight:700)
@@ -285,6 +340,16 @@ export async function PATCH(req) {
                 // bad payload can't bloat the doc.
                 clean[key] =
                     v && typeof v === 'object' && !Array.isArray(v) && JSON.stringify(v).length < 6000 ? v : null
+                continue
+            }
+
+            if (key === 'albumDesign') {
+                // The photo list can be long: a 200-photo album at ~180
+                // bytes a row is around 36KB, comfortably inside
+                // Firestore's 1MB document limit but worth a ceiling so
+                // a runaway client cannot bloat the doc. null clears.
+                clean[key] =
+                    v && typeof v === 'object' && !Array.isArray(v) && JSON.stringify(v).length < 200000 ? v : null
                 continue
             }
 

@@ -57,9 +57,11 @@ async function callStudioApi(op, payload = {}) {
 }
 import { heebo, frankRuhl, notoHebrew, gveretLevin, playpenSansHebrew } from '@/app/fonts'
 // Note: `secular`, `davidLibre`, `danaYad` exports still exist in
-// '@/app/fonts' for legacy consumers (PageLayouts, app/layout.js) but
-// are deliberately NOT registered here — the design studio's font
-// picker was pruned to a curated set per the spring 2026 redesign.
+// '@/app/fonts' (app/layout.js uses them) but are deliberately NOT
+// registered here — the design studio's font picker was pruned to a
+// curated set per the spring 2026 redesign. The other legacy consumer
+// this note used to name, PageLayouts, was deleted as dead code; if
+// nothing else claims these three, they can go too.
 
 // ── Frame URL registry ───────────────────────────────────────────────
 // Frames are next/image-imported PNGs from src/media/frames. Their
@@ -741,9 +743,15 @@ const PHOTO_FRAMES_COLLECTION = 'studio_photo_frames'
 
 export async function uploadPhotoFrameAsset(file, { uid, label = '' } = {}) {
     if (!file) throw new Error('uploadPhotoFrameAsset: missing file')
-    const okTypes = ['image/png', 'image/webp', 'image/svg+xml']
+    // JPEG included on purpose. Nine-sliced frames never draw their
+    // middle, so they need no alpha at all — rejecting opaque files here
+    // made the "any picture, any size" promise false at the one dialog
+    // where it mattered. Window overlays DO need a transparent opening,
+    // but that is a property of the artwork, not of the file format, and
+    // the picker that uses them says so.
+    const okTypes = ['image/png', 'image/webp', 'image/svg+xml', 'image/jpeg']
     if (!okTypes.includes(file.type)) {
-        throw new Error('מסגרת חייבת רקע שקוף — רק PNG, WebP או SVG')
+        throw new Error('רק PNG, WebP, SVG או JPG')
     }
     if (file.size > 4 * 1024 * 1024) {
         throw new Error('הקובץ גדול מדי — מקסימום 4MB')

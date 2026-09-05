@@ -38,6 +38,7 @@ const PHOTO_KEYS = [
     'photoFit', 'imageStyle', 'imageMarginTop', 'imageMarginBottom',
     'imageAlign', 'photoFrame', 'photoFrameUrl', 'photoFrameInset',
     'photoFrameSlice',
+    'windowOverlayUrl', 'windowShowName', 'windowNameBottom', 'windowNameColor',
     'albumPhoto',
 ]
 

@@ -12,6 +12,7 @@ import PolaroidPageLayout from '../PolaroidPageLayout/PolaroidPageLayout'
 import ScrapbookPageLayout from '../ScrapbookPageLayout/ScrapbookPageLayout'
 import NotebookPageLayout from '../NotebookPageLayout/NotebookPageLayout'
 import CollagePageLayout from '../CollagePageLayout/CollagePageLayout'
+import WindowPageLayout from '../WindowPageLayout/WindowPageLayout'
 import DuoPageLayout from '../DuoPageLayout/DuoPageLayout'
 
 export default function BookPageTemplate({ entry, styleSettings: incomingStyle, scaledWidth, scaledHeight }) {
@@ -115,6 +116,7 @@ export default function BookPageTemplate({ entry, styleSettings: incomingStyle, 
     if (activeTemplate === 'scrapbook') return <ScrapbookPageLayout {...passThrough} />
     if (activeTemplate === 'notebook') return <NotebookPageLayout {...passThrough} />
     if (activeTemplate === 'collage') return <CollagePageLayout {...passThrough} />
+    if (activeTemplate === 'window') return <WindowPageLayout {...passThrough} />
 
     // ── Classic layout (default) ─────────────────────────────────────────
     // getBlessingText collapses whitespace to one line by default, but if
