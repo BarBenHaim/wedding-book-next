@@ -15,6 +15,7 @@ import path from 'node:path'
 
 const root = path.resolve(__dirname, '..')
 const route = fs.readFileSync(path.join(root, 'src/app/api/admin/weddings/route.js'), 'utf8')
+    .replace(/\r\n/g, '\n')
 
 // The object literal the GET handler returns, from `return {` up to the
 // closing of that block.
