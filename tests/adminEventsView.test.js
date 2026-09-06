@@ -7,6 +7,8 @@ import {
     originOf,
     originLabel,
     appPresence,
+    countByOrigin,
+    createdAtMs,
 } from '@/lib/adminEventsView'
 
 const barMitzvah = {
@@ -346,5 +348,86 @@ describe('appPresence', () => {
         expect(appPresence({ lastAppOpenAt: 1756720800000 }).openedMs).toBe(1756720800000)
         expect(appPresence({ lastAppOpenAt: 'not a date' }).openedMs).toBe(null)
         expect(appPresence({ lastAppOpenAt: null }).openedMs).toBe(null)
+    })
+})
+
+// ── Acquisition channel as a cohort ─────────────────────────────────
+//
+// The per-row badge answers "where did THIS event come from". These two
+// answer "show me everyone who opened a book themselves through /start,
+// and when" - which is a different question and needs the whole list.
+
+const viaStart = (id, createdAt) => ({ id, createdVia: 'self_serve', createdAt })
+const viaApp = id => ({ id, createdVia: 'app' })
+const viaOrder = id => ({ id, createdVia: 'order' })
+const legacy = id => ({ id })
+
+describe('countByOrigin', () => {
+    it('counts each channel and totals them', () => {
+        const c = countByOrigin([viaStart('a'), viaStart('b'), viaApp('c'), viaOrder('d'), legacy('e')])
+        expect(c).toEqual({ all: 5, self_serve: 2, app: 1, order: 1, unknown: 1 })
+    })
+    it('every channel is present at zero, so a chip never reads undefined', () => {
+        expect(countByOrigin([])).toEqual({ all: 0, order: 0, self_serve: 0, app: 0, unknown: 0 })
+    })
+    it('counts a row with a junk createdVia as unknown, not as its own bucket', () => {
+        const c = countByOrigin([{ id: 'x', createdVia: 'facebook' }, { id: 'y', createdVia: null }])
+        expect(c.unknown).toBe(2)
+        expect(c.all).toBe(2)
+    })
+    it('survives a non-array', () => {
+        for (const v of [null, undefined, 'x', 7]) expect(countByOrigin(v).all).toBe(0)
+    })
+    it('the buckets always sum to all', () => {
+        const list = [viaStart('a'), viaApp('b'), viaOrder('c'), legacy('d'), viaStart('e')]
+        const c = countByOrigin(list)
+        expect(c.self_serve + c.app + c.order + c.unknown).toBe(c.all)
+    })
+})
+
+describe('filterEvents by origin', () => {
+    const list = [viaStart('a'), viaApp('b'), viaOrder('c'), legacy('d')]
+
+    it('isolates the /start signups', () => {
+        expect(filterEvents(list, { origin: 'self_serve' }).map(w => w.id)).toEqual(['a'])
+    })
+    it('"unknown" is selectable, because legacy rows are a real cohort', () => {
+        expect(filterEvents(list, { origin: 'unknown' }).map(w => w.id)).toEqual(['d'])
+    })
+    it('defaults to everything, so existing callers are unaffected', () => {
+        expect(filterEvents(list, {})).toHaveLength(4)
+        expect(filterEvents(list)).toHaveLength(4)
+        expect(filterEvents(list, { origin: 'all' })).toHaveLength(4)
+    })
+    it('combines with the other filters rather than replacing them', () => {
+        const mixed = [
+            { id: 'a', createdVia: 'self_serve', eventType: 'wedding' },
+            { id: 'b', createdVia: 'self_serve', eventType: 'bar_mitzvah' },
+            { id: 'c', createdVia: 'order', eventType: 'wedding' },
+        ]
+        expect(filterEvents(mixed, { origin: 'self_serve', eventType: 'wedding' }).map(w => w.id)).toEqual(['a'])
+    })
+})
+
+describe('createdAtMs', () => {
+    it('reads an ISO string', () => {
+        expect(createdAtMs({ createdAt: '2026-09-04T10:00:00.000Z' })).toBe(Date.parse('2026-09-04T10:00:00.000Z'))
+    })
+    it('passes a number through', () => {
+        expect(createdAtMs({ createdAt: 1757000000000 })).toBe(1757000000000)
+    })
+    it('is null when absent or unparseable, so a legacy row can be parked rather than dropped', () => {
+        for (const v of [undefined, null, '', 'not a date', {}]) {
+            expect(createdAtMs({ createdAt: v })).toBeNull()
+        }
+        expect(createdAtMs(undefined)).toBeNull()
+    })
+    it('orders signups newest-first independently of the party date', () => {
+        // A signup today for a wedding next June must sort first by signup
+        // and last by event date. That is the whole point of the column.
+        const older = viaStart('older', '2026-01-01T00:00:00.000Z')
+        const newer = viaStart('newer', '2026-09-04T00:00:00.000Z')
+        const byCreated = [older, newer].sort((a, b) => createdAtMs(b) - createdAtMs(a))
+        expect(byCreated.map(w => w.id)).toEqual(['newer', 'older'])
     })
 })

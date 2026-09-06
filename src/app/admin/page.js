@@ -135,7 +135,7 @@ function formatDate(isoString) {
     try { return new Date(isoString).toLocaleDateString('he-IL') } catch { return isoString }
 }
 
-import { eventTypeOf, eventTypeLabel, matchesSearch, amountOf, compareByAmount, countByEventType, EVENT_TYPES, rowUrgency, countdownLabel, SOON_WINDOW_DAYS, originOf, originLabel, appPresence } from '@/lib/adminEventsView'
+import { eventTypeOf, eventTypeLabel, matchesSearch, amountOf, compareByAmount, countByEventType, EVENT_TYPES, rowUrgency, countdownLabel, SOON_WINDOW_DAYS, originOf, originLabel, appPresence, countByOrigin, createdAtMs, ORIGIN_LABEL } from '@/lib/adminEventsView'
 
 // How a row is tinted by how close its event is.
 //
@@ -2108,6 +2108,10 @@ function AdminDashboardContent() {
     // bar mitzvahs" and "show me the unpaid" are different questions and
     // combining them is the useful case.
     const [typeFilter, setTypeFilter] = useState('all')
+    // Acquisition channel. Orthogonal to both of the above: "the ones who
+    // signed themselves up on the site" is a question about where the
+    // business comes from, not about what state an event is in.
+    const [originFilter, setOriginFilter] = useState('all')
     const [sort, setSort] = useState({ key: 'date', dir: 'asc' })
     const [selectedWedding, setSelectedWedding] = useState(null)
     const [modal, setModal] = useState(null)
@@ -2133,6 +2137,7 @@ function AdminDashboardContent() {
 
     // Filter + Sort
     const typeCounts = useMemo(() => countByEventType(weddings), [weddings])
+    const originCounts = useMemo(() => countByOrigin(weddings), [weddings])
 
     const filtered = useMemo(() => {
         let list = weddings
@@ -2154,8 +2159,9 @@ function AdminDashboardContent() {
                 return true
             })
         }
+        if (originFilter !== 'all') list = list.filter(w => originOf(w) === originFilter)
         return list
-    }, [weddings, searchQuery, statusFilter, typeFilter])
+    }, [weddings, searchQuery, statusFilter, typeFilter, originFilter])
 
     const sorted = useMemo(() => {
         if (!sort.key) return filtered
@@ -2168,6 +2174,10 @@ function AdminDashboardContent() {
             if (sort.key === 'date') { vA = a.weddingDate ? new Date(a.weddingDate).getTime() : 0; vB = b.weddingDate ? new Date(b.weddingDate).getTime() : 0 }
             else if (sort.key === 'couple') { vA = coupleLabel(a).toLowerCase(); vB = coupleLabel(b).toLowerCase() }
             else if (sort.key === 'greetings') { vA = a.greetingsCount ?? 0; vB = b.greetingsCount ?? 0 }
+            // Rows with no createdAt sort as 0 rather than being dropped -
+            // legacy rows predate the field and hiding them would be worse
+            // than parking them at one end.
+            else if (sort.key === 'created') { vA = createdAtMs(a) ?? 0; vB = createdAtMs(b) ?? 0 }
             return vA < vB ? (sort.dir === 'asc' ? -1 : 1) : vA > vB ? (sort.dir === 'asc' ? 1 : -1) : 0
         })
     }, [filtered, sort])
@@ -2669,6 +2679,37 @@ function AdminDashboardContent() {
                         </div>
                     )}
 
+                    {/* Where the business came from. The per-row badge already
+                        says this one event at a time; the question this row
+                        answers is the one a badge cannot - "show me everyone
+                        who opened a book themselves through /start, and when".
+                        Channels with no events are left out rather than shown
+                        as a zero, so the row stays short on a small account. */}
+                    {status === 'ok' && (
+                        <div className='px-4 sm:px-6 pb-2 flex items-center gap-2 overflow-x-auto' dir='rtl'>
+                            {[
+                                { key: 'all', label: 'כל המקורות' },
+                                ...['self_serve', 'app', 'order', 'unknown']
+                                    .filter(k => originCounts[k] > 0)
+                                    .map(k => ({ key: k, label: k === 'unknown' ? 'מקור לא ידוע' : ORIGIN_LABEL[k] })),
+                            ].map(f => (
+                                <button
+                                    key={f.key}
+                                    onClick={() => setOriginFilter(f.key)}
+                                    className='shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors active:scale-95'
+                                    style={
+                                        originFilter === f.key
+                                            ? { background: '#AA8840', color: '#fff', borderColor: '#AA8840' }
+                                            : { background: '#fff', color: '#7a6a52', borderColor: '#ead9b3' }
+                                    }
+                                >
+                                    {f.label}
+                                    <span className='opacity-60 mr-1'>{originCounts[f.key] ?? 0}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     {/* What the two row colours mean. A colour with no key is
                         a puzzle, and this one has to be readable by someone
                         who did not ask for it — including Lord in six
@@ -2725,7 +2766,7 @@ function AdminDashboardContent() {
                         >
                             <ArrowUpDown size={12} className='text-[#a8843a]' />
                             <span className='text-xs font-semibold text-[#a8843a]'>
-                                מיון לפי {sort.key === 'date' ? 'תאריך' : sort.key === 'couple' ? 'שם זוג' : 'ברכות'}
+                                מיון לפי {sort.key === 'date' ? 'תאריך' : sort.key === 'couple' ? 'שם זוג' : sort.key === 'created' ? 'תאריך פתיחה' : sort.key === 'amount' ? 'תשלום' : 'ברכות'}
                                 {' '}({sort.dir === 'asc' ? 'עולה' : 'יורד'})
                             </span>
                             <button
@@ -2871,7 +2912,10 @@ function AdminDashboardContent() {
                                         <SortableHeader sortKey='couple' currentSort={sort} onSort={setSort}><Users size={11} /> זוג</SortableHeader>
                                         <th className='px-6 py-4 font-semibold text-[#a89378]'><span className='flex items-center gap-1.5'><Phone size={11} /> איש קשר</span></th>
                                         <SortableHeader sortKey='date' currentSort={sort} onSort={setSort}><CalendarDays size={11} /> תאריך</SortableHeader>
-                                        <th className='px-6 py-4 font-semibold text-[#a89378] whitespace-nowrap'><span className='flex items-center gap-1.5'><Clock size={11} /> תאריך תשלום</span></th>
+                                        {/* This column has always rendered createdAt - when the
+                                            book was opened - while the header said 'תאריך תשלום'.
+                                            Two different facts, and the wrong one was on the tin. */}
+                                        <SortableHeader sortKey='created' currentSort={sort} onSort={setSort}><Clock size={11} /> נפתח בתאריך</SortableHeader>
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'>סטטוס</th>
                                         <SortableHeader sortKey='greetings' currentSort={sort} onSort={setSort} justify='center'><MessageCircle size={11} /> ברכות</SortableHeader>
                                         <th className='px-6 py-4 font-semibold text-[#a89378] text-center'><span className='flex items-center gap-1.5 justify-center'><Printer size={11} /> הדפסה</span></th>

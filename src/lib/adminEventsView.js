@@ -130,7 +130,7 @@ export function compareByAmount(a, b, dir = 'desc') {
 }
 
 /** The whole pipeline: filter by text, by type, then order. */
-export function filterEvents(list, { query = '', eventType = 'all' } = {}) {
+export function filterEvents(list, { query = '', eventType = 'all', origin = 'all' } = {}) {
     let out = Array.isArray(list) ? list : []
     if (query) out = out.filter(w => matchesSearch(w, query))
     if (eventType && eventType !== 'all') {
@@ -138,6 +138,10 @@ export function filterEvents(list, { query = '', eventType = 'all' } = {}) {
             ? out.filter(w => eventTypeOf(w) === null)
             : out.filter(w => eventTypeOf(w) === eventType)
     }
+    // Acquisition channel. 'unknown' is selectable like any other value
+    // because the legacy rows are a real cohort you sometimes want to
+    // look at on their own - see the note above ORIGIN_LABEL.
+    if (origin && origin !== 'all') out = out.filter(w => originOf(w) === origin)
     return out
 }
 
@@ -152,6 +156,36 @@ export function countByEventType(list) {
         else counts.unset++
     }
     return counts
+}
+
+
+/**
+ * How many events came from each channel, for the filter chips' counters.
+ *
+ * The per-row badge already says where one event came from, but a badge
+ * cannot answer "how many people signed themselves up through /start
+ * this month" - that needs the cohort as a group, which is what these
+ * counts and the `origin` filter above are for.
+ */
+export function countByOrigin(list) {
+    const counts = { all: 0, order: 0, self_serve: 0, app: 0, unknown: 0 }
+    for (const w of Array.isArray(list) ? list : []) {
+        counts.all++
+        counts[originOf(w)]++
+    }
+    return counts
+}
+
+/**
+ * When the event was created, in ms, or null.
+ *
+ * Separate from eventDateMs: that one is the date of the party, this is
+ * the date somebody opened the book. Sorting by it answers "who signed
+ * up most recently", which the party date cannot - a signup today for a
+ * wedding next June sorts last by event date and first by this.
+ */
+export function createdAtMs(w) {
+    return toMs(w?.createdAt)
 }
 
 
