@@ -2221,10 +2221,22 @@ function AdminDashboardContent() {
         setActionLoading(true)
         try {
             const { updated } = await updateWedding(weddingId, patch)
+            // `updated` is the list of field NAMES the server actually wrote —
+            // the route drops anything outside its allow-list, so it is not
+            // simply `patch`. Spreading the array itself would merge
+            // {0: 'ownerName'} into the row and leave the real values stale
+            // until a full refetch. Rebuild the map from the fields that were
+            // accepted, taking the values from the patch we sent.
+            // (Older deploys returned a {field: value} object — handle both,
+            // so a client running against a not-yet-updated API still works.)
+            const savedFields = Array.isArray(updated) ? updated : Object.keys(updated || {})
+            const savedValues = Object.fromEntries(
+                savedFields.filter(k => k in patch).map(k => [k, patch[k]]),
+            )
             // Merge the update into local state so the UI reflects it immediately
             // without a full refetch.
-            setWeddings(prev => prev.map(w => (w.id === weddingId ? { ...w, ...updated } : w)))
-            setSelectedWedding(prev => (prev && prev.id === weddingId ? { ...prev, ...updated } : prev))
+            setWeddings(prev => prev.map(w => (w.id === weddingId ? { ...w, ...savedValues } : w)))
+            setSelectedWedding(prev => (prev && prev.id === weddingId ? { ...prev, ...savedValues } : prev))
             setToast({ message: 'הפרטים נשמרו בהצלחה', type: 'success' })
         } catch (err) {
             setToast({ message: `שגיאה בשמירה: ${err.message}`, type: 'error' })
