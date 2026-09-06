@@ -66,6 +66,9 @@ function ThanksApp() {
     // queue thinks we shipped it"). Optional: legacy bookmarks of
     // the thanks URL won't have it, and the page still works.
     const entryId = searchParams?.get('eid') || ''
+    // Set by the blessing form when the guest sent words without a
+    // picture. Absent means a photo was included - old links included.
+    const noPhoto = searchParams?.get('np') === '1'
 
     // UI status machine:
     //   'working' — trying to upload
@@ -282,7 +285,7 @@ function ThanksApp() {
                         {t('savedHeading')}
                     </h1>
                     <p className='leading-relaxed' style={{ color: '#7a6a52', fontSize: '14px', maxWidth: 340, margin: '0 auto' }}>
-                        {t('savedBody')}
+                        {t(noPhoto ? 'savedBodyTextOnly' : 'savedBody')}
                     </p>
                 </div>
 

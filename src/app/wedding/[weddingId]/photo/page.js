@@ -655,7 +655,13 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     // how spotty the venue's reception is.
     async function onSubmit(e) {
         e.preventDefault()
-        if (!text.trim() || !photoUrl) return
+        // A photo is optional. The blessing is the thing the book is
+        // made of; the picture is a bonus. Everything downstream already
+        // handles a photo-less entry - uploadQueuedEntry() skips the
+        // image upload, and every page layout gates its <img> on
+        // hasImage - because the "image processing failed, save anyway"
+        // fallback below has always produced exactly this shape.
+        if (!text.trim()) return
 
         // Analytics — guest pressed "send" on the blessing form.
         // Fire-and-forget; doesn't affect the actual submit path.
@@ -781,6 +787,15 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
             image: finalBlob,
         }
 
+        // The thanks page says "your blessing and photo are saved". With
+        // the photo optional that sentence is sometimes a lie, and the
+        // page cannot safely work it out for itself: its confirmation
+        // poll can win the race against the image upload and read an
+        // entry whose imageUrl has not landed yet. We know here, for
+        // certain, so we tell it. Absent param == had a photo, which
+        // keeps every already-issued link behaving as before.
+        const thanksNoPhoto = entry.image ? '' : '&np=1'
+
         // Tier 1 — try IDB enqueue.
         let enqueued = false
         try {
@@ -856,7 +871,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
             recordSubmission(weddingId, { id: entry.id, name: entry.name, text: entry.text })
             logEvent(weddingId, 'blessing_sent_success')
             reportGuestWrote(entry.id)
-            router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}`)
+            router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}${thanksNoPhoto}`)
             return
         }
 
@@ -872,7 +887,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
             recordSubmission(weddingId, { id: entry.id, name: entry.name, text: entry.text })
             logEvent(weddingId, 'blessing_sent_success')
             reportGuestWrote(entry.id)
-            router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}`)
+            router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}${thanksNoPhoto}`)
         } catch (err) {
             console.error('[photo] direct upload also failed:', err)
             const rawMsg = err?.message || err?.name || ''
@@ -1459,8 +1474,21 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                             trailing (end = left). No circle. */}
                         <div className='flex items-center justify-between gap-2 mb-2 mt-3'>
                             <span style={{ color: md.cardLabelColor, fontSize: '14.5px', fontWeight: 700 }}>
-                                <span style={{ color: '#c14a4a' }}>*</span>{' '}
-                                {formCopy?.momentPhotoTitle || t('momentPhotoTitle')}
+                                {formCopy?.momentPhotoTitle || t('momentPhotoTitle')}{' '}
+                                {/* The red asterisk that used to sit here said the
+                                    photo was required. It no longer is, and silence
+                                    would not undo it: this page is built around the
+                                    picture, so a guest who has none assumes they
+                                    cannot take part and leaves. Say it plainly. */}
+                                <span
+                                    style={{
+                                        color: md.cardCounterColor,
+                                        fontSize: '11.5px',
+                                        fontWeight: 600,
+                                    }}
+                                >
+                                    {t('momentPhotoOptional')}
+                                </span>
                             </span>
                             <svg
                                 viewBox='0 0 24 24'
@@ -1780,7 +1808,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                         be submitted yet. ── */}
                     <button
                         onClick={onSubmit}
-                        disabled={submitting || !text.trim() || !photoUrl}
+                        disabled={submitting || !text.trim()}
                         className='w-full mt-3 font-bold transition-transform duration-200 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-[0.99] relative'
                         style={{
                             background: mdButtonBg,
@@ -2579,7 +2607,10 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                     textTransform: 'uppercase',
                                 }}
                             >
-                                {t('pageTitleStep2')}
+                                {t('pageTitleStep2')}{' '}
+                                <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 600, opacity: 0.85 }}>
+                                    {t('momentPhotoOptional')}
+                                </span>
                             </span>
                             <span
                                 className='block h-px flex-1 max-w-[60px]'
