@@ -134,6 +134,20 @@ export function scoreRecipe(recipe, entries, { pageIndex = 0, recent = [], style
     const pairs = assign(recipe, entries)
     if (!pairs) return { ok: false, score: -Infinity, base: -Infinity, why: null }
 
+    // A rough may cap the blessing it will take. `pull-quote` sets one:
+    // the page works because of the air around the words, and a long
+    // blessing fills exactly that air. A cap is a design decision the
+    // geometry cannot express - the text would FIT, it just should not.
+    if (Number.isFinite(recipe.maxLength)) {
+        for (const { slot, entry } of pairs) {
+            if (slot.kind === 'blessing' || slot.kind === 'card') {
+                if (blessingLength(entry) > recipe.maxLength) {
+                    return { ok: false, score: -Infinity, base: -Infinity, why: { reason: 'too-long-for-rough' } }
+                }
+            }
+        }
+    }
+
     const reads = []
     let shape = 0
     let shapeN = 0
@@ -145,8 +159,11 @@ export function scoreRecipe(recipe, entries, { pageIndex = 0, recent = [], style
             const len = blessingLength(entry)
             const share = textAreaOf(slot)
             const withImage = slot.kind === 'card'
-            const r = readability(len, share, { hasImage: withImage, styleSettings })
-            const over = overflowRatio(len, share, { hasImage: withImage })
+            // The rough's own type scale, so the page that is SCORED is
+            // the page that is DRAWN.
+            const scale = recipe.typography?.scale ?? 1
+            const r = readability(len, share, { hasImage: withImage, styleSettings, scale })
+            const over = overflowRatio(len, share, { hasImage: withImage, scale })
             reads.push({ id: entry.id, len, readability: r, over })
             // A blessing using a quarter of the room it was given leaves a
             // page of empty paper around three words. Some air is the point;
@@ -164,7 +181,10 @@ export function scoreRecipe(recipe, entries, { pageIndex = 0, recent = [], style
     // The gate. One unreadable blessing sinks the whole composition.
     const worst = reads.length ? Math.min(...reads.map(r => r.readability)) : 1
     if (worst <= 0) {
-        return { ok: false, score: -Infinity, base: -Infinity, why: { reads, reason: 'unreadable' } }
+        // Carry `worst` even here. The explain view needs the number most
+        // when the composition FAILED - "rejected, readability 1%" is an
+        // answer; "rejected" on its own sends somebody back into the code.
+        return { ok: false, score: -Infinity, base: -Infinity, why: { reads, worst, reason: 'unreadable' } }
     }
 
     const meanRead = reads.length ? reads.reduce((s, r) => s + r.readability, 0) / reads.length : 1

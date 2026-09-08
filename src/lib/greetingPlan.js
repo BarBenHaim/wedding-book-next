@@ -134,15 +134,21 @@ export function planGreetings(entries, { styleSettings, split = true } = {}) {
                 const id = kind === 'photo' ? 'plate-full' : 'letter'
                 const rough = roughs.find(r => r.id === id)
                 const s = scoreRecipe(rough, [half], { pageIndex: pages.length, recent, styleSettings })
+                // This half HAS to be placed - it is somebody's blessing and
+                // there is nowhere else for it to go. So a failing score is
+                // recorded rather than obeyed: the page is marked, and its
+                // readability is carried, instead of shipping -Infinity into
+                // a UI that has to print something.
                 pages.push({
                     index: pages.length,
                     recipeId: rough.id,
                     recipe: rough,
                     entries: [half],
                     slots: [{ slot: rough.slots[0], entry: half }],
-                    score: s.score,
-                    base: s.base,
-                    fallback: false,
+                    score: s.ok ? s.score : 0,
+                    base: s.ok ? s.base : 0,
+                    fallback: !s.ok,
+                    unreadable: !s.ok,
                     bonded: true,
                     why: s.why,
                 })
@@ -172,7 +178,14 @@ export function planGreetings(entries, { styleSettings, split = true } = {}) {
             const solo = { card: 'classic', blessing: 'letter', photo: 'plate-full' }[classifyEntry(head)]
             const rough = roughs.find(r => r.id === solo) || roughs[0]
             const s = scoreRecipe(rough, [head], { pageIndex: pages.length, recent, styleSettings })
-            best = { rough, window: [head], score: s.score, base: s.base, why: s.why ?? { reason: 'fallback' }, fallback: true }
+            best = {
+                rough, window: [head],
+                score: s.ok ? s.score : 0,
+                base: s.ok ? s.base : 0,
+                why: s.why ?? { reason: 'fallback' },
+                fallback: true,
+                unreadable: !s.ok,
+            }
         }
 
         const assigned = best.rough.slots.map((slot, k) => ({
@@ -191,6 +204,7 @@ export function planGreetings(entries, { styleSettings, split = true } = {}) {
             score: best.score,
             base: best.base,
             fallback: best.fallback === true,
+            unreadable: best.unreadable === true,
             why: best.why,
         })
 

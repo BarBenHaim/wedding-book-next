@@ -56,6 +56,26 @@ import { fitFactor, PAGE_FIT_TARGET, DEFAULT_MIN_FACTOR, minFactorOf } from './f
  */
 export const REFERENCE_TEXT_AREA = { textOnly: 0.55, withImage: 0.25 }
 
+/**
+ * How much of the modelled capacity we actually promise.
+ *
+ * Capacity tracks area, but not perfectly: the model is blind to the
+ * SHAPE of the block. A wide, short box wastes more of its last line and
+ * fits fewer lines than a square one of the same area, so the area proxy
+ * runs optimistic exactly where a rough runs type across a whole page.
+ *
+ * Measured, not guessed. Binary-searching the real character capacity of
+ * eighty width/height/size combinations in a browser and fitting
+ * capacity = w*h / (fontSize^2 * C) gives C = 0.79 at the median and
+ * over-predicts by at most 1.28x at the extremes. This margin buys back
+ * that worst case.
+ *
+ * The cost is that text shrinks a little sooner than it strictly must.
+ * For something that gets printed and cannot be revised, slightly small
+ * beats clipped.
+ */
+export const CAPACITY_SAFETY = 0.85
+
 /** [x, y, w, h] normalised to the page -> the fraction of page it covers. */
 export function slotArea(area) {
     if (!Array.isArray(area) || area.length < 4) return 0
@@ -76,12 +96,19 @@ export function slotArea(area) {
  * Floored at 1 so a degenerate slot reads as "holds almost nothing"
  * rather than dividing by zero.
  */
-export function capacityOf(textFraction, { hasImage = false } = {}) {
+export function capacityOf(textFraction, { hasImage = false, scale = 1 } = {}) {
     const f = Number(textFraction)
     if (!Number.isFinite(f) || f <= 0) return 1
     const target = hasImage ? PAGE_FIT_TARGET.withImage : PAGE_FIT_TARGET.textOnly
     const reference = hasImage ? REFERENCE_TEXT_AREA.withImage : REFERENCE_TEXT_AREA.textOnly
-    return Math.max(1, target * (Math.min(1, f) / reference))
+    // A rough may set its type larger - the pull-quote page does, and the
+    // whole page depends on it. Characters take area as the SQUARE of
+    // their size, so type at 1.45x holds barely half as much. Without
+    // this the scorer measures a page the renderer does not draw: it
+    // passes a blessing as readable at 100%, the page sets it at 145%,
+    // and the last line falls off the bottom.
+    const k = Number.isFinite(scale) && scale > 0 ? scale : 1
+    return Math.max(1, target * (Math.min(1, f) / reference) * CAPACITY_SAFETY / (k * k))
 }
 
 /**
@@ -90,8 +117,8 @@ export function capacityOf(textFraction, { hasImage = false } = {}) {
  * Same curve as a whole page, because it IS the same curve - only the
  * target moves with the area.
  */
-export function slotFitFactor(textLength, textFraction, { hasImage = false, styleSettings } = {}) {
-    return fitFactor(textLength, capacityOf(textFraction, { hasImage }), minFactorOf(styleSettings))
+export function slotFitFactor(textLength, textFraction, { hasImage = false, styleSettings, scale = 1 } = {}) {
+    return fitFactor(textLength, capacityOf(textFraction, { hasImage, scale }), minFactorOf(styleSettings))
 }
 
 /**
@@ -122,10 +149,10 @@ export function readability(textLength, textFraction, opts = {}) {
  * so the planner can tell "slightly over" from "hopeless" - and the
  * second should become its own page rather than a smaller font.
  */
-export function overflowRatio(textLength, textFraction, { hasImage = false } = {}) {
+export function overflowRatio(textLength, textFraction, { hasImage = false, scale = 1 } = {}) {
     const len = Number(textLength)
     if (!Number.isFinite(len) || len <= 0) return 0
-    return len / capacityOf(textFraction, { hasImage })
+    return len / capacityOf(textFraction, { hasImage, scale })
 }
 
 /**

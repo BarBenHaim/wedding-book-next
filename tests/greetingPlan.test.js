@@ -6,7 +6,7 @@ import { RECIPES, mirrorRecipe, needsOf, capacityCount } from '@/lib/greetingRec
 import { classifyEntry, countKinds, matches, assign, scoreRecipe, tiebreak, textAreaOf } from '@/lib/greetingScoring'
 import { planGreetings, presplit, allRoughs, explainPage } from '@/lib/greetingPlan'
 import { PAGE_FIT_TARGET, DUO_FIT_TARGET } from '@/lib/fontFit'
-import { REFERENCE_TEXT_AREA } from '@/lib/greetingCapacity'
+import { REFERENCE_TEXT_AREA, CAPACITY_SAFETY } from '@/lib/greetingCapacity'
 
 const T = n => 'א'.repeat(n)
 const card = (id, len, aspect = 1.4) => ({ id, name: 'x', text: T(len), imageUrl: 'u', imgAspect: aspect })
@@ -23,17 +23,23 @@ describe('capacity model', () => {
         // Half a page gives its words half of what a full page does.
         const halfTextOnly = capacityOf(REFERENCE_TEXT_AREA.textOnly / 2, { hasImage: false })
         const halfWithImage = capacityOf(REFERENCE_TEXT_AREA.withImage / 2, { hasImage: true })
-        expect(Math.abs(halfTextOnly - DUO_FIT_TARGET.textOnly) / DUO_FIT_TARGET.textOnly).toBeLessThan(0.12)
-        expect(Math.abs(halfWithImage - DUO_FIT_TARGET.withImage) / DUO_FIT_TARGET.withImage).toBeLessThan(0.12)
+        // Compared against the margined promise, so the assertion tracks
+        // what the engine actually offers rather than the raw model.
+        const errText = Math.abs(halfTextOnly / CAPACITY_SAFETY - DUO_FIT_TARGET.textOnly) / DUO_FIT_TARGET.textOnly
+        const errImg = Math.abs(halfWithImage / CAPACITY_SAFETY - DUO_FIT_TARGET.withImage) / DUO_FIT_TARGET.withImage
+        expect(errText).toBeLessThan(0.12)
+        expect(errImg).toBeLessThan(0.12)
+        // And what the engine PROMISES is below the raw model, always.
+        expect(halfTextOnly).toBeLessThan(DUO_FIT_TARGET.textOnly)
     })
     it('a full-page text block is exactly the whole-page target', () => {
-        expect(capacityOf(REFERENCE_TEXT_AREA.textOnly, { hasImage: false })).toBeCloseTo(PAGE_FIT_TARGET.textOnly, 6)
-        expect(capacityOf(REFERENCE_TEXT_AREA.withImage, { hasImage: true })).toBeCloseTo(PAGE_FIT_TARGET.withImage, 6)
+        expect(capacityOf(REFERENCE_TEXT_AREA.textOnly, { hasImage: false })).toBeCloseTo(PAGE_FIT_TARGET.textOnly * CAPACITY_SAFETY, 6)
+        expect(capacityOf(REFERENCE_TEXT_AREA.withImage, { hasImage: true })).toBeCloseTo(PAGE_FIT_TARGET.withImage * CAPACITY_SAFETY, 6)
     })
     it('a 340-char blessing fits the classic page - the calibration trap', () => {
         // Measured against raw page area this read as a 40% overflow and
         // got split onto two pages. It renders fine in the real template.
-        expect(overflowRatio(340, REFERENCE_TEXT_AREA.withImage, { hasImage: true })).toBeLessThan(1.6)
+        expect(overflowRatio(340, REFERENCE_TEXT_AREA.withImage, { hasImage: true })).toBeLessThan(1.8)
         expect(readability(340, REFERENCE_TEXT_AREA.withImage, { hasImage: true })).toBeGreaterThan(0.3)
     })
     it('slotArea clamps and survives junk', () => {
@@ -58,7 +64,7 @@ describe('readability', () => {
         expect(readability(100000, REFERENCE_TEXT_AREA.textOnly)).toBe(0)
     })
     it('overflowRatio keeps counting past the floor, where the fit factor clamps', () => {
-        expect(overflowRatio(3600, REFERENCE_TEXT_AREA.textOnly)).toBeCloseTo(10, 5)
+        expect(overflowRatio(3600, REFERENCE_TEXT_AREA.textOnly)).toBeCloseTo(10 / CAPACITY_SAFETY, 5)
         expect(overflowRatio(0, REFERENCE_TEXT_AREA.textOnly)).toBe(0)
     })
     it('maxReadableLength is the largest blessing that still scores above 0', () => {
@@ -262,10 +268,22 @@ describe('planGreetings', () => {
         const b = planGreetings(mixed).map(p => p.recipeId)
         expect(a).toEqual(b)
     })
-    it('every page it produces is readable', () => {
+    it('every composed page is readable, and one that cannot be is flagged', () => {
+        // The guarantee is not "no page is ever tight" - a 900-character
+        // blessing has to go somewhere and there is no page it fits. It is
+        // that the engine never QUIETLY ships one: a page it could not make
+        // readable is marked, so the studio can show it rather than the
+        // owner finding it in a printed book.
         for (const p of planGreetings(mixed)) {
+            if (p.unreadable) {
+                expect(p.fallback, explainPage(p)).toBe(true)
+                continue
+            }
             if (p.why?.worst != null) expect(p.why.worst, explainPage(p)).toBeGreaterThan(0)
         }
+    })
+    it('never reports a score of -Infinity on a page it actually emits', () => {
+        for (const p of planGreetings(mixed)) expect(Number.isFinite(p.score), explainPage(p)).toBe(true)
     })
     it('handles the degenerate inputs without throwing', () => {
         for (const v of [null, undefined, [], 'x', 7]) expect(planGreetings(v)).toEqual([])
@@ -318,6 +336,7 @@ describe('a split guest stays one guest', () => {
         // where the old pagination rendered it silently. Continuation
         // pages are the real fix; being able to SEE it is the point here.
         const page = planGreetings(list).find(p => p.entries.some(e => e.id === 'long'))
+        expect(page.unreadable).toBe(true)
         expect(page.why.worst).toBeLessThan(0.1)
     })
 })
@@ -349,6 +368,72 @@ describe('textShare is a HEIGHT, textAreaOf is an AREA', () => {
         for (const r of RECIPES) {
             for (const s of r.slots) {
                 if (s.kind === 'card') expect(typeof s.textShare, r.id).toBe('number')
+            }
+        }
+    })
+})
+
+describe('a rough that sets its type larger is scored at that size', () => {
+    // The pull-quote page depends on large type. If the scorer measures
+    // at 1x and the renderer draws at 1.45x, the gate passes a blessing
+    // as perfectly readable and the last line falls off the page.
+    // Characters take area as the SQUARE of their size, so 1.45x holds
+    // barely half as much.
+    it('capacity falls with the square of the scale', () => {
+        const base = capacityOf(0.3)
+        expect(capacityOf(0.3, { scale: 2 })).toBeCloseTo(base / 4, 4)
+        expect(capacityOf(0.3, { scale: 1.45 })).toBeCloseTo(base / (1.45 * 1.45), 4)
+    })
+    it('a blessing that fits at 1x can fail at 1.45x', () => {
+        const share = 0.3
+        const len = Math.round(capacityOf(share) * 1.2)
+        expect(readability(len, share)).toBeGreaterThan(0)
+        expect(readability(len, share, { scale: 1.45 })).toBeLessThan(readability(len, share))
+    })
+    it('scoring uses the rough\'s own scale', () => {
+        const quote = RECIPES.find(r => r.id === 'pull-quote')
+        expect(quote.typography.scale).toBeGreaterThan(1)
+        // Its cap keeps only blessings that are short enough for that size.
+        const tooLong = scoreRecipe(quote, [letter('a', quote.maxLength + 1)])
+        expect(tooLong.ok).toBe(false)
+        const fine = scoreRecipe(quote, [letter('b', 90)])
+        expect(fine.ok).toBe(true)
+        expect(fine.why.worst).toBeGreaterThan(0)
+    })
+    it('an unscaled rough is unaffected', () => {
+        expect(capacityOf(0.3, { scale: 1 })).toBe(capacityOf(0.3))
+    })
+})
+
+describe('the enriched vocabulary stays print-safe', () => {
+    it('page frames name only the album\'s own frame set', () => {
+        const allowed = ['rule', 'double', 'brackets', 'sides']
+        for (const r of RECIPES) {
+            if (r.pageFrame) expect(allowed, r.id).toContain(r.pageFrame)
+        }
+    })
+    it('treatments name only the album\'s own set, and none of them crops', () => {
+        const allowed = ['plain', 'framed', 'card', 'soft-edge', 'vignette']
+        for (const r of RECIPES) {
+            for (const s of r.slots) {
+                if (s.treatment) expect(allowed, `${r.id}/${s.kind}`).toContain(s.treatment)
+            }
+        }
+    })
+    it('every ornament placement is on the page and names a real ornament', () => {
+        const allowed = ['tape', 'stamp', 'mapLines', 'route', 'pin', 'tornStrip', 'cornerRule']
+        for (const r of RECIPES) {
+            for (const o of r.ornaments || []) {
+                expect(allowed, r.id).toContain(o.name)
+                expect(o.at[0] >= 0 && o.at[0] <= 1, r.id).toBe(true)
+                expect(o.at[1] >= 0 && o.at[1] <= 1, r.id).toBe(true)
+            }
+        }
+    })
+    it('any tilt is a fixed number, never a range - the PDF pass must match the screen', () => {
+        for (const r of RECIPES) {
+            for (const s of r.slots) {
+                if (s.rotate !== undefined) expect(typeof s.rotate, r.id).toBe('number')
             }
         }
     })
