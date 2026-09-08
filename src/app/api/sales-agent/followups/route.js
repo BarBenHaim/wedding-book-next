@@ -8,7 +8,8 @@
 //                 back on the ladder, so they are picked up by step 2 in
 //                 this same run rather than tomorrow's.
 //   2. CHASE    — write a real follow-up for every lead due today, using
-//                 free-form content only in-window and wt_followup outside.
+//                 free-form content only in-window and an approved strategy
+//                 template outside.
 //   3. ESCALATE — hand Lord the list of handoffs nobody picked up. The
 //                 bot does not resume those, ever.
 //
@@ -54,12 +55,23 @@ import { sendableNow, MAX_PER_RUN, isFinalAttempt } from '@/lib/salesAgent/follo
 import { MEDIA } from '@/lib/salesAgent/catalog'
 import { mergeMedia, performanceNote } from '@/lib/salesAgent/mediaLibrary'
 import { findOrphans, findStaleHandoffs, handoffAlert } from '@/lib/salesAgent/sweep'
-import { canSendWhatsApp, sendWhatsAppText, sendWhatsAppImage, sendWhatsAppTemplate, FOLLOWUP_TEMPLATE } from '@/lib/salesAgent/whatsapp'
+import { canSendWhatsApp, sendWhatsAppText, sendWhatsAppImage, sendWhatsAppVideo, sendWhatsAppTemplate } from '@/lib/salesAgent/whatsapp'
 import { createOutboundId } from '@/lib/salesAgent/delivery'
 import { isDemoEvidenceContent } from '@/lib/salesAgent/followupEvidence'
 import { readSalesSettings } from '@/lib/salesAgent/settingsStore'
+import { planFollowUp, readFollowUpOffer } from '@/lib/salesAgent/followupStrategy'
 
 const WINDOW_MS = 24 * 3600 * 1000
+
+function unsentVideo(library, lead, strategy) {
+    if (strategy?.mediaPreference !== 'video') return null
+    const sent = new Set([
+        ...(Array.isArray(lead?.mediaSent) ? lead.mediaSent : []),
+        ...(Array.isArray(lead?.imagesSent) ? lead.imagesSent : []),
+    ].map(String))
+    const match = Object.entries(library || {}).find(([key, media]) => media?.kind === 'video' && !sent.has(key))
+    return match ? { key: match[0], ...match[1] } : null
+}
 
 // Three doors, same as the digest: the cron secret for Vercel's
 // scheduler, the shared secret for Make, and a verified super-admin ID
@@ -205,24 +217,56 @@ export async function GET(req) {
             // existed and nothing passed it, so every third follow-up was
             // written as another nudge - and a clean goodbye gets replies
             // that a fourth reminder never will.
-            const isFinal = isFinalAttempt(lead.followUpCount || 0)
-            const system = buildFollowUpPrompt(lead, today, { isFinal, media: library, performanceNote: perf })
-            // The model needs a user turn to answer; this one is an
-            // instruction to the agent, never shown to the customer.
-            const { text: raw } = await callClaude({
-                system,
-                messages: [{ role: 'user', content: 'כתוב עכשיו את הפולו-אפ ללקוח הזה, לפי ההיסטוריה והכללים.' }],
-                maxTokens: 500,
-            })
-            const parsed = parseAgentJson(raw, { mediaKeys: Object.keys(library) })
-            if (parsed.handoff || parsed.messages.length === 0) return
-
-            const text = parsed.messages[0]
             const withinWindow = msSince(lead.lastInboundAt) < WINDOW_MS
+            const followUpNumber = (lead.followUpCount || 0) + 1
+            const isFinal = isFinalAttempt(lead.followUpCount || 0)
+            const strategy = planFollowUp(lead, {
+                attempt: followUpNumber,
+                isFinal,
+                offer: readFollowUpOffer(),
+                customerName: lead.name || lead.profileName || '',
+            })
+            let parsed
+            let text
+            if (withinWindow) {
+                const system = buildFollowUpPrompt(lead, today, {
+                    isFinal,
+                    media: library,
+                    performanceNote: perf,
+                    strategy,
+                })
+                // The model needs a user turn to answer; this one is an
+                // instruction to the agent, never shown to the customer.
+                const { text: raw } = await callClaude({
+                    system,
+                    messages: [{ role: 'user', content: 'כתוב עכשיו את הפולו-אפ ללקוח הזה, לפי ההיסטוריה והכללים.' }],
+                    maxTokens: 500,
+                })
+                parsed = parseAgentJson(raw, { mediaKeys: Object.keys(library) })
+                if (parsed.handoff || parsed.messages.length === 0) return
+                text = parsed.messages[0]
+            } else {
+                // Outside 24 hours the approved template is the customer
+                // message. Do not generate and then persist imaginary copy
+                // that Meta never sent.
+                parsed = {
+                    stage: strategy.id === 'graceful_close' ? 'closed_lost' : lead.stage,
+                    eventDate: lead.eventDate || null,
+                    callbackPromised: lead.callbackPromised || null,
+                    followUpAt: null,
+                    handoff: false,
+                }
+                text = strategy.templateText
+            }
+            const video = unsentVideo(library, lead, strategy)
+            const image = withinWindow && !video && strategy.id === 'proof_site'
+                && parsed.image && library[parsed.image]?.kind !== 'video'
+                ? { key: parsed.image, ...library[parsed.image] }
+                : null
             const nextFollowUpAt = resolveFollowUp({
                 parsed,
                 todayISO: today,
-                followUpCount: (lead.followUpCount || 0) + 1,
+                followUpCount: followUpNumber,
                 addDays: addDaysISO,
             })
 
@@ -233,15 +277,21 @@ export async function GET(req) {
                 text,
                 withinWindow,
                 isFinal,
-                followUpNumber: (lead.followUpCount || 0) + 1,
+                followUpNumber,
                 nextFollowUpAt,
+                strategyId: strategy.id,
+                strategyCta: strategy.cta,
                 // The follow-up prompt allows a first image when none was
                 // ever sent; until now the route accepted the model's
                 // choice, counted it, and then returned no URL — so Make
                 // had nothing to send. Same contract as /reply.
-                sendImage: withinWindow && parsed.image && library[parsed.image]?.kind !== 'video' ? library[parsed.image].url : null,
-                sendImageCaption: withinWindow && parsed.image && library[parsed.image]?.kind !== 'video' ? library[parsed.image].caption : null,
-                hasImage: withinWindow && !!parsed.image && library[parsed.image]?.kind !== 'video',
+                sendImage: image?.url || null,
+                sendImageCaption: image?.caption || null,
+                hasImage: !!image,
+                sendVideo: withinWindow ? video?.url || null : null,
+                sendVideoCaption: video?.caption || null,
+                hasVideo: !!video,
+                templateHeaderVideo: !withinWindow ? video?.url || null : null,
                 // True when this lead only got here because the sweep
                 // caught it. Worth seeing in Make's run log: it is the
                 // one number that says whether the safety net is idle
@@ -267,17 +317,20 @@ export async function GET(req) {
                 scope: 'followup', subject, attempt: item.followUpNumber, part: primaryPart,
             })
             const outboundParts = { [primaryPart]: primaryOutboundId }
-            if (withinWindow && item.hasImage) {
-                outboundParts.image = createOutboundId({
-                    scope: 'followup', subject, attempt: item.followUpNumber, part: 'image',
+            const mediaPart = withinWindow
+                ? (item.hasVideo ? 'video' : item.hasImage ? 'image' : null)
+                : null
+            if (mediaPart) {
+                outboundParts[mediaPart] = createOutboundId({
+                    scope: 'followup', subject, attempt: item.followUpNumber, part: mediaPart,
                 })
             }
             item.outboundId = primaryOutboundId
             item.outboundParts = outboundParts
             item.transport = withinWindow ? 'text' : 'template'
             if (!withinWindow) {
-                item.templateName = FOLLOWUP_TEMPLATE
-                item.templateParameters = [text]
+                item.templateName = strategy.templateName
+                item.templateParameters = strategy.templateParameters
             }
 
             const preparePart = (part, outboundId, advancesFollowUp) => prepareFollowUpDelivery({
@@ -289,9 +342,14 @@ export async function GET(req) {
                 nextFollowUpAt,
                 stage: parsed.stage,
                 advancesFollowUp,
-                demoEvidence: isDemoEvidenceContent({ part, text: advancesFollowUp ? text : '' }),
+                demoEvidence: advancesFollowUp && item.templateHeaderVideo
+                    ? true
+                    : isDemoEvidenceContent({ part, text: advancesFollowUp ? text : '' }),
+                followUpStrategyId: strategy.id,
+                followUpCta: strategy.cta,
+                followUpMediaKind: item.hasVideo ? 'video' : item.hasImage ? 'image' : 'none',
                 logicalAttemptId,
-                templateName: part === 'template' ? FOLLOWUP_TEMPLATE : null,
+                templateName: part === 'template' ? strategy.templateName : null,
                 requestedAt,
             })
             const primaryPreparation = await preparePart(primaryPart, primaryOutboundId, true)
@@ -303,7 +361,7 @@ export async function GET(req) {
                 items.push(item)
                 return
             }
-            if (outboundParts.image) await preparePart('image', outboundParts.image, false)
+            if (mediaPart) await preparePart(mediaPart, outboundParts[mediaPart], false)
 
             if (callerDelivers) {
                 item.deliveryStatus = 'requested'
@@ -324,7 +382,18 @@ export async function GET(req) {
             try {
                 primaryEvidence = withinWindow
                     ? await sendWhatsAppText(lead.phone, text)
-                    : await sendWhatsAppTemplate(lead.phone, FOLLOWUP_TEMPLATE, [text])
+                    : item.templateHeaderVideo
+                        ? await sendWhatsAppTemplate(
+                            lead.phone,
+                            strategy.templateName,
+                            strategy.templateParameters,
+                            { headerVideoUrl: item.templateHeaderVideo },
+                        )
+                        : await sendWhatsAppTemplate(
+                            lead.phone,
+                            strategy.templateName,
+                            strategy.templateParameters,
+                        )
             } catch (error) {
                 const allowed = new Set([
                     'GRAPH_REJECTED', 'GRAPH_TIMEOUT', 'PROVIDER_MESSAGE_ID_MISSING',
@@ -371,14 +440,13 @@ export async function GET(req) {
                 console.warn('[sales-agent/followups] acceptance persistence degraded')
             }
 
-            if (outboundParts.image) {
-                let imageEvidence
+            if (mediaPart) {
+                let mediaEvidence
                 try {
-                    imageEvidence = await sendWhatsAppImage(
-                        lead.phone,
-                        library[parsed.image].url,
-                        library[parsed.image].caption,
-                    )
+                    const asset = mediaPart === 'video' ? video : image
+                    mediaEvidence = mediaPart === 'video'
+                        ? await sendWhatsAppVideo(lead.phone, asset.url, asset.caption)
+                        : await sendWhatsAppImage(lead.phone, asset.url, asset.caption)
                 } catch (error) {
                     const allowed = new Set([
                         'GRAPH_REJECTED', 'GRAPH_TIMEOUT', 'PROVIDER_MESSAGE_ID_MISSING',
@@ -386,7 +454,7 @@ export async function GET(req) {
                     ])
                     const errorCode = allowed.has(error?.errorCode) ? error.errorCode : 'PROVIDER_FAILED'
                     try {
-                        await fail(outboundParts.image, errorCode)
+                        await fail(outboundParts[mediaPart], errorCode)
                     } catch {
                         console.warn('[sales-agent/followups] media failure acknowledgement failed')
                     }
@@ -394,15 +462,15 @@ export async function GET(req) {
                     item.mediaDeliveryStatus = 'failed'
                     console.warn('[sales-agent/followups] media send failed')
                 }
-                if (imageEvidence) {
+                if (mediaEvidence) {
                     item.mediaDeliveryStatus = 'accepted'
                     const mediaAcceptedAt = new Date().toISOString()
                     const mediaAcceptedEvent = {
-                        eventId: `${outboundParts.image}:accepted`,
-                        outboundId: outboundParts.image,
+                        eventId: `${outboundParts[mediaPart]}:accepted`,
+                        outboundId: outboundParts[mediaPart],
                         channel: 'whatsapp_graph',
                         status: 'accepted',
-                        providerMessageId: imageEvidence.providerMessageId,
+                        providerMessageId: mediaEvidence.providerMessageId,
                         occurredAt: mediaAcceptedAt,
                     }
                     try {

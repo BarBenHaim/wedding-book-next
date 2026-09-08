@@ -268,12 +268,35 @@ export function addDaysISO(iso, days) {
     return d.toISOString().slice(0, 10)
 }
 
-export function buildFollowUpPrompt(lead, todayISO, { isFinal = false, media = null, performanceNote = null } = {}) {
+function followUpStrategyBlock(strategy) {
+    if (!strategy?.id || !strategy?.objective) return ''
+    const lines = [
+        '## אסטרטגיית הפולו-אפ שנקבעה',
+        `מזהה: ${String(strategy.id).slice(0, 60)}`,
+        `מטרה יחידה: ${String(strategy.objective).slice(0, 500)}`,
+        `פעולה מבוקשת: ${String(strategy.cta || 'none').slice(0, 40)}`,
+    ]
+    if (strategy.landingUrl) lines.push(`הקישור היחיד שמותר לשלוח: ${strategy.landingUrl}`)
+    if (strategy.mediaPreference === 'video') {
+        lines.push('לצד ההודעה יישלח סרטון אחד שכבר קיים בספריית המדיה. אל תבטיח סרטון נוסף ואל תבקש מדיה מהלקוח.')
+    }
+    if (strategy.coupon?.code && strategy.coupon?.expiresAt) {
+        lines.push(`קופון מאומת: ${strategy.coupon.code}`)
+        lines.push(`תוקף מדויק: ${strategy.coupon.expiresAt}`)
+        lines.push('אסור לשנות את הקוד, התוקף או ההטבה ואסור להציע הנחה אחרת.')
+    } else {
+        lines.push('אסור להציע קופון או הנחה בפולו-אפ הזה.')
+    }
+    lines.push('אל תבחר מטרה, קישור, מדיה או הצעה אחרים. נסח רק את המהלך שנקבע.')
+    return `\n\n${lines.join('\n')}`
+}
+
+export function buildFollowUpPrompt(lead, todayISO, { isFinal = false, media = null, performanceNote = null, strategy = null } = {}) {
     // The last message is a different message, and telling the model
     // "this is the third one" is not enough — it will still write a
     // nudge. Naming it as the goodbye is what produces a goodbye, and a
     // clean exit gets replies that a fourth reminder never would.
-    const finalBlock = isFinal
+    const finalBlock = isFinal && strategy?.id !== 'qualified_offer'
         ? `
 
 ## זו ההודעה האחרונה שהלקוח הזה יקבל
@@ -298,19 +321,21 @@ export function buildFollowUpPrompt(lead, todayISO, { isFinal = false, media = n
 שאל מה עצר את התשלום: תקלה, שאלה על החבילה או תזמון. אל תשלח שוב קישור תשלום אלא אם הלקוח מבקש אותו במפורש.`
         : ''
 
+    const strategyBlock = followUpStrategyBlock(strategy)
+
     return `${buildSystemPrompt(groundedLead, todayISO, { media, performanceNote })}
 
 ## המשימה עכשיו שונה
 הלקוח לא ענה. אתה כותב פולו-אפ יזום — לא תשובה.
-זה הפולו-אפ מספר ${(lead.followUpCount || 0) + 1}.${finalBlock}
+זה הפולו-אפ מספר ${(lead.followUpCount || 0) + 1}.${finalBlock}${strategyBlock}
 ${truthBlock}${paymentBlock}
 
 כללים לפולו-אפ:
 - התחבר למשהו ספציפי שנאמר בשיחה. "רק בודק מה קורה" זו הודעה שנמחקת.
 - הודעה אחת. קצרה. בלי לחץ ובלי אשמה.
 - אם הוא הבטיח לחזור — הזכר את זה בעדינות, בלי לגבות חוב.
-- פולו-אפ שלישי ומעלה: סגור מעגל בכבוד, השאר דלת פתוחה,
-  והחזר stage="closed_lost".
+- פולו-אפ שלישי ומעלה: אם האסטרטגיה היא qualified_offer, שלח רק את ההצעה
+  המאומתת שנקבעה. בכל מקרה אחר סגור מעגל בכבוד והחזר stage="closed_lost".
 - בפולו-אפ מותר לשלוח תמונה רק אם עוד לא שלחת לו אף אחת, והיא זו
   שנותנת את הסיבה להודעה. אחרת image=null.
 

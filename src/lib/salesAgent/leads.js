@@ -643,10 +643,25 @@ export async function prepareFollowUpDelivery({
     stage = null,
     advancesFollowUp = true,
     demoEvidence = false,
+    followUpStrategyId = undefined,
+    followUpCta = undefined,
+    followUpMediaKind = undefined,
     logicalAttemptId = outboundId,
     templateName = null,
     requestedAt = new Date().toISOString(),
 }) {
+    const strategyIds = new Set(['proof_site', 'resolve_blocker', 'qualified_offer', 'graceful_close'])
+    const ctas = new Set(['website', 'reply', 'coupon', 'none'])
+    const mediaKinds = new Set(['image', 'video', 'none'])
+    if (followUpStrategyId !== undefined && !strategyIds.has(followUpStrategyId)) {
+        throw deliveryError('INVALID_FOLLOWUP_METADATA')
+    }
+    if (followUpCta !== undefined && !ctas.has(followUpCta)) {
+        throw deliveryError('INVALID_FOLLOWUP_METADATA')
+    }
+    if (followUpMediaKind !== undefined && !mediaKinds.has(followUpMediaKind)) {
+        throw deliveryError('INVALID_FOLLOWUP_METADATA')
+    }
     const id = normalizePhone(phone)
     if (!id) throw deliveryError('INVALID_LEAD_ID')
     const deliveryRef = deliveryEventRef(outboundId)
@@ -691,6 +706,11 @@ export async function prepareFollowUpDelivery({
             nextFollowUpAt: nextFollowUpAt || null,
             stage: stage || null,
             templateName: templateName || null,
+            ...(followUpStrategyId ? {
+                followUpStrategyId,
+                followUpCta: followUpCta || 'none',
+                followUpMediaKind: followUpMediaKind || 'none',
+            } : {}),
             requestedAtMs,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
@@ -888,6 +908,15 @@ export async function recordDeliveryEvent(event) {
                 leadPatch.followUpCount = FieldValue.increment(1)
                 leadPatch.followUpAt = stored.nextFollowUpAt || null
                 leadPatch.pendingDeliveryMessages = {}
+                if (['proof_site', 'resolve_blocker', 'qualified_offer', 'graceful_close'].includes(stored?.followUpStrategyId)) {
+                    leadPatch.lastFollowUpStrategyId = stored.followUpStrategyId
+                    leadPatch.lastFollowUpCta = ['website', 'reply', 'coupon', 'none'].includes(stored?.followUpCta)
+                        ? stored.followUpCta
+                        : 'none'
+                    leadPatch.lastFollowUpMediaKind = ['image', 'video', 'none'].includes(stored?.followUpMediaKind)
+                        ? stored.followUpMediaKind
+                        : 'none'
+                }
                 leadPatch.turns = FieldValue.arrayUnion({
                     role: 'assistant',
                     text: String(pendingMessages[event.outboundId] || '').slice(0, 2000),

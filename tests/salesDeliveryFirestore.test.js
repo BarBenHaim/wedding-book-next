@@ -172,6 +172,72 @@ describe('transactional follow-up delivery truth', () => {
         expect(store.get(LEAD).turns).toEqual([{ role: 'assistant', text: 'follow-up fixture text', at: Date.parse('2026-08-14T10:01:00.000Z') }])
     })
 
+    it('attributes the bounded sales strategy only after primary delivery evidence', async () => {
+        await prepareFollowUpDelivery(requested({
+            followUpStrategyId: 'proof_site',
+            followUpCta: 'website',
+            followUpMediaKind: 'video',
+        }))
+
+        expect(store.get(DELIVERY)).toMatchObject({
+            followUpStrategyId: 'proof_site',
+            followUpCta: 'website',
+            followUpMediaKind: 'video',
+        })
+        expect(store.get(LEAD).lastFollowUpStrategyId).toBeUndefined()
+
+        await recordDeliveryEvent(event('accepted'))
+        expect(store.get(LEAD).lastFollowUpStrategyId).toBeUndefined()
+
+        await recordDeliveryEvent(event('delivered'))
+        expect(store.get(LEAD)).toMatchObject({
+            lastFollowUpStrategyId: 'proof_site',
+            lastFollowUpCta: 'website',
+            lastFollowUpMediaKind: 'video',
+        })
+    })
+
+    it('never lets secondary video delivery advance or overwrite primary strategy attribution', async () => {
+        await prepareFollowUpDelivery(requested({
+            followUpStrategyId: 'resolve_blocker',
+            followUpCta: 'reply',
+            followUpMediaKind: 'none',
+        }))
+        await recordDeliveryEvent(event('delivered'))
+
+        const videoOutboundId = 'followup-a1b2c3-1:video'
+        await prepareFollowUpDelivery(requested({
+            outboundId: videoOutboundId,
+            part: 'video',
+            advancesFollowUp: false,
+            followUpStrategyId: 'proof_site',
+            followUpCta: 'website',
+            followUpMediaKind: 'video',
+        }))
+        await recordDeliveryEvent(event('delivered', {
+            eventId: 'status-event-secondary-video-delivered',
+            outboundId: videoOutboundId,
+            providerMessageId: 'wamid-secondary-video-fixture',
+        }))
+
+        expect(store.get(LEAD)).toMatchObject({
+            followUpCount: 1,
+            lastFollowUpStrategyId: 'resolve_blocker',
+            lastFollowUpCta: 'reply',
+            lastFollowUpMediaKind: 'none',
+        })
+    })
+
+    it('rejects arbitrary follow-up attribution metadata before writing', async () => {
+        await expect(prepareFollowUpDelivery(requested({ followUpStrategyId: 'private-arbitrary-strategy' })))
+            .rejects.toMatchObject({ code: 'INVALID_FOLLOWUP_METADATA' })
+        await expect(prepareFollowUpDelivery(requested({ followUpCta: 'private-arbitrary-cta' })))
+            .rejects.toMatchObject({ code: 'INVALID_FOLLOWUP_METADATA' })
+        await expect(prepareFollowUpDelivery(requested({ followUpMediaKind: 'private-arbitrary-media' })))
+            .rejects.toMatchObject({ code: 'INVALID_FOLLOWUP_METADATA' })
+        expect(store.get(DELIVERY)).toBeUndefined()
+    })
+
     it.each([
         ['requested', 'delivered'],
         ['requested', 'read'],

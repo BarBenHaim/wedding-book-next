@@ -323,6 +323,40 @@ describe('system prompt — what actually reaches the model', () => {
         expect(f).toContain('שאל מה עצר את התשלום')
         expect(f).toContain('אל תשלח שוב קישור תשלום')
     })
+
+    it('binds a proof-and-site plan without allowing the model to invent a discount', () => {
+        const f = buildFollowUpPrompt({ stage: 'engaged', followUpCount: 0 }, today, {
+            strategy: {
+                id: 'proof_site',
+                objective: 'להמחיש במהירות איך הספר נראה',
+                cta: 'website',
+                landingUrl: 'https://weddingtales.co.il',
+                mediaPreference: 'video',
+                coupon: null,
+            },
+        })
+        expect(f).toContain('אסטרטגיית הפולו-אפ שנקבעה')
+        expect(f).toContain('להמחיש במהירות איך הספר נראה')
+        expect(f).toContain('https://weddingtales.co.il')
+        expect(f).toContain('אסור להציע קופון או הנחה')
+        expect(f).toContain('סרטון אחד שכבר קיים בספריית המדיה')
+    })
+
+    it('binds the exact verified coupon and forbids changing its terms', () => {
+        const f = buildFollowUpPrompt({ stage: 'offer_sent', followUpCount: 2 }, today, {
+            strategy: {
+                id: 'qualified_offer',
+                objective: 'להשלים רכישה',
+                cta: 'coupon',
+                landingUrl: 'https://weddingtales.co.il',
+                mediaPreference: 'none',
+                coupon: { code: 'BACK48', expiresAt: '2026-08-07T12:00:00.000Z' },
+            },
+        })
+        expect(f).toContain('BACK48')
+        expect(f).toContain('2026-08-07T12:00:00.000Z')
+        expect(f).toContain('אסור לשנות את הקוד, התוקף או ההטבה')
+    })
 })
 
 describe('addDaysISO', () => {

@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
     canSendWhatsApp: vi.fn(),
     sendWhatsAppText: vi.fn(),
     sendWhatsAppImage: vi.fn(),
+    sendWhatsAppVideo: vi.fn(),
     sendWhatsAppTemplate: vi.fn(),
     createOutboundId: vi.fn(),
     readSalesSettings: vi.fn(),
@@ -49,8 +50,12 @@ vi.mock('@/lib/salesAgent/whatsapp', () => ({
     canSendWhatsApp: mocks.canSendWhatsApp,
     sendWhatsAppText: mocks.sendWhatsAppText,
     sendWhatsAppImage: mocks.sendWhatsAppImage,
+    sendWhatsAppVideo: mocks.sendWhatsAppVideo,
     sendWhatsAppTemplate: mocks.sendWhatsAppTemplate,
-    FOLLOWUP_TEMPLATE: 'wt_followup',
+    FOLLOWUP_SITE_TEMPLATE: 'wt_followup_site',
+    FOLLOWUP_HELP_TEMPLATE: 'wt_followup_help',
+    FOLLOWUP_OFFER_TEMPLATE: 'wt_followup_offer',
+    FOLLOWUP_CLOSE_TEMPLATE: 'wt_followup_close',
 }))
 vi.mock('@/lib/salesAgent/delivery', () => ({
     createOutboundId: mocks.createOutboundId,
@@ -88,6 +93,8 @@ beforeEach(async () => {
     process.env.CRON_SECRET = 'cron-test-secret'
     process.env.SALES_AGENT_SECRET = 'shared-secret-fixture'
     process.env.SALES_AGENT_OWNER_PHONE = 'non-dialable-owner-fixture'
+    delete process.env.SALES_FOLLOWUP_COUPON_CODE
+    delete process.env.SALES_FOLLOWUP_COUPON_EXPIRES_AT
     mocks.sendableNow.mockReturnValue({ ok: true })
     mocks.canSendWhatsApp.mockReturnValue(true)
     mocks.listLeads.mockResolvedValue([])
@@ -110,6 +117,7 @@ beforeEach(async () => {
     mocks.prepareFollowUpDelivery.mockResolvedValue({ action: 'requested' })
     mocks.sendWhatsAppText.mockResolvedValue({ accepted: true, providerMessageId: 'wamid-text-fixture' })
     mocks.sendWhatsAppImage.mockResolvedValue({ accepted: true, providerMessageId: 'wamid-image-fixture' })
+    mocks.sendWhatsAppVideo.mockResolvedValue({ accepted: true, providerMessageId: 'wamid-video-fixture' })
     mocks.sendWhatsAppTemplate.mockResolvedValue({ accepted: true, providerMessageId: 'wamid-template-fixture' })
     mocks.recordDeliveryEvent.mockResolvedValue({ action: 'applied', status: 'accepted', advanced: false })
     mocks.readSalesSettings.mockResolvedValue({ enabled: true, mode: 'full_conversation' })
@@ -135,9 +143,9 @@ describe('opening-only mode', () => {
             },
         })
         expect(mocks.dueFollowUps).toHaveBeenCalled()
-        expect(mocks.callClaude).toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
         expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
-        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup', ['follow-up'])
+        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup_site', ['Test lead'])
     })
 
     it('fails closed before customer work when the mode cannot be read', async () => {
@@ -174,6 +182,7 @@ describe('follow-up failure privacy', () => {
     })
 
     it('does not expose a lead phone or arbitrary model error when composing a lead fails', async () => {
+        mocks.dueFollowUps.mockResolvedValue([{ ...lead, lastInboundAt: Date.now() }])
         mocks.callClaude.mockRejectedValue(new Error('model-body-sentinel transcript-sentinel'))
         const error = vi.spyOn(console, 'error').mockImplementation(() => {})
 
@@ -189,7 +198,7 @@ describe('follow-up failure privacy', () => {
 })
 
 describe('truthful follow-up transport', () => {
-    it('uses only wt_followup outside the service window and records provider acceptance as pending', async () => {
+    it('uses only the planned approved template outside the service window and records provider acceptance as pending', async () => {
         mocks.parseAgentJson.mockReturnValue({
             malformed: false, handoff: false, messages: ['follow-up'], stage: 'engaged', image: 'book',
             callbackPromised: null, followUpAt: null,
@@ -198,7 +207,7 @@ describe('truthful follow-up transport', () => {
         const result = await runCron()
 
         expect(result.status).toBe(200)
-        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup', ['follow-up'])
+        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup_site', ['Test lead'])
         expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
         expect(mocks.sendWhatsAppImage).not.toHaveBeenCalled()
         expect(mocks.prepareFollowUpDelivery).toHaveBeenCalledWith(expect.objectContaining({
@@ -206,7 +215,7 @@ describe('truthful follow-up transport', () => {
             outboundId: 'outbound-fixture:template',
             channel: 'whatsapp_graph',
             part: 'template',
-            templateName: 'wt_followup',
+            templateName: 'wt_followup_site',
             advancesFollowUp: true,
         }))
         expect(mocks.recordDeliveryEvent).toHaveBeenCalledWith(expect.objectContaining({
@@ -220,6 +229,34 @@ describe('truthful follow-up transport', () => {
             deliveryStatus: 'accepted',
             hasImage: false,
             sendImage: null,
+        })
+    })
+
+    it('carries the real product video in the first outside-window site template instead of a forbidden free-form send', async () => {
+        mocks.mergeMedia.mockReturnValue({
+            product_video: { kind: 'video', url: 'https://cdn.example/product.mp4', caption: 'כך זה עובד' },
+        })
+
+        const result = await runCron()
+
+        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(
+            lead.phone,
+            'wt_followup_site',
+            ['Test lead'],
+            { headerVideoUrl: 'https://cdn.example/product.mp4' },
+        )
+        expect(mocks.sendWhatsAppVideo).not.toHaveBeenCalled()
+        expect(mocks.prepareFollowUpDelivery).toHaveBeenCalledWith(expect.objectContaining({
+            part: 'template',
+            advancesFollowUp: true,
+            demoEvidence: true,
+            followUpMediaKind: 'video',
+        }))
+        expect(result.body.items[0]).toMatchObject({
+            strategyId: 'proof_site',
+            hasVideo: true,
+            sendVideo: null,
+            templateHeaderVideo: 'https://cdn.example/product.mp4',
         })
     })
 
@@ -249,6 +286,64 @@ describe('truthful follow-up transport', () => {
             image: 'outbound-fixture:image',
         })
         expect(mocks.recordMediaSent).not.toHaveBeenCalled()
+    })
+
+    it('uses one unsent product video on the first in-window follow-up and keeps it secondary', async () => {
+        mocks.dueFollowUps.mockResolvedValue([{ ...lead, lastInboundAt: Date.now() }])
+        mocks.mergeMedia.mockReturnValue({
+            product_video: { kind: 'video', url: 'https://cdn.example/product.mp4', caption: 'כך זה עובד' },
+        })
+
+        const result = await runCron()
+
+        expect(mocks.sendWhatsAppText).toHaveBeenCalledWith(lead.phone, 'follow-up')
+        expect(mocks.sendWhatsAppVideo).toHaveBeenCalledWith(lead.phone, 'https://cdn.example/product.mp4', 'כך זה עובד')
+        expect(mocks.prepareFollowUpDelivery).toHaveBeenCalledWith(expect.objectContaining({
+            part: 'video', advancesFollowUp: false, followUpMediaKind: 'video',
+        }))
+        expect(result.body.items[0]).toMatchObject({
+            strategyId: 'proof_site',
+            hasVideo: true,
+            sendVideo: 'https://cdn.example/product.mp4',
+            mediaDeliveryStatus: 'accepted',
+        })
+    })
+
+    it('does not repeat a product video already recorded on the lead', async () => {
+        mocks.dueFollowUps.mockResolvedValue([{ ...lead, lastInboundAt: Date.now(), mediaSent: ['product_video'] }])
+        mocks.mergeMedia.mockReturnValue({
+            product_video: { kind: 'video', url: 'https://cdn.example/product.mp4', caption: 'כך זה עובד' },
+        })
+
+        const result = await runCron()
+
+        expect(mocks.sendWhatsAppVideo).not.toHaveBeenCalled()
+        expect(result.body.items[0]).toMatchObject({ strategyId: 'proof_site', hasVideo: false })
+    })
+
+    it('uses the blocker template on the second outside-window follow-up', async () => {
+        mocks.dueFollowUps.mockResolvedValue([{ ...lead, stage: 'ready_to_pay', followUpCount: 1 }])
+
+        const result = await runCron()
+
+        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup_help', ['Test lead'])
+        expect(result.body.items[0]).toMatchObject({ strategyId: 'resolve_blocker', templateName: 'wt_followup_help' })
+    })
+
+    it('uses a configured 48-hour offer only for a high-intent final follow-up', async () => {
+        process.env.SALES_FOLLOWUP_COUPON_CODE = 'BACK48'
+        process.env.SALES_FOLLOWUP_COUPON_EXPIRES_AT = new Date(Date.now() + 36 * 3600 * 1000).toISOString()
+        mocks.dueFollowUps.mockResolvedValue([{ ...lead, stage: 'offer_sent', followUpCount: 2 }])
+        mocks.isFinalAttempt.mockReturnValue(true)
+
+        const result = await runCron()
+
+        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(
+            lead.phone,
+            'wt_followup_offer',
+            ['Test lead', 'BACK48', expect.any(String)],
+        )
+        expect(result.body.items[0]).toMatchObject({ strategyId: 'qualified_offer', templateName: 'wt_followup_offer' })
     })
 
     it('records normalized template rejection as failed and leaves the item unaccepted', async () => {
