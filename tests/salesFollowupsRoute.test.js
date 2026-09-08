@@ -117,20 +117,27 @@ beforeEach(async () => {
 })
 
 describe('opening-only mode', () => {
-    it('suppresses the complete follow-up pipeline before reads, model calls, or transport', async () => {
+    it('processes scheduled follow-ups while live conversation continuation stays opening-only', async () => {
         mocks.readSalesSettings.mockResolvedValue({ enabled: true, mode: 'opening_only' })
 
         const result = await runCron()
 
         expect(result).toMatchObject({
             status: 200,
-            body: { ok: true, skipped: 'opening-only-mode', delivery: 'none', count: 0, items: [] },
+            body: {
+                ok: true,
+                delivery: 'direct',
+                count: 1,
+                items: [expect.objectContaining({
+                    outboundId: 'outbound-fixture:template',
+                    deliveryStatus: 'accepted',
+                })],
+            },
         })
-        expect(mocks.listLeads).not.toHaveBeenCalled()
-        expect(mocks.dueFollowUps).not.toHaveBeenCalled()
-        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.dueFollowUps).toHaveBeenCalled()
+        expect(mocks.callClaude).toHaveBeenCalled()
         expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
-        expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup', ['follow-up'])
     })
 
     it('fails closed before customer work when the mode cannot be read', async () => {

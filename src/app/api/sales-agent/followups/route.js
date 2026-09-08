@@ -143,17 +143,6 @@ export async function GET(req) {
         })
     }
 
-    if (settings.mode === 'opening_only') {
-        return NextResponse.json({
-            ok: true,
-            skipped: 'opening-only-mode',
-            delivery: 'none',
-            date: today,
-            count: 0,
-            items: [],
-        })
-    }
-
     // ?dry=1 — compose everything and report it WITHOUT marking anything
     // as sent or reviving anything. Use it on the first few days: you
     // get to read what the bot would have written before any customer
