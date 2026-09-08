@@ -57,9 +57,18 @@ async function post(payload) {
         if (error?.name === 'TimeoutError' || error?.name === 'AbortError') throw graphError('GRAPH_TIMEOUT')
         throw graphError('GRAPH_REJECTED')
     }
-    // Provider rejection bodies may include recipient/account details. They
-    // are deliberately not parsed, logged, attached, or rethrown.
-    if (!res.ok) throw graphError('GRAPH_REJECTED')
+    // Provider rejection bodies may include recipient/account details. Keep
+    // only Meta's numeric classification, which is enough to distinguish a
+    // missing template from an expired token without retaining customer data.
+    if (!res.ok) {
+        const rejected = await res.json().catch(() => null)
+        const providerCode = Number.isInteger(rejected?.error?.code) ? rejected.error.code : null
+        const providerSubcode = Number.isInteger(rejected?.error?.error_subcode)
+            ? rejected.error.error_subcode
+            : null
+        console.warn('[sales-agent/whatsapp] graph rejected', { providerCode, providerSubcode })
+        throw graphError('GRAPH_REJECTED', { providerCode, providerSubcode })
+    }
 
     const body = await res.json().catch(() => null)
     const providerMessageId = typeof body?.messages?.[0]?.id === 'string'
@@ -69,9 +78,11 @@ async function post(payload) {
     return { accepted: true, providerMessageId }
 }
 
-function graphError(errorCode) {
+function graphError(errorCode, metadata = {}) {
     const error = new Error('whatsapp graph send failed')
     error.errorCode = errorCode
+    if (Number.isInteger(metadata.providerCode)) error.providerCode = metadata.providerCode
+    if (Number.isInteger(metadata.providerSubcode)) error.providerSubcode = metadata.providerSubcode
     return error
 }
 

@@ -62,8 +62,15 @@ describe('direct WhatsApp Graph evidence', () => {
         fetch.mockResolvedValue({
             ok: false,
             status: 400,
-            json: vi.fn().mockResolvedValue({ error: { message: 'private provider body fixture' } }),
+            json: vi.fn().mockResolvedValue({
+                error: {
+                    code: 132001,
+                    error_subcode: 2494002,
+                    message: 'private provider body fixture',
+                },
+            }),
         })
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
         let caught
         try {
@@ -72,8 +79,17 @@ describe('direct WhatsApp Graph evidence', () => {
             caught = error
         }
 
-        expect(caught).toMatchObject({ message: 'whatsapp graph send failed', errorCode: 'GRAPH_REJECTED' })
-        const visible = `${caught.message} ${caught.stack}`
+        expect(caught).toMatchObject({
+            message: 'whatsapp graph send failed',
+            errorCode: 'GRAPH_REJECTED',
+            providerCode: 132001,
+            providerSubcode: 2494002,
+        })
+        expect(warn).toHaveBeenCalledWith('[sales-agent/whatsapp] graph rejected', {
+            providerCode: 132001,
+            providerSubcode: 2494002,
+        })
+        const visible = `${caught.message} ${caught.stack} ${JSON.stringify(warn.mock.calls)}`
         expect(visible).not.toContain('private provider body fixture')
         expect(visible).not.toContain('non-dialable-recipient-fixture')
         expect(visible).not.toContain('private-token-fixture')
