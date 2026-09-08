@@ -14,6 +14,7 @@ import NotebookPageLayout from '../NotebookPageLayout/NotebookPageLayout'
 import CollagePageLayout from '../CollagePageLayout/CollagePageLayout'
 import WindowPageLayout from '../WindowPageLayout/WindowPageLayout'
 import DuoPageLayout from '../DuoPageLayout/DuoPageLayout'
+import ComposedPageLayout from '../ComposedPageLayout/ComposedPageLayout'
 
 export default function BookPageTemplate({ entry, styleSettings: incomingStyle, scaledWidth, scaledHeight }) {
     // ── Album-mode photo overrides ───────────────────────────────────
@@ -86,6 +87,22 @@ export default function BookPageTemplate({ entry, styleSettings: incomingStyle, 
     if (entry?._duo) {
         return (
             <DuoPageLayout
+                entry={entry}
+                styleSettings={styleSettings}
+                scaledWidth={scaledWidth}
+                scaledHeight={scaledHeight}
+            />
+        )
+    }
+
+    // ── Composed page — the planner's own arrangement ────────────────
+    // Produced by expandBookPages in `composition: 'smart'`, where
+    // greetingPlan chose a rough for these entries rather than a rule
+    // being applied to each of them in turn. The page carries its own
+    // slots, so it is placed by coordinates and not by this file.
+    if (entry?._composed) {
+        return (
+            <ComposedPageLayout
                 entry={entry}
                 styleSettings={styleSettings}
                 scaledWidth={scaledWidth}

@@ -9,6 +9,8 @@
 // photo-only page (the photo big on its own). Short blessings stay on a
 // single combined page. When disabled, it's the classic 1 page per entry.
 
+import { planGreetings } from './greetingPlan'
+
 const DEFAULT_SPLIT_THRESHOLD = 240 // blessing chars beyond which we split (with a photo)
 
 /**
@@ -48,6 +50,33 @@ export function expandBookPages(entries, opts = {}) {
 
     let padN = 0
     const divider = () => ({ id: `__divider_${padN++}`, _divider: true })
+
+    // ── Composed pages ───────────────────────────────────────────────
+    // The one mode in this file that does not decide anything itself.
+    // Every branch below looks at ONE entry and applies a rule to it,
+    // which is why none of them can ask whether these next three would
+    // make a good page together. greetingPlan can, so this hands the
+    // whole list over and wraps whatever it returns.
+    //
+    // Deliberately BEFORE the other modes: composition supersedes them.
+    // autoSplit, duo and smart-photo are three narrow answers to the
+    // question the planner answers generally, and running them first
+    // would pre-chew the list into decisions it never got to make.
+    if (opts.composition === 'smart') {
+        const planned = planGreetings(list, {
+            styleSettings: opts.styleSettings,
+            // Splitting a long blessing off its photo is still worth
+            // doing - it is two pages for one guest, not one blessing
+            // running across two - but the caller can turn it off.
+            split: opts.autoSplit !== false,
+        })
+        const out = planned.map(page => ({
+            id: `__composed_${page.index}_${page.entries[0]?.id ?? page.index}`,
+            _composed: page,
+        }))
+        if (padToSpread && !onSpreadStart(out.length)) out.push(divider())
+        return out
+    }
 
     // ── Smart photo layout (albums) ──────────────────────────────────
     // photoLayout 'smart': photo-only entries compose by their measured

@@ -82,3 +82,55 @@ describe('expandBookPages photoLayout smart', () => {
         expect(out[0]._photoPair).toBeUndefined()
     })
 })
+
+// ── Composed mode ───────────────────────────────────────────────────
+describe('expandBookPages composition: smart', () => {
+    const T = n => 'א'.repeat(n)
+    const list = [
+        { id: '1', name: 'a', text: T(120), imageUrl: 'u', imgAspect: 1.5 },
+        { id: '2', name: 'b', text: T(60) },
+        { id: '3', name: '', text: '', imageUrl: 'u', imgAspect: 1.7 },
+        { id: '4', name: 'd', text: T(70) },
+        { id: '5', name: 'e', text: T(90), imageUrl: 'u', imgAspect: 0.8 },
+    ]
+
+    it('returns composed page objects the template can dispatch on', () => {
+        const pages = expandBookPages(list, { composition: 'smart' })
+        expect(pages.length).toBeGreaterThan(0)
+        for (const p of pages) {
+            if (p._divider) continue
+            expect(p._composed).toBeTruthy()
+            expect(p.id).toMatch(/^__composed_/)
+        }
+    })
+    it('places every entry, and none twice', () => {
+        const pages = expandBookPages(list, { composition: 'smart' })
+        const ids = pages.filter(p => p._composed).flatMap(p => p._composed.entries.map(e => e.id))
+        expect(new Set(ids).size).toBe(ids.length)
+        expect(ids).toHaveLength(list.length)
+    })
+    it('supersedes the narrower modes rather than stacking with them', () => {
+        // duo, autoSplit and smart-photo are three narrow answers to the
+        // question the planner answers generally. If composition ran after
+        // them it would be handed a list already chewed into decisions.
+        const withDuo = expandBookPages(list, { composition: 'smart', entriesPerPage: 2 })
+        const alone = expandBookPages(list, { composition: 'smart' })
+        expect(withDuo.map(p => p.id)).toEqual(alone.map(p => p.id))
+        expect(withDuo.every(p => !p._duo)).toBe(true)
+    })
+    it('every slot on every page has an entry', () => {
+        for (const p of expandBookPages(list, { composition: 'smart' })) {
+            if (!p._composed) continue
+            for (const s of p._composed.slots) expect(s.entry).toBeTruthy()
+        }
+    })
+    it('leaves the other modes untouched when not asked for', () => {
+        const classic = expandBookPages(list, {})
+        expect(classic).toHaveLength(list.length)
+        expect(classic.every(p => !p._composed)).toBe(true)
+    })
+    it('pads to a whole spread when asked, like every other mode', () => {
+        const pages = expandBookPages(list, { composition: 'smart', padToSpread: true })
+        expect(pages.length % 2).toBe(0)
+    })
+})

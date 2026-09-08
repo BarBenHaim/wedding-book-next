@@ -321,3 +321,35 @@ describe('a split guest stays one guest', () => {
         expect(page.why.worst).toBeLessThan(0.1)
     })
 })
+
+describe('textShare is a HEIGHT, textAreaOf is an AREA', () => {
+    // These two are easy to swap and the swap is invisible to every unit
+    // test: the plan stays valid, the scores stay sane, and the book only
+    // goes wrong when it is drawn. Rendering the engine caught it -
+    // giving a card's words a quarter of their box instead of the 42%
+    // they were scored against, so text clipped on three pages. Pin the
+    // distinction so the next reader cannot make the same mistake.
+    const classic = RECIPES.find(r => r.id === 'classic')
+    const slot = classic.slots[0]
+
+    it('textShare is the fraction of the SLOT HEIGHT the words get', () => {
+        expect(slot.textShare).toBe(0.42)
+    })
+    it('textAreaOf is the fraction of the PAGE the words cover, and is smaller', () => {
+        const area = textAreaOf(slot)
+        expect(area).toBeCloseTo(slotArea(slot.area) * slot.textShare, 6)
+        expect(area).toBeLessThan(slot.textShare)
+    })
+    it('a renderer that used the area as a height would starve the text', () => {
+        // The failing case, stated as a number: 0.249 of the box instead
+        // of 0.42 is 41% less room than the blessing was scored against.
+        expect(textAreaOf(slot) / slot.textShare).toBeLessThan(0.65)
+    })
+    it('every card slot declares a textShare rather than relying on the default', () => {
+        for (const r of RECIPES) {
+            for (const s of r.slots) {
+                if (s.kind === 'card') expect(typeof s.textShare, r.id).toBe('number')
+            }
+        }
+    })
+})
