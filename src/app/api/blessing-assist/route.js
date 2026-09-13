@@ -24,6 +24,41 @@ import { normalizeEventType } from '@/lib/eventTypes'
 const MODEL = 'claude-sonnet-4-6' // higher quality for genuinely good, natural blessings
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 
+// ── The Python service ───────────────────────────────────────────────
+// The prompt and the model call also live in a small Flask service
+// (../blessing-assist-service). When BLESSING_ASSIST_URL is set this
+// route delegates to it; otherwise it keeps doing the work itself.
+//
+// The fallback is not ceremony. This endpoint is on the guest page of
+// live events, and a Python process that is down, redeploying, or cold
+// must not cost a guest their blessing. So a failure here is a silent
+// downgrade to the path that was already running in production, not an
+// error the guest ever sees.
+const PY_URL = process.env.BLESSING_ASSIST_URL || ''
+const PY_TIMEOUT_MS = 20000
+
+async function callPythonService(payload) {
+    if (!PY_URL) return null
+    try {
+        const ctrl = new AbortController()
+        const t = setTimeout(() => ctrl.abort(), PY_TIMEOUT_MS)
+        const res = await fetch(`${PY_URL.replace(/\/$/, '')}/assist`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: ctrl.signal,
+        })
+        clearTimeout(t)
+        if (!res.ok) return null
+        const data = await res.json()
+        // Only accept a usable answer. An empty list means the service
+        // ran but produced nothing, and Claude may still do better.
+        return Array.isArray(data?.suggestions) && data.suggestions.length ? data.suggestions : null
+    } catch {
+        return null
+    }
+}
+
 // ── Tiny best-effort in-memory rate limit (per IP). Serverless instances
 // are ephemeral so this only throttles bursts on a warm instance — paired
 // with the small model + token cap it keeps costs bounded. ──
@@ -139,6 +174,16 @@ export async function POST(req) {
             /* grounding is best-effort */
         }
         const { occasion, who } = eventContext(type, names)
+
+        // Try the Python service first. It owns the same prompt, against
+        // Gemini; whatever it returns is already cleaned and capped.
+        const fromPython = await callPythonService({
+            mode, eventType: type, names, locale, maxChars: maxChars,
+            draft, relationship, memory, tone,
+        })
+        if (fromPython) {
+            return NextResponse.json({ suggestions: fromPython, engine: 'python' })
+        }
 
         const system =
             `You are a gifted writer helping an everyday guest write a genuinely beautiful, heartfelt ` +
