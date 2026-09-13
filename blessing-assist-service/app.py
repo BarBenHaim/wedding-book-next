@@ -23,8 +23,13 @@
 import os
 import time
 
+from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+
+# טוען את .env אם הוא קיים, כדי שלא צריך לייצא משתני סביבה ידנית
+# בכל פתיחת טרמינל. הקובץ עצמו ב-.gitignore — המפתח לא נכנס ל-git.
+load_dotenv()
 
 from gemini import GeminiError, call_gemini, parse_list, strip_wrap
 from prompts import (

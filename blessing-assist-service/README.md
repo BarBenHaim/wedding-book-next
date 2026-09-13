@@ -24,8 +24,7 @@ cd blessing-assist-service
 python -m venv venv && source venv/bin/activate    # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env        # ואז לערוך ולשים GEMINI_API_KEY אמיתי
-export GEMINI_API_KEY=...   # Windows PowerShell: $env:GEMINI_API_KEY="..."
-python app.py
+python app.py               # .env נטען אוטומטית
 ```
 
 השירות עולה על `http://localhost:5001`.
