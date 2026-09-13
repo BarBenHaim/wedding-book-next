@@ -65,7 +65,7 @@ def health():
     return jsonify({
         "ok": True,
         "service": "blessing-assist",
-        "model": os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
+        "model": os.environ.get("GEMINI_MODEL", "gemini-3.6-flash"),
         "has_key": bool(os.environ.get("GEMINI_API_KEY")),
     })
 
@@ -131,7 +131,12 @@ def assist():
         app.logger.warning("gemini failed: %s", exc)
         if str(exc) == "NO_KEY":
             return jsonify({"error": "עוזר ה-AI לא מוגדר עדיין (חסר מפתח)."}), 503
-        return jsonify({"error": "העוזר עמוס כרגע, נסו שוב בעוד רגע."}), 502
+        # למשתמש אומרים משהו אנושי; למפתח, כשרצים ב-debug, אומרים את
+        # האמת. בלי זה כל תקלה מול Gemini נראית זהה מבחוץ.
+        payload = {"error": "העוזר עמוס כרגע, נסו שוב בעוד רגע."}
+        if os.environ.get("FLASK_DEBUG") == "1":
+            payload["detail"] = str(exc)
+        return jsonify(payload), 502
 
     if mode == "improve":
         cleaned = strip_wrap(raw)[: max_chars + 40]

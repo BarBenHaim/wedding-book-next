@@ -11,8 +11,8 @@ import re
 
 import requests
 
-# gemini-2.0-flash: מהיר וזול. לברכה קצרה אין צורך במודל גדול.
-MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+# gemini-3.6-flash: מהיר וזול. לברכה קצרה אין צורך במודל גדול.
+MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 
 # 0.85 ולא 0.2: ברכה היא כתיבה יצירתית. בטמפרטורה נמוכה כל שלוש
@@ -29,7 +29,7 @@ def call_gemini(system_prompt, user_prompt, max_tokens=700):
     """
     שולח פרומפט ומחזיר את הטקסט שחזר.
 
-    ל-Gemini יש שדה system_instruction נפרד מההודעה עצמה — בדיוק
+    ל-Gemini יש שדה systemInstruction נפרד מההודעה עצמה — בדיוק
     ההפרדה שיש ב-prompts.py בין ההוראות הקבועות לבין הבקשה הספציפית.
     """
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -37,7 +37,10 @@ def call_gemini(system_prompt, user_prompt, max_tokens=700):
         raise GeminiError("NO_KEY")
 
     payload = {
-        "system_instruction": {"parts": [{"text": system_prompt}]},
+        # camelCase, not snake_case. The Python client library uses
+        # system_instruction, the REST API does not - and it rejects the
+        # unknown field with a 400 rather than ignoring it.
+        "systemInstruction": {"parts": [{"text": system_prompt}]},
         "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
         "generationConfig": {
             "temperature": TEMPERATURE,
@@ -56,7 +59,9 @@ def call_gemini(system_prompt, user_prompt, max_tokens=700):
         raise GeminiError(f"NETWORK: {exc}") from exc
 
     if response.status_code != 200:
-        raise GeminiError(f"HTTP {response.status_code}: {response.text[:200]}")
+        # התשובה של גוגל מסבירה בדיוק מה לא בסדר (שדה לא מוכר, מודל לא
+        # קיים, מפתח חסום). היא לא מכילה את המפתח — הוא נשלח ב-query.
+        raise GeminiError(f"HTTP {response.status_code}: {response.text[:300]}")
 
     data = response.json()
     try:

@@ -105,7 +105,7 @@ export default function SystemDiagram() {
                 fill='#fdf3e3' stroke='#e8c98a' />
             <Node x={380} y={366} w={165} h={70} title='Firebase Auth' sub='התחברות בעלי אירוע'
                 fill='#fdf3e3' stroke='#e8c98a' />
-            <Node x={610} y={366} w={270} h={70} title='Google Gemini API' sub='gemini-2.0-flash'
+            <Node x={610} y={366} w={270} h={70} title='Google Gemini API' sub='gemini-3.6-flash'
                 fill='#e6efe4' stroke='#8fae86' ink='#24421d' />
 
             <Node x={20} y={470} w={165} h={56} title='Lulu Print API' sub='הדפסת הספר'
