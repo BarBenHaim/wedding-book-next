@@ -113,7 +113,10 @@ def assist():
 
     if mode == "improve":
         user_prompt = build_improve_prompt(draft, event_type, names, max_chars)
-        max_tokens = 400
+        # עברית יקרה בטוקנים, ובמודלי Gemini 3.x גם ה-thinking נספר
+        # בתקציב הפלט. 400 הספיקו ל-2.0 ונחתכו ב-3.6 — ראינו מערך JSON
+        # חתוך חוזר כ"הצעה" אחת.
+        max_tokens = 1024
     else:
         user_prompt = build_ideas_prompt(
             event_type,
@@ -123,7 +126,7 @@ def assist():
             tone=str(body.get("tone") or "")[:40],
             max_chars=max_chars,
         )
-        max_tokens = 700
+        max_tokens = 2048
 
     try:
         raw = call_gemini(system_prompt, user_prompt, max_tokens=max_tokens)

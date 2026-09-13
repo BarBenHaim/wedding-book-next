@@ -133,3 +133,17 @@ class TestParseList:
         # המשתמש לא אמור לראות 500 בגלל פלט מוזר של המודל.
         for junk in ["", None, "???", "[not json"]:
             assert isinstance(parse_list(junk), list)
+
+    def test_rescues_the_complete_strings_from_a_truncated_array(self):
+        # השכל הזה הגיע מהרצה אמיתית: Gemini 3.6 החזיר מערך JSON שנחתך
+        # בתקציב הטוקנים, ו-parse_list החזיר את הטקסט הגולמי כ"הצעה"
+        # אחת שמתחילה ב-'['. עכשיו שולפים את המחרוזות ששרדו.
+        truncated = '[\n  "ברכה ראשונה שלמה ומלאה בשמחה.",\n  "ברכה שנייה שלמה גם היא.",\n  "שלישית שנחת'
+        out = parse_list(truncated)
+        assert out == ["ברכה ראשונה שלמה ומלאה בשמחה.", "ברכה שנייה שלמה גם היא."]
+        assert not any(x.startswith("[") for x in out)
+
+    def test_unescapes_quotes_inside_a_rescued_string(self):
+        raw = '[\n  "הוא אמר \\"מזל טוב\\" בקול רם ומלא שמחה אמיתית",\n  "שנייה שנח'
+        out = parse_list(raw)
+        assert out == ['הוא אמר "מזל טוב" בקול רם ומלא שמחה אמיתית']

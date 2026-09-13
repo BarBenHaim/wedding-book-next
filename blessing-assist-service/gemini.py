@@ -100,6 +100,16 @@ def parse_list(raw):
         except json.JSONDecodeError:
             pass  # ממשיכים לפיצול לפי שורות
 
+    # המערך התחיל כ-JSON אבל לא נסגר — קורה כשהפלט נחתך בתקציב הטוקנים.
+    # במקום להחזיר את הטקסט הגולמי כ"הצעה" אחת, שולפים את המחרוזות
+    # השלמות שכן הגיעו. הצעה שנחתכה באמצע נזרקת, לא מוצגת חצי.
+    if start >= 0:
+        complete = re.findall(r'"((?:[^"\\]|\\.)*)"', text[start:])
+        complete = [strip_wrap(c.replace('\\"', '"').replace('\\n', ' ')) for c in complete]
+        complete = [c for c in complete if len(c) > 15]
+        if complete:
+            return complete[:3]
+
     parts = re.split(r"\n{2,}|\n(?=\d+[.)]\s)|\n(?=[-•]\s)", text)
     items = [strip_wrap(re.sub(r"^\s*(\d+[.)]|[-•])\s*", "", p)) for p in parts]
     return [x for x in items if x][:3]
