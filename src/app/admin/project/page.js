@@ -13,6 +13,7 @@
 // Firestore and pings the Flask service while you are standing there.
 
 import { useCallback, useEffect, useState } from 'react'
+import { onAuthStateChanged } from 'firebase/auth'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import { auth } from '@/lib/firebaseClient'
 import {
@@ -53,9 +54,9 @@ export default function ProjectPage() {
     // Real numbers from the real database. The claim this page makes is
     // "this is a product, not an exercise", and that claim should be
     // checkable on the spot rather than typed into a slide.
-    const loadStats = useCallback(async () => {
+    const loadStats = useCallback(async user => {
         try {
-            const token = await auth.currentUser?.getIdToken()
+            const token = await user?.getIdToken()
             if (!token) return
             const res = await fetch('/api/admin/weddings', { headers: { Authorization: `Bearer ${token}` } })
             if (!res.ok) return
@@ -80,7 +81,17 @@ export default function ProjectPage() {
         }
     }, [])
 
-    useEffect(() => { loadStats(); loadHealth() }, [loadStats, loadHealth])
+    // This component is the PARENT of AdminPageWrapper, so its effect runs
+    // before the wrapper has resolved the session - auth.currentUser is
+    // still null at that instant, and a one-shot fetch would bail and
+    // never come back. Subscribing means the numbers load the moment the
+    // user is known, whether that is now or after Firebase restores the
+    // session from storage. Health needs no login.
+    useEffect(() => {
+        loadHealth()
+        const unsub = onAuthStateChanged(auth, user => { if (user) loadStats(user) })
+        return () => unsub()
+    }, [loadStats, loadHealth])
 
     const copyPrompt = async () => {
         try {

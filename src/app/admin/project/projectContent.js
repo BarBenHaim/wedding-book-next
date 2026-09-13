@@ -50,7 +50,7 @@ export const RUBRIC = [
         evidence: [
             'הדף הזה הוא המצגת',
             'לינק חי: app.weddingtales.co.il',
-            'הפייתון קצר ומובן בכוונה — 447 שורות סך הכל, 26 טסטים',
+            'הפייתון קצר ומובן בכוונה — כ-450 שורות, 28 טסטים',
         ],
     },
     {
@@ -128,7 +128,7 @@ export const PY_FILES = [
     { name: 'prompts.py', lines: 110, role: 'בניית הפרומפט. פונקציות טהורות — אין רשת' },
     { name: 'gemini.py', lines: 100, role: 'הקריאה ל-API והניקוי. השכבה היחידה שנוגעת ברשת' },
     { name: 'prompt_lab.py', lines: 95, role: 'כלי CLI להשוואת גרסאות פרומפט' },
-    { name: 'tests/test_prompts.py', lines: 145, role: '26 טסטים, אף אחד לא דורש מפתח API' },
+    { name: 'tests/test_prompts.py', lines: 160, role: '28 טסטים, אף אחד לא דורש מפתח API' },
 ]
 
 /** What to click, in what order, when presenting. */
