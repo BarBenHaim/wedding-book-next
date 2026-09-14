@@ -159,4 +159,22 @@ describe('WhatsApp follow-up template bootstrap', () => {
             'https://graph.facebook.com/v25.0/only-assigned-waba/message_templates?fields=name,status,language&limit=100',
         )
     })
+
+    it('uses a pinned WABA only after it verifies the configured phone belongs to it', async () => {
+        fetch
+            .mockResolvedValueOnce(response({ data: [{ id: config.phoneId }] }))
+            .mockResolvedValueOnce(response({ data: [{ name: 'wt_followup_site', language: 'he', status: 'APPROVED' }] }))
+        const handle = createWhatsAppTemplateBootstrapHandler({
+            getConfig: () => ({ ...config, wabaId: 'pinned-waba-fixture' }),
+        })
+
+        expect(await handle(request())).toEqual({
+            status: 200,
+            body: { ok: true, result: 'TEMPLATE_EXISTS', templateStatus: 'APPROVED' },
+        })
+        expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+            'https://graph.facebook.com/v25.0/pinned-waba-fixture/phone_numbers?fields=id&limit=100',
+            'https://graph.facebook.com/v25.0/pinned-waba-fixture/message_templates?fields=name,status,language&limit=100',
+        ])
+    })
 })

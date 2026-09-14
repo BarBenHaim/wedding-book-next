@@ -29,6 +29,7 @@ function readConfig() {
         secret: process.env.SALES_AGENT_SECRET,
         token: process.env.WHATSAPP_TOKEN,
         phoneId: process.env.WHATSAPP_PHONE_ID,
+        wabaId: process.env.WHATSAPP_WABA_ID,
     }
 }
 
@@ -91,35 +92,46 @@ export function createWhatsAppTemplateBootstrapHandler({ fetchFn = (...args) => 
             return { body: providerBody }
         }
 
-        const identity = await graph('me?fields=id')
-        if (identity.error) return identity.error
-        const systemUserId = identity.body?.id
-        if (typeof systemUserId !== 'string' || !systemUserId) {
-            return reply(502, { ok: false, error: 'META_RESPONSE_INVALID' })
-        }
-
-        const accounts = await graph(`${encodeURIComponent(systemUserId)}/assigned_whatsapp_business_accounts?fields=id&limit=100`)
-        if (accounts.error) return accounts.error
-        const wabas = Array.isArray(accounts.body?.data) ? accounts.body.data : null
-        if (!wabas) {
-            return reply(502, { ok: false, error: 'META_RESPONSE_INVALID' })
-        }
-
-        const assignedWabaIds = wabas.flatMap(waba => (
-            typeof waba?.id === 'string' && waba.id ? [waba.id] : []
-        ))
         let wabaId = null
-        for (const assignedWabaId of assignedWabaIds) {
-            const phoneNumbers = await graph(`${encodeURIComponent(assignedWabaId)}/phone_numbers?fields=id&limit=100`)
+        const pinnedWabaId = typeof config.wabaId === 'string' && config.wabaId ? config.wabaId : null
+        if (pinnedWabaId) {
+            const phoneNumbers = await graph(`${encodeURIComponent(pinnedWabaId)}/phone_numbers?fields=id&limit=100`)
             if (phoneNumbers.error) return phoneNumbers.error
             const phones = Array.isArray(phoneNumbers.body?.data) ? phoneNumbers.body.data : null
             if (!phones) return reply(502, { ok: false, error: 'META_RESPONSE_INVALID' })
             if (phones.some(phone => phone?.id === config.phoneId)) {
-                wabaId = assignedWabaId
-                break
+                wabaId = pinnedWabaId
             }
+        } else {
+            const identity = await graph('me?fields=id')
+            if (identity.error) return identity.error
+            const systemUserId = identity.body?.id
+            if (typeof systemUserId !== 'string' || !systemUserId) {
+                return reply(502, { ok: false, error: 'META_RESPONSE_INVALID' })
+            }
+
+            const accounts = await graph(`${encodeURIComponent(systemUserId)}/assigned_whatsapp_business_accounts?fields=id&limit=100`)
+            if (accounts.error) return accounts.error
+            const wabas = Array.isArray(accounts.body?.data) ? accounts.body.data : null
+            if (!wabas) {
+                return reply(502, { ok: false, error: 'META_RESPONSE_INVALID' })
+            }
+
+            const assignedWabaIds = wabas.flatMap(waba => (
+                typeof waba?.id === 'string' && waba.id ? [waba.id] : []
+            ))
+            for (const assignedWabaId of assignedWabaIds) {
+                const phoneNumbers = await graph(`${encodeURIComponent(assignedWabaId)}/phone_numbers?fields=id&limit=100`)
+                if (phoneNumbers.error) return phoneNumbers.error
+                const phones = Array.isArray(phoneNumbers.body?.data) ? phoneNumbers.body.data : null
+                if (!phones) return reply(502, { ok: false, error: 'META_RESPONSE_INVALID' })
+                if (phones.some(phone => phone?.id === config.phoneId)) {
+                    wabaId = assignedWabaId
+                    break
+                }
+            }
+            if (!wabaId && assignedWabaIds.length === 1) wabaId = assignedWabaIds[0]
         }
-        if (!wabaId && assignedWabaIds.length === 1) wabaId = assignedWabaIds[0]
         if (!wabaId) return reply(502, { ok: false, error: 'WHATSAPP_ACCOUNT_NOT_FOUND' })
 
         const existing = await graph(`${encodeURIComponent(wabaId)}/message_templates?fields=name,status,language&limit=100`)
