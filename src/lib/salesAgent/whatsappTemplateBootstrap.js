@@ -29,7 +29,6 @@ function readConfig() {
         secret: process.env.SALES_AGENT_SECRET,
         token: process.env.WHATSAPP_TOKEN,
         phoneId: process.env.WHATSAPP_PHONE_ID,
-        businessId: process.env.META_BUSINESS_ID || '1432105074957627',
     }
 }
 
@@ -64,7 +63,7 @@ export function createWhatsAppTemplateBootstrapHandler({ fetchFn = (...args) => 
         if (body?.confirm !== CONFIRMATION) {
             return reply(400, { ok: false, error: 'CONFIRMATION_REQUIRED' })
         }
-        if (!config.token || !config.phoneId || !config.businessId) {
+        if (!config.token || !config.phoneId) {
             return reply(503, { ok: false, error: 'WHATSAPP_NOT_CONFIGURED' })
         }
 
@@ -92,7 +91,14 @@ export function createWhatsAppTemplateBootstrapHandler({ fetchFn = (...args) => 
             return { body: providerBody }
         }
 
-        const accounts = await graph(`${encodeURIComponent(config.businessId)}/owned_whatsapp_business_accounts?fields=id&limit=100`)
+        const identity = await graph('me?fields=id')
+        if (identity.error) return identity.error
+        const systemUserId = identity.body?.id
+        if (typeof systemUserId !== 'string' || !systemUserId) {
+            return reply(502, { ok: false, error: 'META_RESPONSE_INVALID' })
+        }
+
+        const accounts = await graph(`${encodeURIComponent(systemUserId)}/assigned_whatsapp_business_accounts?fields=id&limit=100`)
         if (accounts.error) return accounts.error
         const wabas = Array.isArray(accounts.body?.data) ? accounts.body.data : null
         if (!wabas) {

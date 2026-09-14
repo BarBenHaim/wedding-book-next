@@ -5,7 +5,6 @@ const config = {
     secret: 'private-sales-secret-fixture',
     token: 'private-whatsapp-token-fixture',
     phoneId: 'non-dialable-phone-id-fixture',
-    businessId: 'business-fixture',
 }
 
 const request = ({ secret = config.secret, confirm = 'ENSURE_FOLLOWUP_SITE_TEMPLATE' } = {}) => new Request(
@@ -52,6 +51,7 @@ describe('WhatsApp follow-up template bootstrap', () => {
 
     it('returns the existing Hebrew template status without creating a duplicate', async () => {
         fetch
+            .mockResolvedValueOnce(response({ id: 'system-user-fixture' }))
             .mockResolvedValueOnce(response({ data: [{ id: 'waba-fixture' }] }))
             .mockResolvedValueOnce(response({ data: [{ id: config.phoneId }] }))
             .mockResolvedValueOnce(response({ data: [{ name: 'wt_followup_site', language: 'he', status: 'APPROVED' }] }))
@@ -61,11 +61,12 @@ describe('WhatsApp follow-up template bootstrap', () => {
             status: 200,
             body: { ok: true, result: 'TEMPLATE_EXISTS', templateStatus: 'APPROVED' },
         })
-        expect(fetch).toHaveBeenCalledTimes(3)
+        expect(fetch).toHaveBeenCalledTimes(4)
     })
 
     it('submits only the fixed no-media Hebrew website template when it is missing', async () => {
         fetch
+            .mockResolvedValueOnce(response({ id: 'system-user-fixture' }))
             .mockResolvedValueOnce(response({ data: [{ id: 'waba-fixture' }] }))
             .mockResolvedValueOnce(response({ data: [{ id: config.phoneId }] }))
             .mockResolvedValueOnce(response({ data: [] }))
@@ -76,8 +77,8 @@ describe('WhatsApp follow-up template bootstrap', () => {
             status: 200,
             body: { ok: true, result: 'TEMPLATE_SUBMITTED', templateStatus: 'PENDING' },
         })
-        expect(fetch).toHaveBeenCalledTimes(4)
-        const [url, init] = fetch.mock.calls[3]
+        expect(fetch).toHaveBeenCalledTimes(5)
+        const [url, init] = fetch.mock.calls[4]
         expect(url).toBe('https://graph.facebook.com/v25.0/waba-fixture/message_templates')
         expect(init.method).toBe('POST')
         const payload = JSON.parse(init.body)
@@ -121,6 +122,7 @@ describe('WhatsApp follow-up template bootstrap', () => {
 
     it('matches the configured phone ID before reading or creating templates', async () => {
         fetch
+            .mockResolvedValueOnce(response({ id: 'system-user-fixture' }))
             .mockResolvedValueOnce(response({ data: [{ id: 'unrelated-waba' }, { id: 'matching-waba' }] }))
             .mockResolvedValueOnce(response({ data: [{ id: 'other-phone-id' }] }))
             .mockResolvedValueOnce(response({ data: [{ id: config.phoneId }] }))
@@ -132,7 +134,8 @@ describe('WhatsApp follow-up template bootstrap', () => {
             body: { ok: true, result: 'TEMPLATE_EXISTS', templateStatus: 'PENDING' },
         })
         expect(fetch.mock.calls.map(([url]) => url)).toEqual([
-            'https://graph.facebook.com/v25.0/business-fixture/owned_whatsapp_business_accounts?fields=id&limit=100',
+            'https://graph.facebook.com/v25.0/me?fields=id',
+            'https://graph.facebook.com/v25.0/system-user-fixture/assigned_whatsapp_business_accounts?fields=id&limit=100',
             'https://graph.facebook.com/v25.0/unrelated-waba/phone_numbers?fields=id&limit=100',
             'https://graph.facebook.com/v25.0/matching-waba/phone_numbers?fields=id&limit=100',
             'https://graph.facebook.com/v25.0/matching-waba/message_templates?fields=name,status,language&limit=100',
