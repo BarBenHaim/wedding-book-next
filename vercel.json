@@ -29,6 +29,7 @@
   ],
   "crons": [
     { "path": "/api/cron/email", "schedule": "0 8 * * *" },
-    { "path": "/api/sales-agent/followups", "schedule": "30 7,17 * * *" }
+    { "path": "/api/sales-agent/followups", "schedule": "30 7 * * *" },
+    { "path": "/api/sales-agent/followups", "schedule": "30 17 * * *" }
   ]
 }
