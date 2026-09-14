@@ -18,10 +18,12 @@ import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import { auth } from '@/lib/firebaseClient'
 import {
     Boxes, GitBranch, Play, FileCode2, FlaskConical, ListChecks,
-    ExternalLink, RefreshCw, CheckCircle2, XCircle, Copy, Check,
+    ExternalLink, RefreshCw, CheckCircle2, XCircle, Copy, Check, Code2,
 } from 'lucide-react'
 import SystemDiagram from './SystemDiagram'
 import SequenceDiagram from './SequenceDiagram'
+import CodeModal from './CodeModal'
+import { PY_CODE } from './pyCode.generated'
 import { RUBRIC, EXPERIMENTS, SYSTEM_PROMPT, PY_FILES, DEMO_SCRIPT } from './projectContent'
 
 const TABS = [
@@ -50,6 +52,7 @@ export default function ProjectPage() {
     const [stats, setStats] = useState(null)
     const [health, setHealth] = useState(null)
     const [copied, setCopied] = useState(false)
+    const [openFile, setOpenFile] = useState(null)
 
     // Real numbers from the real database. The claim this page makes is
     // "this is a product, not an exercise", and that claim should be
@@ -201,14 +204,21 @@ export default function ProjectPage() {
                                                 <th className='py-2 font-semibold'>קובץ</th>
                                                 <th className='py-2 font-semibold'>שורות</th>
                                                 <th className='py-2 font-semibold'>תפקיד</th>
+                                                <th className='py-2 font-semibold'></th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {PY_FILES.map(f => (
                                                 <tr key={f.name} className='border-b border-[#f0e8d4] last:border-0'>
                                                     <td className='py-2 font-mono text-[12.5px] font-bold text-[#3d2e1a]'>{f.name}</td>
-                                                    <td className='py-2 tabular-nums text-[#7a6a52]'>{f.lines}</td>
+                                                    <td className='py-2 tabular-nums text-[#7a6a52]'>{(PY_CODE[f.name] || '').split('\n').length}</td>
                                                     <td className='py-2 text-[#5a4b35]'>{f.role}</td>
+                                                    <td className='py-2 text-left'>
+                                                        <button onClick={() => setOpenFile(f)}
+                                                            className='inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#ead9b3] bg-white px-2.5 py-1.5 text-[11.5px] font-bold text-[#7a6a52] hover:bg-[#f6efe0]'>
+                                                            <Code2 size={12} /> הצג קוד
+                                                        </button>
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -336,6 +346,9 @@ export default function ProjectPage() {
                     )}
                 </div>
             </div>
+            {openFile && (
+                <CodeModal file={openFile} code={PY_CODE[openFile.name] || ''} onClose={() => setOpenFile(null)} />
+            )}
         </AdminPageWrapper>
     )
 }
