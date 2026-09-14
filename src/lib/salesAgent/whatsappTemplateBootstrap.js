@@ -105,18 +105,21 @@ export function createWhatsAppTemplateBootstrapHandler({ fetchFn = (...args) => 
             return reply(502, { ok: false, error: 'META_RESPONSE_INVALID' })
         }
 
+        const assignedWabaIds = wabas.flatMap(waba => (
+            typeof waba?.id === 'string' && waba.id ? [waba.id] : []
+        ))
         let wabaId = null
-        for (const waba of wabas) {
-            if (typeof waba?.id !== 'string' || !waba.id) continue
-            const phoneNumbers = await graph(`${encodeURIComponent(waba.id)}/phone_numbers?fields=id&limit=100`)
+        for (const assignedWabaId of assignedWabaIds) {
+            const phoneNumbers = await graph(`${encodeURIComponent(assignedWabaId)}/phone_numbers?fields=id&limit=100`)
             if (phoneNumbers.error) return phoneNumbers.error
             const phones = Array.isArray(phoneNumbers.body?.data) ? phoneNumbers.body.data : null
             if (!phones) return reply(502, { ok: false, error: 'META_RESPONSE_INVALID' })
             if (phones.some(phone => phone?.id === config.phoneId)) {
-                wabaId = waba.id
+                wabaId = assignedWabaId
                 break
             }
         }
+        if (!wabaId && assignedWabaIds.length === 1) wabaId = assignedWabaIds[0]
         if (!wabaId) return reply(502, { ok: false, error: 'WHATSAPP_ACCOUNT_NOT_FOUND' })
 
         const existing = await graph(`${encodeURIComponent(wabaId)}/message_templates?fields=name,status,language&limit=100`)

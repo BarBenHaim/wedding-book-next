@@ -141,4 +141,22 @@ describe('WhatsApp follow-up template bootstrap', () => {
             'https://graph.facebook.com/v25.0/matching-waba/message_templates?fields=name,status,language&limit=100',
         ])
     })
+
+    it('uses the only assigned WABA when coexistence hides the configured phone from the phone list', async () => {
+        fetch
+            .mockResolvedValueOnce(response({ id: 'system-user-fixture' }))
+            .mockResolvedValueOnce(response({ data: [{ id: 'only-assigned-waba' }] }))
+            .mockResolvedValueOnce(response({ data: [{ id: 'coexistence-shadow-phone' }] }))
+            .mockResolvedValueOnce(response({ data: [] }))
+            .mockResolvedValueOnce(response({ id: 'template-fixture', status: 'PENDING' }))
+        const handle = createWhatsAppTemplateBootstrapHandler({ getConfig: () => config })
+
+        expect(await handle(request())).toEqual({
+            status: 200,
+            body: { ok: true, result: 'TEMPLATE_SUBMITTED', templateStatus: 'PENDING' },
+        })
+        expect(fetch.mock.calls[3][0]).toBe(
+            'https://graph.facebook.com/v25.0/only-assigned-waba/message_templates?fields=name,status,language&limit=100',
+        )
+    })
 })
