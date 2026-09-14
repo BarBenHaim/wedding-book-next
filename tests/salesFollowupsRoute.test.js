@@ -125,6 +125,19 @@ beforeEach(async () => {
 })
 
 describe('opening-only mode', () => {
+    it('registers the live media library before resolving settings used by a published opening experiment', async () => {
+        mocks.listMedia.mockResolvedValue([{ key: 'published-video', kind: 'video' }])
+        mocks.mergeMedia.mockReturnValue({
+            'published-video': { kind: 'video', url: 'https://cdn.example/video.mp4' },
+        })
+
+        const result = await runCron()
+
+        expect(result.status).toBe(200)
+        expect(mocks.readSalesSettings).toHaveBeenCalledWith({ registeredMediaKeys: ['published-video'] })
+        expect(mocks.listMedia).toHaveBeenCalledTimes(1)
+    })
+
     it('processes scheduled follow-ups while live conversation continuation stays opening-only', async () => {
         mocks.readSalesSettings.mockResolvedValue({ enabled: true, mode: 'opening_only' })
 

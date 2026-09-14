@@ -137,8 +137,12 @@ export async function GET(req) {
 
     const today = todayISO()
     let settings
+    let custom
+    let library
     try {
-        settings = await readSalesSettings()
+        custom = await listMedia()
+        library = mergeMedia(MEDIA, custom)
+        settings = await readSalesSettings({ registeredMediaKeys: Object.keys(library) })
     } catch {
         console.error('[sales-agent/followups] settings read failed')
         return NextResponse.json({ error: 'SETTINGS_READ_FAILED' }, { status: 503 })
@@ -200,8 +204,6 @@ export async function GET(req) {
     // The same library the live conversation uses. Without it a
     // follow-up would offer only the six built-in images while the reply
     // route knows about a video, which reads as two different bots.
-    const custom = await listMedia()
-    const library = mergeMedia(MEDIA, custom)
     const perf = performanceNote(Object.fromEntries(custom.map(m => [m.key, m])), library)
 
     const items = []
