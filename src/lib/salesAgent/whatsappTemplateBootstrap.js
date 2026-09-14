@@ -29,6 +29,7 @@ function readConfig() {
         secret: process.env.SALES_AGENT_SECRET,
         token: process.env.WHATSAPP_TOKEN,
         phoneId: process.env.WHATSAPP_PHONE_ID,
+        businessId: process.env.META_BUSINESS_ID || '1432105074957627',
     }
 }
 
@@ -63,7 +64,7 @@ export function createWhatsAppTemplateBootstrapHandler({ fetchFn = (...args) => 
         if (body?.confirm !== CONFIRMATION) {
             return reply(400, { ok: false, error: 'CONFIRMATION_REQUIRED' })
         }
-        if (!config.token || !config.phoneId) {
+        if (!config.token || !config.phoneId || !config.businessId) {
             return reply(503, { ok: false, error: 'WHATSAPP_NOT_CONFIGURED' })
         }
 
@@ -91,12 +92,26 @@ export function createWhatsAppTemplateBootstrapHandler({ fetchFn = (...args) => 
             return { body: providerBody }
         }
 
-        const account = await graph(`${encodeURIComponent(config.phoneId)}?fields=whatsapp_business_account`)
-        if (account.error) return account.error
-        const wabaId = account.body?.whatsapp_business_account?.id
-        if (typeof wabaId !== 'string' || !wabaId) {
+        const accounts = await graph(`${encodeURIComponent(config.businessId)}/owned_whatsapp_business_accounts?fields=id&limit=100`)
+        if (accounts.error) return accounts.error
+        const wabas = Array.isArray(accounts.body?.data) ? accounts.body.data : null
+        if (!wabas) {
             return reply(502, { ok: false, error: 'META_RESPONSE_INVALID' })
         }
+
+        let wabaId = null
+        for (const waba of wabas) {
+            if (typeof waba?.id !== 'string' || !waba.id) continue
+            const phoneNumbers = await graph(`${encodeURIComponent(waba.id)}/phone_numbers?fields=id&limit=100`)
+            if (phoneNumbers.error) return phoneNumbers.error
+            const phones = Array.isArray(phoneNumbers.body?.data) ? phoneNumbers.body.data : null
+            if (!phones) return reply(502, { ok: false, error: 'META_RESPONSE_INVALID' })
+            if (phones.some(phone => phone?.id === config.phoneId)) {
+                wabaId = waba.id
+                break
+            }
+        }
+        if (!wabaId) return reply(502, { ok: false, error: 'WHATSAPP_ACCOUNT_NOT_FOUND' })
 
         const existing = await graph(`${encodeURIComponent(wabaId)}/message_templates?fields=name,status,language&limit=100`)
         if (existing.error) return existing.error
