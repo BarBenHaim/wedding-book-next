@@ -233,6 +233,14 @@ describe('revenue-first follow-up truth', () => {
         expect(isDueFollowUpCandidate({ followUpAt: TODAY, stage: 'engaged', eventDate: '2026-08-11' }, TODAY)).toBe(true)
     })
 
+    it('waits four quiet hours before the first same-day follow-up', () => {
+        const now = Date.parse('2026-08-10T12:00:00Z')
+        const base = { followUpAt: TODAY, stage: 'engaged', followUpCount: 0 }
+
+        expect(isDueFollowUpCandidate({ ...base, lastInboundAt: now - 3 * 3600_000 }, TODAY, now)).toBe(false)
+        expect(isDueFollowUpCandidate({ ...base, lastInboundAt: now - 4 * 3600_000 }, TODAY, now)).toBe(true)
+    })
+
     it('puts money and event urgency before a generic stale conversation', () => {
         const ranked = rankDueFollowUps([
             { id: 'ordinary', stage: 'engaged', eventDate: null },
@@ -241,5 +249,15 @@ describe('revenue-first follow-up truth', () => {
             { id: 'money', stage: 'ready_to_pay', eventDate: null },
         ], TODAY)
         expect(ranked.map(row => row.id)).toEqual(['money', 'soon', 'proof', 'ordinary'])
+    })
+
+    it('puts a reachable in-window lead before an unreachable old lead', () => {
+        const now = Date.parse('2026-08-10T12:00:00Z')
+        const ranked = rankDueFollowUps([
+            { id: 'old-money', stage: 'ready_to_pay', lastInboundAt: now - 72 * 3600_000 },
+            { id: 'fresh', stage: 'engaged', lastInboundAt: now - 6 * 3600_000 },
+        ], TODAY, now)
+
+        expect(ranked.map(row => row.id)).toEqual(['fresh', 'old-money'])
     })
 })

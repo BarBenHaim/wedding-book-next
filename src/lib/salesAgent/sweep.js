@@ -37,6 +37,7 @@ import { HUMAN_PAUSE_HOURS } from './leadsCore'
 // Long enough that a conversation still in motion is never swept up
 // mid-flow: somebody who wrote last night is thinking, not lost.
 export const ORPHAN_AFTER_HOURS = 36
+export const OPENING_ORPHAN_AFTER_HOURS = 4
 
 // Firestore hands timestamps back in three shapes depending on whether
 // they came from the SDK, from JSON, or from a hand-edited document.
@@ -73,7 +74,6 @@ export const hoursSince = (ms, nowMs = Date.now()) =>
  * with a real cost. Those surface in the admin table instead.
  */
 export function findOrphans(leads, { nowMs = Date.now(), maxAttempts = MAX_ATTEMPTS } = {}) {
-    const cutoff = nowMs - ORPHAN_AFTER_HOURS * 3600 * 1000
     return (Array.isArray(leads) ? leads : []).filter(lead => {
         if (!lead || !lead.phone) return false
         if (isClosed(lead.stage)) return false
@@ -82,7 +82,15 @@ export function findOrphans(leads, { nowMs = Date.now(), maxAttempts = MAX_ATTEM
         if ((lead.followUpCount || 0) >= maxAttempts) return false // ladder finished
         const last = lastContactMs(lead)
         if (last == null) return false
-        return last < cutoff
+        // An opening-experiment lead is known to have just entered the
+        // automated funnel. Recover it early enough to use WhatsApp's open
+        // service window; ordinary legacy orphans retain the conservative
+        // 36-hour threshold.
+        const afterHours = lead.openingVariantId && (lead.followUpCount || 0) === 0
+            ? OPENING_ORPHAN_AFTER_HOURS
+            : ORPHAN_AFTER_HOURS
+        const cutoff = nowMs - afterHours * 3600 * 1000
+        return last <= cutoff
     })
 }
 
@@ -143,4 +151,4 @@ export function handoffAlert(stale, { nowMs = Date.now(), limit = 10 } = {}) {
     return `${head}\n${lines.join('\n')}${more}\n\nהבוט לא ימשיך אותן לבד — הן הועברו אליך בכוונה.`
 }
 
-export default { ORPHAN_AFTER_HOURS, findOrphans, findStaleHandoffs, handoffAlert, hoursSince }
+export default { ORPHAN_AFTER_HOURS, OPENING_ORPHAN_AFTER_HOURS, findOrphans, findStaleHandoffs, handoffAlert, hoursSince }

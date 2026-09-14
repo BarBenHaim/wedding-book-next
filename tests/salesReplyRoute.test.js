@@ -212,7 +212,7 @@ describe('deterministic opening experiment runtime', () => {
         ]
         mocks.getLead.mockResolvedValue({ ...lead, isNew: true, stage: 'new' })
         mocks.readSalesSettings.mockResolvedValue({
-            revision: 8, enabled: true, mode: 'opening_only', openingText: 'legacy',
+            revision: 8, enabled: true, mode: 'full_sales', openingText: 'legacy',
             openingExperiment: { enabled: true, variants: [] },
         })
         mocks.prepareOpeningRuntime.mockReturnValue({
@@ -232,11 +232,13 @@ describe('deterministic opening experiment runtime', () => {
             shouldSend: true,
             send: ['כך הספר עובד', 'שלחי תמונה של הבן שלך'],
             sendText: 'כך הספר עובד',
+            followUpAt: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }),
             openingSequenceParts: parts,
             openingExperiment: { variantId: 'A', variantRevision: 3, action: 'wait_photo' },
         })
         expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
             exchange: expect.objectContaining({
+                followUpAt: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }),
                 openingRuntime: expect.objectContaining({
                     expectedStateVersion: 0,
                     enrollment: expect.objectContaining({ variantId: 'A', variantRevision: 3 }),

@@ -565,6 +565,13 @@ export async function POST(req) {
         const manualPhotoHandoffReason = manualPhotoHandoff
             ? 'התקבלה תמונת ילד — בר מכין את הדוגמה וממשיך ידנית'
             : null
+        // The account currently has no approved business-initiated templates.
+        // Arm the first nudge for today in full-sales mode; the due queue adds a
+        // four-hour idle floor, and the twice-daily cron catches it while the
+        // customer's 24-hour WhatsApp service window is still open.
+        const openingFollowUpAt = settings.mode === 'full_sales' && shouldSend && !manualPhotoHandoff
+            ? today
+            : null
         const parsed = {
             malformed: false,
             messages: transportMessages,
@@ -576,7 +583,7 @@ export async function POST(req) {
             eventType: result.captures?.eventType || lead.eventType || null,
             eventDate: result.captures?.eventDate || lead.eventDate || null,
             callbackPromised: null,
-            followUpAt: null,
+            followUpAt: openingFollowUpAt,
         }
         const responsePayload = {
             ok: true,
@@ -614,7 +621,7 @@ export async function POST(req) {
             stage: parsed.stage,
             handoff: manualPhotoHandoff,
             noReply: !shouldSend,
-            followUpAt: null,
+            followUpAt: openingFollowUpAt,
             notifyOwner: manualPhotoHandoff
                 ? ownerPing(phone, manualPhotoHandoffReason, { name: body?.profileName || lead.name })
                 : null,
@@ -623,7 +630,7 @@ export async function POST(req) {
             phone,
             incomingText: text || `[${messageType}]`,
             parsed,
-            followUpAt: null,
+            followUpAt: openingFollowUpAt,
             profileName: body?.profileName,
             source: resolveSource({ isNew: !!lead.isNew, text, existing: lead.source, fallback: body?.source }),
             variant: null,

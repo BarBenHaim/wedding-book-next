@@ -37,6 +37,10 @@ import { followUpEvidence } from './followupEvidence'
 export { followUpEvidence }
 
 export const MAX_ATTEMPTS = 3
+export const FIRST_FOLLOWUP_MIN_IDLE_HOURS = 4
+
+const HOUR_MS = 3600 * 1000
+const WHATSAPP_WINDOW_MS = 24 * HOUR_MS
 
 // Days to wait before attempt N, counted from the last contact.
 const LADDER = [1, 3, 7]
@@ -152,12 +156,41 @@ function pausedForHuman(lead, nowMs) {
     return !since || Number(nowMs) - since < 48 * 3600 * 1000
 }
 
+function timestampMs(value) {
+    if (value == null) return null
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null
+    if (typeof value?.toMillis === 'function') return value.toMillis()
+    if (typeof value?.seconds === 'number') return value.seconds * 1000
+    if (typeof value === 'string') {
+        const parsed = Date.parse(value)
+        return Number.isFinite(parsed) ? parsed : null
+    }
+    return null
+}
+
+function lastInboundMs(lead) {
+    return timestampMs(lead?.lastInboundAt)
+        ?? timestampMs(lead?.lastMessageAt)
+        ?? timestampMs(lead?.updatedAt)
+}
+
+function isInsideWhatsAppWindow(lead, nowMs) {
+    const last = lastInboundMs(lead)
+    if (last == null) return false
+    const age = Number(nowMs) - last
+    return age >= 0 && age < WHATSAPP_WINDOW_MS
+}
+
 export function isDueFollowUpCandidate(lead, todayISO, nowMs = Date.now()) {
     if (!lead?.followUpAt || !todayISO || lead.followUpAt > todayISO) return false
     if (lead.paymentVerified === true) return false
     if (['closed_won', 'closed_lost', 'handoff'].includes(lead.stage)) return false
     if (pausedForHuman(lead, nowMs)) return false
     if ((lead.followUpCount || 0) >= MAX_ATTEMPTS) return false
+    if ((lead.followUpCount || 0) === 0) {
+        const last = lastInboundMs(lead)
+        if (last != null && Number(nowMs) - last < FIRST_FOLLOWUP_MIN_IDLE_HOURS * HOUR_MS) return false
+    }
     if (['pending', 'requested'].includes(pendingFollowUpStatus(lead, nowMs))) return false
     if (daysUntil(lead.eventDate, todayISO) < 0) return false
     return true
@@ -173,10 +206,17 @@ function revenuePriority(lead, todayISO) {
     return 5_000
 }
 
-export function rankDueFollowUps(leads, todayISO) {
+export function rankDueFollowUps(leads, todayISO, nowMs = Date.now()) {
     return (Array.isArray(leads) ? leads : [])
-        .map((lead, index) => ({ lead, index, priority: revenuePriority(lead, todayISO) }))
-        .sort((left, right) => right.priority - left.priority || left.index - right.index)
+        .map((lead, index) => ({
+            lead,
+            index,
+            reachable: isInsideWhatsAppWindow(lead, nowMs),
+            priority: revenuePriority(lead, todayISO),
+        }))
+        .sort((left, right) => Number(right.reachable) - Number(left.reachable)
+            || right.priority - left.priority
+            || left.index - right.index)
         .map(row => row.lead)
 }
 
@@ -247,7 +287,7 @@ export function sendableNow(ms = Date.now()) {
 export const MAX_PER_RUN = 25
 
 const followupPolicy = {
-    MAX_ATTEMPTS, MAX_PER_RUN, nextFollowUpDate, urgencyFor, daysUntil,
+    MAX_ATTEMPTS, MAX_PER_RUN, FIRST_FOLLOWUP_MIN_IDLE_HOURS, nextFollowUpDate, urgencyFor, daysUntil,
     isFinalAttempt, pendingFollowUpStatus, followUpEvidence, isDueFollowUpCandidate, rankDueFollowUps, sendableNow, israelClock,
 }
 

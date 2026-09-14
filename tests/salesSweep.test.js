@@ -28,6 +28,17 @@ describe('findOrphans', () => {
         expect(findOrphans([lead({ lastInboundAt: hoursAgo(ORPHAN_AFTER_HOURS + 1) })], { nowMs: NOW })).toHaveLength(1)
     })
 
+    it('recovers an enrolled opening after four quiet hours while the WhatsApp window is open', () => {
+        const enrolled = {
+            openingVariantId: 'test-opening',
+            followUpCount: 0,
+            followUpAt: null,
+        }
+        expect(findOrphans([lead({ ...enrolled, lastInboundAt: hoursAgo(3) })], { nowMs: NOW })).toHaveLength(0)
+        expect(findOrphans([lead({ ...enrolled, lastInboundAt: hoursAgo(4) })], { nowMs: NOW })).toHaveLength(1)
+        expect(findOrphans([lead({ ...enrolled, lastInboundAt: hoursAgo(23) })], { nowMs: NOW })).toHaveLength(1)
+    })
+
     it('refuses to resume a handoff', () => {
         // This is the whole reason orphans and handoffs are separate
         // functions. A bot that waits out the pause and then picks the
