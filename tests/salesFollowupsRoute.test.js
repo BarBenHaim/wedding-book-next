@@ -245,7 +245,7 @@ describe('truthful follow-up transport', () => {
         })
     })
 
-    it('carries the real product video in the first outside-window site template instead of a forbidden free-form send', async () => {
+    it('uses the approved no-media template outside the service window even when a product video exists', async () => {
         mocks.mergeMedia.mockReturnValue({
             product_video: { kind: 'video', url: 'https://cdn.example/product.mp4', caption: 'כך זה עובד' },
         })
@@ -256,20 +256,19 @@ describe('truthful follow-up transport', () => {
             lead.phone,
             'wt_followup_site',
             ['Test lead'],
-            { headerVideoUrl: 'https://cdn.example/product.mp4' },
         )
         expect(mocks.sendWhatsAppVideo).not.toHaveBeenCalled()
         expect(mocks.prepareFollowUpDelivery).toHaveBeenCalledWith(expect.objectContaining({
             part: 'template',
             advancesFollowUp: true,
-            demoEvidence: true,
-            followUpMediaKind: 'video',
+            demoEvidence: false,
+            followUpMediaKind: 'none',
         }))
         expect(result.body.items[0]).toMatchObject({
             strategyId: 'proof_site',
-            hasVideo: true,
+            hasVideo: false,
             sendVideo: null,
-            templateHeaderVideo: 'https://cdn.example/product.mp4',
+            templateHeaderVideo: null,
         })
     })
 

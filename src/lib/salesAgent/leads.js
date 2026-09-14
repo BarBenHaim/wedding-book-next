@@ -25,7 +25,7 @@ import { isoInIsrael } from './leadsView'
 import { assertCompletableInboundOutcome, assertInboundClaimToken, decideInboundCompletion, INBOUND_LEASE_MS, sanitizeInboundOutcome, startInboundClaim } from './inboundEventsCore'
 import { reserveHalfOpenProbe, resolveProviderFailure, resolveProviderSuccess, sanitizeBreakerRuntimeState } from './circuitBreaker'
 import { createOutboundId, DELIVERY_ERROR_CODES, DELIVERY_REQUEST_LEASE_MS, decideDeliveryTransition, deliveryEventFingerprint, deliveryEventLedgerId, isDeliveryPending, providerMessageCorrelationId } from './delivery'
-import { isDueFollowUpCandidate, pendingFollowUpStatus, rankDueFollowUps } from './followupPolicy'
+import { isDueFollowUpCandidate, pendingFollowUpStatus, selectDueFollowUps } from './followupPolicy'
 import { isDemoEvidenceContent } from './followupEvidence'
 import { normalizeOpeningVariantId } from './openingExperiment'
 
@@ -1006,7 +1006,7 @@ export async function dueFollowUps(todayISO, limit = 40) {
         if (!isDueFollowUpCandidate(lead, todayISO)) continue
         out.push(lead)
     }
-    return rankDueFollowUps(out, todayISO).slice(0, limit)
+    return selectDueFollowUps(out, todayISO, limit)
 }
 
 // Health needs only enough information to distinguish 25 from 26 due rows,

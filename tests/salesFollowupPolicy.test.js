@@ -3,7 +3,7 @@ import {
     MAX_ATTEMPTS, nextFollowUpDate, urgencyFor, daysUntil, isFinalAttempt,
     sendableNow, israelClock,
     pendingFollowUpStatus,
-    followUpEvidence, isDueFollowUpCandidate, rankDueFollowUps,
+    followUpEvidence, isDueFollowUpCandidate, rankDueFollowUps, selectDueFollowUps,
 } from '@/lib/salesAgent/followupPolicy'
 
 // This file guards the difference between a helpful nudge and the reason
@@ -259,5 +259,29 @@ describe('revenue-first follow-up truth', () => {
         ], TODAY, now)
 
         expect(ranked.map(row => row.id)).toEqual(['fresh', 'old-money'])
+    })
+
+    it('reserves most of a full run for conversations opened in the last seven days', () => {
+        const now = Date.parse('2026-09-14T16:00:00Z')
+        const recent = Array.from({ length: 20 }, (_, index) => ({
+            id: `recent-${index}`,
+            phone: `recent-${index}`,
+            stage: 'opening_completed',
+            createdAt: now - 2 * 86400_000,
+            lastInboundAt: now - 30 * 3600_000,
+        }))
+        const oldMoney = Array.from({ length: 20 }, (_, index) => ({
+            id: `old-${index}`,
+            phone: `old-${index}`,
+            stage: 'ready_to_pay',
+            createdAt: now - 30 * 86400_000,
+            lastInboundAt: now - 30 * 86400_000,
+        }))
+
+        const selected = selectDueFollowUps([...oldMoney, ...recent], '2026-09-14', 25, now)
+
+        expect(selected).toHaveLength(25)
+        expect(selected.filter(row => row.id.startsWith('recent-'))).toHaveLength(15)
+        expect(selected.filter(row => row.id.startsWith('old-'))).toHaveLength(10)
     })
 })

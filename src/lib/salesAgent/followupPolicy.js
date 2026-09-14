@@ -220,6 +220,28 @@ export function rankDueFollowUps(leads, todayISO, nowMs = Date.now()) {
         .map(row => row.lead)
 }
 
+const RECENT_CONVERSATION_MS = 7 * 24 * HOUR_MS
+const RECENT_RUN_SHARE = 0.6
+
+/**
+ * Keep a revenue-ranked backlog without letting it permanently starve new
+ * conversations. A full 25-lead run reserves fifteen places for leads opened
+ * during the last week and leaves ten for the strongest older opportunities.
+ */
+export function selectDueFollowUps(leads, todayISO, limit = 40, nowMs = Date.now()) {
+    const cap = Math.max(0, Number.parseInt(limit, 10) || 0)
+    if (!cap) return []
+    const ranked = rankDueFollowUps(leads, todayISO, nowMs)
+    const cutoff = Number(nowMs) - RECENT_CONVERSATION_MS
+    const recentReserve = Math.ceil(cap * RECENT_RUN_SHARE)
+    const recent = ranked.filter(lead => {
+        const startedAt = timestampMs(lead?.createdAt) ?? timestampMs(lead?.firstInboundAt)
+        return startedAt != null && startedAt >= cutoff && startedAt <= Number(nowMs)
+    }).slice(0, recentReserve)
+    const selected = new Set(recent)
+    return [...recent, ...ranked.filter(lead => !selected.has(lead)).slice(0, cap - recent.length)]
+}
+
 // ── When not to send ────────────────────────────────────────────────
 //
 // Times are read in Asia/Jerusalem rather than computed from an offset,
