@@ -77,3 +77,28 @@ python prompt_lab.py --temp 0.2         # אותה בקשה בטמפרטורה �
 ```
 
 הממצאים מתועדים ב-[experiments.md](./experiments.md).
+
+## פריסה לאוויר (Render, חינם)
+
+הריפו כולל `render.yaml`, אז זה Blueprint — Render קורא אותו ומקים את
+השירות לבד.
+
+1. [dashboard.render.com](https://dashboard.render.com) ← **New** ← **Blueprint**
+2. חבר את `BarBenHaim/wedding-book-next` — Render ימצא את `render.yaml`
+3. הוא יבקש רק `GEMINI_API_KEY` — הדבק אותו שם (הוא מסומן `sync: false`, לא נכנס ל-git)
+4. **Apply**. אחרי ~2 דקות תקבל כתובת כמו `https://wedding-tales-blessing-assist.onrender.com`
+5. בדוק: `<הכתובת>/health` צריך להחזיר `"ok": true, "has_key": true`
+
+ואז ב-Vercel ← Project ← Settings ← Environment Variables:
+
+```
+BLESSING_ASSIST_URL = https://wedding-tales-blessing-assist.onrender.com
+```
+
+ו-**Redeploy**. מרגע זה עוזר הכתיבה באתר החי עובר דרך פייתון, והחיווי
+בדף הפרויקט ירוק.
+
+**Free tier:** השירות נרדם אחרי ~15 דקות ללא תנועה ומתעורר ב-30–50
+שניות. Next.js מחכה 20 שניות ואז נופל ל-Claude — האורח לא רואה שגיאה,
+אבל הבקשה הראשונה אחרי שקט לא תעבור דרך פייתון. Starter (~$7 לחודש)
+משאיר אותו ער. **להצגה בכיתה: תפתח את `/health` דקה לפני**, וזה ער.
