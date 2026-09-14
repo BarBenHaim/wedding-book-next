@@ -78,35 +78,45 @@ python prompt_lab.py --temp 0.2         # אותה בקשה בטמפרטורה �
 
 הממצאים מתועדים ב-[experiments.md](./experiments.md).
 
-## פריסה לאוויר — Vercel, אותו חשבון שכבר יש
+## פריסה לאוויר — בתוך אותו פרויקט Vercel (Services)
 
-ל-Vercel יש preset ל-Flask: הוא מחפש `app.py` עם משתנה `app`, קורא את
-`requirements.txt`, ומנתב כל בקשה לאפליקציה. זה בדיוק מה שיש כאן, אז
-אין קונפיגורציה. הסיבה שזה עדיף על Render החינמי: אין "שינה" של
-15 דקות, cold start של ~שנייה, ותקרת ריצה של 300 שניות ב-Hobby
-(Gemini לוקח 8–23).
+השירות **לא** צריך פרויקט Vercel נפרד. ה-`vercel.json` בשורש הריפו
+מגדיר שני *services* בפרויקט אחד (`the-wedding-gift`):
 
-השירות הוא **פרויקט Vercel נפרד** מאותו ריפו:
-
-1. [vercel.com/new](https://vercel.com/new) ← Import ← `BarBenHaim/wedding-book-next`
-2. **Root Directory** ← `blessing-assist-service` (הצעד שקל לפספס)
-3. Environment Variables:
-   - `GEMINI_API_KEY` — המפתח
-   - `ASSIST_SHARED_SECRET` — מחרוזת אקראית ארוכה, כל דבר
-4. **Deploy** ← ~1 דקה ← כתובת כמו `https://wedding-tales-blessing-assist.vercel.app`
-5. בדוק: `<הכתובת>/health` צריך להחזיר `"ok": true, "has_key": true`
-
-ואז בפרויקט **האתר** (the-wedding-gift) ← Settings ← Environment Variables:
-
-```
-BLESSING_ASSIST_URL   = https://wedding-tales-blessing-assist.vercel.app
-ASSIST_SHARED_SECRET  = אותה מחרוזת בדיוק
+```json
+"services": {
+  "web":    { "root": ".", "framework": "nextjs",
+              "bindings": [{ "type": "service", "service": "assist",
+                             "format": "url", "env": "BLESSING_ASSIST_URL" }] },
+  "assist": { "root": "blessing-assist-service/", "framework": "flask",
+              "entrypoint": "app:app" }
+}
 ```
 
-← **Redeploy**. מרגע זה עוזר הכתיבה באתר החי עובר דרך פייתון, והחיווי
-בדף הפרויקט ירוק.
+- `web` — אתר ה-Next.js, כרגיל. הוא היחיד שמקבל תעבורה מהאינטרנט
+  (ה-`rewrites` בשורש מפנים אליו את הכל).
+- `assist` — ה-Flask הזה. **אין** אליו נתיב ציבורי: הוא פנימי בלבד.
+- ה-**binding** הוא מה שמחבר ביניהם: Vercel מזריק ל-`web` בזמן ריצה
+  משתנה `BLESSING_ASSIST_URL` עם כתובת פנימית של `assist`, שונה לכל
+  deployment. הקוד ב-`src/app/api/blessing-assist/route.js` קורא
+  בדיוק את המשתנה הזה, אז אין שינוי קוד ואין URL קבוע לתחזק.
 
-**למה הסוד המשותף:** הנקודה `/assist` ציבורית וכל קריאה אליה עולה
-כסף. הגבלת קצב לפי IP לא שווה על serverless (הזיכרון מתאפס). עם הסוד,
-רק ה-Next.js שלך יכול להוציא את המפתח שלך. בלי המשתנה (פיתוח מקומי)
+מה שנשאר לעשות ידנית, פעם אחת, בפרויקט `the-wedding-gift`:
+
+1. Settings ← Environment Variables ← `GEMINI_API_KEY` (Production +
+   Preview). זה המשתנה היחיד שחובה.
+2. `git push` ← Vercel בונה את שני ה-services באותו deployment.
+3. בדוק: `/admin/project` באתר החי ← החיווי "שירות Flask" ירוק, עם
+   `has_key: true`.
+
+**למה זה עדיף על Render החינמי:** אין "שינה" של 15 דקות, cold start של
+~שנייה, ותקרת ריצה של 300 שניות ב-Hobby (Gemini לוקח 8–23).
+
+**מה קרה לסוד המשותף (`ASSIST_SHARED_SECRET`):** הוא נשאר בקוד ועובד אם
+מגדירים אותו בשני הצדדים, אבל עכשיו הוא מיותר: הנקודה `/assist` כבר לא
+ציבורית בכלל, אז אף אחד מבחוץ לא יכול להוציא לך את המפתח. בלי המשתנה
 הבדיקה פשוט כבויה.
+
+**פיתוח מקומי:** `BLESSING_ASSIST_URL=http://localhost:5001` ב-`.env.local`
+של האתר, ו-`python app.py` בטרמינל שני (או `vercel dev`, שמזריק את
+ה-binding לבד).

@@ -1,12 +1,34 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/email",
-      "schedule": "0 8 * * *"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "web": {
+      "root": ".",
+      "framework": "nextjs",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "assist",
+          "format": "url",
+          "env": "BLESSING_ASSIST_URL"
+        }
+      ]
     },
-    {
-      "path": "/api/sales-agent/followups",
-      "schedule": "30 7 * * *"
+    "assist": {
+      "root": "blessing-assist-service/",
+      "framework": "flask",
+      "entrypoint": "app:app",
+      "functions": {
+        "app.py": {
+          "excludeFiles": "{tests/**,**/test_*.py,prompt_lab.py,experiments.md,README.md,Procfile}"
+        }
+      }
     }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": { "service": "web" } }
+  ],
+  "crons": [
+    { "path": "/api/cron/email", "schedule": "0 8 * * *" },
+    { "path": "/api/sales-agent/followups", "schedule": "30 7 * * *" }
   ]
 }
