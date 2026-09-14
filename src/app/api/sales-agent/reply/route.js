@@ -831,7 +831,11 @@ export async function POST(req) {
         ? !!String(process.env.ANTHROPIC_API_KEY || '').trim()
         : settings.provider === 'openai'
             ? !!String(process.env.OPENAI_API_KEY || '').trim()
-            : !!String(process.env.ANTHROPIC_API_KEY || '').trim() || !!String(process.env.OPENAI_API_KEY || '').trim()
+            : settings.provider === 'gemini'
+                ? !!String(process.env.GEMINI_API_KEY || '').trim()
+                : !!String(process.env.ANTHROPIC_API_KEY || '').trim()
+                    || !!String(process.env.OPENAI_API_KEY || '').trim()
+                    || !!String(process.env.GEMINI_API_KEY || '').trim()
     let parsed = providerKeyAvailable
         ? null
         : buildDeterministicSalesReply({ decision: turnDecision, lead, incomingText: text })
@@ -870,7 +874,8 @@ export async function POST(req) {
                 if (!usage) return
                 const { usd, known } = costOfClaudeUsage(usage, model)
                 if (!known) console.warn('[sales-agent] no price known for model', model)
-                spends.push(recordSpend({ provider: provider === 'openai' ? 'openai' : 'anthropic', model, usd, usage, todayISO: today }))
+                const meteredProvider = ['anthropic', 'openai', 'gemini'].includes(provider) ? provider : 'anthropic'
+                spends.push(recordSpend({ provider: meteredProvider, model, usd, usage, todayISO: today }))
             }
 
             let providerFailureCode = null

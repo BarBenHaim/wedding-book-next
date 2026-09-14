@@ -64,6 +64,12 @@ export const PRICES = {
         output: 1.6,
         cacheRead: 0.1,
     },
+    'gemini-3.6-flash': {
+        provider: 'gemini',
+        input: 0.75,
+        output: 3.75,
+        cacheRead: 0.075,
+    },
     // Image models are billed per token like everything else; the
     // per-picture figure people quote is that arithmetic already done.
     // Text in and image in are different rates, which is why the image

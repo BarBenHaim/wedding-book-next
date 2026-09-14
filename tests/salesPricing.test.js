@@ -11,6 +11,7 @@ import {
 describe('rates', () => {
     it('knows the model the bot actually runs on', () => {
         expect(ratesFor('claude-haiku-4-5')).toBeTruthy()
+        expect(ratesFor('gemini-3.6-flash')).toMatchObject({ provider: 'gemini', input: 0.75, output: 3.75 })
     })
 
     it('returns null for a model it has never heard of', () => {

@@ -66,13 +66,13 @@ describe('sales agent settings route', () => {
 
     it('publishes with the authenticated identity and registered media allowlist', async () => {
         const response = await PUT(request('PUT', {
-            revision: 3, enabled: true, provider: 'auto', model: 'claude-sonnet-4-5',
+            revision: 3, enabled: true, mode: 'full_sales', provider: 'auto', model: 'claude-sonnet-4-5',
             businessInstructions: 'להציג מחיר מוקדם', activeOpeningIds: ['price_upfront'],
             openingMediaSequence: ['photo-a'], changeNote: 'ניסוי',
         }))
 
         expect(response.status).toBe(200)
-        expect(mocks.saveSalesSettings).toHaveBeenCalledWith(expect.objectContaining({ revision: 3 }), expect.objectContaining({
+        expect(mocks.saveSalesSettings).toHaveBeenCalledWith(expect.objectContaining({ revision: 3, mode: 'full_sales' }), expect.objectContaining({
             updatedBy: 'shared-secret', registeredMediaKeys: expect.arrayContaining(['photo-a']),
         }))
     })

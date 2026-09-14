@@ -16,6 +16,7 @@ afterEach(() => {
     vi.unstubAllGlobals()
     delete process.env.ANTHROPIC_API_KEY
     delete process.env.OPENAI_API_KEY
+    delete process.env.GEMINI_API_KEY
     delete process.env.OPENAI_SALES_MODEL
 })
 
@@ -103,6 +104,67 @@ describe('provider body deadline', () => {
 })
 
 describe('sales model provider fallback', () => {
+    it('uses Gemini JSON mode when it is the only configured sales provider', async () => {
+        process.env.GEMINI_API_KEY = 'gemini-secret-sentinel'
+        const fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: vi.fn().mockResolvedValue({
+                modelVersion: 'gemini-3.6-flash',
+                candidates: [{
+                    content: { parts: [{ text: '{"messages":["ok"],"stage":"engaged","handoff":false}' }] },
+                    finishReason: 'STOP',
+                }],
+                usageMetadata: { promptTokenCount: 40, candidatesTokenCount: 12, thoughtsTokenCount: 3 },
+            }),
+        })
+        vi.stubGlobal('fetch', fetch)
+
+        const result = await callClaude({
+            system: 'system',
+            messages: [{ role: 'user', content: 'hello' }, { role: 'assistant', content: 'hi' }],
+            deadlineAtMs: Date.now() + 5_000,
+        })
+
+        expect(result).toMatchObject({
+            provider: 'gemini',
+            model: 'gemini-3.6-flash',
+            usage: { input_tokens: 40, output_tokens: 15 },
+        })
+        expect(fetch).toHaveBeenCalledTimes(1)
+        expect(fetch.mock.calls[0][0]).toBe('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent')
+        const request = JSON.parse(fetch.mock.calls[0][1].body)
+        expect(request).toMatchObject({
+            systemInstruction: { parts: [{ text: 'system' }] },
+            contents: [
+                { role: 'user', parts: [{ text: 'hello' }] },
+                { role: 'model', parts: [{ text: 'hi' }] },
+            ],
+            generationConfig: { responseMimeType: 'application/json' },
+        })
+        expect(fetch.mock.calls[0][1].headers['x-goog-api-key']).toBe('gemini-secret-sentinel')
+    })
+
+    it('normalizes Gemini provider errors without leaking the response or key', async () => {
+        process.env.GEMINI_API_KEY = 'gemini-secret-sentinel'
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+            ok: false,
+            status: 429,
+            text: vi.fn().mockResolvedValue('gemini-body-sentinel customer-sentinel'),
+        }))
+
+        const error = await callClaude({
+            system: 'prompt-sentinel', messages: [], provider: 'gemini', model: 'gemini-3.6-flash',
+            deadlineAtMs: Date.now() + 5_000,
+        }).catch(err => err)
+
+        expect(error).toMatchObject({ provider: 'gemini', providerStarted: true, errorCode: 'rate_limit', status: 429 })
+        expect(error.message).toBe('gemini rate_limit status 429')
+        expect(error.message).not.toContain('gemini-body-sentinel')
+        expect(error.message).not.toContain('customer-sentinel')
+        expect(error.message).not.toContain('gemini-secret-sentinel')
+    })
+
     it('honors an explicit OpenAI model without first calling Anthropic', async () => {
         process.env.ANTHROPIC_API_KEY = 'anthropic-secret-sentinel'
         process.env.OPENAI_API_KEY = 'openai-secret-sentinel'

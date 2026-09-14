@@ -23,6 +23,8 @@ const API_URL = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
 export const DEFAULT_OPENAI_MODEL = process.env.OPENAI_SALES_MODEL || 'gpt-4.1-mini'
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
+export const DEFAULT_GEMINI_MODEL = process.env.GEMINI_SALES_MODEL || 'gemini-3.6-flash'
 
 // Sonnet, not Haiku. The original reasoning was that the conversation is
 // short and cost per lead matters more than eloquence, and on volume
@@ -333,7 +335,7 @@ class ProviderCallError extends Error {
     constructor(errorCode, { provider = 'anthropic', providerStarted, status = null } = {}) {
         const hasStatus = status != null && Number.isFinite(Number(status))
         const statusText = hasStatus ? ` status ${Number(status)}` : ''
-        const safeProvider = provider === 'openai' ? 'openai' : 'anthropic'
+        const safeProvider = provider === 'openai' ? 'openai' : provider === 'gemini' ? 'gemini' : 'anthropic'
         super(`${safeProvider} ${String(errorCode || 'provider_error')}${statusText}`)
         this.name = 'ProviderCallError'
         this.provider = safeProvider
@@ -506,16 +508,101 @@ async function callOpenAI({ system, messages, model = DEFAULT_OPENAI_MODEL, maxT
     }
 }
 
+async function callGemini({ system, messages, model = DEFAULT_GEMINI_MODEL, maxTokens = MAX_TOKENS, temperature = 0.6, deadlineAtMs = providerDeadlineAt() }) {
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) throw providerCallError('provider_error', { provider: 'gemini', providerStarted: false })
+
+    const timeoutMs = attemptTimeoutMs(deadlineAtMs, 10_000)
+    if (timeoutMs <= 0) throw providerCallError('timeout', { provider: 'gemini', providerStarted: false })
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let providerStarted = false
+    try {
+        providerStarted = true
+        const res = await fetch(`${GEMINI_API_BASE}/${encodeURIComponent(model)}:generateContent`, {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+                'content-type': 'application/json',
+                'x-goog-api-key': apiKey,
+            },
+            body: JSON.stringify({
+                systemInstruction: { parts: [{ text: String(system || '') }] },
+                contents: (Array.isArray(messages) ? messages : []).map(message => ({
+                    role: message?.role === 'assistant' ? 'model' : 'user',
+                    parts: [{ text: String(message?.content || '') }],
+                })),
+                generationConfig: {
+                    temperature,
+                    maxOutputTokens: maxTokens,
+                    responseMimeType: 'application/json',
+                },
+            }),
+        })
+        if (!res.ok) {
+            const body = await res.text().catch(err => {
+                if (err?.name === 'AbortError') throw err
+                return ''
+            })
+            throw providerCallError(classifyProviderBody(res.status, body), {
+                provider: 'gemini', providerStarted: true, status: res.status,
+            })
+        }
+        let data
+        try {
+            data = await res.json()
+        } catch (err) {
+            if (err?.name === 'AbortError') throw err
+            throw providerCallError('invalid_json', { provider: 'gemini', providerStarted: true, status: res.status })
+        }
+        const text = (data?.candidates?.[0]?.content?.parts || [])
+            .map(part => typeof part?.text === 'string' ? part.text : '')
+            .join('')
+        const rawUsage = data?.usageMetadata
+        const usage = rawUsage ? {
+            input_tokens: Number(rawUsage.promptTokenCount) || 0,
+            output_tokens: (Number(rawUsage.candidatesTokenCount) || 0) + (Number(rawUsage.thoughtsTokenCount) || 0),
+            cache_read_input_tokens: Number(rawUsage.cachedContentTokenCount) || 0,
+        } : null
+        return {
+            text,
+            usage,
+            model: typeof data?.modelVersion === 'string' ? data.modelVersion : model,
+            stopReason: data?.candidates?.[0]?.finishReason || null,
+            provider: 'gemini',
+        }
+    } catch (err) {
+        if (err?.name === 'AbortError') throw providerCallError('timeout', { provider: 'gemini', providerStarted: true })
+        if (err instanceof ProviderCallError) {
+            err.providerStarted = providerStarted || err.providerStarted
+            throw err
+        }
+        throw providerCallError('provider_error', { provider: 'gemini', providerStarted })
+    } finally {
+        clearTimeout(timer)
+    }
+}
+
 // Anthropic remains the primary sales model. OpenAI is a hot fallback,
 // not a second opinion: it is used only when the primary provider cannot
 // produce an answer. That keeps tone consistent while preventing a low
 // credit balance or provider outage from turning every lead into a handoff.
 export async function callClaude(input) {
     const deadlineAtMs = input?.deadlineAtMs ?? providerDeadlineAt()
-    const selectedProvider = input?.provider === 'openai' ? 'openai' : input?.provider === 'anthropic' ? 'anthropic' : 'auto'
+    const selectedProvider = input?.provider === 'openai'
+        ? 'openai'
+        : input?.provider === 'gemini'
+            ? 'gemini'
+            : input?.provider === 'anthropic'
+                ? 'anthropic'
+                : 'auto'
     if (selectedProvider === 'openai') {
         if (!process.env.OPENAI_API_KEY) throw providerCallError('provider_error', { provider: 'openai', providerStarted: false })
         return callOpenAI({ ...input, model: input?.model || DEFAULT_OPENAI_MODEL, deadlineAtMs })
+    }
+    if (selectedProvider === 'gemini') {
+        if (!process.env.GEMINI_API_KEY) throw providerCallError('provider_error', { provider: 'gemini', providerStarted: false })
+        return callGemini({ ...input, model: input?.model || DEFAULT_GEMINI_MODEL, deadlineAtMs })
     }
     let primaryError = null
     if (process.env.ANTHROPIC_API_KEY) {
@@ -534,6 +621,9 @@ export async function callClaude(input) {
 
     if (process.env.OPENAI_API_KEY && Date.now() < Number(deadlineAtMs)) {
         return callOpenAI({ ...input, deadlineAtMs })
+    }
+    if (process.env.GEMINI_API_KEY && Date.now() < Number(deadlineAtMs)) {
+        return callGemini({ ...input, model: DEFAULT_GEMINI_MODEL, deadlineAtMs })
     }
     if (primaryError) throw primaryError
     throw providerCallError('provider_error', { provider: 'anthropic', providerStarted: false })

@@ -159,6 +159,7 @@ beforeEach(async () => {
     process.env.SALES_AGENT_SECRET = 'route-test-secret'
     process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
     process.env.OPENAI_API_KEY = 'test-openai-key'
+    delete process.env.GEMINI_API_KEY
     process.env.SALES_AGENT_OWNER_PHONE = 'owner-token'
     mocks.claimInboundEvent.mockResolvedValue({ action: 'process', claimToken: 'claim-token', claimGeneration: 1 })
     mocks.completeInboundEvent.mockResolvedValue({ action: 'completed' })
@@ -172,7 +173,7 @@ beforeEach(async () => {
     mocks.recordMediaSent.mockResolvedValue(undefined)
     mocks.getLead.mockResolvedValue(lead)
     mocks.readSalesSettings.mockResolvedValue({
-        revision: 1, enabled: true, provider: 'anthropic', model: 'claude-haiku-4-5',
+        revision: 1, enabled: true, mode: 'full_sales', provider: 'anthropic', model: 'claude-haiku-4-5',
         fallbackModel: 'claude-haiku-4-5', businessInstructions: 'תשאל שאלה אחת',
         activeOpeningIds: ['question_first'], openingMediaSequence: [],
     })
@@ -1083,6 +1084,34 @@ describe('Anthropic outage handling', () => {
 
         expect(mocks.recordSpend).toHaveBeenCalledWith(expect.objectContaining({
             provider: 'openai', model: 'gpt-4.1-mini', usage,
+        }))
+    })
+
+    it('uses and attributes the configured Gemini sales model', async () => {
+        prepareModelPath()
+        process.env.GEMINI_API_KEY = 'test-gemini-key'
+        const usage = { input_tokens: 80, output_tokens: 20 }
+        mocks.readSalesSettings.mockResolvedValue({
+            revision: 2, enabled: true, mode: 'full_sales', provider: 'gemini', model: 'gemini-3.6-flash',
+            businessInstructions: '', activeOpeningIds: ['question_first'], openingMediaSequence: [],
+        })
+        mocks.costOfClaudeUsage.mockReturnValue({ usd: 0.0001, known: true })
+        mocks.recordSpend.mockResolvedValue(undefined)
+        mocks.callClaude.mockResolvedValue({
+            text: 'valid', usage, model: 'gemini-3.6-flash', provider: 'gemini', stopReason: 'STOP',
+        })
+        mocks.parseAgentJson.mockReturnValue({
+            malformed: false, messages: ['שלום'], stage: 'engaged', handoff: false,
+            image: null, eventType: null, callbackPromised: null, followUpAt: null,
+        })
+
+        await post(inbound({ text: 'שלום' }))
+
+        expect(mocks.callClaude).toHaveBeenCalledWith(expect.objectContaining({
+            provider: 'gemini', model: 'gemini-3.6-flash',
+        }))
+        expect(mocks.recordSpend).toHaveBeenCalledWith(expect.objectContaining({
+            provider: 'gemini', model: 'gemini-3.6-flash', usage,
         }))
     })
 

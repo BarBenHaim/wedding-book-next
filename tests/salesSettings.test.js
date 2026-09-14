@@ -29,6 +29,7 @@ describe('sales agent settings', () => {
             },
         })
         expect(MODEL_REGISTRY.every(row => !('apiKey' in row))).toBe(true)
+        expect(MODEL_REGISTRY).toContainEqual(expect.objectContaining({ id: 'gemini-3.6-flash', provider: 'gemini' }))
     })
 
     it('normalizes only editable allowlisted fields and registered media', () => {
@@ -78,6 +79,29 @@ describe('sales agent settings', () => {
         })
         expect(JSON.stringify(normalized)).not.toContain('ignore policy')
         expect(JSON.stringify(normalized)).not.toContain('attacker-model')
+    })
+
+    it('accepts the explicit full-sales mode without changing the safe default', () => {
+        const normalized = normalizeSalesSettings({
+            revision: 1,
+            mode: 'full_sales',
+        })
+
+        expect(DEFAULT_SALES_SETTINGS.mode).toBe('opening_only')
+        expect(normalized.mode).toBe('full_sales')
+    })
+
+    it('accepts Gemini only with its registered sales model', () => {
+        expect(normalizeSalesSettings({
+            revision: 1,
+            provider: 'gemini',
+            model: 'gemini-3.6-flash',
+        })).toMatchObject({ provider: 'gemini', model: 'gemini-3.6-flash' })
+        expect(() => normalizeSalesSettings({
+            revision: 1,
+            provider: 'gemini',
+            model: 'claude-sonnet-4-5',
+        })).toThrow('INVALID_MODEL')
     })
 
     it('rejects invalid provider, model, revision, and oversized instructions', () => {

@@ -5,9 +5,11 @@ export const MODEL_REGISTRY = Object.freeze([
     { id: 'claude-sonnet-4-5', provider: 'anthropic', label: 'Claude Sonnet 4.5', role: 'primary' },
     { id: 'claude-haiku-4-5', provider: 'anthropic', label: 'Claude Haiku 4.5', role: 'economy' },
     { id: 'gpt-4.1-mini', provider: 'openai', label: 'GPT-4.1 mini', role: 'fallback' },
+    { id: 'gemini-3.6-flash', provider: 'gemini', label: 'Gemini 3.6 Flash', role: 'primary' },
 ])
 
-const PROVIDERS = ['auto', 'anthropic', 'openai']
+const PROVIDERS = ['auto', 'anthropic', 'openai', 'gemini']
+const MODES = ['opening_only', 'full_sales']
 const MODEL_IDS = MODEL_REGISTRY.map(row => row.id)
 const FALLBACK_MODEL = 'claude-haiku-4-5'
 const MAX_INSTRUCTIONS = 4_000
@@ -87,7 +89,7 @@ export function normalizeSalesSettings(input = {}, {
     const model = String(input.model || DEFAULT_SALES_SETTINGS.model)
     assertProviderModel(provider, model)
     const mode = String(input.mode || DEFAULT_SALES_SETTINGS.mode)
-    if (mode !== 'opening_only') throw new Error('INVALID_MODE')
+    if (!MODES.includes(mode)) throw new Error('INVALID_MODE')
     const openingText = cleanOpeningText(input.openingText === undefined
         ? DEFAULT_SALES_SETTINGS.openingText
         : input.openingText)
