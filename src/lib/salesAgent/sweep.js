@@ -38,6 +38,7 @@ import { HUMAN_PAUSE_HOURS } from './leadsCore'
 // mid-flow: somebody who wrote last night is thinking, not lost.
 export const ORPHAN_AFTER_HOURS = 36
 export const OPENING_ORPHAN_AFTER_HOURS = 4
+export const OPENING_RECOVERY_WINDOW_HOURS = 24
 
 // Firestore hands timestamps back in three shapes depending on whether
 // they came from the SDK, from JSON, or from a hand-edited document.
@@ -86,11 +87,13 @@ export function findOrphans(leads, { nowMs = Date.now(), maxAttempts = MAX_ATTEM
         // automated funnel. Recover it early enough to use WhatsApp's open
         // service window; ordinary legacy orphans retain the conservative
         // 36-hour threshold.
-        const afterHours = lead.openingVariantId && (lead.followUpCount || 0) === 0
-            ? OPENING_ORPHAN_AFTER_HOURS
-            : ORPHAN_AFTER_HOURS
-        const cutoff = nowMs - afterHours * 3600 * 1000
-        return last <= cutoff
+        const enrolledOpening = lead.openingVariantId && (lead.followUpCount || 0) === 0
+        const ageMs = nowMs - last
+        if (enrolledOpening
+            && ageMs >= OPENING_ORPHAN_AFTER_HOURS * 3600 * 1000
+            && ageMs < OPENING_RECOVERY_WINDOW_HOURS * 3600 * 1000) return true
+        const ordinaryCutoff = nowMs - ORPHAN_AFTER_HOURS * 3600 * 1000
+        return last <= ordinaryCutoff
     })
 }
 
@@ -151,4 +154,12 @@ export function handoffAlert(stale, { nowMs = Date.now(), limit = 10 } = {}) {
     return `${head}\n${lines.join('\n')}${more}\n\nהבוט לא ימשיך אותן לבד — הן הועברו אליך בכוונה.`
 }
 
-export default { ORPHAN_AFTER_HOURS, OPENING_ORPHAN_AFTER_HOURS, findOrphans, findStaleHandoffs, handoffAlert, hoursSince }
+export default {
+    ORPHAN_AFTER_HOURS,
+    OPENING_ORPHAN_AFTER_HOURS,
+    OPENING_RECOVERY_WINDOW_HOURS,
+    findOrphans,
+    findStaleHandoffs,
+    handoffAlert,
+    hoursSince,
+}

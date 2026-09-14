@@ -37,6 +37,8 @@ describe('findOrphans', () => {
         expect(findOrphans([lead({ ...enrolled, lastInboundAt: hoursAgo(3) })], { nowMs: NOW })).toHaveLength(0)
         expect(findOrphans([lead({ ...enrolled, lastInboundAt: hoursAgo(4) })], { nowMs: NOW })).toHaveLength(1)
         expect(findOrphans([lead({ ...enrolled, lastInboundAt: hoursAgo(23) })], { nowMs: NOW })).toHaveLength(1)
+        expect(findOrphans([lead({ ...enrolled, lastInboundAt: hoursAgo(25) })], { nowMs: NOW })).toHaveLength(0)
+        expect(findOrphans([lead({ ...enrolled, lastInboundAt: hoursAgo(36) })], { nowMs: NOW })).toHaveLength(1)
     })
 
     it('refuses to resume a handoff', () => {
