@@ -55,6 +55,8 @@ const mocks = vi.hoisted(() => ({
     loadOpeningVariableVersions: vi.fn(),
     signOpeningVariableDownload: vi.fn(),
     readPriorConversationContext: vi.fn(),
+    canSendWhatsApp: vi.fn(),
+    sendInboundSequenceDirect: vi.fn(),
 }))
 
 vi.mock('@/lib/salesAgent/prompt', () => ({ buildSystemPrompt: mocks.buildSystemPrompt, addDaysISO: mocks.addDaysISO }))
@@ -107,6 +109,8 @@ vi.mock('@/lib/salesAgent/openingVariableRuntimeStore', () => ({
     signOpeningVariableDownload: mocks.signOpeningVariableDownload,
 }))
 vi.mock('@/lib/salesAgent/priorContext', () => ({ readPriorConversationContext: mocks.readPriorConversationContext }))
+vi.mock('@/lib/salesAgent/whatsapp', () => ({ canSendWhatsApp: mocks.canSendWhatsApp }))
+vi.mock('@/lib/salesAgent/inboundDirectDelivery', () => ({ sendInboundSequenceDirect: mocks.sendInboundSequenceDirect }))
 
 const lead = { isNew: false, stage: 'engaged', turns: [], followUpCount: 0, imagesSent: [], mediaSent: [] }
 const inbound = overrides => ({ eventId: 'event-token', phone: 'test-phone-token', text: '', messageType: 'text', ...overrides })
@@ -161,6 +165,7 @@ beforeEach(async () => {
     process.env.OPENAI_API_KEY = 'test-openai-key'
     delete process.env.GEMINI_API_KEY
     process.env.SALES_AGENT_OWNER_PHONE = 'owner-token'
+    delete process.env.SALES_AGENT_DIRECT_GRAPH
     mocks.claimInboundEvent.mockResolvedValue({ action: 'process', claimToken: 'claim-token', claimGeneration: 1 })
     mocks.completeInboundEvent.mockResolvedValue({ action: 'completed' })
     mocks.completeProviderFallback.mockResolvedValue({ action: 'completed' })
@@ -201,10 +206,36 @@ beforeEach(async () => {
     mocks.loadOpeningVariableVersions.mockResolvedValue({})
     mocks.signOpeningVariableDownload.mockResolvedValue('https://storage.test/signed')
     mocks.readPriorConversationContext.mockResolvedValue({ state: 'none', hasPriorConversation: false })
+    mocks.canSendWhatsApp.mockReturnValue(true)
+    mocks.sendInboundSequenceDirect.mockResolvedValue({ status: 'accepted', acceptedParts: 2, totalParts: 2, persistenceDegraded: false })
     ;({ POST } = await import('@/app/api/sales-agent/reply/route'))
 })
 
 describe('deterministic opening experiment runtime', () => {
+    it('uses direct Graph delivery for the published journey and tells Make not to resend it', async () => {
+        process.env.SALES_AGENT_DIRECT_GRAPH = 'true'
+        const parts = [
+            { partId: 'a'.repeat(32), blockId: 'a-explain', order: 1, kind: 'text', text: 'כך הספר עובד' },
+            { partId: 'b'.repeat(32), blockId: 'a-video', order: 2, kind: 'video', url: 'https://media.test/demo.mp4' },
+        ]
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true, stage: 'new' })
+        mocks.prepareOpeningRuntime.mockReturnValue({
+            eligible: true, expectedStateVersion: 0,
+            enrollment: { variantId: 'B', variantRevision: 3, flow: { id: 'B', revision: 3, blocks: [] } },
+            result: { action: 'completed', state: { cursor: 2, waitingFor: null }, parts, captures: {}, completed: true },
+        })
+
+        const result = await post(inbound({ text: 'אשמח לפרטים' }))
+
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({
+            shouldSend: false,
+            directDelivery: { status: 'accepted', acceptedParts: 2, totalParts: 2, persistenceDegraded: false },
+        })
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({ deliveryChannel: 'whatsapp_graph' }))
+        expect(mocks.sendInboundSequenceDirect).toHaveBeenCalledWith({ phone: 'test-phone-token', parts })
+    })
+
     it('persists and returns an ordered published journey without model work', async () => {
         const parts = [
             { partId: 'a'.repeat(32), blockId: 'a-explain', order: 1, kind: 'text', text: 'כך הספר עובד' },

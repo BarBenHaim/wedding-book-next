@@ -67,6 +67,8 @@ import {
     signOpeningVariableDownload,
 } from '@/lib/salesAgent/openingVariableRuntimeStore'
 import { readPriorConversationContext } from '@/lib/salesAgent/priorContext'
+import { canSendWhatsApp } from '@/lib/salesAgent/whatsapp'
+import { sendInboundSequenceDirect } from '@/lib/salesAgent/inboundDirectDelivery'
 
 // What the customer sees when the machinery breaks. Deliberately honest
 // and short — no apology theatre, no invented reason.
@@ -649,6 +651,9 @@ export async function POST(req) {
                 exposedAt: lead.openingExposedAt || null,
             },
         }
+        const useDirectGraph = shouldSend
+            && process.env.SALES_AGENT_DIRECT_GRAPH === 'true'
+            && canSendWhatsApp()
         try {
             const durable = await completeSuccessfulExchange({
                 eventId,
@@ -657,9 +662,14 @@ export async function POST(req) {
                 exchange,
                 outcome: responsePayload,
                 deadlineAtMs: routeDeadlineAtMs,
+                deliveryChannel: useDirectGraph ? 'whatsapp_graph' : 'make',
             })
             if (durable.action === 'completed') {
                 compactLeadBestEffort(phone)
+                if (useDirectGraph) {
+                    const directDelivery = await sendInboundSequenceDirect({ phone, parts: transportSequenceParts })
+                    return NextResponse.json({ ...responsePayload, shouldSend: false, directDelivery })
+                }
                 return NextResponse.json(responsePayload)
             }
             if (durable.action === 'cached') {

@@ -297,7 +297,7 @@ export async function completeProviderFallback({ eventId, claimToken, claimGener
 
 // Final customer-facing success is durable only when the lead exchange and
 // inbound completion commit together under the same claim fence.
-export async function completeSuccessfulExchange({ eventId, claimToken, claimGeneration, exchange, outcome, deadlineAtMs = null }) {
+export async function completeSuccessfulExchange({ eventId, claimToken, claimGeneration, exchange, outcome, deadlineAtMs = null, deliveryChannel = 'make' }) {
     assertBeforeDeadline(deadlineAtMs)
     const ownedClaimToken = assertInboundClaimToken(claimToken)
     const cleanOutcome = sanitizeInboundOutcome(outcome)
@@ -362,7 +362,7 @@ export async function completeSuccessfulExchange({ eventId, claimToken, claimGen
         for (const replyPart of replyParts) {
             tx.set(deliveryEventRef(replyPart.outboundId), {
                 outboundId: replyPart.outboundId,
-                channel: 'make',
+                channel: deliveryChannel === 'whatsapp_graph' ? 'whatsapp_graph' : 'make',
                 status: 'requested',
                 leadId: id,
                 part: replyPart.part,
