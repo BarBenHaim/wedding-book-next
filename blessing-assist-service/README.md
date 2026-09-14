@@ -78,27 +78,35 @@ python prompt_lab.py --temp 0.2         # אותה בקשה בטמפרטורה �
 
 הממצאים מתועדים ב-[experiments.md](./experiments.md).
 
-## פריסה לאוויר (Render, חינם)
+## פריסה לאוויר — Vercel, אותו חשבון שכבר יש
 
-הריפו כולל `render.yaml`, אז זה Blueprint — Render קורא אותו ומקים את
-השירות לבד.
+ל-Vercel יש preset ל-Flask: הוא מחפש `app.py` עם משתנה `app`, קורא את
+`requirements.txt`, ומנתב כל בקשה לאפליקציה. זה בדיוק מה שיש כאן, אז
+אין קונפיגורציה. הסיבה שזה עדיף על Render החינמי: אין "שינה" של
+15 דקות, cold start של ~שנייה, ותקרת ריצה של 300 שניות ב-Hobby
+(Gemini לוקח 8–23).
 
-1. [dashboard.render.com](https://dashboard.render.com) ← **New** ← **Blueprint**
-2. חבר את `BarBenHaim/wedding-book-next` — Render ימצא את `render.yaml`
-3. הוא יבקש רק `GEMINI_API_KEY` — הדבק אותו שם (הוא מסומן `sync: false`, לא נכנס ל-git)
-4. **Apply**. אחרי ~2 דקות תקבל כתובת כמו `https://wedding-tales-blessing-assist.onrender.com`
+השירות הוא **פרויקט Vercel נפרד** מאותו ריפו:
+
+1. [vercel.com/new](https://vercel.com/new) ← Import ← `BarBenHaim/wedding-book-next`
+2. **Root Directory** ← `blessing-assist-service` (הצעד שקל לפספס)
+3. Environment Variables:
+   - `GEMINI_API_KEY` — המפתח
+   - `ASSIST_SHARED_SECRET` — מחרוזת אקראית ארוכה, כל דבר
+4. **Deploy** ← ~1 דקה ← כתובת כמו `https://wedding-tales-blessing-assist.vercel.app`
 5. בדוק: `<הכתובת>/health` צריך להחזיר `"ok": true, "has_key": true`
 
-ואז ב-Vercel ← Project ← Settings ← Environment Variables:
+ואז בפרויקט **האתר** (the-wedding-gift) ← Settings ← Environment Variables:
 
 ```
-BLESSING_ASSIST_URL = https://wedding-tales-blessing-assist.onrender.com
+BLESSING_ASSIST_URL   = https://wedding-tales-blessing-assist.vercel.app
+ASSIST_SHARED_SECRET  = אותה מחרוזת בדיוק
 ```
 
-ו-**Redeploy**. מרגע זה עוזר הכתיבה באתר החי עובר דרך פייתון, והחיווי
+← **Redeploy**. מרגע זה עוזר הכתיבה באתר החי עובר דרך פייתון, והחיווי
 בדף הפרויקט ירוק.
 
-**Free tier:** השירות נרדם אחרי ~15 דקות ללא תנועה ומתעורר ב-30–50
-שניות. Next.js מחכה 20 שניות ואז נופל ל-Claude — האורח לא רואה שגיאה,
-אבל הבקשה הראשונה אחרי שקט לא תעבור דרך פייתון. Starter (~$7 לחודש)
-משאיר אותו ער. **להצגה בכיתה: תפתח את `/health` דקה לפני**, וזה ער.
+**למה הסוד המשותף:** הנקודה `/assist` ציבורית וכל קריאה אליה עולה
+כסף. הגבלת קצב לפי IP לא שווה על serverless (הזיכרון מתאפס). עם הסוד,
+רק ה-Next.js שלך יכול להוציא את המפתח שלך. בלי המשתנה (פיתוח מקומי)
+הבדיקה פשוט כבויה.

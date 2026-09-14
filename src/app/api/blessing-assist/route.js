@@ -44,7 +44,12 @@ async function callPythonService(payload) {
         const t = setTimeout(() => ctrl.abort(), PY_TIMEOUT_MS)
         const res = await fetch(`${PY_URL.replace(/\/$/, '')}/assist`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                // The Python endpoint is public and every call costs money.
+                // When both sides share this secret, nobody else can spend it.
+                ...(process.env.ASSIST_SHARED_SECRET ? { 'X-Assist-Secret': process.env.ASSIST_SHARED_SECRET } : {}),
+            },
             body: JSON.stringify(payload),
             signal: ctrl.signal,
         })

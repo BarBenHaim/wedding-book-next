@@ -70,6 +70,20 @@ def health():
     })
 
 
+# הנקודה הזו ציבורית באינטרנט, וכל קריאה אליה עולה כסף (Gemini). הגבלת
+# הקצב לפי IP לא שווה הרבה על serverless - הזיכרון מתאפס בכל הפעלה.
+# אז יש סוד משותף: Next.js שולח אותו בכותרת, ומי שאין לו אותו מקבל 401
+# לפני שנבנה פרומפט. אופציונלי בכוונה - בלי המשתנה (פיתוח מקומי,
+# בדיקות) הבדיקה פשוט לא מופעלת.
+SHARED_SECRET = os.environ.get("ASSIST_SHARED_SECRET", "")
+
+
+def caller_is_trusted():
+    if not SHARED_SECRET:
+        return True
+    return request.headers.get("X-Assist-Secret", "") == SHARED_SECRET
+
+
 @app.post("/assist")
 def assist():
     """
@@ -87,6 +101,9 @@ def assist():
     התשובה: {"suggestions": [...]} — תמיד רשימה, גם כשיש הצעה אחת,
     כדי שצד הלקוח לא יצטרך שני מסלולי טיפול.
     """
+    if not caller_is_trusted():
+        return jsonify({"error": "unauthorized"}), 401
+
     client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "unknown")
     client_ip = client_ip.split(",")[0].strip()
     if is_rate_limited(client_ip):
