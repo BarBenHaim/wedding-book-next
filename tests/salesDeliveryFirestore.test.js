@@ -99,6 +99,35 @@ beforeEach(() => {
 })
 
 describe('transactional follow-up delivery truth', () => {
+    it('credits the assigned model only after its prepared response is delivered', async () => {
+        store.set(LEAD, {
+            modelAssignment: {
+                experimentId: 'sales-models', experimentRevision: 2,
+                armId: 'gemini', armRevision: 1,
+                provider: 'gemini', model: 'gemini-3.6-flash',
+            },
+        })
+        store.set(DELIVERY, {
+            outboundId: OUTBOUND_ID, status: 'requested', leadId: '41', part: 'text',
+            deliveryRole: 'secondary', advanceOnDelivery: false,
+            logicalAttemptId: 'model-response-attempt', advancesFollowUp: false,
+            modelAttributed: true,
+        })
+
+        await recordDeliveryEvent(event('accepted'))
+        expect(store.get(LEAD).modelDeliveredAt).toBeUndefined()
+
+        await recordDeliveryEvent(event('delivered', {
+            eventId: 'model-response-delivered', occurredAt: '2026-08-14T10:02:00.000Z',
+        }))
+        expect(store.get(LEAD).modelDeliveredAt).toBe('2026-08-14T10:02:00.000Z')
+
+        await recordDeliveryEvent(event('read', {
+            eventId: 'model-response-read', occurredAt: '2026-08-14T10:03:00.000Z',
+        }))
+        expect(store.get(LEAD).modelDeliveredAt).toBe('2026-08-14T10:02:00.000Z')
+    })
+
     it('records requested metadata without claiming the follow-up was accepted or delivered', async () => {
         await expect(prepareFollowUpDelivery(requested())).resolves.toEqual({ action: 'requested', outboundId: OUTBOUND_ID })
 

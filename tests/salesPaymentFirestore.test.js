@@ -53,6 +53,26 @@ import { closeLeadOnPurchase } from '@/lib/salesAgent/leads'
 beforeEach(() => store.reset())
 
 describe('verified sales payment persistence', () => {
+    it('attributes the first verified purchase to the assignment already stored on the lead', async () => {
+        const assignment = {
+            experimentId: 'sales-models', experimentRevision: 2,
+            armId: 'gemini', armRevision: 1,
+            provider: 'gemini', model: 'gemini-3.6-flash', assignedAt: 1_000,
+        }
+        store.set('sales_leads/non-dialable-payment-model', { modelAssignment: assignment })
+
+        await closeLeadOnPurchase({
+            phone: 'non-dialable-payment-model', orderId: 'order-model-attribution',
+            amount: 990, paymentSource: 'woocommerce',
+        })
+
+        expect(store.get('sales_leads/non-dialable-payment-model')).toMatchObject({
+            modelAssignment: assignment,
+            paymentVerified: true,
+            modelPaymentAttributedAt: 'SERVER_TIME',
+        })
+    })
+
     it('stores an explicit verified payment fact on the matching lead', async () => {
         await closeLeadOnPurchase({
             phone: 'non-dialable-payment-lead-one', orderId: 'order-test-one',

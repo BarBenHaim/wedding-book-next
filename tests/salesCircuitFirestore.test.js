@@ -372,6 +372,69 @@ describe('Firestore atomic provider fallback matrix', () => {
 })
 
 describe('Firestore atomic successful exchange matrix', () => {
+    it('persists one model execution and marks a timely advancing reply on the pinned cohort', async () => {
+        const assignment = {
+            experimentId: 'sales-models', experimentRevision: 2,
+            armId: 'claude', armRevision: 3,
+            provider: 'anthropic', model: 'claude-sonnet-4-5',
+        }
+        store.set(EVENT, processingEvent())
+        store.set('sales_leads/456', {
+            stage: 'engaged', modelAssignment: { ...assignment, assignedAt: 8_000 },
+            modelDeliveredAt: 9_000,
+        })
+
+        await completeSuccessfulExchange(successArgs({
+            exchange: { ...exchange, parsed: { ...parsed, stage: 'offer_sent' } },
+            modelAssignment: assignment,
+            modelExecution: {
+                provider: 'anthropic', model: 'claude-sonnet-4-5',
+                primaryAttempted: true, fallback: false, attempts: 1,
+                costUsd: 0.002, latencyMs: 850,
+            },
+        }))
+
+        expect(store.get('sales_leads/456')).toMatchObject({
+            modelAssignment: expect.objectContaining(assignment),
+            modelExecution: expect.objectContaining({ provider: 'anthropic', fallback: false }),
+            modelPrimaryAttempted: true,
+            modelFallbackUsed: false,
+            modelReply24h: true,
+            modelProgressed: true,
+            modelLatencyMs: 850,
+            modelCostUsd: { increment: 0.002 },
+        })
+        expect(store.get('sales_delivery_events/inbound-01639857c87ca59d2f08e31b-0:text'))
+            .toMatchObject({ modelAttributed: true })
+    })
+
+    it('rejects execution attribution that does not match the durable assignment', async () => {
+        store.set(EVENT, processingEvent())
+        store.set('sales_leads/456', {
+            modelAssignment: {
+                experimentId: 'sales-models', experimentRevision: 2,
+                armId: 'gemini', armRevision: 1,
+                provider: 'gemini', model: 'gemini-3.6-flash', assignedAt: 8_000,
+            },
+        })
+
+        await expect(completeSuccessfulExchange(successArgs({
+            modelAssignment: {
+                experimentId: 'sales-models', experimentRevision: 2,
+                armId: 'claude', armRevision: 1,
+                provider: 'anthropic', model: 'claude-sonnet-4-5',
+            },
+            modelExecution: {
+                provider: 'anthropic', model: 'claude-sonnet-4-5',
+                primaryAttempted: true, fallback: false, attempts: 1,
+            },
+        }))).resolves.toEqual({ action: 'stale' })
+
+        expect(store.get(EVENT)).toEqual(processingEvent())
+        expectNoWrites()
+    })
+
+
     it('records every configured opening asset as seen in the same durable exchange', () => {
         const result = buildExchangePatch({ ...exchange, parsed: parsedWithOpeningMedia })
         expect(result.patch.imagesSent).toBeUndefined()

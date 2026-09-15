@@ -43,6 +43,7 @@ import {
     claimInboundEvent, completeInboundEvent,
     acquireProviderCircuit, recordProviderFailure, recordProviderSuccess, releaseProviderProbe, completeProviderFallback as persistProviderFallback, completeSuccessfulExchange, compactLeadBestEffort,
     recordInboundHeartbeat,
+    resolveOrEnrollModelAssignment,
 } from '@/lib/salesAgent/leads'
 import { costOfClaudeUsage } from '@/lib/salesAgent/pricing'
 import { parseInboundBody } from '@/lib/salesAgent/inbound'
@@ -844,11 +845,37 @@ export async function POST(req) {
     // worth sending, so it is credited before anything else can fail.
     creditPendingMedia(lead).catch(() => {})
 
-    const providerKeyAvailable = settings.provider === 'anthropic'
+    let selectedProvider = settings.provider
+    let selectedModel = settings.model
+    let modelAssignment = null
+    if (settings.modelExperiment?.enabled === true) {
+        let enrollment
+        try {
+            enrollment = await resolveOrEnrollModelAssignment({
+                eventId,
+                leadId: phone,
+                experiment: settings.modelExperiment,
+                claimToken: claim.claimToken,
+                generation: claim.claimGeneration,
+                deadlineAtMs: providerDeadlineAtMs,
+            })
+        } catch {
+            console.error('[sales-agent] model assignment failed')
+            return NextResponse.json({ error: 'model-assignment-failed' }, { status: 503 })
+        }
+        if (!enrollment?.assignment || !['assigned', 'existing'].includes(enrollment.action)) {
+            return NextResponse.json({ error: 'model-assignment-stale' }, { status: 503 })
+        }
+        modelAssignment = enrollment.assignment
+        selectedProvider = modelAssignment.provider
+        selectedModel = modelAssignment.model
+    }
+
+    const providerKeyAvailable = selectedProvider === 'anthropic'
         ? !!String(process.env.ANTHROPIC_API_KEY || '').trim()
-        : settings.provider === 'openai'
+        : selectedProvider === 'openai'
             ? !!String(process.env.OPENAI_API_KEY || '').trim()
-            : settings.provider === 'gemini'
+            : selectedProvider === 'gemini'
                 ? !!String(process.env.GEMINI_API_KEY || '').trim()
                 : !!String(process.env.ANTHROPIC_API_KEY || '').trim()
                     || !!String(process.env.OPENAI_API_KEY || '').trim()
@@ -866,6 +893,19 @@ export async function POST(req) {
     })
     const messages = parsed ? [] : toApiMessages(lead.turns, text)
     const spends = []
+    const modelExecution = modelAssignment ? {
+        provider: selectedProvider,
+        model: selectedModel,
+        primaryAttempted: false,
+        fallback: !providerKeyAvailable,
+        failureCode: providerKeyAvailable ? null : 'provider_unavailable',
+        attempts: 0,
+        costUsd: 0,
+        latencyMs: null,
+        actualProvider: null,
+        actualModel: null,
+    } : null
+    const modelStartedAtMs = Date.now()
 
     if (!parsed) {
         // Provider enrichment is optional; the deterministic sales policy is
@@ -876,12 +916,20 @@ export async function POST(req) {
             parsed = buildDeterministicSalesReply({ decision: turnDecision, lead, incomingText: text })
         } else {
             try {
-                circuit = await acquireProviderCircuit({ deadlineAtMs: providerDeadlineAtMs })
+                circuit = await acquireProviderCircuit({
+                    provider: selectedProvider,
+                    model: selectedModel,
+                    deadlineAtMs: providerDeadlineAtMs,
+                })
             } catch {
                 console.error('[sales-agent] provider breaker check failed')
                 return NextResponse.json({ error: 'provider-breaker-unavailable' }, { status: 503 })
             }
             if (!circuit.allow) {
+                if (modelExecution) {
+                    modelExecution.fallback = true
+                    modelExecution.failureCode = 'circuit_open'
+                }
                 parsed = buildDeterministicSalesReply({ decision: turnDecision, lead, incomingText: text })
             }
         }
@@ -892,17 +940,25 @@ export async function POST(req) {
                 const { usd, known } = costOfClaudeUsage(usage, model)
                 if (!known) console.warn('[sales-agent] no price known for model', model)
                 const meteredProvider = ['anthropic', 'openai', 'gemini'].includes(provider) ? provider : 'anthropic'
+                if (modelExecution && known) modelExecution.costUsd += usd
                 spends.push(recordSpend({ provider: meteredProvider, model, usd, usage, todayISO: today }))
             }
 
             let providerFailureCode = null
             let providerStarted = false
             try {
+                if (modelExecution) modelExecution.attempts += 1
                 const { text: raw, usage, model, stopReason, provider } = await callClaude({
                     system, messages, deadlineAtMs: providerDeadlineAtMs,
-                    provider: settings.provider, model: settings.model,
+                    provider: selectedProvider, model: selectedModel,
                 })
                 providerStarted = true
+                if (modelExecution) {
+                    modelExecution.actualProvider = provider || selectedProvider
+                    modelExecution.actualModel = model || selectedModel
+                    modelExecution.fallback = modelExecution.actualProvider !== selectedProvider
+                        || modelExecution.actualModel !== selectedModel
+                }
                 parsed = parseAgentJson(raw, { mediaKeys: Object.keys(library) })
                 if (usage) console.log('[sales-agent] usage', usage.input_tokens, usage.output_tokens, stopReason)
                 meter(usage, model, provider)
@@ -911,13 +967,14 @@ export async function POST(req) {
                     console.warn('[sales-agent] unparseable output, retrying once', 'stop:', stopReason)
                     let retry
                     try {
+                        if (modelExecution) modelExecution.attempts += 1
                         retry = await callClaude({
                             system: `${system}\n\nחשוב: התשובה הקודמת שלך לא הייתה JSON תקין. החזר עכשיו אך ורק אובייקט JSON יחיד, בלי טקסט לפניו או אחריו, ושמור על התשובה ללקוח קצרה.`,
                             messages,
                             temperature: 0.3,
                             deadlineAtMs: providerDeadlineAtMs,
-                            provider: settings.provider,
-                            model: settings.model,
+                            provider: selectedProvider,
+                            model: selectedModel,
                         })
                         providerStarted = true
                     } catch (err) {
@@ -925,6 +982,12 @@ export async function POST(req) {
                         providerFailureCode = err?.providerStarted === false ? 'invalid_json' : normalizeProviderError(err)
                     }
                     if (retry) {
+                        if (modelExecution) {
+                            modelExecution.actualProvider = retry.provider || selectedProvider
+                            modelExecution.actualModel = retry.model || selectedModel
+                            modelExecution.fallback = modelExecution.actualProvider !== selectedProvider
+                                || modelExecution.actualModel !== selectedModel
+                        }
                         meter(retry.usage, retry.model, retry.provider)
                         const second = parseAgentJson(retry.text, { mediaKeys: Object.keys(library) })
                         if (!second.malformed) parsed = second
@@ -935,35 +998,59 @@ export async function POST(req) {
                 providerStarted = providerStarted || err?.providerStarted !== false
                 providerFailureCode = providerFailureCode || normalizeProviderError(err)
             }
+            if (modelExecution) modelExecution.primaryAttempted = modelExecution.primaryAttempted || providerStarted
 
             if (!providerStarted) {
                 try {
-                    const released = await releaseProviderProbe(circuit.probeId || null, routeDeadlineAtMs)
+                    const released = await releaseProviderProbe({
+                        provider: selectedProvider, model: selectedModel,
+                        probeId: circuit.probeId || null, deadlineAtMs: routeDeadlineAtMs,
+                    })
                     if (released.action === 'deadline') return NextResponse.json({ error: 'provider-probe-release-deadline-exhausted' }, { status: 503 })
                 } catch {
                     return NextResponse.json({ error: 'provider-probe-release-failed' }, { status: 503 })
+                }
+                if (modelExecution) {
+                    modelExecution.fallback = true
+                    modelExecution.failureCode = providerFailureCode || 'provider_unavailable'
                 }
                 parsed = buildDeterministicSalesReply({ decision: turnDecision, lead, incomingText: text })
             } else if (providerFailureCode) {
                 console.error('[sales-agent] model provider failure', providerFailureCode)
                 try {
                     if (Date.now() >= routeDeadlineAtMs) return NextResponse.json({ error: 'provider-failure-deadline-exhausted' }, { status: 503 })
-                    await recordProviderFailure(providerFailureCode, circuit.probeId || null, routeDeadlineAtMs)
+                    await recordProviderFailure({
+                        provider: selectedProvider, model: selectedModel,
+                        errorCode: providerFailureCode, probeId: circuit.probeId || null,
+                        deadlineAtMs: routeDeadlineAtMs,
+                    })
                 } catch {
                     console.error('[sales-agent] provider breaker failure record failed')
                     return NextResponse.json({ error: 'provider-failure-record-failed' }, { status: 503 })
+                }
+                if (modelExecution) {
+                    modelExecution.fallback = true
+                    modelExecution.failureCode = providerFailureCode
                 }
                 parsed = buildDeterministicSalesReply({ decision: turnDecision, lead, incomingText: text })
             } else {
                 try {
                     if (Date.now() >= routeDeadlineAtMs) return NextResponse.json({ error: 'provider-success-deadline-exhausted' }, { status: 503 })
-                    await recordProviderSuccess(circuit.probeId || null, routeDeadlineAtMs)
+                    await recordProviderSuccess({
+                        provider: selectedProvider, model: selectedModel,
+                        probeId: circuit.probeId || null, deadlineAtMs: routeDeadlineAtMs,
+                    })
                 } catch {
                     console.error('[sales-agent] provider breaker success record failed')
                     return NextResponse.json({ error: 'provider-success-record-failed' }, { status: 503 })
                 }
             }
         }
+    }
+    if (modelExecution) {
+        modelExecution.latencyMs = modelExecution.primaryAttempted
+            ? Math.max(0, Date.now() - modelStartedAtMs)
+            : null
     }
 
     // A handoff with no words leaves the customer staring at silence.
@@ -1126,7 +1213,15 @@ export async function POST(req) {
         variant, isNew: !!lead.isNew,
     }
     try {
-        const durable = await completeSuccessfulExchange({ eventId, claimToken: claim.claimToken, claimGeneration: claim.claimGeneration, exchange, outcome: responsePayload, deadlineAtMs: routeDeadlineAtMs })
+        const durable = await completeSuccessfulExchange({
+            eventId,
+            claimToken: claim.claimToken,
+            claimGeneration: claim.claimGeneration,
+            exchange,
+            outcome: responsePayload,
+            deadlineAtMs: routeDeadlineAtMs,
+            ...(modelAssignment ? { modelAssignment, modelExecution } : {}),
+        })
         if (durable.action === 'completed') {
             compactLeadBestEffort(phone)
             Promise.allSettled(spends).catch(() => {})

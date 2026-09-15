@@ -299,6 +299,45 @@ function matchingModelAssignment(stored, experiment) {
     return arm ? candidate : null
 }
 
+const MODEL_FAILURE_CODES = new Set([
+    'timeout', 'rate_limit', 'low_credit', 'invalid_json', 'provider_error',
+    'provider_unavailable', 'circuit_open',
+])
+const MODEL_STAGE_RANK = Object.freeze({
+    new: 0, engaged: 1, opening_completed: 1, qualified: 2, demo_sent: 2,
+    offer_sent: 3, objection: 3, ready_to_pay: 4, closed_won: 5,
+})
+
+function sanitizedModelExecution(value = {}, assignment = {}) {
+    const provider = String(value.provider || '')
+    const model = String(value.model || '')
+    if (provider !== assignment.provider || model !== assignment.model) throw new Error('MODEL_EXECUTION_ASSIGNMENT_MISMATCH')
+    const actualProvider = ['anthropic', 'openai', 'gemini'].includes(value.actualProvider)
+        ? value.actualProvider
+        : null
+    const actualModel = typeof value.actualModel === 'string' && value.actualModel.length <= 120
+        ? value.actualModel
+        : null
+    const attempts = Math.min(3, Math.max(0, Number.isInteger(Number(value.attempts)) ? Number(value.attempts) : 0))
+    const costUsd = Number.isFinite(Number(value.costUsd)) ? Math.max(0, Number(value.costUsd)) : 0
+    const latencyMs = value.latencyMs == null || !Number.isFinite(Number(value.latencyMs))
+        ? null
+        : Math.min(120_000, Math.max(0, Number(value.latencyMs)))
+    const failureCode = MODEL_FAILURE_CODES.has(value.failureCode) ? value.failureCode : null
+    return {
+        provider,
+        model,
+        primaryAttempted: value.primaryAttempted === true,
+        fallback: value.fallback === true,
+        failureCode,
+        attempts,
+        costUsd,
+        latencyMs,
+        actualProvider,
+        actualModel,
+    }
+}
+
 /**
  * Assign one experiment arm under the same durable lease that owns the
  * inbound event. Retries see the stored assignment; stale workers write
@@ -385,7 +424,11 @@ export async function completeProviderFallback({ eventId, claimToken, claimGener
 
 // Final customer-facing success is durable only when the lead exchange and
 // inbound completion commit together under the same claim fence.
-export async function completeSuccessfulExchange({ eventId, claimToken, claimGeneration, exchange, outcome, deadlineAtMs = null, deliveryChannel = 'make' }) {
+export async function completeSuccessfulExchange({
+    eventId, claimToken, claimGeneration, exchange, outcome,
+    deadlineAtMs = null, deliveryChannel = 'make',
+    modelAssignment = null, modelExecution = null,
+}) {
     assertBeforeDeadline(deadlineAtMs)
     const ownedClaimToken = assertInboundClaimToken(claimToken)
     const cleanOutcome = sanitizeInboundOutcome(outcome)
@@ -423,9 +466,39 @@ export async function completeSuccessfulExchange({ eventId, claimToken, claimGen
         const decision = decideInboundCompletion(stored, ownedClaimToken, Date.now())
         if (decision.action !== 'complete') return decision
         if (Number(stored.claimGeneration) !== Number(claimGeneration)) return { action: 'stale' }
+        const storedLead = leadSnap.exists ? leadSnap.data() || {} : {}
         if (exchange?.openingRuntime) {
-            const storedStateVersion = Number(leadSnap.exists ? leadSnap.data()?.openingStateVersion || 0 : 0)
+            const storedStateVersion = Number(storedLead.openingStateVersion || 0)
             if (storedStateVersion !== Number(exchange.openingRuntime.expectedStateVersion || 0)) return { action: 'stale' }
+        }
+        let execution = null
+        if (modelAssignment) {
+            const canonicalAssignment = modelAssignmentFields(modelAssignment)
+            if (!matchingModelAssignment(storedLead.modelAssignment, {
+                id: canonicalAssignment.experimentId,
+                revision: canonicalAssignment.experimentRevision,
+                arms: [{
+                    id: canonicalAssignment.armId,
+                    revision: canonicalAssignment.armRevision,
+                    provider: canonicalAssignment.provider,
+                    model: canonicalAssignment.model,
+                }],
+            })) return { action: 'stale' }
+            execution = sanitizedModelExecution(modelExecution, canonicalAssignment)
+            patch.modelAssignment = storedLead.modelAssignment
+            patch.modelExecution = execution
+            patch.modelPrimaryAttempted = storedLead.modelPrimaryAttempted === true || execution.primaryAttempted
+            patch.modelFallbackUsed = storedLead.modelFallbackUsed === true || execution.fallback
+            patch.modelLatencyMs = execution.latencyMs
+            patch.modelExecutionAt = FieldValue.serverTimestamp()
+            patch.modelCostUsd = FieldValue.increment(execution.costUsd)
+            patch.modelExecutionCount = FieldValue.increment(1)
+            if (execution.failureCode) patch.providerFailureCode = execution.failureCode
+            const deliveredAtMs = healthMs(storedLead.modelDeliveredAt)
+            if (deliveredAtMs != null && Date.now() - deliveredAtMs <= 86_400_000) patch.modelReply24h = true
+            const priorRank = MODEL_STAGE_RANK[storedLead.stage] ?? 0
+            const nextRank = MODEL_STAGE_RANK[exchange?.parsed?.stage] ?? priorRank
+            if (nextRank > priorRank) patch.modelProgressed = true
         }
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
         tx.set(leadRef, patch, { merge: true })
@@ -467,6 +540,7 @@ export async function completeSuccessfulExchange({ eventId, claimToken, claimGen
                     openingVariantRevision: exchange.openingRuntime.variantRevision,
                     openingExposure: !!exchange.openingRuntime.enrollment && replyPart.order === 1,
                 } : {}),
+                ...(execution ? { modelAttributed: true } : {}),
                 deliveryRole: 'secondary',
                 advanceOnDelivery: false,
                 logicalAttemptId: inboundAttemptId,
@@ -927,8 +1001,16 @@ export async function recordDeliveryEvent(event) {
         const firstDeliveryEvidence = (decision.nextStatus === 'delivered' || decision.nextStatus === 'read')
             && stored?.status !== 'delivered'
             && stored?.status !== 'read'
-        if (leadRef && firstDeliveryEvidence && (stored?.demoEvidence === true || stored?.mediaKey || stored?.openingExposure === true)) {
+        if (leadRef && firstDeliveryEvidence && (
+            stored?.demoEvidence === true
+            || stored?.mediaKey
+            || stored?.openingExposure === true
+            || stored?.modelAttributed === true
+        )) {
             const evidencePatch = { updatedAt: FieldValue.serverTimestamp() }
+            if (stored?.modelAttributed === true && !lead.modelDeliveredAt) {
+                evidencePatch.modelDeliveredAt = event.occurredAt
+            }
             if (stored?.openingExposure === true && !lead.openingExposedAt) {
                 evidencePatch.openingVariantId = normalizeOpeningVariantId(stored.openingVariantId)
                 evidencePatch.openingVariantRevision = Number(stored.openingVariantRevision || 1)
@@ -1270,7 +1352,10 @@ export async function closeLeadOnPurchase({ phone, orderId, weddingId, amount, p
             paymentVerified: true,
             verifiedOrderId,
         }
-        if (!markerSnap.exists) verifiedPatch.paymentVerifiedAt = FieldValue.serverTimestamp()
+        if (!markerSnap.exists) {
+            verifiedPatch.paymentVerifiedAt = FieldValue.serverTimestamp()
+            if (lead.modelAssignment) verifiedPatch.modelPaymentAttributedAt = FieldValue.serverTimestamp()
+        }
         tx.set(leadRef, verifiedPatch, { merge: true })
         if (markerSnap.exists) return { credited: false, media: [] }
 

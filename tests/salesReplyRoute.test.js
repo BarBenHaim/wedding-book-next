@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
     recordProviderFailure: vi.fn(),
     recordProviderSuccess: vi.fn(),
     recordInboundHeartbeat: vi.fn(),
+    resolveOrEnrollModelAssignment: vi.fn(),
     costOfClaudeUsage: vi.fn(),
     resolveSource: vi.fn(),
     mergeMedia: vi.fn(),
@@ -80,6 +81,7 @@ vi.mock('@/lib/salesAgent/leads', () => ({
     acquireProviderCircuit: mocks.acquireProviderCircuit,
     recordProviderFailure: mocks.recordProviderFailure, recordProviderSuccess: mocks.recordProviderSuccess,
     recordInboundHeartbeat: mocks.recordInboundHeartbeat,
+    resolveOrEnrollModelAssignment: mocks.resolveOrEnrollModelAssignment,
 }))
 vi.mock('@/lib/salesAgent/pricing', () => ({ costOfClaudeUsage: mocks.costOfClaudeUsage }))
 vi.mock('@/lib/salesAgent/attribution', () => ({ resolveSource: mocks.resolveSource }))
@@ -118,6 +120,7 @@ const inbound = overrides => ({ eventId: 'event-token', phone: 'test-phone-token
 let POST
 
 function expectNoProviderWork() {
+    expect(mocks.resolveOrEnrollModelAssignment).not.toHaveBeenCalled()
     expect(mocks.acquireProviderCircuit).not.toHaveBeenCalled()
     expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
     expect(mocks.recordProviderSuccess).not.toHaveBeenCalled()
@@ -175,6 +178,7 @@ beforeEach(async () => {
     mocks.recordProviderFailure.mockResolvedValue(undefined)
     mocks.recordProviderSuccess.mockResolvedValue(undefined)
     mocks.recordInboundHeartbeat.mockResolvedValue(undefined)
+    mocks.resolveOrEnrollModelAssignment.mockResolvedValue({ action: 'existing', assignment: null })
     mocks.recordMediaSent.mockResolvedValue(undefined)
     mocks.getLead.mockResolvedValue(lead)
     mocks.readSalesSettings.mockResolvedValue({
@@ -209,6 +213,118 @@ beforeEach(async () => {
     mocks.canSendWhatsApp.mockReturnValue(true)
     mocks.sendInboundSequenceDirect.mockResolvedValue({ status: 'accepted', acceptedParts: 2, totalParts: 2, persistenceDegraded: false })
     ;({ POST } = await import('@/app/api/sales-agent/reply/route'))
+})
+
+describe('model revenue experiment runtime', () => {
+    const assignment = {
+        experimentId: 'sales-models', experimentRevision: 2,
+        armId: 'claude', armRevision: 3,
+        provider: 'anthropic', model: 'claude-sonnet-4-5',
+    }
+    const activeExperiment = {
+        id: 'sales-models', revision: 2, enabled: true,
+        targetVerifiedSalesPerDay: 2, minimumDeliveredPerArm: 30, minimumDays: 7,
+        championArmId: 'gemini',
+        arms: [
+            { id: 'gemini', revision: 1, provider: 'gemini', model: 'gemini-3.6-flash', weight: 80, enabled: true },
+            { id: 'claude', revision: 3, provider: 'anthropic', model: 'claude-sonnet-4-5', weight: 20, enabled: true },
+        ],
+    }
+
+    function prepareExperimentPath() {
+        prepareDecisionPath()
+        mocks.readSalesSettings.mockResolvedValue({
+            revision: 8, enabled: true, mode: 'full_sales',
+            provider: 'gemini', model: 'gemini-3.6-flash',
+            businessInstructions: '', activeOpeningIds: ['question_first'], openingMediaSequence: [],
+            modelExperiment: activeExperiment,
+        })
+        mocks.resolveOrEnrollModelAssignment.mockResolvedValue({ action: 'existing', assignment })
+        mocks.callClaude.mockResolvedValue({
+            text: 'valid', usage: { input_tokens: 100, output_tokens: 20 },
+            model: assignment.model, provider: assignment.provider, stopReason: 'end_turn',
+        })
+        mocks.costOfClaudeUsage.mockReturnValue({ usd: 0.001, known: true })
+    }
+
+    it('calls only the assigned provider/model and persists actual execution truth', async () => {
+        prepareExperimentPath()
+
+        await post(inbound({ text: 'אשמח לפרטים' }))
+
+        expect(mocks.resolveOrEnrollModelAssignment).toHaveBeenCalledWith(expect.objectContaining({
+            eventId: 'event-token', leadId: 'test-phone-token', experiment: activeExperiment,
+            claimToken: 'claim-token', generation: 1,
+        }))
+        expect(mocks.callClaude).toHaveBeenCalledWith(expect.objectContaining({
+            provider: 'anthropic', model: 'claude-sonnet-4-5',
+        }))
+        expect(mocks.acquireProviderCircuit).toHaveBeenCalledWith(expect.objectContaining({
+            provider: 'anthropic', model: 'claude-sonnet-4-5',
+        }))
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            modelAssignment: assignment,
+            modelExecution: expect.objectContaining({
+                provider: 'anthropic', model: 'claude-sonnet-4-5',
+                primaryAttempted: true, fallback: false, attempts: 1, costUsd: 0.001,
+            }),
+        }))
+    })
+
+    it('marks deterministic fallback as contaminated after an assigned provider failure', async () => {
+        prepareExperimentPath()
+        mocks.callClaude.mockRejectedValue(Object.assign(new Error('timeout'), {
+            providerStarted: true, errorCode: 'timeout',
+        }))
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        await post(inbound({ text: 'אשמח לפרטים' }))
+
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            modelAssignment: assignment,
+            modelExecution: expect.objectContaining({
+                primaryAttempted: true, fallback: true, failureCode: 'timeout', attempts: 1,
+            }),
+        }))
+    })
+
+    it('does not claim a primary provider attempt when failure happens before fetch', async () => {
+        prepareExperimentPath()
+        mocks.callClaude.mockRejectedValue(Object.assign(new Error('provider unavailable'), {
+            providerStarted: false, errorCode: 'provider_error',
+        }))
+
+        await post(inbound({ text: 'אשמח לפרטים' }))
+
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            modelExecution: expect.objectContaining({
+                primaryAttempted: false, fallback: true, failureCode: 'provider_error', attempts: 1,
+                latencyMs: null,
+            }),
+        }))
+    })
+
+    it('treats JSON repair as one assigned sample with two attempts', async () => {
+        prepareExperimentPath()
+        mocks.callClaude
+            .mockResolvedValueOnce({ text: 'bad', usage: null, model: assignment.model, provider: assignment.provider })
+            .mockResolvedValueOnce({ text: 'good', usage: null, model: assignment.model, provider: assignment.provider })
+        mocks.parseAgentJson
+            .mockReturnValueOnce({ malformed: true, messages: [], handoff: false })
+            .mockReturnValueOnce({
+                malformed: false, messages: ['תשובה'], stage: 'engaged', handoff: false,
+                image: null, eventType: null, callbackPromised: null, followUpAt: null,
+            })
+        vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+        await post(inbound({ text: 'אשמח לפרטים' }))
+
+        expect(mocks.resolveOrEnrollModelAssignment).toHaveBeenCalledTimes(1)
+        expect(mocks.callClaude).toHaveBeenCalledTimes(2)
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            modelExecution: expect.objectContaining({ attempts: 2, primaryAttempted: true, fallback: false }),
+        }))
+    })
 })
 
 describe('deterministic opening experiment runtime', () => {
@@ -943,7 +1059,10 @@ describe('Anthropic outage handling', () => {
         const result = await post(inbound({ text: 'צריך מחיר' }))
 
         expect(result.body).toMatchObject({ sendText: deterministicFallback, handoff: false })
-        expect(mocks.recordProviderFailure).toHaveBeenCalledWith(code, null, expect.any(Number))
+        expect(mocks.recordProviderFailure).toHaveBeenCalledWith(expect.objectContaining({
+            provider: 'anthropic', model: 'claude-haiku-4-5', errorCode: code,
+            probeId: null, deadlineAtMs: expect.any(Number),
+        }))
         expect(console.error).toHaveBeenCalledWith('[sales-agent] model provider failure', code)
         expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
         expect(mocks.completeProviderFallback).not.toHaveBeenCalled()
@@ -963,7 +1082,9 @@ describe('Anthropic outage handling', () => {
         const [firstCall, secondCall] = mocks.callClaude.mock.calls
         expect(firstCall[0].deadlineAtMs).toBe(secondCall[0].deadlineAtMs)
         expect(firstCall[0].deadlineAtMs - Date.now()).toBeLessThanOrEqual(20_000)
-        expect(mocks.recordProviderFailure).toHaveBeenCalledWith('invalid_json', null, expect.any(Number))
+        expect(mocks.recordProviderFailure).toHaveBeenCalledWith(expect.objectContaining({
+            errorCode: 'invalid_json', probeId: null, deadlineAtMs: expect.any(Number),
+        }))
     })
 
     it('counts a malformed first response when repair expires before fetch and never releases its probe', async () => {
@@ -980,7 +1101,9 @@ describe('Anthropic outage handling', () => {
 
         expect(first.body).toMatchObject({ sendText: deterministicFallback, handoff: false })
         expect(mocks.recordProviderFailure).toHaveBeenCalledTimes(1)
-        expect(mocks.recordProviderFailure).toHaveBeenCalledWith('invalid_json', null, expect.any(Number))
+        expect(mocks.recordProviderFailure).toHaveBeenCalledWith(expect.objectContaining({
+            errorCode: 'invalid_json', probeId: null, deadlineAtMs: expect.any(Number),
+        }))
         expect(mocks.releaseProviderProbe).not.toHaveBeenCalled()
         expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
 
@@ -1001,7 +1124,9 @@ describe('Anthropic outage handling', () => {
 
         expect(first.body).toMatchObject({ sendText: deterministicFallback, handoff: false })
         expect(mocks.recordProviderFailure).toHaveBeenCalledTimes(1)
-        expect(mocks.recordProviderFailure).toHaveBeenCalledWith('timeout', null, expect.any(Number))
+        expect(mocks.recordProviderFailure).toHaveBeenCalledWith(expect.objectContaining({
+            errorCode: 'timeout', probeId: null, deadlineAtMs: expect.any(Number),
+        }))
         expect(mocks.releaseProviderProbe).not.toHaveBeenCalled()
         expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
 
@@ -1022,7 +1147,9 @@ describe('Anthropic outage handling', () => {
 
         expect(first.body).toMatchObject({ sendText: deterministicFallback, handoff: false })
         expect(mocks.releaseProviderProbe).toHaveBeenCalledTimes(1)
-        expect(mocks.releaseProviderProbe).toHaveBeenCalledWith('probe-token', expect.any(Number))
+        expect(mocks.releaseProviderProbe).toHaveBeenCalledWith(expect.objectContaining({
+            probeId: 'probe-token', deadlineAtMs: expect.any(Number),
+        }))
         expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
         expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
 
@@ -1046,7 +1173,9 @@ describe('Anthropic outage handling', () => {
 
         expect(first.body).toMatchObject({ sendText: deterministicFallback, stage: 'engaged', handoff: false })
         expect(mocks.releaseProviderProbe).toHaveBeenCalledTimes(1)
-        expect(mocks.releaseProviderProbe).toHaveBeenCalledWith('missing-key-probe', expect.any(Number))
+        expect(mocks.releaseProviderProbe).toHaveBeenCalledWith(expect.objectContaining({
+            probeId: 'missing-key-probe', deadlineAtMs: expect.any(Number),
+        }))
         expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
         expect(mocks.recordProviderSuccess).not.toHaveBeenCalled()
         expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
