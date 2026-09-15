@@ -19,6 +19,8 @@ const request = ({ secret = config.secret, confirm = 'ENSURE_FOLLOWUP_SITE_TEMPL
     },
 )
 
+const allTemplatesRequest = () => request({ confirm: 'ENSURE_SALES_TEMPLATES' })
+
 const response = body => ({ ok: true, json: vi.fn().mockResolvedValue(body) })
 
 beforeEach(() => vi.stubGlobal('fetch', vi.fn()))
@@ -103,6 +105,43 @@ describe('WhatsApp follow-up template bootstrap', () => {
         expect(JSON.stringify(payload)).not.toContain('HEADER')
     })
 
+    it('ensures every fixed follow-up and owner-status template without duplicating an approved one', async () => {
+        fetch
+            .mockResolvedValueOnce(response({ data: [{ id: config.phoneId }] }))
+            .mockResolvedValueOnce(response({ data: [{ name: 'wt_followup_site', language: 'he', status: 'APPROVED' }] }))
+            .mockResolvedValueOnce(response({ id: 'help-template', status: 'PENDING' }))
+            .mockResolvedValueOnce(response({ id: 'offer-template', status: 'PENDING' }))
+            .mockResolvedValueOnce(response({ id: 'close-template', status: 'PENDING' }))
+            .mockResolvedValueOnce(response({ id: 'digest-template', status: 'PENDING' }))
+        const handle = createWhatsAppTemplateBootstrapHandler({
+            getConfig: () => ({ ...config, wabaId: '  pinned-waba-fixture\r\n' }),
+        })
+
+        expect(await handle(allTemplatesRequest())).toEqual({
+            status: 200,
+            body: {
+                ok: true,
+                result: 'TEMPLATES_ENSURED',
+                templates: [
+                    { name: 'wt_followup_site', status: 'APPROVED', result: 'EXISTS' },
+                    { name: 'wt_followup_help', status: 'PENDING', result: 'SUBMITTED' },
+                    { name: 'wt_followup_offer', status: 'PENDING', result: 'SUBMITTED' },
+                    { name: 'wt_followup_close', status: 'PENDING', result: 'SUBMITTED' },
+                    { name: 'wt_daily_digest', status: 'PENDING', result: 'SUBMITTED' },
+                ],
+            },
+        })
+        const submitted = fetch.mock.calls.slice(2).map(([, init]) => JSON.parse(init.body))
+        expect(submitted.map(item => item.name)).toEqual([
+            'wt_followup_help', 'wt_followup_offer', 'wt_followup_close', 'wt_daily_digest',
+        ])
+        expect(submitted.map(item => item.language)).toEqual(['he', 'he', 'he', 'he'])
+        expect(submitted.find(item => item.name === 'wt_followup_offer').components[0].text).toContain('{{3}}')
+        expect(submitted.find(item => item.name === 'wt_daily_digest')).toMatchObject({ category: 'UTILITY' })
+        expect(JSON.stringify(submitted)).not.toContain(config.token)
+        expect(JSON.stringify(submitted)).not.toContain(config.phoneId)
+    })
+
     it('normalizes provider failures to a numeric code without leaking bodies or credentials', async () => {
         fetch.mockResolvedValue({
             ok: false,
@@ -165,7 +204,7 @@ describe('WhatsApp follow-up template bootstrap', () => {
             .mockResolvedValueOnce(response({ data: [{ id: config.phoneId }] }))
             .mockResolvedValueOnce(response({ data: [{ name: 'wt_followup_site', language: 'he', status: 'APPROVED' }] }))
         const handle = createWhatsAppTemplateBootstrapHandler({
-            getConfig: () => ({ ...config, wabaId: 'pinned-waba-fixture' }),
+            getConfig: () => ({ ...config, wabaId: '  pinned-waba-fixture\r\n' }),
         })
 
         expect(await handle(request())).toEqual({

@@ -3,26 +3,76 @@ import { timingSafeEqual } from 'node:crypto'
 const GRAPH_BASE = 'https://graph.facebook.com/v25.0'
 const GRAPH_TIMEOUT_MS = 7_500
 const CONFIRMATION = 'ENSURE_FOLLOWUP_SITE_TEMPLATE'
+const ALL_TEMPLATES_CONFIRMATION = 'ENSURE_SALES_TEMPLATES'
 const TEMPLATE_NAME = 'wt_followup_site'
 const TEMPLATE_LANGUAGE = 'he'
 const SAFE_STATUSES = new Set(['APPROVED', 'PENDING', 'REJECTED', 'PAUSED', 'DISABLED', 'IN_APPEAL'])
 
-const TEMPLATE_PAYLOAD = Object.freeze({
-    name: TEMPLATE_NAME,
-    language: TEMPLATE_LANGUAGE,
-    category: 'MARKETING',
-    components: [
-        {
+const TEMPLATE_DEFINITIONS = Object.freeze([
+    Object.freeze({
+        name: TEMPLATE_NAME,
+        language: TEMPLATE_LANGUAGE,
+        category: 'MARKETING',
+        components: [
+            {
+                type: 'BODY',
+                text: '{{1}}, רציתי לשלוח לך שוב דרך קצרה לראות איך ספר הברכות עובד. הסרטון והפרטים מחכים באתר: https://weddingtales.co.il',
+                example: { body_text: [['משפחה יקרה']] },
+            },
+            {
+                type: 'BUTTONS',
+                buttons: [{ type: 'URL', text: 'לצפייה בפרטים', url: 'https://weddingtales.co.il' }],
+            },
+        ],
+    }),
+    Object.freeze({
+        name: 'wt_followup_help',
+        language: TEMPLATE_LANGUAGE,
+        category: 'MARKETING',
+        components: [{
             type: 'BODY',
-            text: '{{1}}, רציתי לשלוח לך שוב דרך קצרה לראות איך ספר הברכות עובד. הסרטון והפרטים מחכים באתר: https://weddingtales.co.il',
+            text: '{{1}}, רציתי לבדוק אם עצרה אתכם שאלה על החבילה, תקלה בתשלום או פשוט התזמון. אפשר לענות לי כאן במשפט אחד.',
             example: { body_text: [['משפחה יקרה']] },
-        },
-        {
-            type: 'BUTTONS',
-            buttons: [{ type: 'URL', text: 'לצפייה בפרטים', url: 'https://weddingtales.co.il' }],
-        },
-    ],
-})
+        }],
+    }),
+    Object.freeze({
+        name: 'wt_followup_offer',
+        language: TEMPLATE_LANGUAGE,
+        category: 'MARKETING',
+        components: [{
+            type: 'BODY',
+            text: '{{1}}, שמרנו לכם את הקוד {{2}} עד {{3}}. אפשר לראות את כל הפרטים ולהשלים הזמנה כאן: https://weddingtales.co.il',
+            example: { body_text: [['משפחה יקרה', 'TALES48', '17.9.2026']] },
+        }],
+    }),
+    Object.freeze({
+        name: 'wt_followup_close',
+        language: TEMPLATE_LANGUAGE,
+        category: 'MARKETING',
+        components: [{
+            type: 'BODY',
+            text: '{{1}}, סוגר כאן את המעקב כדי לא להציף. אם תרצו לחזור לספר הברכות בהמשך, פשוט כתבו לנו כאן.',
+            example: { body_text: [['משפחה יקרה']] },
+        }],
+    }),
+    Object.freeze({
+        name: 'wt_daily_digest',
+        language: TEMPLATE_LANGUAGE,
+        category: 'UTILITY',
+        components: [{
+            type: 'BODY',
+            text: 'עדכון Wedding Tales:\n{{1}}\n{{2}}\n{{3}}\n{{4}}',
+            example: { body_text: [[
+                'דוח מכירות יומי',
+                '0 מתוך 2 מכירות מאומתות היום',
+                'קליטה: תקין | מסירה: תקין | פולואפים: תקין',
+                'ממשיכים לאסוף ראיות לפני שינוי הקצאה',
+            ]] },
+        }],
+    }),
+])
+
+const TEMPLATE_PAYLOAD = TEMPLATE_DEFINITIONS[0]
 
 function readConfig() {
     return {
@@ -56,12 +106,19 @@ function safeMetaCode(body) {
 
 export function createWhatsAppTemplateBootstrapHandler({ fetchFn = (...args) => fetch(...args), getConfig = readConfig } = {}) {
     return async function handleWhatsAppTemplateBootstrap(request) {
-        const config = getConfig()
+        const suppliedConfig = getConfig()
+        const config = {
+            ...suppliedConfig,
+            token: typeof suppliedConfig?.token === 'string' ? suppliedConfig.token.trim() : '',
+            phoneId: typeof suppliedConfig?.phoneId === 'string' ? suppliedConfig.phoneId.trim() : '',
+            wabaId: typeof suppliedConfig?.wabaId === 'string' ? suppliedConfig.wabaId.trim() : '',
+        }
         if (!sameSecret(request.headers.get('x-wt-secret'), config.secret)) {
             return reply(401, { ok: false, error: 'UNAUTHORIZED' })
         }
         const body = await request.json().catch(() => null)
-        if (body?.confirm !== CONFIRMATION) {
+        const ensureAll = body?.confirm === ALL_TEMPLATES_CONFIRMATION
+        if (body?.confirm !== CONFIRMATION && !ensureAll) {
             return reply(400, { ok: false, error: 'CONFIRMATION_REQUIRED' })
         }
         if (!config.token || !config.phoneId) {
@@ -139,6 +196,36 @@ export function createWhatsAppTemplateBootstrapHandler({ fetchFn = (...args) => 
         const templates = Array.isArray(existing.body?.data) ? existing.body.data : null
         if (!templates) return reply(502, { ok: false, error: 'META_RESPONSE_INVALID' })
         const match = templates.find(item => item?.name === TEMPLATE_NAME && item?.language === TEMPLATE_LANGUAGE)
+        if (ensureAll) {
+            const results = []
+            for (const definition of TEMPLATE_DEFINITIONS) {
+                const existingTemplate = templates.find(item => (
+                    item?.name === definition.name && item?.language === definition.language
+                ))
+                if (existingTemplate) {
+                    results.push({
+                        name: definition.name,
+                        status: templateStatus(existingTemplate.status),
+                        result: 'EXISTS',
+                    })
+                    continue
+                }
+                const submitted = await graph(`${encodeURIComponent(wabaId)}/message_templates`, {
+                    method: 'POST',
+                    body: JSON.stringify(definition),
+                })
+                if (submitted.error) return submitted.error
+                if (typeof submitted.body?.id !== 'string' || !submitted.body.id) {
+                    return reply(502, { ok: false, error: 'META_RESPONSE_INVALID' })
+                }
+                results.push({
+                    name: definition.name,
+                    status: templateStatus(submitted.body.status || 'PENDING'),
+                    result: 'SUBMITTED',
+                })
+            }
+            return reply(200, { ok: true, result: 'TEMPLATES_ENSURED', templates: results })
+        }
         if (match) {
             return reply(200, {
                 ok: true,
