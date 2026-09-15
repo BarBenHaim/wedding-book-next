@@ -23,11 +23,12 @@ import { normalizePhone } from './agent'
 import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerCommand, isTestPhone, MAX_TURNS, HUMAN_PAUSE_HOURS } from './leadsCore'
 import { isoInIsrael } from './leadsView'
 import { assertCompletableInboundOutcome, assertInboundClaimToken, decideInboundCompletion, INBOUND_LEASE_MS, sanitizeInboundOutcome, startInboundClaim } from './inboundEventsCore'
-import { reserveHalfOpenProbe, resolveProviderFailure, resolveProviderSuccess, sanitizeBreakerRuntimeState } from './circuitBreaker'
+import { providerCircuitRuntimeId, reserveHalfOpenProbe, resolveProviderFailure, resolveProviderSuccess, sanitizeBreakerRuntimeState } from './circuitBreaker'
 import { createOutboundId, DELIVERY_ERROR_CODES, DELIVERY_REQUEST_LEASE_MS, decideDeliveryTransition, deliveryEventFingerprint, deliveryEventLedgerId, isDeliveryPending, providerMessageCorrelationId } from './delivery'
 import { isDueFollowUpCandidate, pendingFollowUpStatus, selectDueFollowUps } from './followupPolicy'
 import { isDemoEvidenceContent } from './followupEvidence'
 import { normalizeOpeningVariantId } from './openingExperiment'
+import { assignModelArm } from './modelExperiment'
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
 // importing this file boots the Admin SDK, which needs credentials.
@@ -54,6 +55,13 @@ export function inboundEventRef(eventId) {
 
 function anthropicRuntimeRef() {
     return adminDb.collection(RUNTIME_COLLECTION).doc(ANTHROPIC_RUNTIME_ID)
+}
+
+function providerRuntimeRef(identity = null) {
+    if (identity?.provider && identity?.model) {
+        return adminDb.collection(RUNTIME_COLLECTION).doc(providerCircuitRuntimeId(identity))
+    }
+    return anthropicRuntimeRef()
 }
 
 function deliveryEventRef(outboundId) {
@@ -185,9 +193,9 @@ export async function readSalesHealthRuntime() {
  * circuit needs only a transaction read; a half-open circuit writes a short
  * lease, so exactly one concurrent request becomes the probe.
  */
-export async function acquireProviderCircuit({ deadlineAtMs } = {}) {
+export async function acquireProviderCircuit({ provider, model, deadlineAtMs } = {}) {
     assertBeforeDeadline(deadlineAtMs)
-    const runtimeRef = anthropicRuntimeRef()
+    const runtimeRef = providerRuntimeRef({ provider, model })
     const probeId = crypto.randomUUID()
     return adminDb.runTransaction(async tx => {
         assertBeforeDeadline(deadlineAtMs)
@@ -207,9 +215,15 @@ export async function acquireProviderCircuit({ deadlineAtMs } = {}) {
     })
 }
 
-export async function recordProviderFailure(errorCode, probeId = null, deadlineAtMs = null) {
+export async function recordProviderFailure(errorOrOptions, probeId = null, deadlineAtMs = null) {
+    const options = errorOrOptions && typeof errorOrOptions === 'object'
+        ? errorOrOptions
+        : { errorCode: errorOrOptions, probeId, deadlineAtMs }
+    const errorCode = options.errorCode
+    probeId = options.probeId || null
+    deadlineAtMs = options.deadlineAtMs ?? null
     assertBeforeDeadline(deadlineAtMs)
-    const runtimeRef = anthropicRuntimeRef()
+    const runtimeRef = providerRuntimeRef(options)
     return adminDb.runTransaction(async tx => {
         assertBeforeDeadline(deadlineAtMs)
         const snap = await tx.get(runtimeRef)
@@ -222,9 +236,14 @@ export async function recordProviderFailure(errorCode, probeId = null, deadlineA
     })
 }
 
-export async function recordProviderSuccess(probeId = null, deadlineAtMs = null) {
+export async function recordProviderSuccess(probeOrOptions = null, deadlineAtMs = null) {
+    const options = probeOrOptions && typeof probeOrOptions === 'object'
+        ? probeOrOptions
+        : { probeId: probeOrOptions, deadlineAtMs }
+    const probeId = options.probeId || null
+    deadlineAtMs = options.deadlineAtMs ?? null
     assertBeforeDeadline(deadlineAtMs)
-    const runtimeRef = anthropicRuntimeRef()
+    const runtimeRef = providerRuntimeRef(options)
     return adminDb.runTransaction(async tx => {
         assertBeforeDeadline(deadlineAtMs)
         const snap = await tx.get(runtimeRef)
@@ -237,10 +256,15 @@ export async function recordProviderSuccess(probeId = null, deadlineAtMs = null)
     })
 }
 
-export async function releaseProviderProbe(probeId, deadlineAtMs = null) {
+export async function releaseProviderProbe(probeOrOptions, deadlineAtMs = null) {
+    const options = probeOrOptions && typeof probeOrOptions === 'object'
+        ? probeOrOptions
+        : { probeId: probeOrOptions, deadlineAtMs }
+    const probeId = options.probeId || null
+    deadlineAtMs = options.deadlineAtMs ?? null
     if (!probeId) return { action: 'released' }
     assertBeforeDeadline(deadlineAtMs)
-    const runtimeRef = anthropicRuntimeRef()
+    const runtimeRef = providerRuntimeRef(options)
     return adminDb.runTransaction(async tx => {
         const snap = await tx.get(runtimeRef)
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
@@ -248,6 +272,70 @@ export async function releaseProviderProbe(probeId, deadlineAtMs = null) {
         if (stored.halfOpenProbeId !== probeId) return { action: 'stale' }
         tx.set(runtimeRef, { ...stored, halfOpenProbeId: null, halfOpenLeaseUntilMs: null, updatedAt: FieldValue.serverTimestamp() }, { merge: false })
         return { action: 'released' }
+    })
+}
+
+function modelAssignmentFields(value = {}) {
+    return {
+        experimentId: String(value.experimentId || ''),
+        experimentRevision: Number(value.experimentRevision),
+        armId: String(value.armId || ''),
+        armRevision: Number(value.armRevision),
+        provider: String(value.provider || ''),
+        model: String(value.model || ''),
+    }
+}
+
+function matchingModelAssignment(stored, experiment) {
+    const candidate = modelAssignmentFields(stored)
+    if (candidate.experimentId !== String(experiment?.id || '')
+        || candidate.experimentRevision !== Number(experiment?.revision)) return null
+    const arm = (Array.isArray(experiment?.arms) ? experiment.arms : []).find(row => (
+        row?.id === candidate.armId
+        && Number(row?.revision) === candidate.armRevision
+        && row?.provider === candidate.provider
+        && row?.model === candidate.model
+    ))
+    return arm ? candidate : null
+}
+
+/**
+ * Assign one experiment arm under the same durable lease that owns the
+ * inbound event. Retries see the stored assignment; stale workers write
+ * nothing. The assignment contains experiment metadata only.
+ */
+export async function resolveOrEnrollModelAssignment({
+    eventId, leadId, experiment, claimToken, generation, deadlineAtMs = null,
+}) {
+    assertBeforeDeadline(deadlineAtMs)
+    const safeLeadId = String(leadId || '')
+    if (!safeLeadId || safeLeadId.length > 160 || safeLeadId.includes('/')) throw new Error('INVALID_MODEL_LEAD_ID')
+    const ownedClaimToken = assertInboundClaimToken(claimToken)
+    const expectedGeneration = Number(generation)
+    if (!Number.isInteger(expectedGeneration) || expectedGeneration < 1) throw new Error('INVALID_MODEL_CLAIM_GENERATION')
+    const eventRef = inboundEventRef(eventId)
+    const leadRef = ref(safeLeadId)
+
+    return adminDb.runTransaction(async tx => {
+        assertBeforeDeadline(deadlineAtMs)
+        const [eventSnap, leadSnap] = await Promise.all([tx.get(eventRef), tx.get(leadRef)])
+        if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
+        const event = eventSnap.exists ? eventSnap.data() : null
+        const claim = decideInboundCompletion(event, ownedClaimToken, Date.now())
+        if (claim.action !== 'complete' || Number(event?.claimGeneration) !== expectedGeneration) {
+            return { action: 'stale' }
+        }
+        const lead = leadSnap.exists ? leadSnap.data() || {} : {}
+        const existing = matchingModelAssignment(lead.modelAssignment, experiment)
+        if (existing) return { action: 'existing', assignment: existing }
+
+        const assignment = modelAssignmentFields(assignModelArm(experiment, safeLeadId))
+        assertBeforeDeadline(deadlineAtMs)
+        tx.set(leadRef, {
+            modelAssignment: { ...assignment, assignedAt: FieldValue.serverTimestamp() },
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true })
+        return { action: 'assigned', assignment }
     })
 }
 

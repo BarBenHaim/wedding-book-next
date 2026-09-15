@@ -93,6 +93,7 @@ import {
     releaseProviderProbe,
 } from '@/lib/salesAgent/leads'
 import { createOutboundId } from '@/lib/salesAgent/delivery'
+import { providerCircuitRuntimeId } from '@/lib/salesAgent/circuitBreaker'
 
 const RUNTIME = 'sales_runtime/anthropic'
 const EVENT = 'sales_inbound_events/event-token'
@@ -143,6 +144,23 @@ afterEach(() => {
 })
 
 describe('Firestore provider acquire deadline fence', () => {
+    it('opens only the failing provider and model circuit', async () => {
+        const gemini = { provider: 'gemini', model: 'gemini-3.6-flash' }
+        const claude = { provider: 'anthropic', model: 'claude-sonnet-4-5' }
+
+        await recordProviderFailure({ ...gemini, errorCode: 'timeout' })
+        await recordProviderFailure({ ...gemini, errorCode: 'timeout' })
+        await recordProviderFailure({ ...gemini, errorCode: 'timeout' })
+
+        await expect(acquireProviderCircuit(gemini)).resolves.toEqual({ allow: false, mode: 'open' })
+        await expect(acquireProviderCircuit(claude)).resolves.toEqual({ allow: true, mode: 'closed' })
+        expect(store.get(`sales_runtime/${providerCircuitRuntimeId(gemini)}`)).toMatchObject({
+            consecutiveFailures: 3,
+            lastErrorCode: 'timeout',
+        })
+        expect(store.get(`sales_runtime/${providerCircuitRuntimeId(claude)}`)).toBeUndefined()
+    })
+
     it('allows exactly one concurrent half-open acquire', async () => {
         store.set(RUNTIME, { consecutiveFailures: 3, openUntilMs: 9_999 })
 

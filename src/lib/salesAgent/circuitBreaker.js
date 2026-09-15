@@ -1,4 +1,6 @@
-// Deterministic state transitions for the provider-wide Anthropic circuit.
+import crypto from 'node:crypto'
+
+// Deterministic state transitions for a provider/model-scoped circuit.
 // This module deliberately has no Firebase dependency so the critical timing
 // and privacy rules can be exercised without credentials or network access.
 
@@ -18,6 +20,16 @@ export const PROVIDER_PATH_DEADLINE_MS = INBOUND_ROUTE_DEADLINE_MS - FALLBACK_CO
 export const HALF_OPEN_LEASE_MS = 23_000
 
 const ERROR_CODES = new Set(['timeout', 'rate_limit', 'low_credit', 'invalid_json', 'provider_error'])
+
+export function providerCircuitRuntimeId({ provider, model } = {}) {
+    const cleanProvider = String(provider || '').trim().toLowerCase()
+    const cleanModel = String(model || '').trim()
+    if (!/^[a-z][a-z0-9_-]{1,31}$/.test(cleanProvider) || !cleanModel || cleanModel.length > 120) {
+        throw new Error('INVALID_PROVIDER_CIRCUIT_IDENTITY')
+    }
+    const digest = crypto.createHash('sha256').update(`${cleanProvider}:${cleanModel}`).digest('hex').slice(0, 32)
+    return `provider_${digest}`
+}
 
 export function normalizeProviderError(error) {
     const given = String(error?.errorCode || error?.code || '').toLowerCase()

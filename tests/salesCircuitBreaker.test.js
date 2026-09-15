@@ -3,6 +3,7 @@ import {
     breakerDecision, nextFailureState, successState, reserveHalfOpenProbe,
     normalizeProviderError, resolveProviderFailure, resolveProviderSuccess,
     HALF_OPEN_LEASE_MS, PROVIDER_PATH_DEADLINE_MS, sanitizeBreakerRuntimeState,
+    providerCircuitRuntimeId,
 } from '../src/lib/salesAgent/circuitBreaker'
 
 describe('Anthropic circuit breaker', () => {
@@ -68,6 +69,16 @@ describe('Anthropic circuit breaker', () => {
             halfOpenProbeId: null,
             halfOpenLeaseUntilMs: null,
         })
+    })
+
+    it('creates stable opaque runtime ids scoped to provider and model', () => {
+        const gemini = providerCircuitRuntimeId({ provider: 'gemini', model: 'gemini-3.6-flash' })
+        const claude = providerCircuitRuntimeId({ provider: 'anthropic', model: 'claude-sonnet-4-5' })
+
+        expect(gemini).toBe(providerCircuitRuntimeId({ provider: 'gemini', model: 'gemini-3.6-flash' }))
+        expect(gemini).not.toBe(claude)
+        expect(gemini).toMatch(/^provider_[a-f0-9]{32}$/)
+        expect(gemini).not.toContain('gemini')
     })
 
     it.each([
