@@ -93,7 +93,7 @@ import {
     releaseProviderProbe,
 } from '@/lib/salesAgent/leads'
 import { createOutboundId } from '@/lib/salesAgent/delivery'
-import { providerCircuitRuntimeId } from '@/lib/salesAgent/circuitBreaker'
+import { providerCircuitRuntimeId } from '@/lib/salesAgent/circuitIdentity'
 
 const RUNTIME = 'sales_runtime/anthropic'
 const EVENT = 'sales_inbound_events/event-token'

@@ -3,8 +3,8 @@ import {
     breakerDecision, nextFailureState, successState, reserveHalfOpenProbe,
     normalizeProviderError, resolveProviderFailure, resolveProviderSuccess,
     HALF_OPEN_LEASE_MS, PROVIDER_PATH_DEADLINE_MS, sanitizeBreakerRuntimeState,
-    providerCircuitRuntimeId,
 } from '../src/lib/salesAgent/circuitBreaker'
+import { providerCircuitRuntimeId } from '../src/lib/salesAgent/circuitIdentity'
 
 describe('Anthropic circuit breaker', () => {
     it('opens after three consecutive failures for five minutes', () => {
