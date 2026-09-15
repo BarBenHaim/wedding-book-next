@@ -5,6 +5,7 @@ import { isOpeningVariantId } from './openingExperiment'
 import { bindOpeningVariables } from './salesVariables'
 
 const MAX_OPENING_VARIANT_LINEAGES = 512
+const MAX_MODEL_ARM_LINEAGES = 64
 
 const activeRef = () => adminDb.collection('sales_agent_settings').doc('active')
 const historyRef = revision => adminDb.collection('sales_agent_settings_history').doc(`revision-${revision}`)
@@ -75,6 +76,78 @@ function applyOpeningVariantRevisions(currentExperiment, nextExperiment, storedL
     return {
         openingExperiment: { ...nextExperiment, variants },
         openingVariantLineages,
+    }
+}
+
+const modelArmSignature = arm => JSON.stringify({ provider: arm?.provider, model: arm?.model })
+
+const modelExperimentSignature = experiment => JSON.stringify({
+    id: experiment?.id,
+    enabled: experiment?.enabled === true,
+    targetVerifiedSalesPerDay: Number(experiment?.targetVerifiedSalesPerDay),
+    minimumDeliveredPerArm: Number(experiment?.minimumDeliveredPerArm),
+    minimumDays: Number(experiment?.minimumDays),
+    championArmId: experiment?.championArmId,
+    arms: (Array.isArray(experiment?.arms) ? experiment.arms : []).map(arm => ({
+        id: arm.id,
+        provider: arm.provider,
+        model: arm.model,
+        weight: Number(arm.weight),
+        enabled: arm.enabled === true,
+    })),
+})
+
+function trustedModelArmLineages(stored, currentExperiment) {
+    const lineages = {}
+    if (stored && typeof stored === 'object' && !Array.isArray(stored)) {
+        for (const [id, rawRevision] of Object.entries(stored)) {
+            const revision = Number(rawRevision)
+            if (/^[a-z][a-z0-9_-]{0,63}$/.test(id) && Number.isInteger(revision) && revision >= 1) {
+                lineages[id] = revision
+            }
+        }
+    }
+    for (const arm of Array.isArray(currentExperiment?.arms) ? currentExperiment.arms : []) {
+        const revision = Number(arm?.revision)
+        if (!/^[a-z][a-z0-9_-]{0,63}$/.test(String(arm?.id || '')) || !Number.isInteger(revision) || revision < 1) continue
+        lineages[arm.id] = Math.max(lineages[arm.id] || 0, revision)
+    }
+    return lineages
+}
+
+function applyModelExperimentRevisions(currentExperiment, nextExperiment, storedLineages) {
+    const sameExperiment = currentExperiment?.id === nextExperiment?.id
+    const currentById = new Map((sameExperiment && Array.isArray(currentExperiment?.arms) ? currentExperiment.arms : [])
+        .map(arm => [arm.id, arm]))
+    const modelArmLineages = trustedModelArmLineages(storedLineages, currentExperiment)
+    const arms = nextExperiment.arms.map(arm => {
+        const current = currentById.get(arm.id)
+        const priorRevision = Math.max(modelArmLineages[arm.id] || 0, Number(current?.revision) || 0)
+        const changed = !current || modelArmSignature(current) !== modelArmSignature(arm)
+        const revision = changed ? priorRevision + 1 : Math.max(1, priorRevision)
+        modelArmLineages[arm.id] = revision
+        return { ...arm, revision }
+    })
+    if (Object.keys(modelArmLineages).length > MAX_MODEL_ARM_LINEAGES) throw new Error('MODEL_ARM_LINEAGE_LIMIT')
+    const currentRevision = sameExperiment ? Math.max(1, Number(currentExperiment?.revision) || 1) : 0
+    const changed = !sameExperiment || modelExperimentSignature(currentExperiment) !== modelExperimentSignature({ ...nextExperiment, arms })
+    return {
+        modelExperiment: { ...nextExperiment, arms, revision: changed ? currentRevision + 1 : currentRevision },
+        modelArmLineages,
+    }
+}
+
+const PROVIDER_CREDENTIALS = {
+    anthropic: 'ANTHROPIC_API_KEY',
+    openai: 'OPENAI_API_KEY',
+    gemini: 'GEMINI_API_KEY',
+}
+
+function assertModelExperimentCredentials(experiment) {
+    if (experiment?.enabled !== true) return
+    for (const arm of experiment.arms.filter(row => row.enabled && row.weight > 0)) {
+        const key = PROVIDER_CREDENTIALS[arm.provider]
+        if (!key || !String(process.env[key] || '').trim()) throw new Error('MODEL_ARM_CREDENTIAL_MISSING')
     }
 }
 
@@ -153,6 +226,7 @@ export async function publishSalesSettingsSnapshot(input, {
             revision: currentRevision + 1,
             fallbackModel: DEFAULT_SALES_SETTINGS.fallbackModel,
             openingVariantLineages: versioned.openingVariantLineages,
+            modelArmLineages: trustedModelArmLineages(current?.modelArmLineages, normalized.modelExperiment),
             updatedAt: timestamp,
             updatedBy: String(updatedBy || 'system').slice(0, 160),
         }
@@ -192,7 +266,14 @@ export async function saveSalesSettings(input, { updatedBy, registeredMediaKeys 
         if (Number(input?.revision) !== currentRevision) throw new Error('STALE_REVISION')
 
         const migratedCurrent = resolveSalesSettings(current, { registeredMediaKeys })
-        const normalized = normalizeSalesSettings({ ...migratedCurrent, ...input, revision: currentRevision }, { registeredMediaKeys })
+        const normalizedInput = normalizeSalesSettings({ ...migratedCurrent, ...input, revision: currentRevision }, { registeredMediaKeys })
+        const modelVersioned = applyModelExperimentRevisions(
+            migratedCurrent.modelExperiment,
+            normalizedInput.modelExperiment,
+            current?.modelArmLineages,
+        )
+        const normalized = { ...normalizedInput, modelExperiment: modelVersioned.modelExperiment }
+        assertModelExperimentCredentials(normalized.modelExperiment)
         const openingVariantLineages = trustedOpeningVariantLineages(
             current?.openingVariantLineages,
             migratedCurrent.openingExperiment,
@@ -205,6 +286,7 @@ export async function saveSalesSettings(input, { updatedBy, registeredMediaKeys 
             revision: currentRevision + 1,
             fallbackModel: DEFAULT_SALES_SETTINGS.fallbackModel,
             openingVariantLineages,
+            modelArmLineages: modelVersioned.modelArmLineages,
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: String(updatedBy || 'system').slice(0, 160),
         }
@@ -259,12 +341,20 @@ export async function restoreSalesSettingsRevision(revision, {
             normalized.openingExperiment,
             current?.openingVariantLineages,
         )
+        const modelVersioned = applyModelExperimentRevisions(
+            migratedCurrent.modelExperiment,
+            normalized.modelExperiment,
+            current?.modelArmLineages,
+        )
+        assertModelExperimentCredentials(modelVersioned.modelExperiment)
         const next = {
             ...normalized,
             openingExperiment: versioned.openingExperiment,
+            modelExperiment: modelVersioned.modelExperiment,
             revision: currentRevision + 1,
             fallbackModel: DEFAULT_SALES_SETTINGS.fallbackModel,
             openingVariantLineages: versioned.openingVariantLineages,
+            modelArmLineages: modelVersioned.modelArmLineages,
             restoredFromRevision: restoreRevision,
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: String(updatedBy || 'system').slice(0, 160),

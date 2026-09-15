@@ -27,6 +27,16 @@ describe('sales agent settings', () => {
                     expect.objectContaining({ id: 'C' }),
                 ]),
             },
+            modelExperiment: {
+                enabled: false,
+                targetVerifiedSalesPerDay: 2,
+                minimumDeliveredPerArm: 30,
+                minimumDays: 7,
+                arms: expect.arrayContaining([
+                    expect.objectContaining({ provider: 'gemini', model: 'gemini-3.6-flash' }),
+                    expect.objectContaining({ provider: 'anthropic', model: 'claude-sonnet-4-5' }),
+                ]),
+            },
         })
         expect(MODEL_REGISTRY.every(row => !('apiKey' in row))).toBe(true)
         expect(MODEL_REGISTRY).toContainEqual(expect.objectContaining({ id: 'gemini-3.6-flash', provider: 'gemini' }))
@@ -76,6 +86,7 @@ describe('sales agent settings', () => {
                 enabled: true,
                 variants: [expect.objectContaining({ id: 'A', revision: 1 })],
             }),
+            modelExperiment: DEFAULT_SALES_SETTINGS.modelExperiment,
         })
         expect(JSON.stringify(normalized)).not.toContain('ignore policy')
         expect(JSON.stringify(normalized)).not.toContain('attacker-model')
@@ -102,6 +113,20 @@ describe('sales agent settings', () => {
             provider: 'gemini',
             model: 'claude-sonnet-4-5',
         })).toThrow('INVALID_MODEL')
+    })
+
+    it('normalizes the approved model experiment through the server model registry', () => {
+        const modelExperiment = {
+            id: 'model-2026-09', revision: 4, enabled: true,
+            targetVerifiedSalesPerDay: 2, minimumDeliveredPerArm: 30, minimumDays: 7,
+            championArmId: 'gemini',
+            arms: [
+                { id: 'gemini', provider: 'gemini', model: 'gemini-3.6-flash', weight: 80, enabled: true, revision: 2 },
+                { id: 'claude', provider: 'anthropic', model: 'claude-sonnet-4-5', weight: 20, enabled: true, revision: 1 },
+            ],
+        }
+
+        expect(normalizeSalesSettings({ revision: 1, modelExperiment }).modelExperiment).toEqual(modelExperiment)
     })
 
     it('rejects invalid provider, model, revision, and oversized instructions', () => {

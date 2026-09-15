@@ -94,4 +94,13 @@ describe('sales agent settings route', () => {
         expect(response.status).toBe(409)
         expect(await response.json()).toEqual({ error: 'STALE_REVISION' })
     })
+
+    it('returns a fixed validation error when an active arm has no server credential', async () => {
+        mocks.saveSalesSettings.mockRejectedValue(new Error('MODEL_ARM_CREDENTIAL_MISSING'))
+
+        const response = await PUT(request('PUT', { revision: 3, modelExperiment: settings.modelExperiment }))
+
+        expect(response.status).toBe(400)
+        expect(await response.json()).toEqual({ error: 'MODEL_ARM_CREDENTIAL_MISSING' })
+    })
 })

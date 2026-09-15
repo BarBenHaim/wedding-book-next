@@ -1,5 +1,6 @@
 import { ACTIVE_VARIANT_IDS } from './experiments'
 import { DEFAULT_OPENING_EXPERIMENT, normalizeOpeningExperiment } from './openingExperiment'
+import { normalizeModelExperiment } from './modelExperiment'
 
 export const MODEL_REGISTRY = Object.freeze([
     { id: 'claude-sonnet-4-5', provider: 'anthropic', label: 'Claude Sonnet 4.5', role: 'primary' },
@@ -15,6 +16,26 @@ const FALLBACK_MODEL = 'claude-haiku-4-5'
 const MAX_INSTRUCTIONS = 4_000
 const MAX_CHANGE_NOTE = 240
 const MAX_OPENING_TEXT = 1_500
+
+export const DEFAULT_MODEL_EXPERIMENT = Object.freeze({
+    id: 'model-control',
+    revision: 1,
+    enabled: false,
+    targetVerifiedSalesPerDay: 2,
+    minimumDeliveredPerArm: 30,
+    minimumDays: 7,
+    championArmId: 'gemini',
+    arms: Object.freeze([
+        Object.freeze({
+            id: 'gemini', provider: 'gemini', model: 'gemini-3.6-flash',
+            weight: 80, enabled: true, revision: 1,
+        }),
+        Object.freeze({
+            id: 'claude', provider: 'anthropic', model: 'claude-sonnet-4-5',
+            weight: 20, enabled: true, revision: 1,
+        }),
+    ]),
+})
 
 export const DEFAULT_OPENING_TEXT = `היי, כיף שכתבת 😊
 Wedding Tales הוא ספר ברכות מודפס שנוצר מהברכות והתמונות שהאורחים מעלים מהטלפון.
@@ -37,6 +58,7 @@ export const DEFAULT_SALES_SETTINGS = Object.freeze({
     activeOpeningIds: [...ACTIVE_VARIANT_IDS],
     openingMediaSequence: [],
     openingExperiment: DEFAULT_OPENING_EXPERIMENT,
+    modelExperiment: DEFAULT_MODEL_EXPERIMENT,
     updatedAt: null,
     updatedBy: null,
     changeNote: '',
@@ -113,6 +135,10 @@ export function normalizeSalesSettings(input = {}, {
             ])],
         },
     )
+    const modelExperiment = normalizeModelExperiment(
+        input.modelExperiment === undefined ? DEFAULT_MODEL_EXPERIMENT : input.modelExperiment,
+        MODEL_REGISTRY,
+    )
 
     return {
         revision,
@@ -125,6 +151,7 @@ export function normalizeSalesSettings(input = {}, {
         activeOpeningIds,
         openingMediaSequence,
         openingExperiment,
+        modelExperiment,
         changeNote: cleanText(input.changeNote, MAX_CHANGE_NOTE),
     }
 }

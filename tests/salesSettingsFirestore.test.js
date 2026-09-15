@@ -44,7 +44,12 @@ const dynamicVariant = (id, { label = 'מסלול משוכפל', revision = 1 } 
     blocks: [{ id: `${id}-stop`, type: 'stop' }],
 })
 
-beforeEach(() => store.reset())
+beforeEach(() => {
+    store.reset()
+    delete process.env.GEMINI_API_KEY
+    delete process.env.ANTHROPIC_API_KEY
+    delete process.env.OPENAI_API_KEY
+})
 
 describe('sales settings Firestore store', () => {
     it('reads a safe default without creating a document', async () => {
@@ -352,6 +357,68 @@ describe('sales settings Firestore store', () => {
         await expect(saveSalesSettings({ revision: 12, openingExperiment: bypass }, { updatedBy: 'owner@example.test' }))
             .rejects.toThrow('OPENING_EXPERIMENT_REQUIRES_PUBLISH')
         expect(store.get('sales_agent_settings/active').openingExperiment).toEqual(currentExperiment)
+    })
+
+    it('owns model arm and experiment revisions across removal, re-addition, and client jumps', async () => {
+        const original = {
+            id: 'model-2026-09', revision: 3, enabled: false,
+            targetVerifiedSalesPerDay: 2, minimumDeliveredPerArm: 30, minimumDays: 7,
+            championArmId: 'gemini',
+            arms: [
+                { id: 'gemini', provider: 'gemini', model: 'gemini-3.6-flash', weight: 100, enabled: true, revision: 2 },
+                { id: 'claude', provider: 'anthropic', model: 'claude-sonnet-4-5', weight: 0, enabled: false, revision: 4 },
+            ],
+        }
+        store.set('sales_agent_settings/active', {
+            revision: 20, enabled: true, mode: 'full_sales', provider: 'gemini', model: 'gemini-3.6-flash',
+            openingText: 'פתיחה', activeOpeningIds: ['answer_first'], openingMediaSequence: [],
+            modelExperiment: original, modelArmLineages: { gemini: 2, claude: 4 },
+        })
+
+        const removed = await saveSalesSettings({
+            revision: 20,
+            modelExperiment: { ...original, revision: 999, arms: [original.arms[0]] },
+        }, { updatedBy: 'owner@example.test' })
+        expect(removed.modelExperiment).toMatchObject({ revision: 4 })
+        expect(removed.modelExperiment.arms[0]).toMatchObject({ id: 'gemini', revision: 2 })
+        expect(store.get('sales_agent_settings/active').modelArmLineages).toEqual({ gemini: 2, claude: 4 })
+
+        const readdedInput = {
+            ...original, revision: 999, championArmId: 'gemini',
+            arms: [
+                { ...original.arms[0], revision: 999 },
+                { ...original.arms[1], model: 'claude-haiku-4-5', revision: 999 },
+            ],
+        }
+        const readded = await saveSalesSettings({
+            revision: 21, modelExperiment: readdedInput,
+        }, { updatedBy: 'owner@example.test' })
+
+        expect(readded.modelExperiment.revision).toBe(5)
+        expect(readded.modelExperiment.arms.map(row => [row.id, row.revision])).toEqual([
+            ['gemini', 2], ['claude', 5],
+        ])
+    })
+
+    it('rejects an enabled model arm without its server credential before any settings write', async () => {
+        store.set('sales_agent_settings/active', {
+            revision: 30, enabled: true, mode: 'full_sales', provider: 'gemini', model: 'gemini-3.6-flash',
+            openingText: 'פתיחה', activeOpeningIds: ['answer_first'], openingMediaSequence: [],
+        })
+        const modelExperiment = {
+            id: 'model-credential-test', revision: 1, enabled: true,
+            targetVerifiedSalesPerDay: 2, minimumDeliveredPerArm: 30, minimumDays: 7,
+            championArmId: 'gemini',
+            arms: [
+                { id: 'gemini', provider: 'gemini', model: 'gemini-3.6-flash', weight: 80, enabled: true, revision: 1 },
+                { id: 'claude', provider: 'anthropic', model: 'claude-sonnet-4-5', weight: 20, enabled: true, revision: 1 },
+            ],
+        }
+
+        await expect(saveSalesSettings({ revision: 30, modelExperiment }, { updatedBy: 'owner@example.test' }))
+            .rejects.toThrow('MODEL_ARM_CREDENTIAL_MISSING')
+        expect(store.get('sales_agent_settings/active')).toMatchObject({ revision: 30 })
+        expect(store.get('sales_agent_settings_history/revision-30')).toBeUndefined()
     })
 
     it('refuses stale, missing, archived, or incompatible variable drafts without changing settings', async () => {
