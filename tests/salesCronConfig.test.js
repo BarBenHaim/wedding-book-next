@@ -12,4 +12,15 @@ describe('sales follow-up schedule', () => {
             { path: '/api/sales-agent/followups', schedule: '30 17 * * *' },
         ])
     })
+
+    it('checks owner revenue status morning and evening using Hobby-compatible daily cron expressions', () => {
+        const config = JSON.parse(readFileSync(resolve(process.cwd(), 'vercel.json'), 'utf8'))
+        const ownerStatus = config.crons.filter(row => row.path === '/api/cron/sales-model-status')
+
+        expect(ownerStatus).toEqual([
+            { path: '/api/cron/sales-model-status', schedule: '15 8 * * *' },
+            { path: '/api/cron/sales-model-status', schedule: '15 18 * * *' },
+        ])
+        expect(ownerStatus.every(row => !row.schedule.includes('*/'))).toBe(true)
+    })
 })
