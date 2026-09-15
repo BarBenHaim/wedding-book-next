@@ -199,6 +199,31 @@ describe('WhatsApp follow-up template bootstrap', () => {
         )
     })
 
+    it('falls back to the configured business owned WABAs when the token has no direct assignment', async () => {
+        const businessId = 'business-fixture'
+        fetch
+            .mockResolvedValueOnce(response({ id: 'system-user-fixture' }))
+            .mockResolvedValueOnce(response({ data: [] }))
+            .mockResolvedValueOnce(response({ data: [{ id: 'business-waba-fixture' }] }))
+            .mockResolvedValueOnce(response({ data: [{ id: config.phoneId }] }))
+            .mockResolvedValueOnce(response({ data: [{ name: 'wt_followup_site', language: 'he', status: 'APPROVED' }] }))
+        const handle = createWhatsAppTemplateBootstrapHandler({
+            getConfig: () => ({ ...config, businessId }),
+        })
+
+        expect(await handle(request())).toEqual({
+            status: 200,
+            body: { ok: true, result: 'TEMPLATE_EXISTS', templateStatus: 'APPROVED' },
+        })
+        expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+            'https://graph.facebook.com/v25.0/me?fields=id',
+            'https://graph.facebook.com/v25.0/system-user-fixture/assigned_whatsapp_business_accounts?fields=id&limit=100',
+            `https://graph.facebook.com/v25.0/${businessId}/owned_whatsapp_business_accounts?fields=id&limit=100`,
+            'https://graph.facebook.com/v25.0/business-waba-fixture/phone_numbers?fields=id&limit=100',
+            'https://graph.facebook.com/v25.0/business-waba-fixture/message_templates?fields=name,status,language&limit=100',
+        ])
+    })
+
     it('uses a pinned WABA only after it verifies the configured phone belongs to it', async () => {
         fetch
             .mockResolvedValueOnce(response({ data: [{ id: config.phoneId }] }))

@@ -80,6 +80,7 @@ function readConfig() {
         token: process.env.WHATSAPP_TOKEN,
         phoneId: process.env.WHATSAPP_PHONE_ID,
         wabaId: process.env.WHATSAPP_WABA_ID,
+        businessId: process.env.WHATSAPP_BUSINESS_ID,
     }
 }
 
@@ -112,6 +113,7 @@ export function createWhatsAppTemplateBootstrapHandler({ fetchFn = (...args) => 
             token: typeof suppliedConfig?.token === 'string' ? suppliedConfig.token.trim() : '',
             phoneId: typeof suppliedConfig?.phoneId === 'string' ? suppliedConfig.phoneId.trim() : '',
             wabaId: typeof suppliedConfig?.wabaId === 'string' ? suppliedConfig.wabaId.trim() : '',
+            businessId: typeof suppliedConfig?.businessId === 'string' ? suppliedConfig.businessId.trim() : '',
         }
         if (!sameSecret(request.headers.get('x-wt-secret'), config.secret)) {
             return reply(401, { ok: false, error: 'UNAUTHORIZED' })
@@ -177,7 +179,19 @@ export function createWhatsAppTemplateBootstrapHandler({ fetchFn = (...args) => 
             const assignedWabaIds = wabas.flatMap(waba => (
                 typeof waba?.id === 'string' && waba.id ? [waba.id] : []
             ))
-            for (const assignedWabaId of assignedWabaIds) {
+            const candidateWabaIds = [...assignedWabaIds]
+            if (config.businessId) {
+                const ownedAccounts = await graph(`${encodeURIComponent(config.businessId)}/owned_whatsapp_business_accounts?fields=id&limit=100`)
+                if (ownedAccounts.error) return ownedAccounts.error
+                const ownedWabas = Array.isArray(ownedAccounts.body?.data) ? ownedAccounts.body.data : null
+                if (!ownedWabas) return reply(502, { ok: false, error: 'META_RESPONSE_INVALID' })
+                for (const ownedWaba of ownedWabas) {
+                    if (typeof ownedWaba?.id === 'string' && ownedWaba.id && !candidateWabaIds.includes(ownedWaba.id)) {
+                        candidateWabaIds.push(ownedWaba.id)
+                    }
+                }
+            }
+            for (const assignedWabaId of candidateWabaIds) {
                 const phoneNumbers = await graph(`${encodeURIComponent(assignedWabaId)}/phone_numbers?fields=id&limit=100`)
                 if (phoneNumbers.error) return phoneNumbers.error
                 const phones = Array.isArray(phoneNumbers.body?.data) ? phoneNumbers.body.data : null
@@ -187,7 +201,7 @@ export function createWhatsAppTemplateBootstrapHandler({ fetchFn = (...args) => 
                     break
                 }
             }
-            if (!wabaId && assignedWabaIds.length === 1) wabaId = assignedWabaIds[0]
+            if (!wabaId && candidateWabaIds.length === 1) wabaId = candidateWabaIds[0]
         }
         if (!wabaId) return reply(502, { ok: false, error: 'WHATSAPP_ACCOUNT_NOT_FOUND' })
 
