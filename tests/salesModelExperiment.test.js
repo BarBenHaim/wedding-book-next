@@ -137,6 +137,39 @@ describe('sales model experiment policy', () => {
         expect(recommendModelAllocation(summary)).toEqual({ action: 'insufficient_evidence' })
     })
 
+    it('counts the daily target only from verified payments in the current Jerusalem day', () => {
+        const nowMs = Date.UTC(2026, 8, 15, 12)
+        const assignment = (armId, model, provider) => ({
+            experimentId: experiment.id, experimentRevision: experiment.revision,
+            armId, armRevision: 1, model, provider, assignedAt: nowMs - 60_000,
+        })
+        const leads = [
+            {
+                modelAssignment: assignment('gemini', 'gemini-3.6-flash', 'gemini'),
+                paymentVerified: true, amount: 990,
+                modelPaymentAttributedAt: Date.UTC(2026, 8, 15, 5),
+            },
+            {
+                modelAssignment: assignment('claude', 'claude-sonnet-4-5', 'anthropic'),
+                paymentVerified: true, amount: 690,
+                modelPaymentAttributedAt: Date.UTC(2026, 8, 14, 20),
+            },
+            {
+                modelAssignment: assignment('claude', 'claude-sonnet-4-5', 'anthropic'),
+                paymentVerified: false, amount: 990,
+                modelPaymentAttributedAt: Date.UTC(2026, 8, 15, 9),
+            },
+        ]
+
+        const summary = summarizeModelExperiment(leads, { experiment, nowMs })
+
+        expect(summary.verifiedPaidToday).toBe(1)
+        expect(summary.verifiedRevenueToday).toBe(990)
+        expect(summary.targetReachedToday).toBe(false)
+        expect(summary.rows.find(row => row.armId === 'gemini').verifiedPaidToday).toBe(1)
+        expect(summary.rows.find(row => row.armId === 'claude').verifiedPaidToday).toBe(0)
+    })
+
     it.each([
         [{ primaryAttempted: 5, providerFailures: 2, invalidOutputs: 0, policyFailures: 0 }, { pause: true, reason: 'provider_failure_rate' }],
         [{ primaryAttempted: 10, providerFailures: 0, invalidOutputs: 2, policyFailures: 0 }, { pause: true, reason: 'invalid_output_rate' }],

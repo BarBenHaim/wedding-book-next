@@ -104,6 +104,14 @@ function ratio(numerator, denominator) {
     return { numerator, denominator, rate: denominator ? numerator / denominator : null }
 }
 
+function jerusalemDayKey(value) {
+    const timestamp = toMs(value)
+    if (timestamp == null) return null
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(timestamp))
+}
+
 function percentile(values, fraction) {
     if (!values.length) return null
     const sorted = [...values].sort((a, b) => a - b)
@@ -135,11 +143,13 @@ export function evaluateModelGuardrail(row = {}) {
 
 export function summarizeModelExperiment(leads = [], { experiment, nowMs = Date.now() } = {}) {
     const arms = Array.isArray(experiment?.arms) ? experiment.arms : []
+    const todayKey = jerusalemDayKey(nowMs)
     const rows = arms.map(arm => {
         const assigned = leads.filter(lead => assignmentMatches(lead, experiment, arm))
         const uncontaminated = assigned.filter(lead => lead?.modelFallbackUsed !== true && lead?.modelExecution?.fallback !== true)
         const delivered = uncontaminated.filter(lead => toMs(lead?.modelDeliveredAt) != null)
         const verified = uncontaminated.filter(lead => lead?.paymentVerified === true)
+        const verifiedToday = verified.filter(lead => jerusalemDayKey(lead?.modelPaymentAttributedAt) === todayKey)
         const providerFailures = assigned.filter(lead => Boolean(lead?.providerFailureCode)).length
         const invalidOutputs = assigned.filter(lead => lead?.providerFailureCode === 'invalid_json').length
         const policyFailures = assigned.filter(lead => lead?.modelPolicyFailure === true).length
@@ -166,6 +176,8 @@ export function summarizeModelExperiment(leads = [], { experiment, nowMs = Date.
             readyToPay: uncontaminated.filter(lead => ['ready_to_pay', 'closed_won'].includes(lead?.stage)).length,
             verifiedPaid: verified.length,
             verifiedRevenue,
+            verifiedPaidToday: verifiedToday.length,
+            verifiedRevenueToday: verifiedToday.reduce((sum, lead) => sum + (Number.isFinite(Number(lead?.amount)) ? Number(lead.amount) : 0), 0),
             providerFailures,
             invalidOutputs,
             policyFailures,
@@ -189,12 +201,18 @@ export function summarizeModelExperiment(leads = [], { experiment, nowMs = Date.
     const evidenceReady = experiment?.enabled === true
         && active.length > 1
         && active.every(row => row.delivered >= minimumDelivered && row.exposureDays >= minimumDays)
+    const verifiedPaidToday = rows.reduce((sum, row) => sum + row.verifiedPaidToday, 0)
+    const verifiedRevenueToday = rows.reduce((sum, row) => sum + row.verifiedRevenueToday, 0)
+    const targetVerifiedSalesPerDay = Math.max(1, Number(experiment?.targetVerifiedSalesPerDay) || 2)
     return {
         experimentId: String(experiment?.id || ''),
         experimentRevision: Number(experiment?.revision) || 0,
         enabled: experiment?.enabled === true,
         championArmId: String(experiment?.championArmId || ''),
-        targetVerifiedSalesPerDay: Math.max(1, Number(experiment?.targetVerifiedSalesPerDay) || 2),
+        targetVerifiedSalesPerDay,
+        verifiedPaidToday,
+        verifiedRevenueToday,
+        targetReachedToday: verifiedPaidToday >= targetVerifiedSalesPerDay,
         minimumDeliveredPerArm: minimumDelivered,
         minimumDays,
         evidenceReady,
