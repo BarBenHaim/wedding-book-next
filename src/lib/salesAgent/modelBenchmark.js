@@ -12,6 +12,8 @@ const MAX_CASES = 100
 const MAX_CANDIDATES = 3
 const MAX_TURNS = 4
 const MAX_TURN_CHARS = 320
+const MAX_CONCURRENCY = 6
+const DEFAULT_BENCHMARK_BUDGET_MS = 45_000
 const ALLOWED_PRICES = new Set([690, 990])
 const STAGES = new Set(['new', 'engaged', 'opening_completed', 'qualified', 'demo_sent', 'offer_sent', 'objection', 'ready_to_pay', 'closed_won', 'closed_lost', 'handoff'])
 const INTENTS = new Set(['general', 'price', 'demo', 'positive_signal', 'objection', 'process', 'payment_intent', 'negative_exit', 'support', 'handoff_active'])
@@ -157,22 +159,36 @@ export async function runModelBenchmark(input = {}, deps = {}) {
     const saveScore = deps.saveScore || (async () => {})
     const randomId = deps.randomId || (() => crypto.randomUUID())
     const now = deps.now || Date.now
+    const deadlineNow = deps.deadlineNow || Date.now
+    const requestedDeadline = Number(input.deadlineAtMs)
+    const deadlineAtMs = Number.isFinite(requestedDeadline) && requestedDeadline > deadlineNow()
+        ? requestedDeadline
+        : deadlineNow() + DEFAULT_BENCHMARK_BUDGET_MS
     if (typeof callModel !== 'function') throw new Error('BENCHMARK_MODEL_REQUIRED')
     const scores = []
 
-    for (const sourceCase of cases) {
+    const jobs = cases.flatMap(sourceCase => {
         const benchmarkCase = redactBenchmarkCase(sourceCase)
         const caseId = String(randomId())
-        for (const candidate of candidates) {
+        return candidates.map(candidate => ({ benchmarkCase, caseId, candidate }))
+    })
+    let cursor = 0
+    const worker = async () => {
+        while (cursor < jobs.length) {
+            const job = jobs[cursor]
+            cursor += 1
+            const { benchmarkCase, caseId, candidate } = job
             const startedAt = now()
             let safeScore
             try {
+                if (deadlineNow() >= deadlineAtMs) throw Object.assign(new Error('benchmark deadline'), { errorCode: 'timeout' })
                 const result = await callModel({
                     provider: candidate.provider,
                     model: candidate.model,
                     system: 'מבחן מכירה יבש בלבד. החזר JSON עם messages, stage, handoff. אין להציע שיחת טלפון. מחירים תקינים: 690 או 990 ש״ח.',
                     messages: [{ role: 'user', content: JSON.stringify(benchmarkCase) }],
                     temperature: 0.3,
+                    deadlineAtMs,
                 })
                 const scored = scoreBenchmarkCandidate({ raw: result?.text, benchmarkCase })
                 const priced = costOfTextUsage(result?.usage, candidate.model)
@@ -207,6 +223,7 @@ export async function runModelBenchmark(input = {}, deps = {}) {
             await saveScore(safeScore)
         }
     }
+    await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENCY, jobs.length) }, () => worker()))
     return aggregateScores(scores, revision, cases.length)
 }
 

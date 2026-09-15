@@ -78,6 +78,7 @@ export async function POST(request) {
             maxCases,
             cases,
             candidates: BENCHMARK_CANDIDATES,
+            deadlineAtMs: Date.now() + 45_000,
         }, {
             callModel: callClaude,
             // Individual provider responses are deliberately not persisted.

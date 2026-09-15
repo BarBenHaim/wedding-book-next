@@ -109,4 +109,28 @@ describe('redacted offline model benchmark', () => {
         expect(saveScore).toHaveBeenCalledWith(expect.objectContaining({ errorCode: 'provider_error' }))
         expect(JSON.stringify(saveScore.mock.calls)).not.toContain('provider private body')
     })
+
+    it('uses bounded concurrency under one absolute route deadline', async () => {
+        let active = 0
+        let maximumActive = 0
+        const callModel = vi.fn(async input => {
+            active += 1
+            maximumActive = Math.max(maximumActive, active)
+            await new Promise(resolve => setTimeout(resolve, 5))
+            active -= 1
+            return { text: validCandidate }
+        })
+
+        await runModelBenchmark({
+            revision: 3,
+            cases: Array.from({ length: 4 }, (_, index) => ({ ...privateCase, incomingText: `case ${index}` })),
+            candidates,
+            deadlineAtMs: Date.now() + 20_000,
+        }, { callModel })
+
+        expect(maximumActive).toBeGreaterThan(1)
+        expect(maximumActive).toBeLessThanOrEqual(6)
+        expect(callModel.mock.calls.every(([input]) => Number.isFinite(input.deadlineAtMs))).toBe(true)
+        expect(new Set(callModel.mock.calls.map(([input]) => input.deadlineAtMs)).size).toBe(1)
+    })
 })
