@@ -935,7 +935,19 @@ export async function recordDeliveryEvent(event) {
         }
         const stored = deliverySnap.exists ? deliverySnap.data() : null
         const ownership = normalizedDeliveryOwnership(stored, event.outboundId)
-        const decision = decideDeliveryTransition(stored, event)
+        const isCorrelatedMakeDeliveryRelay = (
+            stored?.channel === 'whatsapp_graph'
+            && event.channel === 'make'
+            && (event.status === 'delivered' || event.status === 'read')
+            && !!event.providerMessageId
+            && correlationSnap?.exists
+            && correlatedOutboundId === event.outboundId
+            && (!stored?.providerMessageId || stored.providerMessageId === event.providerMessageId)
+        )
+        const ownedEvent = isCorrelatedMakeDeliveryRelay
+            ? { ...event, channel: stored.channel }
+            : event
+        const decision = decideDeliveryTransition(stored, ownedEvent)
         if (decision.action === 'reject') throw deliveryError(decision.error)
         const ledgerPatch = {
             eventIdHash: deliveryEventLedgerId(event.eventId),
@@ -979,7 +991,7 @@ export async function recordDeliveryEvent(event) {
             outboundId: String(stored?.outboundId || event.outboundId),
             ...ownership,
             eventId: event.eventId,
-            channel: event.channel,
+            channel: ownedEvent.channel,
             status: decision.nextStatus,
             providerMessageId: event.providerMessageId || stored?.providerMessageId || null,
             errorCode: event.status === 'failed' ? event.errorCode : null,

@@ -354,6 +354,191 @@ describe('transactional follow-up delivery truth', () => {
         expect(store.writes()).toHaveLength(beforeWrites)
     })
 
+    it('accepts an exactly correlated Make relay from requested through delivered and read while retaining WhatsApp ownership and exposing the opening once', async () => {
+        const outboundId = 'graph-owned-opening-requested:text'
+        const providerMessageId = 'wamid-graph-relay-requested'
+        const deliveryKey = `sales_delivery_events/${outboundId}`
+        const correlationKey = `sales_delivery_provider_ids/${providerMessageCorrelationId(providerMessageId)}`
+        store.set(deliveryKey, {
+            outboundId,
+            channel: 'whatsapp_graph',
+            status: 'requested',
+            leadId: '41',
+            part: 'text',
+            deliveryRole: 'secondary',
+            advanceOnDelivery: false,
+            logicalAttemptId: 'graph-owned-opening-requested',
+            openingVariantId: 'v_abcdef123456',
+            openingVariantRevision: 3,
+            openingExposure: true,
+        })
+        store.set(correlationKey, { outboundId })
+
+        await expect(recordDeliveryEvent(event('delivered', {
+            eventId: 'graph-relay-requested-delivered',
+            outboundId,
+            channel: 'make',
+            providerMessageId,
+            occurredAt: '2026-08-14T10:02:00.000Z',
+        }))).resolves.toMatchObject({ action: 'applied', status: 'delivered', advanced: false })
+
+        expect(store.get(deliveryKey)).toMatchObject({
+            channel: 'whatsapp_graph',
+            status: 'delivered',
+            providerMessageId,
+        })
+        expect(store.get(LEAD)).toMatchObject({
+            openingVariantId: 'v_abcdef123456',
+            openingVariantRevision: 3,
+            openingExposedAt: '2026-08-14T10:02:00.000Z',
+            openingExposureOutboundId: outboundId,
+        })
+
+        await expect(recordDeliveryEvent(event('read', {
+            eventId: 'graph-relay-requested-read',
+            outboundId,
+            channel: 'make',
+            providerMessageId,
+            occurredAt: '2026-08-14T10:03:00.000Z',
+        }))).resolves.toMatchObject({ action: 'applied', status: 'read', advanced: false })
+
+        expect(store.get(deliveryKey)).toMatchObject({ channel: 'whatsapp_graph', status: 'read' })
+        expect(store.get(LEAD).openingExposedAt).toBe('2026-08-14T10:02:00.000Z')
+        expect(store.writes().filter(write => (
+            write.key === LEAD && Object.hasOwn(write.value, 'openingExposedAt')
+        ))).toHaveLength(1)
+    })
+
+    it('accepts an exactly correlated Make read relay from accepted and exposes the opening once', async () => {
+        const outboundId = 'graph-owned-opening-accepted:text'
+        const providerMessageId = 'wamid-graph-relay-accepted'
+        const deliveryKey = `sales_delivery_events/${outboundId}`
+        store.set(deliveryKey, {
+            outboundId,
+            channel: 'whatsapp_graph',
+            status: 'accepted',
+            providerMessageId,
+            leadId: '41',
+            part: 'text',
+            deliveryRole: 'secondary',
+            advanceOnDelivery: false,
+            logicalAttemptId: 'graph-owned-opening-accepted',
+            openingVariantId: 'v_123456abcdef',
+            openingVariantRevision: 4,
+            openingExposure: true,
+        })
+        store.set(`sales_delivery_provider_ids/${providerMessageCorrelationId(providerMessageId)}`, { outboundId })
+        const readRelay = event('read', {
+            eventId: 'graph-relay-accepted-read',
+            outboundId,
+            channel: 'make',
+            providerMessageId,
+            occurredAt: '2026-08-14T10:04:00.000Z',
+        })
+
+        await expect(recordDeliveryEvent(readRelay))
+            .resolves.toMatchObject({ action: 'applied', status: 'read', advanced: false })
+        await expect(recordDeliveryEvent(readRelay))
+            .resolves.toEqual({ action: 'noop', reason: 'EVENT_REPLAY' })
+
+        expect(store.get(deliveryKey)).toMatchObject({ channel: 'whatsapp_graph', status: 'read' })
+        expect(store.get(LEAD)).toMatchObject({
+            openingVariantId: 'v_123456abcdef',
+            openingVariantRevision: 4,
+            openingExposedAt: '2026-08-14T10:04:00.000Z',
+            openingExposureOutboundId: outboundId,
+        })
+        expect(store.writes().filter(write => (
+            write.key === LEAD && Object.hasOwn(write.value, 'openingExposedAt')
+        ))).toHaveLength(1)
+    })
+
+    it('rejects an uncorrelated Make relay without writing or retaining its provider identity', async () => {
+        const outboundId = 'graph-owned-uncorrelated:text'
+        const providerMessageId = 'non-dialable-uncorrelated-provider-sentinel'
+        store.set(`sales_delivery_events/${outboundId}`, {
+            outboundId,
+            channel: 'whatsapp_graph',
+            status: 'requested',
+            leadId: '41',
+            deliveryRole: 'secondary',
+            advanceOnDelivery: false,
+            logicalAttemptId: 'graph-owned-uncorrelated',
+            openingExposure: true,
+        })
+        const beforeEntries = structuredClone(store.entries())
+        const beforeWrites = store.writes()
+
+        await expect(recordDeliveryEvent(event('delivered', {
+            eventId: 'graph-relay-uncorrelated-delivered',
+            outboundId,
+            channel: 'make',
+            providerMessageId,
+        }))).rejects.toMatchObject({ code: 'CHANNEL_MISMATCH' })
+
+        expect(store.entries()).toEqual(beforeEntries)
+        expect(store.writes()).toEqual(beforeWrites)
+        expect(JSON.stringify(store.entries())).not.toContain(providerMessageId)
+    })
+
+    it('rejects a correlated Make relay whose provider identity differs from the stored provider without a write', async () => {
+        const outboundId = 'graph-owned-provider-mismatch:text'
+        const storedProviderMessageId = 'wamid-graph-owner-original'
+        const relayedProviderMessageId = 'non-dialable-relay-provider-mismatch-sentinel'
+        store.set(`sales_delivery_events/${outboundId}`, {
+            outboundId,
+            channel: 'whatsapp_graph',
+            status: 'accepted',
+            providerMessageId: storedProviderMessageId,
+            leadId: '41',
+            deliveryRole: 'secondary',
+            advanceOnDelivery: false,
+            logicalAttemptId: 'graph-owned-provider-mismatch',
+            openingExposure: true,
+        })
+        store.set(`sales_delivery_provider_ids/${providerMessageCorrelationId(relayedProviderMessageId)}`, { outboundId })
+        const beforeEntries = structuredClone(store.entries())
+        const beforeWrites = store.writes()
+
+        await expect(recordDeliveryEvent(event('delivered', {
+            eventId: 'graph-relay-provider-mismatch-delivered',
+            outboundId,
+            channel: 'make',
+            providerMessageId: relayedProviderMessageId,
+        }))).rejects.toMatchObject({ code: 'CHANNEL_MISMATCH' })
+
+        expect(store.entries()).toEqual(beforeEntries)
+        expect(store.writes()).toEqual(beforeWrites)
+        expect(JSON.stringify(store.entries())).not.toContain(relayedProviderMessageId)
+    })
+
+    it('rejects the reverse WhatsApp-to-Make channel relay even when provider-correlated', async () => {
+        const outboundId = 'make-owned-reverse-relay:text'
+        const providerMessageId = 'wamid-make-owner-reverse'
+        store.set(`sales_delivery_events/${outboundId}`, {
+            outboundId,
+            channel: 'make',
+            status: 'accepted',
+            providerMessageId,
+            deliveryRole: 'external',
+            advanceOnDelivery: false,
+            logicalAttemptId: 'make-owned-reverse-relay',
+        })
+        store.set(`sales_delivery_provider_ids/${providerMessageCorrelationId(providerMessageId)}`, { outboundId })
+        const beforeEntries = structuredClone(store.entries())
+        const beforeWrites = store.writes()
+
+        await expect(recordDeliveryEvent(event('delivered', {
+            eventId: 'reverse-relay-delivered',
+            outboundId,
+            channel: 'whatsapp_graph',
+            providerMessageId,
+        }))).rejects.toMatchObject({ code: 'CHANNEL_MISMATCH' })
+
+        expect(store.entries()).toEqual(beforeEntries)
+        expect(store.writes()).toEqual(beforeWrites)
+    })
+
     it('a late read for an older attempt cannot clear or hide a newer pending attempt', async () => {
         await prepareFollowUpDelivery(requested())
         await recordDeliveryEvent(event('accepted'))
