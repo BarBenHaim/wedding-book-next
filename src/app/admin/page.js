@@ -2589,6 +2589,40 @@ function AdminDashboardContent() {
                     </button>
                 </div>
 
+                {/* Mobile tools strip. The desktop header hides its tool links
+                    below sm, which left the phone with no way into ברקודים,
+                    the studios or the project page. One scrollable row, same
+                    order as the desktop header, ברקודים first because that is
+                    the one reached for on the go. */}
+                <div className='sm:hidden -mx-4 mb-5 overflow-x-auto px-4' style={{ scrollbarWidth: 'none' }}>
+                    <div className='flex w-max gap-2 pb-1'>
+                        {MOBILE_TOOLS.map(tool => {
+                            const Icon = tool.icon
+                            return (
+                                <a
+                                    key={tool.href}
+                                    href={tool.href}
+                                    className='flex items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2.5 text-[13px] font-bold active:scale-[0.98] transition-all'
+                                    style={tool.primary
+                                        ? {
+                                            background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                            color: '#fff',
+                                            boxShadow: '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
+                                        }
+                                        : {
+                                            background: '#ffffff',
+                                            border: '1px solid rgba(212,184,103,0.30)',
+                                            color: '#7a6a52',
+                                            boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
+                                        }}
+                                >
+                                    <Icon size={14} style={{ color: tool.primary ? '#fff' : '#c9a44e' }} /> {tool.label}
+                                </a>
+                            )
+                        })}
+                    </div>
+                </div>
+
                 {/* Main Table Card */}
                 <motion.div
                     initial={{ opacity: 0, y: 16 }}
@@ -3026,6 +3060,19 @@ function AdminDashboardContent() {
         </div>
     )
 }
+
+// Tool links shown on phones (the desktop header renders its own
+// copies, hidden below sm). Keep in the same order as the header.
+const MOBILE_TOOLS = [
+    { href: '/admin/qrcodes', label: 'ברקודים', icon: QrCode, primary: true },
+    { href: '/admin/project', label: 'הצגת הפרויקט', icon: GraduationCap },
+    { href: '/admin/studio', label: 'סטודיו עיצוב', icon: Wand2 },
+    { href: '/admin/emails', label: 'מיילים', icon: Mail },
+    { href: '/admin/sales-leads', label: 'לידים ווטסאפ', icon: MessageCircle },
+    { href: '/admin/social-preview', label: 'תוכן לרשתות', icon: Instagram },
+    { href: '/admin/album-studio', label: 'סטודיו אלבומים', icon: Images },
+    { href: '/admin/guest-design', label: 'עיצוב דף ברכה', icon: Sparkles },
+]
 
 export default function AdminPage() {
     return (
