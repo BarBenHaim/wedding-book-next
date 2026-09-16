@@ -33,6 +33,11 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# ephemeral production diagnostics; may contain pulled runtime secrets
+.tmp-prod-template
+.tmp-template-request.json
+.tmp-template-probe.mjs
+
 # vercel
 .vercel
 
