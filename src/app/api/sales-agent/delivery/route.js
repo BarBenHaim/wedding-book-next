@@ -46,6 +46,12 @@ export async function POST(req) {
         const result = await recordDeliveryEvent(event)
         return NextResponse.json({ accepted: true, result }, { status: 202 })
     } catch (error) {
+        if (error?.code === 'CHANNEL_MISMATCH') {
+            return NextResponse.json({
+                accepted: true,
+                result: { action: 'noop', reason: 'CHANNEL_MISMATCH' },
+            }, { status: 202 })
+        }
         if (CONFLICT_CODES.has(error?.code)) {
             return NextResponse.json({ error: error.code }, { status: 409 })
         }

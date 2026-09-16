@@ -100,6 +100,37 @@ describe('delivery acknowledgement route', () => {
         })
     })
 
+    it('acknowledges a provider-correlated channel ownership mismatch without retrying persistence', async () => {
+        const error = new Error('private stored channel detail')
+        error.code = 'CHANNEL_MISMATCH'
+        mocks.recordDeliveryEvent.mockRejectedValue(error)
+        const providerOnly = {
+            eventId: 'meta-status-channel-owned',
+            channel: 'make',
+            status: 'delivered',
+            providerMessageId: 'wamid-channel-owned-fixture',
+            occurredAt: '2026-09-16T10:05:00.000Z',
+        }
+
+        const response = await POST(request(providerOnly))
+        const responseText = await response.text()
+
+        expect(response.status).toBe(202)
+        expect(JSON.parse(responseText)).toEqual({
+            accepted: true,
+            result: { action: 'noop', reason: 'CHANNEL_MISMATCH' },
+        })
+        expect(mocks.resolveProviderMessageOutboundId).toHaveBeenCalledTimes(1)
+        expect(mocks.resolveProviderMessageOutboundId).toHaveBeenCalledWith(providerOnly.providerMessageId)
+        expect(mocks.recordDeliveryEvent).toHaveBeenCalledTimes(1)
+        expect(mocks.recordDeliveryEvent).toHaveBeenCalledWith({
+            ...providerOnly,
+            outboundId: 'followup-hash-route:template',
+        })
+        expect(responseText).not.toContain(providerOnly.providerMessageId)
+        expect(responseText).not.toContain('private stored channel detail')
+    })
+
     it('returns a stable conflict for ambiguous provider correlation', async () => {
         const error = new Error('private correlation detail')
         error.code = 'PROVIDER_MESSAGE_ID_AMBIGUOUS'
