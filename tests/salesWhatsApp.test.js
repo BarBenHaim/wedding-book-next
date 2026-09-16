@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
     DAILY_DIGEST_TEMPLATE,
-    FOLLOWUP_CLOSE_TEMPLATE,
-    FOLLOWUP_HELP_TEMPLATE,
-    FOLLOWUP_OFFER_TEMPLATE,
-    FOLLOWUP_SITE_TEMPLATE,
+    FOLLOWUP_TEMPLATE,
     sendWhatsAppAudio,
     sendWhatsAppImage,
     sendWhatsAppTemplate,
@@ -114,62 +111,42 @@ describe('direct WhatsApp Graph evidence', () => {
     })
 })
 
-describe('approved WhatsApp templates', () => {
-    it('sends every approved follow-up template with its exact body parameter count', async () => {
+describe('allowlisted WhatsApp templates', () => {
+    it('sends the evidenced universal follow-up template with the complete message as one body parameter', async () => {
         fetch.mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue(providerBody) })
 
-        const approved = [
-            [FOLLOWUP_SITE_TEMPLATE, ['משפחה יקרה']],
-            [FOLLOWUP_HELP_TEMPLATE, ['משפחה יקרה']],
-            [FOLLOWUP_OFFER_TEMPLATE, ['משפחה יקרה', 'BACK48', '10.9.2026']],
-            [FOLLOWUP_CLOSE_TEMPLATE, ['משפחה יקרה']],
-        ]
-        for (const [name, parameters] of approved) {
-            await expect(sendWhatsAppTemplate('non-dialable-recipient-fixture', name, parameters))
-                .resolves.toEqual({ accepted: true, providerMessageId: 'wamid-evidence-fixture' })
-        }
+        const message = 'משפחה יקרה, הנה הפרטים והקישור לאתר.'
+        await expect(sendWhatsAppTemplate('non-dialable-recipient-fixture', FOLLOWUP_TEMPLATE, [message]))
+            .resolves.toEqual({ accepted: true, providerMessageId: 'wamid-evidence-fixture' })
 
-        expect(fetch.mock.calls.map(([, init]) => {
-            const payload = JSON.parse(init.body)
-            return [payload.template.name, payload.template.components[0].parameters.map(row => row.text)]
-        })).toEqual(approved)
+        const payload = JSON.parse(fetch.mock.calls[0][1].body)
+        expect(payload.template).toEqual({
+            name: 'wt_followup',
+            language: { code: 'he' },
+            components: [{ type: 'body', parameters: [{ type: 'text', text: message }] }],
+        })
     })
 
-    it('rejects the wrong parameter count for every follow-up template before Graph', async () => {
-        await expect(sendWhatsAppTemplate('non-dialable-recipient-fixture', FOLLOWUP_SITE_TEMPLATE, []))
+    it('rejects wrong parameter counts and retired unapproved strategy templates before Graph', async () => {
+        fetch.mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue(providerBody) })
+
+        await expect(sendWhatsAppTemplate('non-dialable-recipient-fixture', FOLLOWUP_TEMPLATE, []))
             .rejects.toMatchObject({ errorCode: 'TEMPLATE_NOT_CONFIGURED' })
-        await expect(sendWhatsAppTemplate('non-dialable-recipient-fixture', FOLLOWUP_HELP_TEMPLATE, ['one', 'two']))
+        await expect(sendWhatsAppTemplate('non-dialable-recipient-fixture', FOLLOWUP_TEMPLATE, ['one', 'two']))
             .rejects.toMatchObject({ errorCode: 'TEMPLATE_NOT_CONFIGURED' })
-        await expect(sendWhatsAppTemplate('non-dialable-recipient-fixture', FOLLOWUP_OFFER_TEMPLATE, ['one']))
-            .rejects.toMatchObject({ errorCode: 'TEMPLATE_NOT_CONFIGURED' })
-        await expect(sendWhatsAppTemplate('non-dialable-recipient-fixture', FOLLOWUP_CLOSE_TEMPLATE, []))
+        await expect(sendWhatsAppTemplate('non-dialable-recipient-fixture', 'wt_followup_site', ['one']))
             .rejects.toMatchObject({ errorCode: 'TEMPLATE_NOT_CONFIGURED' })
         expect(fetch).not.toHaveBeenCalled()
     })
 
-    it('allows only the site follow-up template to carry the approved video header', async () => {
-        fetch.mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue(providerBody) })
-
-        await sendWhatsAppTemplate(
-            'non-dialable-recipient-fixture',
-            FOLLOWUP_SITE_TEMPLATE,
-            ['משפחה יקרה'],
-            { headerVideoUrl: 'https://media.example/product.mp4' },
-        )
-
-        const payload = JSON.parse(fetch.mock.calls[0][1].body)
-        expect(payload.template.components).toEqual([
-            { type: 'header', parameters: [{ type: 'video', video: { link: 'https://media.example/product.mp4' } }] },
-            { type: 'body', parameters: [{ type: 'text', text: 'משפחה יקרה' }] },
-        ])
-
+    it('rejects an unsupported media header on the universal text-only follow-up template', async () => {
         await expect(sendWhatsAppTemplate(
             'non-dialable-recipient-fixture',
-            FOLLOWUP_HELP_TEMPLATE,
-            ['משפחה יקרה'],
+            FOLLOWUP_TEMPLATE,
+            ['משפחה יקרה, הנה הפרטים.'],
             { headerVideoUrl: 'https://media.example/product.mp4' },
         )).rejects.toMatchObject({ errorCode: 'TEMPLATE_NOT_CONFIGURED' })
-        expect(fetch).toHaveBeenCalledTimes(1)
+        expect(fetch).not.toHaveBeenCalled()
     })
 
     it('sends wt_daily_digest with exactly four safe body parameters', async () => {

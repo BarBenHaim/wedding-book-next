@@ -34,8 +34,8 @@ describe('context-aware follow-up sales plan', () => {
             landingUrl: 'https://weddingtales.co.il',
             mediaPreference: 'video',
             coupon: null,
-            templateName: 'wt_followup_site',
-            templateParameters: ['נועה'],
+            templateName: 'wt_followup',
+            templateParameters: ['נועה, רציתי לשלוח לך שוב דרך קצרה לראות איך ספר הברכות עובד. הסרטון והפרטים מחכים באתר: https://weddingtales.co.il'],
             templateText: 'נועה, רציתי לשלוח לך שוב דרך קצרה לראות איך ספר הברכות עובד. הסרטון והפרטים מחכים באתר: https://weddingtales.co.il',
         })
     })
@@ -52,8 +52,8 @@ describe('context-aware follow-up sales plan', () => {
             landingUrl: null,
             mediaPreference: 'none',
             coupon: null,
-            templateName: 'wt_followup_help',
-            templateParameters: ['משפחה יקרה'],
+            templateName: 'wt_followup',
+            templateParameters: ['משפחה יקרה, רציתי לבדוק אם עצרה אתכם שאלה על החבילה, תקלה בתשלום או פשוט התזמון. אפשר לענות לי כאן במשפט אחד.'],
             templateText: 'משפחה יקרה, רציתי לבדוק אם עצרה אתכם שאלה על החבילה, תקלה בתשלום או פשוט התזמון. אפשר לענות לי כאן במשפט אחד.',
         })
     })
@@ -69,6 +69,7 @@ describe('context-aware follow-up sales plan', () => {
         })
         expect(secondSite.templateName).toBe(firstSite.templateName)
         expect(secondSite.templateText).toBe(firstSite.templateText)
+        expect(secondSite.templateParameters).toEqual([secondSite.templateText])
 
         const checkoutHelp = planFollowUp({ stage: 'ready_to_pay' }, {
             attempt: 2,
@@ -80,6 +81,7 @@ describe('context-aware follow-up sales plan', () => {
         })
         expect(objectionHelp.templateName).toBe(checkoutHelp.templateName)
         expect(objectionHelp.templateText).toBe(checkoutHelp.templateText)
+        expect(objectionHelp.templateParameters).toEqual([objectionHelp.templateText])
     })
 
     it('gives a verified offer only to a high-intent final touch', () => {
@@ -96,8 +98,8 @@ describe('context-aware follow-up sales plan', () => {
             landingUrl: 'https://weddingtales.co.il',
             mediaPreference: 'none',
             coupon: offer,
-            templateName: 'wt_followup_offer',
-            templateParameters: ['דנה', 'BACK48', '10.9.2026'],
+            templateName: 'wt_followup',
+            templateParameters: ['דנה, שמרנו לכם את הקוד BACK48 עד 10.9.2026. אפשר לראות את כל הפרטים ולהשלים הזמנה כאן: https://weddingtales.co.il'],
             templateText: 'דנה, שמרנו לכם את הקוד BACK48 עד 10.9.2026. אפשר לראות את כל הפרטים ולהשלים הזמנה כאן: https://weddingtales.co.il',
         })
     })
@@ -119,8 +121,8 @@ describe('context-aware follow-up sales plan', () => {
                 landingUrl: null,
                 mediaPreference: 'none',
                 coupon: null,
-                templateName: 'wt_followup_close',
-                templateParameters: ['טל'],
+                templateName: 'wt_followup',
+                templateParameters: ['טל, סוגר כאן את המעקב כדי לא להציף. אם תרצו לחזור לספר הברכות בהמשך, פשוט כתבו לנו כאן.'],
                 templateText: 'טל, סוגר כאן את המעקב כדי לא להציף. אם תרצו לחזור לספר הברכות בהמשך, פשוט כתבו לנו כאן.',
             })
         }

@@ -1,4 +1,5 @@
 const LANDING_URL = 'https://weddingtales.co.il'
+const FOLLOWUP_TEMPLATE = 'wt_followup'
 const MAX_OFFER_WINDOW_MS = 48 * 60 * 60 * 1000
 const HIGH_INTENT_STAGES = new Set([
     'ready_to_pay',
@@ -38,8 +39,18 @@ export function readFollowUpOffer(env = process.env, nowMs = Date.now()) {
     return { code, expiresAt: new Date(expiresAtMs).toISOString() }
 }
 
-function plan({ id, objective, cta, landingUrl = null, mediaPreference = 'none', coupon = null, templateName, templateParameters, templateText }) {
-    return { id, objective, cta, landingUrl, mediaPreference, coupon, templateName, templateParameters, templateText }
+function plan({ id, objective, cta, landingUrl = null, mediaPreference = 'none', coupon = null, templateText }) {
+    return {
+        id,
+        objective,
+        cta,
+        landingUrl,
+        mediaPreference,
+        coupon,
+        templateName: FOLLOWUP_TEMPLATE,
+        templateParameters: [templateText],
+        templateText,
+    }
 }
 
 export function planFollowUp(lead = {}, {
@@ -60,8 +71,6 @@ export function planFollowUp(lead = {}, {
                 cta: 'coupon',
                 landingUrl: LANDING_URL,
                 coupon: { code: cleanParameter(offer.code), expiresAt: cleanParameter(offer.expiresAt) },
-                templateName: 'wt_followup_offer',
-                templateParameters: [name, cleanParameter(offer.code), expiryLabel(offer.expiresAt)],
                 templateText: `${name}, שמרנו לכם את הקוד ${cleanParameter(offer.code)} עד ${expiryLabel(offer.expiresAt)}. אפשר לראות את כל הפרטים ולהשלים הזמנה כאן: ${LANDING_URL}`,
             })
         }
@@ -69,8 +78,6 @@ export function planFollowUp(lead = {}, {
             id: 'graceful_close',
             objective: 'לסגור מעגל בכבוד ולהשאיר דלת פתוחה בלי לחץ ובלי הנחה',
             cta: 'none',
-            templateName: 'wt_followup_close',
-            templateParameters: [name],
             templateText: `${name}, סוגר כאן את המעקב כדי לא להציף. אם תרצו לחזור לספר הברכות בהמשך, פשוט כתבו לנו כאן.`,
         })
     }
@@ -82,8 +89,6 @@ export function planFollowUp(lead = {}, {
             cta: 'website',
             landingUrl: LANDING_URL,
             mediaPreference: 'video',
-            templateName: 'wt_followup_site',
-            templateParameters: [name],
             templateText: siteTemplateText(name),
         })
     }
@@ -93,8 +98,6 @@ export function planFollowUp(lead = {}, {
             id: 'resolve_blocker',
             objective: 'לברר בעדינות אם עצרה שאלה על החבילה, תקלה בתשלום או תזמון',
             cta: 'reply',
-            templateName: 'wt_followup_help',
-            templateParameters: [name],
             templateText: helpTemplateText(name),
         })
     }
@@ -104,8 +107,6 @@ export function planFollowUp(lead = {}, {
             id: 'resolve_blocker',
             objective: 'להתייחס להתלבטות האחרונה ולבקש תשובה קצרה על הדבר היחיד שעוצר את ההחלטה',
             cta: 'reply',
-            templateName: 'wt_followup_help',
-            templateParameters: [name],
             templateText: helpTemplateText(name),
         })
     }
@@ -115,8 +116,6 @@ export function planFollowUp(lead = {}, {
         objective: 'להחזיר את הליד לפרטים המלאים באתר בלי לחזור על מדיה שכבר נשלחה',
         cta: 'website',
         landingUrl: LANDING_URL,
-        templateName: 'wt_followup_site',
-        templateParameters: [name],
         templateText: siteTemplateText(name),
     })
 }

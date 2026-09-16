@@ -2,9 +2,10 @@ import { timingSafeEqual } from 'node:crypto'
 
 const GRAPH_BASE = 'https://graph.facebook.com/v25.0'
 const GRAPH_TIMEOUT_MS = 7_500
-const CONFIRMATION = 'ENSURE_FOLLOWUP_SITE_TEMPLATE'
+const CONFIRMATION = 'ENSURE_FOLLOWUP_TEMPLATE'
+const LEGACY_CONFIRMATION = 'ENSURE_FOLLOWUP_SITE_TEMPLATE'
 const ALL_TEMPLATES_CONFIRMATION = 'ENSURE_SALES_TEMPLATES'
-const TEMPLATE_NAME = 'wt_followup_site'
+const TEMPLATE_NAME = 'wt_followup'
 const TEMPLATE_LANGUAGE = 'he'
 const SAFE_STATUSES = new Set(['APPROVED', 'PENDING', 'REJECTED', 'PAUSED', 'DISABLED', 'IN_APPEAL'])
 
@@ -13,46 +14,10 @@ const TEMPLATE_DEFINITIONS = Object.freeze([
         name: TEMPLATE_NAME,
         language: TEMPLATE_LANGUAGE,
         category: 'MARKETING',
-        components: [
-            {
-                type: 'BODY',
-                text: '{{1}}, רציתי לשלוח לך שוב דרך קצרה לראות איך ספר הברכות עובד. הסרטון והפרטים מחכים באתר: https://weddingtales.co.il',
-                example: { body_text: [['משפחה יקרה']] },
-            },
-            {
-                type: 'BUTTONS',
-                buttons: [{ type: 'URL', text: 'לצפייה בפרטים', url: 'https://weddingtales.co.il' }],
-            },
-        ],
-    }),
-    Object.freeze({
-        name: 'wt_followup_help',
-        language: TEMPLATE_LANGUAGE,
-        category: 'MARKETING',
         components: [{
             type: 'BODY',
-            text: '{{1}}, רציתי לבדוק אם עצרה אתכם שאלה על החבילה, תקלה בתשלום או פשוט התזמון. אפשר לענות לי כאן במשפט אחד.',
-            example: { body_text: [['משפחה יקרה']] },
-        }],
-    }),
-    Object.freeze({
-        name: 'wt_followup_offer',
-        language: TEMPLATE_LANGUAGE,
-        category: 'MARKETING',
-        components: [{
-            type: 'BODY',
-            text: '{{1}}, שמרנו לכם את הקוד {{2}} עד {{3}}. אפשר לראות את כל הפרטים ולהשלים הזמנה כאן: https://weddingtales.co.il',
-            example: { body_text: [['משפחה יקרה', 'TALES48', '17.9.2026']] },
-        }],
-    }),
-    Object.freeze({
-        name: 'wt_followup_close',
-        language: TEMPLATE_LANGUAGE,
-        category: 'MARKETING',
-        components: [{
-            type: 'BODY',
-            text: '{{1}}, סוגר כאן את המעקב כדי לא להציף. אם תרצו לחזור לספר הברכות בהמשך, פשוט כתבו לנו כאן.',
-            example: { body_text: [['משפחה יקרה']] },
+            text: '{{1}}',
+            example: { body_text: [['משפחה יקרה, הנה הפרטים.']] },
         }],
     }),
     Object.freeze({
@@ -120,7 +85,7 @@ export function createWhatsAppTemplateBootstrapHandler({ fetchFn = (...args) => 
         }
         const body = await request.json().catch(() => null)
         const ensureAll = body?.confirm === ALL_TEMPLATES_CONFIRMATION
-        if (body?.confirm !== CONFIRMATION && !ensureAll) {
+        if (body?.confirm !== CONFIRMATION && body?.confirm !== LEGACY_CONFIRMATION && !ensureAll) {
             return reply(400, { ok: false, error: 'CONFIRMATION_REQUIRED' })
         }
         if (!config.token || !config.phoneId) {

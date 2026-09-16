@@ -22,17 +22,11 @@
 const GRAPH = 'https://graph.facebook.com/v19.0'
 const GRAPH_TIMEOUT_MS = 12_000
 
-export const FOLLOWUP_SITE_TEMPLATE = 'wt_followup_site'
-export const FOLLOWUP_HELP_TEMPLATE = 'wt_followup_help'
-export const FOLLOWUP_OFFER_TEMPLATE = 'wt_followup_offer'
-export const FOLLOWUP_CLOSE_TEMPLATE = 'wt_followup_close'
+export const FOLLOWUP_TEMPLATE = 'wt_followup'
 export const DAILY_DIGEST_TEMPLATE = 'wt_daily_digest'
 
 const TEMPLATE_PARAMETERS = new Map([
-    [FOLLOWUP_SITE_TEMPLATE, 1],
-    [FOLLOWUP_HELP_TEMPLATE, 1],
-    [FOLLOWUP_OFFER_TEMPLATE, 3],
-    [FOLLOWUP_CLOSE_TEMPLATE, 1],
+    [FOLLOWUP_TEMPLATE, 1],
     [DAILY_DIGEST_TEMPLATE, 4],
 ])
 
@@ -145,33 +139,14 @@ export function sendWhatsAppTemplate(to, templateName, parameters = [], options 
         .slice(0, 1024))
     if (clean.some(value => !value)) return Promise.reject(graphError('TEMPLATE_NOT_CONFIGURED'))
 
-    let headerVideoUrl = null
     if (options?.headerVideoUrl != null) {
-        if (templateName !== FOLLOWUP_SITE_TEMPLATE) {
-            return Promise.reject(graphError('TEMPLATE_NOT_CONFIGURED'))
-        }
-        try {
-            const parsed = new URL(String(options.headerVideoUrl))
-            if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
-                return Promise.reject(graphError('TEMPLATE_NOT_CONFIGURED'))
-            }
-            headerVideoUrl = parsed.toString()
-        } catch {
-            return Promise.reject(graphError('TEMPLATE_NOT_CONFIGURED'))
-        }
+        return Promise.reject(graphError('TEMPLATE_NOT_CONFIGURED'))
     }
 
-    const components = []
-    if (headerVideoUrl) {
-        components.push({
-            type: 'header',
-            parameters: [{ type: 'video', video: { link: headerVideoUrl } }],
-        })
-    }
-    components.push({
+    const components = [{
         type: 'body',
         parameters: clean.map(text => ({ type: 'text', text })),
-    })
+    }]
 
     return post({
         messaging_product: 'whatsapp',
@@ -186,10 +161,7 @@ export function sendWhatsAppTemplate(to, templateName, parameters = [], options 
 }
 
 const whatsapp = {
-    FOLLOWUP_SITE_TEMPLATE,
-    FOLLOWUP_HELP_TEMPLATE,
-    FOLLOWUP_OFFER_TEMPLATE,
-    FOLLOWUP_CLOSE_TEMPLATE,
+    FOLLOWUP_TEMPLATE,
     DAILY_DIGEST_TEMPLATE,
     canSendWhatsApp,
     sendWhatsAppAudio,

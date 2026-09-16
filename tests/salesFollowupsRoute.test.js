@@ -52,10 +52,7 @@ vi.mock('@/lib/salesAgent/whatsapp', () => ({
     sendWhatsAppImage: mocks.sendWhatsAppImage,
     sendWhatsAppVideo: mocks.sendWhatsAppVideo,
     sendWhatsAppTemplate: mocks.sendWhatsAppTemplate,
-    FOLLOWUP_SITE_TEMPLATE: 'wt_followup_site',
-    FOLLOWUP_HELP_TEMPLATE: 'wt_followup_help',
-    FOLLOWUP_OFFER_TEMPLATE: 'wt_followup_offer',
-    FOLLOWUP_CLOSE_TEMPLATE: 'wt_followup_close',
+    FOLLOWUP_TEMPLATE: 'wt_followup',
 }))
 vi.mock('@/lib/salesAgent/delivery', () => ({
     createOutboundId: mocks.createOutboundId,
@@ -158,7 +155,9 @@ describe('opening-only mode', () => {
         expect(mocks.dueFollowUps).toHaveBeenCalled()
         expect(mocks.callClaude).not.toHaveBeenCalled()
         expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
-        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup_site', ['Test lead'])
+        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup', [
+            'Test lead, רציתי לשלוח לך שוב דרך קצרה לראות איך ספר הברכות עובד. הסרטון והפרטים מחכים באתר: https://weddingtales.co.il',
+        ])
     })
 
     it('fails closed before customer work when the mode cannot be read', async () => {
@@ -220,7 +219,9 @@ describe('truthful follow-up transport', () => {
         const result = await runCron()
 
         expect(result.status).toBe(200)
-        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup_site', ['Test lead'])
+        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup', [
+            'Test lead, רציתי לשלוח לך שוב דרך קצרה לראות איך ספר הברכות עובד. הסרטון והפרטים מחכים באתר: https://weddingtales.co.il',
+        ])
         expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
         expect(mocks.sendWhatsAppImage).not.toHaveBeenCalled()
         expect(mocks.prepareFollowUpDelivery).toHaveBeenCalledWith(expect.objectContaining({
@@ -228,7 +229,7 @@ describe('truthful follow-up transport', () => {
             outboundId: 'outbound-fixture:template',
             channel: 'whatsapp_graph',
             part: 'template',
-            templateName: 'wt_followup_site',
+            templateName: 'wt_followup',
             advancesFollowUp: true,
         }))
         expect(mocks.recordDeliveryEvent).toHaveBeenCalledWith(expect.objectContaining({
@@ -254,8 +255,8 @@ describe('truthful follow-up transport', () => {
 
         expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(
             lead.phone,
-            'wt_followup_site',
-            ['Test lead'],
+            'wt_followup',
+            ['Test lead, רציתי לשלוח לך שוב דרך קצרה לראות איך ספר הברכות עובד. הסרטון והפרטים מחכים באתר: https://weddingtales.co.il'],
         )
         expect(mocks.sendWhatsAppVideo).not.toHaveBeenCalled()
         expect(mocks.prepareFollowUpDelivery).toHaveBeenCalledWith(expect.objectContaining({
@@ -338,8 +339,10 @@ describe('truthful follow-up transport', () => {
 
         const result = await runCron()
 
-        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup_help', ['Test lead'])
-        expect(result.body.items[0]).toMatchObject({ strategyId: 'resolve_blocker', templateName: 'wt_followup_help' })
+        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup', [
+            'Test lead, רציתי לבדוק אם עצרה אתכם שאלה על החבילה, תקלה בתשלום או פשוט התזמון. אפשר לענות לי כאן במשפט אחד.',
+        ])
+        expect(result.body.items[0]).toMatchObject({ strategyId: 'resolve_blocker', templateName: 'wt_followup' })
     })
 
     it('uses a configured 48-hour offer only for a high-intent final follow-up', async () => {
@@ -352,10 +355,10 @@ describe('truthful follow-up transport', () => {
 
         expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(
             lead.phone,
-            'wt_followup_offer',
-            ['Test lead', 'BACK48', expect.any(String)],
+            'wt_followup',
+            [expect.stringContaining('BACK48')],
         )
-        expect(result.body.items[0]).toMatchObject({ strategyId: 'qualified_offer', templateName: 'wt_followup_offer' })
+        expect(result.body.items[0]).toMatchObject({ strategyId: 'qualified_offer', templateName: 'wt_followup' })
     })
 
     it('records normalized template rejection as failed and leaves the item unaccepted', async () => {
