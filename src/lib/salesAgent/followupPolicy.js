@@ -119,6 +119,13 @@ export function nextFollowUpDate({
     // least annoying moment there is, precisely because they chose it.
     if (callbackPromised && callbackPromised > todayISO) return addDaysISO(callbackPromised, 1)
 
+    // The first ordinary nudge must stay inside WhatsApp's 24-hour service
+    // window. `isDueFollowUpCandidate` still requires four quiet hours, so
+    // "today" means "eligible later today", never "send immediately".
+    // A quoted price, an objection, or an explicit "later" commitment keeps
+    // its stage floor below.
+    if (attempt === 0 && !STAGE_FLOOR[stage]) return todayISO
+
     const base = LADDER[Math.min(attempt, LADDER.length - 1)]
     const floored = Math.max(base, STAGE_FLOOR[stage] || 0)
     let days = Math.max(1, Math.round(floored * URGENCY_SCALE[urgency]))
@@ -169,12 +176,14 @@ function timestampMs(value) {
 }
 
 function lastInboundMs(lead) {
+    // Only a customer message opens Meta's 24-hour service window.
+    // `lastMessageAt` also advances on our outbound delivery and
+    // `updatedAt` advances on admin/system writes, so neither is evidence
+    // that free-form WhatsApp delivery is legal.
     return timestampMs(lead?.lastInboundAt)
-        ?? timestampMs(lead?.lastMessageAt)
-        ?? timestampMs(lead?.updatedAt)
 }
 
-function isInsideWhatsAppWindow(lead, nowMs) {
+export function isInsideWhatsAppWindow(lead, nowMs = Date.now()) {
     const last = lastInboundMs(lead)
     if (last == null) return false
     const age = Number(nowMs) - last
@@ -189,7 +198,8 @@ export function isDueFollowUpCandidate(lead, todayISO, nowMs = Date.now()) {
     if ((lead.followUpCount || 0) >= MAX_ATTEMPTS) return false
     if ((lead.followUpCount || 0) === 0) {
         const last = lastInboundMs(lead)
-        if (last != null && Number(nowMs) - last < FIRST_FOLLOWUP_MIN_IDLE_HOURS * HOUR_MS) return false
+        if (last == null) return false
+        if (Number(nowMs) - last < FIRST_FOLLOWUP_MIN_IDLE_HOURS * HOUR_MS) return false
     }
     if (['pending', 'requested'].includes(pendingFollowUpStatus(lead, nowMs))) return false
     if (daysUntil(lead.eventDate, todayISO) < 0) return false
@@ -234,12 +244,26 @@ export function selectDueFollowUps(leads, todayISO, limit = 40, nowMs = Date.now
     const ranked = rankDueFollowUps(leads, todayISO, nowMs)
     const cutoff = Number(nowMs) - RECENT_CONVERSATION_MS
     const recentReserve = Math.ceil(cap * RECENT_RUN_SHARE)
-    const recent = ranked.filter(lead => {
+    const reachable = ranked
+        .filter(lead => isInsideWhatsAppWindow(lead, nowMs))
+        .slice(0, cap)
+    const selected = new Set(reachable)
+    const reachableRecent = reachable.filter(lead => {
         const startedAt = timestampMs(lead?.createdAt) ?? timestampMs(lead?.firstInboundAt)
         return startedAt != null && startedAt >= cutoff && startedAt <= Number(nowMs)
-    }).slice(0, recentReserve)
-    const selected = new Set(recent)
-    return [...recent, ...ranked.filter(lead => !selected.has(lead)).slice(0, cap - recent.length)]
+    }).length
+    const remaining = cap - reachable.length
+    const recent = ranked.filter(lead => {
+        if (selected.has(lead)) return false
+        const startedAt = timestampMs(lead?.createdAt) ?? timestampMs(lead?.firstInboundAt)
+        return startedAt != null && startedAt >= cutoff && startedAt <= Number(nowMs)
+    }).slice(0, Math.min(remaining, Math.max(0, recentReserve - reachableRecent)))
+    for (const lead of recent) selected.add(lead)
+    return [
+        ...reachable,
+        ...recent,
+        ...ranked.filter(lead => !selected.has(lead)).slice(0, cap - reachable.length - recent.length),
+    ]
 }
 
 // ── When not to send ────────────────────────────────────────────────
@@ -310,7 +334,8 @@ export const MAX_PER_RUN = 25
 
 const followupPolicy = {
     MAX_ATTEMPTS, MAX_PER_RUN, FIRST_FOLLOWUP_MIN_IDLE_HOURS, nextFollowUpDate, urgencyFor, daysUntil,
-    isFinalAttempt, pendingFollowUpStatus, followUpEvidence, isDueFollowUpCandidate, rankDueFollowUps, sendableNow, israelClock,
+    isFinalAttempt, pendingFollowUpStatus, followUpEvidence, isDueFollowUpCandidate, isInsideWhatsAppWindow,
+    rankDueFollowUps, sendableNow, israelClock,
 }
 
 export default followupPolicy

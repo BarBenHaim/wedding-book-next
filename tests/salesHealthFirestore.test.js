@@ -159,7 +159,7 @@ describe('sanitized sales health Firestore aggregation', () => {
     it('preserves the follow-up warning boundary below 26 and at 26', async () => {
         for (let i = 0; i < 25; i++) {
             store.set(`sales_leads/non-dialable-due-${i}`, {
-                followUpAt: '2026-08-15', stage: 'engaged', followUpCount: 0,
+                followUpAt: '2026-08-15', stage: 'engaged', followUpCount: 0, lastInboundAt: 0,
             })
         }
         await expect(readDueFollowUpHealth('2026-08-15')).resolves.toEqual({
@@ -167,7 +167,7 @@ describe('sanitized sales health Firestore aggregation', () => {
         })
 
         store.set('sales_leads/non-dialable-due-25', {
-            followUpAt: '2026-08-15', stage: 'engaged', followUpCount: 0,
+            followUpAt: '2026-08-15', stage: 'engaged', followUpCount: 0, lastInboundAt: 0,
         })
         await expect(readDueFollowUpHealth('2026-08-15')).resolves.toEqual({
             dueFollowUps: 26, scanSaturated: false, scanned: 26,

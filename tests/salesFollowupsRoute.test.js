@@ -42,7 +42,12 @@ vi.mock('@/lib/salesAgent/leads', () => ({
     listLeads: mocks.listLeads, reviveOrphans: mocks.reviveOrphans,
     listMedia: mocks.listMedia, recordMediaSent: mocks.recordMediaSent,
 }))
-vi.mock('@/lib/salesAgent/followupPolicy', () => ({ sendableNow: mocks.sendableNow, MAX_PER_RUN: 25, isFinalAttempt: mocks.isFinalAttempt }))
+vi.mock('@/lib/salesAgent/followupPolicy', async importOriginal => ({
+    ...(await importOriginal()),
+    sendableNow: mocks.sendableNow,
+    MAX_PER_RUN: 25,
+    isFinalAttempt: mocks.isFinalAttempt,
+}))
 vi.mock('@/lib/salesAgent/catalog', () => ({ MEDIA: {} }))
 vi.mock('@/lib/salesAgent/mediaLibrary', () => ({ mergeMedia: mocks.mergeMedia, performanceNote: mocks.performanceNote }))
 vi.mock('@/lib/salesAgent/sweep', () => ({ findOrphans: mocks.findOrphans, findStaleHandoffs: mocks.findStaleHandoffs, handoffAlert: mocks.handoffAlert }))
@@ -90,6 +95,7 @@ beforeEach(async () => {
     process.env.CRON_SECRET = 'cron-test-secret'
     process.env.SALES_AGENT_SECRET = 'shared-secret-fixture'
     process.env.SALES_AGENT_OWNER_PHONE = 'non-dialable-owner-fixture'
+    process.env.SALES_FOLLOWUP_TEMPLATE_ENABLED = 'true'
     delete process.env.SALES_FOLLOWUP_COUPON_CODE
     delete process.env.SALES_FOLLOWUP_COUPON_EXPIRES_AT
     mocks.sendableNow.mockReturnValue({ ok: true })
@@ -210,6 +216,97 @@ describe('follow-up failure privacy', () => {
 })
 
 describe('truthful follow-up transport', () => {
+    it('fails closed outside 24 hours without explicit template opt-in and reports only a safe blocked aggregate', async () => {
+        delete process.env.SALES_FOLLOWUP_TEMPLATE_ENABLED
+
+        const result = await runCron()
+
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({
+            count: 0,
+            items: [],
+            templateDelivery: { status: 'blocked', blockedCount: 1 },
+        })
+        expect(JSON.stringify(result.body)).not.toContain(lead.phone)
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.prepareFollowUpDelivery).not.toHaveBeenCalled()
+        expect(mocks.recordDeliveryEvent).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+    })
+
+    it('keeps an in-window follow-up sendable when template delivery is disabled', async () => {
+        delete process.env.SALES_FOLLOWUP_TEMPLATE_ENABLED
+        mocks.dueFollowUps.mockResolvedValue([{ ...lead, lastInboundAt: Date.now() }])
+
+        const result = await runCron()
+
+        expect(result.body).toMatchObject({
+            count: 1,
+            templateDelivery: { status: 'disabled', blockedCount: 0 },
+        })
+        expect(mocks.sendWhatsAppText).toHaveBeenCalledWith(lead.phone, 'follow-up')
+        expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
+    })
+
+    it('parses an ISO lastInboundAt with the same in-window decision as queue ranking', async () => {
+        delete process.env.SALES_FOLLOWUP_TEMPLATE_ENABLED
+        mocks.dueFollowUps.mockResolvedValue([{
+            ...lead,
+            lastInboundAt: new Date(Date.now() - 6 * 3600_000).toISOString(),
+        }])
+
+        const result = await runCron()
+
+        expect(result.body).toMatchObject({
+            count: 1,
+            templateDelivery: { status: 'disabled', blockedCount: 0 },
+        })
+        expect(mocks.sendWhatsAppText).toHaveBeenCalledWith(lead.phone, 'follow-up')
+        expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
+    })
+
+    it('does not trust a recent outbound timestamp when no customer inbound proves an open window', async () => {
+        delete process.env.SALES_FOLLOWUP_TEMPLATE_ENABLED
+        mocks.dueFollowUps.mockResolvedValue([{
+            ...lead,
+            lastInboundAt: null,
+            lastMessageAt: new Date(Date.now() - 3600_000).toISOString(),
+            updatedAt: Date.now(),
+        }])
+
+        const result = await runCron()
+
+        expect(result.body).toMatchObject({
+            count: 0,
+            items: [],
+            templateDelivery: { status: 'blocked', blockedCount: 1 },
+        })
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
+    })
+
+    it('does not revive or identify an outside-window orphan while templates are disabled', async () => {
+        delete process.env.SALES_FOLLOWUP_TEMPLATE_ENABLED
+        mocks.listLeads.mockResolvedValue([{ ...lead, followUpAt: null }])
+        mocks.findOrphans.mockReturnValue([{ ...lead, followUpAt: null }])
+        mocks.dueFollowUps.mockResolvedValue([])
+
+        const result = await runCron()
+
+        expect(result.body).toMatchObject({
+            count: 0,
+            items: [],
+            recovered: 0,
+            recoveredLeads: [],
+            templateDelivery: { status: 'blocked', blockedCount: 1 },
+        })
+        expect(JSON.stringify(result.body)).not.toContain(lead.phone)
+        expect(mocks.reviveOrphans).not.toHaveBeenCalled()
+        expect(mocks.prepareFollowUpDelivery).not.toHaveBeenCalled()
+        expect(mocks.recordDeliveryEvent).not.toHaveBeenCalled()
+    })
+
     it('uses only the planned approved template outside the service window and records provider acceptance as pending', async () => {
         mocks.parseAgentJson.mockReturnValue({
             malformed: false, handoff: false, messages: ['follow-up'], stage: 'engaged', image: 'book',
@@ -480,6 +577,27 @@ describe('truthful follow-up transport', () => {
         const body = await response.json()
 
         expect(body.delivery).toBe('dry')
+        expect(mocks.prepareFollowUpDelivery).not.toHaveBeenCalled()
+        expect(mocks.recordDeliveryEvent).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+    })
+
+    it('dry-run still previews an outside-window template while production template delivery is disabled', async () => {
+        delete process.env.SALES_FOLLOWUP_TEMPLATE_ENABLED
+
+        const response = await GET(new Request('http://localhost/api/sales-agent/followups?dry=1', {
+            headers: { authorization: 'Bearer cron-test-secret' },
+        }))
+        const body = await response.json()
+
+        expect(body).toMatchObject({
+            delivery: 'dry',
+            count: 1,
+            items: [expect.objectContaining({ withinWindow: false, deliveryStatus: 'dry' })],
+            templateDelivery: { status: 'disabled', blockedCount: 0 },
+        })
+        expect(mocks.reviveOrphans).not.toHaveBeenCalled()
         expect(mocks.prepareFollowUpDelivery).not.toHaveBeenCalled()
         expect(mocks.recordDeliveryEvent).not.toHaveBeenCalled()
         expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()

@@ -51,7 +51,7 @@ import { isSuperAdmin } from '@/lib/superAdmin'
 import { buildFollowUpPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, resolveFollowUp } from '@/lib/salesAgent/agent'
 import { dueFollowUps, prepareFollowUpDelivery, recordDeliveryEvent, listLeads, reviveOrphans, listMedia } from '@/lib/salesAgent/leads'
-import { sendableNow, MAX_PER_RUN, isFinalAttempt } from '@/lib/salesAgent/followupPolicy'
+import { sendableNow, MAX_PER_RUN, isFinalAttempt, isInsideWhatsAppWindow } from '@/lib/salesAgent/followupPolicy'
 import { MEDIA } from '@/lib/salesAgent/catalog'
 import { mergeMedia, performanceNote } from '@/lib/salesAgent/mediaLibrary'
 import { findOrphans, findStaleHandoffs, handoffAlert } from '@/lib/salesAgent/sweep'
@@ -60,8 +60,6 @@ import { createOutboundId } from '@/lib/salesAgent/delivery'
 import { isDemoEvidenceContent } from '@/lib/salesAgent/followupEvidence'
 import { readSalesSettings } from '@/lib/salesAgent/settingsStore'
 import { planFollowUp, readFollowUpOffer } from '@/lib/salesAgent/followupStrategy'
-
-const WINDOW_MS = 24 * 3600 * 1000
 
 function unsentVideo(library, lead, strategy) {
     if (strategy?.mediaPreference !== 'video') return null
@@ -98,13 +96,6 @@ function todayISO() {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
 }
 
-function msSince(ts) {
-    if (!ts) return Infinity
-    const ms = ts?.toMillis ? ts.toMillis() : Number(ts)
-    if (!Number.isFinite(ms)) return Infinity
-    return Date.now() - ms
-}
-
 // ── The sweep ───────────────────────────────────────────────────────
 //
 // One read of the whole lead table, which sounds wasteful and is not:
@@ -114,21 +105,27 @@ function msSince(ts) {
 //
 // Never throws. A sweep that fails must not stop the follow-ups that
 // were already due - that would trade a quiet leak for a loud one.
-async function sweep(today) {
+async function sweep(today, { templateDeliveryEnabled = false, nowMs = Date.now() } = {}) {
     try {
         const all = await listLeads({ limit: 500 })
         const orphans = findOrphans(all)
         const stale = findStaleHandoffs(all)
-        if (orphans.length) {
-            await reviveOrphans(orphans.map(l => l.phone), today)
+        const blocked = templateDeliveryEnabled
+            ? []
+            : orphans.filter(lead => !isInsideWhatsAppWindow(lead, nowMs))
+        const blockedSet = new Set(blocked)
+        const revivable = orphans.filter(lead => !blockedSet.has(lead))
+        if (revivable.length) {
+            await reviveOrphans(revivable.map(l => l.phone), today)
         }
         return {
-            revived: orphans.map(l => ({ phone: l.phone, name: l.name || l.profileName || null })),
+            revived: revivable.map(l => ({ phone: l.phone, name: l.name || l.profileName || null })),
             stale,
+            blockedTemplateCount: blocked.length,
         }
     } catch {
         console.error('[sales-agent/followups] sweep failed')
-        return { revived: [], stale: [], error: 'sweep-failed' }
+        return { revived: [], stale: [], blockedTemplateCount: 0, error: 'sweep-failed' }
     }
 }
 
@@ -180,6 +177,7 @@ export async function GET(req) {
         && !!process.env.SALES_AGENT_SECRET
     const directSend = !callerDelivers && canSendWhatsApp()
     const composeOnly = !dry && !callerDelivers && !directSend
+    const templateDeliveryEnabled = process.env.SALES_FOLLOWUP_TEMPLATE_ENABLED === 'true'
 
     // Nothing goes out on Shabbat, or before nine, or after nine. The
     // leads stay due - `dueFollowUps` compares with `<=` - so a skipped
@@ -189,9 +187,9 @@ export async function GET(req) {
         return NextResponse.json({ ok: true, skipped: when.reason, date: today, count: 0, items: [] })
     }
 
-    const { revived, stale, error: sweepError } = dry
-        ? { revived: [], stale: findStaleHandoffs(await listLeads({ limit: 500 }).catch(() => [])) }
-        : await sweep(today)
+    const { revived, stale, blockedTemplateCount: sweepBlockedTemplateCount = 0, error: sweepError } = dry
+        ? { revived: [], stale: findStaleHandoffs(await listLeads({ limit: 500 }).catch(() => [])), blockedTemplateCount: 0 }
+        : await sweep(today, { templateDeliveryEnabled })
 
     let leads
     try {
@@ -207,6 +205,7 @@ export async function GET(req) {
     const perf = performanceNote(Object.fromEntries(custom.map(m => [m.key, m])), library)
 
     const items = []
+    let blockedTemplateCount = sweepBlockedTemplateCount
     // A small worker pool rather than a sequential loop: twenty-five
     // model calls in a row is 60-90 seconds of wall time, which is the
     // function's entire budget. Four at a time lands the same work in a
@@ -219,7 +218,15 @@ export async function GET(req) {
             // existed and nothing passed it, so every third follow-up was
             // written as another nudge - and a clean goodbye gets replies
             // that a fourth reminder never will.
-            const withinWindow = msSince(lead.lastInboundAt) < WINDOW_MS
+            const withinWindow = isInsideWhatsAppWindow(lead)
+            if (!dry && !withinWindow && !templateDeliveryEnabled) {
+                // Production currently has no approved proactive template.
+                // Fail before strategy composition, delivery preparation, or
+                // any customer-linked write. The aggregate counter below is
+                // enough to operate the queue without exposing identity data.
+                blockedTemplateCount += 1
+                return
+            }
             const followUpNumber = (lead.followUpCount || 0) + 1
             const isFinal = isFinalAttempt(lead.followUpCount || 0)
             const strategy = planFollowUp(lead, {
@@ -525,6 +532,10 @@ export async function GET(req) {
         date: today,
         count: items.length,
         items,
+        templateDelivery: {
+            status: templateDeliveryEnabled ? 'enabled' : blockedTemplateCount ? 'blocked' : 'disabled',
+            blockedCount: blockedTemplateCount,
+        },
         recovered: revived.length,
         recoveredLeads: revived,
         handoffsWaiting: stale.length,

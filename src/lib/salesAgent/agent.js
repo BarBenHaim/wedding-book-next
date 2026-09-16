@@ -262,29 +262,27 @@ export function resolveFollowUp({ parsed, todayISO, followUpCount = 0, addDays }
         })
     }
 
-    if (parsed.followUpAt && parsed.followUpAt > todayISO && !parsed.handoff) {
-        const stopped = nextFollowUpDate({
-            stage: parsed.stage,
-            attempt: followUpCount,
-            eventDate: parsed.eventDate,
-            todayISO,
-            handoff: parsed.handoff,
-        }) == null
-        // ...unless the policy says to stop entirely. A model that
-        // suggests a date for a lead whose event was last week is not a
-        // reason to send that message.
-        if (!stopped) return parsed.followUpAt
-        return null
-    }
-
-    return nextFollowUpDate({
+    const policyDate = nextFollowUpDate({
         stage: parsed.stage,
         attempt: followUpCount,
         eventDate: parsed.eventDate,
         todayISO,
-        callbackPromised: parsed.callbackPromised,
         handoff: parsed.handoff,
     })
+    if (policyDate == null) return null
+
+    // A first ordinary follow-up is deliberately due today and the four-hour
+    // idle gate decides when it may leave. Letting a model-suggested tomorrow
+    // override this date closes the free-form WhatsApp window. Conversely,
+    // stage and later-attempt policy dates are minimums: the model may choose
+    // more breathing room, but never less.
+    if (policyDate === todayISO) return policyDate
+
+    if (parsed.followUpAt && parsed.followUpAt > todayISO && !parsed.handoff) {
+        return parsed.followUpAt > policyDate ? parsed.followUpAt : policyDate
+    }
+
+    return policyDate
 }
 
 // ── The call ────────────────────────────────────────────────────────

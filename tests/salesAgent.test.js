@@ -531,7 +531,7 @@ describe('resolveFollowUp — no lead falls out of the funnel', () => {
 
     it('always schedules something for a live conversation', () => {
         // The model forgetting follow_up_at must not mean "never chase".
-        expect(run({})).toBe('2026-08-06')
+        expect(run({})).toBe(today)
     })
 
     it('chases the day AFTER a promised callback', () => {
@@ -548,7 +548,17 @@ describe('resolveFollowUp — no lead falls out of the funnel', () => {
     })
 
     it('never schedules in the past', () => {
-        expect(run({ followUpAt: '2026-01-01' })).toBe('2026-08-06')
+        expect(run({ followUpAt: '2026-01-01' })).toBe(today)
+    })
+
+    it('does not let a model suggestion push the first ordinary follow-up outside the open window', () => {
+        expect(run({ followUpAt: '2026-08-06' })).toBe(today)
+    })
+
+    it('does not let a model suggestion undercut stage floors', () => {
+        expect(run({ stage: 'offer_sent', followUpAt: '2026-08-06' })).toBe('2026-08-07')
+        expect(run({ stage: 'objection', followUpAt: '2026-08-06' })).toBe('2026-08-07')
+        expect(run({ stage: 'commit_later', followUpAt: '2026-08-06' })).toBe('2026-08-09')
     })
 
     it('stops on handoff, on a closed deal, and on a lost one', () => {
@@ -568,14 +578,14 @@ describe('resolveFollowUp — no lead falls out of the funnel', () => {
 
     it('widens the gap with every attempt', () => {
         const gaps = [0, 1, 2].map(n => run({}, n))
-        expect(gaps).toEqual(['2026-08-06', '2026-08-08', '2026-08-12'])
+        expect(gaps).toEqual(['2026-08-05', '2026-08-08', '2026-08-12'])
     })
 
     it('chases harder when the event is close and backs off when it is far', () => {
         const soon = run({ eventDate: '2026-08-14' })
         const far = run({ eventDate: '2027-06-01' })
-        expect(soon).toBe('2026-08-06')
-        expect(far).toBe('2026-08-07')
+        expect(soon).toBe(today)
+        expect(far).toBe(today)
     })
 
     it('stops entirely once the event has already happened', () => {

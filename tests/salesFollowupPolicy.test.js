@@ -47,8 +47,8 @@ describe('daysUntil', () => {
 describe('the ladder', () => {
     const base = { stage: 'engaged', todayISO: TODAY }
 
-    it('widens with each attempt instead of nagging daily', () => {
-        expect(nextFollowUpDate({ ...base, attempt: 0 })).toBe('2026-08-11')
+    it('keeps the first ordinary follow-up today, then widens later attempts', () => {
+        expect(nextFollowUpDate({ ...base, attempt: 0 })).toBe('2026-08-10')
         expect(nextFollowUpDate({ ...base, attempt: 1 })).toBe('2026-08-13')
         expect(nextFollowUpDate({ ...base, attempt: 2 })).toBe('2026-08-17')
     })
@@ -58,12 +58,16 @@ describe('the ladder', () => {
         expect(nextFollowUpDate({ ...base, attempt: 9 })).toBeNull()
     })
 
-    it('gives a fresh price room to breathe', () => {
-        // Chasing the morning after a quote is pressure; the same message
-        // two days later is service.
+    it('keeps stage floors for a fresh quote, objection, and promised later decision', () => {
         const engaged = nextFollowUpDate({ stage: 'engaged', attempt: 0, todayISO: TODAY })
         const quoted = nextFollowUpDate({ stage: 'offer_sent', attempt: 0, todayISO: TODAY })
-        expect(quoted > engaged).toBe(true)
+        const objection = nextFollowUpDate({ stage: 'objection', attempt: 0, todayISO: TODAY })
+        const later = nextFollowUpDate({ stage: 'commit_later', attempt: 0, todayISO: TODAY })
+
+        expect(engaged).toBe(TODAY)
+        expect(quoted).toBe('2026-08-12')
+        expect(objection).toBe('2026-08-12')
+        expect(later).toBe('2026-08-14')
     })
 
     it('waits longest for someone who asked us to come back later', () => {
@@ -79,9 +83,9 @@ describe('the event date changes the rhythm', () => {
         expect(daysUntil(soon, TODAY)).toBeLessThan(daysUntil(far, TODAY))
     })
 
-    it('stretches when the event is months away', () => {
+    it('does not let a distant event push the first ordinary follow-up outside the service window', () => {
         const far = nextFollowUpDate({ stage: 'engaged', attempt: 0, eventDate: '2027-05-01', todayISO: TODAY })
-        expect(daysUntil(far, TODAY)).toBe(2)
+        expect(far).toBe(TODAY)
     })
 
     it('never schedules a follow-up for after the event', () => {
@@ -95,10 +99,9 @@ describe('the event date changes the rhythm', () => {
         expect(nextFollowUpDate({ stage: 'offer_sent', attempt: 0, eventDate: '2026-08-01', todayISO: TODAY })).toBeNull()
     })
 
-    it('still waits at least a day', () => {
-        // Halving the ladder must never round down to "today".
+    it('keeps the first ordinary follow-up due today even when the event is imminent', () => {
         const d = nextFollowUpDate({ stage: 'engaged', attempt: 0, eventDate: '2026-08-11', todayISO: TODAY })
-        expect(daysUntil(d, TODAY)).toBeGreaterThanOrEqual(1)
+        expect(d).toBe(TODAY)
     })
 })
 
@@ -125,7 +128,7 @@ describe('a promised callback beats the ladder', () => {
 
     it('is ignored once it is in the past', () => {
         const d = nextFollowUpDate({ stage: 'engaged', attempt: 0, todayISO: TODAY, callbackPromised: '2026-08-01' })
-        expect(d).toBe('2026-08-11')
+        expect(d).toBe(TODAY)
     })
 })
 
@@ -230,7 +233,12 @@ describe('revenue-first follow-up truth', () => {
     it('refuses paid leads and events that have already passed', () => {
         expect(isDueFollowUpCandidate({ followUpAt: TODAY, stage: 'engaged', paymentVerified: true }, TODAY)).toBe(false)
         expect(isDueFollowUpCandidate({ followUpAt: TODAY, stage: 'engaged', eventDate: '2026-08-09' }, TODAY)).toBe(false)
-        expect(isDueFollowUpCandidate({ followUpAt: TODAY, stage: 'engaged', eventDate: '2026-08-11' }, TODAY)).toBe(true)
+        expect(isDueFollowUpCandidate({
+            followUpAt: TODAY,
+            stage: 'engaged',
+            eventDate: '2026-08-11',
+            lastInboundAt: Date.now() - 5 * 3600_000,
+        }, TODAY)).toBe(true)
     })
 
     it('waits four quiet hours before the first same-day follow-up', () => {
@@ -239,6 +247,11 @@ describe('revenue-first follow-up truth', () => {
 
         expect(isDueFollowUpCandidate({ ...base, lastInboundAt: now - 3 * 3600_000 }, TODAY, now)).toBe(false)
         expect(isDueFollowUpCandidate({ ...base, lastInboundAt: now - 4 * 3600_000 }, TODAY, now)).toBe(true)
+    })
+
+    it('does not send a same-day first follow-up without a proven contact timestamp', () => {
+        const now = Date.parse('2026-08-10T12:00:00Z')
+        expect(isDueFollowUpCandidate({ followUpAt: TODAY, stage: 'engaged', followUpCount: 0 }, TODAY, now)).toBe(false)
     })
 
     it('puts money and event urgency before a generic stale conversation', () => {
@@ -255,10 +268,20 @@ describe('revenue-first follow-up truth', () => {
         const now = Date.parse('2026-08-10T12:00:00Z')
         const ranked = rankDueFollowUps([
             { id: 'old-money', stage: 'ready_to_pay', lastInboundAt: now - 72 * 3600_000 },
-            { id: 'fresh', stage: 'engaged', lastInboundAt: now - 6 * 3600_000 },
+            { id: 'fresh', stage: 'engaged', lastInboundAt: '2026-08-10T06:00:00.000Z' },
         ], TODAY, now)
 
         expect(ranked.map(row => row.id)).toEqual(['fresh', 'old-money'])
+    })
+
+    it('does not treat an outbound or admin timestamp as proof the service window reopened', () => {
+        const now = Date.parse('2026-08-10T12:00:00Z')
+        const ranked = rankDueFollowUps([
+            { id: 'money', stage: 'ready_to_pay', lastInboundAt: now - 72 * 3600_000 },
+            { id: 'outbound-only', stage: 'engaged', lastMessageAt: '2026-08-10T11:00:00.000Z', updatedAt: now },
+        ], TODAY, now)
+
+        expect(ranked.map(row => row.id)).toEqual(['money', 'outbound-only'])
     })
 
     it('reserves most of a full run for conversations opened in the last seven days', () => {
@@ -283,5 +306,26 @@ describe('revenue-first follow-up truth', () => {
         expect(selected).toHaveLength(25)
         expect(selected.filter(row => row.id.startsWith('recent-'))).toHaveLength(15)
         expect(selected.filter(row => row.id.startsWith('old-'))).toHaveLength(10)
+    })
+
+    it('never lets outside-window backlog displace a reachable conversation', () => {
+        const now = Date.parse('2026-09-14T16:00:00Z')
+        const reachable = Array.from({ length: 20 }, (_, index) => ({
+            id: `reachable-${index}`,
+            stage: 'engaged',
+            createdAt: now - 30 * 86400_000,
+            lastInboundAt: now - 6 * 3600_000,
+        }))
+        const recentButClosed = Array.from({ length: 20 }, (_, index) => ({
+            id: `closed-window-${index}`,
+            stage: 'ready_to_pay',
+            createdAt: now - 2 * 86400_000,
+            lastInboundAt: now - 30 * 3600_000,
+        }))
+
+        const selected = selectDueFollowUps([...recentButClosed, ...reachable], '2026-09-14', 25, now)
+
+        expect(selected.filter(row => row.id.startsWith('reachable-'))).toHaveLength(20)
+        expect(selected.slice(0, 20).every(row => row.id.startsWith('reachable-'))).toBe(true)
     })
 })
