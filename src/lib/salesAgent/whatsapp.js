@@ -22,11 +22,29 @@
 const GRAPH = 'https://graph.facebook.com/v19.0'
 const GRAPH_TIMEOUT_MS = 12_000
 
+// Which follow-up template goes out. `wt_followup` ({{1}} = the whole
+// message) was designed on 15.9 and never approved by Meta. `wt_followup_he`
+// ("היי {{1}}, רק מוודא שלא פספסתי אותך לגבי ספר הברכות...") has been
+// APPROVED on the production WABA since 5.8 - found in WhatsApp Manager on
+// 18.9 while 163 leads sat blocked waiting for a template. Its one variable
+// is the customer's name, so the two are not interchangeable; see
+// followupStrategy.js for how parameters are chosen per template.
+export const APPROVED_NAME_TEMPLATE = 'wt_followup_he'
+// The universal template's name. Still allowlisted so it can be switched
+// to with SALES_FOLLOWUP_TEMPLATE_NAME the day Meta approves it.
 export const FOLLOWUP_TEMPLATE = 'wt_followup'
 export const DAILY_DIGEST_TEMPLATE = 'wt_daily_digest'
 
+// Resolved per call, not at import: the cron and the tests both need to
+// be able to change it without a redeploy of the module graph.
+export function activeFollowupTemplate(env = process.env) {
+    const name = String(env?.SALES_FOLLOWUP_TEMPLATE_NAME || '').trim()
+    return TEMPLATE_PARAMETERS.has(name) ? name : APPROVED_NAME_TEMPLATE
+}
+
 const TEMPLATE_PARAMETERS = new Map([
     [FOLLOWUP_TEMPLATE, 1],
+    [APPROVED_NAME_TEMPLATE, 1],
     [DAILY_DIGEST_TEMPLATE, 4],
 ])
 

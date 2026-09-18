@@ -1,5 +1,36 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { planFollowUp, readFollowUpOffer } from '@/lib/salesAgent/followupStrategy'
+
+// The plans below were written for the universal template (`wt_followup`,
+// {{1}} = the whole message). Production defaults to the template Meta
+// actually approved (`wt_followup_he`, {{1}} = the customer's name) - see
+// the last describe - so these pin the universal name explicitly.
+beforeEach(() => { process.env.SALES_FOLLOWUP_TEMPLATE_NAME = 'wt_followup' })
+afterEach(() => { delete process.env.SALES_FOLLOWUP_TEMPLATE_NAME })
+
+describe('the approved name-only template (production default)', () => {
+    it('sends the customer name as the only parameter and records the body Meta will render', () => {
+        delete process.env.SALES_FOLLOWUP_TEMPLATE_NAME
+        const first = planFollowUp({ stage: 'engaged' }, { attempt: 1, customerName: 'דנה כהן' })
+        expect(first.templateName).toBe('wt_followup_he')
+        expect(first.templateParameters).toEqual(['דנה כהן'])
+        expect(first.templateText).toBe('היי דנה כהן, רק מוודא שלא פספסתי אותך לגבי ספר הברכות. אשמח לענות על כל שאלה 🙏')
+        // The plan itself (objective, cta, landing) is unchanged - only the transport text.
+        expect(first.cta).toBeTruthy()
+    })
+
+    it('never sends an empty name parameter', () => {
+        delete process.env.SALES_FOLLOWUP_TEMPLATE_NAME
+        const plan = planFollowUp({ stage: 'new' }, { attempt: 2, customerName: '' })
+        expect(plan.templateParameters).toEqual(['משפחה יקרה'])
+        expect(plan.templateText).toMatch(/^היי משפחה יקרה, /)
+    })
+
+    it('falls back to the approved template for an unknown name', () => {
+        process.env.SALES_FOLLOWUP_TEMPLATE_NAME = 'wt_something_else'
+        expect(planFollowUp({ stage: 'new' }, { attempt: 1, customerName: 'רון' }).templateName).toBe('wt_followup_he')
+    })
+})
 
 const NOW = Date.parse('2026-09-08T12:00:00.000Z')
 

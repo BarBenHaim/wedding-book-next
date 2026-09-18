@@ -98,6 +98,9 @@ beforeEach(async () => {
     process.env.SALES_AGENT_SECRET = 'shared-secret-fixture'
     process.env.SALES_AGENT_OWNER_PHONE = 'non-dialable-owner-fixture'
     process.env.SALES_FOLLOWUP_TEMPLATE_ENABLED = 'true'
+    // These transport tests were written against the universal template;
+    // production defaults to the approved name-only one (whatsapp.js).
+    process.env.SALES_FOLLOWUP_TEMPLATE_NAME = 'wt_followup'
     delete process.env.SALES_FOLLOWUP_COUPON_CODE
     delete process.env.SALES_FOLLOWUP_COUPON_EXPIRES_AT
     mocks.sendableNow.mockReturnValue({ ok: true })

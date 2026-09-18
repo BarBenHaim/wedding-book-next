@@ -1,5 +1,16 @@
 const LANDING_URL = 'https://weddingtales.co.il'
-const FOLLOWUP_TEMPLATE = 'wt_followup'
+// Keep in step with whatsapp.js. The approved template's single variable is
+// the customer's NAME and its body is fixed by Meta; the richer strategy
+// texts below only go out as free text inside the 24h window, or through
+// `wt_followup` once that template is approved.
+const UNIVERSAL_TEMPLATE = 'wt_followup'
+const APPROVED_NAME_TEMPLATE = 'wt_followup_he'
+const NAME_ONLY_TEMPLATES = new Set([APPROVED_NAME_TEMPLATE])
+const activeTemplate = (env = process.env) => {
+    const name = String(env?.SALES_FOLLOWUP_TEMPLATE_NAME || '').trim()
+    return name === UNIVERSAL_TEMPLATE || NAME_ONLY_TEMPLATES.has(name) ? name : APPROVED_NAME_TEMPLATE
+}
+const approvedNameBody = name => `היי ${name}, רק מוודא שלא פספסתי אותך לגבי ספר הברכות. אשמח לענות על כל שאלה 🙏`
 const MAX_OFFER_WINDOW_MS = 48 * 60 * 60 * 1000
 const HIGH_INTENT_STAGES = new Set([
     'ready_to_pay',
@@ -39,7 +50,9 @@ export function readFollowUpOffer(env = process.env, nowMs = Date.now()) {
     return { code, expiresAt: new Date(expiresAtMs).toISOString() }
 }
 
-function plan({ id, objective, cta, landingUrl = null, mediaPreference = 'none', coupon = null, templateText }) {
+function plan({ id, objective, cta, landingUrl = null, mediaPreference = 'none', coupon = null, templateText, name = '' }) {
+    const templateName = activeTemplate()
+    const nameOnly = NAME_ONLY_TEMPLATES.has(templateName)
     return {
         id,
         objective,
@@ -47,9 +60,11 @@ function plan({ id, objective, cta, landingUrl = null, mediaPreference = 'none',
         landingUrl,
         mediaPreference,
         coupon,
-        templateName: FOLLOWUP_TEMPLATE,
-        templateParameters: [templateText],
-        templateText,
+        templateName,
+        // What Meta will actually render, so the transcript records the
+        // message the customer received and not the one we wished we sent.
+        templateParameters: nameOnly ? [name] : [templateText],
+        templateText: nameOnly ? approvedNameBody(name) : templateText,
     }
 }
 
@@ -65,7 +80,7 @@ export function planFollowUp(lead = {}, {
 
     if (final) {
         if (HIGH_INTENT_STAGES.has(lead?.stage) && offer?.code && offer?.expiresAt) {
-            return plan({
+            return plan({ name,
                 id: 'qualified_offer',
                 objective: 'לתת לליד שכבר הביע כוונת רכישה סיבה אמיתית להשלים הזמנה עכשיו',
                 cta: 'coupon',
@@ -74,7 +89,7 @@ export function planFollowUp(lead = {}, {
                 templateText: `${name}, שמרנו לכם את הקוד ${cleanParameter(offer.code)} עד ${expiryLabel(offer.expiresAt)}. אפשר לראות את כל הפרטים ולהשלים הזמנה כאן: ${LANDING_URL}`,
             })
         }
-        return plan({
+        return plan({ name,
             id: 'graceful_close',
             objective: 'לסגור מעגל בכבוד ולהשאיר דלת פתוחה בלי לחץ ובלי הנחה',
             cta: 'none',
@@ -83,7 +98,7 @@ export function planFollowUp(lead = {}, {
     }
 
     if (number === 1) {
-        return plan({
+        return plan({ name,
             id: 'proof_site',
             objective: 'להמחיש במהירות איך ספר הברכות נראה ולהוביל לפרטים באתר',
             cta: 'website',
@@ -94,7 +109,7 @@ export function planFollowUp(lead = {}, {
     }
 
     if (lead?.stage === 'ready_to_pay') {
-        return plan({
+        return plan({ name,
             id: 'resolve_blocker',
             objective: 'לברר בעדינות אם עצרה שאלה על החבילה, תקלה בתשלום או תזמון',
             cta: 'reply',
@@ -103,7 +118,7 @@ export function planFollowUp(lead = {}, {
     }
 
     if (['objection', 'commit_later', 'offer_sent'].includes(lead?.stage)) {
-        return plan({
+        return plan({ name,
             id: 'resolve_blocker',
             objective: 'להתייחס להתלבטות האחרונה ולבקש תשובה קצרה על הדבר היחיד שעוצר את ההחלטה',
             cta: 'reply',
@@ -111,7 +126,7 @@ export function planFollowUp(lead = {}, {
         })
     }
 
-    return plan({
+    return plan({ name,
         id: 'proof_site',
         objective: 'להחזיר את הליד לפרטים המלאים באתר בלי לחזור על מדיה שכבר נשלחה',
         cta: 'website',
