@@ -11,6 +11,114 @@ the ones that touch what you are about to change.
 
 ---
 
+## ⚠️ 18.9 — Claude joined this repo. Read this section first.
+
+Lord brought a second agent (Claude, via Cowork) into the sales system on
+18.9 because sales were not happening. This section is written for the
+next Codex session: what was found in the LIVE data, what was changed,
+and what is deliberately left for you. Keep writing here, in this
+format, when you change `salesAgent/`; Claude does the same.
+
+### What the live table said on 18.9 (`/api/sales-agent/leads`)
+
+208 leads since August, ~30 a week. 6 closed_won, 4 verified, 3,450 ₪.
+**108 leads (52%) wrote exactly one message and never again.** 163 with
+`followUpAt` in the past; only 31 ever received a follow-up. 23 in
+`handoff`. Model spend for the week: 0.
+
+Transcripts, not aggregates, found the cause:
+
+- Shay Cohen (17.9) got opening A, then asked "האורחים סורקים באירוע או
+  לפני?" and "האלבום מונפק אחרי האירוע?" — **no reply, ever.**
+- A mother (15.9) wrote "אני צריכה לבר מצווה לבן שלי", "ספר מודפס" — got
+  a generic "כל הפרטים באתר" from the opening's closing block. No price,
+  no next step.
+- Every "אבדוק תודה" after opening A got silence.
+
+### Root cause — the scripted opening swallowed every later turn
+
+`prepareOpeningRuntime` returns `eligible: true` for any lead with a
+pinned `openingFlow`, on every message, forever. `runOpeningFlow` then
+returns `parts: []` in two cases: the flow already reached `stop`
+(`completed`, cursor past the end) and the flow is waiting for a photo /
+event date while the customer typed words (`wait_photo` / `wait_event`).
+`reply/route.js` turned an empty parts list into `noReply: true` and
+returned. The sales agent below it — the decision policy, the model, the
+price safety net, the media guard — was never reached for any enrolled
+lead. Since ~31.8 every new lead is enrolled, so the whole agent was
+effectively off. This is consistent with the 24.8 design ("no free-form
+AI conversation… `stop` leaves the conversation to the owner"), but the
+owner was not answering either, and nothing told him a question had
+arrived. Lord approved reviving the agent after the opening on 18.9.
+
+### What changed (commit 2f73574)
+
+- `openingRuntime.js` — `prepareOpeningRuntime({ yieldWhenSilent })`.
+  When true, a **text** turn that produces no parts and no approval
+  request, while the flow is finished / `wait_photo` / `wait_event`,
+  returns `eligible: false` with reason `opening-finished` or
+  `opening-<action>-yielded`. Non-text turns (photo, owner approval) are
+  never yielded — they advance the state machine and must be committed
+  by the opening branch. Opening state is not touched, so a photo that
+  arrives later still resumes the design/approval flow where it waited.
+- `openingNoteFor(runtime, lead)` (same file, pure) — one Hebrew line for
+  the prompt: what the opening already said (first text blocks, quoted),
+  and whether it asked for a photo. Without it the agent greets a lead
+  who was greeted an hour ago or asks for the photo again.
+- `reply/route.js` — passes `yieldWhenSilent: settings.mode === 'full_sales'`
+  and `openingNote` into `buildSystemPrompt`. Opening-only mode is
+  unchanged.
+- `prompt.js` — renders `lead.openingNote` under "what we know".
+- `template-bootstrap/route.js` — accepts a super-admin ID token in
+  addition to `x-wt-secret` (same door as `/leads`), so the template can
+  be provisioned from the admin without pasting the secret anywhere.
+- Tests: `salesOpeningRuntime.test.js` (5 new), `salesReplyRoute.test.js`
+  mock now spreads the real module. Full suite: 1612 passing.
+
+### Still broken, in order — Codex, this is the queue
+
+1. **Follow-ups outside the 24h window are all blocked** —
+   `blockedTemplateCount` — because `wt_followup` is not approved at
+   Meta and `SALES_FOLLOWUP_TEMPLATE_ENABLED` is not set in Vercel
+   (verified 18.9: the var does not exist; `WHATSAPP_WABA_ID` does not
+   exist either, discovery through `WHATSAPP_BUSINESS_ID` must work).
+   163 leads are waiting on this one switch. Provision the template, get
+   it approved, then Lord sets the flag. A `{{1}}` MARKETING body is
+   the kind Meta rejects as too generic — have a concrete fallback text
+   ready.
+2. **Nothing writes `sales_health_runtime/followups.lastRunAtMs`.**
+   `readSalesHealthRuntime` reads it, the health card shows `lastRunAt:
+   null` forever, and there is no way to tell from the admin whether the
+   cron ran. Write it at the end of every non-dry run.
+3. **`?dry=1` on `/followups` never returned** in two attempts (>5 min,
+   `maxDuration: 60`). Dry mode composes a model call per due lead with
+   no route deadline; with 163 due that is a hung request. Give dry a
+   cap (say 10 items) and a deadline.
+4. **Opening A hands hot leads to Lord** ("מכין דוגמה ואחזור") and 23 are
+   sitting in `handoff` with no SLA and no reminder. Either the approval
+   queue gets a daily nudge to Lord, or variant A stops promising a
+   personal sample. Product decision — ask him, do not guess.
+5. **Opening B (99% of traffic) is `media > media > stop`** — two files
+   and no question, no price, no "מתי האירוע?". Now that the agent
+   answers, a closing question would turn one-message leads into
+   conversations. Lord's own rule: whoever asks a price gets a price.
+6. The Anthropic breaker state is stale (15 consecutive failures, last on
+   ~20.8, `lastSuccessAtMs: null`) and `fallbackModel: claude-haiku-4-5`
+   is probably retired — the blessing assistant in this repo runs on
+   `claude-sonnet-4-6`. Not urgent while the arms are OpenAI/Gemini, but
+   the health card shows amber for a reason nobody is acting on.
+
+### How Claude works in this repo (so the two of us do not collide)
+
+Same rules as yours: pure logic in `src/lib`, tests in `tests/`, no
+secrets typed anywhere. Claude commits from Lord's machine with the
+OneDrive workarounds (`.git/_locks/`, `--no-verify`), runs the suite in
+a clean clone, and pushes by clicking Sync in VS Code. Commit messages
+carry `Co-Authored-By: Claude`. If you find a change you did not make
+under `salesAgent/`, `git log` will say which of us and why.
+
+---
+
 ## The WhatsApp sales agent — shipped and live
 
 A Claude-powered salesperson that answers WhatsApp on the business
