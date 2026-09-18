@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
     verifyIdToken: vi.fn(),
     isSuperAdmin: vi.fn(),
     listMedia: vi.fn(),
+    getLead: vi.fn(),
+    isInsideWhatsAppWindow: vi.fn(),
     readSalesSettings: vi.fn(),
     loadOpeningVariableVersions: vi.fn(),
     signOpeningVariableDownload: vi.fn(),
@@ -12,7 +14,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/firebaseAdmin', () => ({ adminAuth: { verifyIdToken: mocks.verifyIdToken } }))
 vi.mock('@/lib/superAdmin', () => ({ isSuperAdmin: mocks.isSuperAdmin }))
-vi.mock('@/lib/salesAgent/leads', () => ({ listMedia: mocks.listMedia }))
+vi.mock('@/lib/salesAgent/leads', () => ({ listMedia: mocks.listMedia, getLead: mocks.getLead }))
+vi.mock('@/lib/salesAgent/followupPolicy', () => ({ isInsideWhatsAppWindow: mocks.isInsideWhatsAppWindow }))
 vi.mock('@/lib/salesAgent/settingsStore', () => ({ readSalesSettings: mocks.readSalesSettings }))
 vi.mock('@/lib/salesAgent/openingVariableRuntimeStore', () => ({
     loadOpeningVariableVersions: mocks.loadOpeningVariableVersions,
@@ -33,6 +36,8 @@ beforeEach(async () => {
     process.env.SALES_AGENT_SECRET = 'test-secret'
     process.env.SALES_TEST_PHONE = '972526618184'
     mocks.listMedia.mockResolvedValue([])
+    mocks.getLead.mockResolvedValue({ phone: '972526618184', lastInboundAt: new Date('2030-01-01T00:00:00Z') })
+    mocks.isInsideWhatsAppWindow.mockReturnValue(true)
     mocks.readSalesSettings.mockResolvedValue({ openingExperiment: experiment })
     mocks.loadOpeningVariableVersions.mockResolvedValue({})
     mocks.sendOpeningVariantTest.mockResolvedValue({ ok: true, variantId: 'A', variantRevision: 3, sentParts: 2, recipientMasked: '•••8184' })
@@ -76,6 +81,7 @@ describe('opening mobile test route', () => {
             variantId: dynamicId,
             experiment: dynamicExperiment,
             recipient: '972526618184',
+            serviceWindowOpen: true,
         }))
     })
 
@@ -85,9 +91,33 @@ describe('opening mobile test route', () => {
         await expect(response.json()).resolves.toEqual({ ok: true, variantId: 'A', variantRevision: 3, sentParts: 2, recipientMasked: '•••8184' })
         expect(mocks.sendOpeningVariantTest).toHaveBeenCalledWith(expect.objectContaining({
             variantId: 'A', recipient: '972526618184', experiment,
+            serviceWindowOpen: true,
             variableVersions: {}, signDownload: mocks.signOpeningVariableDownload,
         }))
+        expect(mocks.getLead).toHaveBeenCalledWith('972526618184')
         expect(JSON.stringify(mocks.sendOpeningVariantTest.mock.calls)).not.toContain('phone:')
+    })
+
+    it('passes a closed service window explicitly and returns a typed no-send result', async () => {
+        mocks.isInsideWhatsAppWindow.mockReturnValue(false)
+        mocks.sendOpeningVariantTest.mockResolvedValue({
+            ok: false,
+            error: 'TEST_WINDOW_CLOSED',
+            variantId: 'A',
+            sentParts: 0,
+            totalParts: 1,
+            recipientMasked: '•••8184',
+        })
+
+        const response = await POST(request({ variantId: 'A' }))
+
+        expect(response.status).toBe(200)
+        await expect(response.json()).resolves.toMatchObject({ ok: false, error: 'TEST_WINDOW_CLOSED', sentParts: 0 })
+        expect(mocks.isInsideWhatsAppWindow).toHaveBeenCalledWith(expect.objectContaining({ phone: '972526618184' }))
+        expect(mocks.sendOpeningVariantTest).toHaveBeenCalledWith(expect.objectContaining({
+            variantId: 'A',
+            serviceWindowOpen: false,
+        }))
     })
 
     it('returns a fixed private error when the test transport is unavailable', async () => {

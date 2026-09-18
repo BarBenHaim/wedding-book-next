@@ -44,7 +44,8 @@ describe('opening mobile test send', () => {
         const deps = dependencies()
         const result = await sendOpeningVariantTest({
             variantId: 'B', recipient: '052-661-8184', experiment,
-            variableVersions: {}, legacyLibrary: {}, signDownload: vi.fn(), dependencies: deps,
+            variableVersions: {}, legacyLibrary: {}, signDownload: vi.fn(),
+            serviceWindowOpen: true, dependencies: deps,
         })
 
         expect(result).toEqual({ ok: true, variantId: 'B', variantRevision: 7, sentParts: 4, recipientMasked: '•••8184' })
@@ -63,6 +64,7 @@ describe('opening mobile test send', () => {
             variantId: 'v_aaaaaaaaaaaa',
             recipient: '052-661-8184',
             experiment: dynamicExperiment,
+            serviceWindowOpen: true,
             dependencies: deps,
         })
 
@@ -102,12 +104,34 @@ describe('opening mobile test send', () => {
         expect(deps.sendText).not.toHaveBeenCalled()
     })
 
+    it('fails closed before transport when the service window is not explicitly open', async () => {
+        const deps = dependencies()
+
+        const result = await sendOpeningVariantTest({
+            variantId: 'B', recipient: '972526618184', experiment, dependencies: deps,
+        })
+
+        expect(result).toEqual({
+            ok: false,
+            error: 'TEST_WINDOW_CLOSED',
+            variantId: 'B',
+            sentParts: 0,
+            totalParts: 4,
+            recipientMasked: '•••8184',
+        })
+        expect(deps.sendText).not.toHaveBeenCalled()
+        expect(deps.sendImage).not.toHaveBeenCalled()
+        expect(deps.sendVideo).not.toHaveBeenCalled()
+        expect(deps.sendAudio).not.toHaveBeenCalled()
+    })
+
     it('reports a truthful partial send without exposing provider content', async () => {
         const deps = dependencies({
             sendVideo: vi.fn(async () => { throw new Error('private provider body and phone') }),
         })
         const result = await sendOpeningVariantTest({
-            variantId: 'B', recipient: '972526618184', experiment, dependencies: deps,
+            variantId: 'B', recipient: '972526618184', experiment,
+            serviceWindowOpen: true, dependencies: deps,
         })
 
         expect(result).toEqual({ ok: false, error: 'TEST_SEND_PARTIAL', variantId: 'B', sentParts: 2, totalParts: 4, recipientMasked: '•••8184' })

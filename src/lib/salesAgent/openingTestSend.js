@@ -35,6 +35,7 @@ const productionDependencies = {
 export async function sendOpeningVariantTest({
     variantId,
     recipient,
+    serviceWindowOpen = false,
     experiment,
     variableVersions = {},
     legacyLibrary = {},
@@ -69,6 +70,17 @@ export async function sendOpeningVariantTest({
     })
     const parts = Array.isArray(resolved?.parts) ? resolved.parts : []
     if (!parts.length) throw testError('TEST_VARIANT_EMPTY')
+
+    if (serviceWindowOpen !== true) {
+        return {
+            ok: false,
+            error: 'TEST_WINDOW_CLOSED',
+            variantId: id,
+            sentParts: 0,
+            totalParts: parts.length,
+            recipientMasked: maskedRecipient(normalizedRecipient),
+        }
+    }
 
     let sentParts = 0
     try {

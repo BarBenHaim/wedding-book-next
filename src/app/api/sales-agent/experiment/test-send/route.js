@@ -7,7 +7,8 @@ import { NextResponse } from 'next/server'
 import { adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { MEDIA } from '@/lib/salesAgent/catalog'
-import { listMedia } from '@/lib/salesAgent/leads'
+import { isInsideWhatsAppWindow } from '@/lib/salesAgent/followupPolicy'
+import { getLead, listMedia } from '@/lib/salesAgent/leads'
 import { mergeMedia } from '@/lib/salesAgent/mediaLibrary'
 import { isOpeningVariantId } from '@/lib/salesAgent/openingExperiment'
 import { sendOpeningVariantTest } from '@/lib/salesAgent/openingTestSend'
@@ -47,13 +48,17 @@ export async function POST(req) {
     }
 
     try {
+        const recipient = process.env.SALES_TEST_PHONE
+        const testLead = await getLead(recipient)
+        const serviceWindowOpen = isInsideWhatsAppWindow(testLead)
         const custom = await listMedia({ fresh: true })
         const library = mergeMedia(MEDIA, Array.isArray(custom) ? custom : []) || MEDIA || {}
         const settings = await readSalesSettings({ registeredMediaKeys: Object.keys(library) })
         const variableVersions = await loadOpeningVariableVersions(settings.openingExperiment)
         const result = await sendOpeningVariantTest({
             variantId: String(input.variantId),
-            recipient: process.env.SALES_TEST_PHONE,
+            recipient,
+            serviceWindowOpen,
             experiment: settings.openingExperiment,
             variableVersions,
             legacyLibrary: library,
