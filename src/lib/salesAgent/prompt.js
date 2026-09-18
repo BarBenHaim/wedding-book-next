@@ -63,6 +63,8 @@ export function buildSystemPrompt(lead = {}, todayISO, { media = null, performan
     if (Number.isFinite(lead.daysSinceLastMessage)) {
         known.push(`עברו ${lead.daysSinceLastMessage} ימים מאז ההודעה האחרונה שלו`)
     }
+    // Set by the route when the scripted opening yielded this turn.
+    if (lead.openingNote) known.push(lead.openingNote)
 
     // Hebrew, not ISO. Handing the model "2026-08-09" and letting it
     // phrase the deadline itself produced "9 בספטמבר" — a month late —

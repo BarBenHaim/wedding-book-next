@@ -105,7 +105,10 @@ vi.mock('@/lib/salesAgent/decisionPolicy', () => ({
 }))
 vi.mock('@/lib/salesAgent/openingPlan', () => ({ buildOpeningPlan: mocks.buildOpeningPlan }))
 vi.mock('@/lib/salesAgent/openingOnly', () => ({ buildOpeningOnlyPlan: mocks.buildOpeningOnlyPlan }))
-vi.mock('@/lib/salesAgent/openingRuntime', () => ({ prepareOpeningRuntime: mocks.prepareOpeningRuntime }))
+vi.mock('@/lib/salesAgent/openingRuntime', async importOriginal => ({
+    ...(await importOriginal()),
+    prepareOpeningRuntime: mocks.prepareOpeningRuntime,
+}))
 vi.mock('@/lib/salesAgent/openingVariableRuntimeStore', () => ({
     loadOpeningVariableVersions: mocks.loadOpeningVariableVersions,
     signOpeningVariableDownload: mocks.signOpeningVariableDownload,

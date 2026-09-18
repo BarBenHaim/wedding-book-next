@@ -62,7 +62,7 @@ import { decideInboundAge } from '@/lib/salesAgent/transportPolicy'
 import { buildDeterministicSalesReply, decideSalesTurn, enforceSalesReply } from '@/lib/salesAgent/decisionPolicy'
 import { buildOpeningPlan } from '@/lib/salesAgent/openingPlan'
 import { buildOpeningOnlyPlan } from '@/lib/salesAgent/openingOnly'
-import { prepareOpeningRuntime } from '@/lib/salesAgent/openingRuntime'
+import { prepareOpeningRuntime, openingNoteFor } from '@/lib/salesAgent/openingRuntime'
 import {
     loadOpeningVariableVersions,
     signOpeningVariableDownload,
@@ -532,6 +532,10 @@ export async function POST(req) {
             },
             signDownload: signOpeningVariableDownload,
             eventId,
+            // In full-sales mode a silent opening (finished, or waiting for a
+            // photo while the customer typed words) hands the turn to the
+            // agent below instead of ending the request with no reply.
+            yieldWhenSilent: settings.mode === 'full_sales',
         })
     } catch {
         console.warn('[sales-agent] opening terminal opening-variable-resolution-failed')
@@ -724,6 +728,11 @@ export async function POST(req) {
     const lastMs = lead.lastInboundAt?.toMillis?.() || Number(lead.lastInboundAt) || 0
     const daysSinceLastMessage = lastMs ? Math.floor((Date.now() - lastMs) / 86400000) : null
 
+    // What the scripted opening already said to this lead, so the agent
+    // continues the thread instead of introducing the product a second
+    // time or asking for a photo the opening already asked for.
+    const openingNote = openingNoteFor(openingRuntime, lead)
+
     if (settings.mode === 'opening_only') {
         const opening = buildOpeningOnlyPlan({ lead, settings, library, eventId })
         if (!opening.eligible) {
@@ -884,7 +893,7 @@ export async function POST(req) {
         ? null
         : buildDeterministicSalesReply({ decision: turnDecision, lead, incomingText: text })
 
-    const system = parsed ? '' : buildSystemPrompt({ ...lead, daysSinceLastMessage, variant }, today, {
+    const system = parsed ? '' : buildSystemPrompt({ ...lead, daysSinceLastMessage, variant, openingNote }, today, {
         media: library,
         performanceNote: perf,
         businessInstructions: settings.businessInstructions,

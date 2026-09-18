@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_OPENING_EXPERIMENT } from '../src/lib/salesAgent/openingExperiment'
-import { prepareOpeningRuntime } from '../src/lib/salesAgent/openingRuntime'
+import { prepareOpeningRuntime, openingNoteFor } from '../src/lib/salesAgent/openingRuntime'
 
 const library = {
     cover_personalised: { kind: 'image', url: 'https://media.example/cover.jpg', caption: 'כריכה' },
@@ -197,5 +197,69 @@ describe('prepareOpeningRuntime', () => {
             captures: { eventType: null, eventDate: null, qualificationNeedsReview: true },
         })
         expect(runtime.result.parts).toEqual([])
+    })
+})
+
+// Before 18.9 a silent opening was the end of the request: the route sent
+// nothing. In full-sales mode the route asks the runtime to yield those
+// turns to the agent; in opening-only mode nothing changes.
+describe('prepareOpeningRuntime yieldWhenSilent', () => {
+    const flowA = active.variants.find(item => item.id === 'A')
+    const pinned = (openingState, extra = {}) => ({
+        isNew: false,
+        openingVariantId: 'A',
+        openingVariantRevision: 1,
+        openingFlow: flowA,
+        openingState,
+        openingStateVersion: 2,
+        openingExposedAt: '2026-09-17T08:00:00.000Z',
+        ...extra,
+    })
+    const run = (lead, inbound, yieldWhenSilent = true) => prepareOpeningRuntime({
+        lead, experiment: active, leadKey: 'non-dialable-lead-y', inbound, library, eventId: 'opening-event-y', yieldWhenSilent,
+    })
+
+    it('yields a text reply while the opening waits for a photo, and leaves the wait in place', async () => {
+        const runtime = await run(pinned({ cursor: 2, waitingFor: 'photo' }), { kind: 'text', text: 'האורחים סורקים באירוע או לפני?' })
+        expect(runtime.eligible).toBe(false)
+        expect(runtime.reason).toBe('opening-wait_photo-yielded')
+        expect(runtime.result.state).toEqual({ cursor: 2, waitingFor: 'photo' })
+        const note = openingNoteFor(runtime, {})
+        expect(note).toMatch(/תמונה/)
+        expect(note).toMatch(/לא לחזור על הבקשה/)
+    })
+
+    it('still resumes the design flow when the photo does arrive', async () => {
+        const runtime = await run(pinned({ cursor: 2, waitingFor: 'photo' }), { kind: 'image', mediaId: 'opaque-media-id' })
+        expect(runtime.eligible).toBe(true)
+        expect(runtime.result.action).toBe('approval_pending')
+    })
+
+    it('yields every turn after the opening reached its stop block', async () => {
+        const runtime = await run(pinned({ cursor: flowA.blocks.length, waitingFor: null }), { kind: 'text', text: 'כמה זה עולה?' })
+        expect(runtime.eligible).toBe(false)
+        expect(runtime.reason).toBe('opening-finished')
+        expect(openingNoteFor(runtime, {})).toMatch(/אל תציג את המוצר מחדש/)
+        expect(openingNoteFor(runtime, { childPhotoReceived: true })).toMatch(/אל תבטיח מועד לדוגמה/)
+    })
+
+    it('quotes what the opening already said so the agent does not repeat it', async () => {
+        const runtime = await run(pinned({ cursor: flowA.blocks.length, waitingFor: null }), { kind: 'text', text: 'היי' })
+        const firstText = flowA.blocks.find(block => block.type === 'text').text.slice(0, 20)
+        expect(openingNoteFor(runtime, {})).toContain(firstText)
+    })
+
+    it('changes nothing when the route did not ask for it, or when the opening has something to send', async () => {
+        const legacy = await run(pinned({ cursor: flowA.blocks.length, waitingFor: null }), { kind: 'text', text: 'היי' }, false)
+        expect(legacy.eligible).toBe(true)
+        expect(legacy.result.parts).toEqual([])
+        expect(openingNoteFor(legacy, {})).toBeNull()
+
+        const fresh = await prepareOpeningRuntime({
+            lead: { isNew: true, hasPriorConversation: false }, experiment: active, leadKey: 'non-dialable-lead-z',
+            inbound: { kind: 'text', text: 'אשמח לפרטים' }, library, eventId: 'opening-event-z', yieldWhenSilent: true,
+        })
+        expect(fresh.eligible).toBe(true)
+        expect(fresh.result.parts.length).toBeGreaterThan(0)
     })
 })
