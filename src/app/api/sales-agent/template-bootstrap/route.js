@@ -5,7 +5,11 @@ import { handleWhatsAppTemplateBootstrap } from '@/lib/salesAgent/whatsappTempla
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-export const maxDuration = 20
+// Up to six sequential Graph calls (WABA discovery, template list, create),
+// each with its own 7.5s timeout. Twenty seconds was not enough on 18.9:
+// the function was cut mid-flight and the admin saw a bare 502 from
+// Cloudflare instead of a JSON answer.
+export const maxDuration = 60
 
 // Same door as /api/sales-agent/leads: machines bring the shared secret,
 // a human at the admin brings a verified super-admin ID token. The
@@ -28,6 +32,11 @@ async function withAdminDoor(request) {
 }
 
 export async function POST(request) {
-    const result = await handleWhatsAppTemplateBootstrap(await withAdminDoor(request))
-    return NextResponse.json(result.body, { status: result.status })
+    try {
+        const result = await handleWhatsAppTemplateBootstrap(await withAdminDoor(request))
+        return NextResponse.json(result.body, { status: result.status })
+    } catch (error) {
+        console.error('[sales-agent/template-bootstrap] failed', error?.message || error)
+        return NextResponse.json({ ok: false, error: 'ROUTE_FAILED', detail: String(error?.message || error).slice(0, 200) }, { status: 500 })
+    }
 }

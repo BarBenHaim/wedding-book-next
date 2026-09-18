@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     reviveOrphans: vi.fn(),
     listMedia: vi.fn(),
     recordMediaSent: vi.fn(),
+    recordFollowUpRun: vi.fn(),
     sendableNow: vi.fn(),
     isFinalAttempt: vi.fn(),
     mergeMedia: vi.fn(),
@@ -41,6 +42,7 @@ vi.mock('@/lib/salesAgent/leads', () => ({
     recordDeliveryEvent: mocks.recordDeliveryEvent,
     listLeads: mocks.listLeads, reviveOrphans: mocks.reviveOrphans,
     listMedia: mocks.listMedia, recordMediaSent: mocks.recordMediaSent,
+    recordFollowUpRun: mocks.recordFollowUpRun,
 }))
 vi.mock('@/lib/salesAgent/followupPolicy', async importOriginal => ({
     ...(await importOriginal()),
@@ -75,8 +77,8 @@ const lead = {
 
 let GET
 
-async function runCron() {
-    const response = await GET(new Request('http://localhost/api/sales-agent/followups', {
+async function runCron(query = '') {
+    const response = await GET(new Request(`http://localhost/api/sales-agent/followups${query}`, {
         headers: { authorization: 'Bearer cron-test-secret' },
     }))
     return { status: response.status, body: await response.json() }
@@ -614,5 +616,25 @@ describe('truthful follow-up transport', () => {
             process.env.SALES_AGENT_OWNER_PHONE,
             'inspectable owner alert fixture',
         )
+    })
+
+    // The health card reads sales_runtime/followups.lastRunAtMs; until 18.9
+    // nothing wrote it, so "did the cron run" was unanswerable from the admin.
+    it('stamps the run for the health card, and never on a dry run', async () => {
+        mocks.recordFollowUpRun.mockClear()
+        await runCron()
+        expect(mocks.recordFollowUpRun).toHaveBeenCalledTimes(1)
+        expect(mocks.recordFollowUpRun.mock.calls[0][0]).toMatchObject({ dry: false })
+
+        mocks.recordFollowUpRun.mockClear()
+        await runCron('?dry=1')
+        expect(mocks.recordFollowUpRun).toHaveBeenCalledTimes(1)
+        expect(mocks.recordFollowUpRun.mock.calls[0][0]).toMatchObject({ dry: true })
+    })
+
+    it('caps a dry run at ten leads so it returns before the function is cut', async () => {
+        mocks.dueFollowUps.mockClear()
+        await runCron('?dry=1')
+        expect(mocks.dueFollowUps).toHaveBeenCalledWith(expect.any(String), 10)
     })
 })

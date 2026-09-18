@@ -123,6 +123,27 @@ const healthEnum = (value, allowed) => allowed.includes(value) ? value : 'unknow
  * needed. Replace the runtime document with an allowlist so an old accidental
  * payload/phone field cannot survive forever through merge semantics.
  */
+/**
+ * Stamp the end of a follow-up run. The health card reads
+ * `sales_runtime/followups.lastRunAtMs` and showed `null` forever because
+ * nothing wrote it - the cron could be dead or fine and the admin could
+ * not tell. Best effort: a failed stamp must not fail the run.
+ */
+export async function recordFollowUpRun({ ranAtMs = Date.now(), dry = false, count = 0, blockedCount = 0, delivery = 'none' } = {}) {
+    if (dry) return
+    try {
+        await adminDb.collection(RUNTIME_COLLECTION).doc('followups').set({
+            lastRunAtMs: healthMs(ranAtMs) ?? Date.now(),
+            lastRunCount: Math.max(0, Number(count) || 0),
+            lastRunBlockedCount: Math.max(0, Number(blockedCount) || 0),
+            lastRunDelivery: String(delivery || 'none').slice(0, 20),
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true })
+    } catch {
+        console.error('[sales-agent] followup run stamp failed')
+    }
+}
+
 export async function recordInboundHeartbeat({ receivedAtMs = Date.now() } = {}) {
     const inboundRef = adminDb.collection(RUNTIME_COLLECTION).doc('inbound')
     const safeReceivedAtMs = healthMs(receivedAtMs) ?? Date.now()

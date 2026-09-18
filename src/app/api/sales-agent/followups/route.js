@@ -50,7 +50,7 @@ import { adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { buildFollowUpPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, resolveFollowUp } from '@/lib/salesAgent/agent'
-import { dueFollowUps, prepareFollowUpDelivery, recordDeliveryEvent, listLeads, reviveOrphans, listMedia } from '@/lib/salesAgent/leads'
+import { dueFollowUps, prepareFollowUpDelivery, recordDeliveryEvent, listLeads, reviveOrphans, listMedia, recordFollowUpRun } from '@/lib/salesAgent/leads'
 import { sendableNow, MAX_PER_RUN, isFinalAttempt, isInsideWhatsAppWindow } from '@/lib/salesAgent/followupPolicy'
 import { MEDIA } from '@/lib/salesAgent/catalog'
 import { mergeMedia, performanceNote } from '@/lib/salesAgent/mediaLibrary'
@@ -191,9 +191,13 @@ export async function GET(req) {
         ? { revived: [], stale: findStaleHandoffs(await listLeads({ limit: 500 }).catch(() => [])), blockedTemplateCount: 0 }
         : await sweep(today, { templateDeliveryEnabled })
 
+    // A dry run composes a model call per lead and has no deadline of its
+    // own; with 160 leads due it never returned (18.9, twice, >5 min against
+    // a 60s function). Ten is enough to read what the bot would write.
+    const DRY_MAX = 10
     let leads
     try {
-        leads = await dueFollowUps(today, MAX_PER_RUN)
+        leads = await dueFollowUps(today, dry ? Math.min(DRY_MAX, MAX_PER_RUN) : MAX_PER_RUN)
     } catch {
         console.error('[sales-agent/followups] query failed')
         return NextResponse.json({ error: 'query-failed' }, { status: 502 })
@@ -514,6 +518,13 @@ export async function GET(req) {
     // should send nothing at all - a daily "0 waiting" is a message you
     // stop reading, and then you miss the day it said 3.
     const alert = handoffAlert(stale)
+
+    await recordFollowUpRun({
+        dry,
+        count: items.length,
+        blockedCount: blockedTemplateCount,
+        delivery: callerDelivers ? 'make' : directSend ? 'direct' : 'none',
+    })
 
     // No approved business-initiated handoff-alert template exists. Keep the
     // alert inspectable in JSON instead of gambling on a free-form send outside
