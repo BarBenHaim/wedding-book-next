@@ -243,6 +243,12 @@ describe('prepareOpeningRuntime yieldWhenSilent', () => {
         expect(openingNoteFor(runtime, { childPhotoReceived: true })).toMatch(/אל תבטיח מועד לדוגמה/)
     })
 
+    it('yields a photo or document that arrives after the opening finished, so it is not swallowed', async () => {
+        const runtime = await run(pinned({ cursor: flowA.blocks.length, waitingFor: null }), { kind: 'document', mediaId: 'doc-1' })
+        expect(runtime.eligible).toBe(false)
+        expect(runtime.reason).toBe('opening-finished')
+    })
+
     it('quotes what the opening already said so the agent does not repeat it', async () => {
         const runtime = await run(pinned({ cursor: flowA.blocks.length, waitingFor: null }), { kind: 'text', text: 'היי' })
         const firstText = flowA.blocks.find(block => block.type === 'text').text.slice(0, 20)

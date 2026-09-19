@@ -139,7 +139,16 @@ export async function prepareOpeningRuntime({
         && result.parts.length === 0
         && !result.approvalRequest
         && (result.completed || result.action === 'wait_photo' || result.action === 'wait_event')
-    if (yieldWhenSilent && silentTextTurn && enrollment === null) {
+    // A photo or document AFTER the opening finished advances nothing
+    // either - the flow is past its stop block - and until 19.9 it was
+    // swallowed the same way (Sharona, 19.9: opening, then a document,
+    // then nothing). Yielded, it reaches the route's media branch, which
+    // hands the chat to a human and pings the owner.
+    const silentMediaAfterStop = inbound?.kind !== 'text'
+        && result.completed
+        && result.parts.length === 0
+        && !result.approvalRequest
+    if (yieldWhenSilent && (silentTextTurn || silentMediaAfterStop) && enrollment === null) {
         const reason = result.completed ? 'opening-finished' : `opening-${result.action}-yielded`
         return { eligible: false, reason, flow, expectedStateVersion, replyToExposure, result }
     }

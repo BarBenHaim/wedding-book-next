@@ -165,6 +165,32 @@ describe('sales model provider fallback', () => {
         expect(error.message).not.toContain('gemini-secret-sentinel')
     })
 
+    // 19.9: gpt-4.1-mini answered a normal turn in 10.6s, the explicit-provider
+    // path capped it at 10s, and the customer got the canned catalog line with
+    // half the route budget unused. An explicit provider gets the full attempt.
+    it('gives an explicitly selected provider the full 16s attempt, not the 10s chain slice', async () => {
+        vi.useFakeTimers()
+        try {
+            process.env.OPENAI_API_KEY = 'openai-secret-sentinel'
+            let aborted = false
+            const fetch = vi.fn((_, { signal }) => new Promise((resolve, reject) => {
+                signal.addEventListener('abort', () => { aborted = true; reject(Object.assign(new Error('aborted'), { name: 'AbortError' })) })
+                setTimeout(() => resolve({
+                    ok: true, status: 200,
+                    json: async () => ({ model: 'gpt-4.1-mini', choices: [{ message: { content: '{"messages":["ok"],"stage":"engaged","handoff":false}' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1 } }),
+                }), 12_000)
+            }))
+            vi.stubGlobal('fetch', fetch)
+            const pending = callClaude({ system: 's', messages: [], provider: 'openai', model: 'gpt-4.1-mini', deadlineAtMs: Date.now() + 20_000 })
+            await vi.advanceTimersByTimeAsync(12_100)
+            const result = await pending
+            expect(aborted).toBe(false)
+            expect(result.provider).toBe('openai')
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
     it('honors an explicit OpenAI model without first calling Anthropic', async () => {
         process.env.ANTHROPIC_API_KEY = 'anthropic-secret-sentinel'
         process.env.OPENAI_API_KEY = 'openai-secret-sentinel'

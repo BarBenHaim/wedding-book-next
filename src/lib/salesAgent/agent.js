@@ -434,11 +434,17 @@ function classifyProviderBody(status, body) {
     return 'provider_error'
 }
 
-async function callOpenAI({ system, messages, model = DEFAULT_OPENAI_MODEL, maxTokens = MAX_TOKENS, temperature = 0.6, deadlineAtMs = providerDeadlineAt() }) {
+// attemptCapMs: 10s when this call is one link in the auto chain (the next
+// provider needs a slice of the shared budget), the full 16s when the
+// experiment picked this provider outright and nothing runs after it. On
+// 19.9 gpt-4.1-mini took 10.6s on a normal turn, hit the 10s cap, and the
+// customer got the canned catalog line instead of an answer - with 10s of
+// budget left unused.
+async function callOpenAI({ system, messages, model = DEFAULT_OPENAI_MODEL, maxTokens = MAX_TOKENS, temperature = 0.6, deadlineAtMs = providerDeadlineAt(), attemptCapMs = DEFAULT_TIMEOUT_MS }) {
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) throw providerCallError('provider_error', { provider: 'openai', providerStarted: false })
 
-    const timeoutMs = attemptTimeoutMs(deadlineAtMs, 10_000)
+    const timeoutMs = attemptTimeoutMs(deadlineAtMs, attemptCapMs)
     if (timeoutMs <= 0) throw providerCallError('timeout', { provider: 'openai', providerStarted: false })
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -506,11 +512,11 @@ async function callOpenAI({ system, messages, model = DEFAULT_OPENAI_MODEL, maxT
     }
 }
 
-async function callGemini({ system, messages, model = DEFAULT_GEMINI_MODEL, maxTokens = MAX_TOKENS, temperature = 0.6, deadlineAtMs = providerDeadlineAt() }) {
+async function callGemini({ system, messages, model = DEFAULT_GEMINI_MODEL, maxTokens = MAX_TOKENS, temperature = 0.6, deadlineAtMs = providerDeadlineAt(), attemptCapMs = DEFAULT_TIMEOUT_MS }) {
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) throw providerCallError('provider_error', { provider: 'gemini', providerStarted: false })
 
-    const timeoutMs = attemptTimeoutMs(deadlineAtMs, 10_000)
+    const timeoutMs = attemptTimeoutMs(deadlineAtMs, attemptCapMs)
     if (timeoutMs <= 0) throw providerCallError('timeout', { provider: 'gemini', providerStarted: false })
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -618,10 +624,10 @@ export async function callClaude(input) {
     }
 
     if (process.env.OPENAI_API_KEY && Date.now() < Number(deadlineAtMs)) {
-        return callOpenAI({ ...input, deadlineAtMs })
+        return callOpenAI({ ...input, deadlineAtMs, attemptCapMs: 10_000 })
     }
     if (process.env.GEMINI_API_KEY && Date.now() < Number(deadlineAtMs)) {
-        return callGemini({ ...input, model: DEFAULT_GEMINI_MODEL, deadlineAtMs })
+        return callGemini({ ...input, model: DEFAULT_GEMINI_MODEL, deadlineAtMs, attemptCapMs: 10_000 })
     }
     if (primaryError) throw primaryError
     throw providerCallError('provider_error', { provider: 'anthropic', providerStarted: false })
