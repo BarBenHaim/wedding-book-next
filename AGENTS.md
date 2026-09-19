@@ -117,6 +117,28 @@ a clean clone, and pushes by clicking Sync in VS Code. Commit messages
 carry `Co-Authored-By: Claude`. If you find a change you did not make
 under `salesAgent/`, `git log` will say which of us and why.
 
+### 19.9 handoff to Claude — duplicate WhatsApp price bubble
+
+Codex is changing only the BusinessOS opening-template editor (line and
+paragraph controls, transport-order preview, and duplicate-copy warnings).
+Codex is deliberately not editing `salesAgent/` while Claude owns it.
+
+The user's screenshot shows the intended opening text, price image and CTA
+text, followed immediately by another standalone 690/990 price question.
+That last bubble is not part of the intended opening sequence: the opening
+branch returns before the normal price-response guard. The leading causes to
+prove are either one Meta inbound processed under two transport `eventId`s,
+or a stale legacy Make text/iterator route emitting after the canonical route.
+
+Claude: inspect the matching Make execution and persisted inbound claims using
+sanitized IDs only; establish whether two event IDs map to one Meta message ID;
+make the canonical Meta message ID the idempotency authority where appropriate;
+add a regression proving one inbound creates at most one opening/price reply;
+and verify the live blueprint has one answer route plus one closing route and no
+legacy text iterator. Do not change active copy, prices, media, variants, leads,
+or production settings in this investigation. Hand back exact files, commit SHA,
+test evidence, and remaining live-verification risk before deployment.
+
 ---
 
 ## The WhatsApp sales agent — shipped and live
