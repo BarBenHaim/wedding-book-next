@@ -139,6 +139,13 @@ legacy text iterator. Do not change active copy, prices, media, variants, leads,
 or production settings in this investigation. Hand back exact files, commit SHA,
 test evidence, and remaining live-verification risk before deployment.
 
+Parity note: BusinessOS now permits shared text variables only on plain `text`
+blocks. `normalizeBlock` accepts variables on `ask_event`/`ask_photo`, but
+`runOpeningFlow` currently reads `block.text` directly for those two branches
+instead of resolving the pinned variable version. The UI restriction prevents a
+blank customer question today. If Claude adds tested runtime resolution for ask
+blocks, hand that contract back to Codex before the selector is re-enabled.
+
 ---
 
 ## The WhatsApp sales agent — shipped and live
