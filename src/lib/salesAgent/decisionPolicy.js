@@ -368,6 +368,14 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
     if (result.stage === 'closed_won' && lead.paymentVerified !== true) {
         result.stage = decision.intent === 'payment_intent' ? 'ready_to_pay' : (lead.stage || 'engaged')
     }
+    // "הבנתי, תודה" is not a no. On 20.9 the model closed a February bar
+    // mitzvah as closed_lost after exactly that line, which is terminal:
+    // no follow-up ever goes out again. Only the customer can close a lead
+    // (negative_exit) - a polite pause keeps its stage and gets chased.
+    if (result.stage === 'closed_lost' && decision.intent !== 'negative_exit') {
+        result.stage = decision.intent === 'objection' ? 'objection' : (lead.stage || 'engaged')
+        if (result.stage === 'opening_completed' || result.stage === 'new') result.stage = 'engaged'
+    }
     if (decision.nextBestAction === 'close_lost') {
         result.stage = 'closed_lost'
         result.handoff = false

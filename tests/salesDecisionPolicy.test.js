@@ -272,6 +272,26 @@ describe('deterministic WhatsApp reply contract', () => {
         expect(warmPaymentOpener('', decision)).toBeNull()
     })
 
+    it('does not let the model close a lead the customer did not close', () => {
+        // "הבנתי, תודה" after a price list closed a February bar mitzvah as
+        // closed_lost on 20.9 - terminal, never chased again.
+        const incomingText = 'הבנתי, תודה'
+        const result = enforceSalesReply({
+            parsed: { messages: ['שמחתי לעזור, אם תחליט תגיד לי'], stage: 'closed_lost', handoff: false },
+            decision: decisionFor(incomingText),
+            lead: { stage: 'offer_sent', eventType: 'bar_mitzvah', eventDate: '2027-02-01' },
+            incomingText,
+        })
+        expect(result.stage).toBe('offer_sent')
+        const fresh = enforceSalesReply({
+            parsed: { messages: ['בסדר גמור'], stage: 'closed_lost', handoff: false },
+            decision: decisionFor(incomingText),
+            lead: { stage: 'opening_completed' },
+            incomingText,
+        })
+        expect(fresh.stage).toBe('engaged')
+    })
+
     it('closes a clean negative exit without handoff or owner escalation', () => {
         const incomingText = 'החלטנו לוותר תודה'
         const result = enforceSalesReply({

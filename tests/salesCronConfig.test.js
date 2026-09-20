@@ -7,9 +7,15 @@ describe('sales follow-up schedule', () => {
         const config = JSON.parse(readFileSync(resolve(process.cwd(), 'vercel.json'), 'utf8'))
         const followups = config.crons.filter(row => row.path === '/api/sales-agent/followups')
 
+        // Hobby crons fire anywhere inside a one-hour window after the
+        // scheduled minute. 17:30 UTC is 20:30 in Israel, so a late fire
+        // landed after the 21:00 sendable cutoff and the evening run sent
+        // nothing (20.9: ten same-day leads, zero follow-ups). 15:30 UTC
+        // is 18:30 in summer and 17:30 in winter, with the whole window
+        // inside sending hours either way.
         expect(followups).toEqual([
             { path: '/api/sales-agent/followups', schedule: '30 7 * * *' },
-            { path: '/api/sales-agent/followups', schedule: '30 17 * * *' },
+            { path: '/api/sales-agent/followups', schedule: '30 15 * * *' },
         ])
         expect(followups.every(row => !row.schedule.includes('*/'))).toBe(true)
     })
