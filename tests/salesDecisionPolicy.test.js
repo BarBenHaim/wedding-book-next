@@ -280,3 +280,36 @@ describe('deterministic WhatsApp reply contract', () => {
         expect(result.messages[0]).not.toMatch(/אתקשר|טלפון|שיחת טלפון/)
     })
 })
+
+// 19.9: a customer explained "חשבתי שהצעת מחיר הנחה" right after the bot had
+// listed the prices, and the enforcer replaced the model's warm reply with
+// the bare price line. Mentioning price is not asking for it.
+describe('price mentions after the prices were just given', () => {
+    const priced = { turns: [
+        { role: 'user', text: 'מה המחיר?' },
+        { role: 'assistant', text: 'המחירים: ספר דיגיטלי ₪690 · ספר מודפס ₪990. הכל כולל מע״מ.' },
+    ] }
+
+    it('does not treat a passing mention as a price question when prices were just stated', () => {
+        expect(detectSalesIntent('כנראה שנוצר לי בלבול כי חשבתי שהצעת מחיר הנחה. תודה על המידע', priced)).not.toBe('price')
+    })
+
+    it('still answers an explicit how-much, even right after the prices', () => {
+        expect(detectSalesIntent('רגע, כמה עולה המודפס?', priced)).toBe('price')
+    })
+
+    it('treats a topic word as a price question when no prices were given yet', () => {
+        expect(detectSalesIntent('ומה לגבי מחיר?', { turns: [] })).toBe('price')
+    })
+
+    it('keeps the model reply instead of the price line for such a mention', () => {
+        const lead = { ...priced, stage: 'engaged', eventDate: '2026-12-03' }
+        const decision = decideSalesTurn({ lead, incomingText: 'התבלבלתי, חשבתי שהצעת מחיר הנחה. מקווה לשבת על זה בהקדם' })
+        const result = enforceSalesReply({
+            parsed: { messages: ['הבנתי לגמרי, אין לחץ. כשתרצי לשבת על זה אני כאן, ובינתיים שמרתי לך את התאריך בראש.'], stage: 'engaged', handoff: false },
+            decision, lead, incomingText: 'התבלבלתי, חשבתי שהצעת מחיר הנחה. מקווה לשבת על זה בהקדם',
+        })
+        expect(result.messages[0]).toMatch(/הבנתי לגמרי/)
+        expect(result.messages[0]).not.toMatch(/המחירים:/)
+    })
+})

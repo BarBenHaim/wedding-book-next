@@ -47,7 +47,7 @@ export const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5'
 export const FALLBACK_MODEL = 'claude-haiku-4-5'
 
 const EVENT_TYPES = ['bar_mitzvah', 'bat_mitzvah', 'wedding', 'birthday', 'brit', 'other']
-const PACKAGE_IDS = ['digital', 'printed', 'premium']
+const PACKAGE_IDS = ['digital', 'printed']
 
 const MAX_MESSAGES = 3
 const MAX_MESSAGE_CHARS = 900
@@ -94,6 +94,8 @@ function cleanStr(v, max = 300) {
 // is almost always doing a comma's job, so that is what it becomes.
 const EMOJI = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/gu
 const LEADING_ORNAMENT = /^[\s\p{Extended_Pictographic}️‍]+/u
+// "מעולה!", "בהחלט,", "שאלה מצוינת.", "וואו" at the very start of a message.
+const CLICHE_OPENER = /^(?:מעולה|בהחלט|נהדר|וואו|אחלה|שאלה מצוינת|שאלה טובה|כמובן|ברור)\s*[!,.]\s*(?=\S)/u
 
 export function sanitizeReply(raw, { maxEmoji = 1 } = {}) {
     let s = String(raw || '')
@@ -117,6 +119,11 @@ export function sanitizeReply(raw, { maxEmoji = 1 } = {}) {
 
     // Ornament at the start of a message reads as a broadcast blast.
     s = s.replace(LEADING_ORNAMENT, '')
+    // The prompt forbids these openers and the model writes them anyway
+    // ("מעולה, בר מצווה זה מושלם!" went to a customer on 19.9). Dropped
+    // here, then the sentence is re-capitalised by simply starting later.
+    s = s.replace(CLICHE_OPENER, '')
+    s = s.replace(/!{2,}/g, '!')
 
     // Emoji budget, counted across the whole message.
     let kept = 0

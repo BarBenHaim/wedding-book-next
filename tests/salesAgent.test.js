@@ -294,14 +294,16 @@ describe('sales model provider fallback', () => {
 
 describe('catalog — the only facts the agent may state', () => {
     it('carries the live prices and checkout links', () => {
-        expect(PACKAGES.map(p => p.price)).toEqual([690, 990, 1490])
+        // Two packages, as on the live site. "פרימיום מלכותי" (1,490) was
+        // removed on 19.9 - the shop never sold it and the bot quoted it.
+        expect(PACKAGES.map(p => p.price)).toEqual([690, 990])
+        expect(findPackage('premium')).toBeFalsy()
         expect(findPackage('printed').includes).toEqual(expect.arrayContaining([
             'כל מה שבדיגיטלי',
             'ספר מודפס בכריכה קשה',
         ]))
         expect(findPackage('printed').checkout).toContain('add-to-cart=6271')
         expect(findPackage('digital').checkout).toContain('add-to-cart=6258')
-        expect(findPackage('premium').checkout).toContain('add-to-cart=5480')
     })
 
     it('marks exactly one package as the recommendation', () => {
@@ -713,6 +715,13 @@ describe('the concession deadline the model must not compute itself', () => {
 describe('sanitizeReply — the tells that give a bot away', () => {
     it('turns a spaced em dash into the comma it was standing in for', () => {
         expect(sanitizeReply('הספר מגיע תוך שבועיים — כולל משלוח')).toBe('הספר מגיע תוך שבועיים, כולל משלוח')
+        // 19.9: "מעולה, בר מצווה זה מושלם!" reached a customer. The prompt forbids
+        // the opener; the sanitizer now removes it when the model writes it anyway.
+        expect(sanitizeReply('מעולה, בר מצווה זה מושלם לספר ברכות! יש זמן עד 2.11.')).toBe('בר מצווה זה מושלם לספר ברכות! יש זמן עד 2.11.')
+        expect(sanitizeReply('בהחלט! אפשר גם באנגלית.')).toBe('אפשר גם באנגלית.')
+        expect(sanitizeReply('שאלה מצוינת. האורחים סורקים QR.')).toBe('האורחים סורקים QR.')
+        expect(sanitizeReply('מעולה שכתבת, יש זמן')).toBe('מעולה שכתבת, יש זמן')
+        expect(sanitizeReply('נשמע נהדר!!')).toBe('נשמע נהדר!')
         expect(sanitizeReply('נשמח לעזור – בכל שאלה')).toBe('נשמח לעזור, בכל שאלה')
     })
 

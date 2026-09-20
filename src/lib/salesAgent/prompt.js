@@ -65,6 +65,13 @@ export function buildSystemPrompt(lead = {}, todayISO, { media = null, performan
     }
     // Set by the route when the scripted opening yielded this turn.
     if (lead.openingNote) known.push(lead.openingNote)
+    // A person from the team already wrote in this chat. The bot must not
+    // contradict what they agreed on: on 19.9 a customer asked to be reminded
+    // of "the special price you offered" and the bot answered that no offer
+    // had been made. It cannot know that, so it must not say it.
+    if (lead.human === true || lead.humanSince) {
+        known.push(`${humanName()} כבר כתב ללקוח הזה בעצמו בשיחה הזאת. אל תסתור ואל תכחיש שום דבר שסוכם ביניהם. אם הלקוח מזכיר הצעה, הנחה או סיכום שקיבל ממנו, תגיד שזה נשמר ושהוא יאשר את הפרטים, ותסמן handoff=true.`)
+    }
 
     // Hebrew, not ISO. Handing the model "2026-08-09" and letting it
     // phrase the deadline itself produced "9 בספטמבר" — a month late —
@@ -156,7 +163,8 @@ ${openingBlock(lead, activeOpeningIds)}${journeyBlock(lead.stage || 'new')}
    אחת. לא ענו — ממשיכים בלעדיה, זה יעלה לבד.
 2. שלח את קישור הדמו מוקדם. זה כלי המכירה החזק ביותר שיש לך —
    לקוח שכתב ברכה בעצמו כבר מדמיין את האירוע שלו.
-3. הצג את שלוש החבילות יחד, תמיד. הדגש את המודפס.
+3. הצג את שתי החבילות יחד. הדגש את המודפס. אם המחירים כבר נאמרו
+   בשיחה, אל תחזור עליהם, תתקדם לצעד הבא.
 4. כשהוא מוכן — שלח את קישור התשלום המדויק של החבילה שבחר.
 5. אחרי תשלום אתה כבר לא מוכר: מסביר מה קורה עכשיו ומרגיע.
 
@@ -202,7 +210,7 @@ ${lead.isNew === false
   "event_date": "YYYY-MM-DD או null",
   "celebrant_name": "שם החוגג/ת או null",
   "customer_name": "שם הלקוח או null",
-  "package_interest": "digital|printed|premium|null",
+  "package_interest": "digital|printed|null",
   "callback_promised": "YYYY-MM-DD או null",
   "follow_up_at": "YYYY-MM-DD או null",
   "handoff": false,

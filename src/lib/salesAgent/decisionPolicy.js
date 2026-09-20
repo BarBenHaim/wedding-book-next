@@ -31,7 +31,18 @@ function hasCheckoutFriction(text) {
     return /(לא\s+הצלח|לא\s+עובד|נתקע|בעיה|תקלה).{0,30}(תשלום|לשלם|קישור|הזמנה)|(תשלום|לשלם|קישור).{0,30}(לא\s+עובד|בעיה|תקלה|נתקע)/.test(value)
 }
 
-export function detectSalesIntent(text = '') {
+// Did the bot already state the catalog prices in its last two turns? A
+// customer who then merely MENTIONS price ("חשבתי שהצעת מחיר הנחה") is
+// not asking for the list again. On 19.9 the enforcer replaced a warm
+// model reply with the bare price line twice in a row for exactly that
+// sentence, and the customer answered "כן כן אני רואה".
+export function pricesRecentlyStated(lead = {}) {
+    const turns = Array.isArray(lead?.turns) ? lead.turns : []
+    const recent = turns.filter(t => t?.role === 'assistant').slice(-2)
+    return recent.some(t => hasOnlyCurrentCatalogPrices(String(t?.text || '')))
+}
+
+export function detectSalesIntent(text = '', lead = null) {
     const value = normalizedText(text)
 
     // Terminal intent comes before generic phrases such as "דיברתי עם בן
@@ -47,7 +58,11 @@ export function detectSalesIntent(text = '') {
     // "כמה כסף", "how much"); the regex keeps the broader topic words.
     // The two must agree or the dodge-guard repairs a reply the enforcer
     // then throws away.
-    if (asksPrice(value) || /מחיר|כמה.{0,12}עולה|עלות|חבילות|טווח\s+מחירים/.test(value)) return 'price'
+    // An explicit "how much" is always a price question. A bare topic word
+    // ("מחיר", "חבילות") counts only while the prices have not just been
+    // given - otherwise it is conversation about the price, not a request.
+    if (asksPrice(value)) return 'price'
+    if (/מחיר|כמה.{0,12}עולה|עלות|חבילות|טווח\s+מחירים/.test(value) && !pricesRecentlyStated(lead)) return 'price'
     if (/דוגמ|תמונה|תמונות|סרטון|וידאו|לראות.{0,18}(ספר|איך|מוצר)|איך\s+זה\s+נראה/.test(value)) return 'demo'
     if (/וואו|מדהים|אהבתי|נראה.{0,8}אש|מושלם|יפה\s+ממש|זה\s+בדיוק/.test(value)) return 'positive_signal'
     if (/יקר|להתייעץ|לחשוב|אחשוב|נדבר\s+על\s+זה|רחוק|לא\s+בטוח|מתלבט/.test(value)) return 'objection'
@@ -151,7 +166,7 @@ export function decideSalesTurn({ lead = {}, incomingText = '', isExistingCustom
         }
     }
 
-    const intent = detectSalesIntent(incomingText)
+    const intent = detectSalesIntent(incomingText, lead)
     return {
         ...base,
         conversationKind: 'sales',
@@ -173,8 +188,7 @@ const KNOWN_QUESTION_PATTERNS = Object.freeze({
 function packageFor({ parsed, lead, incomingText }) {
     const text = normalizedText(incomingText)
     let id = parsed?.packageInterest || lead?.packageInterest || lead?.package_interest || null
-    if (/פרימיום|מלכותי/.test(text)) id = 'premium'
-    else if (/דיגיטל/.test(text)) id = 'digital'
+    if (/דיגיטל/.test(text)) id = 'digital'
     else if (/מודפס|הדפס/.test(text)) id = 'printed'
     return PACKAGES.find(item => item.id === id) || PACKAGES.find(item => item.recommended) || PACKAGES[0]
 }
@@ -191,7 +205,12 @@ function deterministicMessage({ parsed, decision, lead, incomingText }) {
     if (decision.nextBestAction === 'recommend_package') return 'החבילה המודפסת היא הבחירה של רוב המשפחות, ספר כריכה קשה שמגיע עד הבית. לשלוח לך את הפרטים שלה?'
     if (decision.nextBestAction === 'handle_objection') return 'מבין. מה בעיקר עוצר אותך, המחיר או החשש איך הספר ייצא?'
     if (decision.intent === 'process') return 'האורחים סורקים QR, כותבים ברכה ומעלים תמונה בלי אפליקציה. בסוף מאשרים הכול ומקבלים ספר.'
-    return 'הספר מרכז את הברכות והתמונות מהאירוע למזכרת אחת. מה הכי חשוב לך, החוויה לאורחים או הספר המודפס?'
+    // The last resort when no model answer exists. It used to open with a
+    // product definition and a two-way question, which read as a machine
+    // to everyone who got it. A person who cannot answer right now says so
+    // and asks the one thing that lets them help.
+    if (lead?.eventType || lead?.eventDate) return 'רגע, אני בודק ומיד חוזר אלייך עם תשובה מסודרת. בינתיים, מה הכי חשוב לך שנפתור, האורחים או הספר עצמו?'
+    return 'שמח שכתבת. כדי שאכוון אותך נכון, לאיזה אירוע זה ומתי בערך?'
 }
 
 export function buildDeterministicSalesReply({ decision, lead = {}, incomingText = '' } = {}) {

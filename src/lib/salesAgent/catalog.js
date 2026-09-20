@@ -43,7 +43,12 @@ export const DEMO = {
 }
 
 // Bar mitzvah is the commercial focus (see the landing page). The same
-// three packages serve every event type; only the wording changes.
+// two packages serve every event type; only the wording changes.
+//
+// There used to be a third, "פרימיום מלכותי" at 1,490 - it never existed on
+// the live site, and on 19.9 the bot quoted it to a real customer as if it
+// did. Removed at Lord's instruction the same day. A package the shop does
+// not sell is a price the bot must not say.
 export const PACKAGES = [
     {
         id: 'digital',
@@ -79,21 +84,6 @@ export const PACKAGES = [
             'נייר פרימיום בגימור משי',
             'כל הברכות והתמונות בפנים',
             'משלוח עד הבית — כלול',
-        ],
-    },
-    {
-        id: 'premium',
-        name: 'פרימיום מלכותי',
-        price: 1490,
-        wasPrice: 1790,
-        checkout: 'https://weddingtales.co.il/checkout/?add-to-cart=5480',
-        pitch: 'החוויה המלאה למשפחות גדולות',
-        includes: [
-            'כל מה שבמודפס',
-            'עותק נוסף — לסבא ולסבתא',
-            'פוסטר A2 מוקשח לעמדה',
-            'עדיפות בתור ההפקה',
-            'ליווי אישי צמוד בוואטסאפ',
         ],
     },
 ]
