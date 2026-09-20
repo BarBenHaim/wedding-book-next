@@ -339,11 +339,51 @@ describe('system prompt — what actually reaches the model', () => {
             forbiddenRepeats: ['eventType', 'eventDate'],
             modelEligible: true,
         }
-        const prompt = buildSystemPrompt({ eventType: 'bar_mitzvah', eventDate: '2026-11-05' }, '2026-08-16', { turnDecision })
-        expect(prompt).toContain('## החלטת המכירה לתור הזה')
-        expect(prompt).toContain(JSON.stringify(turnDecision, null, 2))
+        const prompt = buildSystemPrompt({ eventType: 'bar_mitzvah', eventDate: '2026-11-05' }, '2026-08-16', { turnDecision, incomingText: 'כמה זה עולה?' })
+        // Rendered as a Hebrew briefing, not as JSON: the model read the
+        // raw object as configuration and asked for facts listed in it.
+        expect(prompt).not.toContain(JSON.stringify(turnDecision, null, 2))
+        expect(prompt).toContain('## התור הזה, בקצרה')
+        expect(prompt).toContain('מה שהוא כתב הרגע: "כמה זה עולה?"')
+        expect(prompt).toContain('מה הוא מבקש: שאל כמה זה עולה.')
+        expect(prompt).toContain('כבר ידוע ואסור לשאול שוב: סוג האירוע, תאריך האירוע.')
+        expect(prompt).toContain('עד 1 הודעה, עד 180 תווים')
+        // Last thing the model reads.
+        expect(prompt.trim().endsWith('אין בהודעה מידע שכבר נאמר?')).toBe(true)
         expect(prompt).not.toContain('מתי יהיה לך נוח שנדבר?')
         expect(prompt).not.toContain('שיחת טלפון')
+    })
+
+    it('briefs the model only for a live sales turn', () => {
+        const paused = { conversationKind: 'paused', intent: 'handoff_active', nextBestAction: 'silence', knownFacts: [] }
+        expect(buildSystemPrompt({}, '2026-08-16', { turnDecision: paused })).not.toContain('## התור הזה, בקצרה')
+        expect(buildSystemPrompt({}, '2026-08-16')).not.toContain('## התור הזה, בקצרה')
+    })
+
+    it('tells the model the payment line is appended for it', () => {
+        const turnDecision = { conversationKind: 'sales', intent: 'payment_intent', nextBestAction: 'send_payment_link', knownFacts: ['eventType'], maxMessages: 2, maxChars: 420, maxQuestions: 1 }
+        const prompt = buildSystemPrompt({ eventType: 'wedding' }, '2026-08-16', { turnDecision, incomingText: 'רוצה להזמין' })
+        expect(prompt).toContain('המערכת מצרפת בעצמה את קישור התשלום')
+        expect(prompt).toContain('בלי מספרים, בלי קישור, בלי שאלה')
+    })
+
+    it('names what is still unknown only when the move is to qualify', () => {
+        const base = { conversationKind: 'sales', intent: 'general', knownFacts: [], qualificationTarget: 'eventTypeAndDate', maxMessages: 2, maxChars: 420, maxQuestions: 1 }
+        const qualify = buildSystemPrompt({ isNew: true }, '2026-08-16', { turnDecision: { ...base, nextBestAction: 'answer_then_qualify', openingBundleRequired: true }, incomingText: 'היי' })
+        expect(qualify).toContain('מה שעוד לא ידוע ומותר לשאול פעם אחת: לאיזה אירוע ומתי בערך.')
+        expect(qualify).toContain('זו ההודעה הראשונה שלו. תן ערך לפני שאתה שואל.')
+        const answer = buildSystemPrompt({}, '2026-08-16', { turnDecision: { ...base, intent: 'price', nextBestAction: 'answer' }, incomingText: 'כמה עולה' })
+        expect(answer).not.toContain('מה שעוד לא ידוע ומותר לשאול')
+    })
+
+    it('shows worked examples with live catalog prices', () => {
+        const prompt = buildSystemPrompt({}, '2026-08-16')
+        expect(prompt).toContain('## ככה זה נשמע כשזה טוב')
+        expect(prompt).toContain('הלקוח: "מבררת עבור בר מצווה של אחיין"')
+        expect(prompt).toContain('ספר דיגיטלי 690 שח, ספר מודפס בכריכה קשה 990 שח')
+        expect(prompt).toContain('https://weddingtales.co.il/checkout/?add-to-cart=6271')
+        expect(prompt).not.toContain('1,490')
+        expect(prompt).not.toContain('1490')
     })
 
     it('adds the bounded owner instruction as a separate editable layer', () => {
@@ -861,7 +901,7 @@ describe('images — a whitelist, not a capability', () => {
         // The failure Lord reported: asked how much, answered with a
         // question about the event.
         const p = buildSystemPrompt({}, '2026-08-05')
-        expect(p).toMatch(/אם הוא שאל מחיר, תגיד מחיר/)
+        expect(p).toMatch(/שאלה ישירה נענית קודם, תמיד/)
         expect(p).toMatch(/תגיד לו כמה זה עולה/)
     })
 

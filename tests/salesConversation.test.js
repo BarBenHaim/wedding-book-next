@@ -14,8 +14,11 @@ describe('the craft guide', () => {
         expect(CONVERSATION_CRAFT).toMatch(/שאלה סגורה/)
     })
 
-    it('covers the four moments a sales bot usually fumbles', () => {
-        for (const moment of ['כמה עולה?', 'מילה אחת', 'אני אחשוב', 'משהו אישי']) {
+    it('covers the moments a sales bot usually fumbles', () => {
+        // Price and "I'll think about it" moved to selling.js, where the
+        // objection playbook lives; saying them twice cost prompt space
+        // and taught nothing.
+        for (const moment of ['מילה אחת', 'משהו אישי', 'אבדוק']) {
             expect(CONVERSATION_CRAFT, moment).toContain(moment)
         }
     })

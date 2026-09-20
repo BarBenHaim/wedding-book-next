@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { JOURNEY, VALUE_TIPS, journeyFor, journeyBlock, LANGUAGE_RULES, TERMS } from '@/lib/salesAgent/journey'
+import { JOURNEY, VALUE_TIPS, journeyFor, journeyBlock, pickValueTip, LANGUAGE_RULES, TERMS } from '@/lib/salesAgent/journey'
 import { buildSystemPrompt } from '@/lib/salesAgent/prompt'
 import { STAGES } from '@/lib/salesAgent/catalog'
 import { isTestPhone } from '@/lib/salesAgent/leadsCore'
@@ -77,9 +77,53 @@ describe('things worth giving away', () => {
         }
     })
 
-    it('puts the tips in the prompt', () => {
+    it('puts exactly one chosen tip in the prompt, never the list', () => {
         const p = buildSystemPrompt({ stage: 'offer_sent' }, '2026-08-07')
-        expect(p).toContain(VALUE_TIPS[0].text)
+        expect(p).toContain('## משהו שווה לתת לו עכשיו, בחינם')
+        const shown = VALUE_TIPS.filter(t => p.includes(t.text))
+        expect(shown).toHaveLength(1)
+        expect(shown[0].id).toBe('mc_reminder')
+    })
+
+    it('leaves the tip out when nothing fits', () => {
+        const p = buildSystemPrompt({ stage: 'new' }, '2026-08-07')
+        expect(p).not.toContain('## משהו שווה לתת לו עכשיו, בחינם')
+    })
+})
+
+describe('pickValueTip', () => {
+    const today = '2026-09-20'
+    const id = args => pickValueTip({ todayISO: today, ...args })?.id ?? null
+
+    it('answers what the customer actually wrote before anything else', () => {
+        expect(id({ text: 'סבתא שלו בת 90 לא תסתדר עם זה' })).toBe('older_guests')
+        expect(id({ text: 'ומה אם יכתבו שטויות או שגיאות כתיב' })).toBe('panel_fixes')
+        expect(id({ text: 'האירוע כבר היה, שכחנו' })).toBe('after_event')
+        expect(id({ text: 'אנשים באמת יכתבו?' })).toBe('mc_reminder')
+        expect(id({ text: 'חצי מהמשפחה בחו"ל ולא יגיע' })).toBe('family_group')
+        expect(id({ text: 'זה דחוף, נספיק?' })).toBe('timing')
+        // A trigger beats the calendar.
+        expect(id({ text: 'סבתא לא תסתדר', eventDate: '2026-09-25' })).toBe('older_guests')
+    })
+
+    it('reads the calendar when the text says nothing', () => {
+        expect(id({ eventDate: '2026-09-10' })).toBe('after_event')
+        expect(id({ eventDate: '2026-10-05' })).toBe('timing')
+        expect(id({ eventDate: '2027-01-15' })).toBe('far_date')
+        expect(id({ eventDate: '2026-11-10' })).toBeNull()
+    })
+
+    it('reads the stage when there is no date', () => {
+        expect(id({ stage: 'closed_won' })).toBe('poster_placement')
+        expect(id({ stage: 'offer_sent' })).toBe('mc_reminder')
+        expect(id({ stage: 'objection', eventDate: '2027-02-01' })).toBe('far_date')
+        expect(id({ stage: 'new' })).toBeNull()
+        expect(id({ stage: 'engaged' })).toBeNull()
+    })
+
+    it('survives garbage dates', () => {
+        expect(id({ eventDate: 'בקרוב' })).toBeNull()
+        expect(pickValueTip()).toBeNull()
     })
 })
 

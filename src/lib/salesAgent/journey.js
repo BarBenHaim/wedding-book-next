@@ -57,7 +57,67 @@ export const VALUE_TIPS = [
         when: 'כשהאירוע קרוב ויש לחץ של זמן',
         text: 'עמוד האורחים והפוסטר מוכנים תוך 48 שעות מאישור העיצוב, אז גם אירוע בעוד שבוע הוא ריאלי.',
     },
+    {
+        id: 'panel_fixes',
+        when: 'כשחוששים מה האורחים יכתבו, משגיאות כתיב או מברכות מביכות',
+        text: 'שום דבר לא נכנס לספר בלי שראיתם אותו. בפאנל מאשרים כל ברכה, מתקנים שגיאות כתיב ומסדרים את הסדר, ורק אז זה הולך לדפוס.',
+    },
+    {
+        id: 'older_guests',
+        when: 'כשמזכירים סבא וסבתא או אורחים מבוגרים שקשה להם עם טלפון',
+        text: 'לסבא וסבתא לא צריך טלפון חכם. מישהו צעיר במשפחה יושב לידם דקה, וכותב את הברכה שלהם מהטלפון שלו, עם תמונה משותפת.',
+    },
+    {
+        id: 'far_date',
+        when: 'כשהאירוע רחוק והלקוח מרגיש שאין סיבה לסגור עכשיו',
+        text: 'כשסוגרים מוקדם, הפוסטר וקישור האורחים מוכנים הרבה לפני, ואפשר לשלוח את הקישור עם ההזמנה. ככה מי שלא יגיע כותב עוד לפני האירוע.',
+    },
 ]
+
+// The one tip that fits THIS conversation, or null. The full list used to
+// be pasted into every prompt with "pick one when it fits"; in practice the
+// model either ignored it or read three of them out loud. One tip, chosen
+// here from what the customer actually wrote and where the event sits in
+// time, is something the model can drop into a sentence.
+const NEAR_DAYS = 21
+const FAR_DAYS = 75
+
+function daysUntil(iso, todayISO) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/
+    if (!m.test(String(iso || '')) || !m.test(String(todayISO || ''))) return null
+    const a = Date.parse(`${iso}T12:00:00Z`)
+    const b = Date.parse(`${todayISO}T12:00:00Z`)
+    if (Number.isNaN(a) || Number.isNaN(b)) return null
+    return Math.round((a - b) / 86_400_000)
+}
+
+const TIP_TRIGGERS = [
+    { id: 'older_guests', re: /סבא|סבתא|מבוגר|קשיש|לא\s+יודע(?:ים|ת)?\s+להשתמש|לא\s+מסתדר(?:ים|ת)?\s+עם/ },
+    { id: 'panel_fixes', re: /שגיא|כתיב|מביך|מה\s+יכתבו|יכתבו\s+שטויות|לשלוט|לאשר/ },
+    { id: 'after_event', re: /שכח|פספס|אחרי\s+האירוע|האירוע\s+כבר|עבר\s+כבר|כבר\s+היה/ },
+    { id: 'mc_reminder', re: /כמה\s+ברכות|באמת\s+יכתבו|יכתבו\s+בכלל|אנשים\s+לא\s+כותבים|ישתפו\s+פעולה/ },
+    { id: 'family_group', re: /משפחה\s+גדולה|הרבה\s+אורחים|חו"?ל|לא\s+יגיע|בחו״ל|מחו"ל/ },
+    { id: 'timing', re: /דחוף|בעוד\s+שבוע|נספיק|יספיק|מהר|בזמן\s+ל/ },
+]
+
+export function pickValueTip({ stage = 'new', eventDate = null, todayISO = null, text = '' } = {}) {
+    const value = String(text || '')
+    if (value) {
+        for (const t of TIP_TRIGGERS) {
+            if (t.re.test(value)) return VALUE_TIPS.find(v => v.id === t.id) || null
+        }
+    }
+    const byId = id => VALUE_TIPS.find(v => v.id === id) || null
+    const days = daysUntil(eventDate, todayISO)
+    if (days !== null && days < 0) return byId('after_event')
+    if (days !== null && days <= NEAR_DAYS) return byId('timing')
+    if (stage === 'closed_won') return byId('poster_placement')
+    if (['offer_sent', 'objection', 'commit_later'].includes(stage)) {
+        return days !== null && days >= FAR_DAYS ? byId('far_date') : byId('mc_reminder')
+    }
+    if (days !== null && days >= FAR_DAYS) return byId('far_date')
+    return null
+}
 
 // ── The journey ─────────────────────────────────────────────────────
 export const JOURNEY = {
@@ -149,24 +209,27 @@ export function journeyFor(stage) {
 }
 
 /**
- * The brief for where this lead actually is, plus the two tips most
- * likely to be useful there. Only one stage is ever injected — handing
- * the model all nine produces an agent that averages them.
+ * The brief for where this lead actually is, plus at most ONE tip — the
+ * one pickValueTip chose for this turn. Only one stage is ever injected:
+ * handing the model all nine produces an agent that averages them, and
+ * handing it eight tips produced an agent that recited three.
  */
-export function journeyBlock(stage) {
+export function journeyBlock(stage, { tip = null } = {}) {
     const j = journeyFor(stage)
-    const tips = VALUE_TIPS.map(t => `- ${t.text} (מתי: ${t.when})`).join('\n')
+    const tipBlock = tip
+        ? `
+## משהו שווה לתת לו עכשיו, בחינם
+${tip.text}
+תשלב את זה במשפט אחד, במילים שלך, רק אם זה יושב טבעי על מה שהוא כתב. לא כטיפ מספר אחת, לא כרשימה, ולא אם כבר אמרת לו את זה.
+`
+        : ''
     return `## איפה אתה נמצא בשיחה הזאת: ${j.title}
 המטרה שלך עכשיו: ${j.goal}
 תעשה:
 ${j.do.map(d => `- ${d}`).join('\n')}
 אל תעשה:
 ${j.avoid.map(d => `- ${d}`).join('\n')}
-
-## דברים אמיתיים שמותר ושווה לתת בחינם
-תן אחד מהם כשהוא מתאים לרגע, לא כרשימה. זה בונה אמון הרבה יותר מהנחה.
-${tips}
-`
+${tipBlock}`
 }
 
 // ── Language quality ────────────────────────────────────────────────
@@ -201,4 +264,4 @@ ${TERMS.map(t => `  · ${t}`).join('\n')}
 - קרא את המשפט שלך פעם אחת לפני שאתה שולח. אם הוא נשמע כמו תרגום, שכתב אותו.
 `
 
-export default { JOURNEY, VALUE_TIPS, journeyBlock, journeyFor, LANGUAGE_RULES }
+export default { JOURNEY, VALUE_TIPS, journeyBlock, journeyFor, pickValueTip, LANGUAGE_RULES }

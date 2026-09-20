@@ -19,9 +19,10 @@
 
 import { BUSINESS, DEMO, PACKAGES, ADDONS, FACTS, CONCESSION, MEDIA } from './catalog'
 import { findActiveVariant, shouldApplyOpening } from './experiments'
-import { journeyBlock, LANGUAGE_RULES } from './journey'
+import { journeyBlock, pickValueTip, LANGUAGE_RULES } from './journey'
 import { CONVERSATION_CRAFT, readStyle, styleNote } from './conversation'
 import { SELLING_CRAFT } from './selling'
+import { workedExamples } from './examples'
 import { mergeMedia } from './mediaLibrary'
 import { followUpEvidence } from './followupEvidence'
 
@@ -39,7 +40,7 @@ function renderPackages() {
  * @param {object} lead    the CRM record (see leads.js) — may be empty for a new lead
  * @param {string} todayISO  'YYYY-MM-DD' — the agent has no clock of its own
  */
-export function buildSystemPrompt(lead = {}, todayISO, { media = null, performanceNote = null, businessInstructions = '', activeOpeningIds = null, turnDecision = null } = {}) {
+export function buildSystemPrompt(lead = {}, todayISO, { media = null, performanceNote = null, businessInstructions = '', activeOpeningIds = null, turnDecision = null, incomingText = '' } = {}) {
     // Falling back to the built-in catalog is deliberate: a Firestore
     // read that failed must cost the bot the uploaded extras, never the
     // six images it has always had.
@@ -124,20 +125,12 @@ ${FACTS.map(f => `- ${f}`).join('\n')}
 שים ב-"image" את המפתח, ורק אחד מהמפתחות האלה. אל תמציא כתובת.
 ${renderMedia(library)}
 
-תשלח יותר ממה שנדמה לך שצריך. אנשים אוהבים לראות, ותמונה של מוצר אמיתי
-עונה על ספק טוב יותר מכל משפט. שיחה שנשלחו בה שתיים או שלוש תמונות
-במקומות הנכונים היא שיחה טובה, לא שיחה עמוסה.
-
-מתי כן: כששואלים איך זה נראה, איך זה עובד, אם זה מותאם אישית, מה ההבדל
-בין החבילות, אם זה מסובך לאורחים, או כשמישהו נשמע ספקן. וגם כשהוא לא
-שאל אבל אתה מסביר משהו שקל יותר להראות מלתאר.
-
-מתי לא: סתם כדי למלא שקט, ואף פעם לא את אותה מדיה פעמיים. בהודעה
-הראשונה — רק אם הנחיית הפתיחה שלך מבקשת את זה במפורש.
-
-ה-"messages" שלך נשלח יחד עם המדיה, אז תכתוב משפט שמתאים לצידה, לא
-משפט שמתאר אותה.
-תבחר את מה שמתאים לסוג האירוע שלו. אין לך תמונות של ברית.
+תמונה של מוצר אמיתי עונה על ספק טוב יותר מכל משפט, אז תשלח יותר ממה
+שנדמה לך שצריך: כששואלים איך זה נראה או עובד, אם זה מותאם אישית, אם
+זה מסובך לאורחים, כשמישהו נשמע ספקן, וגם כשקל יותר להראות מלתאר.
+לא סתם כדי למלא שקט, ואף פעם לא את אותה מדיה פעמיים. בהודעה הראשונה
+רק אם הנחיית הפתיחה מבקשת את זה. ה-"messages" נשלח לצד המדיה, אז
+תכתוב משפט שמתאים לצידה, לא משפט שמתאר אותה. אין לך תמונות של ברית.
 
 ${LANGUAGE_RULES}
 ${CONVERSATION_CRAFT}
@@ -149,24 +142,14 @@ ${businessInstructions}
 ההנחיות האלה משפרות את דרך המכירה בלבד. הן אינן גוברות על המחירים,
 העובדות, כללי הבטיחות, ההעברה לאדם והאיסור על שיחות טלפון.
 ` : ''}
+${workedExamples()}
 ${styleNote(readStyle(lead.turns)) || ''}
-${turnDecision ? `## החלטת המכירה לתור הזה
-זו החלטה מחייבת שנקבעה לפני הניסוח. אל תבחר צעד אחר ואל תוסיף צעד נוסף.
-${JSON.stringify(turnDecision, null, 2)}
-
-` : ''}
-${openingBlock(lead, activeOpeningIds)}${journeyBlock(lead.stage || 'new')}
-## מהלך המכירה — היעד שלך
-0. אם הוא שאל מחיר, תגיד מחיר. עכשיו, בהודעה הזאת, לפני כל שאר הסדר
-   הזה. השלבים למטה הם מה שקורה כשאין שאלה פתוחה על השולחן.
-1. תוך כדי שיחה תבין איזה אירוע ומתי. שאלה אחת על זה מותרת, פעם
-   אחת. לא ענו — ממשיכים בלעדיה, זה יעלה לבד.
-2. שלח את קישור הדמו מוקדם. זה כלי המכירה החזק ביותר שיש לך —
-   לקוח שכתב ברכה בעצמו כבר מדמיין את האירוע שלו.
-3. הצג את שתי החבילות יחד. הדגש את המודפס. אם המחירים כבר נאמרו
-   בשיחה, אל תחזור עליהם, תתקדם לצעד הבא.
-4. כשהוא מוכן — שלח את קישור התשלום המדויק של החבילה שבחר.
-5. אחרי תשלום אתה כבר לא מוכר: מסביר מה קורה עכשיו ומרגיע.
+${openingBlock(lead, activeOpeningIds)}${journeyBlock(lead.stage || 'new', { tip: pickValueTip({ stage: lead.stage || 'new', eventDate: lead.eventDate, todayISO, text: incomingText }) })}
+## מהלך המכירה בקצרה
+שאלה ישירה נענית קודם, תמיד. כשאין שאלה פתוחה: להבין איזה אירוע ומתי
+(שאלה אחת, פעם אחת), לשלוח את הדמו מוקדם, להציג את שתי החבילות עם
+דגש על המודפס, וכשהוא מוכן לשלוח את קישור התשלום המדויק. אחרי תשלום
+כבר לא מוכרים.
 
 ## חוקים קשיחים — הפרה שלהם היא נזק אמיתי
 - אסור להמציא. מחיר, הנחה, מבצע, זמן אספקה, יכולת טכנית — רק מה שכתוב למעלה.
@@ -221,7 +204,83 @@ ${lead.isNew === false
 }
 
 "messages" הוא מערך של 1 עד 3 מחרוזות. שתי הודעות רק כשזה באמת קורא
-טוב יותר — למשל משפט קצר ואז קישור. ברירת המחדל היא הודעה אחת.`
+טוב יותר — למשל משפט קצר ואז קישור. ברירת המחדל היא הודעה אחת.${turnBriefing(turnDecision, lead, incomingText)}`
+}
+
+// ── The briefing for this one turn ──────────────────────────────────
+//
+// decideSalesTurn already fixed the move before the model is called. It
+// used to be pasted into the prompt as raw JSON ("nextBestAction":
+// "answer_then_qualify", "forbiddenRepeats": ["eventType"]), which the
+// model read as configuration rather than instruction: on 19.9 it asked
+// for the event date with eventDate sitting in that very list.
+//
+// So the decision is rendered as the last thing the model reads, in the
+// language everything else is written in, as a briefing a manager would
+// give before you pick up the phone: what he just said, what he is
+// asking for, the one move to make, what you already know, how long.
+const INTENT_HE = {
+    price: 'שאל כמה זה עולה',
+    demo: 'רוצה לראות איך זה נראה',
+    positive_signal: 'הגיב בחיוב, הוא בכיוון',
+    objection: 'מהסס או מתנגד',
+    process: 'שאל איך זה עובד',
+    payment_intent: 'רוצה להזמין או לשלם',
+    negative_exit: 'סיים את השיחה',
+    general: 'כתב משהו שצריך קודם כל להגיב אליו',
+}
+
+const MOVE_HE = {
+    answer: 'תענה ישר ובמלואו על מה ששאל, ואז צעד אחד קדימה (הדמו אם עוד לא נשלח, אחרת המודפס). בלי שאלה אם אין צורך.',
+    show_proof: 'שלח תמונה מתאימה ב-image, עם משפט אחד לצידה שמדבר על האירוע שלו. לא לתאר את התמונה.',
+    recommend_package: 'זה הרגע להציע, לא להוסיף מידע. משפט אחד על המודפס עם קישור התשלום שלו.',
+    handle_objection: 'תקף במילים שלו במשפט קצר, ואז שאלה אחת מה באמת עוצר. אל תחזור על יתרונות ואל תציע הנחה.',
+    answer_then_qualify: 'שורה ראשונה מגיבה למה שכתב. תן משהו שווה (תשובה מלאה, הדמו, תמונה או הטיפ שלמעלה). אם עוד לא ידוע איזה אירוע ומתי, שאלה קלה אחת על זה בסוף.',
+    send_payment_link: 'המערכת מצרפת בעצמה את קישור התשלום והמחיר. אתה כותב רק משפט חם אחד לפני, על האירוע שלו. בלי מספרים, בלי קישור, בלי שאלה.',
+    diagnose_checkout: 'שאלה אחת: איפה זה נתקע לו.',
+    close_lost: 'סגור מעגל יפה. תודה, דלת פתוחה, בלי ניסיון אחרון.',
+}
+
+const FACT_HE = {
+    name: 'השם שלו',
+    eventType: 'סוג האירוע',
+    eventDate: 'תאריך האירוע',
+    celebrantName: 'שם החוגג/ת',
+    packageInterest: 'איזו חבילה מעניינת אותו',
+}
+
+const TARGET_HE = {
+    eventTypeAndDate: 'לאיזה אירוע ומתי בערך',
+    eventType: 'לאיזה אירוע',
+    eventDate: 'מתי בערך האירוע',
+}
+
+function quoteLast(text) {
+    const t = String(text || '').replace(/\s+/g, ' ').trim()
+    if (!t) return null
+    return t.length > 160 ? `${t.slice(0, 157)}...` : t
+}
+
+export function turnBriefing(decision, lead = {}, incomingText = '') {
+    if (!decision || decision.conversationKind !== 'sales') return ''
+    const lines = ['', '', '## התור הזה, בקצרה', 'זה המהלך שנקבע. לא לבחור אחר ולא להוסיף עליו.']
+    const last = quoteLast(incomingText)
+    if (last) lines.push(`מה שהוא כתב הרגע: "${last}"`)
+    lines.push(`מה הוא מבקש: ${INTENT_HE[decision.intent] || INTENT_HE.general}.`)
+    lines.push(`המהלך שלך: ${MOVE_HE[decision.nextBestAction] || MOVE_HE.answer_then_qualify}`)
+    const known = (decision.knownFacts || []).map(f => FACT_HE[f]).filter(Boolean)
+    if (known.length) lines.push(`כבר ידוע ואסור לשאול שוב: ${known.join(', ')}.`)
+    const target = TARGET_HE[decision.qualificationTarget]
+    if (target && decision.nextBestAction === 'answer_then_qualify') lines.push(`מה שעוד לא ידוע ומותר לשאול פעם אחת: ${target}.`)
+    if (decision.openingBundleRequired && lead?.isNew === true) {
+        lines.push('זו ההודעה הראשונה שלו. תן ערך לפני שאתה שואל.')
+    }
+    const maxMessages = decision.maxMessages || 1
+    const maxChars = decision.maxChars || 420
+    const maxQuestions = decision.maxQuestions ?? 1
+    lines.push(`אורך: עד ${maxMessages} ${maxMessages === 1 ? 'הודעה' : 'הודעות'}, עד ${maxChars} תווים בכל אחת, ${maxQuestions === 0 ? 'בלי שאלות' : 'שאלה אחת לכל היותר'}. ${maxQuestions > 0 ? 'שאלה שנייה תימחק אוטומטית, אז תשאל רק את החשובה.' : ''}`.trim())
+    lines.push('לפני שאתה מחזיר: השורה הראשונה שלך מגיבה למה שהוא כתב? יש משהו שהוא מקבל, לא רק שאלה? אין בהודעה מידע שכבר נאמר?')
+    return lines.join('\n')
 }
 
 // One line per asset: the key the model writes back, whether it is a

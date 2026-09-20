@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDeterministicSalesReply, decideSalesTurn, detectSalesIntent, enforceSalesReply, TURN_LIMITS } from '@/lib/salesAgent/decisionPolicy'
+import { buildDeterministicSalesReply, decideSalesTurn, detectSalesIntent, enforceSalesReply, warmPaymentOpener, TURN_LIMITS } from '@/lib/salesAgent/decisionPolicy'
 
 describe('conversation-learned sales decision policy', () => {
     it.each([
@@ -240,9 +240,36 @@ describe('deterministic WhatsApp reply contract', () => {
             lead: {},
             incomingText,
         })
-        expect(result.messages[0]).toContain('https://weddingtales.co.il/checkout/?add-to-cart=6271')
-        expect(result.messages[0].match(/https:\/\//g)).toHaveLength(1)
+        // The model's short warm line goes first; the link line is still
+        // ours, word for word, and the only place a URL appears.
+        expect(result.messages).toHaveLength(2)
+        expect(result.messages[0]).toBe('מעולה, הנה קישור')
+        expect(result.messages[1]).toContain('https://weddingtales.co.il/checkout/?add-to-cart=6271')
+        expect(result.messages.join(' ').match(/https:\/\//g)).toHaveLength(1)
         expect(result.stage).toBe('ready_to_pay')
+    })
+
+    it('drops the model opener before the payment line when it carries a number, link or question', () => {
+        const incomingText = 'אני רוצה להזמין את המודפס'
+        const decision = decisionFor(incomingText)
+        for (const opener of [
+            'ספר מודפס עולה 1490 שח',
+            'הנה: https://example.com/pay',
+            'איזו חבילה תרצי?',
+            'אחזור אליך בטלפון',
+            'א'.repeat(141),
+        ]) {
+            const result = enforceSalesReply({
+                parsed: { messages: [opener], stage: 'engaged', packageInterest: 'printed', handoff: false },
+                decision,
+                lead: {},
+                incomingText,
+            })
+            expect(result.messages, opener).toHaveLength(1)
+            expect(result.messages[0]).toContain('add-to-cart=6271')
+        }
+        expect(warmPaymentOpener('יאללה, הולכים על המודפס לבר מצווה של יונתן', decision)).toBe('יאללה, הולכים על המודפס לבר מצווה של יונתן')
+        expect(warmPaymentOpener('', decision)).toBeNull()
     })
 
     it('closes a clean negative exit without handoff or owner escalation', () => {

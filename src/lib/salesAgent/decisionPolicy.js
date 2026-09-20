@@ -254,6 +254,23 @@ function hasOnlyCurrentCatalogPrices(message) {
     return prices.length > 0 && prices.every(price => current.has(price))
 }
 
+// A model sentence that may precede the deterministic payment line. It
+// must add warmth and nothing else: no figure (a wrong price next to the
+// right one is worse than no sentence), no link (two links is two ways to
+// get it wrong), no question (the customer is paying, not deciding), and
+// short enough to read as a remark rather than a pitch.
+const WARM_MAX_CHARS = 140
+export function warmPaymentOpener(message, decision) {
+    const m = compactMessage(message)
+    if (!m || m.length > WARM_MAX_CHARS) return null
+    if (/https?:\/\/|www\./i.test(m)) return null
+    if (/\d{3,}|₪|ש"ח|ש״ח|שקל/.test(m)) return null
+    if (m.includes('?')) return null
+    if (CALL_LANGUAGE.test(normalizedText(m))) return null
+    if (decision && containsRepeatedKnownQuestion(m, decision)) return null
+    return m
+}
+
 function clipMessage(message, maxChars, fallback) {
     if (message.length <= maxChars) return message
     const url = /https?:\/\/\S+/g
@@ -305,8 +322,16 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         || CALL_LANGUAGE.test(normalizedText(candidates[0]))
         || containsRepeatedKnownQuestion(candidates[0], decision)
     )
+    // The payment line itself stays deterministic (right price, right
+    // link, always), but "ספר מודפס עולה ₪990… לתשלום מאובטח:" on its own
+    // is a vending machine. If the model wrote a short human sentence with
+    // no numbers, no link and no question in it, it goes out first and the
+    // link follows as its own bubble.
+    const warmLead = decision.nextBestAction === 'send_payment_link'
+        ? warmPaymentOpener(candidates[0], decision)
+        : null
     let messages = mustUseDeterministic
-        ? [fallback]
+        ? (warmLead ? [warmLead, fallback] : [fallback])
         : [
             candidates[0],
             ...candidates.slice(1).filter(m =>

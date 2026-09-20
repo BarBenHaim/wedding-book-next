@@ -146,6 +146,74 @@ instead of resolving the pinned variable version. The UI restriction prevents a
 blank customer question today. If Claude adds tested runtime resolution for ask
 blocks, hand that contract back to Codex before the selector is re-enabled.
 
+### 19–20.9 — what Claude changed after reading the live transcripts
+
+Lord's instruction on 19.9: drop the phantom package, write like a person,
+listen to the other side, think like a salesperson; on 20.9: make the
+agent much more attentive, value-giving, and closing. Commits 115c55e,
+06b4d3e, cfef6e9, c78ae47 and the one carrying this note. Codex: the
+duplicate-bubble investigation above is still open; none of this touches
+transport, Make, or the opening editor.
+
+What the 19.9 transcripts showed (24h, ~20 conversations): the model was
+timing out at the 10s OpenAI cap and the canned "הספר מרכז…" line went
+out instead; the price enforcer re-quoted 690/990 to a customer who
+merely *mentioned* price ("חשבתי שהצעת מחיר מיוחד"); the bot quoted a
+1,490 "פרימיום מלכותי" that the shop does not sell; it contradicted a
+private offer Lord had made to a customer in the same chat; and it
+answered personal details ("בר מצווה של האחיין", a date) with product
+paragraphs.
+
+- `agent.js` — `DEFAULT_TIMEOUT_MS` 16s per attempt (`attemptCapMs`);
+  the auto-chain still uses 10s. `sanitizeReply` strips cliché openers
+  ("מעולה!", "בהחלט,") and collapses `!!`.
+- `catalog.js` — premium package removed. Two packages only: digital
+  690 (6258), printed 990 (6271, recommended). Tests assert no 1,490.
+- `decisionPolicy.js` — `pricesRecentlyStated(lead)`: a bare price
+  *topic* word is intent `price` only when the last two assistant turns
+  did not already carry the catalog prices. Last-resort fallback line is
+  human ("רגע, אני בודק ומיד חוזר…"). **New:** `warmPaymentOpener` —
+  for `send_payment_link` the model's first bubble goes out before the
+  deterministic price+link line if it is ≤140 chars with no digits, no
+  URL, no question, no phone-call language; otherwise the link line
+  alone, exactly as before.
+- `prompt.js` — the `turnDecision` is no longer pasted as JSON. It is
+  rendered as the **last** section, `## התור הזה, בקצרה` (`turnBriefing`):
+  the customer's last line quoted, intent and move in Hebrew, the facts
+  that are known and must not be re-asked, what may still be asked
+  (only for `answer_then_qualify`), length/question budget, and a three
+  question self-check. `buildSystemPrompt` takes `incomingText` for this;
+  the reply route passes it. A `human`/`humanSince` lead gets the rule
+  never to deny an offer the owner made. Sales-flow block shortened;
+  media prose shortened.
+- `examples.js` (new) — `workedExamples()`: eight customer lines with a
+  good reply (catalog prices interpolated) and the bad reply seen live,
+  plus a "what reads as a machine" list. Injected before the style note.
+- `journey.js` — `VALUE_TIPS` +3 (`panel_fixes`, `older_guests`,
+  `far_date`). **`pickValueTip({stage, eventDate, todayISO, text})`**
+  returns at most one tip: text triggers first (סבתא → older_guests,
+  שגיאות → panel_fixes, …), then the calendar (past → after_event,
+  ≤21d → timing, ≥75d → far_date), then stage. `journeyBlock(stage,
+  {tip})` renders only that tip; the full list is no longer in the
+  prompt. `engaged`/`demo_sent` briefs rewritten to react first, send
+  the demo rather than ask, and offer the printed link once event and
+  prices are known.
+- `conversation.js` — "### להקשיב לפני שעונים"; price and "אני אחשוב"
+  moved out (they live in `selling.js`).
+- `followupStrategy.js` / `whatsapp.js` — approved Meta template
+  `wt_followup_he` (one `{{1}}` = name) is the default outside 24h;
+  `SALES_FOLLOWUP_TEMPLATE_NAME` overrides. `leads.js
+  recordFollowUpRun` writes `sales_runtime/followups`; the cron writes it
+  after every run; `?dry=1` capped at 10 leads.
+
+Rendered prompt for a typical engaged lead: ~16.2k chars / 349 lines
+(was 15.7k before examples and briefing, with the JSON block gone).
+
+Open, for whoever gets there first: 13 August-era leads got the approved
+template at 20.9 07:49 UTC, Meta accepted 6, none delivered after 4h
+(`staleAccepted`). Check template delivery callbacks. Consider first
+name only in the `{{1}}` parameter (profile names arrive as "דורית זוזות").
+
 ---
 
 ## The WhatsApp sales agent — shipped and live

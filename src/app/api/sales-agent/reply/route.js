@@ -899,6 +899,7 @@ export async function POST(req) {
         businessInstructions: settings.businessInstructions,
         activeOpeningIds: settings.activeOpeningIds,
         turnDecision,
+        incomingText: text,
     })
     const messages = parsed ? [] : toApiMessages(lead.turns, text)
     const spends = []

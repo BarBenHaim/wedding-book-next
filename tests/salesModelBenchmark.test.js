@@ -57,7 +57,10 @@ describe('redacted offline model benchmark', () => {
             callModel, saveScore, randomId: () => 'case-random', now: () => 1_000,
         })
 
-        expect(JSON.stringify(callModel.mock.calls)).not.toMatch(/052|@|order-private|https?:\/\/|נועה כהן/)
+        // deadlineAtMs is a wall-clock timestamp and, a few times a day,
+        // happens to contain "052". Strip it before looking for a phone.
+        const calls = JSON.stringify(callModel.mock.calls, (k, v) => (k === 'deadlineAtMs' ? undefined : v))
+        expect(calls).not.toMatch(/052|@|order-private|https?:\/\/|נועה כהן/)
         expect(JSON.stringify(saveScore.mock.calls)).not.toContain(privateCase.incomingText)
         expect(saveScore).toHaveBeenCalledTimes(2)
         expect(saveScore).toHaveBeenCalledWith(expect.objectContaining({
