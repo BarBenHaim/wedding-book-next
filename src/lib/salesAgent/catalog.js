@@ -88,6 +88,20 @@ export const PACKAGES = [
     },
 ]
 
+// Digital first, printed later. Approved by Lord on 22.9: the same
+// designed book, printed and shipped, for the full price difference, up
+// to 30 days after the event. It exists for the customer who says
+// "יקר" - a third door instead of a no. The bot may offer it only as an
+// answer to price hesitation; the printed package stays the lead. The
+// checkout URL is filled once the shop has the product.
+export const UPGRADE = {
+    id: 'digital_to_printed',
+    name: 'שדרוג מדיגיטלי למודפס',
+    price: 300,
+    windowDays: 30,
+    checkout: process.env.SALES_UPGRADE_CHECKOUT_URL || null,
+}
+
 export const ADDONS = [
     { name: 'עותק מודפס נוסף', price: 290 },
     { name: 'פוסטר A2 מוקשח לעמדה', price: 180 },
@@ -106,6 +120,7 @@ export const FACTS = [
     'הקישור נשאר פתוח גם אחרי האירוע — מי שפספס משלים מהבית, ואפשר גם להתחיל אחרי שהאירוע כבר עבר.',
     'מתאים לבר מצווה, בת מצווה, חתונה, ברית ויום הולדת — אותה מערכת, עיצוב מותאם לאירוע.',
     'המחירים כוללים מע״מ, עיצוב אישי וליווי בוואטסאפ.',
+    'אפשר להתחיל בספר הדיגיטלי ולשדרג למודפס עד 30 ימים אחרי האירוע בהפרש של 300 ₪ — אותו ספר בדיוק, אותם עמודים, רק בכריכה קשה ומשלוח עד הבית.',
     'אחרי התשלום נשלח מייל עם פרטי גישה, ואנחנו יוצרים קשר בוואטסאפ להתחלת העיצוב.',
 ]
 
@@ -225,6 +240,6 @@ export function findPackage(id) {
     return PACKAGES.find(p => p.id === id) || null
 }
 
-export const CATALOG = { BUSINESS, DEMO, PACKAGES, ADDONS, FACTS, CONCESSION, STAGES, MEDIA }
+export const CATALOG = { BUSINESS, DEMO, PACKAGES, ADDONS, UPGRADE, FACTS, CONCESSION, STAGES, MEDIA }
 
 export default CATALOG

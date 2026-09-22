@@ -2,7 +2,7 @@
 // move. This policy turns the current message and durable lead facts into
 // one small, testable instruction before any provider is called.
 
-import { PACKAGES, ADDONS, DEMO } from './catalog'
+import { PACKAGES, ADDONS, DEMO, UPGRADE } from './catalog'
 import { asksPrice, priceFallbackMessage } from './selling'
 
 // Two messages, not one: a real seller answers, then adds one step. A
@@ -337,6 +337,8 @@ function allowedPrices() {
         for (const a of ADDONS) for (let n = 1; n <= 3; n += 1) out.add(p.price + n * a.price)
     }
     for (const a of ADDONS) out.add(a.price)
+    out.add(UPGRADE.price)
+    for (const p of PACKAGES) out.add(p.price + UPGRADE.price)
     return out
 }
 function hasOnlyCurrentCatalogPrices(message) {

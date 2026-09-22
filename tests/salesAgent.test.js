@@ -1030,3 +1030,20 @@ describe('parseOwnerCommand', () => {
         expect(parseOwnerCommand('תשלח לו שקט 0501234567')).toBeNull()
     })
 })
+
+
+describe('digital first, printed later (22.9)', () => {
+    it('states the upgrade as a fact the bot may give, with price and window', () => {
+        const p = buildSystemPrompt({}, '2026-09-22')
+        expect(p).toContain('שדרוג מדיגיטלי למודפס: ₪300, עד 30 ימים אחרי האירוע')
+        expect(p).toContain('זו תשובה למי שמהסס על המחיר, לא הצעה יזומה')
+        expect(p).toMatch(/לשדרג למודפס עד 30 ימים אחרי האירוע בהפרש של 300/)
+    })
+
+    it('shows the upgrade in the "יקר" example and never prices the digital below catalog', () => {
+        const p = buildSystemPrompt({}, '2026-09-22')
+        expect(p).toContain('להתחיל בדיגיטלי ב-690 שח')
+        expect(p).toContain('לשדרג למודפס ב-300 שח')
+        expect(p).not.toMatch(/\b590\b/)
+    })
+})

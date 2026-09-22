@@ -415,6 +415,15 @@ describe('what the 21-22.9 transcripts taught the enforcer', () => {
         expect(invented.messages[0]).not.toContain('1400')
     })
 
+    it('lets the model quote the upgrade price and the digital-plus-upgrade total', () => {
+        const incomingText = 'כמה זה עולה?'
+        const result = enforceSalesReply({
+            parsed: { messages: ['דיגיטלי 690 שח, ואחרי האירוע שדרוג למודפס ב-300 שח, סך הכל 990 שח. לאיזה אירוע?'], stage: 'offer_sent', handoff: false },
+            decision: decisionFor(incomingText), lead: {}, incomingText,
+        })
+        expect(result.messages[0]).toContain('300')
+    })
+
     it('answers a second ad click with the demo, not the opening again', () => {
         const text = 'שלום! אפשר לקבל מידע נוסף על זה?'
         expect(isAdCta(text)).toBe(true)

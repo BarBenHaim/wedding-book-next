@@ -17,7 +17,7 @@
 //    Splitting those into a second model call would double the cost and
 //    let the two answers disagree.
 
-import { BUSINESS, DEMO, PACKAGES, ADDONS, FACTS, CONCESSION, MEDIA } from './catalog'
+import { BUSINESS, DEMO, PACKAGES, ADDONS, UPGRADE, FACTS, CONCESSION, MEDIA } from './catalog'
 import { findActiveVariant, shouldApplyOpening } from './experiments'
 import { journeyBlock, pickValueTip, LANGUAGE_RULES } from './journey'
 import { CONVERSATION_CRAFT, readStyle, styleNote } from './conversation'
@@ -114,6 +114,8 @@ ${BUSINESS.product}.
 ${renderPackages()}
 
 תוספות: ${ADDONS.map(a => `${a.name} ${ils(a.price)}`).join(' · ')}
+שדרוג מדיגיטלי למודפס: ${ils(UPGRADE.price)}, עד ${UPGRADE.windowDays} ימים אחרי האירוע.${UPGRADE.checkout ? ` קישור: ${UPGRADE.checkout}` : ' אין עדיין קישור תשלום לשדרוג, מי שרוצה לשדרג עובר למישהו מהצוות (handoff=true).'}
+זו תשובה למי שמהסס על המחיר, לא הצעה יזומה. בפתיחה ובהצגת החבילות המודפס הוא ההמלצה.
 
 ## עובדות שמותר לך למסור
 ${FACTS.map(f => `- ${f}`).join('\n')}

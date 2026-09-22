@@ -17,7 +17,7 @@
 // Prices are interpolated so a catalog change cannot leave a stale
 // number in the one place the model is told to copy from.
 
-import { PACKAGES, ADDONS, DEMO } from './catalog'
+import { PACKAGES, ADDONS, DEMO, UPGRADE } from './catalog'
 
 const price = id => {
     const p = PACKAGES.find(x => x.id === id)
@@ -31,6 +31,7 @@ export function workedExamples() {
     const printedLink = printed()?.checkout || ''
     const extraCopy = `${ADDONS[0]?.price || 0} שח`
     const twoBooks = `${(printed()?.price || 0) + (ADDONS[0]?.price || 0)} שח`
+    const upgrade = `${UPGRADE.price} שח`
 
     return `## ככה זה נשמע כשזה טוב
 כל דוגמה: מה הלקוח כתב, ואז תשובה שעובדת. שים לב לצורה, לא למילים. אל תעתיק משפטים, כל שיחה שונה. הדוגמאות בלשון נקבה, אתה מתאים את המין למי שמולך.
@@ -53,7 +54,7 @@ export function workedExamples() {
 רע: לחזור על רשימת מה שכלול, או להציע הנחה.
 
 הלקוח: "ראיתי, וזה יקר מאוד" (אחרי תמונה)
-טוב: "אז שיהיה ברור מה נכנס ב-${printedPrice}: הספר עצמו בכריכה קשה, עיצוב של כל עמוד, ומשלוח. בלי הגבלה על ברכות. ואם המודפס לא הכרחי לכם, הדיגיטלי ב-${digital} נותן את אותה חוויה לאורחים. לאיזה אירוע זה?"
+טוב: "מבין. אז אפשר להתחיל בדיגיטלי ב-${digital}, זה הפוסטר, עמוד האורחים והספר הדיגיטלי. ואחרי האירוע, כשהספר כבר מלא בברכות, מחליטים אם לשדרג למודפס ב-${upgrade}. אותו ספר בדיוק, רק בכריכה קשה עד הבית. לאיזה אירוע זה?"
 רע: "מבין, זה באמת השקעה לא קטנה. מה עוצר אותך, המחיר או משהו אחר?" היא הרגע אמרה מה עוצר אותה, ואתה הסכמת שזה יקר.
 
 הלקוח: "כמה יעלה לי 2 ספרים?"
