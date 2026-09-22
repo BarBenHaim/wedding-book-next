@@ -264,6 +264,19 @@ export function runOpeningFlow({ flow, state = { cursor: 0, waitingFor: null }, 
     let approvalRequest = null
     let approvedAssetKey = null
 
+    // The very first message may already answer the event question: a
+    // click-to-WhatsApp ad with ice-breaker buttons ("לבר מצווה", "לחתונה")
+    // sends that as the opening line. Capture it here and the ask_event
+    // block below is skipped instead of asking what was just said.
+    let eventAnswered = false
+    if (cursor === 0 && !waitingFor && inbound?.kind === 'text' && String(inbound.text || '').trim()) {
+        const first = qualification(inbound.text)
+        if (first.eventType) {
+            Object.assign(captures, { eventType: first.eventType, eventDate: first.eventDate, qualificationNeedsReview: false })
+            eventAnswered = true
+        }
+    }
+
     if (waitingFor === 'event') {
         if (inbound?.kind !== 'text' || !String(inbound.text || '').trim()) return waitResult('wait_event', { cursor, waitingFor })
         Object.assign(captures, qualification(inbound.text))
@@ -326,6 +339,10 @@ export function runOpeningFlow({ flow, state = { cursor: 0, waitingFor: null }, 
             continue
         }
         if (block.type === 'ask_event') {
+            if (eventAnswered) {
+                cursor += 1
+                continue
+            }
             parts.push({ partId: partId(eventId, block.id), blockId: block.id, order: parts.length + 1, kind: 'text', text: block.text })
             cursor += 1
             return { action: 'wait_event', state: { cursor, waitingFor: 'event' }, parts, captures, approvalRequest, completed: false }

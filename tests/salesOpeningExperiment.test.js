@@ -223,6 +223,24 @@ describe('opening experiment runner', () => {
         expect(monthOnly).toMatchObject({ action: 'wait_photo', state: { waitingFor: 'photo' } })
     })
 
+    it('skips the event question when the first message already answers it', () => {
+        // Ice-breaker buttons on the ad send "לבר מצווה" as the first line.
+        const first = runOpeningFlow({
+            flow: variant('C'), eventId: 'event-c-ice', library: media,
+            inbound: { kind: 'text', text: 'היי, מעניין אותי ספר ברכות לבת מצווה' },
+        })
+        expect(first.captures).toMatchObject({ eventType: 'bat_mitzvah', qualificationNeedsReview: false })
+        expect(first.parts.map(p => p.blockId)).not.toContain('c-event')
+        expect(first).toMatchObject({ action: 'wait_photo', state: { waitingFor: 'photo' } })
+        // The generic ad text still gets the question.
+        const generic = runOpeningFlow({
+            flow: variant('C'), eventId: 'event-c-generic', library: media,
+            inbound: { kind: 'text', text: 'שלום! אפשר לקבל מידע נוסף על זה?' },
+        })
+        expect(generic).toMatchObject({ action: 'wait_event' })
+        expect(generic.parts.map(p => p.blockId)).toContain('c-event')
+    })
+
     it('returns stable part ids when the same claimed event is evaluated twice', () => {
         const one = runOpeningFlow({ flow: variant('B'), eventId: 'duplicate-event', library: media })
         const two = runOpeningFlow({ flow: variant('B'), eventId: 'duplicate-event', library: media })
