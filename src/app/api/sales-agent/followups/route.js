@@ -275,7 +275,7 @@ export async function GET(req) {
             // template text-only; product video remains available for replies and
             // follow-ups inside the open 24-hour service window.
             const video = withinWindow ? unsentVideo(library, lead, strategy) : null
-            const image = withinWindow && !video && strategy.id === 'proof_site'
+            const image = withinWindow && !video && ['demo_first', 'real_page'].includes(strategy.id)
                 && parsed.image && library[parsed.image]?.kind !== 'video'
                 ? { key: parsed.image, ...library[parsed.image] }
                 : null

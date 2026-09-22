@@ -50,7 +50,7 @@ vi.mock('@/lib/salesAgent/followupPolicy', async importOriginal => ({
     MAX_PER_RUN: 25,
     isFinalAttempt: mocks.isFinalAttempt,
 }))
-vi.mock('@/lib/salesAgent/catalog', () => ({ MEDIA: {} }))
+vi.mock('@/lib/salesAgent/catalog', () => ({ MEDIA: {}, DEMO: { writeBlessing: 'https://demo.example/photo' } }))
 vi.mock('@/lib/salesAgent/mediaLibrary', () => ({ mergeMedia: mocks.mergeMedia, performanceNote: mocks.performanceNote }))
 vi.mock('@/lib/salesAgent/sweep', () => ({ findOrphans: mocks.findOrphans, findStaleHandoffs: mocks.findStaleHandoffs, handoffAlert: mocks.handoffAlert }))
 vi.mock('@/lib/salesAgent/whatsapp', () => ({
@@ -167,7 +167,7 @@ describe('opening-only mode', () => {
         expect(mocks.callClaude).not.toHaveBeenCalled()
         expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
         expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup', [
-            'Test lead, רציתי לשלוח לך שוב דרך קצרה לראות איך ספר הברכות עובד. הסרטון והפרטים מחכים באתר: https://weddingtales.co.il',
+            'Test lead, אם בא לך להרגיש את זה במקום לקרוא: זה אירוע דמו, אפשר לכתוב שם ברכה מהטלפון תוך חצי דקה: https://demo.example/photo',
         ])
     })
 
@@ -322,7 +322,7 @@ describe('truthful follow-up transport', () => {
 
         expect(result.status).toBe(200)
         expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup', [
-            'Test lead, רציתי לשלוח לך שוב דרך קצרה לראות איך ספר הברכות עובד. הסרטון והפרטים מחכים באתר: https://weddingtales.co.il',
+            'Test lead, אם בא לך להרגיש את זה במקום לקרוא: זה אירוע דמו, אפשר לכתוב שם ברכה מהטלפון תוך חצי דקה: https://demo.example/photo',
         ])
         expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
         expect(mocks.sendWhatsAppImage).not.toHaveBeenCalled()
@@ -358,7 +358,7 @@ describe('truthful follow-up transport', () => {
         expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(
             lead.phone,
             'wt_followup',
-            ['Test lead, רציתי לשלוח לך שוב דרך קצרה לראות איך ספר הברכות עובד. הסרטון והפרטים מחכים באתר: https://weddingtales.co.il'],
+            ['Test lead, אם בא לך להרגיש את זה במקום לקרוא: זה אירוע דמו, אפשר לכתוב שם ברכה מהטלפון תוך חצי דקה: https://demo.example/photo'],
         )
         expect(mocks.sendWhatsAppVideo).not.toHaveBeenCalled()
         expect(mocks.prepareFollowUpDelivery).toHaveBeenCalledWith(expect.objectContaining({
@@ -368,7 +368,7 @@ describe('truthful follow-up transport', () => {
             followUpMediaKind: 'none',
         }))
         expect(result.body.items[0]).toMatchObject({
-            strategyId: 'proof_site',
+            strategyId: 'demo_first',
             hasVideo: false,
             sendVideo: null,
             templateHeaderVideo: null,
@@ -417,7 +417,7 @@ describe('truthful follow-up transport', () => {
             part: 'video', advancesFollowUp: false, followUpMediaKind: 'video',
         }))
         expect(result.body.items[0]).toMatchObject({
-            strategyId: 'proof_site',
+            strategyId: 'demo_first',
             hasVideo: true,
             sendVideo: 'https://cdn.example/product.mp4',
             mediaDeliveryStatus: 'accepted',
@@ -433,7 +433,7 @@ describe('truthful follow-up transport', () => {
         const result = await runCron()
 
         expect(mocks.sendWhatsAppVideo).not.toHaveBeenCalled()
-        expect(result.body.items[0]).toMatchObject({ strategyId: 'proof_site', hasVideo: false })
+        expect(result.body.items[0]).toMatchObject({ strategyId: 'demo_first', hasVideo: false })
     })
 
     it('uses the blocker template on the second outside-window follow-up', async () => {

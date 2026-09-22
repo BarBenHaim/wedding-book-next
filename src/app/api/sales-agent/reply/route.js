@@ -59,7 +59,7 @@ import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
 import { normalizeProviderError, INBOUND_ROUTE_DEADLINE_MS, INBOUND_HEARTBEAT_BUDGET_MS, FALLBACK_COMMIT_RESERVE_MS } from '@/lib/salesAgent/circuitBreaker'
 import { decideInboundAge } from '@/lib/salesAgent/transportPolicy'
-import { buildDeterministicSalesReply, decideSalesTurn, enforceSalesReply } from '@/lib/salesAgent/decisionPolicy'
+import { buildDeterministicSalesReply, decideSalesTurn, enforceSalesReply, liftInlineImageMarkers } from '@/lib/salesAgent/decisionPolicy'
 import { buildOpeningPlan } from '@/lib/salesAgent/openingPlan'
 import { buildOpeningOnlyPlan } from '@/lib/salesAgent/openingOnly'
 import { prepareOpeningRuntime, openingNoteFor } from '@/lib/salesAgent/openingRuntime'
@@ -75,6 +75,13 @@ import { sendInboundSequenceDirect } from '@/lib/salesAgent/inboundDirectDeliver
 // and short — no apology theatre, no invented reason.
 const FALLBACK_REPLY = 'רגע אחד, אני מעביר אותך לנציג שלנו 🙏'
 const AI_OUTAGE_REPLY = 'קיבלתי את ההודעה שלך. מישהו מהצוות יחזור אליך בהקדם.'
+// What the customer hears when they send something the bot cannot read.
+const MEDIA_ACK = {
+    image: 'קיבלתי את התמונה, תודה. מישהו מהצוות מסתכל וחוזר אליך כאן בקרוב.',
+    document: 'קיבלתי, תודה. מישהו מהצוות עובר על זה וחוזר אליך כאן עוד היום.',
+    audio: 'קיבלתי את ההודעה הקולית. מישהו מהצוות מאזין וחוזר אליך כאן בקרוב.',
+    video: 'קיבלתי את הסרטון, תודה. מישהו מהצוות מסתכל וחוזר אליך כאן בקרוב.',
+}
 const AI_OUTAGE_REASON = 'תקלה בשירות ה-AI'
 
 // What an existing customer hears. Deliberately not a sales sentence:
@@ -707,10 +714,14 @@ export async function POST(req) {
             console.error('[sales-agent] media handoff persistence failed')
             return NextResponse.json({ error: 'media-handoff-persist-failed' }, { status: 503 })
         }
+        // Silence after a document is the worst answer there is: on 22.9
+        // a customer sent what was almost certainly the invitation and got
+        // nothing back for hours. One warm line, then the human takes it.
+        const ack = MEDIA_ACK[messageType] || MEDIA_ACK.document
         return complete({
             ok: true,
-            send: [],
-            sendText: '',
+            send: [ack],
+            sendText: ack,
             hasImage: false,
             hasVideo: false,
             stage: 'handoff',
@@ -1066,11 +1077,21 @@ export async function POST(req) {
     // A handoff with no words leaves the customer staring at silence.
     if (parsed.handoff && parsed.messages.length === 0) parsed.messages = [FALLBACK_REPLY]
 
+    // The model sometimes writes the picture INTO the text - on 21.9 two
+    // customers received the literal line "[image: book_open_spread]" and
+    // no picture. The marker is lifted out of the words and, when the
+    // model left `image` empty, becomes the image it evidently meant.
+    const lifted = liftInlineImageMarkers(parsed.messages)
+    parsed.messages = lifted.messages
+    if (!parsed.image && lifted.image) parsed.image = lifted.image
+
     // Never send the same photo twice. The model is told which ones went
     // out already, but the CRM is the thing that actually knows, and a
     // repeated image is the kind of small wrongness that makes a whole
-    // conversation feel automated.
-    if (parsed.image && Array.isArray(lead.imagesSent) && lead.imagesSent.includes(parsed.image)) {
+    // conversation feel automated. `mediaRequested` covers the minute
+    // between our send and the provider's delivery callback.
+    const alreadyShown = new Set([...(lead.imagesSent || []), ...(lead.mediaSent || []), ...(lead.mediaRequested || [])])
+    if (parsed.image && alreadyShown.has(parsed.image)) {
         parsed.image = null
     }
     // ── The price guard ──────────────────────────────────────────────
@@ -1101,7 +1122,7 @@ export async function POST(req) {
             incomingText: text,
             messages: parsed.messages,
             eventType: parsed.eventType || lead.eventType,
-            seen: [...(lead.imagesSent || []), ...(lead.mediaSent || [])],
+            seen: [...alreadyShown],
             library,
         })
         if (pick) {

@@ -211,6 +211,16 @@ describe('opening experiment runner', () => {
         })
         expect(exact.captures).toMatchObject({ eventType: 'bar_mitzvah', eventDate: '2026-12-15', qualificationNeedsReview: false })
         expect(exact).toMatchObject({ action: 'wait_photo', state: { waitingFor: 'photo' } })
+
+        // "בר מצווה בפברואר" answers the question. The date is the sales
+        // agent's job; the script must not keep the customer waiting for
+        // dd.mm.yyyy (רויטל, 21.9: half an hour of silence).
+        const monthOnly = runOpeningFlow({
+            flow: variant('C'), state: initial.state, inbound: { kind: 'text', text: 'בר מצווה בפברואר' },
+            eventId: 'event-c-4', library: media,
+        })
+        expect(monthOnly.captures).toMatchObject({ eventType: 'bar_mitzvah', eventDate: null, qualificationNeedsReview: false })
+        expect(monthOnly).toMatchObject({ action: 'wait_photo', state: { waitingFor: 'photo' } })
     })
 
     it('returns stable part ids when the same claimed event is evaluated twice', () => {

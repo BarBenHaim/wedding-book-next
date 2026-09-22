@@ -217,10 +217,11 @@ function partId(eventId, blockId) {
 }
 
 function eventTypeOf(text) {
-    if (/בר\s*מצו[וה]/i.test(text)) return 'bar_mitzvah'
-    if (/בת\s*מצו[וה]/i.test(text)) return 'bat_mitzvah'
-    if (/חתונ|חופה/i.test(text)) return 'wedding'
+    if (/בר\s*מצו[וה]|בר\s*מצוו?ה|bar\s*mitzva/i.test(text)) return 'bar_mitzvah'
+    if (/בת\s*מצו[וה]|בת\s*מצוו?ה|bat\s*mitzva/i.test(text)) return 'bat_mitzvah'
+    if (/חתונ|חופה|wedding/i.test(text)) return 'wedding'
     if (/ברית|בריתה/i.test(text)) return 'brit'
+    if (/יום\s*הולדת|יומולדת|birthday/i.test(text)) return 'birthday'
     return null
 }
 
@@ -235,11 +236,16 @@ function eventDateOf(text) {
     return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
+// "בר מצווה בפברואר" is a perfectly good answer to "לאיזה אירוע ומתי".
+// Until 22.9 it needed a full dd.mm.yyyy to count, so the flow kept
+// waiting for the event and the customer (רויטל, 21.9 20:31) got nothing
+// until Lord answered by hand half an hour later. The event type is
+// what the script needs; a missing date is the sales agent's job.
 function qualification(text) {
     const clean = String(text || '').trim().slice(0, 500)
     const eventType = eventTypeOf(clean)
     const eventDate = eventDateOf(clean)
-    if (!eventType || !eventDate) {
+    if (!eventType) {
         return { eventType, eventDate, qualificationNeedsReview: true, qualificationNote: clean }
     }
     return { eventType, eventDate, qualificationNeedsReview: false }

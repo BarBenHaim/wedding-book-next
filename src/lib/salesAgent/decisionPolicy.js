@@ -2,7 +2,7 @@
 // move. This policy turns the current message and durable lead facts into
 // one small, testable instruction before any provider is called.
 
-import { PACKAGES } from './catalog'
+import { PACKAGES, ADDONS, DEMO } from './catalog'
 import { asksPrice, priceFallbackMessage } from './selling'
 
 // Two messages, not one: a real seller answers, then adds one step. A
@@ -54,6 +54,18 @@ export function detectSalesIntent(text = '', lead = null) {
     if (hasCheckoutFriction(value)) return 'payment_intent'
     if (/רוצה\s+להזמין|רוצ[הים]\s+לסגור|איך\s+משלמ|אפשר\s+לשלם|קישור.{0,12}תשלום|אקח\s+את|נלך\s+על|אפשר\s+להזמין/.test(value)) return 'payment_intent'
 
+    // The button text of the Facebook/Instagram ad. It is not a question,
+    // it is a click. On a lead who already got the opening it means "I
+    // pressed the button again" (21.9: two clicks, four minutes apart, and
+    // the bot re-sent the opening in its own words). The deterministic
+    // answer is the one thing the opening did not give: the live demo.
+    if (isAdCta(value) && lead && lead.isNew !== true && (lead.turnCount > 0 || (Array.isArray(lead.turns) && lead.turns.length > 0))) return 'ad_cta_repeat'
+
+    // "I have a file, just print it" is not a product we sell, and on 22.9
+    // the model quoted the full package price for it as if it were. A
+    // person from the team has to price that, so it is a handoff.
+    if (/רק\s+(?:רוצה\s+)?להדפיס|יש\s+ל[ינ]ו?\s+(?:כבר\s+)?קובץ|קובץ\s+מוכן|להדפיס\s+(?:לי\s+)?קובץ|הדפסה\s+בלבד|רק\s+הדפסה/.test(value)) return 'print_only'
+
     // asksPrice carries the full "how much" vocabulary ("כמה זה יוצא",
     // "כמה כסף", "how much"); the regex keeps the broader topic words.
     // The two must agree or the dodge-guard repairs a reply the enforcer
@@ -68,6 +80,11 @@ export function detectSalesIntent(text = '', lead = null) {
     if (/יקר|להתייעץ|לחשוב|אחשוב|נדבר\s+על\s+זה|רחוק|לא\s+בטוח|מתלבט/.test(value)) return 'objection'
     if (/איך\s+זה\s+עובד|מה\s+מקבלים|איך\s+האורחים|איך\s+מתחילים/.test(value)) return 'process'
     return 'general'
+}
+
+const AD_CTA = /אפשר\s+לקבל\s+מידע\s+נוסף|هل\s+يمكنني\s+الحصول\s+على\s+مزيد|can\s+i\s+get\s+more\s+info|более\s+подробн|можно\s+(?:получить\s+)?больше\s+информации/i
+export function isAdCta(text) {
+    return AD_CTA.test(normalizedText(text))
 }
 
 function knownFacts(lead) {
@@ -119,6 +136,8 @@ function nextAction(intent, lead, incomingText) {
             ? 'diagnose_checkout'
             : 'send_payment_link'
     }
+    if (intent === 'ad_cta_repeat') return 'send_demo'
+    if (intent === 'print_only') return 'handoff_print'
     if (intent === 'price' || intent === 'process') return 'answer'
     if (intent === 'demo') return 'show_proof'
     if (intent === 'positive_signal') return 'recommend_package'
@@ -200,6 +219,12 @@ function deterministicMessage({ parsed, decision, lead, incomingText }) {
         const selected = packageFor({ parsed, lead, incomingText })
         return `${selected.name} עולה ₪${selected.price} וכולל מע״מ. לתשלום מאובטח: ${selected.checkout}`
     }
+    if (decision.nextBestAction === 'send_demo') {
+        return demoAlreadySent(lead)
+            ? 'שלחתי למעלה את כל הפרטים והמחירים. אם יש שאלה, אני כאן. לאיזה אירוע זה אצלכם?'
+            : `אם בא לך להרגיש את זה במקום לקרוא, זה אירוע דמו אמיתי. אפשר לכתוב שם ברכה מהטלפון תוך חצי דקה: ${DEMO.writeBlessing}`
+    }
+    if (decision.nextBestAction === 'handoff_print') return 'הדפסה של קובץ מוכן זה משהו שמישהו מהצוות מתמחר בנפרד. אני מעביר אליו, והוא יחזור אלייך כאן עוד היום.'
     if (decision.intent === 'price') return priceFallbackMessage()
     if (decision.nextBestAction === 'show_proof') return 'בטח, מצרף דוגמה מתוך ספר אמיתי. מה חשוב לך לראות, את הכריכה או את העמודים מבפנים?'
     if (decision.nextBestAction === 'recommend_package') return 'החבילה המודפסת היא הבחירה של רוב המשפחות, ספר כריכה קשה שמגיע עד הבית. לשלוח לך את הפרטים שלה?'
@@ -233,24 +258,91 @@ export function buildDeterministicSalesReply({ decision, lead = {}, incomingText
     })
 }
 
+function demoAlreadySent(lead) {
+    if (lead?.demoEvidenceDelivered === true) return true
+    const turns = Array.isArray(lead?.turns) ? lead.turns : []
+    return turns.some(t => t?.role === 'assistant' && String(t?.text || '').includes(DEMO.writeBlessing))
+}
+
+// "[image: book_open_spread]" inside the words is the model narrating the
+// picture instead of attaching it. Lift the marker out; the first key
+// found becomes the image when the model left that field empty.
+const INLINE_IMAGE = /\[\s*(?:image|img|תמונה)\s*:\s*([\w-]+)\s*\]/gi
+export function liftInlineImageMarkers(messages) {
+    let image = null
+    const out = (Array.isArray(messages) ? messages : []).map(m => {
+        const text = String(m || '').replace(INLINE_IMAGE, (_, key) => {
+            if (!image) image = key
+            return ''
+        })
+        return text.replace(/[ \t]*\n[ \t]*\n[ \t]*$/, '').replace(/\s*:\s*$/, '.').replace(/[ \t]{2,}/g, ' ').trim()
+    }).filter(Boolean)
+    return { messages: out, image }
+}
+
+// "רוצה שאשלח לך דוגמה?" adds a whole round trip for nothing: the answer
+// is always yes. The sentence is dropped and the thing it offered is
+// sent - a real spread when it offered a picture, the demo link when it
+// offered the demo. The payment link keeps its own deterministic path.
+const OFFER_TO_SEND = /(?:^|[.!?]\s*|\n)\s*(?:אז\s+)?(?:רוצה|תרצי|תרצה|אפשר)\s+ש?אשלח\s+(?:לך\s+)?(?:כבר\s+)?(?:את\s+)?(?:ה)?(דוגמה|דוגמא|תמונה|תמונות|דמו|קישור\s+לדמו)[^.!?\n]*[?]/u
+export function resolveOfferToSend(message, { lead = {}, hasImage = false } = {}) {
+    const m = String(message || '')
+    const match = OFFER_TO_SEND.exec(m)
+    if (!match) return { message: m, image: null, append: null }
+    const what = match[1]
+    const stripped = m.replace(match[0], match[0].match(/^[.!?]\s*/)?.[0] || '').replace(/[ \t]{2,}/g, ' ').trim()
+    if (/דמו/.test(what)) {
+        if (demoAlreadySent(lead)) return { message: stripped || m, image: null, append: null }
+        return { message: stripped, image: null, append: `הנה דוגמה חיה, אפשר לכתוב שם ברכה מהטלפון: ${DEMO.writeBlessing}` }
+    }
+    if (hasImage) return { message: stripped || m, image: null, append: null }
+    const shown = new Set([...(lead?.imagesSent || []), ...(lead?.mediaSent || []), ...(lead?.mediaRequested || [])])
+    const pick = ['book_open_spread', 'cover_personalised', 'upload_screen'].find(k => !shown.has(k)) || null
+    return { message: stripped || m, image: pick, append: pick ? null : null }
+}
+
 function containsRepeatedKnownQuestion(message, decision) {
     return (decision.forbiddenRepeats || []).some(field => KNOWN_QUESTION_PATTERNS[field]?.test(normalizedText(message)))
 }
 
+// Question marks inside URLs are not questions. Until 21.9 this turned
+// "checkout/?add-to-cart=6271" into "checkout/.add-to-cart=6271" - a dead
+// payment link, sent to a customer who had just said yes.
 function keepOneQuestion(message, maxQuestions) {
-    if (maxQuestions < 1) return message.replace(/\?/g, '.')
+    const urls = []
+    const masked = String(message).replace(/https?:\/\/\S+/g, u => {
+        urls.push(u)
+        return `\u0000${urls.length - 1}\u0000`
+    })
     let seen = 0
-    return message.replace(/\?/g, () => (++seen <= maxQuestions ? '?' : '.'))
+    const limited = maxQuestions < 1
+        ? masked.replace(/\?/g, '.')
+        : masked.replace(/\?/g, () => (++seen <= maxQuestions ? '?' : '.'))
+    return limited.replace(/\u0000(\d+)\u0000/g, (_, i) => urls[Number(i)])
 }
 
 function compactMessage(message) {
     return String(message || '').replace(/\s*\n+\s*/g, ' ').replace(/\s{2,}/g, ' ').trim()
 }
 
+// Every figure the bot may state: the two packages, the add-ons, and a
+// package plus up to three of one add-on ("שני ספרים מודפסים" is 990 +
+// 290). Until 21.9 only the bare package prices passed, so a customer who
+// asked twice what two books cost got the price list twice.
+function allowedPrices() {
+    const out = new Set()
+    for (const p of PACKAGES) {
+        out.add(p.price)
+        if (p.wasPrice) out.add(p.wasPrice)
+        for (const a of ADDONS) for (let n = 1; n <= 3; n += 1) out.add(p.price + n * a.price)
+    }
+    for (const a of ADDONS) out.add(a.price)
+    return out
+}
 function hasOnlyCurrentCatalogPrices(message) {
     const prices = [...String(message || '').replace(/,/g, '').matchAll(/(?:^|\D)(\d{3,4})(?=\D|$)/g)]
         .map(match => Number(match[1]))
-    const current = new Set(PACKAGES.map(item => item.price))
+    const current = allowedPrices()
     return prices.length > 0 && prices.every(price => current.has(price))
 }
 
@@ -304,7 +396,11 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
     }
 
     const fallback = deterministicMessage({ parsed, decision, lead, incomingText })
-    const candidates = (Array.isArray(parsed.messages) ? parsed.messages : [])
+    // The route lifts inline image markers before calling here; doing it
+    // again costs nothing and protects any other caller.
+    const inline = liftInlineImageMarkers(parsed.messages)
+    let liftedImage = !parsed.image && inline.image ? inline.image : null
+    const candidates = inline.messages
         .map(compactMessage)
         .filter(Boolean)
         .slice(0, Math.max(1, decision.maxMessages || 1))
@@ -317,6 +413,8 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         decision.nextBestAction === 'close_lost'
         || decision.nextBestAction === 'diagnose_checkout'
         || decision.nextBestAction === 'send_payment_link'
+        || decision.nextBestAction === 'send_demo'
+        || decision.nextBestAction === 'handoff_print'
         || (decision.intent === 'price' && !hasOnlyCurrentCatalogPrices(candidates.join('\n')))
         || candidates.length === 0
         || CALL_LANGUAGE.test(normalizedText(candidates[0]))
@@ -338,6 +436,20 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
                 !CALL_LANGUAGE.test(normalizedText(m))
                 && !containsRepeatedKnownQuestion(m, decision)),
         ]
+
+    // An offer to send something becomes the thing itself.
+    let appended = null
+    if (!mustUseDeterministic) {
+        messages = messages.map(m => {
+            const r = resolveOfferToSend(m, { lead, hasImage: !!parsed.image || !!liftedImage })
+            if (r.image && !liftedImage) liftedImage = r.image
+            if (r.append && !appended) appended = r.append
+            return r.message
+        }).filter(Boolean)
+        if (appended && messages.length < Math.max(1, decision.maxMessages || 1)) messages.push(appended)
+        else if (appended) messages[messages.length - 1] = `${messages[messages.length - 1]} ${appended}`.trim()
+        if (!messages.length) messages = [fallback]
+    }
 
     // One question budget for the whole reply, not per bubble.
     let questionBudget = decision.maxQuestions
@@ -361,7 +473,19 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
     const result = {
         ...parsed,
         messages: out,
+        image: parsed.image || liftedImage || null,
         noReply: false,
+    }
+    if (decision.nextBestAction === 'handoff_print') {
+        result.handoff = true
+        result.handoffReason = result.handoffReason || 'הלקוח רוצה להדפיס קובץ מוכן - צריך תמחור ידני'
+        result.image = null
+        result.openingMediaKeys = []
+    }
+    if (decision.nextBestAction === 'send_demo') {
+        result.image = null
+        result.openingMediaKeys = []
+        if (!['handoff', 'closed_won', 'closed_lost'].includes(result.stage) && result.stage !== 'ready_to_pay') result.stage = 'demo_sent'
     }
     // The model can recognize buying intent; it cannot observe money.
     // Only the paid WooCommerce boundary may persist closed_won.

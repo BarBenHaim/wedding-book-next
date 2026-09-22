@@ -1,4 +1,12 @@
+import { DEMO } from './catalog'
+
 const LANDING_URL = 'https://weddingtales.co.il'
+// The first nudge used to point at the website. A website is homework;
+// the demo is thirty seconds on the phone, and it is the one thing the
+// scripted opening never sends. 22.9: twenty-five "תוכל לראות באתר"
+// follow-ups went out in one morning and produced one reply, "ראיתי,
+// וזה יקר מאוד".
+const DEMO_URL = DEMO.writeBlessing
 // Keep in step with whatsapp.js. The approved template's single variable is
 // the customer's NAME and its body is fixed by Meta; the richer strategy
 // texts below only go out as free text inside the 24h window, or through
@@ -28,6 +36,7 @@ const cleanParameter = (value, fallback = '') => String(value || fallback)
 
 const customerLabel = value => cleanParameter(value, 'משפחה יקרה') || 'משפחה יקרה'
 const siteTemplateText = name => `${name}, רציתי לשלוח לך שוב דרך קצרה לראות איך ספר הברכות עובד. הסרטון והפרטים מחכים באתר: ${LANDING_URL}`
+const demoTemplateText = name => `${name}, אם בא לך להרגיש את זה במקום לקרוא: זה אירוע דמו, אפשר לכתוב שם ברכה מהטלפון תוך חצי דקה: ${DEMO_URL}`
 const helpTemplateText = name => `${name}, רציתי לבדוק אם עצרה אתכם שאלה על החבילה, תקלה בתשלום או פשוט התזמון. אפשר לענות לי כאן במשפט אחד.`
 
 function expiryLabel(iso) {
@@ -98,13 +107,21 @@ export function planFollowUp(lead = {}, {
     }
 
     if (number === 1) {
+        if (['demo_sent', 'offer_sent'].includes(lead?.stage)) {
+            return plan({ name,
+                id: 'one_question',
+                objective: 'הוא כבר ראה את הדמו או את המחירים. שאלה אחת קצרה שמתחברת לדבר האחרון שהוא כתב, בלי קישור, בלי מחירים, בלי לחץ. המטרה היחידה: שיענה.',
+                cta: 'reply',
+                templateText: helpTemplateText(name),
+            })
+        }
         return plan({ name,
-            id: 'proof_site',
-            objective: 'להמחיש במהירות איך ספר הברכות נראה ולהוביל לפרטים באתר',
-            cta: 'website',
-            landingUrl: LANDING_URL,
+            id: 'demo_first',
+            objective: 'לתת לו לחוות את זה במקום לקרוא: הקישור לאירוע הדמו, שבו כותבים ברכה מהטלפון תוך חצי דקה. משפט אחד על מה שהאורח מרגיש כשהוא כותב, ובסוף שאלה קלה אחת, לאיזה אירוע זה אצלו. בלי מחירים, בלי לינק לאתר, בלי "רציתי להראות לך".',
+            cta: 'demo',
+            landingUrl: DEMO_URL,
             mediaPreference: 'video',
-            templateText: siteTemplateText(name),
+            templateText: demoTemplateText(name),
         })
     }
 
@@ -127,10 +144,10 @@ export function planFollowUp(lead = {}, {
     }
 
     return plan({ name,
-        id: 'proof_site',
-        objective: 'להחזיר את הליד לפרטים המלאים באתר בלי לחזור על מדיה שכבר נשלחה',
-        cta: 'website',
-        landingUrl: LANDING_URL,
+        id: 'real_page',
+        objective: 'להראות עמוד אמיתי מתוך ספר שהדפסנו, עם משפט אחד על מה שרואים בו, ושאלה קלה אחת. בלי לינק לאתר ובלי לחזור על תמונה שכבר נשלחה.',
+        cta: 'reply',
+        mediaPreference: 'image',
         templateText: siteTemplateText(name),
     })
 }

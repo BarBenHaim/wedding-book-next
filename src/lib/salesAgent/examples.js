@@ -17,7 +17,7 @@
 // Prices are interpolated so a catalog change cannot leave a stale
 // number in the one place the model is told to copy from.
 
-import { PACKAGES, DEMO } from './catalog'
+import { PACKAGES, ADDONS, DEMO } from './catalog'
 
 const price = id => {
     const p = PACKAGES.find(x => x.id === id)
@@ -29,6 +29,8 @@ export function workedExamples() {
     const digital = price('digital')
     const printedPrice = price('printed')
     const printedLink = printed()?.checkout || ''
+    const extraCopy = `${ADDONS[0]?.price || 0} שח`
+    const twoBooks = `${(printed()?.price || 0) + (ADDONS[0]?.price || 0)} שח`
 
     return `## ככה זה נשמע כשזה טוב
 כל דוגמה: מה הלקוח כתב, ואז תשובה שעובדת. שים לב לצורה, לא למילים. אל תעתיק משפטים, כל שיחה שונה. הדוגמאות בלשון נקבה, אתה מתאים את המין למי שמולך.
@@ -49,6 +51,14 @@ export function workedExamples() {
 הלקוח: "יקר לי"
 טוב: "מבין. השאלה האמיתית היא בדרך כלל אם זה ייצא יפה בסוף. תסתכלי על העמוד הזה מספר אמיתי, ותגידי לי אם זה מה שדמיינת." (עם image של ספר פתוח)
 רע: לחזור על רשימת מה שכלול, או להציע הנחה.
+
+הלקוח: "ראיתי, וזה יקר מאוד" (אחרי תמונה)
+טוב: "אז שיהיה ברור מה נכנס ב-${printedPrice}: הספר עצמו בכריכה קשה, עיצוב של כל עמוד, ומשלוח. בלי הגבלה על ברכות. ואם המודפס לא הכרחי לכם, הדיגיטלי ב-${digital} נותן את אותה חוויה לאורחים. לאיזה אירוע זה?"
+רע: "מבין, זה באמת השקעה לא קטנה. מה עוצר אותך, המחיר או משהו אחר?" היא הרגע אמרה מה עוצר אותה, ואתה הסכמת שזה יקר.
+
+הלקוח: "כמה יעלה לי 2 ספרים?"
+טוב: "ספר מודפס ${printedPrice}, ועותק מודפס נוסף ${extraCopy}. שניים יחד ${twoBooks}. לסבא וסבתא?"
+רע: לשלוח שוב את רשימת המחירים של החבילות. זו לא הייתה השאלה.
 
 הלקוח: "אני אחשוב על זה"
 טוב: "ברור, בלי לחץ. אם יש שאלה שמפריעה להחליט, תזרקי אותה לפה ואענה ישר. מתי נוח שאחזור אלייך?"

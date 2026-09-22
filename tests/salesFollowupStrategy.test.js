@@ -53,22 +53,42 @@ describe('follow-up offer boundary', () => {
 })
 
 describe('context-aware follow-up sales plan', () => {
-    it('uses proof, the real site and one video preference for the first touch', () => {
-        expect(planFollowUp({ stage: 'engaged' }, {
+    it('leads with the live demo, not the website, on the first touch', () => {
+        // 22.9: twenty-five "תוכל לראות באתר" follow-ups in one morning,
+        // one reply. The demo is the thing the opening never sends.
+        const plan = planFollowUp({ stage: 'engaged' }, {
             attempt: 1,
             isFinal: false,
             customerName: 'נועה',
-        })).toEqual({
-            id: 'proof_site',
-            objective: 'להמחיש במהירות איך ספר הברכות נראה ולהוביל לפרטים באתר',
-            cta: 'website',
-            landingUrl: 'https://weddingtales.co.il',
+        })
+        expect(plan).toMatchObject({
+            id: 'demo_first',
+            cta: 'demo',
+            landingUrl: 'https://app.weddingtales.co.il/wedding/0oeixSvNuY9uKEmZ0GVg/photo',
             mediaPreference: 'video',
             coupon: null,
             templateName: 'wt_followup',
-            templateParameters: ['נועה, רציתי לשלוח לך שוב דרך קצרה לראות איך ספר הברכות עובד. הסרטון והפרטים מחכים באתר: https://weddingtales.co.il'],
-            templateText: 'נועה, רציתי לשלוח לך שוב דרך קצרה לראות איך ספר הברכות עובד. הסרטון והפרטים מחכים באתר: https://weddingtales.co.il',
         })
+        expect(plan.objective).toContain('הדמו')
+        expect(plan.objective).toContain('בלי לינק לאתר')
+        expect(plan.templateText).toContain('נועה')
+        expect(plan.templateText).toContain('0oeixSvNuY9uKEmZ0GVg')
+        expect(plan.templateText).not.toContain('https://weddingtales.co.il')
+        expect(plan.templateParameters).toEqual([plan.templateText])
+    })
+
+    it('asks one question instead of re-proving to someone who already saw the demo or prices', () => {
+        for (const stage of ['demo_sent', 'offer_sent']) {
+            const plan = planFollowUp({ stage }, { attempt: 1, isFinal: false, customerName: 'דנה' })
+            expect(plan.id).toBe('one_question')
+            expect(plan.landingUrl).toBeNull()
+            expect(plan.objective).toContain('בלי קישור')
+        }
+    })
+
+    it('shows a real page on a later touch for a lead with no objection on record', () => {
+        const plan = planFollowUp({ stage: 'engaged' }, { attempt: 2, isFinal: false, customerName: '' })
+        expect(plan).toMatchObject({ id: 'real_page', cta: 'reply', mediaPreference: 'image', landingUrl: null })
     })
 
     it('asks about checkout friction instead of repeating proof for a payment-ready second touch', () => {
@@ -98,8 +118,11 @@ describe('context-aware follow-up sales plan', () => {
             attempt: 2,
             customerName: 'נועה',
         })
+        // Same template, and each route's parameter is exactly its own
+        // rendered text. The copy itself differs on purpose since 22.9:
+        // the first touch leads with the demo, the second with a real page.
         expect(secondSite.templateName).toBe(firstSite.templateName)
-        expect(secondSite.templateText).toBe(firstSite.templateText)
+        expect(firstSite.templateParameters).toEqual([firstSite.templateText])
         expect(secondSite.templateParameters).toEqual([secondSite.templateText])
 
         const checkoutHelp = planFollowUp({ stage: 'ready_to_pay' }, {

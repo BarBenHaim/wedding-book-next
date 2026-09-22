@@ -98,7 +98,8 @@ vi.mock('@/lib/salesAgent/experiments', () => ({
 vi.mock('@/lib/salesAgent/leadsView', () => ({ deriveLead: mocks.deriveLead, sortLeads: mocks.sortLeads, isoInIsrael: mocks.isoInIsrael }))
 vi.mock('@/lib/salesAgent/digest', () => ({ buildDigest: mocks.buildDigest }))
 vi.mock('@/lib/salesAgent/settingsStore', () => ({ readSalesSettings: mocks.readSalesSettings }))
-vi.mock('@/lib/salesAgent/decisionPolicy', () => ({
+vi.mock('@/lib/salesAgent/decisionPolicy', async importOriginal => ({
+    ...(await importOriginal()),
     decideSalesTurn: mocks.decideSalesTurn,
     enforceSalesReply: mocks.enforceSalesReply,
     buildDeterministicSalesReply: mocks.buildDeterministicSalesReply,
@@ -1485,7 +1486,11 @@ describe('non-text inbound media', () => {
             const result = await post(inbound({ messageType: requestedType }))
             const reason = normalizedType === 'image' ? 'הלקוח שלח תמונה' : `הלקוח שלח ${normalizedType}`
 
-            expect(result.body).toMatchObject({ ok: true, sendText: '', hasImage: false, hasVideo: false, stage: 'handoff', handoff: true })
+            // One warm line goes out (22.9: a customer's document got hours
+            // of silence); the human still owns the conversation.
+            expect(result.body).toMatchObject({ ok: true, hasImage: false, hasVideo: false, stage: 'handoff', handoff: true })
+            expect(result.body.sendText).toMatch(/^קיבלתי/)
+            expect(result.body.send).toEqual([result.body.sendText])
             expect(mocks.setHuman).toHaveBeenCalledWith('test-phone-token', true, expect.stringContaining(reason))
             expect(mocks.completeInboundEvent).toHaveBeenCalledWith(expect.objectContaining({
                 outcome: expect.objectContaining({ handoff: true, noReply: false, stage: 'handoff' }),

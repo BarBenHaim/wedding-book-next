@@ -692,9 +692,14 @@ export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, pr
     if (parsed.callbackPromised) patch.callbackPromised = parsed.callbackPromised
     if (source) patch.source = String(source).slice(0, 60)
     if (parsed.objectionRaised) patch.objectionCount = FieldValue.increment(1)
-    // Media is deliberately not marked seen here. This transaction only
+    // Media is deliberately not marked SEEN here. This transaction only
     // prepares delivery records; the provider's delivered/read callback is
     // the first truthful evidence that the customer actually received it.
+    // It is marked REQUESTED, though: on 21.9 a customer wrote twice inside
+    // one minute and got the same spread twice, because the second turn
+    // ran before the first delivery callback landed. The reply route treats
+    // a requested key like a sent one when it picks the next picture.
+    if (parsed.image) patch.mediaRequested = FieldValue.arrayUnion(String(parsed.image).slice(0, 80))
 
     // followUpAt null means "stop chasing" and must be written, not skipped.
     patch.followUpAt = followUpAt || null

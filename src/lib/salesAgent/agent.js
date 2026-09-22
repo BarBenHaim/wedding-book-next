@@ -95,7 +95,7 @@ function cleanStr(v, max = 300) {
 const EMOJI = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/gu
 const LEADING_ORNAMENT = /^[\s\p{Extended_Pictographic}️‍]+/u
 // "מעולה!", "בהחלט,", "שאלה מצוינת.", "וואו" at the very start of a message.
-const CLICHE_OPENER = /^(?:מעולה|בהחלט|נהדר|וואו|אחלה|שאלה מצוינת|שאלה טובה|כמובן|ברור)\s*[!,.]\s*(?=\S)/u
+const CLICHE_OPENER = /^(?:מעולה|בהחלט|נהדר|וואו|אחלה|שאלה מצוינת|שאלה טובה|כמובן|ברור|כיף לשמוע|מצוין|יופי|בטח)\s*[!,.]\s*(?=\S)/u
 
 export function sanitizeReply(raw, { maxEmoji = 1 } = {}) {
     let s = String(raw || '')

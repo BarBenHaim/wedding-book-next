@@ -214,6 +214,50 @@ template at 20.9 07:49 UTC, Meta accepted 6, none delivered after 4h
 (`staleAccepted`). Check template delivery callbacks. Consider first
 name only in the `{{1}}` parameter (profile names arrive as "דורית זוזות").
 
+### 22.9 — read from WhatsApp Web, 24 hours of real chats
+
+Lord: "שורה תחתונה הבוט לא מוכר". What the transcripts showed, and the fix
+for each (all in `decisionPolicy.js` unless noted; tests in
+`salesDecisionPolicy.test.js` under "what the 21-22.9 transcripts taught"):
+
+- Two customers received the literal text `[image: book_open_spread]` and
+  no picture. `liftInlineImageMarkers` strips the marker from the words and
+  promotes the key to `image`; applied in the reply route and again in
+  `enforceSalesReply`.
+- A payment link went out as `checkout/.add-to-cart=6271`: `keepOneQuestion`
+  replaced the `?` inside the URL. URLs are now masked before the limit.
+- "כמה יעלה לי 2 ספרים" twice, price list twice: `hasOnlyCurrentCatalogPrices`
+  accepted only 690/990. `allowedPrices()` adds add-ons and package + n×add-on.
+- A second click on the ad ("אפשר לקבל מידע נוסף") re-sent the opening in
+  new words. Intent `ad_cta_repeat` → deterministic `send_demo` (the demo
+  link once; afterwards "שלחתי למעלה את כל הפרטים"). `isAdCta` also matches
+  the Arabic/English/Russian button texts.
+- "יש לי קובץ, רק להדפיס" was quoted 990: intent `print_only` →
+  `handoff_print`, deterministic line + `handoff=true`.
+- "רוצה שאשלח לך דוגמה?" → `resolveOfferToSend` drops the question and
+  attaches the next unseen picture, or appends the demo link.
+- The same picture twice inside one minute: `leads.js` now writes
+  `mediaRequested` at completion; the route dedupes against it.
+- A document got silence for hours: the media branch in `reply/route.js`
+  sends one `MEDIA_ACK` line before the handoff.
+- "בר מצווה בפברואר" left the opening waiting for dd.mm.yyyy
+  (`openingExperiment.qualification`): the event type alone now qualifies;
+  `eventTypeOf` also knows יום הולדת and Latin spellings.
+- Morning follow-ups were "תוכל לראות באתר" ×25 → one reply. `followupStrategy`
+  first touch is `demo_first` (demo link, `cta: 'demo'`), `one_question` for
+  demo_sent/offer_sent, `real_page` for later touches; the follow-up prompt
+  forbids the website link and gendered verbs when the gender is unknown.
+- `agent.js` sanitizer also drops "כיף לשמוע", "מצוין", "יופי", "בטח" openers.
+
+Still open and NOT code: Lord answered three chats by hand (21.9 20:59,
+21:54; 22.9 11:10) and the bot did not pause — on 22.9 it closed a lead
+"מעליו" one minute after he wrote. The reply route handles Meta's
+`smb_message_echoes` (see `outgoing`), so either Make does not forward the
+echo field or the WABA is not subscribed to it. Verify in Make/Meta before
+touching the route. Also open: why 21.9 20:31 ("בר מצווה בפברואר") produced
+no reply at all — check the lead's `modelExecution` once the admin session
+is available.
+
 ---
 
 ## The WhatsApp sales agent — shipped and live

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDeterministicSalesReply, decideSalesTurn, detectSalesIntent, enforceSalesReply, warmPaymentOpener, TURN_LIMITS } from '@/lib/salesAgent/decisionPolicy'
+import { buildDeterministicSalesReply, decideSalesTurn, detectSalesIntent, enforceSalesReply, warmPaymentOpener, liftInlineImageMarkers, resolveOfferToSend, isAdCta, TURN_LIMITS } from '@/lib/salesAgent/decisionPolicy'
 
 describe('conversation-learned sales decision policy', () => {
     it.each([
@@ -358,5 +358,119 @@ describe('price mentions after the prices were just given', () => {
         })
         expect(result.messages[0]).toMatch(/הבנתי לגמרי/)
         expect(result.messages[0]).not.toMatch(/המחירים:/)
+    })
+})
+
+
+describe('what the 21-22.9 transcripts taught the enforcer', () => {
+    const decisionFor = (incomingText, lead = {}) => decideSalesTurn({ incomingText, lead })
+    const DEMO_URL = 'https://app.weddingtales.co.il/wedding/0oeixSvNuY9uKEmZ0GVg/photo'
+
+    it('never turns the question mark inside a URL into a full stop', () => {
+        // 21.9: "checkout/?add-to-cart=6271" went out as "checkout/.add-to-cart=6271".
+        const incomingText = 'כן, אשמח'
+        const result = enforceSalesReply({
+            parsed: { messages: ['מוכן להתחיל? הקישור כאן: https://weddingtales.co.il/checkout/?add-to-cart=6271 ומה התאריך?'], stage: 'engaged', handoff: false },
+            decision: decisionFor(incomingText),
+            lead: {},
+            incomingText,
+        })
+        expect(result.messages[0]).toContain('https://weddingtales.co.il/checkout/?add-to-cart=6271')
+        expect(result.messages[0].match(/\?/g)).toHaveLength(2)
+        expect(result.messages[0].endsWith('ומה התאריך.')).toBe(true)
+    })
+
+    it('lifts "[image: key]" out of the words and attaches the picture', () => {
+        expect(liftInlineImageMarkers(['הנה דוגמה לספר מודפס כדי שתראי איך זה יוצא:\n\n[image: book_open_spread]'])).toEqual({
+            messages: ['הנה דוגמה לספר מודפס כדי שתראי איך זה יוצא.'],
+            image: 'book_open_spread',
+        })
+        expect(liftInlineImageMarkers(['בלי תמונה'])).toEqual({ messages: ['בלי תמונה'], image: null })
+        const incomingText = 'אפשר לראות דוגמה?'
+        const result = enforceSalesReply({
+            parsed: { messages: ['בטח, תראי: [image: cover_personalised]'], stage: 'engaged', handoff: false, image: null },
+            decision: decisionFor(incomingText),
+            lead: {},
+            incomingText,
+        })
+        expect(result.messages[0]).not.toContain('[image')
+    })
+
+    it('lets the model add up a package and an extra copy', () => {
+        // 21.9: "כמה יעלה לי 2 ספרים" twice, the price list twice.
+        const incomingText = 'כמה יעלה לי 2 ספרים'
+        const result = enforceSalesReply({
+            parsed: { messages: ['ספר מודפס 990 שח ועותק נוסף 290 שח, ביחד 1280 שח. לסבא וסבתא?'], stage: 'offer_sent', handoff: false },
+            decision: decisionFor(incomingText),
+            lead: {},
+            incomingText,
+        })
+        expect(result.messages[0]).toContain('1280')
+        const invented = enforceSalesReply({
+            parsed: { messages: ['שני ספרים 1400 שח'], stage: 'offer_sent', handoff: false },
+            decision: decisionFor(incomingText),
+            lead: {},
+            incomingText,
+        })
+        expect(invented.messages[0]).not.toContain('1400')
+    })
+
+    it('answers a second ad click with the demo, not the opening again', () => {
+        const text = 'שלום! אפשר לקבל מידע נוסף על זה?'
+        expect(isAdCta(text)).toBe(true)
+        expect(isAdCta('مرحبًا! هل يمكنني الحصول على مزيد من المعلومات حول هذا؟')).toBe(true)
+        expect(detectSalesIntent(text, { isNew: true })).not.toBe('ad_cta_repeat')
+        const lead = { isNew: false, stage: 'opening_completed', turns: [{ role: 'user', text }, { role: 'assistant', text: 'היי, כיף שפנית' }] }
+        const decision = decisionFor(text, lead)
+        expect(decision).toMatchObject({ intent: 'ad_cta_repeat', nextBestAction: 'send_demo' })
+        const result = enforceSalesReply({
+            parsed: { messages: ['היי, כיף שפנית! ב-Wedding Tales האורחים סורקים QR...'], stage: 'engaged', handoff: false },
+            decision, lead, incomingText: text,
+        })
+        expect(result.messages).toHaveLength(1)
+        expect(result.messages[0]).toContain(DEMO_URL)
+        expect(result.stage).toBe('demo_sent')
+        // Demo already sent: a short pointer, no second demo link.
+        const seen = { ...lead, turns: [...lead.turns, { role: 'assistant', text: `הנה: ${DEMO_URL}` }] }
+        const again = enforceSalesReply({ parsed: { messages: ['x'], stage: 'engaged' }, decision: decisionFor(text, seen), lead: seen, incomingText: text })
+        expect(again.messages[0]).not.toContain(DEMO_URL)
+        expect(again.messages[0]).toContain('שלחתי למעלה')
+    })
+
+    it('hands a print-only request to a human instead of quoting the package', () => {
+        // 22.9: "אם אני מביאה קובץ רק רוצה להדפיס, כמה יעלה לי?" → "990 ש״ח".
+        const incomingText = 'אם אני מביאה קובץ רק רוצה להדפיס, כמה יעלה לי?'
+        const decision = decisionFor(incomingText)
+        expect(decision).toMatchObject({ intent: 'print_only', nextBestAction: 'handoff_print' })
+        const result = enforceSalesReply({
+            parsed: { messages: ['עלות הדפסת ספר מודפס אצלנו היא 990 ש״ח'], stage: 'engaged', handoff: false },
+            decision, lead: {}, incomingText,
+        })
+        expect(result.messages[0]).not.toContain('990')
+        expect(result.messages[0]).toContain('מישהו מהצוות')
+        expect(result.handoff).toBe(true)
+    })
+
+    it('sends the thing instead of asking whether to send it', () => {
+        const spread = resolveOfferToSend('ספר דיגיטלי 690 שח, ספר מודפס 990 שח. רוצה שאשלח לך דוגמה של הספר המודפס?', { lead: {} })
+        expect(spread).toEqual({ message: 'ספר דיגיטלי 690 שח, ספר מודפס 990 שח.', image: 'book_open_spread', append: null })
+        // Already showed the spread: the next unseen picture.
+        expect(resolveOfferToSend('רוצה שאשלח לך תמונה?', { lead: { imagesSent: ['book_open_spread'] } }).image).toBe('cover_personalised')
+        // An image is already attached: just drop the question.
+        expect(resolveOfferToSend('יפה. רוצה שאשלח לך דוגמה?', { lead: {}, hasImage: true })).toMatchObject({ message: 'יפה.', image: null })
+        // The demo offer becomes the demo link.
+        const demo = resolveOfferToSend('נשמע מתאים. רוצה שאשלח לך את הדמו?', { lead: {} })
+        expect(demo.message).toBe('נשמע מתאים.')
+        expect(demo.append).toContain(DEMO_URL)
+        // Payment links keep their own path.
+        expect(resolveOfferToSend('רוצה שאשלח לך את הקישור לתשלום?', { lead: {} }).image).toBeNull()
+        // Through the enforcer: the image lands on the result.
+        const incomingText = 'כמה זה עולה?'
+        const result = enforceSalesReply({
+            parsed: { messages: ['ספר דיגיטלי 690 שח, ספר מודפס 990 שח. רוצה שאשלח לך דוגמה של הספר המודפס?'], stage: 'offer_sent', handoff: false, image: null },
+            decision: decisionFor(incomingText), lead: {}, incomingText,
+        })
+        expect(result.messages[0]).not.toContain('רוצה שאשלח')
+        expect(result.image).toBe('book_open_spread')
     })
 })

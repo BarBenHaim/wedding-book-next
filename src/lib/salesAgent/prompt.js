@@ -54,8 +54,9 @@ export function buildSystemPrompt(lead = {}, todayISO, { media = null, performan
     if (lead.notes) known.push(`מה שכבר למדנו עליו: ${lead.notes}`)
     if (lead.objectionCount) known.push(`מספר ההתנגדויות עד כה: ${lead.objectionCount}`)
     if (lead.followUpCount) known.push(`כמה פולו-אפים כבר נשלחו: ${lead.followUpCount}`)
-    if (Array.isArray(lead.imagesSent) && lead.imagesSent.length) {
-        known.push(`תמונות שכבר שלחת לו: ${lead.imagesSent.join(', ')} — אל תשלח את אותה תמונה שוב`)
+    const shown = [...new Set([...(lead.imagesSent || []), ...(lead.mediaSent || []), ...(lead.mediaRequested || [])])]
+    if (shown.length) {
+        known.push(`תמונות שכבר שלחת לו: ${shown.join(', ')} — אל תשלח את אותה תמונה שוב`)
     }
     // The gap since he last wrote is what separates "continuing" from
     // "reopening", and getting it wrong is jarring in both directions:
@@ -165,6 +166,11 @@ ${openingBlock(lead, activeOpeningIds)}${journeyBlock(lead.stage || 'new', { tip
   handoff=true. אל תנסה להציל את זה לבד.
 - אתה לא ממציא שאתה אדם. אם שואלים ישירות אם אתה בוט — תגיד שאתה
   עוזר דיגיטלי של ${BUSINESS.brand} ושאפשר לקבל ${humanName()} לשיחה תוך רגע.
+- מה שלא בקטלוג לא נמכר כאן: "יש לי קובץ, רק להדפיס", "אתם תעצבו מברכות
+  שאשלח בוואטסאפ", הנחה לשני ספרים. לא ממציאים מחיר ולא מבטיחים שירות.
+  משפט אחד שמישהו מהצוות יתמחר או יאשר, ו-handoff=true.
+- שני ספרים = ספר מודפס ${ils(PACKAGES.find(p => p.id === 'printed')?.price || 0)} + עותק נוסף ${ils(ADDONS[0]?.price || 0)}. זה החישוב היחיד שמותר לך.
+- התמונה נשלחת דרך השדה "image" בלבד. אף פעם לא לכתוב בטקסט "[image: ...]" או "מצרף תמונה" בלי לשים מפתח ב-image.
 - stage="closed_lost" רק כשהלקוח אמר לא במפורש ("לא רלוונטי", "ויתרנו",
   "לא מעוניין"). "הבנתי, תודה", "אעדכן", "אחשוב" זה לא לא. שם נשארים
   בשלב הנוכחי וקובעים follow_up_at.
@@ -406,6 +412,11 @@ ${truthBlock}${paymentBlock}
 
 כללים לפולו-אפ:
 - התחבר למשהו ספציפי שנאמר בשיחה. "רק בודק מה קורה" זו הודעה שנמחקת.
+- אם הוא לא כתב כלום חוץ מלחיצה על הפרסומת, אין למה להתחבר. אז תן משהו
+  שווה ותשאל שאלה קלה אחת. לא "רציתי להראות לך", לא "זה עוזר להבין למה
+  זה שווה", לא לינק לאתר.
+- לא ידוע אם זה גבר או אישה? תנסח בלי פנייה במין: "אפשר לראות" ולא
+  "תוכל לראות", "מתי האירוע" ולא "מתי האירוע שלך".
 - הודעה אחת. קצרה. בלי לחץ ובלי אשמה.
 - אם הוא הבטיח לחזור — הזכר את זה בעדינות, בלי לגבות חוב.
 - פולו-אפ שלישי ומעלה: אם האסטרטגיה היא qualified_offer, שלח רק את ההצעה
