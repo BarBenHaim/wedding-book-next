@@ -53,27 +53,25 @@ describe('follow-up offer boundary', () => {
 })
 
 describe('context-aware follow-up sales plan', () => {
-    it('leads with the live demo, not the website, on the first touch', () => {
-        // 22.9: twenty-five "תוכל לראות באתר" follow-ups in one morning,
-        // one reply. The demo is the thing the opening never sends.
+    it('leads with one clear line and one question on the first touch, no link', () => {
+        // 22.9: twenty-five "תוכל לראות באתר" follow-ups in one morning, one
+        // reply. 24.9: no demo link either - what they get, one question.
         const plan = planFollowUp({ stage: 'engaged' }, {
             attempt: 1,
             isFinal: false,
             customerName: 'נועה',
         })
         expect(plan).toMatchObject({
-            id: 'demo_first',
-            cta: 'demo',
-            landingUrl: 'https://app.weddingtales.co.il/wedding/0oeixSvNuY9uKEmZ0GVg/photo',
+            id: 'one_line',
+            cta: 'reply',
+            landingUrl: null,
             mediaPreference: 'video',
             coupon: null,
             templateName: 'wt_followup',
         })
-        expect(plan.objective).toContain('הדמו')
-        expect(plan.objective).toContain('בלי לינק לאתר')
+        expect(plan.objective).toContain('בלי קישורים')
         expect(plan.templateText).toContain('נועה')
-        expect(plan.templateText).toContain('0oeixSvNuY9uKEmZ0GVg')
-        expect(plan.templateText).not.toContain('https://weddingtales.co.il')
+        expect(plan.templateText).not.toMatch(/https?:/)
         expect(plan.templateParameters).toEqual([plan.templateText])
     })
 

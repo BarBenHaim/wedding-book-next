@@ -2,15 +2,17 @@
 // move. This policy turns the current message and durable lead facts into
 // one small, testable instruction before any provider is called.
 
-import { PACKAGES, ADDONS, DEMO, UPGRADE } from './catalog'
+import { PACKAGES, ADDONS, UPGRADE } from './catalog'
 import { asksPrice, priceFallbackMessage } from './selling'
 
-// Two messages, not one: a real seller answers, then adds one step. A
-// single 180-char bubble forced almost every model reply through the
-// deterministic fallback, which reads as a script because it is one.
+// One bubble, two sentences, and a hard ceiling the model cannot talk
+// past. 24.9, Lord: "הוא מספים, כותב ישר המון טקסט, יורה מידע". 420 chars
+// let the model write a paragraph and call it a message; 260 is two
+// real sentences plus a short question. The payment turn is the one
+// place two bubbles are still built (a warm line, then the link).
 export const TURN_LIMITS = Object.freeze({
-    maxMessages: 2,
-    maxChars: 420,
+    maxMessages: 1,
+    maxChars: 260,
     maxQuestions: 1,
 })
 
@@ -220,9 +222,9 @@ function deterministicMessage({ parsed, decision, lead, incomingText }) {
         return `${selected.name} עולה ₪${selected.price} וכולל מע״מ. לתשלום מאובטח: ${selected.checkout}`
     }
     if (decision.nextBestAction === 'send_demo') {
-        return demoAlreadySent(lead)
-            ? 'שלחתי למעלה את כל הפרטים והמחירים. אם יש שאלה, אני כאן. לאיזה אירוע זה אצלכם?'
-            : `אם בא לך להרגיש את זה במקום לקרוא, זה אירוע דמו אמיתי. אפשר לכתוב שם ברכה מהטלפון תוך חצי דקה: ${DEMO.writeBlessing}`
+        // A second tap on the ad button. Everything is already above; the
+        // only useful move is the one question that starts a real chat.
+        return 'הכל למעלה, איך זה עובד והמחירים. לאיזה אירוע זה אצלכם?'
     }
     if (decision.nextBestAction === 'handoff_print') return 'הדפסה של קובץ מוכן זה משהו שמישהו מהצוות מתמחר בנפרד. אני מעביר אליו, והוא יחזור אלייך כאן עוד היום.'
     if (decision.intent === 'price') return priceFallbackMessage()
@@ -258,12 +260,6 @@ export function buildDeterministicSalesReply({ decision, lead = {}, incomingText
     })
 }
 
-function demoAlreadySent(lead) {
-    if (lead?.demoEvidenceDelivered === true) return true
-    const turns = Array.isArray(lead?.turns) ? lead.turns : []
-    return turns.some(t => t?.role === 'assistant' && String(t?.text || '').includes(DEMO.writeBlessing))
-}
-
 // "[image: book_open_spread]" inside the words is the model narrating the
 // picture instead of attaching it. Lift the marker out; the first key
 // found becomes the image when the model left that field empty.
@@ -291,10 +287,9 @@ export function resolveOfferToSend(message, { lead = {}, hasImage = false } = {}
     if (!match) return { message: m, image: null, append: null }
     const what = match[1]
     const stripped = m.replace(match[0], match[0].match(/^[.!?]\s*/)?.[0] || '').replace(/[ \t]{2,}/g, ' ').trim()
-    if (/דמו/.test(what)) {
-        if (demoAlreadySent(lead)) return { message: stripped || m, image: null, append: null }
-        return { message: stripped, image: null, append: `הנה דוגמה חיה, אפשר לכתוב שם ברכה מהטלפון: ${DEMO.writeBlessing}` }
-    }
+    // "רוצה שאשלח את הדמו?" - the offer goes, and nothing replaces it. The
+    // demo is sent only when the customer asks to try it (24.9).
+    if (/דמו/.test(what)) return { message: stripped || m, image: null, append: null }
     if (hasImage) return { message: stripped || m, image: null, append: null }
     const shown = new Set([...(lead?.imagesSent || []), ...(lead?.mediaSent || []), ...(lead?.mediaRequested || [])])
     const pick = ['book_open_spread', 'cover_personalised', 'upload_screen'].find(k => !shown.has(k)) || null
@@ -365,6 +360,9 @@ export function warmPaymentOpener(message, decision) {
     return m
 }
 
+// Over the limit, cut at the end of a sentence rather than mid-word:
+// the customer sees a shorter message, not a broken one. A URL that
+// straddles the limit means the whole message is unsafe to cut.
 function clipMessage(message, maxChars, fallback) {
     if (message.length <= maxChars) return message
     const url = /https?:\/\/\S+/g
@@ -374,6 +372,8 @@ function clipMessage(message, maxChars, fallback) {
         if (start < maxChars && end > maxChars) return fallback
     }
     const clipped = message.slice(0, maxChars + 1)
+    const sentenceEnd = Math.max(clipped.lastIndexOf('. '), clipped.lastIndexOf('? '), clipped.lastIndexOf('! '), clipped.lastIndexOf('.\n'), clipped.lastIndexOf('?\n'))
+    if (sentenceEnd >= Math.floor(maxChars * 0.4)) return clipped.slice(0, sentenceEnd + 1).trim()
     const boundary = clipped.lastIndexOf(' ')
     return clipped.slice(0, boundary >= Math.floor(maxChars * 0.65) ? boundary : maxChars).replace(/[,:;\s]+$/, '').trim()
 }
@@ -487,7 +487,7 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
     if (decision.nextBestAction === 'send_demo') {
         result.image = null
         result.openingMediaKeys = []
-        if (!['handoff', 'closed_won', 'closed_lost'].includes(result.stage) && result.stage !== 'ready_to_pay') result.stage = 'demo_sent'
+        if (['opening_completed', 'new'].includes(result.stage)) result.stage = 'engaged'
     }
     // The model can recognize buying intent; it cannot observe money.
     // Only the paid WooCommerce boundary may persist closed_won.

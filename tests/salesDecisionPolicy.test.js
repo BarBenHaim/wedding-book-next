@@ -123,7 +123,7 @@ describe('deterministic WhatsApp reply contract', () => {
 
     const decisionFor = (incomingText, lead = {}) => decideSalesTurn({ incomingText, lead })
 
-    it('keeps at most two messages, one question total, within the char limit', () => {
+    it('keeps one message, one question, within the char limit', () => {
         const decision = decisionFor('אשמח לעוד פרטים')
         const result = enforceSalesReply({
             parsed: {
@@ -139,13 +139,13 @@ describe('deterministic WhatsApp reply contract', () => {
             lead: {},
             incomingText: 'אשמח לעוד פרטים',
         })
-        expect(result.messages).toHaveLength(2)
+        expect(result.messages).toHaveLength(1)
         for (const m of result.messages) expect(m.length).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
         const questions = result.messages.join(' ').match(/\?/g) || []
         expect(questions).toHaveLength(1)
     })
 
-    it('lets a price answered in the second message stand instead of forcing the fallback', () => {
+    it('still delivers the price when the model buried it in a second bubble', () => {
         const incomingText = 'כמה זה יוצא?'
         const result = enforceSalesReply({
             parsed: {
@@ -157,7 +157,9 @@ describe('deterministic WhatsApp reply contract', () => {
             lead: {},
             incomingText,
         })
-        expect(result.messages).toHaveLength(2)
+        // One bubble since 24.9: the second is dropped and the price guard
+        // supplies the catalog line instead.
+        expect(result.messages).toHaveLength(1)
         expect(result.messages.join(' ')).toContain('₪990')
     })
 
@@ -364,7 +366,6 @@ describe('price mentions after the prices were just given', () => {
 
 describe('what the 21-22.9 transcripts taught the enforcer', () => {
     const decisionFor = (incomingText, lead = {}) => decideSalesTurn({ incomingText, lead })
-    const DEMO_URL = 'https://app.weddingtales.co.il/wedding/0oeixSvNuY9uKEmZ0GVg/photo'
 
     it('never turns the question mark inside a URL into a full stop', () => {
         // 21.9: "checkout/?add-to-cart=6271" went out as "checkout/.add-to-cart=6271".
@@ -424,7 +425,7 @@ describe('what the 21-22.9 transcripts taught the enforcer', () => {
         expect(result.messages[0]).toContain('300')
     })
 
-    it('answers a second ad click with the demo, not the opening again', () => {
+    it('answers a second ad click with one question, not the opening again', () => {
         const text = 'שלום! אפשר לקבל מידע נוסף על זה?'
         expect(isAdCta(text)).toBe(true)
         expect(isAdCta('مرحبًا! هل يمكنني الحصول على مزيد من المعلومات حول هذا؟')).toBe(true)
@@ -437,13 +438,9 @@ describe('what the 21-22.9 transcripts taught the enforcer', () => {
             decision, lead, incomingText: text,
         })
         expect(result.messages).toHaveLength(1)
-        expect(result.messages[0]).toContain(DEMO_URL)
-        expect(result.stage).toBe('demo_sent')
-        // Demo already sent: a short pointer, no second demo link.
-        const seen = { ...lead, turns: [...lead.turns, { role: 'assistant', text: `הנה: ${DEMO_URL}` }] }
-        const again = enforceSalesReply({ parsed: { messages: ['x'], stage: 'engaged' }, decision: decisionFor(text, seen), lead: seen, incomingText: text })
-        expect(again.messages[0]).not.toContain(DEMO_URL)
-        expect(again.messages[0]).toContain('שלחתי למעלה')
+        expect(result.messages[0]).toBe('הכל למעלה, איך זה עובד והמחירים. לאיזה אירוע זה אצלכם?')
+        expect(result.messages[0]).not.toContain('http')
+        expect(result.stage).toBe('engaged')
     })
 
     it('hands a print-only request to a human instead of quoting the package', () => {
@@ -467,10 +464,10 @@ describe('what the 21-22.9 transcripts taught the enforcer', () => {
         expect(resolveOfferToSend('רוצה שאשלח לך תמונה?', { lead: { imagesSent: ['book_open_spread'] } }).image).toBe('cover_personalised')
         // An image is already attached: just drop the question.
         expect(resolveOfferToSend('יפה. רוצה שאשלח לך דוגמה?', { lead: {}, hasImage: true })).toMatchObject({ message: 'יפה.', image: null })
-        // The demo offer becomes the demo link.
+        // The demo offer is dropped and nothing replaces it (24.9: the demo
+        // goes out only when the customer asks to try it).
         const demo = resolveOfferToSend('נשמע מתאים. רוצה שאשלח לך את הדמו?', { lead: {} })
-        expect(demo.message).toBe('נשמע מתאים.')
-        expect(demo.append).toContain(DEMO_URL)
+        expect(demo).toEqual({ message: 'נשמע מתאים.', image: null, append: null })
         // Payment links keep their own path.
         expect(resolveOfferToSend('רוצה שאשלח לך את הקישור לתשלום?', { lead: {} }).image).toBeNull()
         // Through the enforcer: the image lands on the result.

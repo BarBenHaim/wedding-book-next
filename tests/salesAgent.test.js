@@ -380,7 +380,7 @@ describe('system prompt — what actually reaches the model', () => {
         const prompt = buildSystemPrompt({}, '2026-08-16')
         expect(prompt).toContain('## ככה זה נשמע כשזה טוב')
         expect(prompt).toContain('הלקוח: "מבררת עבור בר מצווה של אחיין"')
-        expect(prompt).toContain('ספר דיגיטלי 690 שח, ספר מודפס בכריכה קשה 990 שח')
+        expect(prompt).toContain('דיגיטלי 690 שח, מודפס בכריכה קשה 990 שח')
         expect(prompt).toContain('https://weddingtales.co.il/checkout/?add-to-cart=6271')
         expect(prompt).not.toContain('1,490')
         expect(prompt).not.toContain('1490')
