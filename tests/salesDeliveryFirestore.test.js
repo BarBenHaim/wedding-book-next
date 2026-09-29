@@ -257,6 +257,17 @@ describe('transactional follow-up delivery truth', () => {
         })
     })
 
+    it.each(['one_line', 'one_question', 'real_page'])(
+        'accepts the %s strategy planFollowUp produces today (one_line broke the ledger for a week)',
+        async followUpStrategyId => {
+            await expect(prepareFollowUpDelivery(requested({
+                followUpStrategyId,
+                followUpCta: 'reply',
+                followUpMediaKind: 'video',
+            }))).resolves.toMatchObject({ action: 'requested' })
+        },
+    )
+
     it('rejects arbitrary follow-up attribution metadata before writing', async () => {
         await expect(prepareFollowUpDelivery(requested({ followUpStrategyId: 'private-arbitrary-strategy' })))
             .rejects.toMatchObject({ code: 'INVALID_FOLLOWUP_METADATA' })

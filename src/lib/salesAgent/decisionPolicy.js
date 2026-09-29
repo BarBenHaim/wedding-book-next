@@ -197,6 +197,19 @@ export function decideSalesTurn({ lead = {}, incomingText = '', isExistingCustom
     }
 }
 
+// gpt-4.1-mini sometimes finishes a Hebrew word in Arabic letters:
+// "לאיזה אירוע זה אצلكם?" (seven of ten follow-up drafts on 29.9). The
+// customer reads a typo in a script they may not know; the bot reads as
+// broken. A message that mixes the two scripts never goes out. Arabic
+// on its own is fine: the ad CTA has an Arabic variant and the agent
+// answers in the customer's language.
+const HEBREW_LETTERS = /[\u05d0-\u05ea]/
+const ARABIC_LETTERS = /[\u0600-\u06ff]/
+export function hasMixedScript(text = '') {
+    const s = String(text || '')
+    return HEBREW_LETTERS.test(s) && ARABIC_LETTERS.test(s)
+}
+
 const CALL_LANGUAGE = /(שיחת\s+טלפון|בטלפון|אתקשר|להתקשר|נדבר\s+בטלפון|אחזור\s+אליך)/
 const KNOWN_QUESTION_PATTERNS = Object.freeze({
     name: /(איך\s+קוראים\s+לך|מה\s+השם)/,
@@ -420,6 +433,7 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         || (decision.intent === 'price' && !hasOnlyCurrentCatalogPrices(candidates.join('\n')))
         || candidates.length === 0
         || CALL_LANGUAGE.test(normalizedText(candidates[0]))
+        || hasMixedScript(candidates[0])
         || containsRepeatedKnownQuestion(candidates[0], decision)
     )
     // The payment line itself stays deterministic (right price, right
@@ -436,6 +450,7 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
             candidates[0],
             ...candidates.slice(1).filter(m =>
                 !CALL_LANGUAGE.test(normalizedText(m))
+                && !hasMixedScript(m)
                 && !containsRepeatedKnownQuestion(m, decision)),
         ]
 

@@ -91,6 +91,28 @@ export function isOwnEcho(lead, text) {
     return squash(tail.map(x => x.text).join(' ')) === t
 }
 
+// A picture, video or document that arrives within a couple of minutes
+// after we sent one, from a customer who has not typed anything since,
+// is almost always Meta echoing our own message: on 21-27.9 seven
+// variant-B leads were handed to a human "because the customer sent a
+// document" in the very minute the opening's pricing sheet went out,
+// and the bot went silent on them for good. A real attachment inside
+// that window is rare, and the cost of missing it is one bot turn, not
+// a silenced lead.
+export const OWN_MEDIA_ECHO_WINDOW_MS = 3 * 60 * 1000
+export function isOwnMediaEcho(lead, messageType, nowMs = Date.now()) {
+    if (!['image', 'video', 'document', 'audio'].includes(String(messageType || ''))) return false
+    const sentAt = lead?.lastOutboundMediaAt?.toMillis?.() ?? Number(lead?.lastOutboundMediaAt) ?? 0
+    if (!sentAt || !Number.isFinite(sentAt)) return false
+    const age = Number(nowMs) - sentAt
+    if (age < 0 || age > OWN_MEDIA_ECHO_WINDOW_MS) return false
+    // Only while our media was the last thing said: a customer who wrote
+    // after it and then sends a photo is answering us, not echoing.
+    const turns = Array.isArray(lead?.turns) ? lead.turns : []
+    const last = turns[turns.length - 1]
+    return !last || last.role === 'assistant'
+}
+
 // ── Owner commands ──────────────────────────────────────────────────
 //
 // Lord can steer the bot from his own phone by messaging the business

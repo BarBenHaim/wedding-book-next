@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { planFollowUp, readFollowUpOffer } from '@/lib/salesAgent/followupStrategy'
+import { planFollowUp, readFollowUpOffer, FOLLOWUP_STRATEGY_IDS, FOLLOWUP_CTAS } from '@/lib/salesAgent/followupStrategy'
 
 // The plans below were written for the universal template (`wt_followup`,
 // {{1}} = the whole message). Production defaults to the template Meta
@@ -193,5 +193,28 @@ describe('context-aware follow-up sales plan', () => {
         expect(serialized).not.toContain('private-transcript-sentinel')
         expect(serialized).not.toContain('private-turn-sentinel')
         expect(serialized).not.toContain('private-media.example')
+    })
+
+    // 22-29.9: three strategies were added to planFollowUp and not to the
+    // ledger whitelist in leads.js; every first follow-up threw
+    // INVALID_FOLLOWUP_METADATA in a silent catch and one lead a day went
+    // out instead of twenty-five. The whitelist is now imported from here,
+    // and this test walks every plan the strategy can produce.
+    it('every strategy id and cta planFollowUp can produce is on the shared whitelist', () => {
+        const stages = ['new', 'opening_completed', 'engaged', 'demo_sent', 'offer_sent', 'objection', 'ready_to_pay', 'commit_later']
+        const seen = new Set()
+        for (const stage of stages) {
+            for (const attempt of [1, 2, 3]) {
+                for (const isFinal of [false, true]) {
+                    for (const offer of [null, { code: 'WT10', expiresAt: new Date(Date.now() + 3600e3).toISOString() }]) {
+                        const plan = planFollowUp({ stage, notes: attempt === 2 ? 'התלבט על המחיר' : '' }, { attempt, isFinal, offer, customerName: 'נועה' })
+                        seen.add(plan.id)
+                        expect(FOLLOWUP_STRATEGY_IDS).toContain(plan.id)
+                        expect(FOLLOWUP_CTAS).toContain(plan.cta)
+                    }
+                }
+            }
+        }
+        for (const id of ['one_line', 'one_question', 'real_page', 'graceful_close']) expect([...seen]).toContain(id)
     })
 })

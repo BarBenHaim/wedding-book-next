@@ -258,6 +258,46 @@ touching the route. Also open: why 21.9 20:31 ("בר מצווה בפברואר")
 no reply at all — check the lead's `modelExecution` once the admin session
 is available.
 
+### 29.9 — "הרבה לידים ולא קרה כלום": three failures, none of them the prompt
+
+Numbers for 21-28.9 from `/api/sales-agent/leads`: 86 new leads, 52 wrote
+one message and nothing more, 0 sales, and the follow-up queue had sent
+5 + 17 messages on 21-22.9 and then ONE in the six days after. Causes:
+
+- **Follow-ups died on 22.9, by my hand.** `followupStrategy` gained
+  `one_line`, `one_question`, `real_page`; `prepareFollowUpDelivery` in
+  `leads.js` still whitelisted the four old ids and threw
+  `INVALID_FOLLOWUP_METADATA` — inside `processLead`'s `catch {}` that only
+  logged "lead failed". Every run since composed 25 and delivered the one
+  lead whose plan happened to be `graceful_close`. The whitelist is now
+  `FOLLOWUP_STRATEGY_IDS` / `FOLLOWUP_CTAS` exported from
+  `followupStrategy.js` and imported by `leads.js`; a test walks every plan
+  `planFollowUp` can produce against it; the catch logs the error code and
+  the run stamp carries `lastRunFailedCount`. Lesson: a whitelist copied
+  into another file is a second source of truth with a delay fuse.
+- **Variant B silenced itself.** Seven B leads went `human: true` with
+  "הלקוח שלח document" in the same minute the opening's pricing sheet went
+  out — Meta echoing our own document, Make not marking it as an echo, the
+  media branch handing the lead to a human forever (the customer's next
+  text is never answered). `completeSuccessfulExchange` now stamps
+  `lastOutboundMediaAt` when a media part goes out; `isOwnMediaEcho`
+  (leadsCore) treats a non-text inbound within 3 minutes of it, with no
+  customer text in between, as our echo → `skipped: 'own-media-echo'`,
+  no handoff. Zero D leads had this, because D sends video+image, never a
+  document.
+- **gpt-4.1-mini writes Arabic letters inside Hebrew words**: seven of ten
+  follow-up drafts ended "לאיזה אירוע זה אצلكם?". `hasMixedScript`
+  (decisionPolicy) → deterministic reply in `enforceSalesReply`, and the
+  strategy's own `templateText` in the follow-up route.
+
+What the same numbers said about the opening: "דמו לפני מחיר"
+(`v_d3b0f1e2a9c4`, video → page → ask event) got a second message from
+18/28 leads; B from 14/55. Published rev 31: D at 100 %, B off.
+
+Not code, for Lord: two `ready_to_pay` leads (21.9, 24.9) and eight
+handed-off leads waited for a human all week. The "44 שיחות מחכות לך"
+alert in the follow-up response is real, not noise.
+
 ---
 
 ## The WhatsApp sales agent — shipped and live

@@ -60,6 +60,7 @@ import { createOutboundId } from '@/lib/salesAgent/delivery'
 import { isDemoEvidenceContent } from '@/lib/salesAgent/followupEvidence'
 import { readSalesSettings } from '@/lib/salesAgent/settingsStore'
 import { planFollowUp, readFollowUpOffer } from '@/lib/salesAgent/followupStrategy'
+import { hasMixedScript } from '@/lib/salesAgent/decisionPolicy'
 
 function unsentVideo(library, lead, strategy) {
     if (strategy?.mediaPreference !== 'video') return null
@@ -210,6 +211,7 @@ export async function GET(req) {
 
     const items = []
     let blockedTemplateCount = sweepBlockedTemplateCount
+    let failedCount = 0
     // A small worker pool rather than a sequential loop: twenty-five
     // model calls in a row is 60-90 seconds of wall time, which is the
     // function's entire budget. Four at a time lands the same work in a
@@ -258,6 +260,10 @@ export async function GET(req) {
                 parsed = parseAgentJson(raw, { mediaKeys: Object.keys(library) })
                 if (parsed.handoff || parsed.messages.length === 0) return
                 text = parsed.messages[0]
+                // A Hebrew line with Arabic letters in it is a model
+                // glitch, not a message. The strategy's own line says the
+                // same thing in clean Hebrew.
+                if (hasMixedScript(text)) text = strategy.templateText
             } else {
                 // Outside 24 hours the approved template is the customer
                 // message. Do not generate and then persist imaginary copy
@@ -502,8 +508,13 @@ export async function GET(req) {
                 }
             }
             items.push(item)
-        } catch {
-            console.error('[sales-agent/followups] lead failed')
+        } catch (error) {
+            // The code, never the lead. A week of INVALID_FOLLOWUP_METADATA
+            // hid behind a bare "lead failed" (22-29.9); the run stamp below
+            // carries the count so the leads screen can show it.
+            failedCount += 1
+            const code = String(error?.code || error?.errorCode || '')
+            console.error('[sales-agent/followups] lead failed', /^[A-Z_]{3,40}$/.test(code) ? code : 'unknown')
         }
     }
 
@@ -523,6 +534,7 @@ export async function GET(req) {
         dry,
         count: items.length,
         blockedCount: blockedTemplateCount,
+        failedCount,
         delivery: callerDelivers ? 'make' : directSend ? 'direct' : 'none',
     })
 
@@ -547,6 +559,7 @@ export async function GET(req) {
             status: templateDeliveryEnabled ? 'enabled' : blockedTemplateCount ? 'blocked' : 'disabled',
             blockedCount: blockedTemplateCount,
         },
+        failedCount,
         recovered: revived.length,
         recoveredLeads: revived,
         handoffsWaiting: stale.length,

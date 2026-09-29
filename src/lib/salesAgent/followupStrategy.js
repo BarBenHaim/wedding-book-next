@@ -54,6 +54,21 @@ export function readFollowUpOffer(env = process.env, nowMs = Date.now()) {
     return { code, expiresAt: new Date(expiresAtMs).toISOString() }
 }
 
+// Every strategy id planFollowUp can return. The delivery ledger
+// (prepareFollowUpDelivery) whitelists strategy ids before writing, and
+// the whitelist used to be a second copy of this list inside leads.js.
+// On 22.9 three strategies were added here and not there, and for a
+// week every first follow-up threw INVALID_FOLLOWUP_METADATA inside a
+// catch that only logged "lead failed": one follow-up a day went out
+// instead of twenty-five. One list, imported by both sides.
+export const FOLLOWUP_STRATEGY_IDS = Object.freeze([
+    'one_line', 'one_question', 'real_page',
+    'resolve_blocker', 'qualified_offer', 'graceful_close',
+    // Retired on 22.9; kept so old ledger rows still validate.
+    'proof_site',
+])
+export const FOLLOWUP_CTAS = Object.freeze(['website', 'reply', 'coupon', 'none'])
+
 function plan({ id, objective, cta, landingUrl = null, mediaPreference = 'none', coupon = null, templateText, name = '' }) {
     const templateName = activeTemplate()
     const nameOnly = NAME_ONLY_TEMPLATES.has(templateName)

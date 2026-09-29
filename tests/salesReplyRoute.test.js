@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
     toApiMessages: vi.fn(),
     isPausedForHuman: vi.fn(),
     isOwnEcho: vi.fn(),
+    isOwnMediaEcho: vi.fn(),
     parseOwnerCommand: vi.fn(),
     setHuman: vi.fn(),
     findCustomerByPhone: vi.fn(),
@@ -69,7 +70,7 @@ vi.mock('@/lib/salesAgent/agent', () => ({
 }))
 vi.mock('@/lib/salesAgent/leads', () => ({
     getLead: mocks.getLead, saveExchange: mocks.saveExchange, toApiMessages: mocks.toApiMessages,
-    isPausedForHuman: mocks.isPausedForHuman, isOwnEcho: mocks.isOwnEcho,
+    isPausedForHuman: mocks.isPausedForHuman, isOwnEcho: mocks.isOwnEcho, isOwnMediaEcho: mocks.isOwnMediaEcho,
     parseOwnerCommand: mocks.parseOwnerCommand, setHuman: mocks.setHuman,
     findCustomerByPhone: mocks.findCustomerByPhone, listLeads: mocks.listLeads,
     recordSpend: mocks.recordSpend, listMedia: mocks.listMedia,
@@ -194,6 +195,7 @@ beforeEach(async () => {
     mocks.findCustomerByPhone.mockResolvedValue(null)
     mocks.isPausedForHuman.mockReturnValue(false)
     mocks.isOwnEcho.mockReturnValue(false)
+    mocks.isOwnMediaEcho.mockReturnValue(false)
     mocks.parseOwnerCommand.mockReturnValue(null)
     mocks.decideSalesTurn.mockReturnValue({
         conversationKind: 'sales', intent: 'general', nextBestAction: 'answer_then_qualify',
@@ -1510,6 +1512,19 @@ describe('non-text inbound media', () => {
         expect(mocks.completeInboundEvent).not.toHaveBeenCalled()
         expect(mocks.callClaude).not.toHaveBeenCalled()
         expectNoProviderWork()
+    })
+
+    // 21-27.9: seven variant-B leads were handed to a human "because the
+    // customer sent a document" in the minute the opening's pricing sheet
+    // went out. That was Meta echoing our own document. Nobody is handed
+    // off over our own message, and the bot stays on the lead.
+    it('stays quiet and keeps the bot on an echo of the media it just sent', async () => {
+        mocks.isOwnMediaEcho.mockReturnValue(true)
+        const result = await post(inbound({ text: '', messageType: 'document', mediaId: 'opaque-media-id' }))
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({ send: [], sendText: '', noReply: true, handoff: false, skipped: 'own-media-echo' })
+        expect(mocks.setHuman).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
     })
 
     it('answers conflicting text once and keeps the duplicate delivery silent', async () => {

@@ -20,8 +20,9 @@ import { adminDb } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
 import crypto from 'node:crypto'
 import { normalizePhone } from './agent'
-import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerCommand, isTestPhone, MAX_TURNS, HUMAN_PAUSE_HOURS } from './leadsCore'
+import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, isOwnMediaEcho, parseOwnerCommand, isTestPhone, MAX_TURNS, HUMAN_PAUSE_HOURS } from './leadsCore'
 import { isoInIsrael } from './leadsView'
+import { FOLLOWUP_STRATEGY_IDS, FOLLOWUP_CTAS } from './followupStrategy'
 import { assertCompletableInboundOutcome, assertInboundClaimToken, decideInboundCompletion, INBOUND_LEASE_MS, sanitizeInboundOutcome, startInboundClaim } from './inboundEventsCore'
 import { reserveHalfOpenProbe, resolveProviderFailure, resolveProviderSuccess, sanitizeBreakerRuntimeState } from './circuitBreaker'
 import { providerCircuitRuntimeId } from './circuitIdentity'
@@ -34,7 +35,7 @@ import { assignModelArm } from './modelExperiment'
 // The pure helpers live in leadsCore.js so they stay unit-testable —
 // importing this file boots the Admin SDK, which needs credentials.
 // Re-exported here so callers still have one import to reach for.
-export { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, parseOwnerCommand, isTestPhone, MAX_TURNS, HUMAN_PAUSE_HOURS }
+export { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, isOwnMediaEcho, parseOwnerCommand, isTestPhone, MAX_TURNS, HUMAN_PAUSE_HOURS }
 
 const COLLECTION = 'sales_leads'
 const INBOUND_EVENTS_COLLECTION = 'sales_inbound_events'
@@ -129,13 +130,14 @@ const healthEnum = (value, allowed) => allowed.includes(value) ? value : 'unknow
  * nothing wrote it - the cron could be dead or fine and the admin could
  * not tell. Best effort: a failed stamp must not fail the run.
  */
-export async function recordFollowUpRun({ ranAtMs = Date.now(), dry = false, count = 0, blockedCount = 0, delivery = 'none' } = {}) {
+export async function recordFollowUpRun({ ranAtMs = Date.now(), dry = false, count = 0, blockedCount = 0, failedCount = 0, delivery = 'none' } = {}) {
     if (dry) return
     try {
         await adminDb.collection(RUNTIME_COLLECTION).doc('followups').set({
             lastRunAtMs: healthMs(ranAtMs) ?? Date.now(),
             lastRunCount: Math.max(0, Number(count) || 0),
             lastRunBlockedCount: Math.max(0, Number(blockedCount) || 0),
+            lastRunFailedCount: Math.max(0, Number(failedCount) || 0),
             lastRunDelivery: String(delivery || 'none').slice(0, 20),
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true })
@@ -522,6 +524,13 @@ export async function completeSuccessfulExchange({
             const nextRank = MODEL_STAGE_RANK[exchange?.parsed?.stage] ?? priorRank
             if (nextRank > priorRank) patch.modelProgressed = true
         }
+        // When we send a picture, a video or a document, Meta echoes it
+        // back through the same webhook a few seconds later, and Make does
+        // not always mark it as ours. The reply route reads this stamp to
+        // tell that echo from a customer attachment (see isOwnMediaEcho).
+        if (replyParts.some(item => ['image', 'video', 'document', 'audio'].includes(item.part))) {
+            patch.lastOutboundMediaAt = Date.now()
+        }
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
         tx.set(leadRef, patch, { merge: true })
         tx.set(eventRef, { status: 'completed', leaseUntilMs: null, outcome: cleanOutcome, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
@@ -839,8 +848,8 @@ export async function prepareFollowUpDelivery({
     templateName = null,
     requestedAt = new Date().toISOString(),
 }) {
-    const strategyIds = new Set(['proof_site', 'resolve_blocker', 'qualified_offer', 'graceful_close'])
-    const ctas = new Set(['website', 'reply', 'coupon', 'none'])
+    const strategyIds = new Set(FOLLOWUP_STRATEGY_IDS)
+    const ctas = new Set(FOLLOWUP_CTAS)
     const mediaKinds = new Set(['image', 'video', 'none'])
     if (followUpStrategyId !== undefined && !strategyIds.has(followUpStrategyId)) {
         throw deliveryError('INVALID_FOLLOWUP_METADATA')

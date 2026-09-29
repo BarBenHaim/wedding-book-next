@@ -38,7 +38,7 @@ import { buildSystemPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, normalizePhone, resolveFollowUp } from '@/lib/salesAgent/agent'
 import {
     getLead, toApiMessages, isPausedForHuman,
-    isOwnEcho, parseOwnerCommand, setHuman, findCustomerByPhone, listLeads, recordSpend,
+    isOwnEcho, isOwnMediaEcho, parseOwnerCommand, setHuman, findCustomerByPhone, listLeads, recordSpend,
     listMedia, creditPendingMedia,
     claimInboundEvent, completeInboundEvent,
     acquireProviderCircuit, recordProviderFailure, recordProviderSuccess, releaseProviderProbe, completeProviderFallback as persistProviderFallback, completeSuccessfulExchange, compactLeadBestEffort,
@@ -701,6 +701,9 @@ export async function POST(req) {
     // A photo, video, voice note, or document cannot be interpreted
     // reliably without its bytes. Keep the handoff in this WhatsApp chat;
     // do not spend a model call inventing what the attachment might show.
+    if (messageType !== 'text' && isOwnMediaEcho(lead, messageType, Date.now())) {
+        return complete({ ok: true, send: [], sendText: '', handoff: false, noReply: true, skipped: 'own-media-echo' })
+    }
     if (messageType !== 'text') {
         const handoffReason = messageType === 'image'
             ? 'הלקוח שלח תמונה — נדרשת בדיקה אנושית והכנת דוגמה אם הוצעה'

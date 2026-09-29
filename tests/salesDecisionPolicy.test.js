@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDeterministicSalesReply, decideSalesTurn, detectSalesIntent, enforceSalesReply, warmPaymentOpener, liftInlineImageMarkers, resolveOfferToSend, isAdCta, TURN_LIMITS } from '@/lib/salesAgent/decisionPolicy'
+import { buildDeterministicSalesReply, decideSalesTurn, detectSalesIntent, enforceSalesReply, warmPaymentOpener, liftInlineImageMarkers, resolveOfferToSend, isAdCta, hasMixedScript, TURN_LIMITS } from '@/lib/salesAgent/decisionPolicy'
 
 describe('conversation-learned sales decision policy', () => {
     it.each([
@@ -109,6 +109,23 @@ describe('deterministic WhatsApp reply contract', () => {
         expect(result.messages).toHaveLength(1)
         expect(result.messages[0]).toMatch(/690|990|1,?490|₪/)
         expect(result.messages[0].length).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
+    })
+
+    // 29.9: seven of ten follow-up drafts ended "לאיזה אירוע זה אצلكם?" —
+    // Hebrew finished in Arabic letters. Never sent.
+    it('drops a Hebrew message with Arabic letters in it and answers deterministically', () => {
+        expect(hasMixedScript('לאיזה אירוע זה אצلكם?')).toBe(true)
+        expect(hasMixedScript('לאיזה אירוע זה אצלכם?')).toBe(false)
+        expect(hasMixedScript('هل يمكنني الحصول على مزيد من المعلومات؟')).toBe(false)
+        const lead = { stage: 'engaged', eventType: 'bar_mitzvah' }
+        const incomingText = 'מה כלול?'
+        const decision = decideSalesTurn({ incomingText, lead })
+        const result = enforceSalesReply({
+            parsed: { messages: ['האורחים סורקים QR וכותבים ברכה. לאיזה אירוע זה אצلكם?'], stage: 'engaged', handoff: false },
+            decision, lead, incomingText,
+        })
+        expect(result.messages.length).toBeGreaterThan(0)
+        for (const m of result.messages) expect(hasMixedScript(m)).toBe(false)
     })
 
     it('never lets model output claim a paid sale without payment verification', () => {

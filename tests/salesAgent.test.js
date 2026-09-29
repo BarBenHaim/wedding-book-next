@@ -5,7 +5,7 @@ import { callClaude, parseAgentJson, normalizePhone, resolveFollowUp, sanitizeRe
 // leadsCore, not leads: importing leads.js boots the Firebase Admin SDK,
 // which needs service-account credentials the test runner has no business
 // holding. The pure logic lives in leadsCore for exactly this reason.
-import { toApiMessages, trimTurns, isPausedForHuman, isOwnEcho, parseOwnerCommand, MAX_TURNS, HUMAN_PAUSE_HOURS } from '@/lib/salesAgent/leadsCore'
+import { toApiMessages, trimTurns, isPausedForHuman, isOwnEcho, isOwnMediaEcho, OWN_MEDIA_ECHO_WINDOW_MS, parseOwnerCommand, MAX_TURNS, HUMAN_PAUSE_HOURS } from '@/lib/salesAgent/leadsCore'
 
 // The agent talks to paying customers with no human in the loop. These
 // tests pin the things that would be expensive to discover in production:
@@ -946,6 +946,30 @@ describe('returning leads — continuing, not restarting', () => {
 // A sales bot that talks over its owner, or pitches packages to someone
 // who already paid, does more damage than a bot that says nothing. These
 // pin the two signals that make it stand down.
+
+describe('isOwnMediaEcho — our own picture coming back vs a customer attachment', () => {
+    const now = Date.parse('2026-09-27T12:57:30.000Z')
+    const justSent = { lastOutboundMediaAt: now - 20_000, turns: [{ role: 'user', text: 'בר מצווה 5.11' }, { role: 'assistant', text: 'ככה זה נראה:' }] }
+
+    it('treats a document, image or video seconds after our own media as an echo', () => {
+        for (const kind of ['document', 'image', 'video']) expect(isOwnMediaEcho(justSent, kind, now)).toBe(true)
+    })
+
+    it('never swallows text, and never media when we sent none recently', () => {
+        expect(isOwnMediaEcho(justSent, 'text', now)).toBe(false)
+        expect(isOwnMediaEcho({ turns: justSent.turns }, 'document', now)).toBe(false)
+        expect(isOwnMediaEcho({ ...justSent, lastOutboundMediaAt: now - OWN_MEDIA_ECHO_WINDOW_MS - 1 }, 'image', now)).toBe(false)
+    })
+
+    it('is a customer attachment once the customer has written after our media', () => {
+        const answered = { ...justSent, turns: [...justSent.turns, { role: 'user', text: 'הנה ההזמנה' }] }
+        expect(isOwnMediaEcho(answered, 'image', now)).toBe(false)
+    })
+
+    it('reads a Firestore timestamp as well as a number', () => {
+        expect(isOwnMediaEcho({ ...justSent, lastOutboundMediaAt: { toMillis: () => now - 5_000 } }, 'document', now)).toBe(true)
+    })
+})
 
 describe('isOwnEcho — our voice vs a human typing', () => {
     const withTurns = turns => ({ turns })
