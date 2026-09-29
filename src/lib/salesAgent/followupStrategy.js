@@ -1,3 +1,4 @@
+import { CONCESSION } from './catalog'
 const LANDING_URL = 'https://weddingtales.co.il'
 // The first nudge used to point at the website, then briefly at the
 // demo. Both are homework. 24.9: one line about what they get, one
@@ -62,7 +63,7 @@ export function readFollowUpOffer(env = process.env, nowMs = Date.now()) {
 // catch that only logged "lead failed": one follow-up a day went out
 // instead of twenty-five. One list, imported by both sides.
 export const FOLLOWUP_STRATEGY_IDS = Object.freeze([
-    'one_line', 'one_question', 'real_page',
+    'one_line', 'one_question', 'real_page', 'deadline_offer',
     'resolve_blocker', 'qualified_offer', 'graceful_close',
     // Retired on 22.9; kept so old ledger rows still validate.
     'proof_site',
@@ -87,11 +88,28 @@ function plan({ id, objective, cta, landingUrl = null, mediaPreference = 'none',
     }
 }
 
+// The same concession the reply policy gives, with the same date rule,
+// so a customer who hears it twice hears the same thing.
+const HE_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
+function concessionText(todayISO) {
+    const base = /^\d{4}-\d{2}-\d{2}$/.test(String(todayISO || '')) ? todayISO : new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+    const d = new Date(`${base}T12:00:00Z`)
+    d.setUTCDate(d.getUTCDate() + CONCESSION.validDays)
+    const iso = d.toISOString().slice(0, 10)
+    const until = `${Number(iso.slice(8, 10))} ב${HE_MONTHS[Number(iso.slice(5, 7)) - 1]}`
+    return CONCESSION.text.replace('{DATE}', until)
+}
+function concessionAlreadyOffered(lead) {
+    const turns = Array.isArray(lead?.turns) ? lead.turns : []
+    return turns.some(t => t?.role === 'assistant' && /במתנה/.test(String(t?.text || '')))
+}
+
 export function planFollowUp(lead = {}, {
     attempt = 1,
     isFinal = false,
     offer = null,
     customerName = '',
+    todayISO = null,
 } = {}) {
     const number = Math.max(1, Math.min(3, Number(attempt) || 1))
     const name = customerLabel(customerName)
@@ -140,6 +158,19 @@ export function planFollowUp(lead = {}, {
             objective: 'לברר בעדינות אם עצרה שאלה על החבילה, תקלה בתשלום או תזמון',
             cta: 'reply',
             templateText: helpTemplateText(name),
+        })
+    }
+
+    // Second touch for someone who saw the prices and went quiet: the one
+    // concession, with its date, and the close. Not a question about what
+    // is bothering them; they already know, and it did not make them
+    // write. A reason to decide this week does.
+    if (['objection', 'commit_later', 'offer_sent', 'demo_sent'].includes(lead?.stage) && !concessionAlreadyOffered(lead)) {
+        return plan({ name,
+            id: 'deadline_offer',
+            objective: `ההצעה היחידה שקיימת, עם התאריך שלה: "${concessionText(todayISO)}". משפט אחד שמתחבר לאירוע שלו, ההצעה כמו שהיא כתובה, והבקשה: "רוצה שאפתח לכם את הספר? שולח קישור." בלי שאלה על מה עוצר, בלי לחזור על יתרונות.`,
+            cta: 'reply',
+            templateText: `${name}, שמרתי לכם ${concessionText(todayISO)}. רוצה שאפתח לכם את הספר? שולח קישור.`,
         })
     }
 

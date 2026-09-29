@@ -1,4 +1,5 @@
 import { createHash } from 'crypto'
+import { eventTypeOf } from './eventType'
 
 const MAX_BLOCKS = 20
 const MAX_TEXT = 1_500
@@ -216,14 +217,6 @@ function partId(eventId, blockId) {
         .slice(0, 32)
 }
 
-function eventTypeOf(text) {
-    if (/בר\s*מצו[וה]|בר\s*מצוו?ה|bar\s*mitzva/i.test(text)) return 'bar_mitzvah'
-    if (/בת\s*מצו[וה]|בת\s*מצוו?ה|bat\s*mitzva/i.test(text)) return 'bat_mitzvah'
-    if (/חתונ|חופה|wedding/i.test(text)) return 'wedding'
-    if (/ברית|בריתה/i.test(text)) return 'brit'
-    if (/יום\s*הולדת|יומולדת|birthday/i.test(text)) return 'birthday'
-    return null
-}
 
 function eventDateOf(text) {
     const match = String(text).match(/(?:^|\D)(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:\D|$)/)

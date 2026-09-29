@@ -240,10 +240,24 @@ export async function GET(req) {
                 isFinal,
                 offer: readFollowUpOffer(),
                 customerName: lead.name || lead.profileName || '',
+                todayISO: today,
             })
             let parsed
             let text
-            if (withinWindow) {
+            // The offer with its date is one sentence for everyone; the
+            // model would only add variance to the date. It goes as written.
+            const scripted = strategy.id === 'deadline_offer'
+            if (withinWindow && scripted) {
+                parsed = {
+                    stage: lead.stage,
+                    eventDate: lead.eventDate || null,
+                    callbackPromised: lead.callbackPromised || null,
+                    followUpAt: null,
+                    handoff: false,
+                    image: null,
+                }
+                text = strategy.templateText
+            } else if (withinWindow) {
                 const system = buildFollowUpPrompt(lead, today, {
                     isFinal,
                     media: library,

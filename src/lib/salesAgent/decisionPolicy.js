@@ -2,8 +2,9 @@
 // move. This policy turns the current message and durable lead facts into
 // one small, testable instruction before any provider is called.
 
-import { PACKAGES, ADDONS, UPGRADE } from './catalog'
-import { asksPrice, priceFallbackMessage } from './selling'
+import { PACKAGES, ADDONS, UPGRADE, CONCESSION } from './catalog'
+import { asksPrice } from './selling'
+import { eventTypeOf, EVENT_HE } from './eventType'
 
 // One bubble, two sentences, and a hard ceiling the model cannot talk
 // past. 24.9, Lord: "הוא מספים, כותב ישר המון טקסט, יורה מידע". 420 chars
@@ -78,10 +79,28 @@ export function detectSalesIntent(text = '', lead = null) {
     if (asksPrice(value)) return 'price'
     if (/מחיר|כמה.{0,12}עולה|עלות|חבילות|טווח\s+מחירים/.test(value) && !pricesRecentlyStated(lead)) return 'price'
     if (/דוגמ|תמונה|תמונות|סרטון|וידאו|לראות.{0,18}(ספר|איך|מוצר)|איך\s+זה\s+נראה/.test(value)) return 'demo'
-    if (/וואו|מדהים|אהבתי|נראה.{0,8}אש|מושלם|יפה\s+ממש|זה\s+בדיוק/.test(value)) return 'positive_signal'
-    if (/יקר|להתייעץ|לחשוב|אחשוב|נדבר\s+על\s+זה|רחוק|לא\s+בטוח|מתלבט/.test(value)) return 'objection'
+    if (/יקר|להתייעץ|לחשוב|אחשוב|נדבר\s+על\s+זה|רחוק|לא\s+בטוח|מתלבט|תקציב/.test(value)) return 'objection'
+    if (/וואו|מדהים|אהבתי|נראה.{0,8}אש|מושלם|יפה\s+ממש|זה\s+בדיוק|נשמע\s+(?:טוב|מעולה|מצוין)/.test(value)) return 'positive_signal'
+    // "כן", "סבבה", "יאללה" on its own. What it means depends on what we
+    // asked last; nextAction reads the previous bot line for that.
+    if (isAffirmative(value)) return 'affirmative'
     if (/איך\s+זה\s+עובד|מה\s+מקבלים|איך\s+האורחים|איך\s+מתחילים/.test(value)) return 'process'
+    // "בר מצווה", "חתונה בפברואר": the answer to the one question the
+    // opening asked. Until 29.9 the model answered it with another
+    // explanation and another question, and the customer left. Now it
+    // is the moment the offer goes out.
+    if (eventTypeOf(value) && !lead?.eventType && !isQuestion(value)) return 'event_answer'
     return 'general'
+}
+
+function isQuestion(text) {
+    return /\?|^(?:איך|מה|כמה|האם|אפשר|למה|מתי|יש\s+מצב|יש\s+אפשרות)\b|\s(?:איך|האם|אפשר|יש\s+מצב)\s/.test(normalizedText(text))
+}
+
+const AFFIRMATIVE = /^(?:כן|כן\s+כן|כן\s+בבקשה|כן\s+תודה|אוקיי|אוקי|אוקיי\s+תודה|ok|okay|yes|sure|סבבה|בסדר|יאללה|קדימה|מתאים|מתאים\s+לי|בטח|אשמח|נשמע\s+טוב|למה\s+לא|בואי|בוא|יאללה\s+בוא|👍|🙏|👌|💪)[\s!.,🙂😊👍🙏]*$/u
+export function isAffirmative(text) {
+    const value = normalizedText(text)
+    return value.length <= 24 && AFFIRMATIVE.test(value)
 }
 
 const AD_CTA = /אפשר\s+לקבל\s+מידע\s+נוסף|هل\s+يمكنني\s+الحصول\s+على\s+مزيد|can\s+i\s+get\s+more\s+info|более\s+подробн|можно\s+(?:получить\s+)?больше\s+информации/i
@@ -130,6 +149,45 @@ function explicitlyRequestsPaymentLink(text) {
     return /(שלח|תשלח|אפשר|צריך).{0,18}(קישור|לינק)|(קישור|לינק).{0,12}(שוב|מחדש)/.test(normalizedText(text))
 }
 
+// ── What the conversation already contains ──────────────────────────
+
+function assistantTexts(lead) {
+    const turns = Array.isArray(lead?.turns) ? lead.turns : []
+    return turns.filter(t => t?.role === 'assistant').map(t => String(t?.text || ''))
+}
+
+function lastAssistantText(lead) {
+    const texts = assistantTexts(lead)
+    return texts.length ? texts[texts.length - 1] : ''
+}
+
+// Both catalog prices went out at some point in this chat (opening
+// pricing sheet excluded: that is an image the bot cannot read back).
+export function pricesStated(lead = {}) {
+    if (['offer_sent', 'objection', 'commit_later', 'ready_to_pay'].includes(lead?.stage)) return true
+    const printed = PACKAGES.find(p => p.id === 'printed')?.price
+    const digital = PACKAGES.find(p => p.id === 'digital')?.price
+    return assistantTexts(lead).some(t => t.includes(String(printed)) && t.includes(String(digital)))
+}
+
+// The one concession goes out once per conversation, whatever the model
+// or the follow-up ladder would like.
+export function concessionOffered(lead = {}) {
+    return assistantTexts(lead).some(t => /במתנה/.test(t))
+}
+
+const CLOSE_QUESTION = /אפתח|פותחים|נפתח|קישור|לינק|להזמין|לסגור|נתחיל|להתחיל|שולח\s+לך|לשלוח\s+לך/
+function lastLineWasClose(lead) {
+    return CLOSE_QUESTION.test(lastAssistantText(lead))
+}
+
+// Simple quantity questions ("2 ספרים", "עותק נוסף") keep the model: the
+// arithmetic is allowed and validated. A plain "כמה עולה" is answered
+// by the catalog itself.
+function plainPriceQuestion(text) {
+    return !/\b[2-9]\b|שני|שתי|שניים|עותק|נוסף|עוד\s+ספר|ספרים|שדרוג|לשדרג|פוסטר|אקספרס|משלוח/.test(normalizedText(text))
+}
+
 function nextAction(intent, lead, incomingText) {
     if (intent === 'negative_exit') return 'close_lost'
     if (intent === 'payment_intent') {
@@ -140,19 +198,43 @@ function nextAction(intent, lead, incomingText) {
     }
     if (intent === 'ad_cta_repeat') return 'send_demo'
     if (intent === 'print_only') return 'handoff_print'
-    if (intent === 'price' || intent === 'process') return 'answer'
+    if (intent === 'price') return plainPriceQuestion(incomingText) ? 'quote_price' : 'answer'
+    if (intent === 'process') return 'answer'
     if (intent === 'demo') return 'show_proof'
-    if (intent === 'positive_signal') return 'recommend_package'
+    if (intent === 'event_answer') return 'present_offer'
+    // "כן" to "רוצה שאפתח לכם את הספר?" is an order. "כן" to anything else
+    // after the prices is still a yes; before the prices it is a person
+    // who wants to hear more, so they get the offer.
+    if (intent === 'affirmative') {
+        if (lastLineWasClose(lead) || pricesStated(lead)) return 'send_payment_link'
+        if (lead?.eventType) return 'present_offer'
+        return 'answer_then_qualify'
+    }
+    if (intent === 'positive_signal') {
+        if (pricesStated(lead)) return 'send_payment_link'
+        return lead?.eventType ? 'present_offer' : 'answer_then_qualify'
+    }
     if (intent === 'objection') return 'handle_objection'
+    // The event is known and the offer never went out: a statement (not a
+    // question) from the customer is the opening to make it. A question
+    // is answered by the model first; the close follows next turn.
+    if (intent === 'general'
+        && lead?.eventType
+        && !pricesStated(lead)
+        && !isQuestion(incomingText)
+        && ['new', 'opening_completed', 'engaged', undefined, null, ''].includes(lead?.stage)) {
+        return 'present_offer'
+    }
     return 'answer_then_qualify'
 }
 
-export function decideSalesTurn({ lead = {}, incomingText = '', isExistingCustomer = false, pausedForHuman = null } = {}) {
+export function decideSalesTurn({ lead = {}, incomingText = '', isExistingCustomer = false, pausedForHuman = null, todayISO = null } = {}) {
     const facts = knownFacts(lead)
     const base = {
         ...TURN_LIMITS,
         knownFacts: facts,
         forbiddenRepeats: [...facts],
+        todayISO: todayISO || isoTodayInIsrael(),
         ...openingFields(lead),
     }
 
@@ -227,23 +309,119 @@ function packageFor({ parsed, lead, incomingText }) {
     return PACKAGES.find(item => item.id === id) || PACKAGES.find(item => item.recommended) || PACKAGES[0]
 }
 
+// ── The offer, the close, the two doors ─────────────────────────────
+//
+// These lines are the funnel. They are written here and not by the model
+// because on 21-28.9 the model, given 86 leads and every instruction to
+// close, asked for the order zero times. It explained, it asked which
+// package "speaks to you", it asked about the style of the event. A
+// salesperson asks for the order every time the customer gives an
+// opening; this policy does it for him.
+
+const HE_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
+function isoTodayInIsrael() {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+}
+function addDays(iso, days) {
+    const d = new Date(`${iso}T12:00:00Z`)
+    if (Number.isNaN(d.getTime())) return iso
+    d.setUTCDate(d.getUTCDate() + Number(days || 0))
+    return d.toISOString().slice(0, 10)
+}
+function hebrewDayMonth(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''))
+    if (!m) return String(iso || '')
+    return `${Number(m[3])} ב${HE_MONTHS[Number(m[2]) - 1] || ''}`
+}
+export function concessionLine(todayISO) {
+    const until = hebrewDayMonth(addDays(todayISO || isoTodayInIsrael(), CONCESSION.validDays))
+    return CONCESSION.text.replace('{DATE}', until)
+}
+
+const price = id => PACKAGES.find(p => p.id === id)?.price || 0
+const PRICE_LINE = () => `דיגיטלי ${price('digital')} שח, מודפס בכריכה קשה ${price('printed')} שח כולל משלוח.`
+
+// One sentence that puts the book at THEIR event. The generic line
+// ("האורחים סורקים QR...") is what the opening already said; here the
+// job is to make the parent picture the specific evening.
+const EVENT_LINE = Object.freeze({
+    bar_mitzvah: 'בר מצווה זה בדיוק האירוע לזה: ספר שהוא פותח גם בעוד עשרים שנה, עם ברכה ותמונה מכל מי שהיה.',
+    bat_mitzvah: 'בת מצווה זה בדיוק האירוע לזה: ספר שהיא פותחת גם בעוד עשרים שנה, עם ברכה ותמונה מכל מי שהיה.',
+    wedding: 'מהחתונה נשארות תמונות, ומהספר נשארות המילים של כל מי שהיה שם.',
+    brit: 'מהברית נשאר ספר שהוא יקרא כשיגדל, עם ברכה ותמונה מכל המשפחה.',
+    birthday: 'מיום ההולדת נשאר ספר עם משהו אישי מכל מי שהיה, לא רק תמונות.',
+    other: 'בסוף האירוע נשאר ספר כריכה קשה עם ברכה ותמונה מכל מי שהיה.',
+})
+
+function celebrant(lead, parsed) {
+    return String(parsed?.celebrantName || lead?.celebrantName || '').trim()
+}
+
+function closeQuestion(lead, parsed) {
+    const name = celebrant(lead, parsed)
+    return name ? `רוצה שאפתח את הספר של ${name}? שולח קישור.` : 'רוצה שאפתח לכם את הספר? שולח קישור.'
+}
+
+function presentOfferMessage({ parsed, lead, incomingText }) {
+    const type = eventTypeOf(incomingText) || parsed?.eventType || lead?.eventType || 'other'
+    const line = EVENT_LINE[type] || EVENT_LINE.other
+    return `${line} ${PRICE_LINE()} ${closeQuestion(lead, parsed)}`
+}
+
+function quotePriceMessage({ parsed, lead, incomingText }) {
+    const type = eventTypeOf(incomingText) || parsed?.eventType || lead?.eventType
+    const tail = type ? closeQuestion(lead, parsed) : 'לאיזה אירוע זה אצלכם?'
+    return `${PRICE_LINE()} ${tail}`
+}
+
+function isPriceObjection(text) {
+    return /יקר|מחיר|כסף|תקציב|הרבה|עולה/.test(normalizedText(text))
+}
+function isFarDateObjection(text) {
+    return /רחוק|עוד\s+הרבה\s+זמן|יש\s+זמן|מוקדם\s+מדי|בינתיים/.test(normalizedText(text))
+}
+
+function objectionMessage({ decision, lead, incomingText, parsed }) {
+    const today = decision.todayISO
+    const offered = concessionOffered(lead)
+    if (isPriceObjection(incomingText)) {
+        // First door: a real page. Second door: digital now, printed
+        // later. Third and last: the one concession, with its date.
+        const upgradeLine = `אפשר גם להתחיל בדיגיטלי ב-${price('digital')} שח ולשדרג למודפס ב-${UPGRADE.price} שח עד ${UPGRADE.windowDays} יום אחרי האירוע, אותו ספר בדיוק.`
+        if (!(lead?.objectionCount > 0) && !offered) {
+            return `מבין. תסתכלו רגע על עמוד מספר אמיתי שהדפסנו. ${upgradeLine}`
+        }
+        if (!offered) return `אני יכול לעשות דבר אחד: ${concessionLine(today)}. זה הכי רחוק שאני יכול ללכת. ${closeQuestion(lead, parsed)}`
+        return `זה המחיר, ובלי מזלגות: עיצוב, כריכה קשה ומשלוח בפנים. ${closeQuestion(lead, parsed)}`
+    }
+    if (isFarDateObjection(incomingText)) {
+        const extra = offered ? '' : ` ${concessionLine(today)}, אז שווה להחליט השבוע.`
+        return `דווקא כשיש זמן שווה לפתוח עכשיו: הפוסטר וקישור האורחים מוכנים מראש, שולחים אותו עם ההזמנה, ומי שלא מגיע כותב לפני.${extra}`
+    }
+    // "אחשוב", "אתייעץ": a polite pause. A date on the offer and one
+    // question, so the pause has an end.
+    const extra = offered ? '' : ` שמרתי לכם ${concessionLine(today)}.`
+    return `ברור, זה משהו שמחליטים ביחד.${extra} מתי נוח שאחזור?`
+}
+
 function deterministicMessage({ parsed, decision, lead, incomingText }) {
     if (decision.nextBestAction === 'close_lost') return 'תודה שעדכנת, שמחתי לעזור. אם זה יחזור להיות רלוונטי, אנחנו כאן.'
     if (decision.nextBestAction === 'diagnose_checkout') return 'איפה זה נתקע לך, בפתיחת הקישור או בשלב התשלום?'
     if (decision.nextBestAction === 'send_payment_link') {
         const selected = packageFor({ parsed, lead, incomingText })
-        return `${selected.name} עולה ₪${selected.price} וכולל מע״מ. לתשלום מאובטח: ${selected.checkout}`
+        return `${selected.name}, ${selected.price} שח ${selected.id === 'printed' ? 'כולל משלוח' : 'כולל מע״מ'}: ${selected.checkout}\nאחרי התשלום מגיע מייל עם הגישה, ואני שולח לכם את הפוסטר לאישור תוך 48 שעות.`
     }
+    if (decision.nextBestAction === 'present_offer') return presentOfferMessage({ parsed, lead, incomingText })
+    if (decision.nextBestAction === 'quote_price') return quotePriceMessage({ parsed, lead, incomingText })
+    if (decision.nextBestAction === 'handle_objection') return objectionMessage({ decision, lead, incomingText, parsed })
     if (decision.nextBestAction === 'send_demo') {
         // A second tap on the ad button. Everything is already above; the
         // only useful move is the one question that starts a real chat.
         return 'הכל למעלה, איך זה עובד והמחירים. לאיזה אירוע זה אצלכם?'
     }
     if (decision.nextBestAction === 'handoff_print') return 'הדפסה של קובץ מוכן זה משהו שמישהו מהצוות מתמחר בנפרד. אני מעביר אליו, והוא יחזור אלייך כאן עוד היום.'
-    if (decision.intent === 'price') return priceFallbackMessage()
-    if (decision.nextBestAction === 'show_proof') return 'בטח, מצרף דוגמה מתוך ספר אמיתי. מה חשוב לך לראות, את הכריכה או את העמודים מבפנים?'
-    if (decision.nextBestAction === 'recommend_package') return 'החבילה המודפסת היא הבחירה של רוב המשפחות, ספר כריכה קשה שמגיע עד הבית. לשלוח לך את הפרטים שלה?'
-    if (decision.nextBestAction === 'handle_objection') return 'מבין. מה בעיקר עוצר אותך, המחיר או החשש איך הספר ייצא?'
+    if (decision.intent === 'price') return quotePriceMessage({ parsed, lead, incomingText })
+    if (decision.nextBestAction === 'show_proof') return 'הנה עמוד מתוך ספר אמיתי שהדפסנו, ככה זה יוצא. ' + closeQuestion(lead, parsed)
     if (decision.intent === 'process') return 'האורחים סורקים QR, כותבים ברכה ומעלים תמונה בלי אפליקציה. בסוף מאשרים הכול ומקבלים ספר.'
     // The last resort when no model answer exists. It used to open with a
     // product definition and a two-way question, which read as a machine
@@ -287,6 +465,25 @@ export function liftInlineImageMarkers(messages) {
         return text.replace(/[ \t]*\n[ \t]*\n[ \t]*$/, '').replace(/\s*:\s*$/, '.').replace(/[ \t]{2,}/g, ' ').trim()
     }).filter(Boolean)
     return { messages: out, image }
+}
+
+function seenImages(lead) {
+    return new Set([...(lead?.imagesSent || []), ...(lead?.mediaSent || []), ...(lead?.mediaRequested || [])].map(String))
+}
+function pickUnseen(keys, lead) {
+    const seen = seenImages(lead)
+    return keys.find(k => !seen.has(k)) || null
+}
+const EVENT_IMAGES = Object.freeze({
+    bar_mitzvah: ['book_bar_mitzvah', 'pages_bar_mitzvah', 'cover_personalised', 'book_open_spread'],
+    bat_mitzvah: ['book_bar_mitzvah', 'pages_bar_mitzvah', 'cover_personalised', 'book_open_spread'],
+    wedding: ['book_wedding', 'pages_wedding', 'book_open_spread', 'cover_personalised'],
+    birthday: ['book_birthday', 'pages_birthday', 'book_open_spread', 'cover_personalised'],
+    brit: ['cover_personalised', 'book_open_spread'],
+    other: ['cover_personalised', 'book_open_spread'],
+})
+export function pickEventImage(eventType, lead) {
+    return pickUnseen(EVENT_IMAGES[eventType] || EVENT_IMAGES.other, lead)
 }
 
 // "רוצה שאשלח לך דוגמה?" adds a whole round trip for nothing: the answer
@@ -430,6 +627,9 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         || decision.nextBestAction === 'send_payment_link'
         || decision.nextBestAction === 'send_demo'
         || decision.nextBestAction === 'handoff_print'
+        || decision.nextBestAction === 'present_offer'
+        || decision.nextBestAction === 'quote_price'
+        || decision.nextBestAction === 'handle_objection'
         || (decision.intent === 'price' && !hasOnlyCurrentCatalogPrices(candidates.join('\n')))
         || candidates.length === 0
         || CALL_LANGUAGE.test(normalizedText(candidates[0]))
@@ -492,6 +692,27 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         messages: out,
         image: parsed.image || liftedImage || null,
         noReply: false,
+    }
+    // The event named in this message is a fact whether or not the model
+    // wrote it into event_type.
+    const namedEvent = eventTypeOf(incomingText)
+    if (namedEvent && !result.eventType) result.eventType = namedEvent
+
+    // The offer and the price answer go out with the picture of a book
+    // from their kind of event; the price objection with an open spread.
+    // Never a picture they already got.
+    if (['present_offer', 'quote_price'].includes(decision.nextBestAction)) {
+        result.image = pickEventImage(result.eventType || lead.eventType, lead)
+        result.stage = 'offer_sent'
+        result.handoff = false
+        result.handoffReason = null
+    }
+    if (decision.nextBestAction === 'handle_objection') {
+        result.image = isPriceObjection(incomingText) ? pickUnseen(['book_open_spread', 'pages_bar_mitzvah', 'cover_personalised'], lead) : null
+        result.stage = 'objection'
+        result.objectionRaised = true
+        result.handoff = false
+        result.handoffReason = null
     }
     if (decision.nextBestAction === 'handoff_print') {
         result.handoff = true

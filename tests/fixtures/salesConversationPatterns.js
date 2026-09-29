@@ -4,7 +4,7 @@ export const SALES_CONVERSATION_PATTERNS = Object.freeze([
         lead: { eventType: 'bar_mitzvah' },
         incomingText: 'כמה עולה הספר המודפס?',
         parsed: { messages: ['יש כמה אפשרויות ואשמח להסביר'], stage: 'engaged', handoff: false },
-        expected: { intent: 'price', nextBestAction: 'answer', stage: 'engaged', handoff: false },
+        expected: { intent: 'price', nextBestAction: 'quote_price', stage: 'offer_sent', handoff: false },
     },
     {
         id: 'demo-proof',
@@ -25,7 +25,7 @@ export const SALES_CONVERSATION_PATTERNS = Object.freeze([
         lead: { eventType: 'bar_mitzvah' },
         incomingText: 'וואו זה בדיוק מה שחיפשנו',
         parsed: { messages: ['מעולה, אתקשר להסביר עוד'], stage: 'engaged', handoff: false },
-        expected: { intent: 'positive_signal', nextBestAction: 'recommend_package', stage: 'engaged', handoff: false },
+        expected: { intent: 'positive_signal', nextBestAction: 'present_offer', stage: 'offer_sent', handoff: false },
     },
     {
         id: 'payment-friction',

@@ -127,13 +127,31 @@ describe('context-aware follow-up sales plan', () => {
             attempt: 2,
             customerName: 'נועה',
         })
-        const objectionHelp = planFollowUp({ stage: 'objection' }, {
+        // An objection that already heard the concession gets the same
+        // help line as a stuck checkout; one that has not gets the offer.
+        const objectionHelp = planFollowUp({ stage: 'objection', turns: [{ role: 'assistant', text: 'עותק מודפס נוסף במתנה עד 2 באוקטובר' }] }, {
             attempt: 2,
             customerName: 'נועה',
         })
         expect(objectionHelp.templateName).toBe(checkoutHelp.templateName)
         expect(objectionHelp.templateText).toBe(checkoutHelp.templateText)
         expect(objectionHelp.templateParameters).toEqual([objectionHelp.templateText])
+    })
+
+    // 29.9: the second touch for someone who saw the prices is the one
+    // concession with its date and the close, written the same way the
+    // reply policy writes it. Not "what is stopping you".
+    it('sends the dated concession and the close on the second touch after prices', () => {
+        for (const stage of ['offer_sent', 'objection', 'demo_sent', 'commit_later']) {
+            const plan = planFollowUp({ stage }, { attempt: 2, customerName: 'נועה', todayISO: '2026-09-29' })
+            expect(plan.id).toBe('deadline_offer')
+            expect(plan.templateText).toContain('במתנה')
+            expect(plan.templateText).toContain('2 באוקטובר')
+            expect(plan.templateText).toMatch(/רוצה שאפתח לכם את הספר\? שולח קישור\.$/)
+            expect(plan.objective).toContain('2 באוקטובר')
+            expect(FOLLOWUP_STRATEGY_IDS).toContain(plan.id)
+        }
+        expect(planFollowUp({ stage: 'engaged' }, { attempt: 2, customerName: 'נועה' }).id).toBe('real_page')
     })
 
     it('gives a verified offer only to a high-intent final touch', () => {

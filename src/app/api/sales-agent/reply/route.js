@@ -861,6 +861,7 @@ export async function POST(req) {
         incomingText: text,
         isExistingCustomer: false,
         pausedForHuman: isPausedForHuman(lead),
+        todayISO: today,
     })
 
     // They wrote back. If something was sent to them inside the last day,
@@ -1239,7 +1240,7 @@ export async function POST(req) {
         followUpAt,
         notifyOwner: parsed.handoff
             ? ownerPing(phone, parsed.handoffReason, { name: parsed.customerName || lead.name, stage: parsed.stage, lastText: text })
-            : null,
+            : hotLeadPing(phone, parsed, lead, { name: parsed.customerName || lead.name || body?.profileName, lastText: text }),
     }
     const exchange = {
         phone, incomingText: text, parsed, followUpAt, profileName: body?.profileName,
@@ -1280,6 +1281,25 @@ function ownerPing(phone, reason, extra = {}) {
         extra.lastText ? `הודעה אחרונה: "${String(extra.lastText).slice(0, 160)}"` : null,
         `פתח שיחה: https://wa.me/${phone}`,
         `הבוט מושתק לשיחה הזאת ל-48 שעות. ${BUSINESS.brand}`,
+    ]
+    return lines.filter(Boolean).join('\n')
+}
+
+// Not a handoff: the bot keeps selling. This is the moment a person
+// should also pick up the phone. On 21-28.9 two ready_to_pay leads and
+// three that got the concession sat for a week with nobody told.
+function hotLeadPing(phone, parsed, lead, extra = {}) {
+    const becameReady = parsed?.stage === 'ready_to_pay' && lead?.stage !== 'ready_to_pay'
+    const gotConcession = (parsed?.messages || []).some(m => /במתנה/.test(String(m || '')))
+    if (!becameReady && !gotConcession) return null
+    const lines = [
+        becameReady ? '🔥 ליד חם: קיבל קישור תשלום' : '🔥 ליד חם: קיבל את ההצעה עם התאריך',
+        `טלפון: ${phone}`,
+        extra.name ? `שם: ${extra.name}` : null,
+        lead?.eventType ? `אירוע: ${lead.eventType}${lead?.eventDate ? ` · ${lead.eventDate}` : ''}` : null,
+        extra.lastText ? `כתב: "${String(extra.lastText).slice(0, 120)}"` : null,
+        `פתח שיחה: https://wa.me/${phone}`,
+        'הבוט ממשיך. טלפון ממך עכשיו סוגר את זה.',
     ]
     return lines.filter(Boolean).join('\n')
 }

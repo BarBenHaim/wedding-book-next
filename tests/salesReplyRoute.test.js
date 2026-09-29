@@ -769,7 +769,7 @@ describe('conversation-learned decision contract', () => {
         const result = await post(inbound({ text }))
 
         expect(mocks.decideSalesTurn).toHaveBeenCalledWith({
-            lead: expect.objectContaining({ eventType: 'bar_mitzvah' }), incomingText: text, isExistingCustomer: false, pausedForHuman: false,
+            lead: expect.objectContaining({ eventType: 'bar_mitzvah' }), incomingText: text, isExistingCustomer: false, pausedForHuman: false, todayISO: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
         })
         expect(mocks.buildSystemPrompt).toHaveBeenCalledWith(expect.any(Object), expect.any(String), expect.objectContaining({ turnDecision: decision }))
         expect(mocks.enforceSalesReply).toHaveBeenCalledWith(expect.objectContaining({

@@ -298,6 +298,48 @@ Not code, for Lord: two `ready_to_pay` leads (21.9, 24.9) and eight
 handed-off leads waited for a human all week. The "44 שיחות מחכות לך"
 alert in the follow-up response is real, not noise.
 
+### 29.9, later — the funnel became a mechanism
+
+Lord: "הוא לא תוקף… זה לא הגיוני שלא היו מכירות שבועיים… יש לך יד
+חופשית… צריך לבנות מנגנון." The same 34 conversations read again for
+one thing: how many times did the bot ask for the order? Zero. It
+explained, asked "מה מעניין אותך יותר", asked about the style of the
+event. So the moves that sell are now written by `decisionPolicy.js`,
+not phrased by the model:
+
+- `event_answer` → `present_offer`: one sentence that puts the book at
+  THEIR event (`EVENT_LINE`), both prices, the close ("רוצה שאפתח לכם
+  את הספר? שולח קישור."), and the cover image from their kind of event
+  (`pickEventImage`). Stage → `offer_sent`. Also fires on a statement
+  ("הבנתי") once the event is known and no prices went out.
+- `price` (plain "כמה עולה") → `quote_price`: catalog prices + the close
+  when the event is known, else the event question. Quantity/upgrade
+  questions ("2 ספרים", "שדרוג") keep the model, validated as before.
+- `affirmative` ("כן", "סבבה", "יאללה") after a close line or after the
+  prices → `send_payment_link` (link + "אחרי התשלום… פוסטר לאישור תוך
+  48 שעות"). Before any prices it is a wish to hear more.
+- `positive_signal` after prices → the link; before → the offer.
+- `objection`: price → open spread + the digital-now/printed-later door;
+  second price objection → the ONE concession with its date
+  (`concessionLine`, `CONCESSION.validDays` from today); third → the
+  price, plainly, and the close. "אחשוב"/"להתייעץ" → the concession
+  with a date and "מתי נוח שאחזור?". "רחוק" → the reason to open early.
+  `concessionOffered(lead)` reads the transcript ("במתנה") so it is
+  never given twice.
+- `hotLeadPing` in `reply/route.js`: the owner is told, without muting
+  the bot, when a lead reaches `ready_to_pay` or hears the concession.
+- Follow-up #2 for `offer_sent/objection/demo_sent/commit_later` is
+  `deadline_offer`: the same concession sentence, scripted, no model.
+- The prompt's "מהלך המכירה" is the five steps; MOVE_HE tells the model
+  when the system writes the line and it only fills the fact fields.
+- Live: experiment rev 31, "דמו לפני מחיר" at 100 %, B off, intro says
+  poster / a page per blessing / the parents approve.
+
+Prices unchanged (690/990). Lord allowed lowering them; the read is that
+nobody was asked to buy, so price was never tested. If a week of the
+mechanism produces asks but no payments, the next lever is a WooCommerce
+coupon on the printed book, not the list price.
+
 ---
 
 ## The WhatsApp sales agent — shipped and live
