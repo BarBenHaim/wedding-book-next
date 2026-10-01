@@ -75,9 +75,25 @@ describe('context-aware follow-up sales plan', () => {
         expect(plan.templateParameters).toEqual([plan.templateText])
     })
 
+    // 1.10: the first touch is the only in-window one, so a lead who saw
+    // the prices gets the dated concession and the close right there.
+    it('leads with the dated concession on the FIRST touch after prices', () => {
+        for (const stage of ['offer_sent', 'objection', 'demo_sent', 'commit_later']) {
+            const plan = planFollowUp({ stage }, { attempt: 1, customerName: 'נועה', todayISO: '2026-10-01' })
+            expect(plan.id).toBe('deadline_offer')
+            expect(plan.templateText).toContain('4 באוקטובר')
+            expect(plan.templateText).toMatch(/רוצה שאפתח לכם את הספר\? שולח קישור\.$/)
+        }
+        // Already heard it: back to the one question.
+        const heard = planFollowUp({ stage: 'offer_sent', turns: [{ role: 'assistant', text: 'עותק מודפס נוסף במתנה עד 4 באוקטובר' }] }, { attempt: 1, customerName: 'נועה' })
+        expect(heard.id).toBe('one_question')
+        expect(planFollowUp({ stage: 'engaged' }, { attempt: 1, customerName: 'נועה' }).id).toBe('one_line')
+    })
+
     it('asks one question instead of re-proving to someone who already saw the demo or prices', () => {
+        const heard = [{ role: 'assistant', text: 'עותק מודפס נוסף במתנה עד 4 באוקטובר' }]
         for (const stage of ['demo_sent', 'offer_sent']) {
-            const plan = planFollowUp({ stage }, { attempt: 1, isFinal: false, customerName: 'דנה' })
+            const plan = planFollowUp({ stage, turns: heard }, { attempt: 1, isFinal: false, customerName: 'דנה' })
             expect(plan.id).toBe('one_question')
             expect(plan.landingUrl).toBeNull()
             expect(plan.objective).toContain('בלי קישור')
@@ -225,7 +241,8 @@ describe('context-aware follow-up sales plan', () => {
             for (const attempt of [1, 2, 3]) {
                 for (const isFinal of [false, true]) {
                     for (const offer of [null, { code: 'WT10', expiresAt: new Date(Date.now() + 3600e3).toISOString() }]) {
-                        const plan = planFollowUp({ stage, notes: attempt === 2 ? 'התלבט על המחיר' : '' }, { attempt, isFinal, offer, customerName: 'נועה' })
+                        const heard = attempt === 1 && isFinal === false && offer === null ? [{ role: 'assistant', text: 'במתנה' }] : []
+                        const plan = planFollowUp({ stage, turns: heard, notes: attempt === 2 ? 'התלבט על המחיר' : '' }, { attempt, isFinal, offer, customerName: 'נועה' })
                         seen.add(plan.id)
                         expect(FOLLOWUP_STRATEGY_IDS).toContain(plan.id)
                         expect(FOLLOWUP_CTAS).toContain(plan.cta)

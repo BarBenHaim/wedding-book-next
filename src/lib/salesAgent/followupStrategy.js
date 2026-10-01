@@ -134,6 +134,20 @@ export function planFollowUp(lead = {}, {
         })
     }
 
+    // The first touch is the only one that reliably lands inside Meta's
+    // 24-hour window (the cron runs twice a day; the second touch is three
+    // days later and goes out as the fixed approved template). So the
+    // strongest message a lead who already saw the prices can get - the
+    // one concession with its date and the close - goes FIRST, not second.
+    if (number === 1 && ['demo_sent', 'offer_sent', 'objection', 'commit_later'].includes(lead?.stage) && !concessionAlreadyOffered(lead)) {
+        return plan({ name,
+            id: 'deadline_offer',
+            objective: `ההצעה היחידה שקיימת, עם התאריך שלה: "${concessionText(todayISO)}". משפט אחד שמתחבר לאירוע שלו, ההצעה כמו שהיא כתובה, והבקשה: "רוצה שאפתח לכם את הספר? שולח קישור." בלי שאלה על מה עוצר, בלי לחזור על יתרונות.`,
+            cta: 'reply',
+            templateText: `${name}, שמרתי לכם ${concessionText(todayISO)}. רוצה שאפתח לכם את הספר? שולח קישור.`,
+        })
+    }
+
     if (number === 1) {
         if (['demo_sent', 'offer_sent'].includes(lead?.stage)) {
             return plan({ name,
@@ -166,6 +180,8 @@ export function planFollowUp(lead = {}, {
     // is bothering them; they already know, and it did not make them
     // write. A reason to decide this week does.
     if (['objection', 'commit_later', 'offer_sent', 'demo_sent'].includes(lead?.stage) && !concessionAlreadyOffered(lead)) {
+        // Second touch, still no concession on record (e.g. the first
+        // touch was composed before 1.10): same offer, same date rule.
         return plan({ name,
             id: 'deadline_offer',
             objective: `ההצעה היחידה שקיימת, עם התאריך שלה: "${concessionText(todayISO)}". משפט אחד שמתחבר לאירוע שלו, ההצעה כמו שהיא כתובה, והבקשה: "רוצה שאפתח לכם את הספר? שולח קישור." בלי שאלה על מה עוצר, בלי לחזור על יתרונות.`,
