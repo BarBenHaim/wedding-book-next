@@ -542,6 +542,14 @@ describe('the funnel mechanism', () => {
         expect(turn('הבנתי', { isNew: false, eventType: 'bat_mitzvah', stage: 'offer_sent' }).decision.nextBestAction).toBe('answer_then_qualify')
     })
 
+    it('does not repeat the prices when the event arrives after "כמה עולה"', () => {
+        const lead = { isNew: false, stage: 'offer_sent', turns: [{ role: 'assistant', text: 'דיגיטלי 690 שח, מודפס בכריכה קשה 990 שח כולל משלוח. לאיזה אירוע זה אצלכם?' }] }
+        const { decision, result } = turn('בת מצווה', lead)
+        expect(decision.nextBestAction).toBe('present_offer')
+        expect(result.messages[0]).not.toContain('690')
+        expect(result.messages[0]).toMatch(/בת מצווה.*רוצה שאפתח/)
+    })
+
     it('answers a plain price question from the catalog and closes when the event is known', () => {
         const known = turn('כמה זה עולה?', { isNew: false, eventType: 'wedding' })
         expect(known.decision.nextBestAction).toBe('quote_price')
@@ -576,6 +584,7 @@ describe('the funnel mechanism', () => {
         expect(first.result).toMatchObject({ stage: 'objection', objectionRaised: true })
 
         const second = turn('עדיין יקר', { isNew: false, eventType: 'bar_mitzvah', stage: 'objection', objectionCount: 1, imagesSent: ['book_open_spread'] })
+        expect(second.result.image).toBeNull()
         expect(second.result.messages[0]).toContain('במתנה')
         expect(second.result.messages[0]).toMatch(/עד \d+ ב/)
         expect(second.result.messages[0]).toMatch(/רוצה שאפתח/)
@@ -618,5 +627,32 @@ describe('the funnel mechanism, questions first', () => {
         const r = enforceSalesReply({ parsed: { messages: ['בטח, הפוסטר מוכן תוך 48 שעות. רוצה שאפתח לכם את הספר?'], stage: 'engaged', handoff: false }, decision: d, lead: { isNew: false }, incomingText: 'בר מצווה בעוד חודש, יש מצב להספיק?' })
         expect(r.eventType).toBe('bar_mitzvah')
         expect(r.messages[0]).toContain('48')
+    })
+})
+
+// 30.9-1.10, read from the first conversations under the mechanism.
+describe('what the first two days of the mechanism showed', () => {
+    it('lets go of someone who wants a handwritten guest book, once, and stops closing', () => {
+        const text = 'זה לא מה שאני מחפשת אני צריכה רק את הספר שהאורחים ייכתבו לה בכתב יד'
+        const decision = decideSalesTurn({ incomingText: text, lead: { stage: 'offer_sent' } })
+        expect(decision.nextBestAction).toBe('close_lost')
+        const r = enforceSalesReply({ parsed: { messages: ['רוצה שאפתח לכם את הספר?'], stage: 'offer_sent', handoff: false }, decision, lead: { stage: 'offer_sent' }, incomingText: text })
+        expect(r.stage).toBe('closed_lost')
+        expect(r.messages[0]).not.toMatch(/אפתח/)
+        expect(detectSalesIntent('לא תודה')).toBe('negative_exit')
+    })
+
+    it('answers "תודה לך" after a close with silence, not the generic fallback', () => {
+        const decision = decideSalesTurn({ incomingText: 'תודה לך', lead: { stage: 'closed_lost' } })
+        expect(decision).toMatchObject({ nextBestAction: 'silence', modelEligible: false })
+        const r = enforceSalesReply({ parsed: { messages: ['רגע, אני בודק'], stage: 'closed_lost', handoff: false }, decision, lead: { stage: 'closed_lost' }, incomingText: 'תודה לך' })
+        expect(r).toMatchObject({ noReply: true, messages: [] })
+        // A real question after a close still gets an answer.
+        expect(decideSalesTurn({ incomingText: 'בעצם כמה זה עולה?', lead: { stage: 'closed_lost' } }).nextBestAction).toBe('quote_price')
+    })
+
+    it('reads a bare "כמה" as the price question it is', () => {
+        expect(decideSalesTurn({ incomingText: 'כמה', lead: {} }).nextBestAction).toBe('quote_price')
+        expect(decideSalesTurn({ incomingText: 'כמה?', lead: {} }).nextBestAction).toBe('quote_price')
     })
 })

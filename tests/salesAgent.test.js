@@ -961,6 +961,14 @@ describe('isOwnMediaEcho — our own picture coming back vs a customer attachmen
         expect(isOwnMediaEcho({ ...justSent, lastOutboundMediaAt: now - OWN_MEDIA_ECHO_WINDOW_MS - 1 }, 'image', now)).toBe(false)
     })
 
+    it('is a person when the kind differs from what we sent (a voice note after our picture)', () => {
+        const afterImage = { ...justSent, lastOutboundMediaKind: 'image' }
+        expect(isOwnMediaEcho(afterImage, 'audio', now)).toBe(false)
+        expect(isOwnMediaEcho(afterImage, 'image', now)).toBe(true)
+        expect(isOwnMediaEcho(afterImage, 'document', now)).toBe(true)
+        expect(isOwnMediaEcho({ ...justSent, lastOutboundMediaKind: 'video' }, 'image', now)).toBe(false)
+    })
+
     it('is a customer attachment once the customer has written after our media', () => {
         const answered = { ...justSent, turns: [...justSent.turns, { role: 'user', text: 'הנה ההזמנה' }] }
         expect(isOwnMediaEcho(answered, 'image', now)).toBe(false)

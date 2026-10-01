@@ -340,6 +340,38 @@ nobody was asked to buy, so price was never tested. If a week of the
 mechanism produces asks but no payments, the next lever is a WooCommerce
 coupon on the printed book, not the list price.
 
+### 1.10 — no picture ever left the building
+
+First 12 leads under the mechanism, read in full. One of them (יום הולדת,
+30.9) said "תשלח לי" to the link, then asked six times for an example to
+show the family and got words each time: "איפה זה??", "זה לא שולח כלום".
+Her `mediaRequested` had five keys; `imagesSent`/`mediaSent` were empty
+on every lead in 14 days. In Make's history a reply turn with
+`hasImage: true` ran only the text module: the scenario's routes are
+"שליחת טקסט פעם אחת", "פתיחה מבוקרת · N · תמונה/סרטון/אודיו" ×3 and
+"סיום ומעבר לשיחה". **There is no `hasImage` route** since the 24.8
+blueprint patch (BusinessOS `make-blueprint-patcher`), and the model-reply
+payload never filled the `openingMedia{n}` slot fields. 31 pictures on 18
+leads were dropped at the router while the text promised them.
+
+Fix in `reply/route.js`: a reply-time image or video fills slot 1
+(`slotFields`, shared with the opening branch), with the same outbound id
+`completeSuccessfulExchange` gives the image part, so the delivery
+callback matches the ledger row. `openingMediaCount` counts it. Test:
+"routes a mid-conversation picture through Make slot 1".
+
+Also from those 12: "לא תודה" / "לא מה שאני מחפשת" are a no; a
+handwritten guest book is `not_our_product` (one honest line, close);
+"תודה לך" after a close gets silence, not "רגע, אני בודק"; a bare "כמה"
+is a price question; the own-media echo guard is 90 s and same kind
+(`lastOutboundMediaKind`), because a voice note after our picture was a
+person.
+
+Still not code: all follow-ups go out next morning through Meta's only
+approved template ("רק מוודא שלא פספסתי"); the checkout asks nine fields
+incl. a required postal code and an optional phone; the ad greeting still
+says "ספר לנו כיצד אפשר לעזור".
+
 ---
 
 ## The WhatsApp sales agent — shipped and live

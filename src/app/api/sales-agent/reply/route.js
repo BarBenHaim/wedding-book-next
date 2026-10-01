@@ -34,6 +34,7 @@ export const maxDuration = 30
 
 import { NextResponse } from 'next/server'
 import { createHash } from 'crypto'
+import { createOutboundId } from '@/lib/salesAgent/delivery'
 import { buildSystemPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, normalizePhone, resolveFollowUp } from '@/lib/salesAgent/agent'
 import {
@@ -1160,6 +1161,32 @@ export async function POST(req) {
         addDays: addDaysISO,
     })
 
+    // ── The picture actually leaves the building ────────────────────
+    //
+    // Make's scenario has no `hasImage` branch any more. Since the 24.8
+    // opening-media refactor it routes media only through the slot
+    // fields `openingMedia{1..3}Kind/Id/Url/Caption/VoiceNote`, and this
+    // payload never filled them for a model reply. Result: every picture
+    // the agent attached mid-conversation (31 requests on 18 leads in the
+    // 14 days to 1.10, five of them to one customer who asked six times
+    // "איפה זה??") was dropped at the router, while the text promised it.
+    //
+    // A reply-time image or video goes out through slot 1, with the same
+    // outbound id completeSuccessfulExchange assigns to that part, so the
+    // delivery callback lands on the right ledger row and `mediaSent`
+    // finally records what the customer saw.
+    const replyMediaSlots = openingMediaParts.length
+        ? openingMediaParts
+        : media
+            ? [{
+                partId: createOutboundId({ scope: 'inbound', subject: eventId, attempt: 0, part: media.kind === 'video' ? 'video' : 'image' }),
+                kind: media.kind === 'video' ? 'video' : 'image',
+                url: media.url,
+                caption: media.caption || '',
+                voiceNote: false,
+            }]
+            : []
+
     const directAnswer = parsed.messages.join('\n\n')
     const openingSequenceParts = openingPlan.eligible && directAnswer
         ? [
@@ -1217,8 +1244,9 @@ export async function POST(req) {
         sendVideo: media && media.kind === 'video' ? media.url : null,
         sendVideoCaption: media && media.kind === 'video' ? media.caption : null,
         hasVideo: !!media && media.kind === 'video',
-        openingMediaCount: openingMediaParts.length,
+        openingMediaCount: replyMediaSlots.length,
         openingMediaParts,
+        ...slotFields(replyMediaSlots),
         openingSequenceParts,
         postOpeningText: openingPlan.eligible ? openingPlan.closingText : '',
         openingAnswerId: openingSequenceParts[0]?.partId || null,
@@ -1283,6 +1311,23 @@ function ownerPing(phone, reason, extra = {}) {
         `הבוט מושתק לשיחה הזאת ל-48 שעות. ${BUSINESS.brand}`,
     ]
     return lines.filter(Boolean).join('\n')
+}
+
+// The slot fields Make's media routes read (`openingMedia1Kind = image`
+// → image module, `video` → video module, `audio` → audio module), one
+// set per part, up to three. Shared by the opening branch and the model
+// reply so the two can never drift again.
+function slotFields(parts) {
+    return Object.fromEntries((parts || []).slice(0, 3).flatMap((part, index) => {
+        const slot = index + 1
+        return [
+            [`openingMedia${slot}Id`, part.partId],
+            [`openingMedia${slot}Kind`, part.kind],
+            [`openingMedia${slot}Url`, part.url],
+            [`openingMedia${slot}Caption`, part.caption || ''],
+            [`openingMedia${slot}VoiceNote`, part.kind === 'audio' && part.voiceNote === true],
+        ]
+    }))
 }
 
 // Not a handoff: the bot keeps selling. This is the moment a person

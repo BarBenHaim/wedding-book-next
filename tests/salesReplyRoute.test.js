@@ -693,6 +693,44 @@ describe('owner-controlled opening-only mode', () => {
 })
 
 describe('conversation-learned decision contract', () => {
+    // 1.10: Make routes media only through the openingMedia{n} slot fields
+    // (the hasImage branch is gone since 24.8). A model reply with a
+    // picture filled none of them, so 31 pictures in 14 days were dropped
+    // at the router while the text said "הנה דוגמה". The picture now goes
+    // out through slot 1, under the ledger's own outbound id for that part.
+    it('routes a mid-conversation picture through Make slot 1 with the image part id', async () => {
+        prepareDecisionPath()
+        mocks.mergeMedia.mockReturnValue({
+            book_bar_mitzvah: { url: 'https://cdn.test/bar.jpg', caption: 'ספר בר מצווה', kind: 'image' },
+        })
+        mocks.enforceSalesReply.mockImplementation(({ parsed }) => ({ ...parsed, image: 'book_bar_mitzvah', stage: 'offer_sent' }))
+
+        const result = await post(inbound({ text: 'בר מצווה' }))
+
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({
+            hasImage: true,
+            sendImage: 'https://cdn.test/bar.jpg',
+            openingMediaCount: 1,
+            openingMedia1Kind: 'image',
+            openingMedia1Url: 'https://cdn.test/bar.jpg',
+            openingMedia1Caption: 'ספר בר מצווה',
+            openingMedia1VoiceNote: false,
+            openingSequenceParts: [],
+        })
+        expect(result.body.openingMedia1Id).toMatch(/^[a-z0-9:_-]{8,}$/i)
+        expect(result.body.openingMedia1Id).not.toContain('test-phone-token')
+        expect(result.body.openingMedia2Kind).toBeUndefined()
+    })
+
+    it('fills no media slot when the reply has no picture', async () => {
+        prepareDecisionPath()
+        const result = await post(inbound({ text: 'תודה' }))
+        expect(result.status).toBe(200)
+        expect(result.body.openingMediaCount).toBe(0)
+        expect(result.body.openingMedia1Kind).toBeUndefined()
+    })
+
     it('continues a historical conversation from known facts and never builds a new-lead opening', async () => {
         prepareDecisionPath()
         mocks.getLead.mockResolvedValue({ ...lead, isNew: true })

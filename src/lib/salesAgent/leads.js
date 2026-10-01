@@ -528,8 +528,10 @@ export async function completeSuccessfulExchange({
         // back through the same webhook a few seconds later, and Make does
         // not always mark it as ours. The reply route reads this stamp to
         // tell that echo from a customer attachment (see isOwnMediaEcho).
-        if (replyParts.some(item => ['image', 'video', 'document', 'audio'].includes(item.part))) {
+        const mediaPart = replyParts.find(item => ['image', 'video', 'document', 'audio'].includes(item.part))
+        if (mediaPart) {
             patch.lastOutboundMediaAt = Date.now()
+            patch.lastOutboundMediaKind = mediaPart.part
         }
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
         tx.set(leadRef, patch, { merge: true })

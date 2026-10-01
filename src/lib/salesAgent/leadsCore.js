@@ -99,13 +99,20 @@ export function isOwnEcho(lead, text) {
 // and the bot went silent on them for good. A real attachment inside
 // that window is rare, and the cost of missing it is one bot turn, not
 // a silenced lead.
-export const OWN_MEDIA_ECHO_WINDOW_MS = 3 * 60 * 1000
+// 90 seconds, and only the kind we sent: on 30.9 a customer's voice note,
+// a minute after the bot's picture, was swallowed as an echo and nobody
+// heard it. An echo of a picture is a picture (Meta reports our document
+// as 'document', our image as 'image'); audio after an image is a person.
+export const OWN_MEDIA_ECHO_WINDOW_MS = 90 * 1000
 export function isOwnMediaEcho(lead, messageType, nowMs = Date.now()) {
-    if (!['image', 'video', 'document', 'audio'].includes(String(messageType || ''))) return false
+    const kind = String(messageType || '')
+    if (!['image', 'video', 'document', 'audio'].includes(kind)) return false
     const sentAt = lead?.lastOutboundMediaAt?.toMillis?.() ?? Number(lead?.lastOutboundMediaAt) ?? 0
     if (!sentAt || !Number.isFinite(sentAt)) return false
     const age = Number(nowMs) - sentAt
     if (age < 0 || age > OWN_MEDIA_ECHO_WINDOW_MS) return false
+    const sentKind = String(lead?.lastOutboundMediaKind || '')
+    if (sentKind && !(sentKind === kind || (sentKind === 'image' && kind === 'document'))) return false
     // Only while our media was the last thing said: a customer who wrote
     // after it and then sends a photo is answering us, not echoing.
     const turns = Array.isArray(lead?.turns) ? lead.turns : []

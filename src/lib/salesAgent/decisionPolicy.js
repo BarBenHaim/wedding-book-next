@@ -50,7 +50,11 @@ export function detectSalesIntent(text = '', lead = null) {
 
     // Terminal intent comes before generic phrases such as "דיברתי עם בן
     // אדם". A polite no is a closed loop, not a human-handoff request.
-    if (/ויתר|לוותר|מוותר|החלטנו\s+שלא|לא\s+רלוונט|לא\s+מעוניינ|לא\s+מתאים\s+לנו|ירדנו\s+מזה/.test(value)) return 'negative_exit'
+    if (/ויתר|לוותר|מוותר|החלטנו\s+שלא|לא\s+רלוונט|לא\s+מעוניינ|לא\s+מתאים\s+לנו|ירדנו\s+מזה|^לא\s+תודה[\s!.]*$|לא\s+מה\s+ש(?:אני|אנחנו)\s+מחפש/.test(value)) return 'negative_exit'
+    // A guest book to write in by hand is a different product (30.9, שלומית:
+    // "מעדיפה שייכתבו בכתב יד… צריכה רק את הספר שהאורחים ייכתבו לה"). Three
+    // closes in a row did not change that. One honest line, and let go.
+    if (/בכתב\s+יד|לכתוב\s+ביד|ספר\s+אורחים\s+(?:רגיל|פיזי|קלאסי)|ספר\s+(?:אורחים\s+)?ריק/.test(value)) return 'not_our_product'
 
     // Checkout trouble has to beat both the word "מחיר" and a second
     // payment-link send. The useful move is diagnosis, not another pitch.
@@ -76,7 +80,7 @@ export function detectSalesIntent(text = '', lead = null) {
     // An explicit "how much" is always a price question. A bare topic word
     // ("מחיר", "חבילות") counts only while the prices have not just been
     // given - otherwise it is conversation about the price, not a request.
-    if (asksPrice(value)) return 'price'
+    if (asksPrice(value) || /^כמה[\s?!.]*$/.test(value)) return 'price'
     if (/מחיר|כמה.{0,12}עולה|עלות|חבילות|טווח\s+מחירים/.test(value) && !pricesRecentlyStated(lead)) return 'price'
     if (/דוגמ|תמונה|תמונות|סרטון|וידאו|לראות.{0,18}(ספר|איך|מוצר)|איך\s+זה\s+נראה/.test(value)) return 'demo'
     if (/יקר|להתייעץ|לחשוב|אחשוב|נדבר\s+על\s+זה|רחוק|לא\s+בטוח|מתלבט|תקציב/.test(value)) return 'objection'
@@ -188,8 +192,17 @@ function plainPriceQuestion(text) {
     return !/\b[2-9]\b|שני|שתי|שניים|עותק|נוסף|עוד\s+ספר|ספרים|שדרוג|לשדרג|פוסטר|אקספרס|משלוח/.test(normalizedText(text))
 }
 
+// "תודה לך" after the bot closed the loop. On 30.9 it got "רגע, אני בודק
+// ומיד חוזר אלייך" - the generic fallback - from a bot that had just said
+// goodbye. Silence is the right answer to a courtesy.
+const COURTESY = /^(?:תודה|תודה לך|תודה רבה|תודה בכל מקרה|בסדר|אוקיי|אוקי|סבבה|יום טוב|ערב טוב|להתראות|ביי|בהצלחה)[\s!.🙏🙂❤️]*$/u
+export function isCourtesy(text) {
+    return COURTESY.test(normalizedText(text))
+}
+
 function nextAction(intent, lead, incomingText) {
     if (intent === 'negative_exit') return 'close_lost'
+    if (intent === 'not_our_product') return 'close_lost'
     if (intent === 'payment_intent') {
         if (hasCheckoutFriction(incomingText)) return 'diagnose_checkout'
         return paymentLinkWasSent(lead) && !explicitlyRequestsPaymentLink(incomingText)
@@ -264,6 +277,18 @@ export function decideSalesTurn({ lead = {}, incomingText = '', isExistingCustom
             qualificationTarget: null,
             conversationKind: 'paused',
             intent: 'handoff_active',
+            nextBestAction: 'silence',
+            modelEligible: false,
+        }
+    }
+
+    if (lead?.stage === 'closed_lost' && isCourtesy(incomingText)) {
+        return {
+            ...base,
+            openingBundleRequired: false,
+            qualificationTarget: null,
+            conversationKind: 'sales',
+            intent: 'courtesy_after_close',
             nextBestAction: 'silence',
             modelEligible: false,
         }
@@ -365,7 +390,10 @@ function closeQuestion(lead, parsed) {
 function presentOfferMessage({ parsed, lead, incomingText }) {
     const type = eventTypeOf(incomingText) || parsed?.eventType || lead?.eventType || 'other'
     const line = EVENT_LINE[type] || EVENT_LINE.other
-    return `${line} ${PRICE_LINE()} ${closeQuestion(lead, parsed)}`
+    // Prices already given (they asked "כמה עולה" before naming the
+    // event): the event line and the close, not the prices again.
+    const prices = pricesStated(lead) ? '' : `${PRICE_LINE()} `
+    return `${line} ${prices}${closeQuestion(lead, parsed)}`
 }
 
 function quotePriceMessage({ parsed, lead, incomingText }) {
@@ -405,6 +433,7 @@ function objectionMessage({ decision, lead, incomingText, parsed }) {
 }
 
 function deterministicMessage({ parsed, decision, lead, incomingText }) {
+    if (decision.intent === 'not_our_product') return 'הבנתי, ספר אורחים לכתיבה ביד זה לא מה שאנחנו עושים, אצלנו האורחים כותבים מהטלפון ומצרפים תמונה. בהצלחה באירוע, ואם תרצו בכל זאת, אני כאן.'
     if (decision.nextBestAction === 'close_lost') return 'תודה שעדכנת, שמחתי לעזור. אם זה יחזור להיות רלוונטי, אנחנו כאן.'
     if (decision.nextBestAction === 'diagnose_checkout') return 'איפה זה נתקע לך, בפתיחת הקישור או בשלב התשלום?'
     if (decision.nextBestAction === 'send_payment_link') {
@@ -708,7 +737,10 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         result.handoffReason = null
     }
     if (decision.nextBestAction === 'handle_objection') {
-        result.image = isPriceObjection(incomingText) ? pickUnseen(['book_open_spread', 'pages_bar_mitzvah', 'cover_personalised'], lead) : null
+        // The page goes with the first price objection only; the
+        // concession and the plain price stand on their own.
+        const firstPriceObjection = isPriceObjection(incomingText) && !(lead?.objectionCount > 0) && !concessionOffered(lead)
+        result.image = firstPriceObjection ? pickUnseen(['book_open_spread', ...(EVENT_IMAGES[result.eventType || lead.eventType] || []).filter(k => /^pages_/.test(k)), 'cover_personalised'], lead) : null
         result.stage = 'objection'
         result.objectionRaised = true
         result.handoff = false
