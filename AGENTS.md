@@ -402,6 +402,38 @@ bot says. Template `wt_followup` ({{1}} body) submitted to Meta;
 `SALES_FOLLOWUP_TEMPLATE_NAME` is set once it is approved.
 `SALES_AGENT_OWNER_NAME=בר` is set in Vercel.
 
+### 1.10, evening — the arrange-the-blessings link
+
+Lord: a super-admin should be able to mint a link, send it to the book
+owner, and the owner arranges the blessings "בלי שם משתמש וסיסמא". The
+owner's admin page already has the screen; the wall in front of it was
+the problem.
+
+- `/arrange/[token]` (`src/app/arrange/[token]/page.js`): one list, drag
+  handle, ↑ ↓ and "לראש", "לפי זמן", autosave 900ms after every change
+  with a pinned status bar. No Firestore in the browser — everything via
+  `/api/arrange/[token]` (GET entries in book order, POST `{order}`).
+- The token is NOT on the wedding doc (`digitalTokens`/`statsTokens` are,
+  and `/weddings/{id}` is world-readable). It is the id of a document in
+  `arrange_links`, closed in `firestore.rules`; 32 random bytes base64url.
+  Revoked / unknown / malformed all answer 404. Helpers and the WhatsApp
+  text in `src/lib/arrangeLinks.js`.
+- `/api/admin/arrange-links` POST/GET/DELETE (super-admin); the POST
+  returns the link AND a ready message. `ArrangeLinkPanel` in `/admin`'s
+  detail drawer: create, copy, open, "שלח בוואטסאפ ל<first name>"
+  (wa.me with the owner's phone), list, revoke.
+- `writeEntryOrder` (`src/lib/server/entryOrder.js`) is the one writer of
+  `orderIndex`: reconciles the request against the live entries (deleted
+  ids drop, blessings that arrived meanwhile go to the end), batches of
+  450. **The owner's admin page now saves through it too**
+  (`/api/entries/order`, owner-or-super-admin). Its old client-side
+  `writeBatch` was exactly the case the note above flagged: rules say
+  `allow update: if false` on entries, nothing caught the rejection. Also
+  fixed there: `getEntries` hands back `timestamp` as a millisecond
+  number, so `ts?.seconds` was never truthy — upload times never showed
+  and "סדר לפי זמן" sorted nothing; and the page's own re-sort put
+  unindexed entries first while the book puts them last.
+
 ---
 
 ## The WhatsApp sales agent — shipped and live

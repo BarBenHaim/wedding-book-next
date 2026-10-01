@@ -166,7 +166,10 @@ export default function Header() {
     // Funnel pages are immersive — no site chrome. The wizard (/start)
     // and the events hub (/my) carry their own branded headers, and the
     // mobile app embeds /start in a WebView where a nav bar is noise.
-    if (pathname === '/start' || pathname === '/my' || pathname === '/app') return null
+    // /arrange/[token] is the no-login "arrange the blessings" page the
+    // owner opens from a WhatsApp link; a site nav with a login button
+    // on it would only invite the password they do not have.
+    if (pathname === '/start' || pathname === '/my' || pathname === '/app' || pathname?.startsWith('/arrange/')) return null
 
     return (
         <>

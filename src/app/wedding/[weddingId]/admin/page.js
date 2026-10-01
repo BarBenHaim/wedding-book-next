@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { getEntries } from '../../../../lib/classifyMedia'
 import { useParams } from 'next/navigation'
-import { doc, getDoc, updateDoc, writeBatch, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage, auth } from '../../../../lib/firebaseClient'
 import { onAuthStateChanged, getIdToken } from 'firebase/auth'
@@ -52,11 +52,26 @@ function FramingPreview({ src, objectPosition, rotation, noCrop, storedAspect = 
 
 // "4.7.2026 · 21:35" — the full upload moment of an entry. Managers
 // asked to see WHEN each blessing arrived, not just the date.
+// Accepts the three shapes a timestamp arrives in: a Firestore
+// Timestamp, a {seconds} object, or the plain millisecond number
+// getEntries() hands back (which is what every entry here carries —
+// the `.seconds` the old code looked for never existed on it, so the
+// time was never shown).
 const fmtUploadedAt = ts => {
-    const sec = ts?.seconds ?? (typeof ts?.toDate === 'function' ? Math.floor(ts.toDate().getTime() / 1000) : null)
+    const sec = typeof ts === 'number'
+        ? Math.floor(ts / 1000)
+        : ts?.seconds ?? (typeof ts?.toDate === 'function' ? Math.floor(ts.toDate().getTime() / 1000) : null)
     if (!sec) return ''
     const d = new Date(sec * 1000)
     return `${d.toLocaleDateString('he-IL')} · ${d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}`
+}
+
+// Milliseconds for sorting, from any of the same three shapes.
+const tsMs = ts => {
+    if (typeof ts === 'number') return ts
+    if (ts?.seconds) return ts.seconds * 1000
+    if (typeof ts?.toDate === 'function') return ts.toDate().getTime()
+    return 0
 }
 
 // Icons
@@ -114,9 +129,13 @@ export default function AdminDashboard() {
     useEffect(() => {
         async function fetchData() {
             if (!weddingId) return
+            // getEntries() already sorts the way every reader of the book
+            // does: explicit orderIndex first, then time, and entries with
+            // no index LAST. The re-sort that used to sit here treated a
+            // missing index as 0 and pushed every new blessing to the top
+            // of this screen only — a different order from the book.
             const data = await getEntries(weddingId)
-            const sorted = data.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
-            setEntries(sorted)
+            setEntries(data)
             setLoading(false)
         }
         fetchData()
@@ -214,15 +233,28 @@ export default function AdminDashboard() {
     // full entries array (0 in show-all / reorder mode, page offset otherwise).
     const pageOffset = showAll || reorderMode ? 0 : startIdx
 
-    // Persist the current order to Firestore (orderIndex per entry).
+    // Persist the current order — through the server, NOT the client SDK.
+    //
+    // Same story as delete below: firestore.rules says `allow update:
+    // if false` on entries, so the writeBatch this used to run from the
+    // browser was rejected, and with nothing catching it the list looked
+    // reordered until the next reload. /api/entries/order writes with the
+    // Admin SDK (the writer the no-login arrange link shares), checks the
+    // caller owns the event, and either saves or says it did not.
     async function persistOrder(reordered) {
-        const batch = writeBatch(db)
-        reordered.forEach((entry, index) => {
-            batch.update(doc(db, 'weddings', weddingId, 'entries', entry.id), {
-                orderIndex: index,
+        try {
+            const token = await getIdToken(auth.currentUser)
+            const res = await fetch('/api/entries/order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ weddingId, order: reordered.map(e => e.id) }),
             })
-        })
-        await batch.commit()
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok || !data?.ok) throw new Error(data?.error || 'order-failed')
+        } catch (err) {
+            console.error('Error saving order:', err)
+            alert('שמירת הסדר נכשלה. נסו שוב — ואם זה חוזר, רעננו את העמוד והתחברו מחדש.')
+        }
     }
 
     // Move a single entry across the FULL list — works regardless of which
@@ -402,7 +434,7 @@ export default function AdminDashboard() {
     }
 
     async function resetToChronological() {
-        const sorted = [...entries].sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0))
+        const sorted = [...entries].sort((a, b) => tsMs(a.timestamp) - tsMs(b.timestamp))
         setEntries(sorted)
         await persistOrder(sorted)
     }
@@ -701,7 +733,7 @@ export default function AdminDashboard() {
                                                             <div className='flex-1 min-w-0'>
                                                                 <div className='font-bold text-sm text-gray-900 truncate'>{entry.name || 'אורח/ת'}</div>
                                                                 <div className='text-xs text-gray-500 truncate'>{entry.text || (entry.imageUrl ? 'ברכה עם תמונה' : '')}</div>
-                                                                {entry.timestamp?.seconds && (
+                                                                {tsMs(entry.timestamp) > 0 && (
                                                                     <div className='text-[10px] text-gray-400 mt-0.5'>הועלתה {fmtUploadedAt(entry.timestamp)}</div>
                                                                 )}
                                                             </div>
@@ -846,7 +878,7 @@ export default function AdminDashboard() {
                                                                                 )}
                                                                                 <span className='truncate'>{entry.name || ''}</span>
                                                                             </h3>
-                                                                            {entry.timestamp?.seconds && (
+                                                                            {tsMs(entry.timestamp) > 0 && (
                                                                                 <span className='text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5' title='מועד העלאת הברכה'>
                                                                                     {fmtUploadedAt(entry.timestamp)}
                                                                                 </span>

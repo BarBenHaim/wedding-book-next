@@ -91,6 +91,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ─── /arrange_links — admin-only ───────────────────────────────
+    // No-login "arrange the blessings" links (src/lib/arrangeLinks.js).
+    // The document id IS the secret; it must never be readable from a
+    // client. Minted by /api/admin/arrange-links, consumed by
+    // /api/arrange/[token], both through the admin SDK.
+    match /arrange_links/{token} {
+      allow read, write: if false;
+    }
+
     // ─── Validation ─────────────────────────────────────────────────
     function isValidEntry(data) {
       // Required + size caps + type checks. Keeps malformed entries

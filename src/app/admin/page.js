@@ -1646,6 +1646,210 @@ function FunnelView({ stats, loading }) {
     )
 }
 
+// ─── ArrangeLinkPanel ───────────────────────────────────────────────────
+// Mint / send / revoke the no-login "arrange the blessings" link.
+// POST /api/admin/arrange-links returns the link AND a ready WhatsApp
+// message (first name, the event, the link) so sending is one tap to
+// wa.me with the owner's phone. Existing links are listed from GET so a
+// link sent last month can be copied again or revoked.
+function ArrangeLinkPanel({ wedding }) {
+    const [links, setLinks] = useState(null) // null = not loaded yet
+    const [busy, setBusy] = useState(false)
+    const [fresh, setFresh] = useState(null) // { link, message }
+    const [copied, setCopied] = useState('')
+    const [error, setError] = useState('')
+    const phone = normalizePhoneIntl(wedding.ownerPhone)
+
+    const refresh = useCallback(async () => {
+        try {
+            const token = await getToken()
+            const res = await fetch(`/api/admin/arrange-links?weddingId=${encodeURIComponent(wedding.id)}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+            setLinks(Array.isArray(data.links) ? data.links : [])
+        } catch (e) {
+            setLinks([])
+            setError(e.message || 'שגיאה')
+        }
+    }, [wedding.id])
+
+    useEffect(() => { setFresh(null); setError(''); setLinks(null); refresh() }, [refresh])
+
+    async function mint() {
+        if (busy) return
+        setBusy(true)
+        setError('')
+        try {
+            const token = await getToken()
+            const res = await fetch('/api/admin/arrange-links', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ weddingId: wedding.id }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+            setFresh({ link: data.link, message: data.message })
+            refresh()
+        } catch (e) {
+            setError(e.message || 'שגיאה')
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    async function revoke(token) {
+        if (!confirm('לבטל את הקישור? מי שפתח אותו לא יוכל יותר לסדר את הברכות.')) return
+        try {
+            const idToken = await getToken()
+            const res = await fetch('/api/admin/arrange-links', {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+            if (fresh && fresh.link.endsWith(token)) setFresh(null)
+            refresh()
+        } catch (e) {
+            setError(e.message || 'שגיאה')
+        }
+    }
+
+    function copy(text, key) {
+        navigator.clipboard.writeText(text).then(() => {
+            setCopied(key)
+            setTimeout(() => setCopied(''), 1500)
+        }).catch(() => {})
+    }
+
+    const waHref = fresh && phone && phone.length >= 9
+        ? `https://wa.me/${phone}?text=${encodeURIComponent(fresh.message)}`
+        : null
+
+    return (
+        <div className='space-y-3'>
+            <p className='text-sm text-[#3d2e1a]'>
+                {links === null
+                    ? 'טוען…'
+                    : links.length === 0
+                        ? 'עדיין לא הופק קישור סידור לאירוע הזה.'
+                        : `${links.length} ${links.length === 1 ? 'קישור פעיל' : 'קישורים פעילים'}`}
+            </p>
+
+            <div className='flex flex-wrap gap-2'>
+                <button
+                    onClick={mint}
+                    disabled={busy}
+                    className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white disabled:opacity-50'
+                    style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}
+                >
+                    {busy ? <Loader2 size={12} className='animate-spin' /> : <ArrowUpDown size={12} />}
+                    צור קישור סידור
+                </button>
+            </div>
+
+            {fresh && (
+                <div className='rounded-xl bg-emerald-50 border border-emerald-200 p-3 space-y-2'>
+                    <p className='text-[11px] font-bold text-emerald-700'>✓ קישור הופק — שלח לבעלים</p>
+                    <div className='flex items-center gap-2'>
+                        <code className='flex-1 text-[11px] bg-white border border-emerald-200 rounded-lg px-2 py-1.5 font-mono text-emerald-900 truncate' dir='ltr'>
+                            {fresh.link}
+                        </code>
+                        <button
+                            onClick={() => copy(fresh.link, 'link')}
+                            className='shrink-0 w-7 h-7 rounded-lg bg-white hover:bg-emerald-100 border border-emerald-200 flex items-center justify-center'
+                            title='העתק קישור'
+                        >
+                            {copied === 'link' ? <CheckCircle2 size={11} className='text-emerald-700' /> : <Copy size={11} className='text-emerald-700' />}
+                        </button>
+                        <a
+                            href={fresh.link}
+                            target='_blank'
+                            rel='noreferrer'
+                            className='shrink-0 w-7 h-7 rounded-lg bg-white hover:bg-emerald-100 border border-emerald-200 flex items-center justify-center'
+                            title='פתח'
+                        >
+                            <ExternalLink size={11} className='text-emerald-700' />
+                        </a>
+                    </div>
+                    <div className='flex flex-wrap gap-2'>
+                        {waHref ? (
+                            <a
+                                href={waHref}
+                                target='_blank'
+                                rel='noopener noreferrer'
+                                className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white'
+                                style={{ background: '#25D366' }}
+                            >
+                                <MessageCircle size={12} />
+                                שלח בוואטסאפ ל{(wedding.ownerName || '').trim().split(/\s+/)[0] || 'בעלים'}
+                            </a>
+                        ) : (
+                            <span className='text-[11px] text-[#7a6a52] self-center'>אין טלפון בעלים — העתק את ההודעה ושלח ידנית.</span>
+                        )}
+                        <button
+                            onClick={() => copy(fresh.message, 'msg')}
+                            className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-emerald-200 text-emerald-800 bg-white'
+                        >
+                            {copied === 'msg' ? <CheckCircle2 size={12} /> : <Copy size={12} />}
+                            העתק הודעה מוכנה
+                        </button>
+                    </div>
+                    <pre className='text-[11px] text-emerald-900/80 whitespace-pre-wrap font-sans leading-relaxed bg-white/60 rounded-lg p-2 border border-emerald-100'>{fresh.message}</pre>
+                </div>
+            )}
+
+            {error && (
+                <div className='rounded-xl bg-red-50 border border-red-200 p-3 text-[11px] text-red-700'>{error}</div>
+            )}
+
+            {links && links.length > 0 && (
+                <details className='group'>
+                    <summary className='cursor-pointer text-[11px] text-[#7a6a52] hover:text-[#aa8840] select-none'>
+                        הצג קישורים קיימים ({links.length})
+                    </summary>
+                    <div className='mt-2 space-y-1.5'>
+                        {links.map(l => (
+                            <div key={l.token} className='flex items-center gap-1.5'>
+                                <code className='flex-1 text-[10px] bg-[#fbf6ec] border border-[#ead9b3] rounded-md px-2 py-1 font-mono text-[#7a6a52] truncate' dir='ltr' title={l.link}>
+                                    {l.link}
+                                </code>
+                                <span className='shrink-0 text-[10px] text-[#a89378] tabular-nums' title='שמירות / נגיעה אחרונה'>
+                                    {l.saves || 0}{l.lastUsedAt ? ` · ${new Date(l.lastUsedAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })}` : ''}
+                                </span>
+                                <button
+                                    onClick={() => copy(l.link, l.token)}
+                                    className='shrink-0 w-6 h-6 rounded-md bg-[#fbf6ec] hover:bg-[#f4ecd9] border border-[#ead9b3] flex items-center justify-center'
+                                    title='העתק לינק'
+                                >
+                                    {copied === l.token ? <CheckCircle2 size={10} className='text-emerald-600' /> : <Copy size={10} className='text-[#a8843a]' />}
+                                </button>
+                                <a
+                                    href={l.link}
+                                    target='_blank'
+                                    rel='noreferrer'
+                                    className='shrink-0 w-6 h-6 rounded-md bg-[#fbf6ec] hover:bg-[#f4ecd9] border border-[#ead9b3] flex items-center justify-center'
+                                >
+                                    <ExternalLink size={10} className='text-[#a8843a]' />
+                                </a>
+                                <button
+                                    onClick={() => revoke(l.token)}
+                                    className='shrink-0 w-6 h-6 rounded-md bg-[#fbf6ec] hover:bg-red-50 border border-[#ead9b3] hover:border-red-200 flex items-center justify-center'
+                                    title='בטל קישור'
+                                >
+                                    <X size={10} className='text-red-500' />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </details>
+            )}
+        </div>
+    )
+}
+
 function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onCheckLuluStatus, onSaveEdit }) {
     // ── Analytics state — funnel + recent scans pulled from
     //    /api/admin/wedding-stats. Loads fresh whenever the panel
@@ -1797,6 +2001,16 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
             <div className='px-6 py-5 border-b border-[#f0e8d4]'>
                 <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>קישור צפייה לזוג</p>
                 <PublicLinkPanel wedding={wedding} />
+            </div>
+
+            {/* ── Arrange-the-blessings link ──
+                A no-login link the owner opens on their phone to drag
+                the blessings into the printed order. One tap sends it
+                in WhatsApp with a ready message. Tokens live in the
+                closed `arrange_links` collection (src/lib/arrangeLinks.js). */}
+            <div className='px-6 py-5 border-b border-[#f0e8d4]'>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>קישור סידור ברכות (בלי התחברות)</p>
+                <ArrangeLinkPanel wedding={wedding} />
             </div>
 
             {/* ── Print export (WOW Pro) ──
