@@ -17,6 +17,20 @@ const store = vi.hoisted(() => {
     }))
     const db = {
         collection: name => ({ doc: id => ref(`${name}/${id}`) }),
+        batch: () => {
+            const staged = []
+            return {
+                set: (target, value, options) => staged.push({ target, value, options }),
+                commit: async () => {
+                    for (const write of staged) {
+                        const old = docs.get(write.target.key) || {}
+                        const next = materialize(old, write.value)
+                        docs.set(write.target.key, write.options?.merge ? { ...old, ...next } : next)
+                        writes.push({ key: write.target.key, value: write.value })
+                    }
+                },
+            }
+        },
         runTransaction: work => {
             const run = queue.then(async () => {
                 const staged = []
@@ -62,7 +76,7 @@ vi.mock('firebase-admin/firestore', () => ({
 
 import {
     prepareDigestDelivery, prepareFollowUpDelivery, recordDeliveryEvent, recordDigestOutcome,
-    resolveProviderMessageOutboundId,
+    resolveProviderMessageOutboundId, settleStaleDeliveries,
 } from '@/lib/salesAgent/leads'
 import { providerMessageCorrelationId } from '@/lib/salesAgent/delivery'
 import { POST as acknowledgeDelivery } from '@/app/api/sales-agent/delivery/route'
@@ -1269,5 +1283,94 @@ describe('privacy-safe provider message correlation', () => {
         expect(store.entries()).toEqual(beforeEntries)
         expect(store.writes()).toEqual(beforeWrites)
         expect(JSON.stringify(store.entries())).not.toContain(providerMessageId)
+    })
+})
+
+// ── The 1.10 loop ─────────────────────────────────────────────────────
+// An attempt accepted by Meta that never reported delivery left its
+// attempt id on the lead. The next attempt's own events were then
+// treated as a stranger's and dropped, so the lead stayed 'requested'
+// and was re-sent every run.
+describe('an expired earlier attempt does not veto the next one', () => {
+    const PHONE = 'non-dialable-lead-abc-41'
+    const NEXT = 'followup-next-attempt-2:template'
+
+    it('re-requesting after a stale accept clears the old attempt id, and the new accept lands on the lead', async () => {
+        store.set(LEAD, {
+            followUpAt: '2026-08-14', followUpCount: 1, stage: 'engaged',
+            lastDeliveryStatus: 'accepted',
+            deliveryPendingOutboundId: 'followup-old-1:template',
+            deliveryPendingUntilMs: Date.parse('2026-08-13T10:00:00.000Z'),
+            deliveryPendingAttemptId: 'followup-logical-attempt-1',
+        })
+        const prepared = await prepareFollowUpDelivery(requested({
+            phone: PHONE, outboundId: NEXT, logicalAttemptId: 'followup-logical-attempt-2', nextFollowUpAt: '2026-08-21',
+        }))
+        expect(prepared.action).toBe('requested')
+        expect(store.get(LEAD)).toMatchObject({ lastDeliveryStatus: 'requested', deliveryPendingAttemptId: null, deliveryRequestOutboundId: NEXT })
+
+        await recordDeliveryEvent(event('accepted', { eventId: 'next-accepted', outboundId: NEXT, providerMessageId: 'wamid-next' }))
+        expect(store.get(LEAD)).toMatchObject({
+            lastDeliveryStatus: 'accepted',
+            deliveryPendingOutboundId: NEXT,
+            deliveryPendingAttemptId: 'followup-logical-attempt-2',
+            deliveryRequestOutboundId: null,
+        })
+    })
+
+    it('a failed send on the current request is recorded even when a stale attempt id lingers', async () => {
+        store.set(LEAD, {
+            followUpAt: '2026-08-14', followUpCount: 1, stage: 'engaged',
+            lastDeliveryStatus: 'requested',
+            deliveryPendingAttemptId: 'followup-logical-attempt-1',
+            deliveryRequestOutboundId: NEXT,
+            deliveryRequestAttemptId: 'followup-logical-attempt-2',
+            deliveryRequestUntilMs: Date.parse('2026-08-14T10:02:00.000Z'),
+        })
+        store.set(`sales_delivery_events/${NEXT}`, {
+            outboundId: NEXT, status: 'requested', leadId: '41', part: 'template',
+            deliveryRole: 'primary', advanceOnDelivery: true, advancesFollowUp: true,
+            logicalAttemptId: 'followup-logical-attempt-2', attemptNumber: 2, nextFollowUpAt: '2026-08-21',
+        })
+        await recordDeliveryEvent(event('failed', { eventId: 'next-failed', outboundId: NEXT, providerMessageId: null, errorCode: 'GRAPH_REJECTED' }))
+        expect(store.get(LEAD)).toMatchObject({ lastDeliveryStatus: 'failed', lastDeliveryError: 'GRAPH_REJECTED', deliveryRequestOutboundId: null })
+    })
+})
+
+describe('settleStaleDeliveries', () => {
+    it('counts the expired attempt as a touch, moves the ladder, and clears every in-flight field', async () => {
+        store.set(LEAD, {
+            followUpAt: '2026-08-14', followUpCount: 1, stage: 'engaged',
+            lastDeliveryStatus: 'accepted',
+            deliveryPendingOutboundId: 'followup-old-1:template',
+            deliveryPendingUntilMs: 1,
+            deliveryPendingAttemptId: 'followup-logical-attempt-1',
+            pendingDeliveryMessages: { 'followup-old-1:template': 'text' },
+        })
+        const out = await settleStaleDeliveries([{ phone: '41', stage: 'engaged', followUpCount: 1 }], '2026-08-14')
+        expect(out).toEqual({ settled: 1, ids: ['41'] })
+        const lead = store.get(LEAD)
+        expect(lead).toMatchObject({
+            followUpCount: 2,
+            lastFollowUpAt: 'SERVER_TIME',
+            lastDeliveryStatus: 'stale',
+            deliveryPendingOutboundId: null,
+            deliveryPendingAttemptId: null,
+            deliveryRequestOutboundId: null,
+            pendingDeliveryMessages: {},
+            staleSettledCount: 1,
+        })
+        // The second touch is behind us now; the ladder's next rung is seven days.
+        expect(lead.followUpAt).toBe('2026-08-21')
+    })
+
+    it('a settled lead whose ladder is spent gets no next date', async () => {
+        store.set(LEAD, { followUpCount: 2, stage: 'engaged', lastDeliveryStatus: 'requested' })
+        await settleStaleDeliveries([{ phone: '41', stage: 'engaged', followUpCount: 2 }], '2026-08-14')
+        expect(store.get(LEAD)).toMatchObject({ followUpCount: 3, followUpAt: null })
+    })
+
+    it('is a no-op with nothing to settle', async () => {
+        expect(await settleStaleDeliveries([], '2026-08-14')).toEqual({ settled: 0, ids: [] })
     })
 })

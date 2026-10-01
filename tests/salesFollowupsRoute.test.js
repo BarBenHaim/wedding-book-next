@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
     recordDeliveryEvent: vi.fn(),
     listLeads: vi.fn(),
     reviveOrphans: vi.fn(),
+    settleStaleDeliveries: vi.fn(),
     listMedia: vi.fn(),
     recordMediaSent: vi.fn(),
     recordFollowUpRun: vi.fn(),
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
     mergeMedia: vi.fn(),
     performanceNote: vi.fn(),
     findOrphans: vi.fn(),
+    findStaleDeliveries: vi.fn(),
     findStaleHandoffs: vi.fn(),
     handoffAlert: vi.fn(),
     canSendWhatsApp: vi.fn(),
@@ -41,6 +43,7 @@ vi.mock('@/lib/salesAgent/leads', () => ({
     prepareFollowUpDelivery: mocks.prepareFollowUpDelivery,
     recordDeliveryEvent: mocks.recordDeliveryEvent,
     listLeads: mocks.listLeads, reviveOrphans: mocks.reviveOrphans,
+    settleStaleDeliveries: mocks.settleStaleDeliveries,
     listMedia: mocks.listMedia, recordMediaSent: mocks.recordMediaSent,
     recordFollowUpRun: mocks.recordFollowUpRun,
 }))
@@ -58,7 +61,7 @@ vi.mock('@/lib/salesAgent/catalog', () => ({
     proofLine: () => '«ההורים שלי בכו» (רויטל)',
 }))
 vi.mock('@/lib/salesAgent/mediaLibrary', () => ({ mergeMedia: mocks.mergeMedia, performanceNote: mocks.performanceNote }))
-vi.mock('@/lib/salesAgent/sweep', () => ({ findOrphans: mocks.findOrphans, findStaleHandoffs: mocks.findStaleHandoffs, handoffAlert: mocks.handoffAlert }))
+vi.mock('@/lib/salesAgent/sweep', () => ({ findOrphans: mocks.findOrphans, findStaleDeliveries: mocks.findStaleDeliveries, findStaleHandoffs: mocks.findStaleHandoffs, handoffAlert: mocks.handoffAlert }))
 vi.mock('@/lib/salesAgent/whatsapp', () => ({
     canSendWhatsApp: mocks.canSendWhatsApp,
     sendWhatsAppText: mocks.sendWhatsAppText,
@@ -113,6 +116,9 @@ beforeEach(async () => {
     mocks.canSendWhatsApp.mockReturnValue(true)
     mocks.listLeads.mockResolvedValue([])
     mocks.findOrphans.mockReturnValue([])
+    mocks.findStaleDeliveries.mockReturnValue([])
+    mocks.settleStaleDeliveries.mockReset()
+    mocks.settleStaleDeliveries.mockResolvedValue({ settled: 0, ids: [] })
     mocks.findStaleHandoffs.mockReturnValue([])
     mocks.handoffAlert.mockReturnValue(null)
     mocks.dueFollowUps.mockResolvedValue([lead])
@@ -295,6 +301,27 @@ describe('truthful follow-up transport', () => {
         })
         expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
         expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
+    })
+
+    it('settles expired attempts before selecting, and keeps them out of the orphan sweep', async () => {
+        // The 1.10 loop: an attempt accepted by Meta that never reported
+        // delivery. Settling counts it as a touch and moves followUpAt, so
+        // the lead stops being re-sent the same message every run.
+        const expired = { ...lead, phone: 'expired-attempt-sentinel', lastDeliveryStatus: 'accepted', deliveryPendingUntilMs: 1 }
+        mocks.listLeads.mockResolvedValue([expired, lead])
+        mocks.findStaleDeliveries.mockReturnValue([expired])
+        mocks.settleStaleDeliveries.mockResolvedValue({ settled: 1, ids: ['expired-attempt-sentinel'] })
+        mocks.dueFollowUps.mockResolvedValue([])
+
+        const result = await runCron()
+
+        expect(mocks.findStaleDeliveries).toHaveBeenCalledWith([expired, lead], expect.objectContaining({ pendingStatus: expect.any(Function) }))
+        expect(mocks.settleStaleDeliveries).toHaveBeenCalledWith([expired], expect.any(String))
+        // Orphans and handoffs are searched among the leads that were NOT just settled.
+        expect(mocks.findOrphans).toHaveBeenCalledWith([lead])
+        expect(mocks.findStaleHandoffs).toHaveBeenCalledWith([lead])
+        expect(result.body).toMatchObject({ settledStale: 1, count: 0 })
+        expect(JSON.stringify(result.body)).not.toContain('expired-attempt-sentinel')
     })
 
     it('does not revive or identify an outside-window orphan while templates are disabled', async () => {

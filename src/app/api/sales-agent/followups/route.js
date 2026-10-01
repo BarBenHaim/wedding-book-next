@@ -50,11 +50,11 @@ import { adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { buildFollowUpPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, resolveFollowUp } from '@/lib/salesAgent/agent'
-import { dueFollowUps, prepareFollowUpDelivery, recordDeliveryEvent, listLeads, reviveOrphans, listMedia, recordFollowUpRun } from '@/lib/salesAgent/leads'
-import { sendableNow, MAX_PER_RUN, isFinalAttempt, isInsideWhatsAppWindow } from '@/lib/salesAgent/followupPolicy'
+import { dueFollowUps, prepareFollowUpDelivery, recordDeliveryEvent, listLeads, reviveOrphans, settleStaleDeliveries, listMedia, recordFollowUpRun } from '@/lib/salesAgent/leads'
+import { sendableNow, MAX_PER_RUN, isFinalAttempt, isInsideWhatsAppWindow, pendingFollowUpStatus } from '@/lib/salesAgent/followupPolicy'
 import { MEDIA } from '@/lib/salesAgent/catalog'
 import { mergeMedia, performanceNote } from '@/lib/salesAgent/mediaLibrary'
-import { findOrphans, findStaleHandoffs, handoffAlert } from '@/lib/salesAgent/sweep'
+import { findOrphans, findStaleDeliveries, findStaleHandoffs, handoffAlert } from '@/lib/salesAgent/sweep'
 import { canSendWhatsApp, sendWhatsAppText, sendWhatsAppImage, sendWhatsAppVideo, sendWhatsAppTemplate } from '@/lib/salesAgent/whatsapp'
 import { createOutboundId } from '@/lib/salesAgent/delivery'
 import { isDemoEvidenceContent } from '@/lib/salesAgent/followupEvidence'
@@ -109,8 +109,16 @@ function todayISO() {
 async function sweep(today, { templateDeliveryEnabled = false, nowMs = Date.now() } = {}) {
     try {
         const all = await listLeads({ limit: 500 })
-        const orphans = findOrphans(all)
-        const stale = findStaleHandoffs(all)
+        // First, attempts that expired without an outcome: count them as
+        // the touch they were, so they stop being re-sent and stop taking
+        // places in this run. Settled leads are not re-selected below
+        // because their followUpAt has moved. See sweep.findStaleDeliveries.
+        const expired = findStaleDeliveries(all, { nowMs, pendingStatus: pendingFollowUpStatus })
+        const settled = expired.length ? await settleStaleDeliveries(expired, today) : { settled: 0, ids: [] }
+        const settledIds = new Set(settled.ids)
+        const live = settledIds.size ? all.filter(l => !settledIds.has(l.phone)) : all
+        const orphans = findOrphans(live)
+        const stale = findStaleHandoffs(live)
         const blocked = templateDeliveryEnabled
             ? []
             : orphans.filter(lead => !isInsideWhatsAppWindow(lead, nowMs))
@@ -123,10 +131,11 @@ async function sweep(today, { templateDeliveryEnabled = false, nowMs = Date.now(
             revived: revivable.map(l => ({ phone: l.phone, name: l.name || l.profileName || null })),
             stale,
             blockedTemplateCount: blocked.length,
+            settledStale: settled.settled,
         }
     } catch {
         console.error('[sales-agent/followups] sweep failed')
-        return { revived: [], stale: [], blockedTemplateCount: 0, error: 'sweep-failed' }
+        return { revived: [], stale: [], blockedTemplateCount: 0, settledStale: 0, error: 'sweep-failed' }
     }
 }
 
@@ -188,7 +197,7 @@ export async function GET(req) {
         return NextResponse.json({ ok: true, skipped: when.reason, date: today, count: 0, items: [] })
     }
 
-    const { revived, stale, blockedTemplateCount: sweepBlockedTemplateCount = 0, error: sweepError } = dry
+    const { revived, stale, blockedTemplateCount: sweepBlockedTemplateCount = 0, settledStale = 0, error: sweepError } = dry
         ? { revived: [], stale: findStaleHandoffs(await listLeads({ limit: 500 }).catch(() => [])), blockedTemplateCount: 0 }
         : await sweep(today, { templateDeliveryEnabled })
 
@@ -574,6 +583,7 @@ export async function GET(req) {
             blockedCount: blockedTemplateCount,
         },
         failedCount,
+        settledStale,
         recovered: revived.length,
         recoveredLeads: revived,
         handoffsWaiting: stale.length,

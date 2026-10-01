@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { findOrphans, findStaleHandoffs, handoffAlert, ORPHAN_AFTER_HOURS } from '@/lib/salesAgent/sweep'
+import { findOrphans, findStaleDeliveries, findStaleHandoffs, handoffAlert, ORPHAN_AFTER_HOURS } from '@/lib/salesAgent/sweep'
+import { pendingFollowUpStatus } from '@/lib/salesAgent/followupPolicy'
 
 const NOW = Date.parse('2026-08-08T09:00:00Z')
 const hoursAgo = h => NOW - h * 3600 * 1000
@@ -157,5 +158,34 @@ describe('handoffAlert', () => {
     it('states plainly that the bot is not going to handle these', () => {
         const text = handoffAlert([lead({ human: true, humanSince: hoursAgo(60) })], { nowMs: NOW })
         expect(text).toMatch(/לא ימשיך/)
+    })
+})
+
+describe('findStaleDeliveries', () => {
+    const MIN = 60 * 1000
+    it('finds an accepted attempt whose pending lease expired without a delivery, and a request with no outcome', () => {
+        const rows = findStaleDeliveries([
+            lead({ phone: '1', lastDeliveryStatus: 'accepted', deliveryPendingUntilMs: NOW - MIN }),
+            lead({ phone: '2', lastDeliveryStatus: 'requested', deliveryRequestUntilMs: NOW - MIN }),
+            lead({ phone: '3', lastDeliveryStatus: 'requested' }),
+        ], { nowMs: NOW, pendingStatus: pendingFollowUpStatus })
+        expect(rows.map(r => r.phone)).toEqual(['1', '2', '3'])
+    })
+
+    it('leaves alone attempts still inside their lease, settled attempts, delivered ones, and closed leads', () => {
+        const rows = findStaleDeliveries([
+            lead({ phone: '1', lastDeliveryStatus: 'accepted', deliveryPendingUntilMs: NOW + MIN }),
+            lead({ phone: '2', lastDeliveryStatus: 'requested', deliveryRequestUntilMs: NOW + MIN }),
+            lead({ phone: '3', lastDeliveryStatus: 'stale' }),
+            lead({ phone: '4', lastDeliveryStatus: 'delivered' }),
+            lead({ phone: '5', lastDeliveryStatus: 'read' }),
+            lead({ phone: '6', lastDeliveryStatus: 'failed' }),
+            lead({ phone: '7', stage: 'closed_won', lastDeliveryStatus: 'accepted', deliveryPendingUntilMs: NOW - MIN }),
+        ], { nowMs: NOW, pendingStatus: pendingFollowUpStatus })
+        expect(rows).toHaveLength(0)
+    })
+
+    it('does nothing without the policy predicate', () => {
+        expect(findStaleDeliveries([lead({ lastDeliveryStatus: 'requested' })], { nowMs: NOW })).toEqual([])
     })
 })

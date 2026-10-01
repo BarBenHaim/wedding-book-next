@@ -121,6 +121,38 @@ export function findStaleHandoffs(leads, { nowMs = Date.now(), afterHours = HUMA
     })
 }
 
+/**
+ * Attempts that went out and never came back.
+ *
+ * A follow-up is handed to Meta ('accepted') and the lead waits for the
+ * 'delivered' webhook to count it as a touch and move the ladder. For a
+ * number that is off, has no WhatsApp, or has blocked us, that webhook
+ * never comes: the pending lease expires, the lead looks due again, and
+ * the next run sends the SAME attempt to the same silent number. Found
+ * on 1.10: twenty-one leads from August had been re-sent twice a day for
+ * seven weeks, taking twenty-one of the twenty-five places in every run
+ * while two hundred live leads waited.
+ *
+ * The rule: an expired attempt counts as the touch it was. The ladder
+ * moves on (1, 3, 7 days), the message is never re-sent, and after the
+ * usual number of touches the lead stops like any other. A 'requested'
+ * attempt whose lease expired with no outcome at all is settled the same
+ * way - the Graph call was made, and under-touching an unreachable
+ * number is the cheaper mistake.
+ *
+ * `pendingStatus` is followupPolicy.pendingFollowUpStatus, passed in so
+ * this file stays free of that import cycle.
+ */
+export function findStaleDeliveries(leads, { nowMs = Date.now(), pendingStatus } = {}) {
+    if (typeof pendingStatus !== 'function') return []
+    return (Array.isArray(leads) ? leads : []).filter(lead => {
+        if (!lead || !lead.phone) return false
+        if (isClosed(lead.stage)) return false
+        const status = pendingStatus(lead, nowMs)
+        return status === 'stale' || status === 'stale-requested'
+    })
+}
+
 const nameOf = lead => lead?.name || lead?.profileName || lead?.phone || 'לקוח'
 
 /**
@@ -159,6 +191,7 @@ export default {
     OPENING_ORPHAN_AFTER_HOURS,
     OPENING_RECOVERY_WINDOW_HOURS,
     findOrphans,
+    findStaleDeliveries,
     findStaleHandoffs,
     handoffAlert,
     hoursSince,

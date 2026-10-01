@@ -434,6 +434,38 @@ the problem.
   and "סדר לפי זמן" sorted nothing; and the page's own re-sort put
   unindexed entries first while the book puts them last.
 
+### 1.10, night — twenty-one ghosts in every run
+
+`wt_followup` was approved; `SALES_FOLLOWUP_TEMPLATE_NAME=wt_followup` is
+set in Vercel. The 16:20 run then sent **4** follow-ups out of 25 Graph
+calls (17s, 200, no errors). The other 21 were leads from August with
+`lastDeliveryStatus: 'requested'` and a fresh `deliveryRequestUntilMs` —
+re-requested, sent, and never recorded. Twice a day since August.
+
+The loop: an attempt Meta accepts but never delivers (phone off, no
+WhatsApp, blocked) leaves `deliveryPendingAttemptId` on the lead when its
+30-minute lease expires. `prepareFollowUpDelivery` cleared the outbound
+id and the lease on re-request but **not the attempt id**, and
+`recordDeliveryEvent`'s `ownsLogicalAttempt` compared that stale id with
+the new attempt's, saw a stranger, and dropped the new attempt's own
+`accepted` AND `failed`. The lead sat on `requested`, looked due again at
+the next run, and was sent the same text again — taking 21 of 25 places
+while ~200 live leads waited (`health.followups` red, "queue-overloaded").
+
+Three changes: (1) re-request clears the attempt id; (2)
+`recordDeliveryEvent` has `ownsRequest` — the lead's current
+`deliveryRequestOutboundId` IS this event, whatever older pending fields
+say; (3) `findStaleDeliveries` + `settleStaleDeliveries`, run first in
+the sweep: an expired attempt (`stale` / `stale-requested`) counts as the
+touch it was — `followUpCount + 1`, `followUpAt` from the ladder,
+`lastDeliveryStatus: 'stale'`, in-flight fields cleared,
+`staleSettledCount`. Unreachable numbers now walk the ladder like anyone
+and stop after `MAX_TOUCHES`; a late `delivered` cannot double-advance
+(`logicalAlreadyAdvanced`). The route reports `settledStale`.
+
+Dry run (`?dry=1`) composes correctly with the universal template:
+`one_line` with a customer quote, `deadline_offer` with the dated gift.
+
 ---
 
 ## The WhatsApp sales agent — shipped and live

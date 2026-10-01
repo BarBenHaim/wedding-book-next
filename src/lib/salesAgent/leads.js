@@ -27,7 +27,7 @@ import { assertCompletableInboundOutcome, assertInboundClaimToken, decideInbound
 import { reserveHalfOpenProbe, resolveProviderFailure, resolveProviderSuccess, sanitizeBreakerRuntimeState } from './circuitBreaker'
 import { providerCircuitRuntimeId } from './circuitIdentity'
 import { createOutboundId, DELIVERY_ERROR_CODES, DELIVERY_REQUEST_LEASE_MS, decideDeliveryTransition, deliveryEventFingerprint, deliveryEventLedgerId, isDeliveryPending, providerMessageCorrelationId } from './delivery'
-import { isDueFollowUpCandidate, pendingFollowUpStatus, selectDueFollowUps } from './followupPolicy'
+import { isDueFollowUpCandidate, nextFollowUpDate, pendingFollowUpStatus, selectDueFollowUps } from './followupPolicy'
 import { isDemoEvidenceContent } from './followupEvidence'
 import { normalizeOpeningVariantId } from './openingExperiment'
 import { assignModelArm } from './modelExperiment'
@@ -920,6 +920,12 @@ export async function prepareFollowUpDelivery({
             leadPatch.lastDeliveryStatus = 'requested'
             leadPatch.deliveryPendingOutboundId = null
             leadPatch.deliveryPendingUntilMs = null
+            // The attempt id too. Leaving it behind was the loop found on
+            // 1.10: recordDeliveryEvent compared it with the NEW attempt,
+            // saw a stranger, and dropped the new attempt's own 'accepted'
+            // and 'failed' events - so the lead sat on 'requested' and was
+            // sent again next run, forever.
+            leadPatch.deliveryPendingAttemptId = null
             leadPatch.staleDeliveryOutboundId = lead.deliveryPendingOutboundId || null
             leadPatch.staleDeliveryDetectedAtMs = requestedAtMs
         }
@@ -1092,7 +1098,16 @@ export async function recordDeliveryEvent(event) {
                 && (!lead.deliveryRequestOutboundId || lead.deliveryRequestOutboundId === event.outboundId)
             const ownsLogicalAttempt = (!lead.deliveryPendingAttemptId || lead.deliveryPendingAttemptId === logicalAttemptId)
                 && (!lead.deliveryRequestAttemptId || lead.deliveryRequestAttemptId === logicalAttemptId)
-            if ((!ownsPending || !ownsLogicalAttempt) && !advances) {
+            // The lead's CURRENT request is this very outbound: whatever an
+            // older, expired attempt left in the pending fields, this event
+            // is the one the lead is waiting for. Without this, a stale
+            // deliveryPendingAttemptId vetoed the new attempt's 'accepted'
+            // and 'failed' alike (see prepareFollowUpDelivery).
+            const ownsRequest = !!lead.deliveryRequestOutboundId
+                && lead.deliveryRequestOutboundId === event.outboundId
+                && (!lead.deliveryRequestAttemptId || lead.deliveryRequestAttemptId === logicalAttemptId)
+            const owns = ownsRequest || (ownsPending && ownsLogicalAttempt)
+            if (!owns && !advances) {
                 if (Object.hasOwn(pendingMessages, event.outboundId) && decision.clearPending) {
                     tx.set(leadRef, { pendingDeliveryMessages: withoutCurrentMessage }, { merge: true })
                 }
@@ -1105,18 +1120,18 @@ export async function recordDeliveryEvent(event) {
                 deliveryRequestAttemptId: null,
                 updatedAt: FieldValue.serverTimestamp(),
             }
-            if (event.status === 'accepted' && advanceOnDelivery && !logicalAlreadyAdvanced && ownsPending) {
+            if (event.status === 'accepted' && advanceOnDelivery && !logicalAlreadyAdvanced && owns) {
                 leadPatch.deliveryPendingOutboundId = event.outboundId
                 leadPatch.deliveryPendingUntilMs = decision.pendingUntilMs
                 leadPatch.deliveryPendingAttemptId = logicalAttemptId
                 leadPatch.lastDeliveryError = null
-            } else if (decision.clearPending && ownsPending) {
+            } else if (decision.clearPending && owns) {
                 leadPatch.deliveryPendingOutboundId = null
                 leadPatch.deliveryPendingUntilMs = null
                 leadPatch.deliveryPendingAttemptId = null
                 leadPatch.pendingDeliveryMessages = withoutCurrentMessage
             }
-            if (event.status === 'failed' && ownsPending) leadPatch.lastDeliveryError = event.errorCode
+            if (event.status === 'failed' && owns) leadPatch.lastDeliveryError = event.errorCode
             if (advances) {
                 leadPatch.deliveryPendingOutboundId = null
                 leadPatch.deliveryPendingUntilMs = null
@@ -1585,6 +1600,51 @@ export async function reviveOrphans(phones = [], todayISO) {
     }
     await batch.commit()
     return { revived: ids.length, ids }
+}
+
+/**
+ * Count an expired attempt as the touch it was and move the ladder on.
+ * See sweep.findStaleDeliveries for why. One batch, no per-lead reads:
+ * the next date comes from the policy, exactly as the attempt would have
+ * computed it had its 'delivered' webhook arrived.
+ *
+ * Idempotent per run: a settled lead no longer looks stale.
+ */
+export async function settleStaleDeliveries(leads = [], todayISO) {
+    const rows = (Array.isArray(leads) ? leads : []).filter(l => l && l.phone).slice(0, 100)
+    if (!rows.length || !todayISO) return { settled: 0, ids: [] }
+    const batch = adminDb.batch()
+    const ids = []
+    for (const lead of rows) {
+        const id = normalizePhone(lead.phone)
+        if (!id) continue
+        const attempt = Math.max(0, Number(lead.followUpCount) || 0) + 1
+        batch.set(ref(id), {
+            followUpCount: attempt,
+            lastFollowUpAt: FieldValue.serverTimestamp(),
+            followUpAt: nextFollowUpDate({
+                stage: lead.stage,
+                attempt,
+                eventDate: lead.eventDate || null,
+                todayISO,
+                callbackPromised: lead.callbackPromised || null,
+            }),
+            lastDeliveryStatus: 'stale',
+            deliveryPendingOutboundId: null,
+            deliveryPendingUntilMs: null,
+            deliveryPendingAttemptId: null,
+            deliveryRequestOutboundId: null,
+            deliveryRequestUntilMs: null,
+            deliveryRequestAttemptId: null,
+            pendingDeliveryMessages: {},
+            staleSettledAt: FieldValue.serverTimestamp(),
+            staleSettledCount: FieldValue.increment(1),
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true })
+        ids.push(id)
+    }
+    if (ids.length) await batch.commit()
+    return { settled: ids.length, ids }
 }
 
 // ── The media library ───────────────────────────────────────────────
