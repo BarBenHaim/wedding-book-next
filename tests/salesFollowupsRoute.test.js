@@ -50,7 +50,13 @@ vi.mock('@/lib/salesAgent/followupPolicy', async importOriginal => ({
     MAX_PER_RUN: 25,
     isFinalAttempt: mocks.isFinalAttempt,
 }))
-vi.mock('@/lib/salesAgent/catalog', () => ({ MEDIA: {}, DEMO: { writeBlessing: 'https://demo.example/photo' } }))
+vi.mock('@/lib/salesAgent/catalog', () => ({
+    MEDIA: {},
+    DEMO: { writeBlessing: 'https://demo.example/photo' },
+    CONCESSION: { text: 'עותק מודפס נוסף במתנה (שווי ₪290) בסגירה עד {DATE}', validDays: 3 },
+    PROOF: [{ quote: 'ההורים שלי בכו', who: 'רויטל' }],
+    proofLine: () => '«ההורים שלי בכו» (רויטל)',
+}))
 vi.mock('@/lib/salesAgent/mediaLibrary', () => ({ mergeMedia: mocks.mergeMedia, performanceNote: mocks.performanceNote }))
 vi.mock('@/lib/salesAgent/sweep', () => ({ findOrphans: mocks.findOrphans, findStaleHandoffs: mocks.findStaleHandoffs, handoffAlert: mocks.handoffAlert }))
 vi.mock('@/lib/salesAgent/whatsapp', () => ({
@@ -167,7 +173,7 @@ describe('opening-only mode', () => {
         expect(mocks.callClaude).not.toHaveBeenCalled()
         expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
         expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup', [
-            'Test lead, בסוף האירוע נשאר לכם ספר כריכה קשה עם כל הברכות והתמונות שהאורחים כתבו. לאיזה אירוע זה אצלכם?',
+            'Test lead, בסוף האירוע נשאר לכם ספר כריכה קשה עם כל הברכות והתמונות שהאורחים כתבו. «ההורים שלי בכו» (רויטל). לאיזה אירוע זה אצלכם?',
         ])
     })
 
@@ -322,7 +328,7 @@ describe('truthful follow-up transport', () => {
 
         expect(result.status).toBe(200)
         expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup', [
-            'Test lead, בסוף האירוע נשאר לכם ספר כריכה קשה עם כל הברכות והתמונות שהאורחים כתבו. לאיזה אירוע זה אצלכם?',
+            'Test lead, בסוף האירוע נשאר לכם ספר כריכה קשה עם כל הברכות והתמונות שהאורחים כתבו. «ההורים שלי בכו» (רויטל). לאיזה אירוע זה אצלכם?',
         ])
         expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
         expect(mocks.sendWhatsAppImage).not.toHaveBeenCalled()
@@ -358,7 +364,7 @@ describe('truthful follow-up transport', () => {
         expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(
             lead.phone,
             'wt_followup',
-            ['Test lead, בסוף האירוע נשאר לכם ספר כריכה קשה עם כל הברכות והתמונות שהאורחים כתבו. לאיזה אירוע זה אצלכם?'],
+            ['Test lead, בסוף האירוע נשאר לכם ספר כריכה קשה עם כל הברכות והתמונות שהאורחים כתבו. «ההורים שלי בכו» (רויטל). לאיזה אירוע זה אצלכם?'],
         )
         expect(mocks.sendWhatsAppVideo).not.toHaveBeenCalled()
         expect(mocks.prepareFollowUpDelivery).toHaveBeenCalledWith(expect.objectContaining({

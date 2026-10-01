@@ -211,6 +211,21 @@ export function findMedia(key) {
     return (typeof key === 'string' && MEDIA[key]) || null
 }
 
+// What customers said, as published on the landing pages (lp,
+// bar-mitzvah). The bot quotes one line, with the name the site shows,
+// at the moments where a stranger's word is worth more than ours: the
+// first price objection, the first silent follow-up, the pre-event touch.
+export const PROOF = [
+    { quote: 'ההורים שלי בכו כשפתחנו את הספר', who: 'רויטל, אמא של דויד' },
+    { quote: 'גם סבתא בת ה-82 הסתדרה לבד. קיבלנו יותר מ-200 ברכות', who: 'משפחת מזרחי, בר המצווה של אורי' },
+    { quote: 'הזמנו יומיים לפני האירוע. תוך 24 שעות היה פוסטר מעוצב ועמוד פעיל', who: 'אבי, אבא של אריאל' },
+    { quote: 'בכינו, צחקנו, והרגשנו כאילו חזרנו לאירוע שוב', who: 'שקד' },
+]
+export function proofLine(index = 0) {
+    const p = PROOF[Math.abs(Number(index) || 0) % PROOF.length]
+    return `«${p.quote}» (${p.who})`
+}
+
 // The ONLY concession the agent may offer, and only under the conditions
 // spelled out in the prompt. Everything else — percentage discounts,
 // "special price for you", invented deadlines — is forbidden.
@@ -240,6 +255,6 @@ export function findPackage(id) {
     return PACKAGES.find(p => p.id === id) || null
 }
 
-export const CATALOG = { BUSINESS, DEMO, PACKAGES, ADDONS, UPGRADE, FACTS, CONCESSION, STAGES, MEDIA }
+export const CATALOG = { BUSINESS, DEMO, PACKAGES, ADDONS, UPGRADE, FACTS, CONCESSION, PROOF, STAGES, MEDIA }
 
 export default CATALOG

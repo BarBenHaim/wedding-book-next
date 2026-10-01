@@ -39,6 +39,27 @@ export { followUpEvidence }
 export const MAX_ATTEMPTS = 3
 export const FIRST_FOLLOWUP_MIN_IDLE_HOURS = 4
 
+// A bar mitzvah parent decides a month or two before the event. The
+// ladder (1, 3, 7 days) spends all three touches in the week they are
+// least ready and then falls silent for the two months in which they
+// actually choose. So a lead with a known, far event date gets one more
+// touch, timed to the event: thirty days before (or fourteen, when
+// thirty is already behind us), with the offer. `MAX_TOUCHES` is the
+// ladder plus that one.
+export const PRE_EVENT_LEADS_DAYS = [30, 14]
+export const MAX_TOUCHES = MAX_ATTEMPTS + 1
+
+export function preEventTouchDate(eventDate, todayISO) {
+    const d = daysUntil(eventDate, todayISO)
+    if (d == null || d < 0) return null
+    for (const lead of PRE_EVENT_LEADS_DAYS) {
+        // At least three days out, so it never collides with the ladder's
+        // last message and never lands the morning after a goodbye.
+        if (d - lead >= 3) return addDaysISO(todayISO, d - lead)
+    }
+    return null
+}
+
 const HOUR_MS = 3600 * 1000
 const WHATSAPP_WINDOW_MS = 24 * HOUR_MS
 
@@ -107,7 +128,8 @@ export function nextFollowUpDate({
     if (!todayISO) return null
     if (handoff) return null
     if (NEVER_CHASE.has(stage)) return null
-    if (attempt >= MAX_ATTEMPTS) return null
+    // The ladder is spent: one pre-event touch if the date allows, else stop.
+    if (attempt >= MAX_ATTEMPTS) return attempt === MAX_ATTEMPTS ? preEventTouchDate(eventDate, todayISO) : null
 
     const urgency = urgencyFor(eventDate, todayISO)
     // The event already happened. Whatever this lead was, it is over, and
@@ -139,9 +161,16 @@ export function nextFollowUpDate({
     return addDaysISO(todayISO, days)
 }
 
-/** True when this is the last message this lead will ever get from the bot. */
-export function isFinalAttempt(attempt = 0) {
-    return attempt + 1 >= MAX_ATTEMPTS
+/**
+ * True when this is the last message this lead will ever get from the
+ * bot. With a far event date the third ladder message is NOT the last:
+ * a pre-event touch still follows, so the third one says "נדבר לקראת
+ * האירוע" instead of goodbye.
+ */
+export function isFinalAttempt(attempt = 0, { eventDate = null, todayISO = null } = {}) {
+    if (attempt + 1 >= MAX_TOUCHES) return true
+    if (attempt + 1 >= MAX_ATTEMPTS) return !preEventTouchDate(eventDate, todayISO)
+    return false
 }
 
 /** Operational state for an accepted follow-up waiting on Meta status. */
@@ -195,7 +224,7 @@ export function isDueFollowUpCandidate(lead, todayISO, nowMs = Date.now()) {
     if (lead.paymentVerified === true) return false
     if (['closed_won', 'closed_lost', 'handoff'].includes(lead.stage)) return false
     if (pausedForHuman(lead, nowMs)) return false
-    if ((lead.followUpCount || 0) >= MAX_ATTEMPTS) return false
+    if ((lead.followUpCount || 0) >= MAX_TOUCHES) return false
     if ((lead.followUpCount || 0) === 0) {
         const last = lastInboundMs(lead)
         if (last == null) return false
@@ -333,7 +362,7 @@ export function sendableNow(ms = Date.now()) {
 export const MAX_PER_RUN = 25
 
 const followupPolicy = {
-    MAX_ATTEMPTS, MAX_PER_RUN, FIRST_FOLLOWUP_MIN_IDLE_HOURS, nextFollowUpDate, urgencyFor, daysUntil,
+    MAX_ATTEMPTS, MAX_TOUCHES, MAX_PER_RUN, FIRST_FOLLOWUP_MIN_IDLE_HOURS, nextFollowUpDate, urgencyFor, daysUntil, preEventTouchDate,
     isFinalAttempt, pendingFollowUpStatus, followUpEvidence, isDueFollowUpCandidate, isInsideWhatsAppWindow,
     rankDueFollowUps, sendableNow, israelClock,
 }

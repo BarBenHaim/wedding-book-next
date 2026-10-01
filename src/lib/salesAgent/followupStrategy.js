@@ -1,4 +1,5 @@
-import { CONCESSION } from './catalog'
+import { CONCESSION, proofLine } from './catalog'
+import { preEventTouchDate, daysUntil } from './followupPolicy'
 const LANDING_URL = 'https://weddingtales.co.il'
 // The first nudge used to point at the website, then briefly at the
 // demo. Both are homework. 24.9: one line about what they get, one
@@ -32,7 +33,7 @@ const cleanParameter = (value, fallback = '') => String(value || fallback)
 
 const customerLabel = value => cleanParameter(value, 'משפחה יקרה') || 'משפחה יקרה'
 const siteTemplateText = name => `${name}, רציתי לשלוח לך שוב דרך קצרה לראות איך ספר הברכות עובד. הסרטון והפרטים מחכים באתר: ${LANDING_URL}`
-const oneLineTemplateText = name => `${name}, בסוף האירוע נשאר לכם ספר כריכה קשה עם כל הברכות והתמונות שהאורחים כתבו. לאיזה אירוע זה אצלכם?`
+const oneLineTemplateText = name => `${name}, בסוף האירוע נשאר לכם ספר כריכה קשה עם כל הברכות והתמונות שהאורחים כתבו. ${proofLine(0)}. לאיזה אירוע זה אצלכם?`
 const helpTemplateText = name => `${name}, רציתי לבדוק אם עצרה אתכם שאלה על החבילה, תקלה בתשלום או פשוט התזמון. אפשר לענות לי כאן במשפט אחד.`
 
 function expiryLabel(iso) {
@@ -64,6 +65,7 @@ export function readFollowUpOffer(env = process.env, nowMs = Date.now()) {
 // instead of twenty-five. One list, imported by both sides.
 export const FOLLOWUP_STRATEGY_IDS = Object.freeze([
     'one_line', 'one_question', 'real_page', 'deadline_offer',
+    'until_event', 'pre_event',
     'resolve_blocker', 'qualified_offer', 'graceful_close',
     // Retired on 22.9; kept so old ledger rows still validate.
     'proof_site',
@@ -111,9 +113,36 @@ export function planFollowUp(lead = {}, {
     customerName = '',
     todayISO = null,
 } = {}) {
-    const number = Math.max(1, Math.min(3, Number(attempt) || 1))
+    const number = Math.max(1, Math.min(4, Number(attempt) || 1))
     const name = customerLabel(customerName)
-    const final = isFinal === true || number >= 3
+    const preEventDate = preEventTouchDate(lead?.eventDate, todayISO)
+    const untilEvent = daysUntil(lead?.eventDate, todayISO)
+
+    // Touch 4: the pre-event message, thirty (or fourteen) days before
+    // the event. The offer, the reason it matters now (the poster), a
+    // stranger's word, and the close. Scripted; it goes out as written.
+    if (number >= 4) {
+        const when = untilEvent != null && untilEvent <= 20 ? 'בעוד שבועיים בערך' : 'בעוד חודש בערך'
+        return plan({ name,
+            id: 'pre_event',
+            objective: 'נגיעה לפני האירוע: הפוסטר צריך להיות מוכן, ההצעה עם התאריך, והבקשה להזמנה.',
+            cta: 'reply',
+            templateText: `${name}, האירוע ${when}, וכדי שהפוסטר וקישור האורחים יהיו מוכנים בזמן שווה לפתוח עכשיו. ${concessionText(todayISO)}. ${proofLine(1)}. רוצה שאפתח לכם את הספר? שולח קישור.`,
+        })
+    }
+
+    const final = isFinal === true || (number >= 3 && !preEventDate)
+
+    // Touch 3 with a far event: not goodbye. Say when we will write again
+    // and leave the door open; the pre-event touch follows.
+    if (number >= 3 && !final && preEventDate) {
+        return plan({ name,
+            id: 'until_event',
+            objective: 'לא להציף: להגיד שנכתוב שוב כחודש לפני האירוע, ושאפשר לפנות קודם.',
+            cta: 'reply',
+            templateText: `${name}, לא אציף. אכתוב שוב כחודש לפני האירוע, כשזה הזמן להכין את הפוסטר. ואם תרצו קודם, אני כאן.`,
+        })
+    }
 
     if (final) {
         if (HIGH_INTENT_STAGES.has(lead?.stage) && offer?.code && offer?.expiresAt) {

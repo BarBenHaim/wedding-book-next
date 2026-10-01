@@ -252,4 +252,25 @@ describe('context-aware follow-up sales plan', () => {
         }
         for (const id of ['one_line', 'one_question', 'real_page', 'graceful_close']) expect([...seen]).toContain(id)
     })
+
+    // 1.10: a far event gets "נדבר לקראת האירוע" on touch 3 and the
+    // pre-event message on touch 4; a near or unknown date keeps the goodbye.
+    it('says until-event on the third touch and sends the pre-event offer on the fourth when the date is far', () => {
+        const far = { stage: 'offer_sent', eventDate: '2026-12-15' }
+        const third = planFollowUp(far, { attempt: 3, isFinal: false, customerName: 'נועה', todayISO: '2026-10-01' })
+        expect(third.id).toBe('until_event')
+        expect(third.templateText).toContain('כחודש לפני האירוע')
+        const fourth = planFollowUp(far, { attempt: 4, isFinal: true, customerName: 'נועה', todayISO: '2026-11-15' })
+        expect(fourth.id).toBe('pre_event')
+        expect(fourth.templateText).toContain('בעוד חודש')
+        expect(fourth.templateText).toContain('במתנה')
+        expect(fourth.templateText).toContain('«')
+        expect(fourth.templateText).toMatch(/רוצה שאפתח לכם את הספר\? שולח קישור\.$/)
+        expect(planFollowUp({ stage: 'offer_sent' }, { attempt: 3, isFinal: true, customerName: 'נועה', todayISO: '2026-10-01' }).id).toBe('graceful_close')
+        for (const id of ['until_event', 'pre_event']) expect(FOLLOWUP_STRATEGY_IDS).toContain(id)
+    })
+
+    it('opens the first silent touch with a customer\'s own words', () => {
+        expect(planFollowUp({ stage: 'engaged' }, { attempt: 1, customerName: 'נועה' }).templateText).toContain('«')
+    })
 })

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-    MAX_ATTEMPTS, nextFollowUpDate, urgencyFor, daysUntil, isFinalAttempt,
+    MAX_ATTEMPTS, MAX_TOUCHES, nextFollowUpDate, urgencyFor, daysUntil, isFinalAttempt, preEventTouchDate,
     sendableNow, israelClock,
     pendingFollowUpStatus,
     followUpEvidence, isDueFollowUpCandidate, rankDueFollowUps, selectDueFollowUps,
@@ -327,5 +327,38 @@ describe('revenue-first follow-up truth', () => {
 
         expect(selected.filter(row => row.id.startsWith('reachable-'))).toHaveLength(20)
         expect(selected.slice(0, 20).every(row => row.id.startsWith('reachable-'))).toBe(true)
+    })
+})
+
+// 1.10. The ladder spends its three touches in the week the parent is
+// least ready. A far event date earns one more touch, timed to the event.
+describe('the pre-event touch', () => {
+    it('schedules a fourth touch 30 days before a far event, 14 when 30 is behind us, none when the event is close', () => {
+        expect(preEventTouchDate('2026-12-15', '2026-10-01')).toBe('2026-11-15')
+        expect(preEventTouchDate('2026-10-25', '2026-10-01')).toBe('2026-10-11')
+        expect(preEventTouchDate('2026-10-10', '2026-10-01')).toBeNull()
+        expect(preEventTouchDate(null, '2026-10-01')).toBeNull()
+        expect(preEventTouchDate('2026-09-01', '2026-10-01')).toBeNull()
+    })
+
+    it('lets the ladder hand over to the pre-event touch and then stop', () => {
+        const far = { stage: 'offer_sent', eventDate: '2026-12-15', todayISO: '2026-10-01' }
+        expect(nextFollowUpDate({ ...far, attempt: MAX_ATTEMPTS })).toBe('2026-11-15')
+        expect(nextFollowUpDate({ ...far, attempt: MAX_ATTEMPTS + 1 })).toBeNull()
+        expect(nextFollowUpDate({ stage: 'offer_sent', todayISO: '2026-10-01', attempt: MAX_ATTEMPTS })).toBeNull()
+        expect(MAX_TOUCHES).toBe(MAX_ATTEMPTS + 1)
+    })
+
+    it('does not call the third message final while a pre-event touch is still coming', () => {
+        expect(isFinalAttempt(2, { eventDate: '2026-12-15', todayISO: '2026-10-01' })).toBe(false)
+        expect(isFinalAttempt(3, { eventDate: '2026-12-15', todayISO: '2026-10-01' })).toBe(true)
+        expect(isFinalAttempt(2, { eventDate: null, todayISO: '2026-10-01' })).toBe(true)
+        expect(isFinalAttempt(2)).toBe(true)
+    })
+
+    it('keeps a lead with three touches and a pre-event date in the due queue', () => {
+        const lead = { followUpAt: '2026-11-15', followUpCount: 3, stage: 'offer_sent', eventDate: '2026-12-15', lastInboundAt: Date.parse('2026-10-01T10:00:00Z') }
+        expect(isDueFollowUpCandidate(lead, '2026-11-15', Date.parse('2026-11-15T10:00:00Z'))).toBe(true)
+        expect(isDueFollowUpCandidate({ ...lead, followUpCount: 4 }, '2026-11-15', Date.parse('2026-11-15T10:00:00Z'))).toBe(false)
     })
 })

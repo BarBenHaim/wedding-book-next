@@ -2,7 +2,7 @@
 // move. This policy turns the current message and durable lead facts into
 // one small, testable instruction before any provider is called.
 
-import { PACKAGES, ADDONS, UPGRADE, CONCESSION } from './catalog'
+import { PACKAGES, ADDONS, UPGRADE, CONCESSION, BUSINESS, proofLine } from './catalog'
 import { asksPrice } from './selling'
 import { eventTypeOf, EVENT_HE } from './eventType'
 
@@ -55,6 +55,10 @@ export function detectSalesIntent(text = '', lead = null) {
     // "מעדיפה שייכתבו בכתב יד… צריכה רק את הספר שהאורחים ייכתבו לה"). Three
     // closes in a row did not change that. One honest line, and let go.
     if (/בכתב\s+יד|לכתוב\s+ביד|ספר\s+אורחים\s+(?:רגיל|פיזי|קלאסי)|ספר\s+(?:אורחים\s+)?ריק/.test(value)) return 'not_our_product'
+    // A 990 ₪ decision made by parents in Israel is often made on the
+    // phone. Until 1.10 the bot refused every mention of a call; now a
+    // request for one is the warmest lead there is, and it goes to Bar.
+    if (/תתקשר|להתקשר|תתקשרו|שיחת\s+טלפון|אפשר\s+לדבר|לדבר\s+עם|נציג|בן\s+אדם|מישהו\s+אמיתי|טלפון\s+שלכם|מספר\s+טלפון/.test(value)) return 'call_request'
 
     // Checkout trouble has to beat both the word "מחיר" and a second
     // payment-link send. The useful move is diagnosis, not another pitch.
@@ -203,6 +207,7 @@ export function isCourtesy(text) {
 function nextAction(intent, lead, incomingText) {
     if (intent === 'negative_exit') return 'close_lost'
     if (intent === 'not_our_product') return 'close_lost'
+    if (intent === 'call_request') return 'offer_call'
     if (intent === 'payment_intent') {
         if (hasCheckoutFriction(incomingText)) return 'diagnose_checkout'
         return paymentLinkWasSent(lead) && !explicitlyRequestsPaymentLink(incomingText)
@@ -417,9 +422,9 @@ function objectionMessage({ decision, lead, incomingText, parsed }) {
         // later. Third and last: the one concession, with its date.
         const upgradeLine = `אפשר גם להתחיל בדיגיטלי ב-${price('digital')} שח ולשדרג למודפס ב-${UPGRADE.price} שח עד ${UPGRADE.windowDays} יום אחרי האירוע, אותו ספר בדיוק.`
         if (!(lead?.objectionCount > 0) && !offered) {
-            return `מבין. תסתכלו רגע על עמוד מספר אמיתי שהדפסנו. ${upgradeLine}`
+            return `מבין. תסתכלו רגע על עמוד מספר אמיתי שהדפסנו, ${proofLine(0)}. ${upgradeLine}`
         }
-        if (!offered) return `אני יכול לעשות דבר אחד: ${concessionLine(today)}. זה הכי רחוק שאני יכול ללכת. ${closeQuestion(lead, parsed)}`
+        if (!offered) return `אני יכול לעשות דבר אחד: ${concessionLine(today)}. זה הכי רחוק שאני יכול ללכת. ${CALL_LINE()} ${closeQuestion(lead, parsed)}`
         return `זה המחיר, ובלי מזלגות: עיצוב, כריכה קשה ומשלוח בפנים. ${closeQuestion(lead, parsed)}`
     }
     if (isFarDateObjection(incomingText)) {
@@ -429,10 +434,14 @@ function objectionMessage({ decision, lead, incomingText, parsed }) {
     // "אחשוב", "אתייעץ": a polite pause. A date on the offer and one
     // question, so the pause has an end.
     const extra = offered ? '' : ` שמרתי לכם ${concessionLine(today)}.`
-    return `ברור, זה משהו שמחליטים ביחד.${extra} מתי נוח שאחזור?`
+    return `ברור, זה משהו שמחליטים ביחד.${extra} ${CALL_LINE()} מתי נוח שאחזור?`
 }
 
+const OWNER = () => BUSINESS.ownerName || 'מישהו מהצוות'
+const CALL_LINE = () => `ואם נוח יותר בטלפון, ${OWNER()} יחזור אלייך לדקה.`
+
 function deterministicMessage({ parsed, decision, lead, incomingText }) {
+    if (decision.nextBestAction === 'offer_call') return `בטח. ${OWNER()} יתקשר אלייך היום. באיזו שעה נוח?`
     if (decision.intent === 'not_our_product') return 'הבנתי, ספר אורחים לכתיבה ביד זה לא מה שאנחנו עושים, אצלנו האורחים כותבים מהטלפון ומצרפים תמונה. בהצלחה באירוע, ואם תרצו בכל זאת, אני כאן.'
     if (decision.nextBestAction === 'close_lost') return 'תודה שעדכנת, שמחתי לעזור. אם זה יחזור להיות רלוונטי, אנחנו כאן.'
     if (decision.nextBestAction === 'diagnose_checkout') return 'איפה זה נתקע לך, בפתיחת הקישור או בשלב התשלום?'
@@ -652,6 +661,7 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
     // throw away a good answer over a bad postscript.
     const mustUseDeterministic = (
         decision.nextBestAction === 'close_lost'
+        || decision.nextBestAction === 'offer_call'
         || decision.nextBestAction === 'diagnose_checkout'
         || decision.nextBestAction === 'send_payment_link'
         || decision.nextBestAction === 'send_demo'
@@ -745,6 +755,13 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         result.objectionRaised = true
         result.handoff = false
         result.handoffReason = null
+    }
+    if (decision.nextBestAction === 'offer_call') {
+        result.handoff = true
+        result.handoffReason = 'הלקוח ביקש שיחת טלפון. תתקשר היום.'
+        result.image = null
+        result.openingMediaKeys = []
+        result.stage = 'handoff'
     }
     if (decision.nextBestAction === 'handoff_print') {
         result.handoff = true

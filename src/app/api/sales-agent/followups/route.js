@@ -234,7 +234,7 @@ export async function GET(req) {
                 return
             }
             const followUpNumber = (lead.followUpCount || 0) + 1
-            const isFinal = isFinalAttempt(lead.followUpCount || 0)
+            const isFinal = isFinalAttempt(lead.followUpCount || 0, { eventDate: lead.eventDate || null, todayISO: today })
             const strategy = planFollowUp(lead, {
                 attempt: followUpNumber,
                 isFinal,
@@ -246,7 +246,7 @@ export async function GET(req) {
             let text
             // The offer with its date is one sentence for everyone; the
             // model would only add variance to the date. It goes as written.
-            const scripted = strategy.id === 'deadline_offer'
+            const scripted = ['deadline_offer', 'until_event', 'pre_event'].includes(strategy.id)
             if (withinWindow && scripted) {
                 parsed = {
                     stage: lead.stage,

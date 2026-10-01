@@ -655,4 +655,27 @@ describe('what the first two days of the mechanism showed', () => {
         expect(decideSalesTurn({ incomingText: 'כמה', lead: {} }).nextBestAction).toBe('quote_price')
         expect(decideSalesTurn({ incomingText: 'כמה?', lead: {} }).nextBestAction).toBe('quote_price')
     })
+
+    // 1.10: the phone is how parents in Israel close a 990 ₪ decision.
+    it('hands a request for a call to the owner with a time question, and offers the call on the two hesitation lines', () => {
+        for (const text of ['אפשר שתתקשרו אליי?', 'אני מעדיפה לדבר עם בן אדם', 'יש מספר טלפון?']) {
+            const decision = decideSalesTurn({ incomingText: text, lead: { stage: 'offer_sent' }, todayISO: '2026-10-01' })
+            expect(decision.nextBestAction).toBe('offer_call')
+            const r = enforceSalesReply({ parsed: { messages: ['טיוטה'], stage: 'offer_sent', handoff: false }, decision, lead: { stage: 'offer_sent' }, incomingText: text })
+            expect(r).toMatchObject({ handoff: true, stage: 'handoff' })
+            expect(r.messages[0]).toMatch(/יתקשר אלייך היום\. באיזו שעה נוח\?$/)
+        }
+        const second = enforceSalesReply({ parsed: { messages: ['טיוטה'], stage: 'objection', handoff: false }, decision: decideSalesTurn({ incomingText: 'עדיין יקר', lead: { stage: 'objection', objectionCount: 1 }, todayISO: '2026-10-01' }), lead: { stage: 'objection', objectionCount: 1 }, incomingText: 'עדיין יקר' })
+        expect(second.messages[0]).toMatch(/בטלפון/)
+        expect(second.messages[0].length).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
+        const think = enforceSalesReply({ parsed: { messages: ['טיוטה'], stage: 'offer_sent', handoff: false }, decision: decideSalesTurn({ incomingText: 'אחשוב', lead: { stage: 'offer_sent' }, todayISO: '2026-10-01' }), lead: { stage: 'offer_sent' }, incomingText: 'אחשוב' })
+        expect(think.messages[0]).toMatch(/בטלפון.*מתי נוח שאחזור\?$/)
+        expect(think.messages[0].length).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
+    })
+
+    it('puts a customer\'s words next to the real page on the first price objection', () => {
+        const r = enforceSalesReply({ parsed: { messages: ['טיוטה'], stage: 'offer_sent', handoff: false }, decision: decideSalesTurn({ incomingText: 'יקר לי', lead: { stage: 'offer_sent' }, todayISO: '2026-10-01' }), lead: { stage: 'offer_sent' }, incomingText: 'יקר לי' })
+        expect(r.messages[0]).toContain('«')
+        expect(r.messages[0].length).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
+    })
 })

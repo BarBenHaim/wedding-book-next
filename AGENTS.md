@@ -372,6 +372,36 @@ approved template ("רק מוודא שלא פספסתי"); the checkout asks nin
 incl. a required postal code and an optional phone; the ad greeting still
 says "ספר לנו כיצד אפשר לעזור".
 
+### 1.10, afternoon — the approach, not just the bot
+
+Lord: "הדרך שאני ניגש ללידים לא מספיק טובה?" Four answers, three of them
+code:
+
+- **Timing.** The ladder (1, 3, 7 days) spends every touch in the week a
+  parent is least ready. `preEventTouchDate` schedules one more touch
+  30 (or 14) days before a known event; `MAX_TOUCHES = MAX_ATTEMPTS + 1`;
+  `isFinalAttempt` takes the event date so touch 3 says "נדבר לקראת
+  האירוע" (`until_event`) instead of goodbye, and touch 4 is `pre_event`
+  (poster deadline + concession + a customer's words + the close),
+  scripted.
+- **The phone.** `call_request` → `offer_call`: "בטח. בר יתקשר אלייך
+  היום. באיזו שעה נוח?", handoff=true, owner ping. The two hesitation
+  lines (second price objection, "אחשוב") end with "ואם נוח יותר בטלפון,
+  בר יחזור אלייך לדקה." The prompt no longer forbids calls; the model
+  still never offers one itself (CALL_LANGUAGE guard stays).
+- **Trust.** `PROOF` in catalog.js: four lines from the landing pages,
+  quoted via `proofLine(i)` on the first price objection, the first
+  silent touch (`one_line`) and the pre-event touch.
+- **Intent at the source** is the ad, not code: price and the book in the
+  creative, "לאיזה אירוע?" as the greeting. Lord's.
+
+Same afternoon, outside the repo: WooCommerce checkout now requires the
+phone (so a purchase can close its lead) and not the postcode; sells to
+Israel only (no 250-country select); product 6271 renamed to what the
+bot says. Template `wt_followup` ({{1}} body) submitted to Meta;
+`SALES_FOLLOWUP_TEMPLATE_NAME` is set once it is approved.
+`SALES_AGENT_OWNER_NAME=בר` is set in Vercel.
+
 ---
 
 ## The WhatsApp sales agent — shipped and live
