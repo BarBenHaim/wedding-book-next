@@ -872,6 +872,187 @@ afterEach(() => {
     vi.restoreAllMocks()
 })
 
+describe('existing customer support lookup', () => {
+    beforeEach(() => prepareDecisionPath())
+    const matchedOwner = { weddingId: 'synthetic-wedding-token', ownerName: 'לקוח סינתטי' }
+
+    it.each([
+        'יש תקלה בעמודים של הספר שלי',
+        'אפשר לסדר מחדש את העמודים?',
+        'אפשר לתרגם את הספר לאנגלית?',
+        'אפשר לקבל את הדפים להדפסה?',
+    ])('checks a non-new support request against wedding ownership: %s', async text => {
+        const storedLead = { ...lead, paymentVerified: false, verifiedOrderId: null }
+        mocks.getLead.mockResolvedValue(storedLead)
+        mocks.findCustomerByPhone.mockResolvedValue(matchedOwner)
+
+        const result = await post(inbound({ text }))
+
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledTimes(1)
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledWith('test-phone-token')
+        expect(result.body).toMatchObject({ customer: true, handoff: true })
+        expect(result.body.notifyOwner).toContain('לקוח סינתטי')
+        expect(result.body.sendText).not.toMatch(/690|990|checkout|שילמת/)
+        expect(mocks.setHuman).toHaveBeenCalledWith('test-phone-token', true, 'לקוח קיים כתב')
+        expect(mocks.prepareOpeningRuntime).not.toHaveBeenCalled()
+        expect(mocks.decideSalesTurn).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.completeSuccessfulExchange).not.toHaveBeenCalled()
+        expect(storedLead).toMatchObject({ stage: 'engaged', paymentVerified: false, verifiedOrderId: null })
+        expectNoProviderWork()
+    })
+
+    it('does not turn an unmatched support or purchase claim into customer/payment truth', async () => {
+        const storedLead = { ...lead, paymentVerified: false, verifiedOrderId: null }
+        mocks.getLead.mockResolvedValue(storedLead)
+
+        const result = await post(inbound({ text: 'כבר שילמתי, אפשר לתקן את הספר שלי?' }))
+
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledTimes(1)
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledWith('test-phone-token')
+        expect(result.body.customer).toBeUndefined()
+        expect(mocks.setHuman).not.toHaveBeenCalled()
+        expect(mocks.decideSalesTurn).toHaveBeenCalledWith(expect.objectContaining({ isExistingCustomer: false }))
+        expect(mocks.callClaude).toHaveBeenCalledTimes(1)
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
+        expect(storedLead.paymentVerified).toBe(false)
+        expect(storedLead.verifiedOrderId).toBeNull()
+    })
+
+    it('leaves an ordinary non-new buyer on the normal path without an extra lookup', async () => {
+        const result = await post(inbound({ text: 'כמה עולה הספר המודפס?' }))
+
+        expect(mocks.findCustomerByPhone).not.toHaveBeenCalled()
+        expect(result.body.customer).toBeUndefined()
+        expect(mocks.callClaude).toHaveBeenCalledTimes(1)
+    })
+
+    it('checks a bare yes that continues the customer’s recent support request', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, turns: [
+            { role: 'user', text: 'צריך לתרגם את העמודים לאנגלית' },
+            { role: 'assistant', text: 'הכוונה לעמודי הברכות?' },
+        ] })
+        mocks.findCustomerByPhone.mockResolvedValue(matchedOwner)
+
+        const result = await post(inbound({ text: 'כן' }))
+
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledTimes(1)
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledWith('test-phone-token')
+        expect(result.body).toMatchObject({ customer: true, handoff: true })
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it.each(['התכוונתי לגרסה באנגלית', 'אני רוצה באנגלית', 'כן'])('checks a support continuation through a language correction: %s', async text => {
+        const turns = [
+            { role: 'user', text: 'אפשר לקבל את הדפים להדפסה?' },
+            { role: 'assistant', text: 'הגרסה בעברית?' },
+        ]
+        if (text === 'כן') turns.push(
+            { role: 'user', text: 'אני רוצה באנגלית' },
+            { role: 'assistant', text: 'כל הדפים?' },
+            { role: 'user', text: 'כן' },
+            { role: 'assistant', text: 'באותו סדר?' },
+            { role: 'user', text: 'כן' },
+            { role: 'assistant', text: 'הבנתי' },
+        )
+        mocks.getLead.mockResolvedValue({ ...lead, turns })
+        mocks.findCustomerByPhone.mockResolvedValue(matchedOwner)
+
+        const result = await post(inbound({ text }))
+
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledTimes(1)
+        expect(result.body).toMatchObject({ customer: true, handoff: true })
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it('does not look up a later buyer topic because old support and a language fragment exist', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, turns: [
+            { role: 'user', text: 'אפשר לקבל את הדפים להדפסה?' },
+            { role: 'assistant', text: 'אבדוק' },
+            { role: 'user', text: 'כמה עולה להזמין ספר חדש?' },
+            { role: 'assistant', text: 'בגרסה בעברית?' },
+            { role: 'user', text: 'התכוונתי לגרסה באנגלית' },
+        ] })
+
+        const result = await post(inbound({ text: 'כן' }))
+
+        expect(mocks.findCustomerByPhone).not.toHaveBeenCalled()
+        expect(result.body.customer).toBeUndefined()
+        expect(mocks.callClaude).toHaveBeenCalledTimes(1)
+    })
+
+    it.each([
+        { stage: 'closed_won', paymentVerified: false },
+        { stage: 'engaged', paymentVerified: true, verifiedOrderId: 'synthetic-order-token' },
+    ])('keeps trusted stored customer truth ahead of stale stage or support wording: %j', async storedTruth => {
+        mocks.getLead.mockResolvedValue({ ...lead, ...storedTruth })
+
+        const result = await post(inbound({ text: 'אפשר להמשיך?' }))
+
+        expect(result.body).toMatchObject({ customer: true, handoff: true })
+        expect(mocks.findCustomerByPhone).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.completeSuccessfulExchange).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it.each([undefined, false, 'true', 1])('does not treat an unverified payment flag %s as customer truth', async paymentVerified => {
+        mocks.getLead.mockResolvedValue({ ...lead, paymentVerified, verifiedOrderId: 'synthetic-unverified-order' })
+
+        const result = await post(inbound({ text: 'מה המחיר?' }))
+
+        expect(result.body.customer).toBeUndefined()
+        expect(mocks.findCustomerByPhone).not.toHaveBeenCalled()
+        expect(mocks.setHuman).not.toHaveBeenCalled()
+        expect(mocks.callClaude).toHaveBeenCalledTimes(1)
+    })
+
+    it('preserves opening-only silence for a matched non-new support request', async () => {
+        mocks.readSalesSettings.mockResolvedValue({
+            enabled: true, mode: 'opening_only', provider: 'anthropic', model: 'test-model',
+            activeOpeningIds: [], openingMediaSequence: [],
+        })
+        mocks.findCustomerByPhone.mockResolvedValue(matchedOwner)
+
+        const result = await post(inbound({ text: 'אפשר לשנות את סדר העמודים?' }))
+
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledTimes(1)
+        expect(result.body).toMatchObject({
+            customer: true, handoff: false, shouldSend: false, sendText: '', noReply: true,
+            skipped: 'opening-only-customer',
+        })
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it('leaves human pause ahead of support lookup and customer acknowledgment', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, paymentVerified: true })
+        mocks.isPausedForHuman.mockReturnValue(true)
+
+        const result = await post(inbound({ text: 'צריך לשנות את הספר שלי' }))
+
+        expect(result.body).toMatchObject({ paused: true, noReply: true, handoff: false, send: [] })
+        expect(mocks.findCustomerByPhone).not.toHaveBeenCalled()
+        expect(mocks.setHuman).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it('preserves the first-contact lookup even for a message without support wording', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true })
+        mocks.findCustomerByPhone.mockResolvedValue(matchedOwner)
+
+        const result = await post(inbound({ text: 'שלום' }))
+
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledTimes(1)
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledWith('test-phone-token')
+        expect(result.body).toMatchObject({ customer: true, handoff: true })
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+    })
+})
+
 describe('inbound event duplicate fencing', () => {
     it('durably suppresses an inbound event older than fifteen minutes before lead or provider work', async () => {
         vi.useFakeTimers()
