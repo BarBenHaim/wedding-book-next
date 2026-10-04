@@ -86,9 +86,9 @@ vi.mock('@/lib/salesAgent/leads', () => ({
 }))
 vi.mock('@/lib/salesAgent/pricing', () => ({ costOfClaudeUsage: mocks.costOfClaudeUsage }))
 vi.mock('@/lib/salesAgent/attribution', () => ({ resolveSource: mocks.resolveSource }))
-vi.mock('@/lib/salesAgent/catalog', () => ({ BUSINESS: { brand: 'Test Brand', ownerName: 'הצוות' }, MEDIA: {} }))
+vi.mock('@/lib/salesAgent/catalog', async importOriginal => ({ ...(await importOriginal()), BUSINESS: { brand: 'Test Brand', ownerName: 'הצוות' }, MEDIA: {} }))
 vi.mock('@/lib/salesAgent/mediaLibrary', () => ({ mergeMedia: mocks.mergeMedia, performanceNote: mocks.performanceNote }))
-vi.mock('@/lib/salesAgent/selling', () => ({ priceDodged: mocks.priceDodged, priceFallbackMessage: mocks.priceFallbackMessage }))
+vi.mock('@/lib/salesAgent/selling', async importOriginal => ({ ...(await importOriginal()), priceDodged: mocks.priceDodged, priceFallbackMessage: mocks.priceFallbackMessage }))
 vi.mock('@/lib/salesAgent/mediaGuard', () => ({ mediaGuard: mocks.mediaGuard }))
 vi.mock('@/lib/salesAgent/experiments', () => ({
     ACTIVE_VARIANT_IDS: ['question_first', 'price_upfront', 'demo_first'],
@@ -1681,5 +1681,236 @@ describe('owner takeover persistence and transport', () => {
         expect(mocks.completeInboundEvent).not.toHaveBeenCalled()
         expect(mocks.callClaude).not.toHaveBeenCalled()
         expectNoProviderWork()
+    })
+})
+
+describe('real contextual policy at the transport boundary', () => {
+    async function realPolicy() {
+        prepareDecisionPath()
+        const policy = await vi.importActual('@/lib/salesAgent/decisionPolicy')
+        mocks.decideSalesTurn.mockImplementation(policy.decideSalesTurn)
+        mocks.enforceSalesReply.mockImplementation(policy.enforceSalesReply)
+        mocks.buildDeterministicSalesReply.mockImplementation(policy.buildDeterministicSalesReply)
+    }
+
+    it('persists a human-owned unanswered policy question and notifies the owner without checkout', async () => {
+        await realPolicy()
+        mocks.getLead.mockResolvedValue({ ...lead, eventType: 'bar_mitzvah', stage: 'offer_sent' })
+        const result = await post(inbound({ text: 'אני רוצה להזמין אבל לפני כן מה מדיניות הביטול?' }))
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({ stage: 'handoff', handoff: true, hasImage: false })
+        expect(result.body.sendText).not.toContain('checkout')
+        expect(result.body.notifyOwner).toBeTruthy()
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            exchange: expect.objectContaining({ parsed: expect.objectContaining({ stage: 'handoff', handoff: true }) }),
+        }))
+        expect(mocks.sendInboundSequenceDirect).not.toHaveBeenCalled()
+    })
+
+    it('keeps two-book clarification after the route price guard adds a price list', async () => {
+        await realPolicy()
+        mocks.getLead.mockResolvedValue({ ...lead, eventType: 'bar_mitzvah', stage: 'offer_sent' })
+        mocks.priceDodged.mockReturnValue(true)
+        mocks.priceFallbackMessage.mockReturnValue('דיגיטלי 690 שח, מודפס 990 שח')
+        const result = await post(inbound({ text: 'כמה יעלו שני ספרים' }))
+        expect(result.status).toBe(200)
+        expect(result.body.sendText).toContain('ספר נפרד לכל אירוע')
+        expect(result.body.sendText).not.toMatch(/690|990|checkout/)
+        expect(result.body.stage).toBe('offer_sent')
+    })
+})
+
+describe('real opening runtime reaches the contextual reply policy', () => {
+    async function realOpeningPath() {
+        prepareDecisionPath()
+        const runtime = await vi.importActual('@/lib/salesAgent/openingRuntime')
+        const policy = await vi.importActual('@/lib/salesAgent/decisionPolicy')
+        const plan = await vi.importActual('@/lib/salesAgent/openingPlan')
+        const { DEFAULT_OPENING_EXPERIMENT } = await vi.importActual('@/lib/salesAgent/openingExperiment')
+        mocks.prepareOpeningRuntime.mockImplementation(runtime.prepareOpeningRuntime)
+        mocks.decideSalesTurn.mockImplementation(policy.decideSalesTurn)
+        mocks.enforceSalesReply.mockImplementation(policy.enforceSalesReply)
+        mocks.buildDeterministicSalesReply.mockImplementation(policy.buildDeterministicSalesReply)
+        mocks.buildOpeningPlan.mockImplementation(plan.buildOpeningPlan)
+        mocks.mergeMedia.mockReturnValue({
+            cover_personalised: { kind: 'image', url: 'https://media.test/cover.jpg', caption: 'דוגמת כריכה' },
+            book_open_spread: { kind: 'image', url: 'https://media.test/spread.jpg', caption: 'דוגמת עמודים' },
+        })
+        mocks.readSalesSettings.mockResolvedValue({
+            enabled: true, mode: 'full_sales', provider: 'anthropic', model: 'claude-haiku-4-5',
+            activeOpeningIds: ['answer_first'], openingMediaSequence: [],
+            openingExperiment: { ...DEFAULT_OPENING_EXPERIMENT, enabled: true },
+        })
+        return DEFAULT_OPENING_EXPERIMENT
+    }
+
+    it('answers a first price question instead of running a published child-photo request', async () => {
+        await realOpeningPath()
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true, stage: 'new' })
+
+        const result = await post(inbound({ text: 'כמה עולה ספר מודפס?' }))
+
+        expect(result.status).toBe(200)
+        expect(mocks.decideSalesTurn).toHaveBeenCalledWith(expect.objectContaining({ incomingText: 'כמה עולה ספר מודפס?' }))
+        expect(mocks.callClaude).toHaveBeenCalledTimes(1)
+        expect(mocks.buildSystemPrompt).toHaveBeenCalledWith(expect.objectContaining({
+            openingNote: expect.stringContaining('תסריט הפתיחה לא נשלח'),
+        }), expect.any(String), expect.any(Object))
+        expect(result.body.sendText).toMatch(/690/)
+        expect(result.body.sendText).toMatch(/990/)
+        expect(JSON.stringify(result.body)).not.toMatch(/שלחי תמונה|תמונה של הבן|שם הילד|אכין.*דוגמה|checkout/)
+        expect(result.body.openingExperiment).toBeUndefined()
+        expect(mocks.completeSuccessfulExchange.mock.calls[0][0].exchange.openingRuntime).toBeUndefined()
+        expect(mocks.loadOpeningVariableVersions).not.toHaveBeenCalled()
+        expect(mocks.signOpeningVariableDownload).not.toHaveBeenCalled()
+    })
+
+    it('captures an event answer from pinned C without emitting its next photo-request block', async () => {
+        const experiment = await realOpeningPath()
+        const pinned = {
+            ...lead, openingVariantId: 'C', openingVariantRevision: 1,
+            openingFlow: experiment.variants.find(variant => variant.id === 'C'),
+            openingState: { cursor: 1, waitingFor: 'event' }, openingStateVersion: 4,
+            openingExposedAt: '2026-09-25T09:00:00.000Z',
+        }
+        mocks.getLead.mockResolvedValue(pinned)
+
+        const result = await post(inbound({ text: 'בר מצווה בדצמבר' }))
+
+        expect(result.status).toBe(200)
+        expect(mocks.decideSalesTurn).toHaveBeenCalledTimes(1)
+        expect(mocks.callClaude).toHaveBeenCalledTimes(1)
+        expect(JSON.stringify(result.body)).not.toMatch(/שלחי תמונה|תמונה של הבן|שם הילד|אכין.*דוגמה/)
+        expect(result.body.openingExperiment).toBeUndefined()
+        const saved = mocks.completeSuccessfulExchange.mock.calls[0][0].exchange
+        expect(saved.parsed.eventType).toBe('bar_mitzvah')
+        expect(saved.openingRuntime).toBeUndefined()
+        expect(pinned.openingState).toEqual({ cursor: 1, waitingFor: 'event' })
+    })
+
+    it('keeps a human-paused lead silent before either real runtime or model can run', async () => {
+        const experiment = await realOpeningPath()
+        mocks.getLead.mockResolvedValue({
+            ...lead, human: true, stage: 'handoff', openingVariantId: 'C',
+            openingFlow: experiment.variants.find(variant => variant.id === 'C'),
+            openingState: { cursor: 1, waitingFor: 'event' },
+        })
+        mocks.isPausedForHuman.mockReturnValue(true)
+
+        const result = await post(inbound({ text: 'בר מצווה, כמה עולה?' }))
+
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({ paused: true, noReply: true, send: [] })
+        expect(mocks.prepareOpeningRuntime).not.toHaveBeenCalled()
+        expect(mocks.decideSalesTurn).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.completeSuccessfulExchange).not.toHaveBeenCalled()
+    })
+
+    it('routes a new attachment to human review without enrolling it into a photo-request script', async () => {
+        await realOpeningPath()
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true, stage: 'new' })
+        const result = await post(inbound({ messageType: 'image', mediaId: 'new-image' }))
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({ handoff: true, noReply: false })
+        expect(mocks.setHuman).toHaveBeenCalledTimes(1)
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.completeSuccessfulExchange).not.toHaveBeenCalled()
+    })
+
+    it.each([
+        ['negative exit', 'לא תודה', 'closed_lost'],
+        ['unverified policy', 'מה מדיניות הביטול?', 'handoff'],
+        ['customer timing', 'לא עכשיו, אחזור אליכם', 'commit_later'],
+        ['package clarification', 'אני רוצה להזמין', 'engaged'],
+        ['two-book scope', 'כמה יעלו שני ספרים', 'engaged'],
+        ['question before checkout', 'רוצה להזמין אבל מתי הספר מגיע?', 'engaged'],
+    ])('does not append an opening bundle after a first-message %s', async (_label, text, stage) => {
+        await realOpeningPath()
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true, stage: 'engaged' })
+
+        const result = await post(inbound({ text }))
+
+        expect(result.status).toBe(200)
+        expect(result.body.stage).toBe(stage)
+        expect(result.body.openingSequenceParts).toEqual([])
+        expect(result.body.openingMediaParts).toEqual([])
+        expect(result.body.openingMediaCount).toBe(0)
+        expect(result.body.postOpeningText).toBe('')
+        expect(result.body.sendText).not.toContain('/photo')
+        expect(mocks.buildOpeningPlan).not.toHaveBeenCalled()
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not repeat event or date facts captured in the current first message', async () => {
+        await realOpeningPath()
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true, stage: 'new' })
+        mocks.parseAgentJson.mockReturnValue({
+            malformed: false, messages: ['תשובה'], stage: 'engaged', handoff: false,
+            image: null, eventType: 'bar_mitzvah', eventDate: '2026-12-15', callbackPromised: null, followUpAt: null,
+        })
+
+        const result = await post(inbound({ text: 'בר מצווה ב-15/12/2026, כמה עולה?' }))
+
+        expect(result.status).toBe(200)
+        expect(mocks.buildOpeningPlan).toHaveBeenCalledWith(expect.objectContaining({
+            lead: expect.objectContaining({ eventType: 'bar_mitzvah', eventDate: '2026-12-15' }),
+        }))
+        expect(result.body.postOpeningText).toContain('/photo')
+        expect(result.body.postOpeningText).not.toMatch(/לאיזה אירוע|מתי האירוע|מתי הוא מתקיים/)
+        expect(result.body.openingSequenceParts.map(part => part.kind)).toEqual(['text', 'image', 'image', 'text'])
+        expect(result.body.openingSequenceParts.map(part => part.order)).toEqual([1, 2, 3, 4])
+    })
+
+    it('does not append evidence when the model hands an otherwise general inquiry to a human', async () => {
+        await realOpeningPath()
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true, stage: 'new' })
+        mocks.parseAgentJson.mockReturnValue({
+            malformed: false, messages: ['נדרשת בדיקה של הצוות.'], stage: 'handoff', handoff: true,
+            handoffReason: 'מידע שאינו מופיע בקטלוג', image: null, eventType: null, callbackPromised: null, followUpAt: null,
+        })
+
+        const result = await post(inbound({ text: 'האם אפשר לקבל אישור נגישות?' }))
+
+        expect(result.status).toBe(200)
+        expect(result.body.handoff).toBe(true)
+        expect(result.body.openingSequenceParts).toEqual([])
+        expect(result.body.postOpeningText).toBe('')
+        expect(mocks.buildOpeningPlan).not.toHaveBeenCalled()
+    })
+
+    it('continues a previously promised manual photo handoff through the real runtime', async () => {
+        await realOpeningPath()
+        mocks.getLead.mockResolvedValue({
+            ...lead, openingVariantId: 'A', openingVariantRevision: 1,
+            openingFlow: {
+                id: 'A', label: 'previous manual promise', revision: 1,
+                blocks: [
+                    { id: 'photo', type: 'ask_photo', text: 'שלחו תמונה לדוגמה' },
+                    { id: 'received', type: 'text', text: 'התמונה התקבלה, הצוות ימשיך כאן בשיחה.' },
+                    { id: 'stop', type: 'stop' },
+                ],
+            },
+            openingState: { cursor: 1, waitingFor: 'photo' }, openingStateVersion: 2,
+        })
+
+        const result = await post(inbound({ messageType: 'image', mediaId: 'promised-photo' }))
+
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({
+            stage: 'handoff', handoff: true, followUpAt: null,
+            sendText: 'התמונה התקבלה, הצוות ימשיך כאן בשיחה.',
+        })
+        expect(result.body.notifyOwner).toBeTruthy()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.loadOpeningVariableVersions).toHaveBeenCalledTimes(1)
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            exchange: expect.objectContaining({
+                openingRuntime: expect.objectContaining({
+                    expectedStateVersion: 2, enrollment: null, completed: true,
+                    captures: expect.objectContaining({ childPhotoReceived: true, childPhotoMediaId: 'promised-photo' }),
+                }),
+            }),
+        }))
     })
 })

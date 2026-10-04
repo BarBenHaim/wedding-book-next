@@ -2,9 +2,10 @@
 // move. This policy turns the current message and durable lead facts into
 // one small, testable instruction before any provider is called.
 
-import { PACKAGES, ADDONS, UPGRADE, CONCESSION, BUSINESS, proofLine } from './catalog'
+import { PACKAGES, ADDONS, UPGRADE, CONCESSION, BUSINESS, DEMO, proofLine } from './catalog'
 import { asksPrice } from './selling'
 import { eventTypeOf, EVENT_HE } from './eventType'
+import { isCustomerDeferral, customerWillReturn, applyCustomerTiming } from './journeyMemory'
 
 // One bubble, two sentences, and a hard ceiling the model cannot talk
 // past. 24.9, Lord: "הוא מספים, כותב ישר המון טקסט, יורה מידע". 420 chars
@@ -34,6 +35,50 @@ function hasCheckoutFriction(text) {
     return /(לא\s+הצלח|לא\s+עובד|נתקע|בעיה|תקלה).{0,30}(תשלום|לשלם|קישור|הזמנה)|(תשלום|לשלם|קישור).{0,30}(לא\s+עובד|בעיה|תקלה|נתקע)/.test(value)
 }
 
+// A package mentioned by the model (or inferred from a funnel stage) is
+// not a customer choice. Keep checkout tied to an explicit customer turn.
+function ambiguousOrWithdrawnPackage(text) {
+    const value = normalizedText(text)
+    return (/דיגיטל/.test(value) && /מודפס/.test(value))
+        || /(?:לא\s+|מתלבט|במקום).{0,45}(?:מודפס|דיגיטל)/.test(value)
+}
+
+function explicitPackageChoice(text) {
+    const value = normalizedText(text)
+    if (ambiguousOrWithdrawnPackage(value)) return null
+    const linkRequest = /(?:שלח|אפשר|צריך).{0,14}(?:קישור|לינק).{0,12}(?:לתשלום|להזמנה)/.test(value)
+    if (/^(?:כמה|מה|האם|איך)|אבל|לפני|אם\s|לא\s+רוצה|מתלבט|אולי/.test(value) || (value.includes('?') && !linkRequest)) return null
+    if (!linkRequest && !/^(?:ספר\s+)?(?:דיגיטלי|מודפס)[\s!.]*$|(?:רוצה\s+להזמין|רוצה\s+(?:את\s+)?(?:הספר\s+)?|אקח\s+|נלך\s+על\s+|בחרתי\s+|בעצם\s+)/.test(value)) return null
+    const digital = /דיגיטל/.test(value)
+    const printed = /מודפס/.test(value)
+    return digital !== printed ? (digital ? 'digital' : 'printed') : null
+}
+
+function confirmedPackageId(lead, incomingText) {
+    const current = explicitPackageChoice(incomingText)
+    if (current) return current
+    if (ambiguousOrWithdrawnPackage(incomingText)) return null
+    const turns = Array.isArray(lead?.turns) ? lead.turns : []
+    for (let i = turns.length - 1; i >= 0; i -= 1) {
+        if (turns[i]?.role !== 'user') continue
+        if (ambiguousOrWithdrawnPackage(turns[i].text)) return null
+        const selected = explicitPackageChoice(turns[i].text)
+        if (selected) return selected
+    }
+    return null
+}
+
+function needsQuantityScope(text, lead) {
+    const value = normalizedText(text)
+    if (!/(?:[2-9]|שני|שתי|שניים|כמה)\s*ספרים/.test(value)) return false
+    const context = [value, ...(lead?.turns || []).filter(t => t?.role === 'user').slice(-4).map(t => normalizedText(t.text))].join(' ')
+    return !/עותקים|אותו\s+ספר|ספר\s+נפרד|ספרים\s+נפרדים|שני\s+אירועים/.test(context)
+}
+
+const UNVERIFIED_POLICY = /מדיניות\s+(?:ביטול|החזר)|ביטול|לבטל|החזר\s+כספי|מקדמה|(?:כל\s+הסכום|הכל).{0,15}(?:מראש|לפני)|משלמ.{0,35}(?:לפני|מראש|קודם)|כמה\s+עמודים|מגבלת\s+עמודים|תוספת\s+עמודים|40.{0,15}100/
+const AUTHENTIC_PROOF = /(?:דוגמ|תמונ|ספר).{0,20}אמיתי|לא\s*ai\b|לא\s+בינה\s+מלאכותית/i
+const PROOF_REQUEST = /לראות.{0,24}(?:דוגמ|תמונ|ספר)|(?:תשלח|שלח|אפשר).{0,24}(?:דוגמ|תמונ)|דוגמ.{0,20}לפני|איך\s+זה\s+נראה/
+
 // Did the bot already state the catalog prices in its last two turns? A
 // customer who then merely MENTIONS price ("חשבתי שהצעת מחיר הנחה") is
 // not asking for the list again. On 19.9 the enforcer replaced a warm
@@ -55,6 +100,7 @@ export function detectSalesIntent(text = '', lead = null) {
     // "מעדיפה שייכתבו בכתב יד… צריכה רק את הספר שהאורחים ייכתבו לה"). Three
     // closes in a row did not change that. One honest line, and let go.
     if (/בכתב\s+יד|לכתוב\s+ביד|ספר\s+אורחים\s+(?:רגיל|פיזי|קלאסי)|ספר\s+(?:אורחים\s+)?ריק/.test(value)) return 'not_our_product'
+    if (isCustomerDeferral(value) && /תתקשר|להתקשר|שיחת\s+טלפון|אפשר\s+לדבר/.test(value)) return 'defer_request'
     // A 990 ₪ decision made by parents in Israel is often made on the
     // phone. Until 1.10 the bot refused every mention of a call; now a
     // request for one is the warmest lead there is, and it goes to Bar.
@@ -63,7 +109,21 @@ export function detectSalesIntent(text = '', lead = null) {
     // Checkout trouble has to beat both the word "מחיר" and a second
     // payment-link send. The useful move is diagnosis, not another pitch.
     if (hasCheckoutFriction(value)) return 'payment_intent'
-    if (/רוצה\s+להזמין|רוצ[הים]\s+לסגור|איך\s+משלמ|אפשר\s+לשלם|קישור.{0,12}תשלום|אקח\s+את|נלך\s+על|אפשר\s+להזמין/.test(value)) return 'payment_intent'
+    // Buying interest does not cancel a condition in the same sentence.
+    if (UNVERIFIED_POLICY.test(value) || AUTHENTIC_PROOF.test(value)) return 'needs_verified_answer'
+    if (/אותו\s+ספר.{0,25}ספר\s+נפרד/.test(lastAssistantText(lead))
+        && /נפרד|אירועים\s+שונים|שני\s+אירועים/.test(value)) return 'needs_verified_answer'
+    if (PROOF_REQUEST.test(value)) return 'demo'
+    const asksAlongsideDeferral = asksPrice(value) || /איך\s+זה\s+עובד|מה\s+(?:מקבלים|כלול)|איך\s+האורחים|מתי.{0,12}(?:מגיע|מוכן)|האם/.test(value)
+    if (isCustomerDeferral(value) && !asksAlongsideDeferral) return 'defer_request'
+    if (explicitPackageChoice(value) && /איזה\s+ספר\s+תרצו/.test(lastAssistantText(lead))) return 'payment_intent'
+    if (/רוצה\s+להזמין|רוצ[הים]\s+לסגור|איך\s+משלמ|אפשר\s+לשלם|קישור.{0,12}תשלום|אקח\s+את|נלך\s+על|אפשר\s+להזמין/.test(value)) {
+        // Answer a condition/question in THIS turn before looking up a
+        // package from history. “I want to order, but when does it arrive?”
+        // is not permission to skip the delivery question.
+        if (/אבל|בתנאי|תלוי|לפני|קודם|(?:^|[\s,:])(?:כמה|מה|מתי|האם|למה)\s|איך\s+(?!משלמ)/.test(value)) return 'question_before_checkout'
+        return 'payment_intent'
+    }
 
     // The button text of the Facebook/Instagram ad. It is not a question,
     // it is a click. On a lead who already got the opening it means "I
@@ -169,6 +229,13 @@ function lastAssistantText(lead) {
     return texts.length ? texts[texts.length - 1] : ''
 }
 
+function lastAssistantRequest(lead) {
+    const text = lastAssistantText(lead).replace(/https?:\/\/\S+/g, '[link]')
+    const sentences = text.match(/[^.!?]+[.!?]?/g) || []
+    return sentences.filter(sentence => sentence.trim().endsWith('?')).at(-1)?.trim()
+        || sentences.at(-1)?.trim() || ''
+}
+
 // Both catalog prices went out at some point in this chat (opening
 // pricing sheet excluded: that is an image the bot cannot read back).
 export function pricesStated(lead = {}) {
@@ -182,11 +249,6 @@ export function pricesStated(lead = {}) {
 // or the follow-up ladder would like.
 export function concessionOffered(lead = {}) {
     return assistantTexts(lead).some(t => /במתנה/.test(t))
-}
-
-const CLOSE_QUESTION = /אפתח|פותחים|נפתח|קישור|לינק|להזמין|לסגור|נתחיל|להתחיל|שולח\s+לך|לשלוח\s+לך/
-function lastLineWasClose(lead) {
-    return CLOSE_QUESTION.test(lastAssistantText(lead))
 }
 
 // Simple quantity questions ("2 ספרים", "עותק נוסף") keep the model: the
@@ -208,29 +270,41 @@ function nextAction(intent, lead, incomingText) {
     if (intent === 'negative_exit') return 'close_lost'
     if (intent === 'not_our_product') return 'close_lost'
     if (intent === 'call_request') return 'offer_call'
+    if (intent === 'needs_verified_answer') return 'handoff_question'
+    if (intent === 'defer_request') return 'respect_timing'
+    if (intent === 'question_before_checkout') return 'answer'
     if (intent === 'payment_intent') {
         if (hasCheckoutFriction(incomingText)) return 'diagnose_checkout'
+        if (!confirmedPackageId(lead, incomingText)) return 'clarify_package'
         return paymentLinkWasSent(lead) && !explicitlyRequestsPaymentLink(incomingText)
             ? 'diagnose_checkout'
             : 'send_payment_link'
     }
     if (intent === 'ad_cta_repeat') return 'send_demo'
     if (intent === 'print_only') return 'handoff_print'
-    if (intent === 'price') return plainPriceQuestion(incomingText) ? 'quote_price' : 'answer'
+    if (intent === 'price') {
+        if (needsQuantityScope(incomingText, lead)) return 'clarify_quantity'
+        if (/ספר\s+נפרד|ספרים\s+נפרדים|שני\s+אירועים/.test(normalizedText(incomingText))) return 'handoff_question'
+        return plainPriceQuestion(incomingText) ? 'quote_price' : 'answer'
+    }
     if (intent === 'process') return 'answer'
     if (intent === 'demo') return 'show_proof'
-    if (intent === 'event_answer') return 'present_offer'
-    // "כן" to "רוצה שאפתח לכם את הספר?" is an order. "כן" to anything else
-    // after the prices is still a yes; before the prices it is a person
-    // who wants to hear more, so they get the offer.
+    if (intent === 'event_answer') return 'show_workflow'
+    // A yes answers the last request. Prices/stage alone never authorize
+    // checkout, and opening a book is not selecting its printed package.
     if (intent === 'affirmative') {
-        if (lastLineWasClose(lead) || pricesStated(lead)) return 'send_payment_link'
-        if (lead?.eventType) return 'present_offer'
+        const previous = lastAssistantRequest(lead)
+        if (PROOF_REQUEST.test(previous) || /(?:רוצה|תרצו|תרצי|תרצה).{0,18}(?:דוגמ|תמונ)/.test(previous)) return 'show_proof'
+        if (/(?:רוצה|תרצו|תרצי|תרצה|שאשלח|לשלוח).{0,35}(?:קישור|לינק).{0,16}(?:לתשלום|להזמנה)|(?:רוצה|תרצו).{0,12}לשלם\s+עכשיו/.test(previous)) {
+            return confirmedPackageId(lead, incomingText) ? 'send_payment_link' : 'clarify_package'
+        }
+        if (/רוצה\s+שאפתח|פותחים\s+את\s+הספר/.test(previous)) {
+            return confirmedPackageId(lead, incomingText) ? 'confirm_checkout' : 'clarify_package'
+        }
         return 'answer_then_qualify'
     }
     if (intent === 'positive_signal') {
-        if (pricesStated(lead)) return 'send_payment_link'
-        return lead?.eventType ? 'present_offer' : 'answer_then_qualify'
+        return 'answer_then_qualify'
     }
     if (intent === 'objection') return 'handle_objection'
     // The event is known and the offer never went out: a statement (not a
@@ -239,9 +313,10 @@ function nextAction(intent, lead, incomingText) {
     if (intent === 'general'
         && lead?.eventType
         && !pricesStated(lead)
+        && !assistantTexts(lead).some(text => text.includes(DEMO.writeBlessing))
         && !isQuestion(incomingText)
         && ['new', 'opening_completed', 'engaged', undefined, null, ''].includes(lead?.stage)) {
-        return 'present_offer'
+        return 'show_workflow'
     }
     return 'answer_then_qualify'
 }
@@ -331,12 +406,8 @@ const KNOWN_QUESTION_PATTERNS = Object.freeze({
     packageInterest: /(איזו\s+חבילה|איזה\s+מסלול|איזה\s+ספר\s+בחר)/,
 })
 
-function packageFor({ parsed, lead, incomingText }) {
-    const text = normalizedText(incomingText)
-    let id = parsed?.packageInterest || lead?.packageInterest || lead?.package_interest || null
-    if (/דיגיטל/.test(text)) id = 'digital'
-    else if (/מודפס|הדפס/.test(text)) id = 'printed'
-    return PACKAGES.find(item => item.id === id) || PACKAGES.find(item => item.recommended) || PACKAGES[0]
+function packageFor({ lead, incomingText }) {
+    return PACKAGES.find(item => item.id === confirmedPackageId(lead, incomingText)) || null
 }
 
 // ── The offer, the close, the two doors ─────────────────────────────
@@ -403,7 +474,9 @@ function presentOfferMessage({ parsed, lead, incomingText }) {
 
 function quotePriceMessage({ parsed, lead, incomingText }) {
     const type = eventTypeOf(incomingText) || parsed?.eventType || lead?.eventType
-    const tail = type ? closeQuestion(lead, parsed) : 'לאיזה אירוע זה אצלכם?'
+    const tail = isCustomerDeferral(incomingText) || lead.customerDeferred === true
+        ? 'נוכל להמשיך בזמן שמתאים לכם.'
+        : type ? closeQuestion(lead, parsed) : 'לאיזה אירוע זה אצלכם?'
     return `${PRICE_LINE()} ${tail}`
 }
 
@@ -441,6 +514,17 @@ const OWNER = () => BUSINESS.ownerName || 'מישהו מהצוות'
 const CALL_LINE = () => `ואם נוח יותר בטלפון, ${OWNER()} יחזור אלייך לדקה.`
 
 function deterministicMessage({ parsed, decision, lead, incomingText }) {
+    if (decision.nextBestAction === 'show_workflow') {
+        const dateQuestion = parsed.eventDate || lead.eventDate ? '' : ' מתי האירוע?'
+        return `אפשר לנסות כאן איך האורחים כותבים ברכה ומצרפים תמונה מהטלפון: ${DEMO.writeBlessing}${dateQuestion}`
+    }
+    if (decision.nextBestAction === 'respect_timing') return customerWillReturn(incomingText)
+        ? 'כמובן, נמתין שתפנו אלינו כשתרצו להמשיך.'
+        : 'אין בעיה, נתקדם בזמן שמתאים לכם. מתי נוח שנחזור לזה?'
+    if (decision.nextBestAction === 'clarify_quantity') return 'מדובר בשני עותקים של אותו ספר, או בספר נפרד לכל אירוע?'
+    if (decision.nextBestAction === 'clarify_package') return `כדי לשלוח את הקישור הנכון, איזה ספר תרצו: דיגיטלי ב-${price('digital')} שח או מודפס ב-${price('printed')} שח כולל משלוח?`
+    if (decision.nextBestAction === 'confirm_checkout') return 'תרצו שאשלח קישור לתשלום עבור הספר שבחרתם?'
+    if (decision.nextBestAction === 'handoff_question') return 'השאלה הזו צריכה בדיקה של הצוות. אני מעביר אותה עם פרטי השיחה כדי לקבל תשובה מדויקת.'
     if (decision.nextBestAction === 'offer_call') return `בטח. ${OWNER()} יתקשר אלייך היום. באיזו שעה נוח?`
     if (decision.intent === 'not_our_product') return 'הבנתי, ספר אורחים לכתיבה ביד זה לא מה שאנחנו עושים, אצלנו האורחים כותבים מהטלפון ומצרפים תמונה. בהצלחה באירוע, ואם תרצו בכל זאת, אני כאן.'
     if (decision.nextBestAction === 'close_lost') return 'תודה שעדכנת, שמחתי לעזור. אם זה יחזור להיות רלוונטי, אנחנו כאן.'
@@ -459,7 +543,7 @@ function deterministicMessage({ parsed, decision, lead, incomingText }) {
     }
     if (decision.nextBestAction === 'handoff_print') return 'הדפסה של קובץ מוכן זה משהו שמישהו מהצוות מתמחר בנפרד. אני מעביר אליו, והוא יחזור אלייך כאן עוד היום.'
     if (decision.intent === 'price') return quotePriceMessage({ parsed, lead, incomingText })
-    if (decision.nextBestAction === 'show_proof') return 'הנה עמוד מתוך ספר אמיתי שהדפסנו, ככה זה יוצא. ' + closeQuestion(lead, parsed)
+    if (decision.nextBestAction === 'show_proof') return 'זו דוגמה למבנה הספר, עם ברכה ותמונה בעמוד.'
     if (decision.intent === 'process') return 'האורחים סורקים QR, כותבים ברכה ומעלים תמונה בלי אפליקציה. בסוף מאשרים הכול ומקבלים ספר.'
     // The last resort when no model answer exists. It used to open with a
     // product definition and a two-way question, which read as a machine
@@ -546,6 +630,10 @@ export function resolveOfferToSend(message, { lead = {}, hasImage = false } = {}
 
 function containsRepeatedKnownQuestion(message, decision) {
     return (decision.forbiddenRepeats || []).some(field => KNOWN_QUESTION_PATTERNS[field]?.test(normalizedText(message)))
+}
+
+export function repeatsKnownSalesQuestion(message, lead = {}) {
+    return containsRepeatedKnownQuestion(message, { forbiddenRepeats: knownFacts(lead) })
 }
 
 // Question marks inside URLs are not questions. Until 21.9 this turned
@@ -645,6 +733,24 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         }
     }
 
+    // The model can discover an unknown fact after the initial decision.
+    // Sales copy must never erase that handoff or append a checkout to it.
+    const unresolvedCheckoutQuestion = decision.intent === 'question_before_checkout'
+        && (!(parsed.messages || []).length || /https?:\/\/\S*checkout/i.test((parsed.messages || []).join(' ')))
+    if ((parsed.handoff === true || decision.nextBestAction === 'handoff_question' || unresolvedCheckoutQuestion)
+        && decision.nextBestAction !== 'close_lost') {
+        return applyCustomerTiming({ result: {
+            ...parsed,
+            messages: ['השאלה הזו צריכה בדיקה של הצוות. אני מעביר אותה עם פרטי השיחה כדי לקבל תשובה מדויקת.'],
+            stage: 'handoff', handoff: true,
+            handoffReason: parsed.handoffReason || 'נדרשת תשובה מאומתת לשאלה האחרונה של הלקוח',
+            image: null, openingMediaKeys: [], noReply: false,
+        }, decision, lead, incomingText })
+    }
+    if (decision.nextBestAction === 'send_payment_link' && !confirmedPackageId(lead, incomingText)) {
+        decision = { ...decision, nextBestAction: 'clarify_package' }
+    }
+
     const fallback = deterministicMessage({ parsed, decision, lead, incomingText })
     // The route lifts inline image markers before calling here; doing it
     // again costs nothing and protects any other caller.
@@ -667,8 +773,11 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         || decision.nextBestAction === 'send_demo'
         || decision.nextBestAction === 'handoff_print'
         || decision.nextBestAction === 'present_offer'
+        || decision.nextBestAction === 'show_workflow'
         || decision.nextBestAction === 'quote_price'
         || decision.nextBestAction === 'handle_objection'
+        || ['clarify_package', 'confirm_checkout', 'clarify_quantity', 'respect_timing'].includes(decision.nextBestAction)
+        || (decision.nextBestAction !== 'send_payment_link' && /https?:\/\/\S*checkout/i.test(candidates.join(' ')))
         || (decision.intent === 'price' && !hasOnlyCurrentCatalogPrices(candidates.join('\n')))
         || candidates.length === 0
         || CALL_LANGUAGE.test(normalizedText(candidates[0]))
@@ -731,6 +840,30 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         messages: out,
         image: parsed.image || liftedImage || null,
         noReply: false,
+    }
+    if (result.stage === 'ready_to_pay' && lead.stage !== 'ready_to_pay'
+        && !['send_payment_link', 'diagnose_checkout'].includes(decision.nextBestAction)) {
+        result.stage = lead.stage || 'engaged'
+    }
+    if (['clarify_package', 'confirm_checkout', 'clarify_quantity'].includes(decision.nextBestAction)) {
+        result.stage = lead.stage || 'engaged'
+        result.packageInterest = lead.packageInterest || null
+        result.image = null
+        result.openingMediaKeys = []
+    }
+    if (decision.nextBestAction === 'respect_timing') {
+        result.image = null
+        result.openingMediaKeys = []
+        result.objectionRaised = false
+    }
+    if (decision.nextBestAction === 'show_workflow') {
+        result.stage = ['offer_sent', 'objection', 'commit_later'].includes(lead.stage) ? lead.stage : 'engaged'
+        result.image = null
+        result.openingMediaKeys = []
+    }
+    if (['affirmative', 'positive_signal'].includes(decision.intent) && decision.nextBestAction !== 'send_payment_link') {
+        if (decision.nextBestAction !== 'show_proof') result.stage = lead.stage || 'engaged'
+        result.packageInterest = lead.packageInterest || null
     }
     // The event named in this message is a fact whether or not the model
     // wrote it into event_type.
@@ -805,7 +938,7 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         result.image = null
         result.openingMediaKeys = []
     }
-    return result
+    return applyCustomerTiming({ result, decision, lead, incomingText })
 }
 
 export default decideSalesTurn

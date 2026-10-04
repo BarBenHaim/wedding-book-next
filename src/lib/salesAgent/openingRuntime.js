@@ -91,6 +91,44 @@ export async function prepareOpeningRuntime({
         if (lead?.isNew !== true || lead?.hasPriorConversation === true) {
             return { eligible: false, reason: 'not-enrolled' }
         }
+    }
+
+    const expectedStateVersion = Number.isInteger(lead?.openingStateVersion)
+        ? lead.openingStateVersion
+        : 0
+    const replyToExposure = !!lead?.openingExposedAt && !lead?.openingFirstReplyAt
+
+    // Full-sales text belongs to the contextual reply path, even when an
+    // older published/pinned script has something to send. Waiting for an
+    // event used to consume "בר מצווה, כמה עולה?" and emit a child-photo
+    // request before the decision policy ever saw the question. Checking
+    // only for silence cannot protect that path (or variable-backed copy).
+    // Do not execute or enroll a replacement script, and do not advance
+    // existing state: a photo/owner approval for a previously promised
+    // design must still resume its original flow. The route's existing
+    // human/customer guards run before this, and opening_only opts out.
+    if (yieldWhenSilent && inbound?.kind === 'text') {
+        const state = { ...(lead?.openingState || { cursor: 0, waitingFor: null }) }
+        const completed = !!flow && !state.waitingFor && state.cursor >= flow.blocks.length
+        const action = completed ? 'completed'
+            : state.waitingFor === 'photo' ? 'wait_photo'
+                : state.waitingFor === 'event' ? 'wait_event'
+                    : state.waitingFor === 'approval' ? 'approval_pending' : 'contextual_reply'
+        const reason = !flow ? 'opening-question-first'
+            : completed ? 'opening-finished'
+                : state.waitingFor ? `opening-${action}-yielded` : 'opening-contextual-turn'
+        return {
+            eligible: false, reason, flow, expectedStateVersion, replyToExposure,
+            result: { action, state, parts: [], captures: {}, approvalRequest: null, completed },
+        }
+    }
+    if (yieldWhenSilent && !flow) {
+        // An unsolicited attachment on a new conversation needs the
+        // route's ordinary human review, not a cold scripted photo ask.
+        return { eligible: false, reason: 'opening-customer-media' }
+    }
+
+    if (!flow) {
         const assignment = assignOpeningVariant({
             leadKey,
             experiment: normalized,
@@ -108,9 +146,6 @@ export async function prepareOpeningRuntime({
         enrollment = { ...assignment, flow }
     }
 
-    const expectedStateVersion = Number.isInteger(lead?.openingStateVersion)
-        ? lead.openingStateVersion
-        : 0
     const result = await resolveOpeningSnapshotParts({
         flow,
         state: lead?.openingState || { cursor: 0, waitingFor: null },
@@ -121,24 +156,6 @@ export async function prepareOpeningRuntime({
         signDownload,
         eventId,
     })
-    const replyToExposure = !!lead?.openingExposedAt && !lead?.openingFirstReplyAt
-
-    // The opening is a script, and a script has two silent outcomes: it
-    // has already run to its stop block, or it is waiting for a photo /
-    // an event date and the customer sent words instead. Until 18.9 both
-    // ended the request with an empty parts list, which the route turned
-    // into no reply at all. Every enrolled lead who asked a question after
-    // the opening got silence (Shay Cohen, 17.9: two questions, nothing).
-    // In full-sales mode the opening now yields those turns to the sales
-    // agent. The opening state is left untouched, so a photo that arrives
-    // later still resumes the design flow exactly where it waited.
-    // Only a text turn is yielded. A photo, an owner approval or a media
-    // message that produced no parts still advanced the state machine and
-    // must be committed by the opening branch, not handed to the agent.
-    const silentTextTurn = inbound?.kind === 'text'
-        && result.parts.length === 0
-        && !result.approvalRequest
-        && (result.completed || result.action === 'wait_photo' || result.action === 'wait_event')
     // A photo or document AFTER the opening finished advances nothing
     // either - the flow is past its stop block - and until 19.9 it was
     // swallowed the same way (Sharona, 19.9: opening, then a document,
@@ -148,7 +165,7 @@ export async function prepareOpeningRuntime({
         && result.completed
         && result.parts.length === 0
         && !result.approvalRequest
-    if (yieldWhenSilent && (silentTextTurn || silentMediaAfterStop) && enrollment === null) {
+    if (yieldWhenSilent && silentMediaAfterStop && enrollment === null) {
         const reason = result.completed ? 'opening-finished' : `opening-${result.action}-yielded`
         return { eligible: false, reason, flow, expectedStateVersion, replyToExposure, result }
     }
@@ -160,22 +177,34 @@ export async function prepareOpeningRuntime({
 // the photo the opening already asked for. Pure; see the runtime tests.
 export function openingNoteFor(runtime, lead = {}) {
     if (!runtime || runtime.eligible || !String(runtime.reason || '').startsWith('opening-')) return null
+    const answerFirst = 'ענה קודם על מה שהלקוח שאל. אין לבקש שם או תמונה של ילד/ה או להציע דוגמה אישית ביוזמתך. אפשר להשתמש בדמו ובמדיה הקיימים בלי לטעון שהם צילום של מוצר אמיתי או של לקוח ללא אימות.'
+    if (runtime.reason === 'opening-question-first') {
+        return `תסריט הפתיחה לא נשלח ולא הובטחה דוגמה אישית. ${answerFirst}`
+    }
+    // Only quote already-traversed literal text blocks. Later blocks in
+    // a pinned script may contain a promise that was never made. Treat
+    // recorded copy as conversation context, never verified product facts.
+    const cursor = Number.isInteger(lead?.openingState?.cursor) ? lead.openingState.cursor : 0
     const said = (Array.isArray(runtime.flow?.blocks) ? runtime.flow.blocks : [])
+        .slice(0, cursor)
         .filter(block => block.type === 'text' && String(block.text || '').trim())
         .map(block => String(block.text).replace(/\s+/g, ' ').trim())
         .join(' | ')
         .slice(0, 420)
-    const quoted = said ? ` מה שכבר נאמר לו בפתיחה: «${said}».` : ''
+    const quoted = said ? ` טקסט פתיחה קודם שתועד, לא מקור לעובדות מוצר או להבטחות חדשות: «${said}».` : ''
     if (runtime.reason === 'opening-wait_photo-yielded') {
-        return `הפתיחה האוטומטית ביקשה מהלקוח תמונה של הילד/ה כדי להכין דוגמה אישית, והוא ענה במילים במקום.${quoted} ענה לעניין על מה שכתב; את הדוגמה אפשר להזכיר בעדינות פעם אחת, לא לחזור על הבקשה.`
+        return `הפתיחה הישנה כבר ביקשה תמונה לצורך דוגמה אישית, והלקוח ענה במילים במקום.${quoted} לא לחזור על הבקשה ולא להבטיח מועד או לטעון שהדוגמה מוכנה. ${answerFirst}`
     }
     if (runtime.reason === 'opening-wait_event-yielded') {
-        return `הפתיחה האוטומטית שאלה על סוג האירוע והתאריך, והתשובה לא הייתה חד-משמעית.${quoted} ענה לעניין, ואם זה טבעי ברר את התאריך בשאלה אחת פשוטה.`
+        return `הפתיחה הקודמת שאלה על האירוע. אל תניח שהתשובה עמומה ואל תשאל שוב פרט שהלקוח כבר נתן.${quoted} ${answerFirst}`
+    }
+    if (runtime.reason === 'opening-approval_pending-yielded' || lead?.openingApprovalRequest?.status === 'pending') {
+        return `דוגמה אישית שכבר הובטחה עדיין ממתינה לאישור אנושי. אין לטעון שהיא מוכנה, נשלחה או תגיע במועד מסוים, ואין לבקש שוב פרטים.${quoted} ${answerFirst}`
     }
     if (lead?.childPhotoReceived === true) {
-        return `הפתיחה האוטומטית כבר הוצגה, והלקוח שלח תמונה שבן אדם מכין ממנה דוגמה.${quoted} אל תציג את המוצר מחדש ואל תבטיח מועד לדוגמה; ענה לעניין.`
+        return `כבר התקבלה תמונה בשיחה; אין בכך הוכחה שדוגמה הוכנה או נשלחה.${quoted} אל תציג את המוצר מחדש ואל תבטיח מועד לדוגמה. ${answerFirst}`
     }
-    return `הפתיחה האוטומטית כבר נשלחה ללקוח.${quoted} אל תציג את המוצר מחדש ואל תברך שוב לשלום; המשך את השיחה מהנקודה הזו.`
+    return `לשיחה יש תסריט פתיחה קודם; אל תתחיל אותו מחדש.${quoted} אל תציג את המוצר מחדש ואל תברך שוב לשלום. ${answerFirst}`
 }
 
 const openingRuntime = { prepareOpeningRuntime, resolveOpeningSnapshotParts, openingNoteFor }

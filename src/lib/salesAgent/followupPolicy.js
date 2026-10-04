@@ -221,6 +221,9 @@ export function isInsideWhatsAppWindow(lead, nowMs = Date.now()) {
 
 export function isDueFollowUpCandidate(lead, todayISO, nowMs = Date.now()) {
     if (!lead?.followUpAt || !todayISO || lead.followUpAt > todayISO) return false
+    if (lead.customerDeferred === true && (!lead.customerCallbackAt || lead.customerCallbackAt > todayISO)) return false
+    if (lead.stage === 'commit_later' && !lead.customerCallbackAt && !lead.callbackPromised) return false
+    if (lead.callbackPromised && lead.callbackPromised >= todayISO) return false
     if (lead.paymentVerified === true) return false
     if (['closed_won', 'closed_lost', 'handoff'].includes(lead.stage)) return false
     if (pausedForHuman(lead, nowMs)) return false

@@ -78,6 +78,8 @@ export function findOrphans(leads, { nowMs = Date.now(), maxAttempts = MAX_ATTEM
     return (Array.isArray(leads) ? leads : []).filter(lead => {
         if (!lead || !lead.phone) return false
         if (isClosed(lead.stage)) return false
+        if (lead.customerDeferred === true) return false
+        if (lead.stage === 'commit_later' && !lead.callbackPromised) return false
         if (lead.followUpAt) return false // already has a next step
         if (lead.human) return false // handoff territory, not ours
         if ((lead.followUpCount || 0) >= maxAttempts) return false // ladder finished

@@ -36,7 +36,7 @@ describe('journey in the prompt', () => {
     it('injects the brief for the stage the lead is actually in', () => {
         const p = buildSystemPrompt({ stage: 'ready_to_pay' }, '2026-08-07')
         expect(p).toContain('מוכן לשלם')
-        expect(p).toContain('קישור התשלום המדויק')
+        expect(p).toContain('הבחירה המפורשת')
     })
 
     it('injects only one stage, never the whole playbook', () => {

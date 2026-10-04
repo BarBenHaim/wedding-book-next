@@ -674,3 +674,50 @@ describe('truthful follow-up transport', () => {
         expect(mocks.dueFollowUps).toHaveBeenCalledWith(expect.any(String), 10)
     })
 })
+
+describe('contextual follow-up regression', () => {
+    it('passes real history and repairs a repeated known-event question on the first checkout follow-up', async () => {
+        mocks.dueFollowUps.mockResolvedValue([{
+            ...lead, stage: 'ready_to_pay', eventType: 'bar_mitzvah', lastInboundAt: Date.now() - 5 * 3600_000,
+            turns: [{ role: 'user', text: 'חשוב לי לראות את כל הספר לפני הזמנה' }, { role: 'assistant', text: 'נבדוק דוגמה מתאימה' }],
+        }])
+        mocks.parseAgentJson.mockReturnValue({ malformed: false, handoff: false, messages: ['לאיזה אירוע זה אצלכם?'], stage: 'ready_to_pay', image: null })
+        const result = await runCron('?dry=1')
+        expect(result.status).toBe(200)
+        expect(result.body.items[0].strategyId).toBe('resolve_blocker')
+        expect(result.body.items[0].text).not.toContain('לאיזה אירוע')
+        const args = mocks.callClaude.mock.calls[0][0]
+        expect(args.messages[0]).toMatchObject({ role: 'user', content: 'חשוב לי לראות את כל הספר לפני הזמנה' })
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+        expect(mocks.prepareFollowUpDelivery).not.toHaveBeenCalled()
+    })
+})
+
+describe('last-moment conversation suppression never escapes to a transport', () => {
+    it.each([['direct', runCron], ['make', runMake]])('drops blocked primary work for %s delivery', async (_name, run) => {
+        mocks.prepareFollowUpDelivery.mockResolvedValue({ action: 'blocked', status: 'customer-deferred' })
+        const result = await run()
+        expect(result.body.items).toEqual([])
+        expect(result.body.blockedConversationCount).toBe(1)
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppImage).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppVideo).not.toHaveBeenCalled()
+    })
+
+    it.each([['direct', runCron], ['make', runMake]])('suppresses the unsent primary when media preparation sees a newer pause (%s)', async (_name, run) => {
+        mocks.dueFollowUps.mockResolvedValue([{ ...lead, lastInboundAt: Date.now() - 5 * 3600_000 }])
+        mocks.mergeMedia.mockReturnValue({ example_video: { kind: 'video', url: 'https://example.invalid/product.mp4', caption: 'Product example' } })
+        mocks.prepareFollowUpDelivery
+            .mockResolvedValueOnce({ action: 'requested' })
+            .mockResolvedValueOnce({ action: 'blocked', status: 'customer-deferred' })
+        const result = await run()
+        expect(result.body.items).toEqual([])
+        expect(result.body.blockedConversationCount).toBe(1)
+        expect(mocks.recordDeliveryEvent).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed', errorCode: 'CONVERSATION_CHANGED' }))
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppImage).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppVideo).not.toHaveBeenCalled()
+    })
+})

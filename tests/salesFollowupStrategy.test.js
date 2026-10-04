@@ -78,7 +78,7 @@ describe('context-aware follow-up sales plan', () => {
     // 1.10: the first touch is the only in-window one, so a lead who saw
     // the prices gets the dated concession and the close right there.
     it('leads with the dated concession on the FIRST touch after prices', () => {
-        for (const stage of ['offer_sent', 'objection', 'demo_sent', 'commit_later']) {
+        for (const stage of ['offer_sent', 'objection', 'demo_sent']) {
             const plan = planFollowUp({ stage }, { attempt: 1, customerName: 'נועה', todayISO: '2026-10-01' })
             expect(plan.id).toBe('deadline_offer')
             expect(plan.templateText).toContain('4 באוקטובר')
@@ -158,7 +158,7 @@ describe('context-aware follow-up sales plan', () => {
     // concession with its date and the close, written the same way the
     // reply policy writes it. Not "what is stopping you".
     it('sends the dated concession and the close on the second touch after prices', () => {
-        for (const stage of ['offer_sent', 'objection', 'demo_sent', 'commit_later']) {
+        for (const stage of ['offer_sent', 'objection', 'demo_sent']) {
             const plan = planFollowUp({ stage }, { attempt: 2, customerName: 'נועה', todayISO: '2026-09-29' })
             expect(plan.id).toBe('deadline_offer')
             expect(plan.templateText).toContain('במתנה')
@@ -272,5 +272,16 @@ describe('context-aware follow-up sales plan', () => {
 
     it('opens the first silent touch with a customer\'s own words', () => {
         expect(planFollowUp({ stage: 'engaged' }, { attempt: 1, customerName: 'נועה' }).templateText).toContain('«')
+    })
+})
+
+
+describe('a chosen later conversation never gets a forced bonus', () => {
+    it('keeps the contact contextual on any allowed touch', () => {
+        for (const attempt of [1, 2, 3, 4]) {
+            const plan = planFollowUp({ stage: 'commit_later', customerDeferred: true }, { attempt })
+            expect(plan.id).toBe('one_question')
+            expect(plan.templateText).not.toMatch(/במתנה|checkout|שולח קישור/)
+        }
     })
 })

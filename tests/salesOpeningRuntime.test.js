@@ -200,9 +200,9 @@ describe('prepareOpeningRuntime', () => {
     })
 })
 
-// Before 18.9 a silent opening was the end of the request: the route sent
-// nothing. In full-sales mode the route asks the runtime to yield those
-// turns to the agent; in opening-only mode nothing changes.
+// Full-sales text must reach the contextual policy even when an old
+// script has more to send. Opening-only and promised design events stay
+// on their existing deterministic transport and approval paths.
 describe('prepareOpeningRuntime yieldWhenSilent', () => {
     const flowA = active.variants.find(item => item.id === 'A')
     const pinned = (openingState, extra = {}) => ({
@@ -250,12 +250,13 @@ describe('prepareOpeningRuntime yieldWhenSilent', () => {
     })
 
     it('quotes what the opening already said so the agent does not repeat it', async () => {
-        const runtime = await run(pinned({ cursor: flowA.blocks.length, waitingFor: null }), { kind: 'text', text: 'היי' })
+        const lead = pinned({ cursor: flowA.blocks.length, waitingFor: null })
+        const runtime = await run(lead, { kind: 'text', text: 'היי' })
         const firstText = flowA.blocks.find(block => block.type === 'text').text.slice(0, 20)
-        expect(openingNoteFor(runtime, {})).toContain(firstText)
+        expect(openingNoteFor(runtime, lead)).toContain(firstText)
     })
 
-    it('changes nothing when the route did not ask for it, or when the opening has something to send', async () => {
+    it('changes nothing when the route did not opt in, but sends fresh full-sales text through the contextual policy', async () => {
         const legacy = await run(pinned({ cursor: flowA.blocks.length, waitingFor: null }), { kind: 'text', text: 'היי' }, false)
         expect(legacy.eligible).toBe(true)
         expect(legacy.result.parts).toEqual([])
@@ -265,7 +266,108 @@ describe('prepareOpeningRuntime yieldWhenSilent', () => {
             lead: { isNew: true, hasPriorConversation: false }, experiment: active, leadKey: 'non-dialable-lead-z',
             inbound: { kind: 'text', text: 'אשמח לפרטים' }, library, eventId: 'opening-event-z', yieldWhenSilent: true,
         })
-        expect(fresh.eligible).toBe(true)
-        expect(fresh.result.parts.length).toBeGreaterThan(0)
+        expect(fresh.eligible).toBe(false)
+        expect(fresh.reason).toBe('opening-question-first')
+        expect(fresh.enrollment).toBeUndefined()
+        expect(fresh.result.parts).toEqual([])
+        expect(openingNoteFor(fresh)).toContain('תסריט הפתיחה לא נשלח')
+    })
+
+    it.each([
+        'שלום! אפשר לקבל מידע נוסף על זה?',
+        'כמה עולה ספר מודפס?',
+        'צריך שם ותמונה של הילד כדי לראות דוגמה?',
+        'יש צילום אמיתי של הספר?',
+        'לא תודה',
+    ])('does not let a published opening bypass the normal policy for a new text turn: %s', async text => {
+        const runtime = await run({ isNew: true, hasPriorConversation: false }, { kind: 'text', text })
+        expect(runtime).toMatchObject({ eligible: false, reason: 'opening-question-first' })
+        expect(runtime.enrollment).toBeUndefined()
+        expect(runtime.result.parts).toEqual([])
+        expect(runtime.result.approvalRequest).toBeNull()
+    })
+
+    it('yields a qualifying event answer before a pinned script can ask for a child photo', async () => {
+        const flow = active.variants.find(item => item.id === 'C')
+        const lead = pinned({ cursor: 1, waitingFor: 'event' }, {
+            openingVariantId: 'C', openingFlow: flow,
+        })
+        const snapshot = structuredClone(lead)
+        const runtime = await run(lead, { kind: 'text', text: 'בר מצווה בדצמבר, כמה עולה?' })
+
+        expect(runtime).toMatchObject({
+            eligible: false, reason: 'opening-wait_event-yielded', expectedStateVersion: 2,
+            result: { state: { cursor: 1, waitingFor: 'event' }, parts: [], approvalRequest: null },
+        })
+        expect(lead).toEqual(snapshot)
+        const note = openingNoteFor(runtime, lead)
+        expect(note).toContain('אל תשאל שוב פרט שהלקוח כבר נתן')
+        expect(note).not.toContain('התשובה לא הייתה חד-משמעית')
+        expect(note).not.toContain('מה שכבר נאמר')
+        expect(note).not.toContain(flow.blocks.find(block => block.type === 'text').text)
+    })
+
+    it('never resolves published variable-backed copy for a full-sales text inquiry', async () => {
+        const flow = {
+            id: 'A', label: 'legacy published copy', enabled: true, weight: 100, revision: 9,
+            blocks: [
+                { id: 'legacy-copy', type: 'text', variableKey: 'opening_copy', variableVersionId: 'v1' },
+                { id: 'stop', type: 'stop' },
+            ],
+        }
+        // Deliberately unavailable: the answer path must not execute this
+        // copy or be blocked by a missing/retired script variable.
+        const runtime = await prepareOpeningRuntime({
+            lead: pinned({ cursor: 0, waitingFor: null }, { openingFlow: flow }),
+            experiment: { enabled: true, minSamplePerVariant: 30, variants: [flow] },
+            inbound: { kind: 'text', text: 'איך זה עובד?' },
+            variableVersions: {},
+            yieldWhenSilent: true,
+        })
+        expect(runtime).toMatchObject({ eligible: false, reason: 'opening-contextual-turn', result: { parts: [] } })
+    })
+
+    it('answers text during pending approval without claiming the sample is ready or advancing it', async () => {
+        const lead = pinned({ cursor: 4, waitingFor: 'approval' }, { childPhotoReceived: true })
+        const runtime = await run(lead, { kind: 'text', text: 'מתי אקבל את הדוגמה?' })
+        expect(runtime).toMatchObject({
+            eligible: false, reason: 'opening-approval_pending-yielded',
+            result: { state: { cursor: 4, waitingFor: 'approval' }, parts: [], approvalRequest: null },
+        })
+        expect(openingNoteFor(runtime, lead)).toContain('עדיין ממתינה לאישור אנושי')
+
+        const approved = await run(lead, { kind: 'owner_approval', approvalId: 'approval-1', assetKey: 'sample-1' })
+        expect(approved.eligible).toBe(true)
+        expect(approved.result.parts).toEqual([expect.objectContaining({ kind: 'approved_design', assetKey: 'sample-1' })])
+        expect(approved.result.completed).toBe(true)
+    })
+
+    it('preserves the manual handoff when a promised photo arrives', async () => {
+        const flow = {
+            id: 'A', label: 'manual demo', revision: 3,
+            blocks: [
+                { id: 'photo', type: 'ask_photo', text: 'שלחו תמונה לדוגמה' },
+                { id: 'received', type: 'text', text: 'התמונה התקבלה והצוות ימשיך כאן בשיחה.' },
+                { id: 'stop', type: 'stop' },
+            ],
+        }
+        const runtime = await run(pinned({ cursor: 1, waitingFor: 'photo' }, { openingFlow: flow }), { kind: 'image', mediaId: 'promised-photo' })
+        expect(runtime).toMatchObject({
+            eligible: true, enrollment: null,
+            result: { completed: true, captures: { childPhotoReceived: true, childPhotoMediaId: 'promised-photo' }, approvalRequest: null },
+        })
+        expect(runtime.result.parts[0].text).toBe('התמונה התקבלה והצוות ימשיך כאן בשיחה.')
+    })
+
+    it('lets a new attachment reach ordinary human review instead of starting an unsolicited photo request', async () => {
+        const runtime = await run({ isNew: true, hasPriorConversation: false }, { kind: 'image', mediaId: 'new-attachment' })
+        expect(runtime).toEqual({ eligible: false, reason: 'opening-customer-media' })
+    })
+
+    it('keeps deterministic part IDs stable for a previously promised photo event', async () => {
+        const lead = pinned({ cursor: 2, waitingFor: 'photo' })
+        const first = await run(lead, { kind: 'image', mediaId: 'same-photo' })
+        const retry = await run(lead, { kind: 'image', mediaId: 'same-photo' })
+        expect(retry).toEqual(first)
     })
 })

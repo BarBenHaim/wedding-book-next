@@ -11,7 +11,7 @@ export const SALES_CONVERSATION_PATTERNS = Object.freeze([
         lead: {},
         incomingText: 'אפשר לראות דוגמה אמיתית?',
         parsed: { messages: ['בשמחה, מתי נוח שאתקשר אליך בטלפון?'], stage: 'engaged', handoff: false },
-        expected: { intent: 'demo', nextBestAction: 'show_proof', stage: 'engaged', handoff: false },
+        expected: { intent: 'needs_verified_answer', nextBestAction: 'handoff_question', stage: 'handoff', handoff: true },
     },
     {
         id: 'known-event-facts',
@@ -25,7 +25,7 @@ export const SALES_CONVERSATION_PATTERNS = Object.freeze([
         lead: { eventType: 'bar_mitzvah' },
         incomingText: 'וואו זה בדיוק מה שחיפשנו',
         parsed: { messages: ['מעולה, אתקשר להסביר עוד'], stage: 'engaged', handoff: false },
-        expected: { intent: 'positive_signal', nextBestAction: 'present_offer', stage: 'offer_sent', handoff: false },
+        expected: { intent: 'positive_signal', nextBestAction: 'answer_then_qualify', stage: 'engaged', handoff: false },
     },
     {
         id: 'payment-friction',

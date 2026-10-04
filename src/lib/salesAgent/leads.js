@@ -31,6 +31,7 @@ import { isDueFollowUpCandidate, nextFollowUpDate, pendingFollowUpStatus, select
 import { isDemoEvidenceContent } from './followupEvidence'
 import { normalizeOpeningVariantId } from './openingExperiment'
 import { assignModelArm } from './modelExperiment'
+import { findOrphans } from './sweep'
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
 // importing this file boots the Admin SDK, which needs credentials.
@@ -701,6 +702,11 @@ export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, pr
     if (parsed.packageInterest) patch.packageInterest = parsed.packageInterest
     if (parsed.notes) patch.notes = parsed.notes
     if (parsed.callbackPromised) patch.callbackPromised = parsed.callbackPromised
+    if (typeof parsed.customerDeferred === 'boolean') {
+        patch.customerDeferred = parsed.customerDeferred
+        patch.customerCallbackAt = parsed.customerCallbackAt || null
+        patch.callbackPromised = null
+    }
     if (source) patch.source = String(source).slice(0, 60)
     if (parsed.objectionRaised) patch.objectionCount = FieldValue.increment(1)
     // Media is deliberately not marked SEEN here. This transaction only
@@ -828,10 +834,53 @@ function normalizedDeliveryOwnership(stored, outboundId) {
     return { deliveryRole, advanceOnDelivery, logicalAttemptId }
 }
 
+// Delivery evidence may arrive after a customer reply, owner intervention,
+// or a new callback choice. Those decisions outrank an old transport plan.
+const followUpStopped = lead => lead.paymentVerified === true || !!lead.human
+    || ['closed_won', 'closed_lost', 'handoff'].includes(lead.stage)
+const activityMs = value => healthMs(value) ?? (typeof value === 'string' && Number.isFinite(Date.parse(value)) ? Date.parse(value) : null)
+const followUpState = lead => ({
+    stage: lead.stage || null,
+    eventDate: lead.eventDate || null,
+    followUpAt: lead.followUpAt || null,
+    callbackPromised: lead.callbackPromised || null,
+    customerDeferred: lead.customerDeferred === true,
+    customerCallbackAt: lead.customerCallbackAt || null,
+    lastInboundAtMs: activityMs(lead.lastInboundAt),
+    userTurns: Number(lead.userTurns) || 0,
+})
+
+function followUpStateUnchanged(lead, delivery, scannedLead = null) {
+    const state = followUpState(lead)
+    if (delivery?.leadStateAtRequest) {
+        return Object.entries(delivery.leadStateAtRequest).every(([key, value]) => state[key] === value)
+    }
+    // Legacy delivery records lack a snapshot; a later customer message is
+    // still enough evidence that their current decision must be preserved.
+    const requestedAtMs = healthMs(delivery?.requestedAtMs)
+    if (state.lastInboundAtMs != null
+        && (requestedAtMs == null ? !scannedLead : state.lastInboundAtMs > requestedAtMs)) return false
+    if (scannedLead) {
+        const previous = followUpState(scannedLead)
+        return Object.keys(previous).every(key => {
+            const sourceKey = key === 'lastInboundAtMs' ? 'lastInboundAt' : key
+            return !Object.hasOwn(scannedLead, sourceKey) || previous[key] === state[key]
+        })
+    }
+    return true
+}
+
+function canAdvanceFollowUpSchedule(lead, delivery, scannedLead = null) {
+    return !followUpStopped(lead) && lead.customerDeferred !== true && !lead.customerCallbackAt
+        && !(lead.stage === 'commit_later' && !lead.callbackPromised)
+        && followUpStateUnchanged(lead, delivery, scannedLead)
+}
+
 /**
  * Register the exact outbound part before transport starts. This is metadata,
- * not a success claim: the lead cadence and pending suppression stay untouched
- * until a provider message ID is acknowledged.
+ * not a success claim: cadence advances only on delivery or stale settlement.
+ * A customer-selected callback is one permission, consumed here even if the
+ * transport later fails, so it can never become a new automatic ladder.
  */
 export async function prepareFollowUpDelivery({
     phone,
@@ -875,6 +924,26 @@ export async function prepareFollowUpDelivery({
         if (stored) return { action: 'existing', outboundId: String(outboundId), status: stored.status }
 
         const lead = leadSnap.exists ? leadSnap.data() : {}
+        const requestDay = new Date(requestedAtMs).toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+        if (followUpStopped(lead)) {
+            return { action: 'blocked', outboundId: null, status: 'followup-stopped' }
+        }
+        // A secondary part belongs to the already-authorized primary, but
+        // only while that exact request and its conversation state still own
+        // the lease. Consuming the primary must not discard its own media.
+        let callbackSibling = false
+        if (!advancesFollowUp && lead.customerDeferred === true && !lead.customerCallbackAt
+            && lead.deliveryRequestOutboundId && lead.deliveryRequestAttemptId === String(logicalAttemptId)
+            && Number(lead.deliveryRequestUntilMs) > requestedAtMs) {
+            const primarySnap = await tx.get(deliveryEventRef(lead.deliveryRequestOutboundId))
+            const primary = primarySnap.exists ? primarySnap.data() : null
+            callbackSibling = !!primary?.consumedCustomerCallbackAt && followUpStateUnchanged(lead, primary)
+        }
+        if (!callbackSibling && ((lead.customerDeferred === true && (!lead.customerCallbackAt || lead.customerCallbackAt > requestDay))
+            || (lead.customerCallbackAt && lead.customerCallbackAt > requestDay)
+            || (lead.stage === 'commit_later' && !lead.customerCallbackAt && !lead.callbackPromised))) {
+            return { action: 'blocked', outboundId: null, status: 'customer-deferred' }
+        }
         if (isDeliveryPending({
             status: lead.lastDeliveryStatus,
             deliveryPendingUntilMs: lead.deliveryPendingUntilMs,
@@ -891,6 +960,13 @@ export async function prepareFollowUpDelivery({
         }
 
         const attemptNumber = Number(lead.followUpCount || 0) + 1
+        const consumedCustomerCallbackAt = advancesFollowUp ? lead.customerCallbackAt || null : null
+        const callbackPatch = consumedCustomerCallbackAt ? {
+            customerDeferred: true,
+            customerCallbackAt: null,
+            callbackPromised: null,
+            followUpAt: null,
+        } : {}
         tx.set(deliveryRef, {
             outboundId: String(outboundId),
             channel: String(channel),
@@ -903,7 +979,9 @@ export async function prepareFollowUpDelivery({
             advancesFollowUp: !!advancesFollowUp,
             demoEvidence: demoEvidence === true,
             attemptNumber,
-            nextFollowUpAt: nextFollowUpAt || null,
+            nextFollowUpAt: consumedCustomerCallbackAt ? null : nextFollowUpAt || null,
+            consumedCustomerCallbackAt,
+            leadStateAtRequest: followUpState({ ...lead, ...callbackPatch }),
             stage: stage || null,
             templateName: templateName || null,
             ...(followUpStrategyId ? {
@@ -915,7 +993,7 @@ export async function prepareFollowUpDelivery({
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: false })
-        const leadPatch = {}
+        const leadPatch = { ...callbackPatch }
         if (operationalStatus === 'stale') {
             leadPatch.lastDeliveryStatus = 'requested'
             leadPatch.deliveryPendingOutboundId = null
@@ -1025,7 +1103,8 @@ export async function recordDeliveryEvent(event) {
         )
         const { advanceOnDelivery, logicalAttemptId } = ownership
         const logicalAlreadyAdvanced = !!(advanceOnDelivery && (
-            lead.lastAdvancedDeliveryAttemptId === logicalAttemptId
+            stored?.followUpAdvanced === true
+            || lead.lastAdvancedDeliveryAttemptId === logicalAttemptId
             || Number(lead.followUpCount || 0) >= Number(stored.attemptNumber || 1)
         ))
         const advances = !!(decision.advanceFollowUp && advanceOnDelivery && !logicalAlreadyAdvanced)
@@ -1113,11 +1192,14 @@ export async function recordDeliveryEvent(event) {
                 }
                 return { action: 'applied', status: decision.nextStatus, advanced: false }
             }
+            const controlsAttempt = owns || ownsLogicalAttempt
             const leadPatch = {
-                lastDeliveryStatus: decision.nextStatus,
-                deliveryRequestOutboundId: null,
-                deliveryRequestUntilMs: null,
-                deliveryRequestAttemptId: null,
+                ...(controlsAttempt ? {
+                    lastDeliveryStatus: decision.nextStatus,
+                    deliveryRequestOutboundId: null,
+                    deliveryRequestUntilMs: null,
+                    deliveryRequestAttemptId: null,
+                } : {}),
                 updatedAt: FieldValue.serverTimestamp(),
             }
             if (event.status === 'accepted' && advanceOnDelivery && !logicalAlreadyAdvanced && owns) {
@@ -1133,16 +1215,21 @@ export async function recordDeliveryEvent(event) {
             }
             if (event.status === 'failed' && owns) leadPatch.lastDeliveryError = event.errorCode
             if (advances) {
-                leadPatch.deliveryPendingOutboundId = null
-                leadPatch.deliveryPendingUntilMs = null
-                leadPatch.deliveryPendingAttemptId = null
+                if (controlsAttempt) {
+                    leadPatch.deliveryPendingOutboundId = null
+                    leadPatch.deliveryPendingUntilMs = null
+                    leadPatch.deliveryPendingAttemptId = null
+                }
                 leadPatch.lastAdvancedDeliveryAttemptId = logicalAttemptId
                 leadPatch.lastDeliveryError = null
                 leadPatch.lastFollowUpAt = FieldValue.serverTimestamp()
-                leadPatch.lastMessageAt = FieldValue.serverTimestamp()
                 leadPatch.followUpCount = FieldValue.increment(1)
-                leadPatch.followUpAt = stored.nextFollowUpAt || null
-                leadPatch.pendingDeliveryMessages = {}
+                if (controlsAttempt && canAdvanceFollowUpSchedule(lead, stored)) {
+                    leadPatch.lastMessageAt = FieldValue.serverTimestamp()
+                    leadPatch.followUpAt = stored.nextFollowUpAt || null
+                    if (stored.stage) leadPatch.stage = stored.stage
+                }
+                leadPatch.pendingDeliveryMessages = controlsAttempt ? {} : withoutCurrentMessage
                 if (['proof_site', 'resolve_blocker', 'qualified_offer', 'graceful_close'].includes(stored?.followUpStrategyId)) {
                     leadPatch.lastFollowUpStrategyId = stored.followUpStrategyId
                     leadPatch.lastFollowUpCta = ['website', 'reply', 'coupon', 'none'].includes(stored?.followUpCta)
@@ -1157,7 +1244,6 @@ export async function recordDeliveryEvent(event) {
                     text: String(pendingMessages[event.outboundId] || '').slice(0, 2000),
                     at: Date.parse(event.occurredAt),
                 })
-                if (stored.stage) leadPatch.stage = stored.stage
             }
             tx.set(leadRef, leadPatch, { merge: true })
         }
@@ -1588,62 +1674,96 @@ export async function readSpend({ days = 30, todayISO } = {}) {
 // reviving the same leads week after week, something upstream is
 // dropping writes, and this counter is the only place that would show.
 export async function reviveOrphans(phones = [], todayISO) {
-    const ids = [...new Set(phones.map(normalizePhone).filter(Boolean))].slice(0, 100)
-    if (!ids.length || !todayISO) return { revived: 0, ids: [] }
-    const batch = adminDb.batch()
-    for (const id of ids) {
-        batch.set(ref(id), {
-            followUpAt: todayISO,
-            revivedAt: FieldValue.serverTimestamp(),
-            revivedCount: FieldValue.increment(1),
-        }, { merge: true })
+    const candidates = [...new Set(phones.map(normalizePhone).filter(Boolean))].slice(0, 100)
+    if (!candidates.length || !todayISO) return { revived: 0, ids: [] }
+    const ids = []
+    for (const id of candidates) {
+        const revived = await adminDb.runTransaction(async tx => {
+            const leadRef = ref(id)
+            const snap = await tx.get(leadRef)
+            if (!snap.exists) return false
+            const lead = { ...snap.data(), phone: id }
+            // The scan can predate a reply, a payment, a handoff or a chosen
+            // callback. Re-run orphan eligibility against transaction truth.
+            if (followUpStopped(lead) || lead.customerCallbackAt
+                || pendingFollowUpStatus(lead) !== 'none' || !findOrphans([lead]).length) return false
+            tx.set(leadRef, {
+                followUpAt: todayISO,
+                revivedAt: FieldValue.serverTimestamp(),
+                revivedCount: FieldValue.increment(1),
+            }, { merge: true })
+            return true
+        })
+        if (revived) ids.push(id)
     }
-    await batch.commit()
     return { revived: ids.length, ids }
 }
 
 /**
- * Count an expired attempt as the touch it was and move the ladder on.
- * See sweep.findStaleDeliveries for why. One batch, no per-lead reads:
- * the next date comes from the policy, exactly as the attempt would have
- * computed it had its 'delivered' webhook arrived.
- *
- * Idempotent per run: a settled lead no longer looks stale.
+ * Count an expired attempt as the touch it was. A fresh transactional read
+ * prevents stale scans from replacing a new request, customer decision or
+ * terminal state. Only unchanged, active conversations continue the ladder.
  */
 export async function settleStaleDeliveries(leads = [], todayISO) {
     const rows = (Array.isArray(leads) ? leads : []).filter(l => l && l.phone).slice(0, 100)
     if (!rows.length || !todayISO) return { settled: 0, ids: [] }
-    const batch = adminDb.batch()
     const ids = []
-    for (const lead of rows) {
-        const id = normalizePhone(lead.phone)
-        if (!id) continue
-        const attempt = Math.max(0, Number(lead.followUpCount) || 0) + 1
-        batch.set(ref(id), {
-            followUpCount: attempt,
-            lastFollowUpAt: FieldValue.serverTimestamp(),
-            followUpAt: nextFollowUpDate({
-                stage: lead.stage,
-                attempt,
-                eventDate: lead.eventDate || null,
-                todayISO,
-                callbackPromised: lead.callbackPromised || null,
-            }),
-            lastDeliveryStatus: 'stale',
-            deliveryPendingOutboundId: null,
-            deliveryPendingUntilMs: null,
-            deliveryPendingAttemptId: null,
-            deliveryRequestOutboundId: null,
-            deliveryRequestUntilMs: null,
-            deliveryRequestAttemptId: null,
-            pendingDeliveryMessages: {},
-            staleSettledAt: FieldValue.serverTimestamp(),
-            staleSettledCount: FieldValue.increment(1),
-            updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true })
-        ids.push(id)
+    for (const scanned of rows) {
+        const id = normalizePhone(scanned.phone)
+        if (!id || ids.includes(id)) continue
+        const settled = await adminDb.runTransaction(async tx => {
+            const leadRef = ref(id)
+            const snap = await tx.get(leadRef)
+            if (!snap.exists) return false
+            const lead = snap.data()
+            if (!['stale', 'stale-requested'].includes(pendingFollowUpStatus(lead))) return false
+            const outboundId = lead.deliveryRequestOutboundId || lead.deliveryPendingOutboundId || null
+            const scannedOutboundId = scanned.deliveryRequestOutboundId || scanned.deliveryPendingOutboundId || null
+            if (scannedOutboundId && scannedOutboundId !== outboundId) return false
+            if (Object.hasOwn(scanned, 'followUpCount') && Number(scanned.followUpCount || 0) !== Number(lead.followUpCount || 0)) return false
+            const deliveryRef = outboundId ? deliveryEventRef(outboundId) : null
+            const deliverySnap = deliveryRef ? await tx.get(deliveryRef) : null
+            const delivery = deliverySnap?.exists ? deliverySnap.data() : null
+            const logicalAttemptId = delivery?.logicalAttemptId || lead.deliveryRequestAttemptId || lead.deliveryPendingAttemptId || outboundId
+            const alreadyCounted = delivery?.followUpAdvanced === true || (logicalAttemptId && lead.lastAdvancedDeliveryAttemptId === logicalAttemptId)
+                || (delivery?.attemptNumber && Number(lead.followUpCount || 0) >= Number(delivery.attemptNumber))
+            const attempt = Math.max(0, Number(lead.followUpCount) || 0) + (alreadyCounted ? 0 : 1)
+            const patch = {
+                followUpCount: attempt,
+                ...(!alreadyCounted ? { lastFollowUpAt: FieldValue.serverTimestamp() } : {}),
+                ...(logicalAttemptId ? { lastAdvancedDeliveryAttemptId: logicalAttemptId } : {}),
+                lastDeliveryStatus: 'stale',
+                deliveryPendingOutboundId: null,
+                deliveryPendingUntilMs: null,
+                deliveryPendingAttemptId: null,
+                deliveryRequestOutboundId: null,
+                deliveryRequestUntilMs: null,
+                deliveryRequestAttemptId: null,
+                pendingDeliveryMessages: {},
+                staleSettledAt: FieldValue.serverTimestamp(),
+                staleSettledCount: FieldValue.increment(1),
+                updatedAt: FieldValue.serverTimestamp(),
+            }
+            if (followUpStopped(lead) || (lead.customerDeferred === true && !lead.customerCallbackAt)
+                || (lead.stage === 'commit_later' && !lead.customerCallbackAt && !lead.callbackPromised)) {
+                patch.followUpAt = null
+            } else if (!alreadyCounted && canAdvanceFollowUpSchedule(lead, delivery, scanned)) {
+                patch.followUpAt = nextFollowUpDate({
+                    stage: lead.stage,
+                    attempt,
+                    eventDate: lead.eventDate || null,
+                    todayISO,
+                    callbackPromised: lead.callbackPromised || null,
+                })
+            }
+            tx.set(leadRef, patch, { merge: true })
+            // Keep the provider status truthful; only accounting is settled.
+            // A late delivered/read callback may still add delivery evidence.
+            if (deliveryRef && delivery) tx.set(deliveryRef, { followUpAdvanced: true, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+            return true
+        })
+        if (settled) ids.push(id)
     }
-    if (ids.length) await batch.commit()
     return { settled: ids.length, ids }
 }
 

@@ -522,7 +522,11 @@ export async function POST(req) {
     // events resume the pinned revision and state instead of restarting.
     let openingRuntime
     try {
-        const variableVersions = await loadOpeningVariableVersions(settings.openingExperiment)
+        // Text in full-sales mode cannot execute the script. A retired
+        // variable or unavailable script asset must not block its answer.
+        const variableVersions = settings.mode === 'full_sales' && messageType === 'text'
+            ? {}
+            : await loadOpeningVariableVersions(settings.openingExperiment)
         openingRuntime = await prepareOpeningRuntime({
             lead,
             experiment: settings.openingExperiment,
@@ -540,9 +544,9 @@ export async function POST(req) {
             },
             signDownload: signOpeningVariableDownload,
             eventId,
-            // In full-sales mode a silent opening (finished, or waiting for a
-            // photo while the customer typed words) hands the turn to the
-            // agent below instead of ending the request with no reply.
+            // Full-sales text always reaches the contextual policy before
+            // an old/published script can issue another request or promise.
+            // Existing promised photo/approval events keep their state flow.
             yieldWhenSilent: settings.mode === 'full_sales',
         })
     } catch {
@@ -1142,7 +1146,19 @@ export async function POST(req) {
     // next action selected before the model call.
     parsed = enforceSalesReply({ parsed, decision: turnDecision, lead, incomingText: text })
 
-    const openingPlan = buildOpeningPlan({ lead, decision: turnDecision, settings, library, stats, eventId })
+    // The evidence bundle is also customer-facing copy. A safe answer
+    // above must not be followed by a fresh pitch after a no, a request to
+    // wait, an unresolved question/handoff, or a checkout clarification.
+    const allowOpeningEvidence = !parsed.handoff && !parsed.noReply && !parsed.customerDeferred
+        && !['handoff', 'closed_won', 'closed_lost', 'ready_to_pay', 'commit_later'].includes(parsed.stage)
+        && ['general', 'process', 'event_answer', 'price'].includes(turnDecision.intent)
+        && ['answer_then_qualify', 'answer', 'present_offer', 'quote_price'].includes(turnDecision.nextBestAction)
+    const openingPlan = allowOpeningEvidence
+        ? buildOpeningPlan({
+            lead: { ...lead, eventType: parsed.eventType || lead.eventType, eventDate: parsed.eventDate || lead.eventDate },
+            decision: turnDecision, settings, library, stats, eventId,
+        })
+        : { eligible: false, qualificationTarget: null, closingText: '', mediaParts: [] }
     const openingMediaParts = openingPlan.eligible ? openingPlan.mediaParts : []
     if (openingMediaParts.length) {
         parsed.image = openingMediaParts[0].key

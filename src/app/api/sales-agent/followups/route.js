@@ -59,8 +59,8 @@ import { canSendWhatsApp, sendWhatsAppText, sendWhatsAppImage, sendWhatsAppVideo
 import { createOutboundId } from '@/lib/salesAgent/delivery'
 import { isDemoEvidenceContent } from '@/lib/salesAgent/followupEvidence'
 import { readSalesSettings } from '@/lib/salesAgent/settingsStore'
-import { planFollowUp, readFollowUpOffer } from '@/lib/salesAgent/followupStrategy'
-import { hasMixedScript } from '@/lib/salesAgent/decisionPolicy'
+import { planFollowUp, readFollowUpOffer, buildFollowUpMessages } from '@/lib/salesAgent/followupStrategy'
+import { hasMixedScript, repeatsKnownSalesQuestion } from '@/lib/salesAgent/decisionPolicy'
 
 function unsentVideo(library, lead, strategy) {
     if (strategy?.mediaPreference !== 'video') return null
@@ -220,6 +220,7 @@ export async function GET(req) {
 
     const items = []
     let blockedTemplateCount = sweepBlockedTemplateCount
+    let blockedConversationCount = 0
     let failedCount = 0
     // A small worker pool rather than a sequential loop: twenty-five
     // model calls in a row is 60-90 seconds of wall time, which is the
@@ -277,7 +278,7 @@ export async function GET(req) {
                 // instruction to the agent, never shown to the customer.
                 const { text: raw } = await callClaude({
                     system,
-                    messages: [{ role: 'user', content: 'כתוב עכשיו את הפולו-אפ ללקוח הזה, לפי ההיסטוריה והכללים.' }],
+                    messages: buildFollowUpMessages(lead.turns),
                     maxTokens: 500,
                 })
                 parsed = parseAgentJson(raw, { mediaKeys: Object.keys(library) })
@@ -286,7 +287,7 @@ export async function GET(req) {
                 // A Hebrew line with Arabic letters in it is a model
                 // glitch, not a message. The strategy's own line says the
                 // same thing in clean Hebrew.
-                if (hasMixedScript(text)) text = strategy.templateText
+                if (hasMixedScript(text) || repeatsKnownSalesQuestion(text, lead)) text = strategy.templateText
             } else {
                 // Outside 24 hours the approved template is the customer
                 // message. Do not generate and then persist imaginary copy
@@ -308,6 +309,10 @@ export async function GET(req) {
                 && parsed.image && library[parsed.image]?.kind !== 'video'
                 ? { key: parsed.image, ...library[parsed.image] }
                 : null
+            if (lead.customerDeferred === true) {
+                parsed.customerDeferred = true
+                parsed.customerCallbackAt = null
+            }
             const nextFollowUpAt = resolveFollowUp({
                 parsed,
                 todayISO: today,
@@ -399,6 +404,10 @@ export async function GET(req) {
             })
             const primaryPreparation = await preparePart(primaryPart, primaryOutboundId, true)
             if (primaryPreparation.action !== 'requested') {
+                if (primaryPreparation.action === 'blocked') {
+                    blockedConversationCount += 1
+                    return // No sendable item may escape to Make either.
+                }
                 item.outboundId = primaryPreparation.outboundId || primaryOutboundId
                 item.deliveryStatus = primaryPreparation.action === 'pending'
                     ? 'pending'
@@ -406,7 +415,29 @@ export async function GET(req) {
                 items.push(item)
                 return
             }
-            if (mediaPart) await preparePart(mediaPart, outboundParts[mediaPart], false)
+            if (mediaPart) {
+                const mediaPreparation = await preparePart(mediaPart, outboundParts[mediaPart], false)
+                if (mediaPreparation.action !== 'requested') {
+                    // The conversation may change between the two atomic
+                    // preparations. Neither the text nor media has left yet.
+                    // Settle the unsent primary and emit no caller-send item.
+                    blockedConversationCount += 1
+                    try {
+                        await recordDeliveryEvent({
+                            eventId: `${primaryOutboundId}:suppressed`,
+                            outboundId: primaryOutboundId,
+                            channel: callerDelivers ? 'make' : 'whatsapp_graph',
+                            status: 'failed',
+                            errorCode: 'CONVERSATION_CHANGED',
+                            occurredAt: new Date().toISOString(),
+                        })
+                    } catch {
+                        failedCount += 1
+                        console.warn('[sales-agent/followups] suppression acknowledgement failed')
+                    }
+                    return
+                }
+            }
 
             if (callerDelivers) {
                 item.deliveryStatus = 'requested'
@@ -583,6 +614,7 @@ export async function GET(req) {
             blockedCount: blockedTemplateCount,
         },
         failedCount,
+        blockedConversationCount,
         settledStale,
         recovered: revived.length,
         recoveredLeads: revived,
