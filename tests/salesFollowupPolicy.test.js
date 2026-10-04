@@ -362,3 +362,19 @@ describe('the pre-event touch', () => {
         expect(isDueFollowUpCandidate({ ...lead, followUpCount: 4 }, '2026-11-15', Date.parse('2026-11-15T10:00:00Z'))).toBe(false)
     })
 })
+
+describe('customer-controlled timing memory', () => {
+    const nowMs = Date.parse('2026-10-04T12:00:00Z')
+    const lead = { stage: 'commit_later', followUpAt: '2026-10-04', followUpCount: 0, lastInboundAt: nowMs - 8 * 3600_000 }
+    it('blocks a customer pause even if an old due date remains', () => {
+        expect(isDueFollowUpCandidate({ ...lead, customerDeferred: true }, '2026-10-04', nowMs)).toBe(false)
+    })
+    it('blocks a legacy later-stage lead with no chosen callback', () => {
+        expect(isDueFollowUpCandidate(lead, '2026-10-04', nowMs)).toBe(false)
+    })
+    it('allows the chosen day and never an earlier day', () => {
+        const chosen = { ...lead, customerDeferred: true, customerCallbackAt: '2026-10-05' }
+        expect(isDueFollowUpCandidate(chosen, '2026-10-04', nowMs)).toBe(false)
+        expect(isDueFollowUpCandidate(chosen, '2026-10-05', nowMs + 86400_000)).toBe(true)
+    })
+})

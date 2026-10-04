@@ -36,6 +36,28 @@ const siteTemplateText = name => `${name}, רציתי לשלוח לך שוב ד�
 const oneLineTemplateText = name => `${name}, בסוף האירוע נשאר לכם ספר כריכה קשה עם כל הברכות והתמונות שהאורחים כתבו. ${proofLine(0)}. לאיזה אירוע זה אצלכם?`
 const helpTemplateText = name => `${name}, רציתי לבדוק אם עצרה אתכם שאלה על החבילה, תקלה בתשלום או פשוט התזמון. אפשר לענות לי כאן במשפט אחד.`
 
+// Follow-ups need the actual dialogue too. Bound both turns and characters,
+// and keep adjacent roles valid for every supported provider. No media bytes.
+export function buildFollowUpMessages(turns = []) {
+    let remaining = 6000
+    const recent = []
+    for (const turn of (Array.isArray(turns) ? turns : []).slice(-24).reverse()) {
+        if (!['user', 'assistant'].includes(turn?.role)) continue
+        const content = String(turn.text || '').trim().slice(0, Math.min(1200, remaining))
+        if (!content) continue
+        recent.unshift({ role: turn.role, content })
+        remaining -= content.length
+        if (remaining <= 0) break
+    }
+    while (recent.length && recent[0].role !== 'user') recent.shift()
+    recent.push({ role: 'user', content: 'כתוב עכשיו את הפולו-אפ ללקוח הזה, לפי ההיסטוריה והכללים. הודעות קודמות של הבוט אינן מקור לעובדות על המוצר.' })
+    return recent.reduce((messages, turn) => {
+        if (messages.at(-1)?.role === turn.role) messages.at(-1).content += `\n${turn.content}`
+        else messages.push({ ...turn })
+        return messages
+    }, [])
+}
+
 function expiryLabel(iso) {
     const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
         timeZone: 'Asia/Jerusalem',
@@ -118,6 +140,15 @@ export function planFollowUp(lead = {}, {
     const preEventDate = preEventTouchDate(lead?.eventDate, todayISO)
     const untilEvent = daysUntil(lead?.eventDate, todayISO)
 
+    if (lead.customerDeferred === true || lead.stage === 'commit_later') {
+        return plan({ name,
+            id: 'one_question',
+            objective: 'לחזור רק במועד שהלקוח בחר, להזכיר את ההקשר ולשאול אם מתאים להמשיך. בלי מבצע, דחיפות או קישור תשלום.',
+            cta: 'reply',
+            templateText: `${name}, כתבת שתרצו לחזור לספר בהמשך. האם עכשיו זמן מתאים להמשיך?`,
+        })
+    }
+
     // Touch 4: the pre-event message, thirty (or fourteen) days before
     // the event. The offer, the reason it matters now (the poster), a
     // stranger's word, and the close. Scripted; it goes out as written.
@@ -163,6 +194,16 @@ export function planFollowUp(lead = {}, {
         })
     }
 
+    // Checkout-stage context matters on the FIRST touch as well as later.
+    if (lead?.stage === 'ready_to_pay') {
+        return plan({ name,
+            id: 'resolve_blocker',
+            objective: 'לברר בעדינות אם עצרה שאלה על החבילה, תקלה בתשלום או תזמון',
+            cta: 'reply',
+            templateText: helpTemplateText(name),
+        })
+    }
+
     // The first touch is the only one that reliably lands inside Meta's
     // 24-hour window (the cron runs twice a day; the second touch is three
     // days later and goes out as the fixed approved template). So the
@@ -178,7 +219,7 @@ export function planFollowUp(lead = {}, {
     }
 
     if (number === 1) {
-        if (['demo_sent', 'offer_sent'].includes(lead?.stage)) {
+        if (['demo_sent', 'offer_sent'].includes(lead?.stage) || lead?.eventType) {
             return plan({ name,
                 id: 'one_question',
                 objective: 'הוא כבר ראה את הדמו או את המחירים. שאלה אחת קצרה שמתחברת לדבר האחרון שהוא כתב, בלי קישור, בלי מחירים, בלי לחץ. המטרה היחידה: שיענה.',
@@ -192,15 +233,6 @@ export function planFollowUp(lead = {}, {
             cta: 'reply',
             mediaPreference: 'video',
             templateText: oneLineTemplateText(name),
-        })
-    }
-
-    if (lead?.stage === 'ready_to_pay') {
-        return plan({ name,
-            id: 'resolve_blocker',
-            objective: 'לברר בעדינות אם עצרה שאלה על החבילה, תקלה בתשלום או תזמון',
-            cta: 'reply',
-            templateText: helpTemplateText(name),
         })
     }
 

@@ -1079,3 +1079,15 @@ describe('digital first, printed later (22.9)', () => {
         expect(p).not.toMatch(/\b590\b/)
     })
 })
+
+describe('customer timing overrides the generic ladder', () => {
+    it('never replaces a customer pause with a model-suggested next day', () => {
+        expect(resolveFollowUp({ parsed: { stage: 'commit_later', customerDeferred: true, customerCallbackAt: null, followUpAt: '2026-10-05' }, todayISO: '2026-10-04' })).toBeNull()
+    })
+    it('uses the exact chosen callback day, once', () => {
+        const parsed = { stage: 'commit_later', customerDeferred: true, customerCallbackAt: '2027-01-11' }
+        expect(resolveFollowUp({ parsed, todayISO: '2026-10-04' })).toBe('2027-01-11')
+        expect(resolveFollowUp({ parsed: { ...parsed, customerCallbackAt: null }, todayISO: '2027-01-11' })).toBeNull()
+        expect(resolveFollowUp({ parsed: { ...parsed, stage: 'closed_lost' }, todayISO: '2026-10-04' })).toBeNull()
+    })
+})

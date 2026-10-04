@@ -435,6 +435,11 @@ describe('Firestore atomic successful exchange matrix', () => {
     })
 
 
+    it('persists a customer timing pause and clears a stale callback in the same exchange', () => {
+        const result = buildExchangePatch({ ...exchange, parsed: { ...exchange.parsed, customerDeferred: true, customerCallbackAt: null }, followUpAt: null })
+        expect(result.patch).toMatchObject({ customerDeferred: true, customerCallbackAt: null, callbackPromised: null, followUpAt: null })
+    })
+
     it('records every configured opening asset as seen in the same durable exchange', () => {
         const result = buildExchangePatch({ ...exchange, parsed: parsedWithOpeningMedia })
         expect(result.patch.imagesSent).toBeUndefined()

@@ -4,13 +4,13 @@ import { buildDeterministicSalesReply, decideSalesTurn, detectSalesIntent, enfor
 describe('conversation-learned sales decision policy', () => {
     it.each([
         ['price', 'כמה זה עולה?', {}, 'quote_price'],
-        ['price', 'כמה יעלו לי 2 ספרים?', {}, 'answer'],
+        ['price', 'כמה יעלו לי 2 ספרים?', {}, 'clarify_quantity'],
         ['demo', 'אפשר לראות דוגמה של הספר?', {}, 'show_proof'],
-        ['positive_signal', 'וואו זה נראה אש', { eventType: 'bar_mitzvah' }, 'present_offer'],
-        ['positive_signal', 'וואו זה נראה אש', { eventType: 'bar_mitzvah', stage: 'offer_sent' }, 'send_payment_link'],
-        ['event_answer', 'בר מצווה של הבן', {}, 'present_offer'],
-        ['affirmative', 'כן', { eventType: 'wedding', stage: 'offer_sent' }, 'send_payment_link'],
-        ['affirmative', 'סבבה', { eventType: 'wedding' }, 'present_offer'],
+        ['positive_signal', 'וואו זה נראה אש', { eventType: 'bar_mitzvah' }, 'answer_then_qualify'],
+        ['positive_signal', 'וואו זה נראה אש', { eventType: 'bar_mitzvah', stage: 'offer_sent' }, 'answer_then_qualify'],
+        ['event_answer', 'בר מצווה של הבן', {}, 'show_workflow'],
+        ['affirmative', 'כן', { eventType: 'wedding', stage: 'offer_sent' }, 'answer_then_qualify'],
+        ['affirmative', 'סבבה', { eventType: 'wedding' }, 'answer_then_qualify'],
         ['payment_intent', 'אני רוצה להזמין את המודפס', {}, 'send_payment_link'],
         ['payment_intent', 'לא הצלחתי להשלים את התשלום', { paymentLinkSentAt: 1 }, 'diagnose_checkout'],
         ['negative_exit', 'החלטנו לוותר תודה', {}, 'close_lost'],
@@ -391,7 +391,7 @@ describe('what the 21-22.9 transcripts taught the enforcer', () => {
 
     it('never turns the question mark inside a URL into a full stop', () => {
         // 21.9: "checkout/?add-to-cart=6271" went out as "checkout/.add-to-cart=6271".
-        const incomingText = 'כן, אשמח'
+        const incomingText = 'אני רוצה להזמין ספר מודפס'
         const result = enforceSalesReply({
             parsed: { messages: ['מוכן להתחיל? הקישור כאן: https://weddingtales.co.il/checkout/?add-to-cart=6271 ומה התאריך?'], stage: 'engaged', handoff: false },
             decision: decisionFor(incomingText),
@@ -399,8 +399,7 @@ describe('what the 21-22.9 transcripts taught the enforcer', () => {
             incomingText,
         })
         expect(result.messages[0]).toContain('https://weddingtales.co.il/checkout/?add-to-cart=6271')
-        expect(result.messages[0].match(/\?/g)).toHaveLength(2)
-        expect(result.messages[0].endsWith('ומה התאריך.')).toBe(true)
+        expect(result.messages[0]).not.toContain('checkout/.add-to-cart')
     })
 
     it('lifts "[image: key]" out of the words and attaches the picture', () => {
@@ -421,7 +420,7 @@ describe('what the 21-22.9 transcripts taught the enforcer', () => {
 
     it('lets the model add up a package and an extra copy', () => {
         // 21.9: "כמה יעלה לי 2 ספרים" twice, the price list twice.
-        const incomingText = 'כמה יעלה לי 2 ספרים'
+        const incomingText = 'כמה יעלה לי 2 ספרים, שני עותקים של אותו ספר'
         const result = enforceSalesReply({
             parsed: { messages: ['ספר מודפס 990 שח ועותק נוסף 290 שח, ביחד 1280 שח. לסבא וסבתא?'], stage: 'offer_sent', handoff: false },
             decision: decisionFor(incomingText),
@@ -513,29 +512,28 @@ describe('the funnel mechanism', () => {
         return { decision, result: enforceSalesReply({ parsed: { messages: ['טיוטה של המודל'], stage: lead.stage || 'engaged', handoff: false, ...parsed }, decision, lead, incomingText }) }
     }
 
-    it('answers the event with the offer: their event, both prices, one close, the book from their event', () => {
+    it('answers the event with the guest workflow, without assuming purchase readiness', () => {
         const { decision, result } = turn('בר מצווה', { isNew: false, stage: 'opening_completed' })
-        expect(decision).toMatchObject({ intent: 'event_answer', nextBestAction: 'present_offer' })
+        expect(decision).toMatchObject({ intent: 'event_answer', nextBestAction: 'show_workflow' })
         expect(result.messages).toHaveLength(1)
-        expect(result.messages[0]).toMatch(/בר מצווה/)
-        expect(result.messages[0]).toContain('690')
-        expect(result.messages[0]).toContain('990')
-        expect(result.messages[0]).toMatch(/רוצה שאפתח/)
+        expect(result.messages[0]).toContain('/photo')
+        expect(result.messages[0]).not.toMatch(/690|990|רוצה שאפתח/)
         expect(result.messages[0].length).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
-        expect(result.image).toBe('book_bar_mitzvah')
-        expect(result.stage).toBe('offer_sent')
+        expect(result.image).toBeNull()
+        expect(result.stage).toBe('engaged')
         expect(result.eventType).toBe('bar_mitzvah')
     })
 
-    it('uses the celebrant name in the close and never repeats a picture', () => {
+    it('does not request child details or repeat a picture when showing the workflow', () => {
         const { result } = turn('חתונה בפברואר', { isNew: false, imagesSent: ['book_wedding'] }, { celebrantName: 'נועה ודן' })
-        expect(result.messages[0]).toContain('הספר של נועה ודן')
-        expect(result.image).toBe('pages_wedding')
+        expect(result.messages[0]).not.toContain('שם')
+        expect(result.image).toBeNull()
+        expect(result.messages[0]).toContain('/photo')
     })
 
-    it('makes the offer when the event is already known and the customer only states something', () => {
+    it('can show the workflow when the event is known but still answers questions first', () => {
         const { decision } = turn('הבנתי', { isNew: false, eventType: 'bat_mitzvah', stage: 'engaged' })
-        expect(decision.nextBestAction).toBe('present_offer')
+        expect(decision.nextBestAction).toBe('show_workflow')
         // A question still goes to the model first.
         expect(turn('ומה עם אורחים מבוגרים?', { isNew: false, eventType: 'bat_mitzvah', stage: 'engaged' }).decision.nextBestAction).toBe('answer_then_qualify')
         // Once the prices went out, a statement is no longer an opening for the offer.
@@ -545,9 +543,10 @@ describe('the funnel mechanism', () => {
     it('does not repeat the prices when the event arrives after "כמה עולה"', () => {
         const lead = { isNew: false, stage: 'offer_sent', turns: [{ role: 'assistant', text: 'דיגיטלי 690 שח, מודפס בכריכה קשה 990 שח כולל משלוח. לאיזה אירוע זה אצלכם?' }] }
         const { decision, result } = turn('בת מצווה', lead)
-        expect(decision.nextBestAction).toBe('present_offer')
+        expect(decision.nextBestAction).toBe('show_workflow')
         expect(result.messages[0]).not.toContain('690')
-        expect(result.messages[0]).toMatch(/בת מצווה.*רוצה שאפתח/)
+        expect(result.messages[0]).toContain('/photo')
+        expect(result.messages[0]).not.toContain('שאפתח')
     })
 
     it('answers a plain price question from the catalog and closes when the event is known', () => {
@@ -559,19 +558,19 @@ describe('the funnel mechanism', () => {
         expect(unknown.result.messages[0]).toMatch(/690.*990.*לאיזה אירוע/)
     })
 
-    it('turns "כן" after a close into the payment link with the after-payment line', () => {
+    it('confirms the format after agreeing to open a book, without assuming printed', () => {
         const lead = { isNew: false, eventType: 'bar_mitzvah', stage: 'offer_sent', turns: [{ role: 'assistant', text: 'בר מצווה זה בדיוק האירוע לזה. דיגיטלי 690 שח, מודפס 990 שח. רוצה שאפתח לכם את הספר? שולח קישור.' }] }
         const { decision, result } = turn('כן', lead)
-        expect(decision).toMatchObject({ intent: 'affirmative', nextBestAction: 'send_payment_link' })
-        expect(result.messages.at(-1)).toContain('add-to-cart=6271')
-        expect(result.messages.at(-1)).toMatch(/48 שעות/)
-        expect(result.stage).toBe('ready_to_pay')
-        expect(result.packageInterest).toBe('printed')
+        expect(decision).toMatchObject({ intent: 'affirmative', nextBestAction: 'clarify_package' })
+        expect(result.messages.at(-1)).not.toContain('add-to-cart')
+        expect(result.messages.at(-1)).toContain('איזה ספר תרצו')
+        expect(result.stage).toBe('offer_sent')
+        expect(result.packageInterest).toBeNull()
     })
 
     it('reads "כן" before any prices as a wish to hear more, not as an order', () => {
         expect(turn('כן', { isNew: false }).decision.nextBestAction).toBe('answer_then_qualify')
-        expect(turn('יאללה', { isNew: false, eventType: 'brit' }).decision.nextBestAction).toBe('present_offer')
+        expect(turn('יאללה', { isNew: false, eventType: 'brit' }).decision.nextBestAction).toBe('answer_then_qualify')
         expect(detectSalesIntent('כן אבל יש לי שאלה על המשלוח')).not.toBe('affirmative')
     })
 
@@ -594,19 +593,20 @@ describe('the funnel mechanism', () => {
         expect(third.result.messages[0]).toMatch(/רוצה שאפתח/)
     })
 
-    it('puts a date on "אחשוב" and asks when to come back, once', () => {
+    it('asks when to return without adding a concession to a customer pause', () => {
         const { result } = turn('אני אחשוב על זה', { isNew: false, stage: 'offer_sent' })
-        expect(result.messages[0]).toContain('במתנה')
-        expect(result.messages[0]).toMatch(/מתי נוח שאחזור\?$/)
+        expect(result.messages[0]).not.toContain('במתנה')
+        expect(result.messages[0]).toMatch(/מתי נוח שנחזור לזה\?$/)
+        expect(result.customerDeferred).toBe(true)
         expect(result.image).toBeNull()
         const again = turn('אחשוב', { isNew: false, stage: 'objection', turns: [{ role: 'assistant', text: 'שמרתי לכם עותק מודפס נוסף במתנה' }] })
         expect(again.result.messages[0]).not.toContain('במתנה')
     })
 
-    it('answers a far date with the reason to open now', () => {
+    it('respects a far-date deferral without manufacturing urgency', () => {
         const { result } = turn('האירוע עוד רחוק', { isNew: false, stage: 'offer_sent' })
-        expect(result.messages[0]).toMatch(/מוכנים מראש/)
-        expect(result.messages[0]).toContain('במתנה')
+        expect(result.messages[0]).toContain('מתי נוח שנחזור')
+        expect(result.messages[0]).not.toContain('במתנה')
         expect(result.messages[0].length).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
     })
 
@@ -669,7 +669,8 @@ describe('what the first two days of the mechanism showed', () => {
         expect(second.messages[0]).toMatch(/בטלפון/)
         expect(second.messages[0].length).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
         const think = enforceSalesReply({ parsed: { messages: ['טיוטה'], stage: 'offer_sent', handoff: false }, decision: decideSalesTurn({ incomingText: 'אחשוב', lead: { stage: 'offer_sent' }, todayISO: '2026-10-01' }), lead: { stage: 'offer_sent' }, incomingText: 'אחשוב' })
-        expect(think.messages[0]).toMatch(/בטלפון.*מתי נוח שאחזור\?$/)
+        expect(think.messages[0]).not.toContain('בטלפון')
+        expect(think.messages[0]).toContain('מתי נוח שנחזור')
         expect(think.messages[0].length).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
     })
 

@@ -189,3 +189,11 @@ describe('findStaleDeliveries', () => {
         expect(findStaleDeliveries([lead({ lastDeliveryStatus: 'requested' })], { nowMs: NOW })).toEqual([])
     })
 })
+
+describe('customer timing is not an orphan', () => {
+    it('never revives a deliberately deferred lead', () => {
+        const nowMs = Date.parse('2026-10-04T12:00:00Z')
+        const old = { phone: 'test-deferred-token', stage: 'commit_later', followUpAt: null, lastInboundAt: nowMs - 100 * 3600_000, followUpCount: 0 }
+        expect(findOrphans([{ ...old, customerDeferred: true }, old], { nowMs })).toEqual([])
+    })
+})

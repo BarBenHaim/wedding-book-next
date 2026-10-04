@@ -246,6 +246,11 @@ export function parseAgentJson(raw, { mediaKeys = MEDIA_KEYS } = {}) {
 // system exists to prevent. So the schedule is decided here, with the
 // model's answer as a hint rather than the authority.
 export function resolveFollowUp({ parsed, todayISO, followUpCount = 0, addDays }) {
+    if (parsed.customerDeferred === true) {
+        return parsed.customerCallbackAt && parsed.customerCallbackAt > todayISO && !parsed.handoff
+            && !['closed_won', 'closed_lost', 'handoff'].includes(parsed.stage)
+            ? parsed.customerCallbackAt : null
+    }
     // Precedence, highest first, and the order is the whole rule:
     //
     //   1. a date the CUSTOMER named  — they chose it, nothing beats it

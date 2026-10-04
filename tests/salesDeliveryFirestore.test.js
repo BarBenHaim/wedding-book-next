@@ -76,7 +76,7 @@ vi.mock('firebase-admin/firestore', () => ({
 
 import {
     prepareDigestDelivery, prepareFollowUpDelivery, recordDeliveryEvent, recordDigestOutcome,
-    resolveProviderMessageOutboundId, settleStaleDeliveries,
+    resolveProviderMessageOutboundId, reviveOrphans, settleStaleDeliveries,
 } from '@/lib/salesAgent/leads'
 import { providerMessageCorrelationId } from '@/lib/salesAgent/delivery'
 import { POST as acknowledgeDelivery } from '@/app/api/sales-agent/delivery/route'
@@ -1372,5 +1372,241 @@ describe('settleStaleDeliveries', () => {
 
     it('is a no-op with nothing to settle', async () => {
         expect(await settleStaleDeliveries([], '2026-08-14')).toEqual({ settled: 0, ids: [] })
+    })
+})
+
+describe('customer deferral is rechecked at delivery preparation', () => {
+    it('does not prepare a stale queued message after a customer chose later', async () => {
+        store.set(LEAD, { stage: 'commit_later', followUpAt: '2026-08-14', customerDeferred: true, customerCallbackAt: null })
+        await expect(prepareFollowUpDelivery(requested())).resolves.toMatchObject({ action: 'blocked', status: 'customer-deferred' })
+        expect(store.get(DELIVERY)).toBeUndefined()
+    })
+    it('does not prepare before the customer-selected date', async () => {
+        store.set(LEAD, { stage: 'commit_later', followUpAt: '2026-08-14', customerDeferred: true, customerCallbackAt: '2026-09-01' })
+        await expect(prepareFollowUpDelivery(requested())).resolves.toMatchObject({ action: 'blocked', status: 'customer-deferred' })
+    })
+})
+
+
+describe('one customer-selected callback is one logical preparation', () => {
+    const callbackLead = () => ({
+        stage: 'commit_later', followUpAt: '2026-08-14', followUpCount: 0,
+        customerDeferred: true, customerCallbackAt: '2026-08-14',
+        lastInboundAt: Date.parse('2026-08-10T10:00:00Z'), userTurns: 2,
+    })
+
+    it('consumes permission atomically without claiming delivery, and allows only its own secondary media', async () => {
+        store.set(LEAD, callbackLead())
+        await expect(prepareFollowUpDelivery(requested())).resolves.toMatchObject({ action: 'requested' })
+        expect(store.get(LEAD)).toMatchObject({
+            customerDeferred: true, customerCallbackAt: null, followUpAt: null, followUpCount: 0,
+        })
+        expect(store.get(DELIVERY)).toMatchObject({ consumedCustomerCallbackAt: '2026-08-14', nextFollowUpAt: null })
+        await expect(prepareFollowUpDelivery(requested())).resolves.toMatchObject({ action: 'existing' })
+        await expect(prepareFollowUpDelivery(requested({ outboundId: 'callback-own-image', advancesFollowUp: false, part: 'image' })))
+            .resolves.toMatchObject({ action: 'requested' })
+        await expect(prepareFollowUpDelivery(requested({ outboundId: 'callback-other-image', logicalAttemptId: 'another-attempt', advancesFollowUp: false, part: 'image' })))
+            .resolves.toMatchObject({ action: 'blocked' })
+    })
+
+    it('allows one primary when two workers race to prepare the callback', async () => {
+        store.set(LEAD, callbackLead())
+        const results = await Promise.all([
+            prepareFollowUpDelivery(requested()),
+            prepareFollowUpDelivery(requested({ outboundId: 'callback-concurrent-primary' })),
+        ])
+        expect(results.map(result => result.action).sort()).toEqual(['blocked', 'requested'])
+    })
+
+    it('rolls back callback consumption when preparation fails to commit', async () => {
+        store.set(LEAD, callbackLead())
+        store.failNext()
+        await expect(prepareFollowUpDelivery(requested())).rejects.toThrow('injected delivery transaction failure')
+        expect(store.get(LEAD)).toEqual(callbackLead())
+        expect(store.get(DELIVERY)).toBeUndefined()
+        await expect(prepareFollowUpDelivery(requested())).resolves.toMatchObject({ action: 'requested' })
+    })
+
+    it('does not allow secondary media after a newer customer message', async () => {
+        store.set(LEAD, callbackLead())
+        await prepareFollowUpDelivery(requested())
+        store.set(LEAD, { ...store.get(LEAD), lastInboundAt: Date.parse('2026-08-14T10:00:01Z'), userTurns: 3 })
+        await expect(prepareFollowUpDelivery(requested({ outboundId: 'callback-late-image', advancesFollowUp: false, part: 'image' })))
+            .resolves.toMatchObject({ action: 'blocked' })
+    })
+
+    it.each(['requested', 'accepted', 'failed'])('never retries a consumed callback after %s, even with a fresh outbound id', async status => {
+        store.set(LEAD, callbackLead())
+        await prepareFollowUpDelivery(requested({ demoEvidence: true }))
+        if (status !== 'requested') await recordDeliveryEvent(event(status, status === 'failed'
+            ? { providerMessageId: null, errorCode: 'GRAPH_REJECTED' } : {}))
+        if (status !== 'failed') {
+            const scanned = { ...store.get(LEAD), phone: '41' }
+            await settleStaleDeliveries([scanned], '2026-08-15')
+            expect(store.get(LEAD)).toMatchObject({ followUpCount: 1, followUpAt: null, customerCallbackAt: null })
+            await recordDeliveryEvent(event('delivered', { eventId: 'callback-late-delivery', occurredAt: '2026-08-15T11:00:00Z' }))
+            expect(store.get(LEAD)).toMatchObject({ followUpCount: 1, followUpAt: null, demoEvidenceDelivered: true })
+        }
+        await expect(prepareFollowUpDelivery(requested({
+            outboundId: 'callback-unrequested-retry', logicalAttemptId: 'callback-unrequested-retry', requestedAt: '2026-08-16T10:00:00Z',
+        }))).resolves.toMatchObject({ action: 'blocked', status: 'customer-deferred' })
+        expect(store.get(LEAD).followUpAt).toBeNull()
+    })
+
+    it('records delivery once without restarting the ladder or replacing the deferred stage', async () => {
+        store.set(LEAD, callbackLead())
+        await prepareFollowUpDelivery(requested({ stage: 'engaged', nextFollowUpAt: '2026-08-17' }))
+        await recordDeliveryEvent(event('delivered'))
+        expect(store.get(LEAD)).toMatchObject({
+            stage: 'commit_later', customerDeferred: true, customerCallbackAt: null, followUpAt: null, followUpCount: 1,
+        })
+        await expect(reviveOrphans(['41'], '2026-08-20')).resolves.toEqual({ revived: 0, ids: [] })
+    })
+})
+
+describe('current conversation decisions outrank old delivery plans', () => {
+    it.each([
+        { stage: 'closed_lost' }, { stage: 'closed_won' }, { stage: 'handoff' },
+        { paymentVerified: true }, { human: true }, { human: true, humanSince: 1 },
+    ])('blocks final preparation for current stop state %j', async changed => {
+        store.set(LEAD, { ...store.get(LEAD), ...changed })
+        const before = store.entries()
+        await expect(prepareFollowUpDelivery(requested())).resolves.toMatchObject({ action: 'blocked', status: 'followup-stopped' })
+        expect(store.entries()).toEqual(before)
+    })
+
+    it.each([
+        { stage: 'closed_lost', followUpAt: null },
+        { stage: 'closed_won', paymentVerified: true, followUpAt: null },
+        { stage: 'handoff', human: true, followUpAt: null },
+        { stage: 'engaged', human: true, followUpAt: null },
+        { stage: 'commit_later', customerDeferred: true, customerCallbackAt: null, followUpAt: null },
+        { stage: 'commit_later', customerDeferred: true, customerCallbackAt: '2026-09-02', followUpAt: '2026-09-02' },
+        { stage: 'offer_sent', followUpAt: '2026-08-22', lastInboundAt: Date.parse('2026-08-14T10:01:00Z'), userTurns: 1 },
+    ])('keeps current state %j while recording late delivery evidence and one touch', async changed => {
+        await prepareFollowUpDelivery(requested({ demoEvidence: true }))
+        await recordDeliveryEvent(event('accepted'))
+        store.set(LEAD, { ...store.get(LEAD), ...changed, lastMessageAt: 'newer-conversation-time' })
+        await expect(recordDeliveryEvent(event('delivered', { occurredAt: '2026-08-14T10:05:00Z' })))
+            .resolves.toMatchObject({ action: 'applied', advanced: true })
+        expect(store.get(LEAD)).toMatchObject({ ...changed, lastMessageAt: 'newer-conversation-time', followUpCount: 1, demoEvidenceDelivered: true })
+        await recordDeliveryEvent(event('read', { occurredAt: '2026-08-14T10:06:00Z' }))
+        expect(store.get(LEAD)).toMatchObject({ ...changed, followUpCount: 1 })
+    })
+
+    it.each([
+        '2026-08-14T10:03:00Z',
+        { seconds: Date.parse('2026-08-14T10:03:00Z') / 1000 },
+        { toMillis: () => Date.parse('2026-08-14T10:03:00Z') },
+    ])('protects newer inbound state for legacy delivery records and timestamp shape %j', async lastInboundAt => {
+        await prepareFollowUpDelivery(requested())
+        const legacy = { ...store.get(DELIVERY) }
+        delete legacy.leadStateAtRequest
+        store.set(DELIVERY, legacy)
+        store.set(LEAD, { ...store.get(LEAD), stage: 'offer_sent', followUpAt: '2026-08-22', lastInboundAt })
+        await recordDeliveryEvent(event('delivered'))
+        expect(store.get(LEAD)).toMatchObject({ stage: 'offer_sent', followUpAt: '2026-08-22', followUpCount: 1 })
+    })
+
+    it('keeps current conversation state when a legacy callback has no trustworthy request time', async () => {
+        await prepareFollowUpDelivery(requested())
+        const legacy = { ...store.get(DELIVERY) }
+        delete legacy.leadStateAtRequest
+        delete legacy.requestedAtMs
+        store.set(DELIVERY, legacy)
+        store.set(LEAD, { ...store.get(LEAD), stage: 'offer_sent', followUpAt: '2026-08-22', lastInboundAt: '2026-08-14T10:03:00Z' })
+        await recordDeliveryEvent(event('delivered'))
+        expect(store.get(LEAD)).toMatchObject({ stage: 'offer_sent', followUpAt: '2026-08-22', followUpCount: 1 })
+    })
+
+    it('does not clear an unrelated newer request when the old primary finally delivers', async () => {
+        await prepareFollowUpDelivery(requested())
+        const newer = {
+            stage: 'offer_sent', followUpAt: '2026-08-22',
+            lastInboundAt: Date.parse('2026-08-14T10:03:00Z'),
+            lastDeliveryStatus: 'requested', deliveryRequestOutboundId: 'new-customer-request',
+            deliveryRequestAttemptId: 'new-customer-attempt', deliveryRequestUntilMs: Date.parse('2026-08-14T10:08:00Z'),
+        }
+        store.set(LEAD, { ...store.get(LEAD), ...newer, pendingDeliveryMessages: { [OUTBOUND_ID]: 'old follow-up', 'new-customer-request': 'new message' } })
+        await recordDeliveryEvent(event('delivered', { occurredAt: '2026-08-14T10:04:00Z' }))
+        expect(store.get(LEAD)).toMatchObject({ ...newer, followUpCount: 1, pendingDeliveryMessages: { 'new-customer-request': 'new message' } })
+        expect(store.get(LEAD).pendingDeliveryMessages[OUTBOUND_ID]).toBeUndefined()
+    })
+})
+
+describe('stale sweeps recheck transaction truth', () => {
+    const expired = () => ({
+        phone: '41', followUpAt: '2026-08-14', followUpCount: 1, stage: 'engaged',
+        lastDeliveryStatus: 'accepted', deliveryPendingOutboundId: OUTBOUND_ID,
+        deliveryPendingAttemptId: 'expired-attempt', deliveryPendingUntilMs: 1,
+    })
+
+    it('settles a duplicated or concurrently scanned attempt once', async () => {
+        const scanned = expired()
+        store.set(LEAD, scanned)
+        const results = await Promise.all([
+            settleStaleDeliveries([scanned, scanned], '2026-08-14'),
+            settleStaleDeliveries([scanned], '2026-08-14'),
+        ])
+        expect(results.reduce((sum, result) => sum + result.settled, 0)).toBe(1)
+        expect(store.get(LEAD)).toMatchObject({ followUpCount: 2, staleSettledCount: 1 })
+    })
+
+    it.each([
+        { lastDeliveryStatus: 'requested', deliveryRequestOutboundId: 'new-request', deliveryRequestUntilMs: Number.MAX_SAFE_INTEGER },
+        { lastDeliveryStatus: 'accepted', deliveryPendingOutboundId: 'new-accepted', deliveryPendingUntilMs: 1 },
+        { lastDeliveryStatus: 'delivered', followUpCount: 2 },
+    ])('leaves newer delivery state untouched: %j', async changed => {
+        const scanned = expired()
+        const current = { ...scanned, ...changed }
+        store.set(LEAD, current)
+        await expect(settleStaleDeliveries([scanned], '2026-08-14')).resolves.toEqual({ settled: 0, ids: [] })
+        expect(store.get(LEAD)).toEqual(current)
+    })
+
+    it.each([
+        { stage: 'closed_lost' }, { stage: 'closed_won' }, { stage: 'handoff' },
+        { paymentVerified: true }, { human: true, humanSince: 1 },
+        { stage: 'commit_later', customerDeferred: true, customerCallbackAt: null },
+    ])('counts an expired touch without requeueing current stop state %j', async changed => {
+        const scanned = expired()
+        store.set(LEAD, { ...scanned, ...changed })
+        await settleStaleDeliveries([scanned], '2026-08-14')
+        expect(store.get(LEAD)).toMatchObject({ ...changed, followUpCount: 2, followUpAt: null, lastDeliveryStatus: 'stale' })
+    })
+
+    it.each([
+        { stage: 'commit_later', customerDeferred: true, customerCallbackAt: '2026-09-02', followUpAt: '2026-09-02' },
+        { stage: 'offer_sent', followUpAt: '2026-08-26', lastInboundAt: Date.parse('2026-08-14T10:03:00Z') },
+    ])('preserves a new conversation decision made after the stale scan: %j', async changed => {
+        const scanned = expired()
+        store.set(LEAD, { ...scanned, ...changed })
+        await settleStaleDeliveries([scanned], '2026-08-14')
+        expect(store.get(LEAD)).toMatchObject({ ...changed, followUpCount: 2, lastDeliveryStatus: 'stale' })
+    })
+})
+
+describe('orphan revival rechecks the lead instead of trusting old phone scans', () => {
+    const orphan = () => ({ phone: '41', stage: 'engaged', followUpAt: null, followUpCount: 0, lastInboundAt: Date.now() - 48 * 3600_000 })
+
+    it('revives a still-eligible orphan once', async () => {
+        store.set(LEAD, orphan())
+        await expect(reviveOrphans(['41', '41'], '2026-08-14')).resolves.toEqual({ revived: 1, ids: ['41'] })
+        await expect(reviveOrphans(['41'], '2026-08-14')).resolves.toEqual({ revived: 0, ids: [] })
+        expect(store.get(LEAD)).toMatchObject({ followUpAt: '2026-08-14', revivedCount: 1 })
+    })
+
+    it.each([
+        { stage: 'closed_lost' }, { stage: 'closed_won' }, { stage: 'handoff' },
+        { paymentVerified: true }, { human: true, humanSince: 1 },
+        { stage: 'commit_later', customerDeferred: true, customerCallbackAt: null },
+        { stage: 'commit_later', customerDeferred: true, customerCallbackAt: '2026-09-02', followUpAt: '2026-09-02' },
+        { lastInboundAt: Number.MAX_SAFE_INTEGER }, { followUpCount: 3 },
+        { lastDeliveryStatus: 'accepted', deliveryPendingUntilMs: Number.MAX_SAFE_INTEGER },
+    ])('does not revive state that changed after scanning: %j', async changed => {
+        const current = { ...orphan(), ...changed }
+        store.set(LEAD, current)
+        await expect(reviveOrphans(['41'], '2026-08-14')).resolves.toEqual({ revived: 0, ids: [] })
+        expect(store.get(LEAD)).toEqual(current)
     })
 })
