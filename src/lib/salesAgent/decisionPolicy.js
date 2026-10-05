@@ -43,7 +43,7 @@ function ambiguousOrWithdrawnPackage(text) {
         || /(?:לא\s+|מתלבט|במקום).{0,45}(?:מודפס|דיגיטל)/.test(value)
 }
 
-function explicitPackageChoice(text) {
+export function explicitPackageChoice(text) {
     const value = normalizedText(text)
     if (ambiguousOrWithdrawnPackage(value)) return null
     const linkRequest = /(?:שלח|אפשר|צריך).{0,14}(?:קישור|לינק).{0,12}(?:לתשלום|להזמנה)/.test(value)
@@ -54,7 +54,7 @@ function explicitPackageChoice(text) {
     return digital !== printed ? (digital ? 'digital' : 'printed') : null
 }
 
-function confirmedPackageId(lead, incomingText) {
+export function confirmedPackageId(lead, incomingText) {
     const current = explicitPackageChoice(incomingText)
     if (current) return current
     if (ambiguousOrWithdrawnPackage(incomingText)) return null

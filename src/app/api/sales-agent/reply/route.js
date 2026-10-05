@@ -44,7 +44,7 @@ import {
     claimInboundEvent, completeInboundEvent,
     acquireProviderCircuit, recordProviderFailure, recordProviderSuccess, releaseProviderProbe, completeProviderFallback as persistProviderFallback, completeSuccessfulExchange, compactLeadBestEffort,
     recordInboundHeartbeat,
-    resolveOrEnrollModelAssignment,
+    resolveOrEnrollModelAssignment, validateInboundBeforeSend, prepareInboundMediaFallback, suppressMarketingFromInbound,
 } from '@/lib/salesAgent/leads'
 import { costOfClaudeUsage } from '@/lib/salesAgent/pricing'
 import { parseInboundBody } from '@/lib/salesAgent/inbound'
@@ -59,7 +59,7 @@ import { assignVariant, summarizeExperiments, summarizeGaps } from '@/lib/salesA
 import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
 import { normalizeProviderError, INBOUND_ROUTE_DEADLINE_MS, INBOUND_HEARTBEAT_BUDGET_MS, FALLBACK_COMMIT_RESERVE_MS } from '@/lib/salesAgent/circuitBreaker'
-import { decideInboundAge } from '@/lib/salesAgent/transportPolicy'
+import { decideInboundAge, decideStrictInboundTime } from '@/lib/salesAgent/transportPolicy'
 import { buildDeterministicSalesReply, decideSalesTurn, enforceSalesReply, liftInlineImageMarkers } from '@/lib/salesAgent/decisionPolicy'
 import { buildOpeningPlan } from '@/lib/salesAgent/openingPlan'
 import { buildOpeningOnlyPlan } from '@/lib/salesAgent/openingOnly'
@@ -72,24 +72,29 @@ import { readPriorConversationContext } from '@/lib/salesAgent/priorContext'
 import { shouldLookupCustomerByPhone } from '@/lib/salesAgent/customerContext'
 import { canSendWhatsApp } from '@/lib/salesAgent/whatsapp'
 import { sendInboundSequenceDirect } from '@/lib/salesAgent/inboundDirectDelivery'
+import { isConversationalPolicyEnabled } from '@/lib/salesAgent/salesContract'
+import { buildConversationalTurn, isStopRequest, isPaymentClaim, HANDOFF_CONFIRMED, HANDOFF_FAILED } from '@/lib/salesAgent/conversationRuntime'
+import { readActiveOfferCatalog } from '@/lib/salesAgent/offerStore'
+import { readVerifiedCheckout } from '@/lib/salesAgent/checkoutQuoteStore'
+import { recordConversationEvidence } from '@/lib/salesAgent/salesEvidence'
 
 // What the customer sees when the machinery breaks. Deliberately honest
 // and short — no apology theatre, no invented reason.
-const FALLBACK_REPLY = 'רגע אחד, אני מעביר אותך לנציג שלנו 🙏'
-const AI_OUTAGE_REPLY = 'קיבלתי את ההודעה שלך. מישהו מהצוות יחזור אליך בהקדם.'
+const FALLBACK_REPLY = HANDOFF_CONFIRMED
+const AI_OUTAGE_REPLY = HANDOFF_CONFIRMED
 // What the customer hears when they send something the bot cannot read.
 const MEDIA_ACK = {
-    image: 'קיבלתי את התמונה, תודה. מישהו מהצוות מסתכל וחוזר אליך כאן בקרוב.',
-    document: 'קיבלתי, תודה. מישהו מהצוות עובר על זה וחוזר אליך כאן עוד היום.',
-    audio: 'קיבלתי את ההודעה הקולית. מישהו מהצוות מאזין וחוזר אליך כאן בקרוב.',
-    video: 'קיבלתי את הסרטון, תודה. מישהו מהצוות מסתכל וחוזר אליך כאן בקרוב.',
+    image: `קיבלתי את התמונה. ${HANDOFF_CONFIRMED}`,
+    document: `קיבלתי את המסמך. ${HANDOFF_CONFIRMED}`,
+    audio: `קיבלתי את ההודעה הקולית. ${HANDOFF_CONFIRMED}`,
+    video: `קיבלתי את הסרטון. ${HANDOFF_CONFIRMED}`,
 }
 const AI_OUTAGE_REASON = 'תקלה בשירות ה-AI'
 
 // What an existing customer hears. Deliberately not a sales sentence:
 // they already bought, and the only useful thing the bot can do is
 // acknowledge them and get out of the way fast.
-const CUSTOMER_REPLY = `היי! קיבלתי את ההודעה ואני מעביר אותה ל${BUSINESS.ownerName || 'צוות'}, נחזור אליך ממש עוד מעט 🙏`
+const CUSTOMER_REPLY = HANDOFF_CONFIRMED
 
 // The owner's own WhatsApp number, in 972… form. When set, messages
 // arriving FROM it are treated as commands rather than as a customer,
@@ -164,6 +169,8 @@ export async function POST(req) {
     await recordInboundHeartbeatBestEffort(Date.now())
 
     const text = String(body?.text || '').trim()
+    const strictCommercial = isConversationalPolicyEnabled()
+    const stopRequested = strictCommercial && isStopRequest(text)
     const messageType = body.messageType
 
     // Who sent this, and to whom. On a coexistence number Meta echoes
@@ -183,9 +190,19 @@ export async function POST(req) {
     if (!phone) return NextResponse.json({ error: 'bad-phone' }, { status: 400 })
     if (Date.now() >= routeDeadlineAtMs) return NextResponse.json({ error: 'inbound-deadline-exhausted' }, { status: 503 })
 
+    const customerTime = strictCommercial && !outgoing ? decideStrictInboundTime({ occurredAt: body.occurredAt }) : null
+    const suppressWithoutAck = async ownedClaim => {
+        try {
+            const result = await suppressMarketingFromInbound({ phone, eventId, claimToken: ownedClaim.claimToken })
+            if (['completed', 'cached'].includes(result.action) && result.marketingSuppressed === true) {
+                return NextResponse.json({ ok: true, shouldSend: false, sendText: '', handoff: false, noReply: true, skipped: 'marketing-suppressed-no-ack' })
+            }
+        } catch { /* Suppression is never assumed after an uncertain write. */ }
+        return NextResponse.json({ error: 'marketing-suppression-not-confirmed', shouldSend: false }, { status: 503 })
+    }
     let claim
     try {
-        claim = await claimInboundEvent({ eventId, phone, occurredAt: body.occurredAt })
+        claim = await claimInboundEvent({ eventId, phone, occurredAt: body.occurredAt, outgoing: outgoing || customerTime?.ok === false, incomingText: text })
     } catch {
         console.error('[sales-agent] event claim failed')
         return NextResponse.json({ error: 'event-claim-failed' }, { status: 503 })
@@ -201,6 +218,15 @@ export async function POST(req) {
             hasVideo: false,
             handoff: false,
         })
+    }
+    if (claim.action === 'rejected') {
+        if (stopRequested) {
+            try {
+                const controlClaim = await claimInboundEvent({ eventId, phone, occurredAt: body.occurredAt, outgoing: true })
+                if (controlClaim.action === 'process') return suppressWithoutAck(controlClaim)
+            } catch { return NextResponse.json({ error: 'marketing-suppression-not-confirmed', shouldSend: false }, { status: 503 }) }
+        }
+        return NextResponse.json({ ok: true, shouldSend: false, sendText: '', noReply: true, handoff: false, skipped: claim.reason })
     }
     if (claim.action === 'busy') {
         return NextResponse.json({ ok: true, duplicate: true, processing: true, shouldSend: false }, { status: 202 })
@@ -248,6 +274,8 @@ export async function POST(req) {
     // worst possible recovery: a surprise sales reply hours later. Complete
     // the event durably so provider retries stay silent, but do no lead,
     // media, breaker, or model work.
+    if (customerTime?.ok === false && stopRequested) return suppressWithoutAck(claim)
+    if (customerTime?.ok === false) return complete({ ok: true, shouldSend: false, sendText: '', handoff: false, noReply: true, skipped: customerTime.reason })
     const inboundAge = decideInboundAge({ occurredAt: body.occurredAt })
     if (inboundAge.action === 'skip-stale') {
         return complete({
@@ -324,7 +352,7 @@ export async function POST(req) {
     } catch {
         console.warn('[sales-agent] media library read failed; using built-ins')
     }
-    const library = mergeMedia(MEDIA, custom) || MEDIA || {}
+    const library = mergeMedia(MEDIA, custom, { strict: strictCommercial }) || (strictCommercial ? {} : MEDIA) || {}
     const stats = Object.fromEntries(custom.map(m => [m.key, m]))
     const perf = performanceNote(stats, library)
     let settings
@@ -340,6 +368,7 @@ export async function POST(req) {
         lead = await getLead(phone)
     } catch {
         console.error('[sales-agent] lead read failed')
+        if (strictCommercial) return NextResponse.json({ error: 'lead-unavailable', shouldSend: false }, { status: 503 })
         if (!settings.enabled || settings.mode === 'opening_only') {
             return complete({
                 ok: true, shouldSend: false, send: [], sendText: '', hasImage: false, hasVideo: false,
@@ -347,7 +376,15 @@ export async function POST(req) {
                 skipped: settings.enabled ? 'opening-only-state-unavailable' : 'agent-disabled',
             })
         }
-        return complete({ ok: true, send: [FALLBACK_REPLY], sendText: FALLBACK_REPLY, handoff: true, notifyOwner: ownerPing(phone, 'שגיאת מסד נתונים — הבוט לא הצליח לקרוא את הליד') })
+        return complete({ ok: true, send: [HANDOFF_FAILED], sendText: HANDOFF_FAILED, handoff: false, notifyOwner: ownerPing(phone, 'שגיאת מסד נתונים — הבוט לא הצליח לקרוא את הליד') })
+    }
+
+    // A rollout rollback must not silently move strict-policy conversations
+    // into historical prices, scripts or consent rules. Owner controls/echoes
+    // remain available; customer sales stay paused until explicitly re-enabled.
+    if (!strictCommercial && lead.conversationalPolicyVersion && !outgoing && (!OWNER_PHONE || phone !== OWNER_PHONE)) {
+        if (isStopRequest(text)) return suppressWithoutAck(claim)
+        return complete({ ok: true, shouldSend: false, sendText: '', handoff: false, noReply: true, skipped: 'strict-policy-disabled' })
     }
 
     // ── Lord answered in the chat himself ────────────────────────────
@@ -408,7 +445,7 @@ export async function POST(req) {
         try {
             if (cmd.action === 'pause') {
                 await setHuman(target, true, 'השתקת את הבוט מהטלפון')
-                reply = `הבוט שותק מול ${target} ל-48 שעות.`
+                reply = `הבוט שותק מול ${target} עד שחרור מפורש.`
             } else if (cmd.action === 'resume') {
                 await setHuman(target, false)
                 reply = `הבוט חזר לטפל ב-${target}.`
@@ -431,6 +468,9 @@ export async function POST(req) {
             handoff: false, noReply: true, skipped: 'agent-disabled',
         })
     }
+
+    if (strictCommercial && settings.mode !== 'full_sales') return complete({ ok: true, shouldSend: false, sendText: '', handoff: false, noReply: true, skipped: 'strict-policy-requires-full-sales' })
+    if (strictCommercial && !canSendWhatsApp()) return NextResponse.json({ error: 'strict-policy-requires-verified-direct-transport', shouldSend: false }, { status: 503 })
 
     // Firestore only knows conversations that already passed through this
     // agent. BusinessOS also holds the historical WhatsApp import. Before a
@@ -459,7 +499,7 @@ export async function POST(req) {
 
     // A human already took this conversation. The bot must not talk over
     // Lord mid-negotiation — that is the fastest way to lose a warm lead.
-    if (isPausedForHuman(lead)) {
+    if (isPausedForHuman(lead) && !stopRequested) {
         return complete({ ok: true, send: [], sendText: '', handoff: false, noReply: true, paused: true, stage: lead.stage || 'handoff' })
     }
 
@@ -477,16 +517,23 @@ export async function POST(req) {
     // turns from existing leads; ordinary sales turns need no extra query.
     // Neither the lookup hint nor its result establishes a payment amount.
     let customer = null
-    if (lead.stage === 'closed_won' || lead.paymentVerified === true) {
+    if (!stopRequested && (lead.stage === 'closed_won' || lead.paymentVerified === true)) {
         customer = { weddingId: lead.weddingId || null, ownerName: lead.name || null }
-    } else if (shouldLookupCustomerByPhone({ lead, incomingText: text })) {
-        customer = await findCustomerByPhone(phone)
+    } else if (!stopRequested && (shouldLookupCustomerByPhone({ lead, incomingText: text }) || (strictCommercial && isPaymentClaim(text)))) {
+        try {
+            customer = strictCommercial ? await findCustomerByPhone(phone, { strict: true }) : await findCustomerByPhone(phone)
+        } catch {
+            if (!strictCommercial) throw new Error('customer-lookup-unavailable')
+            lead = { ...lead, customerLookupUnavailable: true }
+        }
     }
-    if (customer) {
+    if (customer && strictCommercial) lead = { ...lead, verifiedCustomer: { weddingId: customer.weddingId || null } }
+    if (customer && !strictCommercial) {
         try {
             await setHuman(phone, true, 'לקוח קיים כתב')
         } catch {
             console.error('[sales-agent] customer mute failed')
+            return complete({ ok: true, send: [HANDOFF_FAILED], sendText: HANDOFF_FAILED, handoff: false, customer: true })
         }
         if (settings.mode === 'opening_only') {
             return complete({
@@ -526,10 +573,10 @@ export async function POST(req) {
     try {
         // Text in full-sales mode cannot execute the script. A retired
         // variable or unavailable script asset must not block its answer.
-        const variableVersions = settings.mode === 'full_sales' && messageType === 'text'
+        const variableVersions = strictCommercial || (settings.mode === 'full_sales' && messageType === 'text')
             ? {}
             : await loadOpeningVariableVersions(settings.openingExperiment)
-        openingRuntime = await prepareOpeningRuntime({
+        openingRuntime = strictCommercial ? { eligible: false } : await prepareOpeningRuntime({
             lead,
             experiment: settings.openingExperiment,
             leadKey: phone,
@@ -711,7 +758,7 @@ export async function POST(req) {
     if (messageType !== 'text' && isOwnMediaEcho(lead, messageType, Date.now())) {
         return complete({ ok: true, send: [], sendText: '', handoff: false, noReply: true, skipped: 'own-media-echo' })
     }
-    if (messageType !== 'text') {
+    if (messageType !== 'text' && !strictCommercial) {
         const handoffReason = messageType === 'image'
             ? 'הלקוח שלח תמונה — נדרשת בדיקה אנושית והכנת דוגמה אם הוצעה'
             : `הלקוח שלח ${messageType} — נדרשת בדיקה אנושית`
@@ -859,7 +906,7 @@ export async function POST(req) {
 
     // Which opening this lead is testing. Assignment uses the configured
     // executable pool, while an existing lead keeps its historical arm.
-    const variant = lead.variant || assignVariant(phone, settings.activeOpeningIds)
+    const variant = strictCommercial ? null : lead.variant || assignVariant(phone, settings.activeOpeningIds)
     // The route already returned above while the 48h handoff pause was
     // live; passing the expiry-aware value keeps the decision layer from
     // re-muting an expired handoff forever.
@@ -879,7 +926,7 @@ export async function POST(req) {
     let selectedProvider = settings.provider
     let selectedModel = settings.model
     let modelAssignment = null
-    if (settings.modelExperiment?.enabled === true) {
+    if (!strictCommercial && settings.modelExperiment?.enabled === true) {
         let enrollment
         try {
             enrollment = await resolveOrEnrollModelAssignment({
@@ -902,7 +949,7 @@ export async function POST(req) {
         selectedModel = modelAssignment.model
     }
 
-    const providerKeyAvailable = selectedProvider === 'anthropic'
+    const providerKeyAvailable = !strictCommercial && (selectedProvider === 'anthropic'
         ? !!String(process.env.ANTHROPIC_API_KEY || '').trim()
         : selectedProvider === 'openai'
             ? !!String(process.env.OPENAI_API_KEY || '').trim()
@@ -910,8 +957,14 @@ export async function POST(req) {
                 ? !!String(process.env.GEMINI_API_KEY || '').trim()
                 : !!String(process.env.ANTHROPIC_API_KEY || '').trim()
                     || !!String(process.env.OPENAI_API_KEY || '').trim()
-                    || !!String(process.env.GEMINI_API_KEY || '').trim()
-    let parsed = providerKeyAvailable
+                    || !!String(process.env.GEMINI_API_KEY || '').trim())
+    const catalogResult = strictCommercial ? await readActiveOfferCatalog() : null
+    const contractPlan = strictCommercial ? await buildConversationalTurn({
+        lead, incomingText: text, body, eventId, revision: claim.conversationRevision,
+        decision: turnDecision, catalogResult, library,
+        checkout: args => readVerifiedCheckout({ ...args, leadId: phone, eventId }),
+    }) : null
+    let parsed = contractPlan ? contractPlan.parsed : providerKeyAvailable
         ? null
         : buildDeterministicSalesReply({ decision: turnDecision, lead, incomingText: text })
 
@@ -1116,7 +1169,7 @@ export async function POST(req) {
     // Appended as a second message rather than replacing the first: the
     // model's sentence is usually fine, it was just missing the one
     // thing that was asked for.
-    if (priceDodged(text, parsed.messages)) {
+    if (!strictCommercial && priceDodged(text, parsed.messages)) {
         console.warn('[sales-agent] price dodged, repairing')
         parsed.messages = [...parsed.messages, priceFallbackMessage()].slice(0, 3)
     }
@@ -1128,7 +1181,7 @@ export async function POST(req) {
     // see, or the bot promised to show, and nothing was attached. Same
     // pathology as the price dodge: the model narrates the capability
     // instead of using it. Same remedy: a deterministic net.
-    if (!parsed.image && !parsed.handoff && parsed.messages.length) {
+    if (!strictCommercial && !parsed.image && !parsed.handoff && parsed.messages.length) {
         const pick = mediaGuard({
             incomingText: text,
             messages: parsed.messages,
@@ -1146,12 +1199,12 @@ export async function POST(req) {
     // leave the route. It enforces the one-message WhatsApp contract,
     // known-fact repetition, truthful links, clean losses, and the exact
     // next action selected before the model call.
-    parsed = enforceSalesReply({ parsed, decision: turnDecision, lead, incomingText: text })
+    if (!strictCommercial) parsed = enforceSalesReply({ parsed, decision: turnDecision, lead, incomingText: text })
 
     // The evidence bundle is also customer-facing copy. A safe answer
     // above must not be followed by a fresh pitch after a no, a request to
     // wait, an unresolved question/handoff, or a checkout clarification.
-    const allowOpeningEvidence = !parsed.handoff && !parsed.noReply && !parsed.customerDeferred
+    const allowOpeningEvidence = !strictCommercial && !parsed.handoff && !parsed.noReply && !parsed.customerDeferred
         && !['handoff', 'closed_won', 'closed_lost', 'ready_to_pay', 'commit_later'].includes(parsed.stage)
         && ['general', 'process', 'event_answer', 'price'].includes(turnDecision.intent)
         && ['answer_then_qualify', 'answer', 'present_offer', 'quote_price'].includes(turnDecision.nextBestAction)
@@ -1172,7 +1225,7 @@ export async function POST(req) {
     const media = parsed.image ? library[parsed.image] || null : null
     if (!media) parsed.image = null
 
-    const followUpAt = resolveFollowUp({
+    const followUpAt = contractPlan ? contractPlan.followUpAt : resolveFollowUp({
         parsed,
         todayISO: today,
         followUpCount: lead.followUpCount || 0,
@@ -1230,6 +1283,7 @@ export async function POST(req) {
     const responsePayload = {
         ok: true,
         send: parsed.messages,
+        ...(parsed.noReply ? { noReply: true } : {}),
         // `sendText` is the same reply as ONE string, and it is what the
         // Make scenario should map to.
         //
@@ -1292,6 +1346,7 @@ export async function POST(req) {
         phone, incomingText: text, parsed, followUpAt, profileName: body?.profileName,
         source: resolveSource({ isNew: !!lead.isNew, text, existing: lead.source, fallback: body?.source }),
         variant, isNew: !!lead.isNew,
+        ...(contractPlan ? { conversationContract: contractPlan.contract, expectedHumanTaskGeneration: lead.humanTaskGeneration || 0 } : {}),
     }
     try {
         const durable = await completeSuccessfulExchange({
@@ -1301,17 +1356,58 @@ export async function POST(req) {
             exchange,
             outcome: responsePayload,
             deadlineAtMs: routeDeadlineAtMs,
+            deliveryChannel: strictCommercial ? 'whatsapp_graph' : 'make',
             ...(modelAssignment ? { modelAssignment, modelExecution } : {}),
         })
         if (durable.action === 'completed') {
             compactLeadBestEffort(phone)
             Promise.allSettled(spends).catch(() => {})
+            if (strictCommercial) {
+                await recordConversationEvidence({ eventId, leadId: phone, contract: contractPlan.contract, outcome: responsePayload }).catch(() => {})
+                const directParts = [
+                    { kind: 'text', order: 1, text: responsePayload.sendText, partId: createOutboundId({ scope: 'inbound', subject: eventId, attempt: 0, part: 'text' }) },
+                    ...replyMediaSlots.map((part, index) => ({ ...part, order: index + 2 })),
+                ].filter(part => part.kind !== 'text' || part.text)
+                if (!directParts.length) return NextResponse.json({ ok: true, shouldSend: false, sendText: '', noReply: true, handoff: false, stage: parsed.stage })
+                const directDelivery = await sendInboundSequenceDirect({
+                    phone, parts: directParts,
+                    validateBeforePart: () => validateInboundBeforeSend({ phone, eventId }),
+                    allowMediaRetry: true,
+                    onMediaFailure: part => prepareInboundMediaFallback({ phone, eventId, failedPartId: part.partId, text: 'לא הצלחתי לאמת שהדוגמה נמסרה. אפשר להמשיך כאן בהסבר כתוב.' }),
+                })
+                await recordConversationEvidence({ eventId, leadId: phone, contract: contractPlan.contract, outcome: responsePayload, delivery: directDelivery }).catch(() => {})
+                return NextResponse.json({ ok: true, shouldSend: false, sendText: '', hasImage: false, hasVideo: false, stage: parsed.stage, handoff: parsed.handoff, directDelivery })
+            }
             return NextResponse.json(responsePayload)
         }
+        if (['human-paused', 'conversation-stale', 'payment-changed'].includes(durable.action)) return NextResponse.json({ ok: true, shouldSend: false, sendText: '', handoff: false, noReply: true, skipped: durable.action })
         if (durable.action === 'cached') return NextResponse.json({ ok: true, duplicate: true, shouldSend: false, cachedOutcome: durable.outcome, sendText: '', hasImage: false, hasVideo: false, handoff: false })
         return NextResponse.json({ error: durable.action === 'deadline' ? 'success-commit-deadline-exhausted' : 'success-commit-stale' }, { status: 503 })
     } catch {
         console.error('[sales-agent] success commit failed')
+        if (strictCommercial && parsed.handoff && contractPlan) {
+            // Task persistence may fail while the conversation store remains
+            // available. Persist an honest failure response under the SAME claim;
+            // an ambiguously committed original returns cached and never resends.
+            try {
+                const failureContract = { ...contractPlan.contract, conversationalState: 'SERVICE', handoffPending: true, followUpSchedule: null }
+                const failureParsed = { ...parsed, messages: [HANDOFF_FAILED], handoff: false, stage: 'handoff' }
+                const failure = { ok: true, sendText: HANDOFF_FAILED, handoff: false, stage: 'handoff', followUpAt: null }
+                const committed = await completeSuccessfulExchange({
+                    eventId, claimToken: claim.claimToken, claimGeneration: claim.claimGeneration,
+                    exchange: { ...exchange, parsed: failureParsed, followUpAt: null, conversationContract: failureContract },
+                    outcome: failure, deadlineAtMs: routeDeadlineAtMs, deliveryChannel: 'whatsapp_graph',
+                })
+                if (committed.action === 'completed') {
+                    const directDelivery = await sendInboundSequenceDirect({ phone,
+                        parts: [{ kind: 'text', order: 1, text: HANDOFF_FAILED, partId: createOutboundId({ scope: 'inbound', subject: eventId, attempt: 0, part: 'text' }) }],
+                        validateBeforePart: () => validateInboundBeforeSend({ phone, eventId }),
+                    })
+                    return NextResponse.json({ ok: true, shouldSend: false, sendText: '', handoff: false, handoffFailed: true, directDelivery })
+                }
+                if (['cached', 'human-paused', 'conversation-stale', 'payment-changed'].includes(committed.action)) return NextResponse.json({ ok: true, shouldSend: false, sendText: '', handoff: false, skipped: committed.action })
+            } catch { /* No safe response without a durable current conversation. */ }
+        }
         return NextResponse.json({ error: 'success-commit-failed' }, { status: 503 })
     }
 }
@@ -1326,7 +1422,7 @@ function ownerPing(phone, reason, extra = {}) {
         reason ? `סיבה: ${reason}` : null,
         extra.lastText ? `הודעה אחרונה: "${String(extra.lastText).slice(0, 160)}"` : null,
         `פתח שיחה: https://wa.me/${phone}`,
-        `הבוט מושתק לשיחה הזאת ל-48 שעות. ${BUSINESS.brand}`,
+        `הבוט מושתק לשיחה הזאת עד שחרור מפורש. ${BUSINESS.brand}`,
     ]
     return lines.filter(Boolean).join('\n')
 }

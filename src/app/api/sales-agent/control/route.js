@@ -1,8 +1,8 @@
 // POST /api/sales-agent/control — take the wheel, or give it back.
 //
 // The one operational control the system needs. After a handoff the bot
-// goes quiet for 48 hours; when Lord finishes the conversation himself he
-// calls `resume` (or lets it expire), and when he wants to step into a
+// stays quiet until the owner explicitly
+// calls `resume`, and when he wants to step into a
 // live conversation he calls `pause` BEFORE typing, so the bot does not
 // answer on top of him.
 //
@@ -51,12 +51,12 @@ export async function POST(req) {
     if (!phone) return NextResponse.json({ error: 'bad-phone' }, { status: 400 })
 
     if (action === 'pause') {
-        await setHuman(phone, true, body?.reason || 'לורד נכנס לשיחה')
-        return NextResponse.json({ ok: true, phone, human: true })
+        const handoff = await setHuman(phone, true, body?.reason || 'לורד נכנס לשיחה', { actor: 'authenticated_control' })
+        return NextResponse.json({ ok: true, phone, human: true, handoff })
     }
     if (action === 'resume') {
-        await setHuman(phone, false)
-        return NextResponse.json({ ok: true, phone, human: false })
+        const handoff = await setHuman(phone, false, null, { actor: 'authenticated_control' })
+        return NextResponse.json({ ok: true, phone, human: false, handoff })
     }
     if (action === 'status') {
         const lead = await getLead(phone)

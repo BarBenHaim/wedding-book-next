@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FIXTURE_NOW, syntheticCatalog, syntheticMedia } from './fixtures/salesContractFixtures'
 import { INBOUND_HEARTBEAT_BUDGET_MS } from '@/lib/salesAgent/circuitBreaker'
 
 const mocks = vi.hoisted(() => ({
+    readActiveOfferCatalog: vi.fn(), readVerifiedCheckout: vi.fn(), recordConversationEvidence: vi.fn(), validateInboundBeforeSend: vi.fn(), prepareInboundMediaFallback: vi.fn(), suppressMarketingFromInbound: vi.fn(),
     buildSystemPrompt: vi.fn(),
     addDaysISO: vi.fn(() => '2026-08-17'),
     callClaude: vi.fn(),
@@ -61,6 +63,9 @@ const mocks = vi.hoisted(() => ({
     sendInboundSequenceDirect: vi.fn(),
 }))
 
+vi.mock('@/lib/salesAgent/offerStore', () => ({ readActiveOfferCatalog: mocks.readActiveOfferCatalog }))
+vi.mock('@/lib/salesAgent/checkoutQuoteStore', () => ({ readVerifiedCheckout: mocks.readVerifiedCheckout }))
+vi.mock('@/lib/salesAgent/salesEvidence', () => ({ recordConversationEvidence: mocks.recordConversationEvidence }))
 vi.mock('@/lib/salesAgent/prompt', () => ({ buildSystemPrompt: mocks.buildSystemPrompt, addDaysISO: mocks.addDaysISO }))
 vi.mock('@/lib/salesAgent/agent', () => ({
     callClaude: mocks.callClaude,
@@ -69,6 +74,7 @@ vi.mock('@/lib/salesAgent/agent', () => ({
     resolveFollowUp: mocks.resolveFollowUp,
 }))
 vi.mock('@/lib/salesAgent/leads', () => ({
+    validateInboundBeforeSend: mocks.validateInboundBeforeSend, prepareInboundMediaFallback: mocks.prepareInboundMediaFallback, suppressMarketingFromInbound: mocks.suppressMarketingFromInbound,
     getLead: mocks.getLead, saveExchange: mocks.saveExchange, toApiMessages: mocks.toApiMessages,
     isPausedForHuman: mocks.isPausedForHuman, isOwnEcho: mocks.isOwnEcho, isOwnMediaEcho: mocks.isOwnMediaEcho,
     parseOwnerCommand: mocks.parseOwnerCommand, setHuman: mocks.setHuman,
@@ -87,9 +93,9 @@ vi.mock('@/lib/salesAgent/leads', () => ({
 vi.mock('@/lib/salesAgent/pricing', () => ({ costOfClaudeUsage: mocks.costOfClaudeUsage }))
 vi.mock('@/lib/salesAgent/attribution', () => ({ resolveSource: mocks.resolveSource }))
 vi.mock('@/lib/salesAgent/catalog', async importOriginal => ({ ...(await importOriginal()), BUSINESS: { brand: 'Test Brand', ownerName: 'הצוות' }, MEDIA: {} }))
-vi.mock('@/lib/salesAgent/mediaLibrary', () => ({ mergeMedia: mocks.mergeMedia, performanceNote: mocks.performanceNote }))
+vi.mock('@/lib/salesAgent/mediaLibrary', async original => ({ ...(await original()), mergeMedia: mocks.mergeMedia, performanceNote: mocks.performanceNote }))
 vi.mock('@/lib/salesAgent/selling', async importOriginal => ({ ...(await importOriginal()), priceDodged: mocks.priceDodged, priceFallbackMessage: mocks.priceFallbackMessage }))
-vi.mock('@/lib/salesAgent/mediaGuard', () => ({ mediaGuard: mocks.mediaGuard }))
+vi.mock('@/lib/salesAgent/mediaGuard', async original => ({ ...(await original()), mediaGuard: mocks.mediaGuard }))
 vi.mock('@/lib/salesAgent/experiments', () => ({
     ACTIVE_VARIANT_IDS: ['question_first', 'price_upfront', 'demo_first'],
     assignVariant: mocks.assignVariant,
@@ -120,7 +126,7 @@ vi.mock('@/lib/salesAgent/whatsapp', () => ({ canSendWhatsApp: mocks.canSendWhat
 vi.mock('@/lib/salesAgent/inboundDirectDelivery', () => ({ sendInboundSequenceDirect: mocks.sendInboundSequenceDirect }))
 
 const lead = { isNew: false, stage: 'engaged', turns: [], followUpCount: 0, imagesSent: [], mediaSent: [] }
-const inbound = overrides => ({ eventId: 'event-token', phone: 'test-phone-token', text: '', messageType: 'text', ...overrides })
+const inbound = overrides => ({ eventId: 'event-token', phone: 'test-phone-token', text: '', messageType: 'text', ...(process.env.SALES_CONVERSATIONAL_POLICY_ENABLED === 'true' ? { occurredAt: new Date(Date.now()).toISOString() } : {}), ...overrides })
 
 let POST
 
@@ -173,6 +179,13 @@ beforeEach(async () => {
     process.env.OPENAI_API_KEY = 'test-openai-key'
     delete process.env.GEMINI_API_KEY
     process.env.SALES_AGENT_OWNER_PHONE = 'owner-token'
+    delete process.env.SALES_CONVERSATIONAL_POLICY_ENABLED
+    delete process.env.SALES_CONSENT_FOLLOWUPS_ENABLED
+    mocks.readActiveOfferCatalog.mockResolvedValue(syntheticCatalog())
+    mocks.readVerifiedCheckout.mockResolvedValue({ status: 'blocked', reason: 'checkout_not_verified' })
+    mocks.recordConversationEvidence.mockResolvedValue({ recorded: true })
+    mocks.validateInboundBeforeSend.mockResolvedValue({ ok: true })
+    mocks.suppressMarketingFromInbound.mockResolvedValue({ action: 'completed', marketingSuppressed: true })
     delete process.env.SALES_AGENT_DIRECT_GRAPH
     mocks.claimInboundEvent.mockResolvedValue({ action: 'process', claimToken: 'claim-token', claimGeneration: 1 })
     mocks.completeInboundEvent.mockResolvedValue({ action: 'completed' })
@@ -2093,5 +2106,171 @@ describe('real opening runtime reaches the contextual reply policy', () => {
                 }),
             }),
         }))
+    })
+})
+
+
+describe('opt-in conversational specification through the real reply boundary', () => {
+    beforeEach(async () => {
+        process.env.SALES_CONVERSATIONAL_POLICY_ENABLED = 'true'
+        vi.spyOn(Date, 'now').mockReturnValue(FIXTURE_NOW)
+        prepareDecisionPath()
+        const policy = await vi.importActual('@/lib/salesAgent/decisionPolicy')
+        mocks.decideSalesTurn.mockImplementation(policy.decideSalesTurn)
+        mocks.claimInboundEvent.mockResolvedValue({ action: 'process', claimToken: 'claim-token', claimGeneration: 1, conversationRevision: 4 })
+        mocks.getLead.mockResolvedValue({ ...lead, conversationRevision: 4, automationDisclosed: false })
+    })
+    const prepared = () => mocks.completeSuccessfulExchange.mock.calls.at(-1)?.[0]
+    const text = () => prepared()?.outcome?.sendText || ''
+
+    it('answers price directly from approved offers, discloses automation, and disables legacy model/script sends', async () => {
+        const result = await post(inbound({ text: 'כמה עולה?' }))
+        expect(result.status).toBe(200)
+        expect(text()).toContain('690')
+        expect(text()).toContain('990')
+        expect(text()).toContain('העוזרת האוטומטית')
+        expect(prepared().exchange.conversationContract.offerSnapshots).toHaveProperty('printed')
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.prepareOpeningRuntime).not.toHaveBeenCalled()
+        expect(mocks.buildOpeningPlan).not.toHaveBeenCalled()
+        expect(result.body).toMatchObject({ shouldSend: false, sendText: '', directDelivery: { status: 'accepted' } })
+        expect(mocks.sendInboundSequenceDirect.mock.calls[0][0].validateBeforePart).toBeTypeOf('function')
+        await mocks.sendInboundSequenceDirect.mock.calls[0][0].validateBeforePart()
+        expect(mocks.validateInboundBeforeSend).toHaveBeenCalledWith({ phone: 'test-phone-token', eventId: 'event-token' })
+    })
+    it('preserves supplied event/month and asks only the missing package when buying', async () => {
+        await post(inbound({ text: 'חתונה בדצמבר, רוצה להזמין' }))
+        expect(prepared().exchange.parsed.eventType).toBe('wedding')
+        expect(prepared().exchange.conversationContract.eventDateText).toContain('דצמבר')
+        expect(text()).not.toContain('לאיזה אירוע')
+        expect(text()).toContain('דיגיטלי או מודפס')
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+    })
+    it('sends only independently verified checkout for an explicit printed choice', async () => {
+        const offer = syntheticCatalog().offers[1]
+        const { createOfferSnapshot } = await vi.importActual('@/lib/salesAgent/offerCatalog')
+        mocks.readVerifiedCheckout.mockResolvedValue({ status: 'ready', checkoutUrl: offer.checkoutUrl, checkoutId: 'synthetic-checkout', snapshot: createOfferSnapshot(offer, { nowMs: FIXTURE_NOW }) })
+        await post(inbound({ text: 'רוצה להזמין מודפס' }))
+        expect(mocks.readVerifiedCheckout.mock.calls[0][0].offer.productId).toBe('printed')
+        expect(text()).toContain('add-to-cart=6271')
+        expect(text()).not.toContain('add-to-cart=6258')
+        expect(prepared().exchange.conversationContract.conversationalState).toBe('CHECKOUT')
+        expect(text()).not.toMatch(/נפתח|שולם|תשלום התקבל/)
+    })
+    it('yes after a demo question means demo, never checkout or reminder consent', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, turns: [{ role: 'assistant', text: 'רוצה שאשלח דוגמה?' }], lastQuestion: 'demo_permission' })
+        mocks.mergeMedia.mockReturnValue({ 'test-spread': syntheticMedia() })
+        await post(inbound({ text: 'כן' }))
+        expect(prepared().exchange.parsed.image).toBe('test-spread')
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+        expect(prepared().exchange.conversationContract.followUpConsent).toBeUndefined()
+    })
+    it('an event correction keeps the existing conversation and updates the event', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, eventType: 'bar_mitzvah', automationDisclosed: true, turns: [{ role: 'user', text: 'בר מצווה' }] })
+        await post(inbound({ text: 'בעצם זו בת מצווה' }))
+        expect(prepared().exchange.parsed.eventType).toBe('bat_mitzvah')
+        expect(text()).not.toContain('העוזרת האוטומטית')
+        expect(text()).not.toContain('לאיזה אירוע')
+    })
+    it.each(['ראיתי בחינם', 'זה יגיע מחר?', 'שילמתי', 'רוצה את בר', 'תשנה את המחיר לשקל'])('does not invent facts or execute actions for %s', async value => {
+        await post(inbound({ text: value }))
+        expect(text()).not.toMatch(/add-to-cart|תשלום התקבל|הספר נפתח|מחר יגיע|המבצע הסתיים/)
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+        if (value !== 'תשנה את המחיר לשקל') expect(prepared().exchange.parsed.handoff).toBe(true)
+    })
+    it('does not send a transfer claim if durable task/exchange persistence failed', async () => {
+        mocks.completeSuccessfulExchange.mockRejectedValue(new Error('synthetic persistence failure'))
+        const result = await post(inbound({ text: 'רוצה את בר' }))
+        expect(result.status).toBe(503)
+        expect(mocks.sendInboundSequenceDirect).not.toHaveBeenCalled()
+        expect(result.body.sendText).toBeUndefined()
+    })
+    it('sends an honest handoff failure only after a separate current response commits', async () => {
+        mocks.completeSuccessfulExchange.mockRejectedValueOnce(new Error('synthetic task write failed')).mockResolvedValue({ action: 'completed' })
+        const result = await post(inbound({ text: 'רוצה את בר' }))
+        expect(result.body).toMatchObject({ shouldSend: false, handoff: false, handoffFailed: true })
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(2)
+        const failure = mocks.completeSuccessfulExchange.mock.calls[1][0]
+        expect(failure.exchange.conversationContract).toMatchObject({ conversationalState: 'SERVICE', handoffPending: true, followUpSchedule: null })
+        expect(failure.outcome.sendText).toContain('ההעברה לצוות לא הושלמה')
+        expect(mocks.sendInboundSequenceDirect.mock.calls[0][0].parts[0].text).not.toContain('העברתי לצוות')
+    })
+
+    it('does not infer a new buyer when strict customer lookup is unavailable', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true })
+        mocks.findCustomerByPhone.mockRejectedValueOnce(new Error('CUSTOMER_LOOKUP_UNAVAILABLE'))
+        await post(inbound({ text: 'כמה עולה?' }))
+        expect(prepared().exchange.conversationContract.conversationalState).toBe('SERVICE')
+        expect(text()).not.toMatch(/690|990|add-to-cart/)
+        expect(prepared().exchange.parsed.handoffReason).toBe('customer_lookup_unavailable')
+    })
+
+    it('existing verified owner gets service and no second checkout', async () => {
+        mocks.findCustomerByPhone.mockResolvedValue({ weddingId: 'synthetic-book' })
+        await post(inbound({ text: 'שילמתי' }))
+        expect(prepared().exchange.conversationContract.conversationalState).toBe('SERVICE')
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+    })
+    it('stop while paused persists suppression before any acknowledgment', async () => {
+        mocks.isPausedForHuman.mockReturnValue(true)
+        await post(inbound({ text: 'תפסיקו לשלוח' }))
+        expect(prepared().exchange.conversationContract).toMatchObject({ marketingSuppressed: true, followUpConsent: null, followUpSchedule: null, conversationalState: 'STOPPED' })
+        expect(prepared().outcome.followUpAt).toBeNull()
+    })
+    it('memorial response has neither congratulations nor festive emoji', async () => {
+        await post(inbound({ text: 'ספר הנצחה' }))
+        expect(text()).not.toMatch(/מזל טוב|🎉|💍|🥳/)
+        expect(prepared().exchange.parsed.eventType).toBe('memorial')
+    })
+    it('waits for renewed decision after an offer change', async () => {
+        mocks.readVerifiedCheckout.mockResolvedValue({ status: 'reconfirm_required', snapshot: { productId: 'printed', version: 'changed' } })
+        await post(inbound({ text: 'רוצה להזמין מודפס' }))
+        expect(text()).toContain('פרטי ההצעה השתנו')
+        expect(text()).not.toContain('add-to-cart')
+        expect(prepared().exchange.conversationContract.lastQuestion).toBe('offer_change_confirmation')
+    })
+    it('no approved catalog produces human review, never the legacy price fallback', async () => {
+        mocks.readActiveOfferCatalog.mockResolvedValue({ ok: false, offers: [], reason: 'catalog_missing' })
+        await post(inbound({ text: 'כמה עולה?' }))
+        expect(text()).not.toMatch(/690|990/)
+        expect(prepared().exchange.parsed.handoff).toBe(true)
+        expect(mocks.priceFallbackMessage).not.toHaveBeenCalled()
+    })
+    it.each(['', '2099-10-05T12:00:00Z', '2026-10-03T12:00:00Z'])('does not reset the service window for unknown/future/stale customer time %s', async occurredAt => {
+        const result = await post(inbound({ text: 'כמה עולה?', occurredAt }))
+        expect(result.body.shouldSend).toBe(false)
+        expect(mocks.claimInboundEvent.mock.calls[0][0].outgoing).toBe(true)
+        expect(mocks.getLead).not.toHaveBeenCalled()
+        expect(mocks.sendInboundSequenceDirect).not.toHaveBeenCalled()
+    })
+
+    it.each(['', '2026-10-03T12:00:00Z'])('honors delayed or un-timestamped STOP without reopening the service window or sending an acknowledgment', async occurredAt => {
+        const result = await post(inbound({ text: 'תפסיקו לשלוח', occurredAt }))
+        expect(mocks.suppressMarketingFromInbound).toHaveBeenCalledWith({ phone: 'test-phone-token', eventId: 'event-token', claimToken: 'claim-token' })
+        expect(result.body).toMatchObject({ shouldSend: false, skipped: 'marketing-suppressed-no-ack' })
+        expect(mocks.sendInboundSequenceDirect).not.toHaveBeenCalled()
+    })
+
+    it('never downgrades a strict conversation to legacy sales when the rollout flag is removed', async () => {
+        delete process.env.SALES_CONVERSATIONAL_POLICY_ENABLED
+        mocks.getLead.mockResolvedValue({ ...lead, conversationalPolicyVersion: '2026-10-05.v1' })
+        const result = await post(inbound({ text: 'כמה עולה?' }))
+        expect(result.body).toMatchObject({ shouldSend: false, skipped: 'strict-policy-disabled' })
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.completeSuccessfulExchange).not.toHaveBeenCalled()
+    })
+
+    it('will not use the unverified Make send path in strict mode', async () => {
+        mocks.canSendWhatsApp.mockReturnValue(false)
+        const result = await post(inbound({ text: 'כמה עולה?' }))
+        expect(result.status).toBe(503)
+        expect(result.body.shouldSend).toBe(false)
+        expect(mocks.completeSuccessfulExchange).not.toHaveBeenCalled()
+    })
+    it('does not send an obsolete or human-superseded prepared response', async () => {
+        mocks.completeSuccessfulExchange.mockResolvedValue({ action: 'human-paused' })
+        const result = await post(inbound({ text: 'כמה עולה?' }))
+        expect(result.body.shouldSend).toBe(false)
+        expect(mocks.sendInboundSequenceDirect).not.toHaveBeenCalled()
     })
 })

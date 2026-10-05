@@ -27,11 +27,15 @@ import { assertCompletableInboundOutcome, assertInboundClaimToken, decideInbound
 import { reserveHalfOpenProbe, resolveProviderFailure, resolveProviderSuccess, sanitizeBreakerRuntimeState } from './circuitBreaker'
 import { providerCircuitRuntimeId } from './circuitIdentity'
 import { createOutboundId, DELIVERY_ERROR_CODES, DELIVERY_REQUEST_LEASE_MS, decideDeliveryTransition, deliveryEventFingerprint, deliveryEventLedgerId, isDeliveryPending, providerMessageCorrelationId } from './delivery'
-import { isDueFollowUpCandidate, nextFollowUpDate, pendingFollowUpStatus, selectDueFollowUps } from './followupPolicy'
+import { isDueFollowUpCandidate, nextFollowUpDate, pendingFollowUpStatus, selectDueFollowUps, strictFollowUpEligibility, createStrictFollowUpSchedule, strictFollowUpDate } from './followupPolicy'
 import { isDemoEvidenceContent } from './followupEvidence'
 import { normalizeOpeningVariantId } from './openingExperiment'
 import { assignModelArm } from './modelExperiment'
 import { findOrphans } from './sweep'
+import { isConversationalPolicyEnabled, sanitizeConversationContract, isMarketingStopRequest, isHumanServiceRequest } from './salesContract'
+import { decideStrictInboundTime } from './transportPolicy'
+import { buildHumanSummary, humanPausePatch, humanTaskId, HUMAN_TASKS_COLLECTION, transitionHumanTask } from './humanHandoff'
+
 
 // The pure helpers live in leadsCore.js so they stay unit-testable —
 // importing this file boots the Admin SDK, which needs credentials.
@@ -48,12 +52,57 @@ const DELIVERY_PROVIDER_IDS_COLLECTION = 'sales_delivery_provider_ids'
 const VERIFIED_ORDERS_COLLECTION = 'sales_verified_orders'
 const OPENING_APPROVALS_COLLECTION = 'sales_opening_approvals'
 
+// A strict inbound reservation is coordination state, not proof that this
+// phone has ever been checked against historical conversations/customer data.
+function hasInitializedConversation(lead = {}) {
+    if (typeof lead.conversationInitialized === 'boolean') return lead.conversationInitialized
+    return lead.createdAt != null || lead.paymentVerified === true || !!lead.weddingId
+        || (Array.isArray(lead.turns) && lead.turns.length > 0)
+        || Number(lead.userTurns || 0) > 0
+        || (typeof lead.stage === 'string' && lead.stage !== 'new' && !!lead.stage)
+}
+
 function ref(phone) {
     return adminDb.collection(COLLECTION).doc(phone)
 }
 
 export function inboundEventRef(eventId) {
     return adminDb.collection(INBOUND_EVENTS_COLLECTION).doc(String(eventId))
+}
+
+// Read this plan before any transaction writes (Firestore read-before-write).
+// A generation changes only after explicit release, so duplicate requests and
+// concurrent retries share one task, even without a transport event ID.
+async function prepareHumanTask(tx, leadId, lead = {}, request = {}) {
+    const active = lead.humanTaskId && lead.humanTaskStatus !== 'released'
+    const generation = Math.max(0, Number(lead.humanTaskGeneration) || 0) + (active ? 0 : 1)
+    const taskId = active ? lead.humanTaskId : humanTaskId(leadId, generation)
+    const taskRef = adminDb.collection(HUMAN_TASKS_COLLECTION).doc(taskId)
+    const snap = await tx.get(taskRef)
+    const stored = snap.exists ? snap.data() : null
+    if (stored && stored.leadId !== leadId) throw new Error('human task ownership mismatch')
+    const nowMs = Date.now()
+    const task = stored || {
+        id: taskId, leadId, generation, status: 'requested',
+        summary: buildHumanSummary(lead, { ...request, incomingText: lead.pendingHumanRequestText || request.incomingText }),
+        sourceEventId: typeof request.eventId === 'string' ? request.eventId.slice(0, 200) : null,
+        requestedAtMs: nowMs, updatedAtMs: nowMs,
+        requestedBy: String(request.actor || 'sales_agent').slice(0, 160),
+    }
+    if (task.status === 'released') throw new Error('released task cannot own a human pause')
+    return {
+        taskRef, task, create: !stored,
+        patch: {
+            ...humanPausePatch({ taskId, status: task.status, generation, now: FieldValue.serverTimestamp() }),
+            ...(lead.humanSince ? { humanSince: lead.humanSince } : {}),
+            handoffReason: String(request.reason || request.parsed?.handoffReason || lead.handoffReason || '').slice(0, 240) || null,
+        },
+        result: { ok: true, taskId, status: task.status },
+    }
+}
+
+function writeHumanTask(tx, plan) {
+    if (plan.create) tx.set(plan.taskRef, plan.task, { merge: false })
 }
 
 function anthropicRuntimeRef() {
@@ -407,7 +456,7 @@ export async function resolveOrEnrollModelAssignment({
  * Commit a provider fallback as one fenced transaction. A stale outbound
  * worker cannot pause a lead after its inbound lease was reclaimed.
  */
-export async function completeProviderFallback({ eventId, claimToken, claimGeneration, phone, reason, recoveryFollowUpAt = null, outcome, deadlineAtMs = null }) {
+export async function completeProviderFallback({ eventId, claimToken, claimGeneration, phone, reason, outcome, deadlineAtMs = null }) {
     assertBeforeDeadline(deadlineAtMs)
     const ownedClaimToken = assertInboundClaimToken(claimToken)
     const cleanOutcome = sanitizeInboundOutcome(outcome)
@@ -419,7 +468,7 @@ export async function completeProviderFallback({ eventId, claimToken, claimGener
 
     return adminDb.runTransaction(async tx => {
         assertBeforeDeadline(deadlineAtMs)
-        const [eventSnap] = await Promise.all([tx.get(eventRef), tx.get(leadRef)])
+        const [eventSnap, leadSnap] = await Promise.all([tx.get(eventRef), tx.get(leadRef)])
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
         const stored = eventSnap.exists ? eventSnap.data() : null
         const decision = decideInboundCompletion(stored, ownedClaimToken, Date.now())
@@ -427,23 +476,22 @@ export async function completeProviderFallback({ eventId, claimToken, claimGener
         if (Number(stored.claimGeneration) !== expectedGeneration) return { action: 'stale' }
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
 
-        const safeRecoveryDate = /^\d{4}-\d{2}-\d{2}$/.test(String(recoveryFollowUpAt || ''))
-            ? String(recoveryFollowUpAt)
-            : null
-        tx.set(leadRef, {
-            human: true,
-            humanSince: FieldValue.serverTimestamp(),
-            handoffReason: String(reason || '').slice(0, 120) || null,
-            ...(safeRecoveryDate ? { followUpAt: safeRecoveryDate } : {}),
-            updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true })
+        const lead = leadSnap.exists ? leadSnap.data() || {} : {}
+        if (stored.conversationRevision != null && stored.conversationRevision !== lead.conversationRevision) return { action: 'stale' }
+        const plan = await prepareHumanTask(tx, normalizePhone(phone), lead, { eventId, reason })
+        if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
+        if (lead.activeInboundEventId === String(eventId)) Object.assign(plan.patch, { activeInboundEventId: null, activeInboundLeaseUntilMs: null })
+        writeHumanTask(tx, plan)
+        tx.set(leadRef, plan.patch, { merge: true })
         tx.set(eventRef, {
             status: 'completed',
             leaseUntilMs: null,
             outcome: cleanOutcome,
+            humanHandoffTaskId: plan.task.id,
+            responseHumanGeneration: plan.task.generation,
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true })
-        return { action: 'completed', outcome: cleanOutcome }
+        return { action: 'completed', outcome: cleanOutcome, humanHandoff: plan.result }
     })
 }
 
@@ -492,6 +540,42 @@ export async function completeSuccessfulExchange({
         if (decision.action !== 'complete') return decision
         if (Number(stored.claimGeneration) !== Number(claimGeneration)) return { action: 'stale' }
         const storedLead = leadSnap.exists ? leadSnap.data() || {} : {}
+        if (storedLead.createdAt != null) delete patch.createdAt
+        else if (storedLead.conversationInitialized === false) {
+            patch.createdAt = storedLead.firstContactAtMs || stored.occurredAtMs || FieldValue.serverTimestamp()
+        }
+        // Exchange completion can update reply activity, but never reopen the
+        // 24-hour window by replacing the verified provider time with receipt.
+        if (stored.occurredAtMs != null && stored.conversationRevision != null) {
+            patch.lastInboundAtMs = stored.occurredAtMs
+            patch.lastInboundAt = stored.occurredAtMs
+        }
+        if (stored.inboundRecorded === true) {
+            const assistantTurns = (exchange?.parsed?.messages || []).map(text => ({ role: 'assistant', text, at: Date.now() }))
+            if (assistantTurns.length) patch.turns = FieldValue.arrayUnion(...assistantTurns)
+            else delete patch.turns
+            delete patch.userTurns
+        }
+        if (exchange?.expectedHumanTaskGeneration != null && Number(exchange.expectedHumanTaskGeneration) !== Number(storedLead.humanTaskGeneration || 0)) return { action: 'human-paused' }
+        if (stored.paymentVerifiedAtClaim === false && storedLead.paymentVerified === true && !exchange?.parsed?.handoff && exchange?.conversationContract?.marketingSuppressed !== true && replyParts.length) return { action: 'payment-changed' }
+        if (storedLead.handoffPending === true && !exchange?.parsed?.handoff && exchange?.conversationContract?.marketingSuppressed !== true && !(exchange?.conversationContract?.handoffPending === true && exchange?.conversationContract?.conversationalState === 'SERVICE') && replyParts.length) return { action: 'human-paused' }
+        if (isPausedForHuman(storedLead) && !exchange?.parsed?.handoff && exchange?.conversationContract?.marketingSuppressed !== true && replyParts.length) return { action: 'human-paused' }
+        if (isConversationalPolicyEnabled() && stored.conversationRevision != null
+            && (storedLead.conversationRevision !== stored.conversationRevision
+                || exchange?.conversationContract?.conversationRevision !== stored.conversationRevision)) {
+            if (storedLead.activeInboundEventId === String(eventId)) tx.set(leadRef, { activeInboundEventId: null, activeInboundLeaseUntilMs: null }, { merge: true })
+            return { action: 'stale' }
+        }
+        if (isConversationalPolicyEnabled() && storedLead.activeInboundEventId === String(eventId)) {
+            patch.activeInboundEventId = null
+            patch.activeInboundLeaseUntilMs = null
+        }
+        const handoffPlan = exchange?.parsed?.handoff
+            ? await prepareHumanTask(tx, id, storedLead, { ...exchange, eventId })
+            : null
+        if (handoffPlan) Object.assign(patch, handoffPlan.patch)
+        else if (isPausedForHuman(storedLead)) { patch.followUpAt = null; patch.followUpSchedule = null }
+        if (!handoffPlan && storedLead.handoffPending === true) { patch.handoffPending = true; patch.followUpAt = null; patch.followUpSchedule = null }
         if (exchange?.openingRuntime) {
             const storedStateVersion = Number(storedLead.openingStateVersion || 0)
             if (storedStateVersion !== Number(exchange.openingRuntime.expectedStateVersion || 0)) return { action: 'stale' }
@@ -535,8 +619,9 @@ export async function completeSuccessfulExchange({
             patch.lastOutboundMediaKind = mediaPart.part
         }
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
+        if (handoffPlan) writeHumanTask(tx, handoffPlan)
         tx.set(leadRef, patch, { merge: true })
-        tx.set(eventRef, { status: 'completed', leaseUntilMs: null, outcome: cleanOutcome, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+        tx.set(eventRef, { status: 'completed', leaseUntilMs: null, outcome: cleanOutcome, ...(handoffPlan ? { humanHandoffTaskId: handoffPlan.task.id } : {}), responseHumanGeneration: handoffPlan?.task.generation ?? (Number(storedLead.humanTaskGeneration) || 0), pendingIncomingText: null, responsePaymentVerified: storedLead.paymentVerified === true, responseMarketingSuppressed: storedLead.marketingSuppressed === true, controlResponse: exchange?.conversationContract?.marketingSuppressed === true || (exchange?.conversationContract?.handoffPending === true && exchange?.conversationContract?.conversationalState === 'SERVICE'), updatedAt: FieldValue.serverTimestamp() }, { merge: true })
         if (exchange?.openingRuntime?.approvalRequest) {
             const stateVersion = Number(exchange.openingRuntime.expectedStateVersion || 0) + 1
             const approval = openingApprovalIdentity(id, stateVersion)
@@ -585,38 +670,210 @@ export async function completeSuccessfulExchange({
                 updatedAt: FieldValue.serverTimestamp(),
             }, { merge: false })
         }
-        return { action: 'completed', outcome: cleanOutcome }
+        return { action: 'completed', outcome: cleanOutcome, ...(handoffPlan ? { humanHandoff: handoffPlan.result } : {}) }
+    })
+}
+
+// The Graph transport calls this after completion, immediately before sending
+// each part. A human intervention/new inbound can revoke already-prepared sales.
+export async function validateInboundBeforeSend({ phone, eventId, nowMs = Date.now() }) {
+    const id = normalizePhone(phone)
+    if (!id) return { ok: false, reason: 'invalid-lead' }
+    return adminDb.runTransaction(async tx => {
+        const [leadSnap, eventSnap] = await Promise.all([tx.get(ref(id)), tx.get(inboundEventRef(eventId))])
+        const lead = leadSnap.exists ? leadSnap.data() || {} : {}
+        const event = eventSnap.exists ? eventSnap.data() : null
+        if (event?.status !== 'completed' || event.outcome?.noReply) return { ok: false, reason: 'inbound-not-sendable' }
+        if (event.conversationRevision != null && event.conversationRevision !== lead.conversationRevision) return { ok: false, reason: 'superseded-inbound' }
+        if (event.conversationRevision != null) {
+            const customerAtMs = lead.lastInboundAtMs
+            if (!Number.isFinite(customerAtMs) || customerAtMs <= 0 || customerAtMs > nowMs
+                || nowMs - customerAtMs >= 24 * 60 * 60 * 1000) return { ok: false, reason: 'whatsapp-window-closed' }
+        }
+        if ((Number(event.responseHumanGeneration) || 0) !== (Number(lead.humanTaskGeneration) || 0)) return { ok: false, reason: 'human-ownership-changed' }
+        if (lead.paymentVerified === true && event.responsePaymentVerified !== true && event.controlResponse !== true && event.outcome?.handoff !== true) return { ok: false, reason: 'payment-state-changed' }
+        if (lead.marketingSuppressed === true && event.responseMarketingSuppressed !== true && event.controlResponse !== true && event.outcome?.handoff !== true) return { ok: false, reason: 'marketing-suppressed' }
+        const handoffAcknowledgment = event.outcome?.handoff === true && event.humanHandoffTaskId === lead.humanTaskId
+        if ((isPausedForHuman(lead) || lead.handoffPending === true) && !handoffAcknowledgment && event.controlResponse !== true) return { ok: false, reason: 'human-takeover' }
+        return { ok: true, reason: null }
+    })
+}
+
+// Register a single truthful text alternative after a definite, persisted media
+// failure. This does not dispatch, retry the media, or credit media delivery.
+export async function prepareInboundMediaFallback({ phone, eventId, text, failedPartId }) {
+    const id = normalizePhone(phone)
+    const fallbackText = typeof text === 'string' ? text.trim().slice(0, 2000) : ''
+    if (!id || !fallbackText || !failedPartId) return { action: 'blocked', reason: 'invalid-fallback', part: null }
+    const outboundId = createOutboundId({ scope: 'inbound', subject: `${eventId}:media-fallback`, attempt: 0, part: 'text' })
+    const logicalAttemptId = createOutboundId({ scope: 'inbound', subject: eventId, attempt: 0, part: 'reply' })
+    return adminDb.runTransaction(async tx => {
+        const target = deliveryEventRef(outboundId)
+        const [leadSnap, eventSnap, failedSnap, existingSnap] = await Promise.all([
+            tx.get(ref(id)), tx.get(inboundEventRef(eventId)), tx.get(deliveryEventRef(failedPartId)), tx.get(target),
+        ])
+        const lead = leadSnap.exists ? leadSnap.data() || {} : {}
+        const event = eventSnap.exists ? eventSnap.data() : null
+        const failed = failedSnap.exists ? failedSnap.data() : null
+        if (event?.status !== 'completed' || event.outcome?.noReply
+            || (event.conversationRevision != null && event.conversationRevision !== lead.conversationRevision)
+            || (Number(event.responseHumanGeneration) || 0) !== (Number(lead.humanTaskGeneration) || 0)
+            || isPausedForHuman(lead) || (lead.paymentVerified === true && event.responsePaymentVerified !== true)) return { action: 'blocked', reason: 'conversation-changed', part: null }
+        if (failed?.status !== 'failed' || failed.leadId !== id || failed.logicalAttemptId !== logicalAttemptId
+            || !['image', 'video', 'document', 'audio', 'approved_design'].includes(failed.part)) {
+            return { action: 'blocked', reason: 'media-failure-not-confirmed', part: null }
+        }
+        // A previous registration may already have reached the provider. Do not
+        // duplicate it after a timeout or crash at the dispatch boundary.
+        if (existingSnap.exists) return { action: 'existing', outboundId, part: null }
+        const order = Math.max(1, Number(failed.order) || 1) + 1
+        tx.set(target, {
+            outboundId, channel: failed.channel === 'whatsapp_graph' ? 'whatsapp_graph' : 'make',
+            status: 'requested', leadId: id, part: 'text', order,
+            deliveryRole: 'secondary', advanceOnDelivery: false, advancesFollowUp: false,
+            logicalAttemptId, demoEvidence: false, mediaFallbackFor: String(failedPartId),
+            requestedAtMs: Date.now(), createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: false })
+        return { action: 'requested', outboundId, part: { kind: 'text', partId: outboundId, text: fallbackText, order } }
     })
 }
 
 /**
  * Claim the one durable unit of inbound work before a reply can spend
- * money or write a lead. The event id is Meta's stable delivery id; the
- * phone is deliberately reduced to a hash before it reaches Firestore.
+ * money or write a lead. The event id is Meta's stable delivery id. Strict
+ * records carry a server-only lead reference to release conversation locks.
  */
-export async function claimInboundEvent({ eventId, phone, occurredAt }) {
+export async function claimInboundEvent({ eventId, phone, occurredAt, outgoing = false, incomingText = null }) {
     const eventRef = inboundEventRef(eventId)
     const claimToken = crypto.randomUUID()
+    const strict = isConversationalPolicyEnabled() && outgoing !== true
+    const leadRef = strict ? ref(normalizePhone(phone)) : null
     return adminDb.runTransaction(async tx => {
         const snap = await tx.get(eventRef)
         const stored = snap.exists ? snap.data() : null
         const nowMs = Date.now()
+        if (strict && stored?.phoneHash && stored.phoneHash !== crypto.createHash('sha256').update(String(phone)).digest('hex')) return { action: 'rejected', noReply: true, reason: 'inbound-phone-mismatch' }
         const claim = startInboundClaim(stored, nowMs, claimToken)
         if (claim.action !== 'process') return claim
-
+        let conversationRevision = null
+        let occurredAtMs = null
+        let inboundRecorded = stored?.inboundRecorded === true
+        let paymentVerifiedAtClaim = stored?.paymentVerifiedAtClaim ?? false
+        const receivedAtMs = stored?.receivedAtMs || nowMs
+        if (strict) {
+            const leadSnap = await tx.get(leadRef)
+            const lead = leadSnap.exists ? leadSnap.data() || {} : {}
+            const timing = decideStrictInboundTime({ occurredAt, nowMs, latestAtMs: activityMs(lead.lastInboundAtMs) ?? activityMs(lead.lastInboundAt) })
+            if (!timing.ok) return { action: 'rejected', noReply: true, reason: timing.reason }
+            if (stored?.occurredAtMs != null && stored.occurredAtMs !== timing.occurredAtMs) return { action: 'rejected', noReply: true, reason: 'inbound-timestamp-mismatch' }
+            occurredAtMs = timing.occurredAtMs
+            paymentVerifiedAtClaim = stored?.paymentVerifiedAtClaim ?? (lead.paymentVerified === true)
+            conversationRevision = stored?.conversationRevision ?? ((Number(lead.conversationRevision) || 0) + 1)
+            // An obsolete queued event can never overwrite a later decision.
+            if (stored?.conversationRevision != null && stored.conversationRevision < Number(lead.conversationRevision)) {
+                const outcome = sanitizeInboundOutcome({ noReply: true, skipped: 'superseded-inbound' })
+                tx.set(eventRef, { status: 'completed', outcome, leaseUntilMs: null, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+                return { action: 'cached', outcome }
+            }
+            // Each new customer event invalidates pending sales immediately,
+            // including a superseded worker still computing the previous response.
+            const revisionPatch = stored?.conversationRevision == null ? {
+                conversationRevision, lastInboundAtMs: occurredAtMs, lastInboundAt: occurredAtMs, lastInboundReceivedAtMs: nowMs,
+                latestInboundEventId: String(eventId), followUpSchedule: null, followUpAt: null,
+                unansweredSalesReminders: 0,
+                ...(!hasInitializedConversation(lead) ? {
+                    conversationInitialized: false,
+                    firstContactAtMs: lead.firstContactAtMs || occurredAtMs,
+                } : {}),
+            } : {}
+            // Safety intent is durable at receipt, before another customer
+            // event can supersede this worker's response. A task is not yet
+            // claimed for human intent; the latest worker must create it.
+            if (isMarketingStopRequest(incomingText)) Object.assign(revisionPatch, {
+                marketingSuppressed: true, marketingSuppressedAtMs: nowMs,
+                followUpConsent: { status: 'revoked', scope: 'sales_reminders', source: 'customer_message', sourceMessageId: String(eventId).slice(0, 300), recordedAtMs: nowMs },
+                followUpAt: null, followUpSchedule: null, callbackPromised: null, customerCallbackAt: null,
+                deliveryRequestOutboundId: null, deliveryRequestAttemptId: null, deliveryRequestUntilMs: null,
+                deliveryPendingOutboundId: null, deliveryPendingAttemptId: null, deliveryPendingUntilMs: null,
+                pendingDeliveryMessages: {},
+            })
+            else if (isHumanServiceRequest(incomingText)) Object.assign(revisionPatch, {
+                handoffPending: true, pendingHumanRequestEventId: String(eventId),
+                pendingHumanRequestText: String(incomingText).slice(0, 600), pendingHumanRequestAtMs: occurredAtMs,
+                followUpAt: null, followUpSchedule: null, callbackPromised: null, customerCallbackAt: null,
+                deliveryRequestOutboundId: null, deliveryRequestAttemptId: null, deliveryRequestUntilMs: null,
+                deliveryPendingOutboundId: null, deliveryPendingAttemptId: null, deliveryPendingUntilMs: null,
+                pendingDeliveryMessages: {},
+            })
+            if (lead.activeInboundEventId && lead.activeInboundEventId !== String(eventId)
+                && Number(lead.activeInboundLeaseUntilMs) > nowMs) {
+                const activeRef = inboundEventRef(lead.activeInboundEventId)
+                const activeSnap = await tx.get(activeRef)
+                const active = activeSnap.exists ? activeSnap.data() : null
+                const queuedTurns = []
+                if (active?.inboundRecorded !== true && active?.pendingIncomingText) {
+                    queuedTurns.push({ role: 'user', text: active.pendingIncomingText, at: active.occurredAtMs || active.receivedAtMs || nowMs })
+                }
+                const currentText = typeof incomingText === 'string' ? incomingText.slice(0, 2000) : ''
+                const currentRecorded = stored?.inboundRecorded === true || !!currentText
+                if (stored?.inboundRecorded !== true && currentText) queuedTurns.push({ role: 'user', text: currentText, at: occurredAtMs })
+                if (queuedTurns.length) Object.assign(revisionPatch, { turns: FieldValue.arrayUnion(...queuedTurns), userTurns: FieldValue.increment(queuedTurns.length) })
+                if (active?.inboundRecorded !== true && active?.pendingIncomingText) tx.set(activeRef, { inboundRecorded: true, pendingIncomingText: null }, { merge: true })
+                inboundRecorded = currentRecorded
+                // This latest customer event owns the new lease now. Persisted
+                // context is ordered, and the prior worker fails the revision
+                // fence; no external retry/queue dispatcher is required.
+            }
+            tx.set(leadRef, { ...revisionPatch, activeInboundEventId: String(eventId), activeInboundLeaseUntilMs: nowMs + INBOUND_LEASE_MS }, { merge: true })
+        }
         tx.set(eventRef, {
             eventId: String(eventId),
             phoneHash: crypto.createHash('sha256').update(String(phone)).digest('hex'),
-            occurredAt: occurredAt || new Date().toISOString(),
-            status: 'processing',
-            leaseUntilMs: nowMs + INBOUND_LEASE_MS,
-            claimToken: claim.claimToken,
-            claimGeneration: claim.claimGeneration,
+            occurredAt: strict ? new Date(occurredAtMs).toISOString() : occurredAt || new Date().toISOString(),
+            status: 'processing', leaseUntilMs: nowMs + INBOUND_LEASE_MS,
+            claimToken: claim.claimToken, claimGeneration: claim.claimGeneration,
+            ...(strict ? { conversationRevision, leadId: normalizePhone(phone), occurredAtMs, receivedAtMs, inboundRecorded, paymentVerifiedAtClaim, pendingIncomingText: inboundRecorded ? null : (typeof incomingText === 'string' ? incomingText.slice(0, 2000) : null) } : {}),
             attempts: FieldValue.increment(1),
-            createdAt: stored?.createdAt || FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+            createdAt: stored?.createdAt || FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true })
-        return claim
+        return { ...claim, ...(strict ? { conversationRevision, occurredAtMs, receivedAtMs } : {}) }
+    })
+}
+
+// A trusted STOP is effective even when its transport timestamp cannot open a
+// customer-service window. Persist suppression without any customer send or
+// fabricated inbound time. Caller must already own this event's claim.
+export async function suppressMarketingFromInbound({ phone, eventId, claimToken }) {
+    const id = normalizePhone(phone)
+    if (!id) throw Object.assign(new Error('invalid lead'), { code: 'INVALID_LEAD_ID' })
+    const ownedClaimToken = assertInboundClaimToken(claimToken)
+    const eventRef = inboundEventRef(eventId)
+    const leadRef = ref(id)
+    return adminDb.runTransaction(async tx => {
+        const [eventSnap, leadSnap] = await Promise.all([tx.get(eventRef), tx.get(leadRef)])
+        const stored = eventSnap.exists ? eventSnap.data() : null
+        const lead = leadSnap.exists ? leadSnap.data() || {} : {}
+        if ((stored?.leadId && stored.leadId !== id) || (stored?.phoneHash && stored.phoneHash !== crypto.createHash('sha256').update(String(phone)).digest('hex'))) return { action: 'rejected', noReply: true, reason: 'inbound-phone-mismatch' }
+        if (stored?.marketingSuppressionApplied === true) return { action: 'cached', outcome: stored.outcome, marketingSuppressed: true }
+        const decision = decideInboundCompletion(stored, ownedClaimToken, Date.now())
+        if (decision.action !== 'complete') return decision
+        const outcome = sanitizeInboundOutcome({ noReply: true, skipped: 'marketing-suppressed-no-ack', handoff: false })
+        tx.set(leadRef, {
+            marketingSuppressed: true,
+            marketingSuppressedAtMs: Date.now(),
+            followUpConsent: { status: 'revoked', scope: 'sales_reminders', source: 'customer_message', sourceMessageId: String(eventId).slice(0, 300), recordedAtMs: Date.now() },
+            followUpAt: null, followUpSchedule: null, callbackPromised: null, customerCallbackAt: null,
+            conversationRevision: (Number(lead.conversationRevision) || 0) + 1,
+            activeInboundEventId: null, activeInboundLeaseUntilMs: null,
+            deliveryRequestOutboundId: null, deliveryRequestAttemptId: null, deliveryRequestUntilMs: null,
+            deliveryPendingOutboundId: null, deliveryPendingAttemptId: null, deliveryPendingUntilMs: null,
+            pendingDeliveryMessages: {}, updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true })
+        tx.set(eventRef, {
+            status: 'completed', leaseUntilMs: null, outcome, marketingSuppressionApplied: true,
+            pendingIncomingText: null, updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true })
+        return { action: 'completed', outcome, marketingSuppressed: true }
     })
 }
 
@@ -636,6 +893,10 @@ export async function completeInboundEvent({ eventId, claimToken, outcome }) {
         const stored = snap.exists ? snap.data() : null
         const decision = decideInboundCompletion(stored, ownedClaimToken, Date.now())
         if (decision.action !== 'complete') return decision
+        const leadRef = stored?.leadId ? ref(stored.leadId) : null
+        const leadSnap = leadRef ? await tx.get(leadRef) : null
+        const lead = leadSnap?.exists ? leadSnap.data() : null
+        if (lead?.activeInboundEventId === String(eventId)) tx.set(leadRef, { activeInboundEventId: null, activeInboundLeaseUntilMs: null }, { merge: true })
 
         tx.set(eventRef, {
             status: 'completed',
@@ -651,15 +912,15 @@ export async function getLead(rawPhone) {
     const phone = normalizePhone(rawPhone)
     if (!phone) return null
     const snap = await ref(phone).get()
-    if (!snap.exists) return { phone, isNew: true, turns: [], stage: 'new', followUpCount: 0, objectionCount: 0 }
-    return { phone, isNew: false, ...snap.data() }
+    const lead = snap.exists ? snap.data() || {} : {}
+    return { phone, turns: [], stage: 'new', followUpCount: 0, objectionCount: 0, ...lead, isNew: !hasInitializedConversation(lead) }
 }
 
 /**
  * Persist one exchange. Undefined values are stripped — the Firestore
  * client rejects them, and a half-written lead is worse than a stale one.
  */
-export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, profileName, source, variant, isNew, openingRuntime = null }) {
+export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, profileName, source, variant, isNew, openingRuntime = null, conversationContract = null }) {
     const id = normalizePhone(phone)
     if (!id) throw new Error('bad phone')
 
@@ -669,6 +930,7 @@ export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, pr
 
     const patch = {
         phone: id,
+        conversationInitialized: true,
         lastInboundAt: now,
         lastMessageAt: now,
         updatedAt: now,
@@ -721,10 +983,13 @@ export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, pr
     // followUpAt null means "stop chasing" and must be written, not skipped.
     patch.followUpAt = followUpAt || null
 
+    Object.assign(patch, sanitizeConversationContract(conversationContract))
+
     if (parsed.handoff) {
         patch.human = true
         patch.humanSince = now
         patch.handoffReason = parsed.handoffReason || null
+        patch.followUpAt = null
     }
 
     if (openingRuntime) {
@@ -775,9 +1040,23 @@ export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, pr
 
 export async function saveExchange(args) {
     const { id, patch } = buildExchangePatch(args)
-    await ref(id).set(patch, { merge: true })
-    // arrayUnion cannot trim, so the cap is enforced on the next read
-    // path via trimTurns() and compacted here when it grows too far.
+    await adminDb.runTransaction(async tx => {
+        const leadRef = ref(id)
+        const snap = await tx.get(leadRef)
+        const lead = snap.exists ? snap.data() || {} : {}
+        if (lead.createdAt != null) delete patch.createdAt
+        else if (lead.conversationInitialized === false) patch.createdAt = lead.firstContactAtMs || FieldValue.serverTimestamp()
+        if (isPausedForHuman(lead) && !args.parsed?.handoff && args.parsed?.messages?.length) {
+            throw Object.assign(new Error('human takeover suppresses automated reply'), { code: 'HUMAN_TAKEOVER' })
+        }
+        if (isPausedForHuman(lead)) { patch.followUpAt = null; patch.followUpSchedule = null }
+        const plan = args.parsed?.handoff ? await prepareHumanTask(tx, id, lead, args) : null
+        if (plan) {
+            Object.assign(patch, plan.patch)
+            writeHumanTask(tx, plan)
+        }
+        tx.set(leadRef, patch, { merge: true })
+    })
     await compactIfNeeded(id)
     return id
 }
@@ -836,17 +1115,19 @@ function normalizedDeliveryOwnership(stored, outboundId) {
 
 // Delivery evidence may arrive after a customer reply, owner intervention,
 // or a new callback choice. Those decisions outrank an old transport plan.
-const followUpStopped = lead => lead.paymentVerified === true || !!lead.human
+const followUpStopped = lead => lead.paymentVerified === true || isPausedForHuman(lead) || lead.handoffPending === true
+    || lead.marketingSuppressed === true || lead.followUpConsent?.status === 'revoked'
     || ['closed_won', 'closed_lost', 'handoff'].includes(lead.stage)
 const activityMs = value => healthMs(value) ?? (typeof value === 'string' && Number.isFinite(Date.parse(value)) ? Date.parse(value) : null)
 const followUpState = lead => ({
     stage: lead.stage || null,
+    conversationRevision: Number(lead.conversationRevision) || 0,
     eventDate: lead.eventDate || null,
     followUpAt: lead.followUpAt || null,
     callbackPromised: lead.callbackPromised || null,
     customerDeferred: lead.customerDeferred === true,
     customerCallbackAt: lead.customerCallbackAt || null,
-    lastInboundAtMs: activityMs(lead.lastInboundAt),
+    lastInboundAtMs: activityMs(lead.lastInboundAtMs) ?? activityMs(lead.lastInboundAt),
     userTurns: Number(lead.userTurns) || 0,
 })
 
@@ -876,6 +1157,18 @@ function canAdvanceFollowUpSchedule(lead, delivery, scannedLead = null) {
         && followUpStateUnchanged(lead, delivery, scannedLead)
 }
 
+function nextStrictSchedulePatch(lead, delivery, patch = {}) {
+    if (!isConversationalPolicyEnabled()) return {}
+    // Old transport events cannot enroll a lead into the new consent policy.
+    // A newer inbound owns its own schedule; leave it untouched.
+    if (!delivery?.strictFollowUpSchedule || !followUpStateUnchanged(lead, delivery)) return {}
+    const sameGeneration = delivery.strictFollowUpSchedule.generation === lead.conversationRevision
+        && delivery.strictFollowUpSchedule.consentSourceMessageId === lead.followUpConsent?.sourceMessageId
+    if (!sameGeneration) return {}
+    const schedule = createStrictFollowUpSchedule({ ...lead, ...patch }, { nowMs: Date.now() })
+    return { followUpSchedule: schedule, followUpAt: strictFollowUpDate(schedule) }
+}
+
 /**
  * Register the exact outbound part before transport starts. This is metadata,
  * not a success claim: cadence advances only on delivery or stale settlement.
@@ -898,6 +1191,7 @@ export async function prepareFollowUpDelivery({
     logicalAttemptId = outboundId,
     templateName = null,
     requestedAt = new Date().toISOString(),
+    expectedSchedule = null,
 }) {
     const strategyIds = new Set(FOLLOWUP_STRATEGY_IDS)
     const ctas = new Set(FOLLOWUP_CTAS)
@@ -921,13 +1215,18 @@ export async function prepareFollowUpDelivery({
     return adminDb.runTransaction(async tx => {
         const [deliverySnap, leadSnap] = await Promise.all([tx.get(deliveryRef), tx.get(leadRef)])
         const stored = deliverySnap.exists ? deliverySnap.data() : null
-        if (stored) return { action: 'existing', outboundId: String(outboundId), status: stored.status }
-
         const lead = leadSnap.exists ? leadSnap.data() : {}
         const requestDay = new Date(requestedAtMs).toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
         if (followUpStopped(lead)) {
             return { action: 'blocked', outboundId: null, status: 'followup-stopped' }
         }
+        const strictGuard = strictFollowUpEligibility(lead, {
+            nowMs: requestedAtMs, expectedSchedule: stored?.strictFollowUpSchedule || expectedSchedule,
+            checkPending: false, transport: part, templateName,
+            claimedAttemptNumber: stored?.strictFollowUpSchedule?.attemptNumber ?? null,
+        })
+        if (!strictGuard.ok) return { action: 'blocked', outboundId: null, status: strictGuard.reason }
+        if (stored) return { action: 'existing', outboundId: String(outboundId), status: stored.status }
         // A secondary part belongs to the already-authorized primary, but
         // only while that exact request and its conversation state still own
         // the lease. Consuming the primary must not discard its own media.
@@ -939,7 +1238,7 @@ export async function prepareFollowUpDelivery({
             const primary = primarySnap.exists ? primarySnap.data() : null
             callbackSibling = !!primary?.consumedCustomerCallbackAt && followUpStateUnchanged(lead, primary)
         }
-        if (!callbackSibling && ((lead.customerDeferred === true && (!lead.customerCallbackAt || lead.customerCallbackAt > requestDay))
+        if (!strictGuard.strict && !callbackSibling && ((lead.customerDeferred === true && (!lead.customerCallbackAt || lead.customerCallbackAt > requestDay))
             || (lead.customerCallbackAt && lead.customerCallbackAt > requestDay)
             || (lead.stage === 'commit_later' && !lead.customerCallbackAt && !lead.callbackPromised))) {
             return { action: 'blocked', outboundId: null, status: 'customer-deferred' }
@@ -982,6 +1281,7 @@ export async function prepareFollowUpDelivery({
             nextFollowUpAt: consumedCustomerCallbackAt ? null : nextFollowUpAt || null,
             consumedCustomerCallbackAt,
             leadStateAtRequest: followUpState({ ...lead, ...callbackPatch }),
+            ...(strictGuard.strict ? { strictFollowUpSchedule: strictGuard.schedule } : {}),
             stage: stage || null,
             templateName: templateName || null,
             ...(followUpStrategyId ? {
@@ -994,6 +1294,11 @@ export async function prepareFollowUpDelivery({
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: false })
         const leadPatch = { ...callbackPatch }
+        if (strictGuard.strict && advancesFollowUp) {
+            leadPatch.followUpConsent = { ...strictGuard.consent, usedReminders: strictGuard.consent.usedReminders + 1 }
+            leadPatch.unansweredSalesReminders = (Number(lead.unansweredSalesReminders) || 0) + 1
+            leadPatch.lastSalesReminderClaimedAtMs = requestedAtMs
+        }
         if (operationalStatus === 'stale') {
             leadPatch.lastDeliveryStatus = 'requested'
             leadPatch.deliveryPendingOutboundId = null
@@ -1028,6 +1333,28 @@ export async function prepareFollowUpDelivery({
             tx.set(leadRef, leadPatch, { merge: true })
         }
         return { action: 'requested', outboundId: String(outboundId) }
+    })
+}
+
+// Re-read authoritative ownership immediately before provider dispatch. A
+// prepared item is not a permanent send permission and cannot survive takeover.
+export async function validateFollowUpBeforeSend({ phone, outboundId, nowMs = Date.now() }) {
+    const id = normalizePhone(phone)
+    if (!id) return { ok: false, reason: 'invalid-lead' }
+    return adminDb.runTransaction(async tx => {
+        const [leadSnap, deliverySnap] = await Promise.all([tx.get(ref(id)), tx.get(deliveryEventRef(outboundId))])
+        const lead = leadSnap.exists ? leadSnap.data() || {} : {}
+        const delivery = deliverySnap.exists ? deliverySnap.data() : null
+        if (!delivery || delivery.leadId !== id || delivery.status !== 'requested') return { ok: false, reason: 'delivery-not-requested' }
+        if (followUpStopped(lead)) return { ok: false, reason: 'followup-stopped' }
+        if (!followUpStateUnchanged(lead, delivery)) return { ok: false, reason: 'conversation-changed' }
+        if (lead.deliveryRequestAttemptId !== delivery.logicalAttemptId || Number(lead.deliveryRequestUntilMs) <= nowMs) return { ok: false, reason: 'delivery-lease-lost' }
+        const guard = strictFollowUpEligibility(lead, {
+            nowMs, expectedSchedule: delivery.strictFollowUpSchedule, checkPending: false,
+            transport: delivery.part, templateName: delivery.templateName,
+            claimedAttemptNumber: delivery.strictFollowUpSchedule?.attemptNumber ?? null,
+        })
+        return { ok: guard.ok, reason: guard.reason || null }
     })
 }
 
@@ -1245,6 +1572,11 @@ export async function recordDeliveryEvent(event) {
                     at: Date.parse(event.occurredAt),
                 })
             }
+            if (isConversationalPolicyEnabled() && advances) {
+                // Never let the legacy date-only ladder mint a strict schedule.
+                delete leadPatch.followUpAt
+                Object.assign(leadPatch, nextStrictSchedulePatch(lead, stored, leadPatch))
+            }
             tx.set(leadRef, leadPatch, { merge: true })
         }
 
@@ -1375,7 +1707,7 @@ export async function readDueFollowUpHealth(todayISO) {
 // Called on a lead's first message and bounded support-like continuations
 // from existing leads. The route still requires a real ownerPhone match;
 // support wording alone does not prove a customer relationship or payment.
-export async function findCustomerByPhone(rawPhone) {
+export async function findCustomerByPhone(rawPhone, { strict = false } = {}) {
     const intl = normalizePhone(rawPhone) // 972501234567
     if (!intl || intl.length < 11) return null
     const local = `0${intl.slice(3)}` // 0501234567
@@ -1393,8 +1725,10 @@ export async function findCustomerByPhone(rawPhone) {
         const d = doc.data() || {}
         return { weddingId: doc.id, ownerName: d.ownerName || null, ownerEmail: d.ownerEmail || null }
     } catch {
-        // A missing index or a malformed number must never stop a reply.
         console.warn('[salesAgent] customer lookup failed')
+        // Unknown customer status must not be misrepresented as a successful
+        // negative lookup when the strict sales policy is in use.
+        if (strict) throw Object.assign(new Error('customer lookup unavailable'), { code: 'CUSTOMER_LOOKUP_UNAVAILABLE' })
         return null
     }
 }
@@ -1473,6 +1807,14 @@ export async function closeLeadOnPurchase({ phone, orderId, weddingId, amount, p
     const patch = {
         stage: 'closed_won',
         followUpAt: null,
+        followUpSchedule: null,
+        deliveryRequestOutboundId: null,
+        deliveryRequestAttemptId: null,
+        deliveryRequestUntilMs: null,
+        deliveryPendingOutboundId: null,
+        deliveryPendingAttemptId: null,
+        deliveryPendingUntilMs: null,
+        pendingDeliveryMessages: {},
         closedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
     }
@@ -1527,19 +1869,77 @@ export async function closeLeadOnPurchase({ phone, orderId, weddingId, amount, p
     return id
 }
 
-export async function setHuman(phone, human, reason = null) {
+// Only authenticated owner/control handlers may call release. Resolution never
+// calls this implicitly; no timer or customer/model text is a release authority.
+export async function setHuman(phone, human, reason = null, options = {}) {
+    if (human) return requestHumanHandoff({ phone, reason, ...options })
+    return updateHumanHandoff({ phone, action: 'release', actor: options.actor || 'authenticated_owner' })
+}
+
+export async function requestHumanHandoff({ phone, reason = null, actor = 'sales_agent', ...request }) {
     const id = normalizePhone(phone)
-    if (!id) return null
-    await ref(id).set(
-        {
-            human: !!human,
-            humanSince: human ? FieldValue.serverTimestamp() : null,
-            handoffReason: human ? reason : null,
+    if (!id) throw Object.assign(new Error('invalid lead'), { code: 'INVALID_LEAD_ID' })
+    return adminDb.runTransaction(async tx => {
+        const leadRef = ref(id)
+        const snap = await tx.get(leadRef)
+        const lead = snap.exists ? snap.data() || {} : {}
+        const plan = await prepareHumanTask(tx, id, lead, { ...request, reason, actor })
+        writeHumanTask(tx, plan)
+        tx.set(leadRef, plan.patch, { merge: true })
+        return plan.result
+    })
+}
+
+export async function updateHumanHandoff({ phone, taskId = null, action, actor }) {
+    const id = normalizePhone(phone)
+    if (!id) throw Object.assign(new Error('invalid lead'), { code: 'INVALID_LEAD_ID' })
+    return adminDb.runTransaction(async tx => {
+        const leadRef = ref(id)
+        const snap = await tx.get(leadRef)
+        const lead = snap.exists ? snap.data() || {} : {}
+        if (taskId && taskId !== lead.humanTaskId) throw Object.assign(new Error('task is not current for lead'), { code: 'TASK_MISMATCH' })
+        // Explicit release of a legacy pause gets a task/audit record first.
+        const plan = !lead.humanTaskId && isPausedForHuman(lead)
+            ? await prepareHumanTask(tx, id, lead, { reason: lead.handoffReason, actor })
+            : null
+        const currentId = plan?.task.id || lead.humanTaskId
+        if (!currentId) throw Object.assign(new Error('human task not found'), { code: 'TASK_NOT_FOUND' })
+        const taskRef = plan?.taskRef || adminDb.collection(HUMAN_TASKS_COLLECTION).doc(currentId)
+        const taskSnap = plan ? null : await tx.get(taskRef)
+        const task = plan?.task || (taskSnap?.exists ? taskSnap.data() : null)
+        if (task && task.leadId !== id) throw Object.assign(new Error('task ownership mismatch'), { code: 'TASK_MISMATCH' })
+        const transition = transitionHumanTask(task, action, actor)
+        if (!transition.changed) return { ok: true, taskId: currentId, status: transition.status, changed: false }
+        if (plan) writeHumanTask(tx, plan)
+        tx.set(taskRef, transition.patch, { merge: true })
+        tx.set(leadRef, {
+            ...(plan?.patch || {}),
+            humanTaskStatus: transition.status,
+            ...(action === 'release' ? {
+                human: false, humanTakeover: false, humanSince: null, handoffReason: null, handoffPending: false, pendingHumanRequestEventId: null, pendingHumanRequestText: null, pendingHumanRequestAtMs: null,
+                humanReleasedAtMs: Date.now(), humanReleasedBy: String(actor).slice(0, 160),
+                // Release allows future inbound responses; it never restarts a
+                // stale reminder, pending response, or previously consumed consent.
+                followUpAt: null, followUpSchedule: null,
+                deliveryRequestOutboundId: null, deliveryRequestAttemptId: null, deliveryRequestUntilMs: null,
+                deliveryPendingOutboundId: null, deliveryPendingAttemptId: null, deliveryPendingUntilMs: null,
+                pendingDeliveryMessages: {},
+            } : { human: true, humanTakeover: true }),
             updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-    )
-    return id
+        }, { merge: true })
+        return { ok: true, taskId: currentId, status: transition.status, changed: true }
+    })
+}
+
+export async function listHumanHandoffs({ limit = 50 } = {}) {
+    const snap = await adminDb.collection(HUMAN_TASKS_COLLECTION).orderBy('updatedAtMs', 'desc').limit(Math.min(100, Math.max(1, Number(limit) || 50))).get()
+    return snap.docs.map(doc => ({ ...doc.data(), id: doc.id }))
+}
+
+export async function getHumanHandoff(taskId) {
+    if (!/^[a-f0-9]{32}$/.test(String(taskId || ''))) return null
+    const snap = await adminDb.collection(HUMAN_TASKS_COLLECTION).doc(taskId).get()
+    return snap.exists ? { ...snap.data(), id: taskId } : null
 }
 
 export const SALES_LEADS_COLLECTION = COLLECTION
@@ -1675,6 +2075,7 @@ export async function readSpend({ days = 30, todayISO } = {}) {
 // reviving the same leads week after week, something upstream is
 // dropping writes, and this counter is the only place that would show.
 export async function reviveOrphans(phones = [], todayISO) {
+    if (isConversationalPolicyEnabled()) return { revived: 0, ids: [] }
     const candidates = [...new Set(phones.map(normalizePhone).filter(Boolean))].slice(0, 100)
     if (!candidates.length || !todayISO) return { revived: 0, ids: [] }
     const ids = []
@@ -1756,6 +2157,11 @@ export async function settleStaleDeliveries(leads = [], todayISO) {
                     todayISO,
                     callbackPromised: lead.callbackPromised || null,
                 })
+            }
+            if (isConversationalPolicyEnabled()) {
+                delete patch.followUpAt
+                Object.assign(patch, nextStrictSchedulePatch(lead, delivery, patch))
+                if (followUpStopped(lead)) { patch.followUpAt = null; patch.followUpSchedule = null }
             }
             tx.set(leadRef, patch, { merge: true })
             // Keep the provider status truthful; only accounting is settled.
