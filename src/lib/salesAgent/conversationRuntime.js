@@ -3,10 +3,11 @@
 import { confirmedPackageId, explicitPackageChoice, isAffirmative } from './decisionPolicy'
 import { eventTypeOf } from './eventType'
 import { getActiveOffer, createOfferSnapshot, formatOfferQuote } from './offerCatalog'
+import { requestsOfferOptions, selectOfferPresentation } from './commercialDirection'
 import { pickApprovedDemo } from './mediaGuard'
 import { captureExplicitFollowUpConsent, resolveExplicitCallbackConsent } from './followupEvidence'
 import { createStrictFollowUpSchedule, strictFollowUpDate } from './followupPolicy'
-import { CONVERSATIONAL_POLICY_VERSION, extractSuppliedTiming, sourceAttributionFromInbound, isMarketingStopRequest, isHumanServiceRequest } from './salesContract'
+import { CONVERSATIONAL_POLICY_VERSION, extractSuppliedTiming, sourceAttributionFromInbound, isMarketingStopRequest, isHumanServiceRequest, isProductAlternativeRequest } from './salesContract'
 
 export const AUTOMATION_DISCLOSURE = 'כאן העוזרת האוטומטית של Wedding Tales.'
 export const HANDOFF_CONFIRMED = 'העברתי לצוות את השיחה והפרטים שכבר מסרתם לבדיקה.'
@@ -17,6 +18,11 @@ const wantsHuman = isHumanServiceRequest
 const freeClaim = text => /בחינם|חינמי|\bfree\b/i.test(text)
 const uncertainPolicy = text => /יגיע\s+מחר|דחוף|אספקה|משלוח|מתי.{0,15}(?:מגיע|מוכן)|הנחה|קופון|כמה\s+עמודים|מגבלת|תקופת|לנצח|שדרוג|עותק\s+נוסף|רולאפ|מעמד|ביטול|החזר/i.test(text)
 const correctEvent = text => /בעצם|תיקון|התכוונתי|זו\s+|זה\s+/.test(text)
+const designQuestion = text => /(?:סבב|תיקונ|אישור|מאשרים|לאשר|טעות|טעויות).{0,35}(?:עיצוב|דפוס|הדפס|כלול|שלכם)|(?:עיצוב|דפוס|הדפס).{0,35}(?:אישור|מאשרים|לאשר|תיקונ)|כמה.{0,15}(?:סבב|תיקונ)|(?:טעות|טעויות)\s+שלכם/.test(text)
+const finalTotalQuestion = text => /(?:סכום|מחיר|עלות).{0,20}סופי|סופי.{0,20}(?:סכום|מחיר|קופה)|(?:מה|כמה).{0,20}(?:בפועל\s+בקופה|לתשלום\s+בקופה)/.test(text)
+const processQuestion = text => /מה.{0,20}(?:מקבלים|כלול)|איך.{0,20}עובד/.test(text)
+const includedCorrectionQuestion = text => /(?:טעות|טעויות)\s+שלכם/.test(text)
+    && !/(?:ספר|אלבום).{0,20}(?:בחינם|חינמי)|פרסומ|פרסומת|מודעה/.test(text)
 
 function approved(catalogResult, productId, lead, nowMs) {
     if (!catalogResult?.ok) return null
@@ -67,7 +73,8 @@ export async function buildConversationalTurn({ lead = {}, incomingText = '', bo
     const selectedOffer = selected ? approved(catalogResult, selected, { ...lead, sourceAttribution: contract.sourceAttribution }, nowMs) : null
     const digital = approved(catalogResult, 'digital', lead, nowMs)
     const printed = approved(catalogResult, 'printed', lead, nowMs)
-    const offers = [digital, printed].filter(Boolean)
+    const presentation = selectOfferPresentation({ printed, digital, text, preferredProductId: selected })
+    const informationalProduct = presentation[0] || null
     const lastQuestion = lead.lastQuestion || ''
     const consent = captureExplicitFollowUpConsent({ text, sourceMessageId: eventId, nowMs })
         || resolveExplicitCallbackConsent({ lead, text, sourceMessageId: eventId, nowMs })
@@ -75,7 +82,7 @@ export async function buildConversationalTurn({ lead = {}, incomingText = '', bo
         delete contract.eventDateText; delete contract.eventDatePrecision; parsed.eventDate = null
     }
 
-    if (isStopRequest(text) || decision.intent === 'negative_exit') {
+    if (isStopRequest(text) || (decision.intent === 'negative_exit' && !isProductAlternativeRequest(text))) {
         contract.marketingSuppressed = true
         contract.followUpConsent = null
         parsed.customerDeferred = true; parsed.customerCallbackAt = null
@@ -93,7 +100,11 @@ export async function buildConversationalTurn({ lead = {}, incomingText = '', bo
         handoff('attachment_requires_human_review', `קיבלתי את הקובץ. ${HANDOFF_CONFIRMED}`)
     } else if (isPaymentClaim(text)) {
         handoff('payment_claim_requires_verification', `אין לי עדיין אישור תשלום מאומת להזמנה הזו. ${HANDOFF_CONFIRMED}`, 'SERVICE')
-    } else if (freeClaim(text)) {
+    } else if (decision.intent === 'print_only' || decision.nextBestAction === 'handoff_print') {
+        handoff('print_only_requires_separate_quote', `הדפסה של קובץ מוכן דורשת תמחור נפרד. ${HANDOFF_CONFIRMED}`)
+    } else if (decision.intent === 'not_our_product') {
+        handoff('requested_product_unapproved', `אין לי הצעה מאומתת לסוג הספר שביקשתם. ${HANDOFF_CONFIRMED}`)
+    } else if (freeClaim(text) && !includedCorrectionQuestion(text)) {
         // Free scope can only come from a specifically matched approved campaign.
         const campaign = contract.sourceAttribution.campaignId
         const matches = catalogResult?.offers?.filter(o => o.free && o.campaignId === campaign && campaign) || []
@@ -127,17 +138,20 @@ export async function buildConversationalTurn({ lead = {}, incomingText = '', bo
         answer('זה חשש מובן. אין הבטחה שכולם ישתתפו. אפשר להתחיל בכמה אנשים קרובים ולשתף את הקישור מראש, כשיש זמן לכתוב בנחת.', 'OBJECTION', 'objection')
         contract.lastObjection = text.slice(0, 400)
     } else if (/אין.{0,8}זמן|להתעסק|מסובך/.test(text)) {
-        const product = selectedOffer || printed || digital
+        const product = informationalProduct
         if (product) answer(`${product.process.editing} ${product.process.approval} הסיוע הכלול: ${product.process.humanAssistance}`, 'OBJECTION', 'objection')
         else handoff('assistance_scope_unverified', `אין לי כרגע פירוט מאומת של הסיוע הכלול. ${HANDOFF_CONFIRMED}`)
     } else if (/אלבום.{0,15}(?:צלם|הצלם)|(?:כבר|יש לי).{0,20}אלבום/.test(text)) {
-        const product = selectedOffer || printed || digital
+        const product = informationalProduct
         if (product) {
             answer(`אפשר להשוות למה שכבר יש לכם. החבילה כאן כוללת: ${product.scope.includes.join(', ')}.`, 'OBJECTION', 'objection')
             parsed.image = pickApprovedDemo({ incomingText: text, eventType, seen: [...(lead.mediaSent || []), ...(lead.mediaRequested || [])], library, nowMs })
         } else handoff('product_scope_unapproved', `אין לי כרגע פירוט מאומת להשוואה. ${HANDOFF_CONFIRMED}`)
+    } else if (finalTotalQuestion(text)) {
+        // Even a complete catalog is not evidence of a buyer's payable cart.
+        answer('אין לי כרגע אימות של הסכום הסופי בקופה. לפני שליחת קישור תשלום נבדוק את המחיר, המסים והמשלוח לפי ההצעה וההזמנה.', 'OFFER')
     } else if (uncertainPolicy(text) || decision.intent === 'needs_verified_answer' || /אחרי.{0,8}האירוע/.test(text)) {
-        const product = selectedOffer || printed || digital
+        const product = informationalProduct
         const unsafeSpecific = /מחר|דחוף|עד.{0,12}\d|הנחה|קופון|שדרוג|עותק\s+נוסף|רולאפ|מעמד|אמיתי|לתרגם|תרגום/.test(text)
         let policyAnswer = null
         if (product && !unsafeSpecific) {
@@ -145,15 +159,17 @@ export async function buildConversationalTurn({ lead = {}, incomingText = '', bo
             else if (/אחרי.{0,8}האירוע|תקופת|לנצח/.test(text)) policyAnswer = product.scope.accessPeriod
             else if (/ביטול/.test(text)) policyAnswer = product.policies.cancellation.summary
             else if (/החזר/.test(text)) policyAnswer = product.policies.refunds.summary
+            else if (/(?:כולל|כלול|עלות|מחיר|עולה).{0,15}משלוח|משלוח.{0,15}(?:כולל|כלול|עולה)/.test(text)) policyAnswer = product.price.shipping.summary
             else if (/משלוח|אספקה|מתי/.test(text)) policyAnswer = `${product.timing.production}. ${product.timing.delivery}. הספירה מתחילה: ${product.timing.startsFrom}.`
         }
         if (policyAnswer) answer(policyAnswer, 'OFFER', 'offer_sent')
         else handoff('product_policy_requires_verified_answer', `אין לי תשובה מאומתת לפרט הזה. ${HANDOFF_CONFIRMED}`)
-    } else if (decision.intent === 'price') {
-        const specific = /מודפס/.test(text) !== /דיגיטל/.test(text)
-            ? (/מודפס/.test(text) ? printed : digital) : null
-        const prices = specific ? [specific] : offers
-        if (!prices.length || (/מודפס/.test(text) && !printed) || (/דיגיטל/.test(text) && !digital)) {
+    } else if (designQuestion(text)) {
+        if (informationalProduct) answer(`${informationalProduct.process.design} ${informationalProduct.process.editing} ${informationalProduct.process.approval}`, 'DISCOVERY')
+        else handoff('design_terms_unapproved', `אין לי כרגע תנאי עיצוב מאומתים. ${HANDOFF_CONFIRMED}`)
+    } else if (decision.intent === 'price' || requestsOfferOptions(text)) {
+        const prices = presentation
+        if (!prices.length) {
             handoff('offer_not_approved', `אין לי כרגע מחיר מאומת להצגה. ${HANDOFF_CONFIRMED}`)
         } else {
             answer(prices.map(offer => quote(offer, nowMs)).join('\n') + (!eventType ? '\nלאיזה אירוע מחפשים ספר?' : ''), 'OFFER', 'offer_sent')
@@ -207,12 +223,12 @@ export async function buildConversationalTurn({ lead = {}, incomingText = '', bo
     } else if (eventType === 'memorial') {
         answer('אפשר להתאים את השיחה לספר הנצחה ברגישות. חשוב לכם ספר מודפס או דיגיטלי?', 'DISCOVERY')
         contract.lastQuestion = 'package_choice'
-    } else if (decision.intent === 'process' || decision.intent === 'question_before_checkout' || decision.intent === 'event_answer' || (eventTypeOf(text) && correctEvent(text))) {
-        if (!offers.length) handoff('product_scope_unapproved', `רשמתי את סוג האירוע. ${HANDOFF_CONFIRMED}`)
+    } else if (decision.intent === 'process' || decision.intent === 'question_before_checkout' || decision.intent === 'event_answer' || processQuestion(text) || (eventTypeOf(text) && correctEvent(text))) {
+        if (!informationalProduct) handoff('product_scope_unapproved', `אין לי כרגע פירוט מאומת לחבילה הזו. ${HANDOFF_CONFIRMED}`)
         else {
-            const product = selectedOffer || printed || digital
-            const detail = /מה.{0,12}(?:מקבלים|כלול)/.test(text) ? product.scope.includes.join(', ') : [product.process.design, product.process.editing, product.process.approval].join(' ')
-            if (decision.intent === 'question_before_checkout' && !/מה.{0,12}(?:מקבלים|כלול)|איך.{0,10}עובד/.test(text)) handoff('purchase_condition_unverified', `אין לי תשובה מאומתת לתנאי הזה. ${HANDOFF_CONFIRMED}`)
+            const product = informationalProduct
+            const detail = /מה.{0,20}(?:מקבלים|כלול)/.test(text) ? product.scope.includes.join(', ') : [product.process.design, product.process.editing, product.process.approval].join(' ')
+            if (decision.intent === 'question_before_checkout' && !processQuestion(text)) handoff('purchase_condition_unverified', `אין לי תשובה מאומתת לתנאי הזה. ${HANDOFF_CONFIRMED}`)
             else answer(detail, 'DISCOVERY')
         }
     } else if (decision.intent === 'objection') {

@@ -1,17 +1,23 @@
 # Conversational sales specification: implementation and release gates
 
-Date: 2026-10-05
+Date: 2026-10-05; commercial direction updated 2026-10-06
 Specification: **Wedding Tales — אפיון בוט מכירות שיחתי**, dated 2026-10-05
 Status: **Local draft implementation. Not a production activation or a declaration that the complete sales system is ready.**
 
 This document maps the whole specification, including all 20 acceptance cases, to the current implementation. It separates a pure helper, an actual application route, local synthetic test evidence, and dependencies that remain unavailable or unapproved. It contains no live customer transcripts or approval records.
 
+## Commercial direction update, 2026-10-06
+
+The owner approved leading with printed at 990 ILS (digital book, personal design, one 21×21 cm hardcover copy and shipping as advertised), with digital at 690 ILS available when relevant or requested. Approval before printing, one consolidated revision and free correction of our errors are the accepted process direction. `commercialDirection.js` records a draft, not an approved catalog. The strict reply route presents only validated offers; it does not hide digital when asked, infer purchase consent from a preferred presentation, or substitute advertised prices for a verified checkout total.
+
+The [commercial direction matrix and Woo adapter investigation](commercial-direction-2026-10-06.md) cover the new requirements, tests and practical provider plan. Page capacity, additional-copy pricing, supplier durations, final tax/shipping checkout calculation, media rights, legally reviewed cancellation/refund terms and human response capacity remain unverified. No 14-business-day delivery or next-business-day response promise is activated. Strict mode remains off by default; prior customer terms remain attached to their existing order/service path.
+
 ## Final local verification
 
-- Whole repository: `./node_modules/.bin/vitest run` passed **116 suites / 2,310 tests** on the final code
-- Independent integrated review found and verified fixes for first-contact ownership lookup, scoped checkout confirmation and superseded STOP/human requests; no remaining must-fix in the reviewed boundaries. Updated review suites: 303 tests passed
+- Whole repository on 2026-10-06: `./node_modules/.bin/vitest run --maxWorkers=1 --minWorkers=1` passed **117 suites / 2,450 tests** on the final code
+- Independent integrated review of the original implementation verified first-contact lookup, checkout consent and overlapping control messages. The commercial update review then verified unsupported-product routing, requested price versus budget, free-book mismatch versus correction terms, scoped product rejection and mixed STOP requests. **No remaining must-fix in the reviewed changes; 5 focused suites / 419 tests and 17 independent runtime checks passed**
 - TypeScript: `tsc --noEmit --incremental false` passed
-- Changed-file ESLint: **0 errors / 8 warnings** (anonymous default exports); whitespace validation passed
+- Changed-file ESLint for the commercial update: **0 errors / 0 warnings**; whitespace validation passed. The original broader implementation had 8 anonymous-default-export warnings
 - Production compilation: `next build --experimental-build-mode compile` passed; full generation, live model/provider canary, deployment and production activation were not performed
 - All acceptance execution used synthetic fixtures and mocked external effects. A separate read-only public Woo product check observed printed product 6271 at 990 ILS; this proves neither approved terms nor a destination-specific checkout total. Digital product retrieval timed out
 - The final regression set covers provider-time service windows, stale/missing-time STOP suppression without reopening that window, per-part final-send validation, explicit human release, and strict-cohort rollback without legacy sales/follow-up fallback
@@ -170,9 +176,9 @@ Every item below is a separate gate. Do not enable the main flag merely because 
 
 - Approve and version the current catalog and each offer, with evidence, approver, approval time and validity interval; publish through an authorized server-only workflow
 - Approve the complete total in ILS, tax treatment, included/extra delivery charges and destination rules; verify current checkout parity
-- Approve included and excluded items, book type/dimensions, copies, page/blessing/photo limits and collection/access period
-- Approve design selection, editing, print approval, included human help and exact customer responsibilities
-- Approve production/delivery durations and the starting milestone; define urgent fulfillment review
+- Complete the approved-direction record with remaining exclusions, page/blessing/photo limits and collection/access period; printed page capacity cannot be null/N/A
+- Record the accepted personal-design, preprint approval, one consolidated revision and free correction of our errors in the complete catalog; verify remaining human help and customer responsibilities
+- Verify production/delivery durations after final design approval; define urgent fulfillment review. Conditional target durations are not approved factual promises
 - Approve service, date-change, cancellation and refund terms with current versioned URLs
 - Define upgrades and additional copies independently, including eligibility and provider product mappings. Do not derive upgrade price by subtracting base packages
 - Approve any actual coupons, permitted entitlement source and expiration. No default campaign urgency, bonus, testimony or customer count

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { FIXTURE_NOW, syntheticCatalog, syntheticMedia } from './fixtures/salesContractFixtures'
+import { FIXTURE_NOW, syntheticCatalog, syntheticCommercialCatalog, syntheticMedia } from './fixtures/salesContractFixtures'
 import { INBOUND_HEARTBEAT_BUDGET_MS } from '@/lib/salesAgent/circuitBreaker'
 
 const mocks = vi.hoisted(() => ({
@@ -2126,7 +2126,7 @@ describe('opt-in conversational specification through the real reply boundary', 
     it('answers price directly from approved offers, discloses automation, and disables legacy model/script sends', async () => {
         const result = await post(inbound({ text: 'כמה עולה?' }))
         expect(result.status).toBe(200)
-        expect(text()).toContain('690')
+        expect(text()).not.toContain('690')
         expect(text()).toContain('990')
         expect(text()).toContain('העוזרת האוטומטית')
         expect(prepared().exchange.conversationContract.offerSnapshots).toHaveProperty('printed')
@@ -2144,6 +2144,77 @@ describe('opt-in conversational specification through the real reply boundary', 
         expect(prepared().exchange.conversationContract.eventDateText).toContain('דצמבר')
         expect(text()).not.toContain('לאיזה אירוע')
         expect(text()).toContain('דיגיטלי או מודפס')
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+    })
+    it.each(['יש גם דיגיטלי?', 'כמה עולה דיגיטלי?', 'אפשר בלי הדפסה?'])('delivers the honest digital fallback through the real route for %s', async message => {
+        await post(inbound({ text: message }))
+        expect(text()).toContain('690')
+        expect(text()).not.toContain('990')
+        expect(prepared().exchange.conversationContract.offerSnapshots).toHaveProperty('digital')
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+        expect(mocks.sendInboundSequenceDirect).toHaveBeenCalledTimes(1)
+    })
+    it('shows both approved choices when explicitly asked, with printed first', async () => {
+        await post(inbound({ text: 'איזה אפשרויות יש?' }))
+        expect(text().indexOf('990')).toBeGreaterThanOrEqual(0)
+        expect(text().indexOf('690')).toBeGreaterThan(text().indexOf('990'))
+    })
+    it('answers the printed price question even when the same message mentions a budget', async () => {
+        await post(inbound({ text: 'כמה עולה המודפס? התקציב שלי הוא אלף שקל' }))
+        expect(text()).toContain('990')
+        expect(text()).not.toContain('690')
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+    })
+    it('offers digital after a specific printed-format refusal without inventing reminder consent', async () => {
+        await post(inbound({ text: 'אני לא מעוניינת בספר המודפס, יש דיגיטלי?' }))
+        expect(text()).toContain('690')
+        expect(text()).not.toContain('990')
+        expect(prepared().exchange.conversationContract.followUpConsent).toBeUndefined()
+    })
+    it('honors a separate withdrawal even when the same message asks for digital', async () => {
+        await post(inbound({ text: 'אני לא מעוניין במודפס, יש דיגיטלי? בעצם ויתרנו' }))
+        expect(prepared().exchange.conversationContract.marketingSuppressed).toBe(true)
+        expect(text()).not.toMatch(/990|690|add-to-cart/)
+    })
+    it.each(['יש לי קובץ מוכן, כמה עולה להדפיס?', 'כמה עולה הדפסה בלבד?'])('keeps separate print-only pricing in durable human review for %s', async message => {
+        await post(inbound({ text: message }))
+        expect(prepared().exchange.parsed.handoffReason).toBe('print_only_requires_separate_quote')
+        expect(text()).toContain('תמחור נפרד')
+        expect(text()).not.toMatch(/990|690|עוד היום|add-to-cart/)
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+    })
+    it('never quotes the full package for an unsupported blank handwritten book', async () => {
+        await post(inbound({ text: 'כמה עולה ספר ריק לכתוב ביד?' }))
+        expect(prepared().exchange.parsed.handoffReason).toBe('requested_product_unapproved')
+        expect(text()).not.toMatch(/990|690|add-to-cart/)
+    })
+    it('keeps a free-book campaign mismatch ahead of a mixed design-approval question', async () => {
+        await post(inbound({ text: 'ראיתי בפרסומת ספר בחינם. האם יש אישור לפני הדפסה?' }))
+        expect(prepared().exchange.conversationContract.conversationalState).toBe('OFFER_MISMATCH')
+        expect(prepared().exchange.parsed.handoffReason).toBe('unverified_free_offer')
+    })
+    it('answers design review conditions before sending any checkout', async () => {
+        mocks.readActiveOfferCatalog.mockResolvedValue(syntheticCommercialCatalog())
+        mocks.getLead.mockResolvedValue({ ...lead, lastQuestion: 'checkout_confirmation', turns: [{ role: 'user', text: 'רוצה מודפס' }] })
+        await post(inbound({ text: 'רוצה להזמין אבל קודם כמה סבבי תיקונים כלולים?' }))
+        expect(text()).toContain('סבב תיקונים מרוכז אחד')
+        expect(text()).toContain('טעויות שלנו מתוקנות ללא עלות')
+        expect(text()).toContain('רק לאחר אישור')
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+    })
+    it('never upgrades an advertised package price to a final checkout guarantee', async () => {
+        await post(inbound({ text: 'מה המחיר הסופי בקופה?' }))
+        expect(text()).toContain('אין לי כרגע אימות של הסכום הסופי בקופה')
+        expect(text()).not.toMatch(/990|690|add-to-cart/)
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+    })
+    it.each(['כמה עמודים כלולים?', 'כמה עולה עותק נוסף?', 'מה מדיניות ההחזרים?', 'מתי מגיע המשלוח?'])('persists human handoff without inventing unapproved terms for %s', async message => {
+        mocks.readActiveOfferCatalog.mockResolvedValue({ ok: false, offers: [], reason: 'catalog_missing' })
+        await post(inbound({ text: message }))
+        expect(prepared().exchange.parsed.handoff).toBe(true)
+        expect(prepared().exchange.parsed.stage).toBe('handoff')
+        expect(text()).not.toMatch(/14|יום העסקים הבא|ללא הגבלה|450|250|add-to-cart/)
+        expect(mocks.sendInboundSequenceDirect).toHaveBeenCalledTimes(1)
         expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
     })
     it('sends only independently verified checkout for an explicit printed choice', async () => {

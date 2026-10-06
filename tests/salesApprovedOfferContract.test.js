@@ -42,6 +42,10 @@ describe('approved commercial contracts', () => {
     it('rejects missing, revoked, future, and mismatched-version approvals', () => {
         for (const a of [null, approval({ revokedAt: '2026-10-05T01:00:00Z' }), approval({ approvedAt: '2026-12-01T01:00:00Z' }), approval({ offerVersion: 'other' })]) expect(validate(offer({ approval: a })).ok).toBe(false)
     })
+    it('cannot disguise an unknown printed page cap as not applicable', () => {
+        const candidate = offer(); candidate.scope.pageLimit = null
+        expect(validate(candidate).errors).toContain('printed_page_limit')
+    })
     it('rejects inactive or malformed validity windows including their end boundary', () => {
         for (const validUntil of ['2026-10-05T12:00:00Z', 'invalid', '2026-09-01T00:00:00Z']) expect(validate(offer({ validUntil })).ok).toBe(false)
         expect(validate(offer({ validFrom: '2026-10-06T00:00:00Z' })).ok).toBe(false)

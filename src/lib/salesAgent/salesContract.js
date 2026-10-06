@@ -11,7 +11,25 @@ export function isConversationalPolicyEnabled(env = process.env) {
     return env?.SALES_CONVERSATIONAL_POLICY_ENABLED === 'true'
 }
 
-export const isMarketingStopRequest = text => /תפסיק|הסירו|תסיר|אל\s+תשלח|לא\s+לשלוח|לא\s+לפנות|לא\s+מעוניי|^לא\s+תודה[.!\s]*$|\b(?:stop|unsubscribe|do not contact)\b/i.test(String(text))
+const scopedRejection = /לא\s+מעוניי(?:ן|נת|נים|נות)\s+ב(?:ספר\s+)?(?:ה?מודפס|ה?דיגיטלי)/g
+export function isProductAlternativeRequest(value) {
+    const text = String(value)
+    const request = product => new RegExp(`(?:יש|אפשר)\\s+(?:גם\\s+|רק\\s+|לקבל\\s+)?(?:ספר\\s+)?${product}|אבל\\s+(?:אני\\s+)?רוצה\\s+(?:ספר\\s+)?${product}`).test(text)
+    return (/לא\s+מעוניי(?:ן|נת|נים|נות)\s+ב(?:ספר\s+)?ה?מודפס/.test(text) && request('דיגיטלי'))
+        || (/לא\s+מעוניי(?:ן|נת|נים|נות)\s+ב(?:ספר\s+)?ה?דיגיטלי/.test(text) && request('מודפס'))
+}
+export function isMarketingStopRequest(value) {
+    const text = String(value)
+    // A specific format refusal plus a request for the other format is not a
+    // global opt-out. Remove only that phrase; explicit stop/contact language
+    // and any separate unscoped refusal still take precedence in the remainder.
+    const alternative = isProductAlternativeRequest(text)
+    const remainder = alternative ? text.replace(scopedRejection, '') : text
+    // Keep the intent policy's separate withdrawal vocabulary authoritative
+    // after removing the product-scoped phrase, even in a mixed message.
+    if (alternative && /ויתר|לוותר|מוותר|החלטנו\s+שלא|לא\s+רלוונט|לא\s+מתאים\s+לנו|ירדנו\s+מזה|לא\s+תודה|לא\s+מה\s+ש(?:אני|אנחנו)\s+מחפש/.test(remainder)) return true
+    return /תפסיק|הסירו|תסיר|אל\s+תשלח|לא\s+לשלוח|לא\s+לפנות|לא\s+מעוניי|^לא\s+תודה[.!\s]*$|\b(?:stop|unsubscribe|do not contact)\b/i.test(remainder)
+}
 export const isHumanServiceRequest = text => /נציג|בן\s+אדם|רוצה\s+את\s+בר|לדבר\s+עם\s+בר|תלונה|פרטיות|מחיקת\s+מידע|לבטל\s+(?:הזמנה|עסקה)|החזר\s+כספי|תתקשר/i.test(String(text))
 
 const plain = value => value != null && typeof value === 'object'

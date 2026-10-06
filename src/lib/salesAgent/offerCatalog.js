@@ -62,6 +62,8 @@ export function validateOffer(offer, { nowMs = Date.now(), customerContext = {} 
     if (!Array.isArray(scope.excludes) || scope.excludes.some(x => !text(x))) errors.push('exclusions')
     if (!text(scope.bookType) || !Number.isInteger(scope.copies) || scope.copies < 0) errors.push('book_scope')
     if (offer.productId === 'printed' && (!text(scope.dimensions) || scope.copies < 1)) errors.push('printed_scope')
+    // Printed capacity is applicable. A pending cap cannot be declared N/A.
+    if (offer.productId === 'printed' && !text(scope.pageLimit)) errors.push('printed_page_limit')
     // null means explicitly not applicable. Omitted or undefined means unknown.
     for (const key of ['dimensions', 'pageLimit', 'blessingLimit', 'photoLimit', 'accessPeriod']) {
         if (!own(scope, key) || (scope[key] !== null && !text(scope[key]))) errors.push(`scope_${key}`)

@@ -22,6 +22,14 @@ export function syntheticCatalog(offers = [syntheticOffer('digital'), syntheticO
     const catalog = { schemaVersion: 1, catalogId: 'synthetic-catalog', version: 'test-v1', approval: approval({ catalogVersion: 'test-v1' }), offers }
     return { ok: true, catalog, offers }
 }
+// Exercises the owner-approved direction with explicitly synthetic completion
+// of the still-unverified fields. This must never become a production seed.
+export function syntheticCommercialCatalog() {
+    const printed = syntheticOffer('printed')
+    printed.scope = { ...printed.scope, bookType: 'hardcover', copies: 1, dimensions: '21x21 cm', includes: ['ספר דיגיטלי', 'עיצוב אישי', 'עותק אחד בכריכה קשה בגודל 21×21 ס״מ', 'משלוח'] }
+    printed.process = { ...printed.process, design: 'עיצוב אישי.', editing: 'סבב תיקונים מרוכז אחד כלול; טעויות שלנו מתוקנות ללא עלות.', approval: 'הדפסה רק לאחר אישור העיצוב הסופי.' }
+    return syntheticCatalog([syntheticOffer('digital'), printed])
+}
 export function syntheticMedia() {
     return {
         key: 'test-spread', assetId: 'test-asset', version: 'test-v1', kind: 'image',

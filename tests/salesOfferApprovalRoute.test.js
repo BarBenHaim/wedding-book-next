@@ -16,7 +16,7 @@ function offer(overrides = {}) {
         schemaVersion: 1, offerId: 'synthetic-printed', version: 'synthetic-offer-v1', productId: 'printed', name: 'Synthetic printed offer',
         validFrom: '2026-10-01T00:00:00Z', validUntil: '2026-11-01T00:00:00Z',
         price: { currency: 'ILS', totalMinor: 12345, subtotalMinor: 12000, tax: { amountMinor: 200, summary: 'Synthetic tax' }, shipping: { amountMinor: 145, summary: 'Synthetic shipping', destinationCountry: 'IL' }, additionalCharges: [] },
-        scope: { includes: ['Synthetic inclusion'], excludes: ['Synthetic exclusion'], bookType: 'Synthetic type', copies: 1, dimensions: 'Synthetic dimensions', pageLimit: null, blessingLimit: null, photoLimit: null, accessPeriod: 'Synthetic access' },
+        scope: { includes: ['Synthetic inclusion'], excludes: ['Synthetic exclusion'], bookType: 'Synthetic type', copies: 1, dimensions: 'Synthetic dimensions', pageLimit: 'Synthetic verified page cap', blessingLimit: null, photoLimit: null, accessPeriod: 'Synthetic access' },
         process: { design: 'Synthetic design', editing: 'Synthetic editing', approval: 'Synthetic approval', humanAssistance: 'Synthetic assistance' },
         timing: { production: 'Synthetic production', delivery: 'Synthetic delivery', startsFrom: 'Synthetic trigger' },
         policies: { service: policy(), dateChange: policy(), cancellation: policy(), refunds: policy() },
@@ -64,6 +64,14 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('offer catalog approval authentication boundary', () => {
+    it('rejects an unspecified printed capacity before any catalog publication', async () => {
+        const input = publish(); input.catalog.offers[0].scope.pageLimit = null
+        const response = await POST(request('POST', input))
+        expect(response.status).toBe(400)
+        expect(await response.json()).toMatchObject({ error: 'INVALID_OFFER_CATALOG' })
+        expect(mocks.db.runTransaction).not.toHaveBeenCalled()
+        expect(records.size).toBe(0)
+    })
     it.each(['GET', 'POST'])('rejects anonymous/shared-secret-only %s before touching storage', async method => {
         const response = await (method === 'GET' ? GET : POST)(request(method, method === 'POST' ? publish() : undefined, { authorization: '', 'x-wt-secret': 'synthetic-secret' }))
         expect(response.status).toBe(401)
