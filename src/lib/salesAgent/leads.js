@@ -34,6 +34,8 @@ import { assignModelArm } from './modelExperiment'
 import { findOrphans } from './sweep'
 import { isConversationalPolicyEnabled, sanitizeConversationContract, isMarketingStopRequest, isHumanServiceRequest } from './salesContract'
 import { decideStrictInboundTime } from './transportPolicy'
+import { extractReferralTouch, mergeAttribution } from './referralEvidence'
+import { resolveOrderAttribution } from './orderAttribution'
 import { buildHumanSummary, humanPausePatch, humanTaskId, HUMAN_TASKS_COLLECTION, transitionHumanTask } from './humanHandoff'
 
 
@@ -557,7 +559,7 @@ export async function completeSuccessfulExchange({
             delete patch.userTurns
         }
         if (exchange?.expectedHumanTaskGeneration != null && Number(exchange.expectedHumanTaskGeneration) !== Number(storedLead.humanTaskGeneration || 0)) return { action: 'human-paused' }
-        if (stored.paymentVerifiedAtClaim === false && storedLead.paymentVerified === true && !exchange?.parsed?.handoff && exchange?.conversationContract?.marketingSuppressed !== true && replyParts.length) return { action: 'payment-changed' }
+        if (stored.paymentVerifiedAtClaim === false && (storedLead.paymentVerified === true || storedLead.boundCheckoutPaid === true) && !exchange?.parsed?.handoff && exchange?.conversationContract?.marketingSuppressed !== true && replyParts.length) return { action: 'payment-changed' }
         if (storedLead.handoffPending === true && !exchange?.parsed?.handoff && exchange?.conversationContract?.marketingSuppressed !== true && !(exchange?.conversationContract?.handoffPending === true && exchange?.conversationContract?.conversationalState === 'SERVICE') && replyParts.length) return { action: 'human-paused' }
         if (isPausedForHuman(storedLead) && !exchange?.parsed?.handoff && exchange?.conversationContract?.marketingSuppressed !== true && replyParts.length) return { action: 'human-paused' }
         if (isConversationalPolicyEnabled() && stored.conversationRevision != null
@@ -621,7 +623,7 @@ export async function completeSuccessfulExchange({
         if (deadlineAtMs != null && Date.now() >= Number(deadlineAtMs)) return { action: 'deadline' }
         if (handoffPlan) writeHumanTask(tx, handoffPlan)
         tx.set(leadRef, patch, { merge: true })
-        tx.set(eventRef, { status: 'completed', leaseUntilMs: null, outcome: cleanOutcome, ...(handoffPlan ? { humanHandoffTaskId: handoffPlan.task.id } : {}), responseHumanGeneration: handoffPlan?.task.generation ?? (Number(storedLead.humanTaskGeneration) || 0), pendingIncomingText: null, responsePaymentVerified: storedLead.paymentVerified === true, responseMarketingSuppressed: storedLead.marketingSuppressed === true, controlResponse: exchange?.conversationContract?.marketingSuppressed === true || (exchange?.conversationContract?.handoffPending === true && exchange?.conversationContract?.conversationalState === 'SERVICE'), updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+        tx.set(eventRef, { status: 'completed', leaseUntilMs: null, outcome: cleanOutcome, ...(handoffPlan ? { humanHandoffTaskId: handoffPlan.task.id } : {}), responseHumanGeneration: handoffPlan?.task.generation ?? (Number(storedLead.humanTaskGeneration) || 0), pendingIncomingText: null, responsePaymentVerified: storedLead.paymentVerified === true || storedLead.boundCheckoutPaid === true, responseMarketingSuppressed: storedLead.marketingSuppressed === true, controlResponse: exchange?.conversationContract?.marketingSuppressed === true || (exchange?.conversationContract?.handoffPending === true && exchange?.conversationContract?.conversationalState === 'SERVICE'), updatedAt: FieldValue.serverTimestamp() }, { merge: true })
         if (exchange?.openingRuntime?.approvalRequest) {
             const stateVersion = Number(exchange.openingRuntime.expectedStateVersion || 0) + 1
             const approval = openingApprovalIdentity(id, stateVersion)
@@ -691,7 +693,7 @@ export async function validateInboundBeforeSend({ phone, eventId, nowMs = Date.n
                 || nowMs - customerAtMs >= 24 * 60 * 60 * 1000) return { ok: false, reason: 'whatsapp-window-closed' }
         }
         if ((Number(event.responseHumanGeneration) || 0) !== (Number(lead.humanTaskGeneration) || 0)) return { ok: false, reason: 'human-ownership-changed' }
-        if (lead.paymentVerified === true && event.responsePaymentVerified !== true && event.controlResponse !== true && event.outcome?.handoff !== true) return { ok: false, reason: 'payment-state-changed' }
+        if ((lead.paymentVerified === true || lead.boundCheckoutPaid === true) && event.responsePaymentVerified !== true && event.controlResponse !== true && event.outcome?.handoff !== true) return { ok: false, reason: 'payment-state-changed' }
         if (lead.marketingSuppressed === true && event.responseMarketingSuppressed !== true && event.controlResponse !== true && event.outcome?.handoff !== true) return { ok: false, reason: 'marketing-suppressed' }
         const handoffAcknowledgment = event.outcome?.handoff === true && event.humanHandoffTaskId === lead.humanTaskId
         if ((isPausedForHuman(lead) || lead.handoffPending === true) && !handoffAcknowledgment && event.controlResponse !== true) return { ok: false, reason: 'human-takeover' }
@@ -743,7 +745,7 @@ export async function prepareInboundMediaFallback({ phone, eventId, text, failed
  * money or write a lead. The event id is Meta's stable delivery id. Strict
  * records carry a server-only lead reference to release conversation locks.
  */
-export async function claimInboundEvent({ eventId, phone, occurredAt, outgoing = false, incomingText = null }) {
+export async function claimInboundEvent({ eventId, phone, occurredAt, outgoing = false, incomingText = null, attributionBody = null, attributionPayloadRepaired = false, attributionStructured = false }) {
     const eventRef = inboundEventRef(eventId)
     const claimToken = crypto.randomUUID()
     const strict = isConversationalPolicyEnabled() && outgoing !== true
@@ -767,7 +769,7 @@ export async function claimInboundEvent({ eventId, phone, occurredAt, outgoing =
             if (!timing.ok) return { action: 'rejected', noReply: true, reason: timing.reason }
             if (stored?.occurredAtMs != null && stored.occurredAtMs !== timing.occurredAtMs) return { action: 'rejected', noReply: true, reason: 'inbound-timestamp-mismatch' }
             occurredAtMs = timing.occurredAtMs
-            paymentVerifiedAtClaim = stored?.paymentVerifiedAtClaim ?? (lead.paymentVerified === true)
+            paymentVerifiedAtClaim = stored?.paymentVerifiedAtClaim ?? (lead.paymentVerified === true || lead.boundCheckoutPaid === true)
             conversationRevision = stored?.conversationRevision ?? ((Number(lead.conversationRevision) || 0) + 1)
             // An obsolete queued event can never overwrite a later decision.
             if (stored?.conversationRevision != null && stored.conversationRevision < Number(lead.conversationRevision)) {
@@ -786,6 +788,14 @@ export async function claimInboundEvent({ eventId, phone, occurredAt, outgoing =
                     firstContactAtMs: lead.firstContactAtMs || occurredAtMs,
                 } : {}),
             } : {}
+            if (attributionBody && stored?.conversationRevision == null) {
+                const touch = extractReferralTouch(attributionBody, { eventId, occurredAtMs, receivedAtMs,
+                    transport: { authenticated: true, providerSignatureVerified: false, provider: 'make', payloadRepaired: attributionPayloadRepaired,
+                        structuredPayloadVerified: attributionStructured === true },
+                })
+                revisionPatch.sourceAttribution = mergeAttribution(lead.sourceAttribution, touch)
+                revisionPatch.attributionContactHash = crypto.createHash('sha256').update(normalizePhone(phone)).digest('hex')
+            }
             // Safety intent is durable at receipt, before another customer
             // event can supersede this worker's response. A task is not yet
             // claimed for human intent; the latest worker must create it.
@@ -1801,6 +1811,29 @@ export async function adminPatchLead(phone, patch = {}) {
 // Called from the WooCommerce webhook the moment a payment lands. This
 // is what stops a paying customer from receiving "עוד מתלבטים?" the next
 // morning — the single most damaging thing an automated funnel can do.
+// A paid checkout may have been forwarded to another payer. Stop marketing to
+// its originating lead without transferring the payer's book/owner identity.
+export async function suppressBoundCheckoutLead({ order, trustedSource = false, db = adminDb, nowMs = Date.now() }) {
+    if (trustedSource !== true) return { suppressed: false, reason: 'untrusted_order_source' }
+    return db.runTransaction(async tx => {
+        const binding = await resolveOrderAttribution({ order, db, transaction: tx, trustedSource: true, nowMs })
+        if (binding.status !== 'bound') return { suppressed: false, reason: binding.reason }
+        const query = db.collection(COLLECTION).where('attributionContactHash', '==', binding.contactHash).limit(2)
+        const matches = await tx.get(query)
+        if (matches.docs.length !== 1) return { suppressed: false, reason: matches.docs.length ? 'ambiguous_bound_lead' : 'bound_lead_missing' }
+        const matched = matches.docs[0]
+        if (crypto.createHash('sha256').update(matched.id).digest('hex') !== binding.contactHash) return { suppressed: false, reason: 'bound_lead_hash_mismatch' }
+        tx.set(db.collection(COLLECTION).doc(matched.id), {
+            stage: 'closed_won', boundCheckoutPaid: true, boundCheckoutOrderId: binding.bindingId,
+            marketingSuppressed: true, marketingSuppressedAtMs: nowMs,
+            followUpAt: null, followUpSchedule: null, callbackPromised: null, customerCallbackAt: null,
+            followUpConsent: null, deliveryRequestOutboundId: null, deliveryRequestAttemptId: null, deliveryRequestUntilMs: null,
+            deliveryPendingOutboundId: null, deliveryPendingAttemptId: null, deliveryPendingUntilMs: null, pendingDeliveryMessages: {},
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true })
+        return { suppressed: true, reason: null }
+    })
+}
 export async function closeLeadOnPurchase({ phone, orderId, weddingId, amount, packageId, buyerName, paymentSource }) {
     const id = normalizePhone(phone)
     if (!id) return null

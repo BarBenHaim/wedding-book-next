@@ -1,5 +1,6 @@
 // Server-owned rollout boundary. Enabling this policy is a separate release
 // decision after commercial, consent, media and checkout data are approved.
+import { extractReferralTouch, mergeAttribution } from './referralEvidence'
 export const CONVERSATIONAL_POLICY_VERSION = '2026-10-05.v1'
 export const CONVERSATIONAL_STATES = Object.freeze([
     'NEW', 'DISCOVERY', 'DEMO', 'OFFER', 'OBJECTION', 'CHECKOUT', 'PAID',
@@ -75,20 +76,11 @@ export function sanitizeConversationContract(value) {
     return result
 }
 
-export function sourceAttributionFromInbound(body = {}, existing = null, nowMs = Date.now()) {
-    if (existing && plain(existing)) return boundedJson(existing)
-    const referral = plain(body.referral) ? body.referral : {}
-    const sourceId = text(referral.source_id || body.adId, 160)
-    const campaignId = text(body.campaignId, 160)
-    const source = text(body.source, 60)
-    return {
-        source: source || 'unknown',
-        campaignId: campaignId || null,
-        adId: sourceId || null,
-        // Transport context identifies attribution, never offer validity or consent.
-        evidence: sourceId ? 'transport_referral' : source ? 'transport_source' : 'unknown',
-        recordedAtMs: nowMs,
-    }
+export function sourceAttributionFromInbound(body = {}, existing = null, nowMs = Date.now(), context = {}) {
+    // Authentication is a server-owned context, never inferred from body IDs.
+    return mergeAttribution(existing, extractReferralTouch(body, {
+        eventId: context.eventId, occurredAtMs: context.occurredAtMs, receivedAtMs: nowMs, transport: context.transport,
+    }))
 }
 
 export function extractSuppliedTiming(incomingText = '') {

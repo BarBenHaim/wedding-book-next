@@ -62,6 +62,41 @@ beforeEach(() => {
 })
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
 
+describe('referral evidence is durable at the inbound claim', () => {
+    const claimReferral = (eventId, adId, at = NOW, extra = {}) => claimInboundEvent({ eventId, phone: PHONE,
+        occurredAt: new Date(at).toISOString(), incomingText: 'synthetic inquiry', attributionStructured: true,
+        attributionBody: { referral: { source_type: 'ad', source_id: adId, ctwa_clid: 'synthetic-click' } }, ...extra,
+    })
+    it('preserves first and latest explicit touches before reply completion, including during human takeover', async () => {
+        vi.stubEnv('SALES_CONVERSATIONAL_POLICY_ENABLED', 'true')
+        store.set(LEAD, { human: true, humanTakeover: true, stage: 'handoff' })
+        expect((await claimReferral('referral-a', 'synthetic-ad-a', NOW - 1000)).action).toBe('process')
+        expect((await claimReferral('referral-b', 'synthetic-ad-b')).action).toBe('process')
+        const attribution = store.get(LEAD).sourceAttribution
+        expect(attribution.firstTouch).toMatchObject({ adId: 'synthetic-ad-a', confidence: 'authenticated_transport' })
+        expect(attribution.latestTouch).toMatchObject({ adId: 'synthetic-ad-b', confidence: 'authenticated_transport' })
+        expect(store.get(LEAD).human).toBe(true)
+        expect((await claimReferral('referral-b', 'attempted-replacement')).action).toBe('busy')
+        expect(store.get(LEAD).sourceAttribution).toEqual(attribution)
+    })
+    it('does not attribute business echoes or stale inbound events', async () => {
+        vi.stubEnv('SALES_CONVERSATIONAL_POLICY_ENABLED', 'true')
+        await claimReferral('referral-current', 'synthetic-current')
+        expect((await claimReferral('referral-old', 'synthetic-old', NOW - 1000)).action).toBe('rejected')
+        await claimReferral('referral-echo', 'synthetic-echo', NOW, { outgoing: true })
+        expect(store.get(LEAD).sourceAttribution.latestTouch.adId).toBe('synthetic-current')
+    })
+    it('stores repaired metadata as unknown rather than promoting customer text into ad evidence', async () => {
+        vi.stubEnv('SALES_CONVERSATIONAL_POLICY_ENABLED', 'true')
+        await claimReferral('referral-repaired', 'synthetic-ad', NOW, { attributionPayloadRepaired: true })
+        expect(store.get(LEAD).sourceAttribution.firstTouch).toMatchObject({ source: 'unknown', adId: null, reason: 'repaired_transport_payload' })
+    })
+    it('does not capture attribution while the strict rollout is disabled', async () => {
+        await claimReferral('referral-disabled', 'synthetic-ad')
+        expect(store.get(LEAD).sourceAttribution).toBeUndefined()
+    })
+})
+
 describe('durable human service lifecycle', () => {
     it('commits the task, paused lead, cleared pending work, and inbound success atomically', async () => {
         const result = await completeSuccessfulExchange(complete())

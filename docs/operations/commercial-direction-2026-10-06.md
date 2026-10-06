@@ -24,9 +24,9 @@ The design direction includes approval before printing and one consolidated revi
 
 ## Final-total adapter investigation
 
-The existing application receives signed WooCommerce order webhooks and reads `sales_checkout_quotes`. It has no Woo cart client or quote writer. `checkoutQuoteStore.js` requires a provider-owned record bound to the lead, inbound event and offer version. `checkoutContract.js` requires exact fresh currency, total, tax, shipping and URL agreement.
+The initial investigation found signed WooCommerce order webhooks and a quote reader without an issuance writer. The subsequent [source-to-purchase update](sales-attribution-2026-10-06.md) adds a disabled dependency-injected writer, independent verification contract and protected order/session binding. A real Woo network client or deployed reservation/enforcement bridge remains absent. `checkoutQuoteStore.js` requires provider-owned evidence bound to the lead, inbound event, offer version and exact protected order.
 
-The current URL allowlist accepts only `/checkout/?add-to-cart=6258` or `6271`. An add-to-cart URL adds a product to the browser's current cart. It does not establish that the browser opens the isolated cart whose total the server verified. Repeated clicks, existing items or destination changes can change the payable total. [Woo add-to-cart URL behavior](https://woocommerce.com/document/quick-guide-to-woocommerce-add-to-cart-urls/)
+Catalog URLs identify `/checkout/?add-to-cart=6258` or `6271`, but the updated strict quote reader rejects those static links as final-total verification. Its v2 provider contract requires an independently verified reserved order-pay URL, immutable binding and payment-time enforcement. An add-to-cart URL alone adds a product to the browser's current cart; existing items or destination changes can change the payable amount. [Woo add-to-cart URL behavior](https://woocommerce.com/document/quick-guide-to-woocommerce-add-to-cart-urls/)
 
 | Official Woo capability | What it can establish | What it cannot establish by itself |
 | --- | --- | --- |
@@ -42,7 +42,7 @@ Sources: [Products API](https://developer.woocommerce.com/docs/apis/store-api/re
 ### Proposed integration sequence
 
 1. In an authorized sandbox, verify installed Woo version, Store API support, shipping/tax/gateway rules and a native same-session checkout handoff. Avoid broad admin credentials unless a proven requirement emerges.
-2. Implement a dependency-injected provider that accepts only an approved offer/version, current lead/event, one mapped product and the minimum verified destination/rate context. Create/reuse an isolated cart idempotently. Reject extra items, unexpected coupons/fees, unselected shipping and incomplete destination calculation.
+2. Connect a real provider to the implemented dependency-injected seam. It must accept only an approved offer/version, current lead/event, one mapped product and the minimum verified destination/rate context. Reserve an isolated order/session idempotently. Reject extra items, unexpected coupons/fees, unselected shipping and incomplete destination calculation.
 3. Normalize Woo integer minor units and the complete composition, including discounts and named fees. Compare with the approved offer; advertised 990 ILS does not imply zero tax.
 4. Store a short-lived provider record with quote/reference IDs, timestamps, product/quantity, destination/rate and checkout-session bindings. Keep cart credentials private. Extend the exact URL contract only after proving the allowed hosted URL opens this same context.
 5. Require recalculation and renewed consent for changed totals or terms. Use supported expected-total enforcement at payment, or a verified equivalent; quote freshness alone does not lock a checkout.

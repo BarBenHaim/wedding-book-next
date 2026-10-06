@@ -1,4 +1,5 @@
 import { validateOffer, createOfferSnapshot, compareOfferSnapshots, trustedCheckoutUrl } from './offerCatalog'
+import { validateProviderCheckoutQuote } from './checkoutProviderAdapter'
 
 // Pure pre-send gate. checkoutResult MUST originate from a verified server-side
 // checkout adapter, never from customer text, the model, or a query parameter.
@@ -10,6 +11,12 @@ export function prepareCheckout({ offer, previousSnapshot = null, acceptedSnapsh
     const comparison = compareOfferSnapshots(previousSnapshot, snapshot)
     if (comparison.requiresReconfirmation && (!acceptedSnapshot || compareOfferSnapshots(acceptedSnapshot, snapshot).changed)) {
         return { status: 'reconfirm_required', reason: comparison.priceChanged ? 'price_changed' : 'offer_changed', comparison, snapshot, checkoutUrl: null }
+    }
+    if (checkoutResult?.contractVersion === 2) {
+        const verified = validateProviderCheckoutQuote({ quote: checkoutResult, offer, nowMs })
+        if (!verified.ok) return { status: 'blocked', reason: verified.reason, snapshot, checkoutUrl: null }
+        return { status: 'ready', reason: null, checkoutUrl: checkoutResult.url, checkoutId: checkoutResult.checkoutId,
+            providerOrderId: checkoutResult.providerOrderId, snapshot, comparison }
     }
     if (!checkoutResult || checkoutResult.verified !== true || !checkoutResult.checkoutId
         || !checkoutResult.verificationRef || !Number.isFinite(Date.parse(checkoutResult.verifiedAt))

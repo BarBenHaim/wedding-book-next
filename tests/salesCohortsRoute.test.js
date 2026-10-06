@@ -39,4 +39,27 @@ describe('private aggregate cohort API', () => {
         mock.get.mockRejectedValueOnce(new Error('synthetic source failure'))
         expect((await GET(request())).status).toBe(503)
     })
+    it('returns aggregate frozen ad observations and unknown associations without operational identifiers or customer content', async () => {
+        const at = Date.parse('2026-10-01T12:00:00Z')
+        const touch = { source: 'meta_ad', confidence: 'authenticated_transport', evidence: 'meta_referral',
+            adId: 'synthetic-ad', campaignId: 'synthetic-campaign', adsetId: null,
+            fieldEvidence: { adId: 'meta_referral', campaignId: 'transport_mapping' },
+            ctwaClid: 'private-click-id', eventId: 'private-meta-event', caption: 'private customer quote' }
+        const paid = { provider: 'woocommerce_signed_webhook', paymentConfidence: 'verified_paid', status: 'paid',
+            paidAtMs: at, verifiedAtMs: at, currency: 'ILS', grossMinor: 99000, refundedMinor: 0 }
+        mock.get.mockResolvedValueOnce({ docs: [] })
+            .mockResolvedValueOnce({ docs: [
+                { id: 'private-order-id', data: () => ({ ...paid, contactHash: 'private-contact-hash', bindingConfidence: 'verified_checkout_binding', sourceSnapshot: { firstTouch: touch, latestTouch: touch } }) },
+                { id: 'private-order-2', data: () => ({ ...paid, contactHash: 'private-phone-hash', bindingConfidence: 'phone_association', source: touch }) },
+                { id: 'private-order-3', data: () => ({ ...paid, contactHash: null, bindingConfidence: 'unlinked' }) },
+                { id: 'private-order-4', data: () => ({ ...paid, contactHash: null, bindingConfidence: 'pending', attributionStatus: 'pending', bindingPaymentSnapshot: { transaction_id: 'private-transaction', id: 'private-order-4' }, phoneAssociationHash: 'private-fallback-hash' }) },
+            ] }).mockResolvedValueOnce({ docs: [] })
+        const response = await GET(request())
+        expect(response.status).toBe(200)
+        const result = await response.json()
+        expect(result.purchaseAttribution).toMatchObject({ verifiedOrders: 4, stronglyBoundOrders: 1, phoneAssociatedOrders: 1, unlinkedOrders: 1, pendingOrders: 1, knownFirstTouchOrders: 1, unknownFirstTouchOrders: 3 })
+        expect(result.purchaseAttribution.byFirstTouch).toContainEqual(expect.objectContaining({ adId: 'synthetic-ad', campaignId: 'synthetic-campaign', confidence: 'authenticated_transport' }))
+        expect(JSON.stringify(result)).not.toMatch(/private-|ctwaClid|eventId|contactHash|caption|customer quote/)
+    })
+
 })

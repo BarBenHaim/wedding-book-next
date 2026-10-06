@@ -7,7 +7,7 @@ import { requestsOfferOptions, selectOfferPresentation } from './commercialDirec
 import { pickApprovedDemo } from './mediaGuard'
 import { captureExplicitFollowUpConsent, resolveExplicitCallbackConsent } from './followupEvidence'
 import { createStrictFollowUpSchedule, strictFollowUpDate } from './followupPolicy'
-import { CONVERSATIONAL_POLICY_VERSION, extractSuppliedTiming, sourceAttributionFromInbound, isMarketingStopRequest, isHumanServiceRequest, isProductAlternativeRequest } from './salesContract'
+import { CONVERSATIONAL_POLICY_VERSION, extractSuppliedTiming, isMarketingStopRequest, isHumanServiceRequest, isProductAlternativeRequest } from './salesContract'
 
 export const AUTOMATION_DISCLOSURE = 'כאן העוזרת האוטומטית של Wedding Tales.'
 export const HANDOFF_CONFIRMED = 'העברתי לצוות את השיחה והפרטים שכבר מסרתם לבדיקה.'
@@ -47,7 +47,9 @@ export async function buildConversationalTurn({ lead = {}, incomingText = '', bo
         automationDisclosed: true,
         handoffPending: false,
         conversationRevision: Number.isSafeInteger(revision) ? revision : (lead.conversationRevision || 0) + 1,
-        sourceAttribution: sourceAttributionFromInbound(body, lead.sourceAttribution, nowMs),
+        // Referral evidence is durably normalized at the authenticated inbound
+        // claim, never reconstructed from message text or a model decision.
+        sourceAttribution: lead.sourceAttribution || { source: 'unknown', campaignId: null, adId: null, evidence: 'unknown' },
         followUpSchedule: null,
         lastQuestion: null,
         ...timing,

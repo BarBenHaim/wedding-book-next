@@ -202,7 +202,10 @@ export async function POST(req) {
     }
     let claim
     try {
-        claim = await claimInboundEvent({ eventId, phone, occurredAt: body.occurredAt, outgoing: outgoing || customerTime?.ok === false, incomingText: text })
+        claim = await claimInboundEvent({ eventId, phone, occurredAt: body.occurredAt, outgoing: outgoing || customerTime?.ok === false, incomingText: text,
+            ...(strictCommercial ? { attributionBody: body, attributionPayloadRepaired: repaired === true,
+                attributionStructured: process.env.SALES_REFERRAL_TRANSPORT_VERSION === 'structured-v1' } : {}),
+        })
     } catch {
         console.error('[sales-agent] event claim failed')
         return NextResponse.json({ error: 'event-claim-failed' }, { status: 503 })
@@ -962,7 +965,7 @@ export async function POST(req) {
     const contractPlan = strictCommercial ? await buildConversationalTurn({
         lead, incomingText: text, body, eventId, revision: claim.conversationRevision,
         decision: turnDecision, catalogResult, library,
-        checkout: args => readVerifiedCheckout({ ...args, leadId: phone, eventId }),
+        checkout: args => readVerifiedCheckout({ ...args, leadId: phone, eventId, attribution: lead.sourceAttribution }),
     }) : null
     let parsed = contractPlan ? contractPlan.parsed : providerKeyAvailable
         ? null

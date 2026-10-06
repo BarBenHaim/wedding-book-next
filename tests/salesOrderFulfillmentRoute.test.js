@@ -53,7 +53,7 @@ const state = vi.hoisted(() => {
 vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: state.db, adminAuth: state.auth }))
 vi.mock('firebase-admin/firestore', () => ({ FieldValue: { serverTimestamp: () => 'SERVER_TIME' } }))
 vi.mock('nodemailer', () => ({ default: { createTransport: state.createTransport } }))
-vi.mock('@/lib/salesAgent/leads', () => ({ closeLeadOnPurchase: state.closeLead }))
+vi.mock('@/lib/salesAgent/leads', () => ({ closeLeadOnPurchase: state.closeLead, suppressBoundCheckoutLead: vi.fn(async () => ({ suppressed: false })) }))
 vi.mock('@/lib/salesAgent/salesEvidence', () => ({ recordVerifiedOrderEvidence: state.recordEvidence }))
 
 import { POST } from '@/app/api/createWedding/route'
@@ -201,7 +201,7 @@ describe('real signed Woo route with synthetic database/auth/mail only', () => {
         expect(state.docs.get('ordersLocks/81001')).toMatchObject({ ownerId: UID, status: 'ready', payment: { verified: true, strict: true } })
         expect(state.docs.get('order_confirmation_outbox/81001')).toMatchObject({ state: 'accepted' })
         expect(state.closeLead.mock.calls.map(([input]) => input.weddingId)).toEqual([null, '81001'])
-        expect(state.recordEvidence).toHaveBeenCalledWith({ order: paid(), db: state.db })
+        expect(state.recordEvidence).toHaveBeenCalledWith({ order: paid(), db: state.db, trustedSource: true })
         expect(state.sendMail).toHaveBeenCalledTimes(1)
         const mail = state.sendMail.mock.calls[0][0]
         expect(mail.html).toContain('/wedding/81001/admin')
@@ -402,7 +402,7 @@ describe('authenticated minimal order status', () => {
         state.docs.get('ordersRaw/81001').signatureVerified = false
         expect(await (await GET(statusReq())).json()).toMatchObject({ paymentVerified: false, bookReady: false, ownerUrl: null, guestUrl: null })
         await POST(request(paid({ status: 'refunded' })))
-        expect(state.recordEvidence).toHaveBeenCalledWith({ order: paid({ status: 'refunded' }), db: state.db })
+        expect(state.recordEvidence).toHaveBeenCalledWith({ order: paid({ status: 'refunded' }), db: state.db, trustedSource: true })
         expect(await (await GET(statusReq())).json()).toMatchObject({ paymentVerified: false, bookReady: false, ownerUrl: null, guestUrl: null })
     })
 })

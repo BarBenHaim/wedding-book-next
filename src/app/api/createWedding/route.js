@@ -118,7 +118,7 @@ export async function POST(req) {
             return NextResponse.json({ skipped: true, reason: recorded.reason, bookReady: false })
         }
         if (payment.ok || body?.status === 'refunded') {
-            try { await recordVerifiedOrderEvidence({ order: body, db }) }
+            try { await recordVerifiedOrderEvidence({ order: body, db, trustedSource: true }) }
             catch { console.warn('[createWedding] payment evidence write failed') }
         }
         if (!payment.ok) {
@@ -131,7 +131,8 @@ export async function POST(req) {
         // Cancel sales reminders on trusted payment even if Auth or book
         // provisioning later fails. A null weddingId makes no creation claim.
         try {
-            const { closeLeadOnPurchase } = await import('@/lib/salesAgent/leads')
+            const { closeLeadOnPurchase, suppressBoundCheckoutLead } = await import('@/lib/salesAgent/leads')
+            await suppressBoundCheckoutLead({ order: body, trustedSource: true, db }).catch(() => { console.warn('[createWedding] bound lead suppression deferred') })
             await recordVerifiedSalesOutcome(body, closeLeadOnPurchase, { ...verification, weddingId: null })
         } catch { console.warn('[createWedding] verified sales outcome write failed') }
         // An owner-editable wedding document is not an identity authority.
@@ -159,7 +160,8 @@ export async function POST(req) {
         // This runs on replay, including legacy books: a failed CRM write can
         // recover, but a preparing book never claims to have been created.
         try {
-            const { closeLeadOnPurchase } = await import('@/lib/salesAgent/leads')
+            const { closeLeadOnPurchase, suppressBoundCheckoutLead } = await import('@/lib/salesAgent/leads')
+            await suppressBoundCheckoutLead({ order: body, trustedSource: true, db }).catch(() => { console.warn('[createWedding] bound lead suppression deferred') })
             await recordVerifiedSalesOutcome(body, closeLeadOnPurchase, { ...verification, weddingId: bookResult.weddingId })
         } catch { console.warn('[createWedding] verified sales outcome write failed') }
         const reviewRef = db.collection('order_fulfillment_reviews').doc(orderId)
