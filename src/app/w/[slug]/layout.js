@@ -2,7 +2,7 @@
 // generateMetadata so the shared link shows an event-aware preview
 // (title/description + branded card image).
 import { adminDb } from '@/lib/firebaseAdmin'
-import { buildShareCopy } from '@/lib/shareCopy'
+import { buildShareCopy, shareImageFor } from '@/lib/shareCopy'
 
 function siteOrigin() {
     if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')
@@ -24,8 +24,9 @@ export async function generateMetadata({ params }) {
         const data = doc.data() || {}
         const { title, description } = buildShareCopy(data)
         const origin = siteOrigin()
-        const ogImage = `${origin}/og/wedding-tales-book.png`
-        const images = [{ url: ogImage, secureUrl: ogImage, width: 1200, height: 630, type: 'image/png', alt: 'Wedding Tales' }]
+        const card = shareImageFor(data?.eventType)
+        const ogImage = `${origin}${card.path}`
+        const images = [{ url: ogImage, secureUrl: ogImage, width: 1200, height: 630, type: card.type, alt: card.alt }]
         return {
             metadataBase: origin ? new URL(origin) : undefined,
             title,
