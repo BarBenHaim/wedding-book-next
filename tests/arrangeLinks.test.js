@@ -79,9 +79,13 @@ describe('what the page sees', () => {
             imageUrlOverride: 'secret', pageStyle: { x: 1 }, forceSplit: true,
         })
         expect(entry).toEqual({
-            id: 'e1', name: 'סבתא', text: 'מזל טוב', imageUrl: 'https://x/y.jpg', photoPosition: '50% 20%',
+            id: 'e1', kind: null, name: 'סבתא', text: 'מזל טוב', imageUrl: 'https://x/y.jpg', photoPosition: '50% 20%',
             photoRotation: 90, timestamp: 1700000000000, orderIndex: 3,
         })
+    })
+
+    it('names a blank page as one, so the owner can place it', () => {
+        expect(publicArrangeEntry({ id: 'b', kind: 'blank', name: '', text: '' })).toMatchObject({ id: 'b', kind: 'blank', name: '', text: '' })
     })
 
     it('sorts like the book: explicit order first, unindexed last by time', () => {

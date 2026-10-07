@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildShareCopy } from '../src/lib/shareCopy.js'
+import { buildShareCopy, shareImageFor } from '../src/lib/shareCopy.js'
 
 // The OG title is what WhatsApp shows in its link-preview card — when
 // it's generic ("ספר הברכות" alone) the link looks like junk. These
@@ -103,5 +103,16 @@ describe('buildShareCopy — description follows the same rules', () => {
         const { description } = buildShareCopy({ eventType: 'wedding' })
         expect(description).toMatch(/כתבו ברכה/)
         expect(description).not.toMatch(/את/) // "ברכו את" pattern shouldn't appear
+    })
+})
+
+describe('shareImageFor — the picture on the link card', () => {
+    it('shows the bar-mitzvah book to a bar-mitzvah guest link', () => {
+        expect(shareImageFor('bar_mitzvah')).toEqual({ path: '/og/bar-mitzvah-book.jpg', type: 'image/jpeg', alt: 'ספר הברכות לבר מצווה' })
+    })
+    it('keeps the general card for every other event, and for no event at all', () => {
+        expect(shareImageFor('wedding').path).toBe('/og/wedding-tales-book.png')
+        expect(shareImageFor('bat_mitzvah').path).toBe('/og/wedding-tales-book.png')
+        expect(shareImageFor(undefined).path).toBe('/og/wedding-tales-book.png')
     })
 })
