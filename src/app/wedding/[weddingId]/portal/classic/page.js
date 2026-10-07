@@ -11,6 +11,7 @@ import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale, dirFor } from '@/i18n/locales'
 import { getEntries } from '@/lib/classifyMedia'
+import { withoutBlankPages } from '@/lib/entryKinds'
 import CoupleDesignPicker from '@/components/CoupleDesignPicker/CoupleDesignPicker'
 
 // ייבוא רכיב לוח השנה המקצועי
@@ -322,7 +323,7 @@ function PortalApp({ onLocaleDiscovered }) {
                         <div className='flex items-center justify-between mb-3'>
                             <h2 className='text-lg font-bold text-gray-800'>הספר שלכם</h2>
                             <span className='text-xs font-semibold text-[#AA8840] bg-[#AA8840]/10 px-3 py-1 rounded-full'>
-                                {entries.length > 0 ? `${entries.length} ברכות` : 'עדיין אין ברכות'}
+                                {withoutBlankPages(entries).length > 0 ? `${withoutBlankPages(entries).length} ברכות` : 'עדיין אין ברכות'}
                             </span>
                         </div>
                         {bookLink ? (
