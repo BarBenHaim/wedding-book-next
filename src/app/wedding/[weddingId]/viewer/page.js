@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import HTMLFlipBook from 'react-pageflip'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage, db, auth } from '@/lib/firebaseClient'
-import { onAuthStateChanged } from 'firebase/auth'
+import { onAuthStateChanged, getIdToken } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 // html2canvas + jsPDF are ~400 KB combined and only used by the
 // admin's "Send to Lulu" + "Download PDFs" flows — never by normal
@@ -21,6 +21,7 @@ import BookCoverTemplate from '@/components/BookCoverTemplate/BookCoverTemplate'
 import BookBackCoverTemplate from '@/components/BookBackCoverTemplate/BookBackCoverTemplate'
 import { expandBookPages } from '@/lib/bookPages'
 import { entryIdsOnPage } from '@/lib/bookPageIndex'
+import { isBlankPage } from '@/lib/entryKinds'
 import PrintOrderModal from '@/components/PrintOrderModal/PrintOrderModal'
 import { getEntries } from '../../../../lib/classifyMedia'
 import defaultStyle, { resolveInteriorDesign } from '@/app/wedding/[weddingId]/viewer/defaultStyle'
@@ -147,6 +148,65 @@ function BookViewerInner({ onLocaleDiscovered }) {
     const applyEntryPatch = useCallback((entryId, patch) => {
         setPages(prev => prev.map(e => (e.id === entryId ? { ...e, ...patch } : e)))
     }, [])
+
+    // ── Blank pages (super-admin) ────────────────────────────────────
+    // An empty leaf with only the book's background, inserted after the
+    // page the operator is looking at. Created on the server (rules
+    // forbid client writes on entries) together with its place in the
+    // order; then the list is re-read, because the server is the one
+    // that knows the order it just wrote. `pages` is in flip order
+    // (reversed), so a fresh read is also the simplest way to land the
+    // new page where the server put it.
+    const [blankBusy, setBlankBusy] = useState(null) // entry id being acted on
+    const reloadEntries = useCallback(async () => {
+        const list = await getEntries(weddingId)
+        setPages(list.reverse())
+    }, [weddingId])
+
+    const insertBlankAfter = useCallback(async afterEntryId => {
+        if (!weddingId || blankBusy) return
+        setBlankBusy(afterEntryId || '__end')
+        try {
+            const token = await getIdToken(auth.currentUser)
+            const res = await fetch('/api/entries/blank', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ weddingId, afterEntryId: afterEntryId || null }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok || !data?.ok) throw new Error(data?.error || 'blank-failed')
+            await reloadEntries()
+            setEditingId(data.id)
+        } catch (err) {
+            console.error('Error inserting blank page:', err)
+            alert('הוספת העמוד הריק נכשלה. נסו שוב.')
+        } finally {
+            setBlankBusy(null)
+        }
+    }, [weddingId, blankBusy, reloadEntries])
+
+    const removeBlank = useCallback(async entryId => {
+        if (!weddingId || blankBusy) return
+        if (!confirm('להסיר את העמוד הריק?')) return
+        setBlankBusy(entryId)
+        try {
+            const token = await getIdToken(auth.currentUser)
+            const res = await fetch('/api/entries/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ weddingId, entryIds: [entryId] }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok || !data?.ok) throw new Error(data?.error || 'delete-failed')
+            setEditingId(prev => (prev === entryId ? null : prev))
+            await reloadEntries()
+        } catch (err) {
+            console.error('Error removing blank page:', err)
+            alert('הסרת העמוד הריק נכשלה. נסו שוב.')
+        } finally {
+            setBlankBusy(null)
+        }
+    }, [weddingId, blankBusy, reloadEntries])
 
     const styleWithLocale = useMemo(
         () => ({ ...styleSettings, locale, ...(noPhotoCrop ? { photoFit: 'contain' } : {}) }),
@@ -785,6 +845,21 @@ function BookViewerInner({ onLocaleDiscovered }) {
                             onEntryPatch={applyEntryPatch}
                         />
                     )}
+                    {/* A blank leaf at the very end — the one place the
+                        per-page "+ עמוד ריק אחרי" pill cannot reach when
+                        the book is still empty, and the usual way to
+                        even out the last spread before print. */}
+                    {isAdmin && mode !== 'cover' && (
+                        <button
+                            type='button'
+                            onClick={() => insertBlankAfter(null)}
+                            disabled={!!blankBusy}
+                            className='mt-3 w-full px-3 py-2 rounded-xl text-[12px] font-bold border border-[#ead9b3] text-[#7a6a52] bg-white hover:bg-[#fbf6ec] disabled:opacity-50'
+                            title='עמוד ריק עם הרקע של הספר בלבד, בסוף הספר'
+                        >
+                            {blankBusy === '__end' ? 'מוסיף…' : '+ עמוד ריק בסוף הספר'}
+                        </button>
+                    )}
                 </aside>
 
                 <main
@@ -894,6 +969,14 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                     const ownerId = owners.length === 1 ? owners[0] : null
                                     const editable = isAdmin && mode !== 'cover' && !!ownerId
                                     const active = !!ownerId && ownerId === editingId
+                                    const blank = isBlankPage(entry)
+                                    const busy = blankBusy === ownerId
+                                    const pill = {
+                                        zIndex: 31,
+                                        background: 'rgba(255,255,255,0.94)',
+                                        color: '#7a6a52',
+                                        border: '1px solid #ead9b3',
+                                    }
                                     return (
                                         <div key={entry.id} className={`demo-page border-l border-[#AA8840]/10 relative ${editable ? 'group' : ''}`}>
                                             <BookPageTemplate
@@ -933,8 +1016,35 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                                             border: '1px solid #ead9b3',
                                                         }}
                                                     >
-                                                        {active ? 'עורך' : 'ערוך עמוד'}
+                                                        {active ? 'עורך' : blank ? 'עמוד ריק' : 'ערוך עמוד'}
                                                     </button>
+                                                    {/* Insert an empty leaf after this page. The
+                                                        reading order is the reverse of `pages`, so
+                                                        "after" is handled by the server, not here. */}
+                                                    <button
+                                                        onMouseDown={e => { e.stopPropagation(); e.preventDefault() }}
+                                                        onTouchStart={e => e.stopPropagation()}
+                                                        onClick={e => { e.stopPropagation(); insertBlankAfter(ownerId) }}
+                                                        disabled={!!blankBusy}
+                                                        title='הוספת עמוד ריק (רק רקע) אחרי העמוד הזה'
+                                                        className={`absolute top-2 right-2 px-2 py-1 rounded-lg text-[11px] font-bold transition-opacity disabled:opacity-50 ${active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                        style={pill}
+                                                    >
+                                                        {busy ? '…' : '+ עמוד ריק אחרי'}
+                                                    </button>
+                                                    {blank && (
+                                                        <button
+                                                            onMouseDown={e => { e.stopPropagation(); e.preventDefault() }}
+                                                            onTouchStart={e => e.stopPropagation()}
+                                                            onClick={e => { e.stopPropagation(); removeBlank(ownerId) }}
+                                                            disabled={!!blankBusy}
+                                                            title='הסרת העמוד הריק'
+                                                            className={`absolute bottom-2 right-2 px-2 py-1 rounded-lg text-[11px] font-bold transition-opacity disabled:opacity-50 ${active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                            style={{ ...pill, color: '#b42318' }}
+                                                        >
+                                                            הסר עמוד ריק
+                                                        </button>
+                                                    )}
                                                 </>
                                             )}
                                         </div>

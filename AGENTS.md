@@ -466,6 +466,33 @@ and stop after `MAX_TOUCHES`; a late `delivered` cannot double-advance
 Dry run (`?dry=1`) composes correctly with the universal template:
 `one_line` with a customer quote, `deadline_offer` with the dated gift.
 
+### 4.10 — a blank page, on purpose
+
+Lord: in the viewer, as super-admin, insert an empty page — no blessing,
+no photo, only the book's background. Until now the only way was a
+blessing with nothing in it, and the notebook/collage layouts draw their
+empty card and sparkles on those.
+
+- `kind: 'blank'` entries (`src/lib/entryKinds.js`: `isBlankPage`,
+  `blankPageDoc`, `insertAfter`, `withoutBlankPages`). Same subcollection,
+  same `orderIndex`, so every reader places it. `kind`, not `type` — the
+  legacy /api/entries route wrote `type`.
+- `BookPageTemplate` paints only the surface + frame overlay for it, after
+  the per-page style merge (a blank page can still get its own
+  background from the page picker). `expandBookPages` never pairs it in
+  duo mode and restarts pairing after it.
+- `POST /api/entries/blank` `{weddingId, afterEntryId|null}` (super-admin):
+  Admin SDK `add` + `writeEntryOrder` on the live entries in one request.
+  Removal is `/api/entries/delete`.
+- Viewer pills per page: "+ עמוד ריק אחרי", and on a blank page "עמוד
+  ריק" / "הסר עמוד ריק"; "+ עמוד ריק בסוף הספר" under the page picker for
+  the empty-book case. After each action the entries are re-read
+  (`reloadEntries`) — `pages` is in flip order, and the server owns the
+  order it just wrote.
+- Counters that say "N ברכות" to a person (portal, owner admin, Picabook
+  header) exclude blanks; the owner admin list and the arrange link label
+  them "עמוד ריק" so they can be ordered like anything else.
+
 ---
 
 ## The WhatsApp sales agent — shipped and live

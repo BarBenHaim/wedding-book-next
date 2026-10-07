@@ -66,3 +66,19 @@ export function buildShareCopy(data = {}) {
 
     return { type, names, prefix, noun, title, description, whatsapp, imageLine }
 }
+
+// The picture on the link card. WhatsApp shows it above the title the
+// moment the guest link lands in a group, so it is the first thing a
+// family sees of the product — the book itself, in the event's own
+// world. One card per event world; events without their own card get
+// the general one. Files live in /public/og. JPEG on purpose: WhatsApp
+// quietly drops previews whose image is too heavy, and the bar-mitzvah
+// card is 150 KB as JPEG against 1.1 MB as PNG.
+const SHARE_IMAGE = {
+    bar_mitzvah: { path: '/og/bar-mitzvah-book.jpg', type: 'image/jpeg', alt: 'ספר הברכות לבר מצווה' },
+}
+const DEFAULT_SHARE_IMAGE = { path: '/og/wedding-tales-book.png', type: 'image/png', alt: 'Wedding Tales' }
+
+export function shareImageFor(eventType) {
+    return SHARE_IMAGE[normalizeEventType(eventType)] || DEFAULT_SHARE_IMAGE
+}

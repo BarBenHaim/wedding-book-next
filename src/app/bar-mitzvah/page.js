@@ -41,7 +41,7 @@ export const metadata = {
             'כל הברכות והתמונות מהאנשים שאוהבים אותו — בספר מודפס אחד. האורחים יוצרים, אתם שומרים לנצח.',
         url: 'https://app.weddingtales.co.il/bar-mitzvah',
         siteName: 'Wedding Tales',
-        images: [{ url: 'https://app.weddingtales.co.il/og/wedding-tales-book.png', width: 1200, height: 630 }],
+        images: [{ url: 'https://app.weddingtales.co.il/og/bar-mitzvah-book.jpg', width: 1200, height: 630, type: 'image/jpeg' }],
         locale: 'he_IL',
         type: 'website',
     },

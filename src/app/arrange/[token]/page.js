@@ -265,8 +265,8 @@ export default function ArrangePage() {
                                                     )}
 
                                                     <div className='flex-1 min-w-0'>
-                                                        <div className='font-bold text-[14px] text-[#1a1410] truncate'>{entry.name || 'אורח/ת'}</div>
-                                                        <div className='text-[12px] text-[#7a6a52] truncate'>{entry.text || (entry.imageUrl ? 'ברכה עם תמונה' : '')}</div>
+                                                        <div className='font-bold text-[14px] text-[#1a1410] truncate'>{entry.kind === 'blank' ? 'עמוד ריק' : entry.name || 'אורח/ת'}</div>
+                                                        <div className='text-[12px] text-[#7a6a52] truncate'>{entry.kind === 'blank' ? 'רק הרקע של הספר' : entry.text || (entry.imageUrl ? 'ברכה עם תמונה' : '')}</div>
                                                         {entry.timestamp && (
                                                             <div className='text-[10px] text-[#b3a48a] mt-0.5'>נכתבה {fmtUploadedAt(entry.timestamp)}</div>
                                                         )}

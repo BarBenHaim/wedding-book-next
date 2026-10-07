@@ -313,7 +313,7 @@ function PicabookExportContent() {
                 `Files:                ${includeCover ? 'cover.jpg (front) + cover_back.jpg (back) + ' : ''}001.jpg … ${String(renderList.length).padStart(3, '0')}.jpg  (one image per page)`,
                 `Bleed note:           images include 2mm bleed each side — Picabook trims it; the page fills edge to edge.`,
                 ``,
-                `Blessings in book:    ${entries.length} · Pages exported: ${selectedPages ? `${selectedPages.size} selected of ${pageCount}` : pageCount} (${Math.max(0, pageCount - slotsNeeded)} blank)`,
+                `Blessings in book:    ${entries.filter(e => e?.kind !== 'blank').length} · Pages exported: ${selectedPages ? `${selectedPages.size} selected of ${pageCount}` : pageCount} (${Math.max(0, pageCount - slotsNeeded)} blank)`,
                 `Safe area:            keep faces / text at least ${SAFE_INSET_MM} mm from every edge.`,
                 ``,
                 `HOW TO ORDER ON picabook.co.il:`,
