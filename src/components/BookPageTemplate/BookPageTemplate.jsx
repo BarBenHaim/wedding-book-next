@@ -6,6 +6,7 @@ import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
 import { resolvePhotoStyle } from '@/lib/bookDesignSchema'
 import { mergePageStyle, pageStyleOf } from '@/lib/pageStyle'
+import { isBlankPage } from '@/lib/entryKinds'
 import { pageFitFactor, nameFontPercent } from '@/lib/fontFit'
 import FramedPhoto from '../FramedPhoto/FramedPhoto'
 import PolaroidPageLayout from '../PolaroidPageLayout/PolaroidPageLayout'
@@ -76,6 +77,45 @@ export default function BookPageTemplate({ entry, styleSettings: incomingStyle, 
                 <svg viewBox='0 0 24 24' width={dw(7)} height={dw(7)} fill={styleSettings.fontColor || '#c9a44e'} style={{ opacity: 0.22 }}>
                     <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                 </svg>
+            </div>
+        )
+    }
+
+    // ── Blank page (kind: 'blank') ───────────────────────────────────
+    // An empty leaf the super-admin inserted on purpose (entryKinds.js).
+    // The page surface exactly as the classic layout paints it — the
+    // book's background and its frame overlay — and nothing else: no
+    // ghost name, no empty notebook card, no collage sparkles. Resolved
+    // AFTER the per-page style merge, so a blank page can still be given
+    // its own background through the page picker. Rendered uniformly
+    // for every template.
+    if (isBlankPage(entry)) {
+        const blankSurface = styleSettings.backgroundUrl || resolveTextureUrl(styleSettings.texture)
+        const { w: bw, h: bh } = pageScale(scaledWidth, scaledHeight)
+        return (
+            <div
+                className='relative box-border overflow-hidden'
+                data-blank-page='true'
+                style={{
+                    width: '100%',
+                    height: '100%',
+                    backgroundColor: styleSettings.backgroundColor || '#fdfaf3',
+                    backgroundImage: blankSurface ? `url(${blankSurface})` : 'none',
+                    backgroundRepeat: 'repeat',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    borderRadius: bw(styleSettings.borderRadius || 0),
+                    padding: bh(styleSettings.pagePadding ?? 4),
+                }}
+            >
+                {styleSettings.frame && (
+                    <img
+                        src={styleSettings.frame}
+                        alt=''
+                        className='absolute top-0 left-0 w-full h-full pointer-events-none'
+                        style={{ zIndex: 10, objectFit: 'cover' }}
+                    />
+                )}
             </div>
         )
     }
