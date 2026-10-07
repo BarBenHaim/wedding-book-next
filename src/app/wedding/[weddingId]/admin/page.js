@@ -8,6 +8,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { db, storage, auth } from '../../../../lib/firebaseClient'
 import { onAuthStateChanged, getIdToken } from 'firebase/auth'
 import { isSuperAdmin } from '@/lib/superAdmin'
+import { isBlankPage, withoutBlankPages } from '@/lib/entryKinds'
 import imageCompression from 'browser-image-compression'
 import { getBlessingText, normalizeBlessing, formatBlessingSmart } from '../../../../lib/normalizeText'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
@@ -590,7 +591,7 @@ export default function AdminDashboard() {
                             ניהול הברכות שלכם
                         </h1>
                         <p className='text-base text-gray-500'>
-                            <span className='font-bold text-[#AA8840]'>{entries.length}</span> רגעים שנאספו
+                            <span className='font-bold text-[#AA8840]'>{withoutBlankPages(entries).length}</span> רגעים שנאספו
                         </p>
                         {/* בקרת העלאות — הצלחות/כשלונות של שליחות אורחים */}
                         {uploadHealth && (uploadHealth.success > 0 || uploadHealth.failed > 0) && (
@@ -731,7 +732,7 @@ export default function AdminDashboard() {
                                                             )}
                                                             {/* Name + snippet */}
                                                             <div className='flex-1 min-w-0'>
-                                                                <div className='font-bold text-sm text-gray-900 truncate'>{entry.name || 'אורח/ת'}</div>
+                                                                <div className='font-bold text-sm text-gray-900 truncate'>{isBlankPage(entry) ? 'עמוד ריק' : entry.name || 'אורח/ת'}</div>
                                                                 <div className='text-xs text-gray-500 truncate'>{entry.text || (entry.imageUrl ? 'ברכה עם תמונה' : '')}</div>
                                                                 {tsMs(entry.timestamp) > 0 && (
                                                                     <div className='text-[10px] text-gray-400 mt-0.5'>הועלתה {fmtUploadedAt(entry.timestamp)}</div>
@@ -876,7 +877,7 @@ export default function AdminDashboard() {
                                                                                         {pageLabel(pageIndex.byEntry[entry.id])}
                                                                                     </span>
                                                                                 )}
-                                                                                <span className='truncate'>{entry.name || ''}</span>
+                                                                                <span className='truncate'>{isBlankPage(entry) ? 'עמוד ריק' : entry.name || ''}</span>
                                                                             </h3>
                                                                             {tsMs(entry.timestamp) > 0 && (
                                                                                 <span className='text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5' title='מועד העלאת הברכה'>
