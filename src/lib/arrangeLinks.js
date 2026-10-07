@@ -113,6 +113,7 @@ export function validateOrderRequest(body) {
 export function publicArrangeEntry(entry) {
     return {
         id: entry.id,
+        kind: entry.kind === 'blank' ? 'blank' : null,
         name: typeof entry.name === 'string' ? entry.name : '',
         text: typeof entry.text === 'string' ? entry.text : '',
         imageUrl: typeof entry.imageUrl === 'string' ? entry.imageUrl : null,

@@ -10,6 +10,7 @@
 // single combined page. When disabled, it's the classic 1 page per entry.
 
 import { planGreetings } from './greetingPlan'
+import { isBlankPage } from './entryKinds'
 
 const DEFAULT_SPLIT_THRESHOLD = 240 // blessing chars beyond which we split (with a photo)
 
@@ -133,11 +134,16 @@ export function expandBookPages(entries, opts = {}) {
     // padToSpread only needs to even out the total count.
     if (opts.entriesPerPage === 2) {
         const pages = []
-        for (let i = 0; i < list.length; i += 2) {
-            const pair = [list[i], list[i + 1]]
-                .filter(Boolean)
-                .map(e => ({ ...e }))
+        // A blank page is a page of its own — it is never half of a duo.
+        // Pairing restarts after it, so the blessings around it keep
+        // pairing exactly as they would have without it.
+        let i = 0
+        while (i < list.length) {
+            if (isBlankPage(list[i])) { pages.push({ ...list[i] }); i += 1; continue }
+            const second = list[i + 1] && !isBlankPage(list[i + 1]) ? list[i + 1] : null
+            const pair = [list[i], second].filter(Boolean).map(e => ({ ...e }))
             pages.push({ id: `__duo_${list[i]?.id || i}`, _duo: pair })
+            i += second ? 2 : 1
         }
         if (padToSpread && !onSpreadStart(pages.length)) pages.push(divider())
         return pages
