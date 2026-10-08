@@ -493,6 +493,28 @@ empty card and sparkles on those.
   header) exclude blanks; the owner admin list and the arrange link label
   them "עמוד ריק" so they can be ordered like anything else.
 
+### 8.10 — the QR code, from the event itself
+
+Lord: in the super-admin table, open an event → mint its QR right
+there, then colour it "a little". The dynamic QR machinery already
+existed (`qrcodes/{code}` → `/q/<code>` redirect, `/admin/qrcodes`),
+but minting meant leaving the event and typing its id into a form.
+
+- `QrCodePanel` in `WeddingDetailPanel` ("ברקוד QR לאירוע", above the
+  digital edition): lists this event's codes (`GET ?weddingId=`), mints
+  with `POST` (label = the event's couple label), previews with
+  `react-qr-code` (already a dependency, used in the portal).
+- Design = `{dark, light, margin}` only (`src/lib/qrStyle.js`): six
+  presets in the brand palette, two colour pickers, a quiet-zone slider.
+  No logo, no gradient, no inverted code — `qrStyleProblem` refuses a
+  pair under 3:1 or light-on-dark, because phone decoders assume dark
+  modules on a light field. All six presets were decoded with OpenCV
+  before shipping.
+- `PATCH /api/admin/qrcodes {code, style}` stores the normalized style
+  on the doc; `GET /api/admin/qrcodes/png` takes `dark`/`light`/`margin`
+  (hex without `#`) and, with no query, falls back to the saved style —
+  so a re-download next year matches the printed sticker.
+
 ---
 
 ## The WhatsApp sales agent — shipped and live
