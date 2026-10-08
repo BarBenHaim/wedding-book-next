@@ -1,7 +1,12 @@
-// GET /api/admin/qrcodes/png?code=xxx&size=800
+// GET /api/admin/qrcodes/png?code=xxx&size=800&dark=0d1f4d&light=ffffff&margin=2
 //
 // Returns a clean PNG of the QR code (no caption, no logo, no
-// decoration — exactly what the user asked for). The QR encodes
+// decoration). Colours and the quiet zone come from the query, or —
+// when the query carries none — from the style saved on the doc, so
+// a re-download months later matches the sticker that was printed.
+// Both go through normalizeQrStyle: a low-contrast or inverted pair
+// falls back to black on white rather than shipping a code that
+// does not scan. The QR encodes
 // `https://<origin>/q/{code}`, which the redirect handler at
 // /q/[code]/route.js resolves to the current target.
 //
@@ -16,6 +21,7 @@ import { NextResponse } from 'next/server'
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import QRCode from 'qrcode'
+import { normalizeQrStyle, colorParam } from '@/lib/qrStyle'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -57,6 +63,12 @@ export async function GET(req) {
             new URL(req.url).origin
         const qrTarget = `${origin}/q/${code}`
 
+        const saved = snap.data()?.style || null
+        const hasQuery = searchParams.has('dark') || searchParams.has('light') || searchParams.has('margin')
+        const style = normalizeQrStyle(hasQuery
+            ? { dark: colorParam(searchParams.get('dark')), light: colorParam(searchParams.get('light')), margin: searchParams.get('margin') }
+            : saved)
+
         // High error correction so the printed QR survives stickers
         // / fingerprints / partial damage at events. ~30% of the
         // code can be lost and the scanner still resolves.
@@ -64,8 +76,8 @@ export async function GET(req) {
             errorCorrectionLevel: 'H',
             type: 'png',
             width: size,
-            margin: 2,
-            color: { dark: '#000000', light: '#ffffff' },
+            margin: style.margin,
+            color: { dark: style.dark, light: style.light },
         })
 
         return new NextResponse(png, {
