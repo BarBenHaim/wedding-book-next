@@ -25,6 +25,8 @@ import {
     resolveThemeColorId,
 } from '@/lib/eventTypes'
 import { LOCALE_ORDER, LOCALES } from '@/i18n/locales'
+import QRCode from 'react-qr-code'
+import { QR_PRESETS, DEFAULT_QR_STYLE, normalizeQrStyle, qrStyleProblem, qrPngPath, presetFor, normalizeHex } from '@/lib/qrStyle'
 
 // ─── Data Fetching ────────────────────────────────────────────────────────────
 async function getToken() {
@@ -1850,6 +1852,245 @@ function ArrangeLinkPanel({ wedding }) {
     )
 }
 
+// ─── QR code panel (per event) ───────────────────────────────────────────────
+// The same dynamic QR the /admin/qrcodes page manages, reached from the
+// event itself: mint one for THIS event, see it, pick a colour, download
+// the print PNG. The code encodes /q/<code>; the sticker never changes
+// even if the target does. Colours are the only "design" on purpose —
+// see src/lib/qrStyle.js for why.
+function QrCodePanel({ wedding }) {
+    const [list, setList] = useState(null) // null = loading
+    const [busy, setBusy] = useState(false)
+    const [error, setError] = useState('')
+    const [openCode, setOpenCode] = useState(null) // which QR's style editor is open
+    const [style, setStyle] = useState(DEFAULT_QR_STYLE)
+    const [saved, setSaved] = useState(false)
+    const [copied, setCopied] = useState('')
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+
+    const refresh = useCallback(async () => {
+        try {
+            const token = await getToken()
+            const res = await fetch(`/api/admin/qrcodes?weddingId=${encodeURIComponent(wedding.id)}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+            setList(Array.isArray(data.list) ? data.list : [])
+        } catch (e) {
+            setList([])
+            setError(e.message || 'שגיאה')
+        }
+    }, [wedding.id])
+
+    useEffect(() => { setList(null); setError(''); setOpenCode(null); refresh() }, [refresh])
+
+    function open(qr) {
+        setOpenCode(qr.code)
+        setStyle(normalizeQrStyle(qr.style))
+        setSaved(false)
+    }
+
+    async function mint() {
+        if (busy) return
+        setBusy(true)
+        setError('')
+        try {
+            const token = await getToken()
+            const res = await fetch('/api/admin/qrcodes', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ weddingId: wedding.id, label: coupleLabel(wedding) }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+            await refresh()
+            setOpenCode(data.code)
+            setStyle(DEFAULT_QR_STYLE)
+            setSaved(false)
+        } catch (e) {
+            setError(e.message || 'שגיאה')
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    async function saveStyle(code) {
+        if (busy || qrStyleProblem(style)) return
+        setBusy(true)
+        try {
+            const token = await getToken()
+            const res = await fetch('/api/admin/qrcodes', {
+                method: 'PATCH',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, style }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+            setSaved(true)
+            setList(prev => (prev || []).map(q => (q.code === code ? { ...q, style: normalizeQrStyle(style) } : q)))
+            setTimeout(() => setSaved(false), 1500)
+        } catch (e) {
+            setError(e.message || 'שגיאה')
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    async function download(code, size) {
+        try {
+            const token = await getToken()
+            const res = await fetch(qrPngPath(code, style, size), { headers: { Authorization: `Bearer ${token}` } })
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            const blob = await res.blob()
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `qr-${wedding.slug || wedding.id}-${code}.png`
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+            setTimeout(() => URL.revokeObjectURL(url), 1000)
+        } catch (e) {
+            setError('ההורדה נכשלה: ' + (e.message || ''))
+        }
+    }
+
+    function copy(text, key) {
+        navigator.clipboard.writeText(text).then(() => {
+            setCopied(key)
+            setTimeout(() => setCopied(''), 1500)
+        }).catch(() => {})
+    }
+
+    const problem = qrStyleProblem(style)
+    const preset = presetFor(style)
+
+    return (
+        <div className='space-y-3'>
+            <div className='flex items-center justify-between gap-2'>
+                <p className='text-sm text-[#3d2e1a]'>
+                    {list === null ? 'טוען…' : list.length === 0 ? 'עדיין אין ברקוד לאירוע הזה.' : `${list.length} ${list.length === 1 ? 'ברקוד' : 'ברקודים'}`}
+                </p>
+                <button
+                    onClick={mint}
+                    disabled={busy}
+                    className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white disabled:opacity-50'
+                    style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}
+                >
+                    {busy && !openCode ? <Loader2 size={12} className='animate-spin' /> : <QrCode size={12} />}
+                    צור ברקוד
+                </button>
+            </div>
+
+            {error && <div className='rounded-xl bg-red-50 border border-red-200 p-3 text-[11px] text-red-700'>{error}</div>}
+
+            {list && list.map(qr => {
+                const shortUrl = `${origin}/q/${qr.code}`
+                const isOpen = openCode === qr.code
+                const shown = isOpen ? style : normalizeQrStyle(qr.style)
+                return (
+                    <div key={qr.code} className='rounded-xl border border-[#ead9b3] bg-[#fbf6ec] p-3 space-y-3'>
+                        <div className='flex items-center gap-3'>
+                            <button
+                                onClick={() => (isOpen ? setOpenCode(null) : open(qr))}
+                                className='shrink-0 rounded-lg p-1.5 border border-[#ead9b3]'
+                                style={{ background: shown.light }}
+                                title={isOpen ? 'סגור עיצוב' : 'עצב את הברקוד'}
+                            >
+                                <QRCode value={shortUrl} size={56} fgColor={shown.dark} bgColor={shown.light} level='H' />
+                            </button>
+                            <div className='flex-1 min-w-0'>
+                                <div className='flex items-center gap-1.5'>
+                                    <code className='text-[11px] font-mono text-[#7a6a52] truncate' dir='ltr'>{shortUrl}</code>
+                                    <button onClick={() => copy(shortUrl, qr.code)} className='shrink-0 w-6 h-6 rounded-md bg-white hover:bg-[#f4ecd9] border border-[#ead9b3] flex items-center justify-center' title='העתק קישור'>
+                                        {copied === qr.code ? <CheckCircle2 size={10} className='text-emerald-600' /> : <Copy size={10} className='text-[#a8843a]' />}
+                                    </button>
+                                </div>
+                                <p className='text-[10px] text-[#a89378] mt-1'>
+                                    {qr.scans || 0} סריקות · {qr.active === false ? <span className='text-red-600 font-bold'>כבוי</span> : 'פעיל'} · יעד: <span dir='ltr' className='font-mono'>{qr.targetUrl}</span>
+                                </p>
+                                <div className='flex flex-wrap gap-1.5 mt-2'>
+                                    <button onClick={() => (isOpen ? setOpenCode(null) : open(qr))} className='inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-[#ead9b3] bg-white text-[#a8843a]'>
+                                        <Wand2 size={11} /> {isOpen ? 'סגור' : 'עצב'}
+                                    </button>
+                                    <button onClick={() => { if (!isOpen) setStyle(normalizeQrStyle(qr.style)); download(qr.code, 1200) }} className='inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-[#ead9b3] bg-white text-[#3d2e1a]'>
+                                        <Download size={11} /> PNG להדפסה
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {isOpen && (
+                            <div className='rounded-xl bg-white border border-[#ead9b3] p-3 space-y-3'>
+                                <div className='flex items-start gap-3'>
+                                    <div className='shrink-0 rounded-xl p-3 border border-[#ead9b3]' style={{ background: style.light }}>
+                                        <QRCode value={shortUrl} size={132} fgColor={problem ? '#000000' : style.dark} bgColor={problem ? '#ffffff' : style.light} level='H' />
+                                    </div>
+                                    <div className='flex-1 min-w-0 space-y-2'>
+                                        <p className='text-[11px] text-[#7a6a52] font-semibold'>צבע מוכן</p>
+                                        <div className='flex flex-wrap gap-1.5'>
+                                            {QR_PRESETS.map(p => (
+                                                <button
+                                                    key={p.id}
+                                                    onClick={() => { setStyle(s => ({ ...s, dark: p.dark, light: p.light })); setSaved(false) }}
+                                                    className={`inline-flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-full text-[11px] font-bold border ${preset === p.id ? 'border-[#a8843a] bg-[#fbf6ec]' : 'border-[#ead9b3] bg-white'} text-[#3d2e1a]`}
+                                                    title={`${p.dark} על ${p.light}`}
+                                                >
+                                                    <span className='w-4 h-4 rounded-full border border-black/10' style={{ background: `linear-gradient(135deg, ${p.dark} 50%, ${p.light} 50%)` }} />
+                                                    {p.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className='grid grid-cols-2 gap-2'>
+                                            <label className='flex items-center gap-2 text-[11px] text-[#3d2e1a] font-semibold'>
+                                                <input type='color' value={normalizeHex(style.dark) || '#000000'} onChange={e => { setStyle(s => ({ ...s, dark: e.target.value })); setSaved(false) }} className='w-8 h-8 rounded-md border border-[#ead9b3] p-0 bg-white cursor-pointer' />
+                                                ריבועים
+                                            </label>
+                                            <label className='flex items-center gap-2 text-[11px] text-[#3d2e1a] font-semibold'>
+                                                <input type='color' value={normalizeHex(style.light) || '#ffffff'} onChange={e => { setStyle(s => ({ ...s, light: e.target.value })); setSaved(false) }} className='w-8 h-8 rounded-md border border-[#ead9b3] p-0 bg-white cursor-pointer' />
+                                                רקע
+                                            </label>
+                                        </div>
+                                        <label className='flex items-center gap-2 text-[11px] text-[#3d2e1a] font-semibold'>
+                                            שוליים
+                                            <input type='range' min={0} max={6} value={style.margin} onChange={e => { setStyle(s => ({ ...s, margin: Number(e.target.value) })); setSaved(false) }} className='flex-1' style={{ accentColor: '#a8843a' }} />
+                                            <span className='tabular-nums text-[#7a6a52] w-4'>{style.margin}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {problem && <div className='rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800'>{problem}</div>}
+
+                                <div className='flex flex-wrap gap-2'>
+                                    <button
+                                        onClick={() => saveStyle(qr.code)}
+                                        disabled={busy || !!problem}
+                                        className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white disabled:opacity-50'
+                                        style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}
+                                    >
+                                        {saved ? <CheckCircle2 size={12} /> : <Save size={12} />}
+                                        {saved ? 'נשמר' : 'שמור עיצוב'}
+                                    </button>
+                                    <button onClick={() => download(qr.code, 1200)} disabled={!!problem} className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-[#ead9b3] bg-white text-[#3d2e1a] disabled:opacity-50'>
+                                        <Download size={12} /> הורד PNG (1200px)
+                                    </button>
+                                    <button onClick={() => download(qr.code, 2000)} disabled={!!problem} className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-[#ead9b3] bg-white text-[#3d2e1a] disabled:opacity-50'>
+                                        <Download size={12} /> 2000px
+                                    </button>
+                                </div>
+                                <p className='text-[10px] text-[#a89378] leading-relaxed'>
+                                    הסורק צריך ריבועים כהים על רקע בהיר בניגודיות גבוהה — לכן לוגו, גרדיאנט או ברקוד הפוך לא מוצעים כאן. שינוי יעד/כיבוי: <a href='/admin/qrcodes' className='underline'>ניהול ברקודים</a>.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )
+            })}
+        </div>
+    )
+}
+
 function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onCheckLuluStatus, onSaveEdit }) {
     // ── Analytics state — funnel + recent scans pulled from
     //    /api/admin/wedding-stats. Loads fresh whenever the panel
@@ -1981,6 +2222,15 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                         <QuickLink href={`/w/${wedding.slug}`} label={`קישור קצר (/${wedding.slug})`} icon={ExternalLink} />
                     )}
                 </div>
+            </div>
+
+            {/* ── QR code ──
+                Mint a dynamic QR for this event, colour it, download
+                the print PNG. The sticker encodes /q/<code>, so the
+                target can change later without reprinting. */}
+            <div className='px-6 py-5 border-b border-[#f0e8d4]'>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>ברקוד QR לאירוע</p>
+                <QrCodePanel wedding={wedding} />
             </div>
 
             {/* ── Digital Edition ──
