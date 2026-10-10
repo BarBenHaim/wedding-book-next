@@ -514,6 +514,17 @@ but minting meant leaving the event and typing its id into a form.
   on the doc; `GET /api/admin/qrcodes/png` takes `dark`/`light`/`margin`
   (hex without `#`) and, with no query, falls back to the saved style —
   so a re-download next year matches the printed sticker.
+- 10.10, Lord: "a real hex field, and density — a few styles, not a
+  zoo". Style grew `ec` (L/M/H = דליל/רגיל/צפוף ועמיד; the EC level IS
+  the density, L is the smallest matrix) and `shape` (square/rounded/
+  dots). The drawing moved to ours: `qrSvg(modules, style, px)` in
+  qrStyle.js, used by the panel preview (`qrcode`'s browser `create()`
+  → `<img>` data URI) and by the PNG route (`sharp` rasterises the same
+  SVG), so preview and file are one picture. Module edges snap to whole
+  pixels — fractional edges at 1200px made OpenCV miss square L/M codes
+  that it read fine at 300px. Finder patterns stay square-ish in dots
+  mode. All 54 shape×density×colour renders decode (OpenCV), at 300 and
+  1200px, before this shipped.
 
 ---
 
