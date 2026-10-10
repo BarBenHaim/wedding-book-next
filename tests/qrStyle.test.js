@@ -10,7 +10,11 @@ import {
     qrPngPath,
     colorParam,
     presetFor,
+    qrSvg,
+    DENSITY_OPTIONS,
+    SHAPE_OPTIONS,
 } from '@/lib/qrStyle'
+import QRCode from 'qrcode'
 
 describe('colours', () => {
     it('normalises short and upper-case hex, rejects everything else', () => {
@@ -55,8 +59,15 @@ describe('normalizeQrStyle', () => {
         expect(normalizeQrStyle({ dark: '#eeeeee', light: '#ffffff', margin: 3 })).toEqual({ ...DEFAULT_QR_STYLE, margin: 3 })
     })
 
+    it('density and shape are one of the offered options, else the default', () => {
+        expect(normalizeQrStyle({ ec: 'h', shape: 'DOTS' })).toMatchObject({ ec: 'H', shape: 'dots' })
+        expect(normalizeQrStyle({ ec: 'Q', shape: 'hexagon' })).toMatchObject({ ec: 'M', shape: 'square' })
+        expect(DENSITY_OPTIONS.map(o => o.id)).toEqual(['L', 'M', 'H'])
+        expect(SHAPE_OPTIONS.map(o => o.id)).toEqual(['square', 'rounded', 'dots'])
+    })
+
     it('keeps a good pair and clamps the margin', () => {
-        expect(normalizeQrStyle({ dark: '#0D1F4D', light: '#fff', margin: '40' })).toEqual({ dark: '#0d1f4d', light: '#ffffff', margin: 8 })
+        expect(normalizeQrStyle({ dark: '#0D1F4D', light: '#fff', margin: '40' })).toEqual({ dark: '#0d1f4d', light: '#ffffff', margin: 8, ec: 'M', shape: 'square' })
         expect(normalizeQrStyle({ dark: '#0d1f4d', light: '#ffffff', margin: -2 })).toMatchObject({ margin: 0 })
         expect(normalizeQrStyle({ dark: '#0d1f4d', light: '#ffffff', margin: 'x' })).toMatchObject({ margin: 2 })
     })
@@ -68,12 +79,56 @@ describe('normalizeQrStyle', () => {
         expect(sp.get('code')).toBe('abcd1234')
         expect(sp.get('size')).toBe('1200')
         expect(sp.get('dark')).toBe('8a6a24')
-        const parsed = styleFromSearchParams(new URLSearchParams({ dark: colorParam(sp.get('dark')), light: colorParam(sp.get('light')), margin: sp.get('margin') }))
-        expect(parsed).toEqual({ dark: '#8a6a24', light: '#fbf6ea', margin: 1 })
+        const parsed = styleFromSearchParams(new URLSearchParams({ dark: colorParam(sp.get('dark')), light: colorParam(sp.get('light')), margin: sp.get('margin'), ec: sp.get('ec'), shape: sp.get('shape') }))
+        expect(parsed).toEqual({ dark: '#8a6a24', light: '#fbf6ea', margin: 1, ec: 'M', shape: 'square' })
     })
 
     it('names the preset a style came from, or custom', () => {
         expect(presetFor({ dark: '#0d1f4d', light: '#ffffff' })).toBe('navy')
         expect(presetFor({ dark: '#123456', light: '#ffffff' })).toBe('custom')
+    })
+})
+
+describe('qrSvg', () => {
+    const url = 'https://app.weddingtales.co.il/q/abcd1234'
+    const count = (svg, tag) => (svg.match(new RegExp(`<${tag} `, 'g')) || []).length
+
+    it('draws one dark element per dark module plus the background', () => {
+        const qr = QRCode.create(url, { errorCorrectionLevel: 'M' })
+        const dark = Array.from(qr.modules.data).filter(Boolean).length
+        const svg = qrSvg(qr.modules, { dark: '#000000', light: '#ffffff', margin: 2, ec: 'M', shape: 'square' }, 330)
+        expect(count(svg, 'rect')).toBe(dark + 1)
+        expect(svg).toContain('width="330" height="330"')
+        expect(svg).toContain('fill="#ffffff"')
+    })
+
+    it('a lower density is a smaller matrix', () => {
+        const l = QRCode.create(url, { errorCorrectionLevel: 'L' }).modules.size
+        const h = QRCode.create(url, { errorCorrectionLevel: 'H' }).modules.size
+        expect(l).toBeLessThan(h)
+    })
+
+    it('dots keep the three finder patterns as squares', () => {
+        const qr = QRCode.create(url, { errorCorrectionLevel: 'M' })
+        const svg = qrSvg(qr.modules, { dark: '#0d1f4d', light: '#ffffff', margin: 2, ec: 'M', shape: 'dots' }, 600)
+        // 3 finders × 33 dark modules each (7×7 ring + 3×3 core), + background
+        expect(count(svg, 'rect')).toBe(3 * 33 + 1)
+        expect(count(svg, 'circle')).toBeGreaterThan(100)
+    })
+
+    it('square modules land on whole pixels so nothing anti-aliases', () => {
+        const qr = QRCode.create(url, { errorCorrectionLevel: 'L' })
+        const svg = qrSvg(qr.modules, { dark: '#000000', light: '#ffffff', margin: 2, ec: 'L', shape: 'square' }, 1200)
+        const coords = [...svg.matchAll(/<rect x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)"/g)].flatMap(m => m.slice(1, 5))
+        expect(coords.length).toBeGreaterThan(0)
+        expect(coords.every(c => /^\d+$/.test(c))).toBe(true)
+    })
+
+    it('a bad colour pair is drawn black on white, not inverted', () => {
+        const qr = QRCode.create(url, { errorCorrectionLevel: 'L' })
+        const svg = qrSvg(qr.modules, { dark: '#ffffff', light: '#000000' }, 300)
+        expect(svg).toContain('fill="#ffffff"/>')
+        expect(svg).toContain('fill="#000000"')
+        expect(svg.indexOf('fill="#ffffff"')).toBeLessThan(svg.indexOf('fill="#000000"'))
     })
 })

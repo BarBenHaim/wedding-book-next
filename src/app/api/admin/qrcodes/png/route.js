@@ -1,4 +1,4 @@
-// GET /api/admin/qrcodes/png?code=xxx&size=800&dark=0d1f4d&light=ffffff&margin=2
+// GET /api/admin/qrcodes/png?code=xxx&size=800&dark=0d1f4d&light=ffffff&margin=2&ec=M&shape=rounded
 //
 // Returns a clean PNG of the QR code (no caption, no logo, no
 // decoration). Colours and the quiet zone come from the query, or —
@@ -21,7 +21,8 @@ import { NextResponse } from 'next/server'
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import QRCode from 'qrcode'
-import { normalizeQrStyle, colorParam } from '@/lib/qrStyle'
+import sharp from 'sharp'
+import { normalizeQrStyle, colorParam, qrSvg } from '@/lib/qrStyle'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -64,21 +65,24 @@ export async function GET(req) {
         const qrTarget = `${origin}/q/${code}`
 
         const saved = snap.data()?.style || null
-        const hasQuery = searchParams.has('dark') || searchParams.has('light') || searchParams.has('margin')
+        const hasQuery = ['dark', 'light', 'margin', 'ec', 'shape'].some(k => searchParams.has(k))
         const style = normalizeQrStyle(hasQuery
-            ? { dark: colorParam(searchParams.get('dark')), light: colorParam(searchParams.get('light')), margin: searchParams.get('margin') }
+            ? {
+                  dark: colorParam(searchParams.get('dark')),
+                  light: colorParam(searchParams.get('light')),
+                  margin: searchParams.get('margin'),
+                  ec: searchParams.get('ec'),
+                  shape: searchParams.get('shape'),
+              }
             : saved)
 
-        // High error correction so the printed QR survives stickers
-        // / fingerprints / partial damage at events. ~30% of the
-        // code can be lost and the scanner still resolves.
-        const png = await QRCode.toBuffer(qrTarget, {
-            errorCorrectionLevel: 'H',
-            type: 'png',
-            width: size,
-            margin: style.margin,
-            color: { dark: style.dark, light: style.light },
-        })
+        // The matrix comes from the same library as before; the drawing
+        // is ours (qrSvg) so the panel preview and the file are one
+        // picture. Density = error-correction level: H loses ~30% of the
+        // code and still scans, L is the sparsest, cleanest matrix.
+        const qr = QRCode.create(qrTarget, { errorCorrectionLevel: style.ec })
+        const svg = qrSvg(qr.modules, style, size)
+        const png = await sharp(Buffer.from(svg)).png().toBuffer()
 
         return new NextResponse(png, {
             status: 200,

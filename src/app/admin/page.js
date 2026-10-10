@@ -25,8 +25,8 @@ import {
     resolveThemeColorId,
 } from '@/lib/eventTypes'
 import { LOCALE_ORDER, LOCALES } from '@/i18n/locales'
-import QRCode from 'react-qr-code'
-import { QR_PRESETS, DEFAULT_QR_STYLE, normalizeQrStyle, qrStyleProblem, qrPngPath, presetFor, normalizeHex } from '@/lib/qrStyle'
+import { create as createQrMatrix } from 'qrcode'
+import { QR_PRESETS, DENSITY_OPTIONS, SHAPE_OPTIONS, DEFAULT_QR_STYLE, normalizeQrStyle, qrStyleProblem, qrPngPath, presetFor, normalizeHex, qrSvg } from '@/lib/qrStyle'
 
 // ─── Data Fetching ────────────────────────────────────────────────────────────
 async function getToken() {
@@ -1852,6 +1852,57 @@ function ArrangeLinkPanel({ wedding }) {
     )
 }
 
+// The same picture the PNG route draws (qrSvg), as an <img>. The matrix
+// comes from the qrcode package's browser build; a bad colour pair is
+// previewed in black-on-white so the admin sees a code, not a blank.
+function QrPreview({ value, style, size }) {
+    const base = normalizeQrStyle(style)
+    const bad = !!qrStyleProblem(style)
+    const dark = bad ? '#000000' : base.dark
+    const light = bad ? '#ffffff' : base.light
+    const { margin, ec, shape } = base
+    const svg = useMemo(() => {
+        try {
+            return qrSvg(createQrMatrix(value, { errorCorrectionLevel: ec }).modules, { dark, light, margin, ec, shape }, size)
+        } catch {
+            return ''
+        }
+    }, [value, dark, light, margin, ec, shape, size])
+    if (!svg) return <div style={{ width: size, height: size }} />
+    // eslint-disable-next-line @next/next/no-img-element -- inline SVG data URI, nothing for next/image to optimise
+    return <img src={`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`} width={size} height={size} alt='' style={{ display: 'block' }} />
+}
+
+// A colour picker with its hex beside it: type #0d1f4d (or 0d1f4d),
+// the swatch follows; pick from the swatch, the text follows. A half-
+// typed value is kept in the field and only applied once it is a colour.
+function HexColorField({ label, value, onChange }) {
+    const [text, setText] = useState(value)
+    useEffect(() => { setText(value) }, [value])
+    function commit(raw) {
+        const v = raw.trim().startsWith('#') ? raw.trim() : '#' + raw.trim()
+        const hex = normalizeHex(v)
+        if (hex) onChange(hex)
+    }
+    const valid = !!normalizeHex(text.trim().startsWith('#') ? text.trim() : '#' + text.trim())
+    return (
+        <label className='flex items-center gap-2 text-[11px] text-[#3d2e1a] font-semibold'>
+            <input type='color' value={normalizeHex(value) || '#000000'} onChange={e => onChange(e.target.value)} className='w-8 h-8 shrink-0 rounded-md border border-[#ead9b3] p-0 bg-white cursor-pointer' />
+            <span className='shrink-0'>{label}</span>
+            <input
+                type='text'
+                dir='ltr'
+                value={text}
+                onChange={e => { setText(e.target.value); commit(e.target.value) }}
+                onBlur={() => { if (!valid) setText(value) }}
+                spellCheck={false}
+                maxLength={7}
+                className={`w-[84px] h-8 rounded-md border px-2 font-mono text-[11px] bg-white outline-none ${valid ? 'border-[#ead9b3]' : 'border-red-300 text-red-700'}`}
+            />
+        </label>
+    )
+}
+
 // ─── QR code panel (per event) ───────────────────────────────────────────────
 // The same dynamic QR the /admin/qrcodes page manages, reached from the
 // event itself: mint one for THIS event, see it, pick a colour, download
@@ -1998,7 +2049,7 @@ function QrCodePanel({ wedding }) {
                                 style={{ background: shown.light }}
                                 title={isOpen ? 'סגור עיצוב' : 'עצב את הברקוד'}
                             >
-                                <QRCode value={shortUrl} size={56} fgColor={shown.dark} bgColor={shown.light} level='H' />
+                                <QrPreview value={shortUrl} style={shown} size={56} />
                             </button>
                             <div className='flex-1 min-w-0'>
                                 <div className='flex items-center gap-1.5'>
@@ -2025,7 +2076,7 @@ function QrCodePanel({ wedding }) {
                             <div className='rounded-xl bg-white border border-[#ead9b3] p-3 space-y-3'>
                                 <div className='flex items-start gap-3'>
                                     <div className='shrink-0 rounded-xl p-3 border border-[#ead9b3]' style={{ background: style.light }}>
-                                        <QRCode value={shortUrl} size={132} fgColor={problem ? '#000000' : style.dark} bgColor={problem ? '#ffffff' : style.light} level='H' />
+                                        <QrPreview value={shortUrl} style={style} size={148} />
                                     </div>
                                     <div className='flex-1 min-w-0 space-y-2'>
                                         <p className='text-[11px] text-[#7a6a52] font-semibold'>צבע מוכן</p>
@@ -2042,15 +2093,38 @@ function QrCodePanel({ wedding }) {
                                                 </button>
                                             ))}
                                         </div>
-                                        <div className='grid grid-cols-2 gap-2'>
-                                            <label className='flex items-center gap-2 text-[11px] text-[#3d2e1a] font-semibold'>
-                                                <input type='color' value={normalizeHex(style.dark) || '#000000'} onChange={e => { setStyle(s => ({ ...s, dark: e.target.value })); setSaved(false) }} className='w-8 h-8 rounded-md border border-[#ead9b3] p-0 bg-white cursor-pointer' />
-                                                ריבועים
-                                            </label>
-                                            <label className='flex items-center gap-2 text-[11px] text-[#3d2e1a] font-semibold'>
-                                                <input type='color' value={normalizeHex(style.light) || '#ffffff'} onChange={e => { setStyle(s => ({ ...s, light: e.target.value })); setSaved(false) }} className='w-8 h-8 rounded-md border border-[#ead9b3] p-0 bg-white cursor-pointer' />
-                                                רקע
-                                            </label>
+                                        <div className='space-y-1.5'>
+                                            <HexColorField label='ריבועים' value={normalizeHex(style.dark) || '#000000'} onChange={hex => { setStyle(s => ({ ...s, dark: hex })); setSaved(false) }} />
+                                            <HexColorField label='רקע' value={normalizeHex(style.light) || '#ffffff'} onChange={hex => { setStyle(s => ({ ...s, light: hex })); setSaved(false) }} />
+                                        </div>
+                                        <div>
+                                            <p className='text-[11px] text-[#7a6a52] font-semibold mb-1'>צפיפות</p>
+                                            <div className='flex gap-1'>
+                                                {DENSITY_OPTIONS.map(o => (
+                                                    <button
+                                                        key={o.id}
+                                                        onClick={() => { setStyle(s => ({ ...s, ec: o.id })); setSaved(false) }}
+                                                        title={o.hint}
+                                                        className={`flex-1 h-8 rounded-lg text-[11px] font-bold border ${style.ec === o.id ? 'border-[#a8843a] bg-[#fbf6ec] text-[#a8843a]' : 'border-[#ead9b3] bg-white text-[#3d2e1a]'}`}
+                                                    >
+                                                        {o.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className='text-[11px] text-[#7a6a52] font-semibold mb-1'>צורה</p>
+                                            <div className='flex gap-1'>
+                                                {SHAPE_OPTIONS.map(o => (
+                                                    <button
+                                                        key={o.id}
+                                                        onClick={() => { setStyle(s => ({ ...s, shape: o.id })); setSaved(false) }}
+                                                        className={`flex-1 h-8 rounded-lg text-[11px] font-bold border ${style.shape === o.id ? 'border-[#a8843a] bg-[#fbf6ec] text-[#a8843a]' : 'border-[#ead9b3] bg-white text-[#3d2e1a]'}`}
+                                                    >
+                                                        {o.label}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
                                         <label className='flex items-center gap-2 text-[11px] text-[#3d2e1a] font-semibold'>
                                             שוליים
@@ -2080,7 +2154,7 @@ function QrCodePanel({ wedding }) {
                                     </button>
                                 </div>
                                 <p className='text-[10px] text-[#a89378] leading-relaxed'>
-                                    הסורק צריך ריבועים כהים על רקע בהיר בניגודיות גבוהה — לכן לוגו, גרדיאנט או ברקוד הפוך לא מוצעים כאן. שינוי יעד/כיבוי: <a href='/admin/qrcodes' className='underline'>ניהול ברקודים</a>.
+                                    דליל = הכי פחות ריבועים (מראה נקי), צפוף ועמיד = שורד מדבקה שרוטה. הסורק צריך ריבועים כהים על רקע בהיר בניגודיות גבוהה — לכן לוגו, גרדיאנט או ברקוד הפוך לא מוצעים כאן. שינוי יעד/כיבוי: <a href='/admin/qrcodes' className='underline'>ניהול ברקודים</a>.
                                 </p>
                             </div>
                         )}
