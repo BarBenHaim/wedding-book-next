@@ -1,3 +1,7 @@
+// Historical exports below are compatibility-only while the new policy is off.
+// They are not approved/versioned offers or media. Strict runtime consumers
+// MUST use offerCatalog.js + offerStore.js and explicit media provenance.
+
 // src/lib/salesAgent/catalog.js
 //
 // THE single source of truth for every FACT the WhatsApp sales agent is

@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FIXTURE_NOW, syntheticCatalog, syntheticCommercialCatalog, syntheticMedia } from './fixtures/salesContractFixtures'
 import { INBOUND_HEARTBEAT_BUDGET_MS } from '@/lib/salesAgent/circuitBreaker'
 
 const mocks = vi.hoisted(() => ({
+    readActiveOfferCatalog: vi.fn(), readVerifiedCheckout: vi.fn(), recordConversationEvidence: vi.fn(), validateInboundBeforeSend: vi.fn(), prepareInboundMediaFallback: vi.fn(), suppressMarketingFromInbound: vi.fn(),
     buildSystemPrompt: vi.fn(),
     addDaysISO: vi.fn(() => '2026-08-17'),
     callClaude: vi.fn(),
@@ -61,6 +63,9 @@ const mocks = vi.hoisted(() => ({
     sendInboundSequenceDirect: vi.fn(),
 }))
 
+vi.mock('@/lib/salesAgent/offerStore', () => ({ readActiveOfferCatalog: mocks.readActiveOfferCatalog }))
+vi.mock('@/lib/salesAgent/checkoutQuoteStore', () => ({ readVerifiedCheckout: mocks.readVerifiedCheckout }))
+vi.mock('@/lib/salesAgent/salesEvidence', () => ({ recordConversationEvidence: mocks.recordConversationEvidence }))
 vi.mock('@/lib/salesAgent/prompt', () => ({ buildSystemPrompt: mocks.buildSystemPrompt, addDaysISO: mocks.addDaysISO }))
 vi.mock('@/lib/salesAgent/agent', () => ({
     callClaude: mocks.callClaude,
@@ -69,6 +74,7 @@ vi.mock('@/lib/salesAgent/agent', () => ({
     resolveFollowUp: mocks.resolveFollowUp,
 }))
 vi.mock('@/lib/salesAgent/leads', () => ({
+    validateInboundBeforeSend: mocks.validateInboundBeforeSend, prepareInboundMediaFallback: mocks.prepareInboundMediaFallback, suppressMarketingFromInbound: mocks.suppressMarketingFromInbound,
     getLead: mocks.getLead, saveExchange: mocks.saveExchange, toApiMessages: mocks.toApiMessages,
     isPausedForHuman: mocks.isPausedForHuman, isOwnEcho: mocks.isOwnEcho, isOwnMediaEcho: mocks.isOwnMediaEcho,
     parseOwnerCommand: mocks.parseOwnerCommand, setHuman: mocks.setHuman,
@@ -87,9 +93,9 @@ vi.mock('@/lib/salesAgent/leads', () => ({
 vi.mock('@/lib/salesAgent/pricing', () => ({ costOfClaudeUsage: mocks.costOfClaudeUsage }))
 vi.mock('@/lib/salesAgent/attribution', () => ({ resolveSource: mocks.resolveSource }))
 vi.mock('@/lib/salesAgent/catalog', async importOriginal => ({ ...(await importOriginal()), BUSINESS: { brand: 'Test Brand', ownerName: 'הצוות' }, MEDIA: {} }))
-vi.mock('@/lib/salesAgent/mediaLibrary', () => ({ mergeMedia: mocks.mergeMedia, performanceNote: mocks.performanceNote }))
+vi.mock('@/lib/salesAgent/mediaLibrary', async original => ({ ...(await original()), mergeMedia: mocks.mergeMedia, performanceNote: mocks.performanceNote }))
 vi.mock('@/lib/salesAgent/selling', async importOriginal => ({ ...(await importOriginal()), priceDodged: mocks.priceDodged, priceFallbackMessage: mocks.priceFallbackMessage }))
-vi.mock('@/lib/salesAgent/mediaGuard', () => ({ mediaGuard: mocks.mediaGuard }))
+vi.mock('@/lib/salesAgent/mediaGuard', async original => ({ ...(await original()), mediaGuard: mocks.mediaGuard }))
 vi.mock('@/lib/salesAgent/experiments', () => ({
     ACTIVE_VARIANT_IDS: ['question_first', 'price_upfront', 'demo_first'],
     assignVariant: mocks.assignVariant,
@@ -120,7 +126,7 @@ vi.mock('@/lib/salesAgent/whatsapp', () => ({ canSendWhatsApp: mocks.canSendWhat
 vi.mock('@/lib/salesAgent/inboundDirectDelivery', () => ({ sendInboundSequenceDirect: mocks.sendInboundSequenceDirect }))
 
 const lead = { isNew: false, stage: 'engaged', turns: [], followUpCount: 0, imagesSent: [], mediaSent: [] }
-const inbound = overrides => ({ eventId: 'event-token', phone: 'test-phone-token', text: '', messageType: 'text', ...overrides })
+const inbound = overrides => ({ eventId: 'event-token', phone: 'test-phone-token', text: '', messageType: 'text', ...(process.env.SALES_CONVERSATIONAL_POLICY_ENABLED === 'true' ? { occurredAt: new Date(Date.now()).toISOString() } : {}), ...overrides })
 
 let POST
 
@@ -173,6 +179,13 @@ beforeEach(async () => {
     process.env.OPENAI_API_KEY = 'test-openai-key'
     delete process.env.GEMINI_API_KEY
     process.env.SALES_AGENT_OWNER_PHONE = 'owner-token'
+    delete process.env.SALES_CONVERSATIONAL_POLICY_ENABLED
+    delete process.env.SALES_CONSENT_FOLLOWUPS_ENABLED
+    mocks.readActiveOfferCatalog.mockResolvedValue(syntheticCatalog())
+    mocks.readVerifiedCheckout.mockResolvedValue({ status: 'blocked', reason: 'checkout_not_verified' })
+    mocks.recordConversationEvidence.mockResolvedValue({ recorded: true })
+    mocks.validateInboundBeforeSend.mockResolvedValue({ ok: true })
+    mocks.suppressMarketingFromInbound.mockResolvedValue({ action: 'completed', marketingSuppressed: true })
     delete process.env.SALES_AGENT_DIRECT_GRAPH
     mocks.claimInboundEvent.mockResolvedValue({ action: 'process', claimToken: 'claim-token', claimGeneration: 1 })
     mocks.completeInboundEvent.mockResolvedValue({ action: 'completed' })
@@ -870,6 +883,187 @@ describe('conversation-learned decision contract', () => {
 afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
+})
+
+describe('existing customer support lookup', () => {
+    beforeEach(() => prepareDecisionPath())
+    const matchedOwner = { weddingId: 'synthetic-wedding-token', ownerName: 'לקוח סינתטי' }
+
+    it.each([
+        'יש תקלה בעמודים של הספר שלי',
+        'אפשר לסדר מחדש את העמודים?',
+        'אפשר לתרגם את הספר לאנגלית?',
+        'אפשר לקבל את הדפים להדפסה?',
+    ])('checks a non-new support request against wedding ownership: %s', async text => {
+        const storedLead = { ...lead, paymentVerified: false, verifiedOrderId: null }
+        mocks.getLead.mockResolvedValue(storedLead)
+        mocks.findCustomerByPhone.mockResolvedValue(matchedOwner)
+
+        const result = await post(inbound({ text }))
+
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledTimes(1)
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledWith('test-phone-token')
+        expect(result.body).toMatchObject({ customer: true, handoff: true })
+        expect(result.body.notifyOwner).toContain('לקוח סינתטי')
+        expect(result.body.sendText).not.toMatch(/690|990|checkout|שילמת/)
+        expect(mocks.setHuman).toHaveBeenCalledWith('test-phone-token', true, 'לקוח קיים כתב')
+        expect(mocks.prepareOpeningRuntime).not.toHaveBeenCalled()
+        expect(mocks.decideSalesTurn).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.completeSuccessfulExchange).not.toHaveBeenCalled()
+        expect(storedLead).toMatchObject({ stage: 'engaged', paymentVerified: false, verifiedOrderId: null })
+        expectNoProviderWork()
+    })
+
+    it('does not turn an unmatched support or purchase claim into customer/payment truth', async () => {
+        const storedLead = { ...lead, paymentVerified: false, verifiedOrderId: null }
+        mocks.getLead.mockResolvedValue(storedLead)
+
+        const result = await post(inbound({ text: 'כבר שילמתי, אפשר לתקן את הספר שלי?' }))
+
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledTimes(1)
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledWith('test-phone-token')
+        expect(result.body.customer).toBeUndefined()
+        expect(mocks.setHuman).not.toHaveBeenCalled()
+        expect(mocks.decideSalesTurn).toHaveBeenCalledWith(expect.objectContaining({ isExistingCustomer: false }))
+        expect(mocks.callClaude).toHaveBeenCalledTimes(1)
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(1)
+        expect(storedLead.paymentVerified).toBe(false)
+        expect(storedLead.verifiedOrderId).toBeNull()
+    })
+
+    it('leaves an ordinary non-new buyer on the normal path without an extra lookup', async () => {
+        const result = await post(inbound({ text: 'כמה עולה הספר המודפס?' }))
+
+        expect(mocks.findCustomerByPhone).not.toHaveBeenCalled()
+        expect(result.body.customer).toBeUndefined()
+        expect(mocks.callClaude).toHaveBeenCalledTimes(1)
+    })
+
+    it('checks a bare yes that continues the customer’s recent support request', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, turns: [
+            { role: 'user', text: 'צריך לתרגם את העמודים לאנגלית' },
+            { role: 'assistant', text: 'הכוונה לעמודי הברכות?' },
+        ] })
+        mocks.findCustomerByPhone.mockResolvedValue(matchedOwner)
+
+        const result = await post(inbound({ text: 'כן' }))
+
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledTimes(1)
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledWith('test-phone-token')
+        expect(result.body).toMatchObject({ customer: true, handoff: true })
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it.each(['התכוונתי לגרסה באנגלית', 'אני רוצה באנגלית', 'כן'])('checks a support continuation through a language correction: %s', async text => {
+        const turns = [
+            { role: 'user', text: 'אפשר לקבל את הדפים להדפסה?' },
+            { role: 'assistant', text: 'הגרסה בעברית?' },
+        ]
+        if (text === 'כן') turns.push(
+            { role: 'user', text: 'אני רוצה באנגלית' },
+            { role: 'assistant', text: 'כל הדפים?' },
+            { role: 'user', text: 'כן' },
+            { role: 'assistant', text: 'באותו סדר?' },
+            { role: 'user', text: 'כן' },
+            { role: 'assistant', text: 'הבנתי' },
+        )
+        mocks.getLead.mockResolvedValue({ ...lead, turns })
+        mocks.findCustomerByPhone.mockResolvedValue(matchedOwner)
+
+        const result = await post(inbound({ text }))
+
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledTimes(1)
+        expect(result.body).toMatchObject({ customer: true, handoff: true })
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it('does not look up a later buyer topic because old support and a language fragment exist', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, turns: [
+            { role: 'user', text: 'אפשר לקבל את הדפים להדפסה?' },
+            { role: 'assistant', text: 'אבדוק' },
+            { role: 'user', text: 'כמה עולה להזמין ספר חדש?' },
+            { role: 'assistant', text: 'בגרסה בעברית?' },
+            { role: 'user', text: 'התכוונתי לגרסה באנגלית' },
+        ] })
+
+        const result = await post(inbound({ text: 'כן' }))
+
+        expect(mocks.findCustomerByPhone).not.toHaveBeenCalled()
+        expect(result.body.customer).toBeUndefined()
+        expect(mocks.callClaude).toHaveBeenCalledTimes(1)
+    })
+
+    it.each([
+        { stage: 'closed_won', paymentVerified: false },
+        { stage: 'engaged', paymentVerified: true, verifiedOrderId: 'synthetic-order-token' },
+    ])('keeps trusted stored customer truth ahead of stale stage or support wording: %j', async storedTruth => {
+        mocks.getLead.mockResolvedValue({ ...lead, ...storedTruth })
+
+        const result = await post(inbound({ text: 'אפשר להמשיך?' }))
+
+        expect(result.body).toMatchObject({ customer: true, handoff: true })
+        expect(mocks.findCustomerByPhone).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.completeSuccessfulExchange).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it.each([undefined, false, 'true', 1])('does not treat an unverified payment flag %s as customer truth', async paymentVerified => {
+        mocks.getLead.mockResolvedValue({ ...lead, paymentVerified, verifiedOrderId: 'synthetic-unverified-order' })
+
+        const result = await post(inbound({ text: 'מה המחיר?' }))
+
+        expect(result.body.customer).toBeUndefined()
+        expect(mocks.findCustomerByPhone).not.toHaveBeenCalled()
+        expect(mocks.setHuman).not.toHaveBeenCalled()
+        expect(mocks.callClaude).toHaveBeenCalledTimes(1)
+    })
+
+    it('preserves opening-only silence for a matched non-new support request', async () => {
+        mocks.readSalesSettings.mockResolvedValue({
+            enabled: true, mode: 'opening_only', provider: 'anthropic', model: 'test-model',
+            activeOpeningIds: [], openingMediaSequence: [],
+        })
+        mocks.findCustomerByPhone.mockResolvedValue(matchedOwner)
+
+        const result = await post(inbound({ text: 'אפשר לשנות את סדר העמודים?' }))
+
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledTimes(1)
+        expect(result.body).toMatchObject({
+            customer: true, handoff: false, shouldSend: false, sendText: '', noReply: true,
+            skipped: 'opening-only-customer',
+        })
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it('leaves human pause ahead of support lookup and customer acknowledgment', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, paymentVerified: true })
+        mocks.isPausedForHuman.mockReturnValue(true)
+
+        const result = await post(inbound({ text: 'צריך לשנות את הספר שלי' }))
+
+        expect(result.body).toMatchObject({ paused: true, noReply: true, handoff: false, send: [] })
+        expect(mocks.findCustomerByPhone).not.toHaveBeenCalled()
+        expect(mocks.setHuman).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it('preserves the first-contact lookup even for a message without support wording', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true })
+        mocks.findCustomerByPhone.mockResolvedValue(matchedOwner)
+
+        const result = await post(inbound({ text: 'שלום' }))
+
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledTimes(1)
+        expect(mocks.findCustomerByPhone).toHaveBeenCalledWith('test-phone-token')
+        expect(result.body).toMatchObject({ customer: true, handoff: true })
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+    })
 })
 
 describe('inbound event duplicate fencing', () => {
@@ -1912,5 +2106,242 @@ describe('real opening runtime reaches the contextual reply policy', () => {
                 }),
             }),
         }))
+    })
+})
+
+
+describe('opt-in conversational specification through the real reply boundary', () => {
+    beforeEach(async () => {
+        process.env.SALES_CONVERSATIONAL_POLICY_ENABLED = 'true'
+        vi.spyOn(Date, 'now').mockReturnValue(FIXTURE_NOW)
+        prepareDecisionPath()
+        const policy = await vi.importActual('@/lib/salesAgent/decisionPolicy')
+        mocks.decideSalesTurn.mockImplementation(policy.decideSalesTurn)
+        mocks.claimInboundEvent.mockResolvedValue({ action: 'process', claimToken: 'claim-token', claimGeneration: 1, conversationRevision: 4 })
+        mocks.getLead.mockResolvedValue({ ...lead, conversationRevision: 4, automationDisclosed: false })
+    })
+    const prepared = () => mocks.completeSuccessfulExchange.mock.calls.at(-1)?.[0]
+    const text = () => prepared()?.outcome?.sendText || ''
+
+    it('answers price directly from approved offers, discloses automation, and disables legacy model/script sends', async () => {
+        const result = await post(inbound({ text: 'כמה עולה?' }))
+        expect(result.status).toBe(200)
+        expect(text()).not.toContain('690')
+        expect(text()).toContain('990')
+        expect(text()).toContain('העוזרת האוטומטית')
+        expect(prepared().exchange.conversationContract.offerSnapshots).toHaveProperty('printed')
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.prepareOpeningRuntime).not.toHaveBeenCalled()
+        expect(mocks.buildOpeningPlan).not.toHaveBeenCalled()
+        expect(result.body).toMatchObject({ shouldSend: false, sendText: '', directDelivery: { status: 'accepted' } })
+        expect(mocks.sendInboundSequenceDirect.mock.calls[0][0].validateBeforePart).toBeTypeOf('function')
+        await mocks.sendInboundSequenceDirect.mock.calls[0][0].validateBeforePart()
+        expect(mocks.validateInboundBeforeSend).toHaveBeenCalledWith({ phone: 'test-phone-token', eventId: 'event-token' })
+    })
+    it('preserves supplied event/month and asks only the missing package when buying', async () => {
+        await post(inbound({ text: 'חתונה בדצמבר, רוצה להזמין' }))
+        expect(prepared().exchange.parsed.eventType).toBe('wedding')
+        expect(prepared().exchange.conversationContract.eventDateText).toContain('דצמבר')
+        expect(text()).not.toContain('לאיזה אירוע')
+        expect(text()).toContain('דיגיטלי או מודפס')
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+    })
+    it.each(['יש גם דיגיטלי?', 'כמה עולה דיגיטלי?', 'אפשר בלי הדפסה?'])('delivers the honest digital fallback through the real route for %s', async message => {
+        await post(inbound({ text: message }))
+        expect(text()).toContain('690')
+        expect(text()).not.toContain('990')
+        expect(prepared().exchange.conversationContract.offerSnapshots).toHaveProperty('digital')
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+        expect(mocks.sendInboundSequenceDirect).toHaveBeenCalledTimes(1)
+    })
+    it('shows both approved choices when explicitly asked, with printed first', async () => {
+        await post(inbound({ text: 'איזה אפשרויות יש?' }))
+        expect(text().indexOf('990')).toBeGreaterThanOrEqual(0)
+        expect(text().indexOf('690')).toBeGreaterThan(text().indexOf('990'))
+    })
+    it('answers the printed price question even when the same message mentions a budget', async () => {
+        await post(inbound({ text: 'כמה עולה המודפס? התקציב שלי הוא אלף שקל' }))
+        expect(text()).toContain('990')
+        expect(text()).not.toContain('690')
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+    })
+    it('offers digital after a specific printed-format refusal without inventing reminder consent', async () => {
+        await post(inbound({ text: 'אני לא מעוניינת בספר המודפס, יש דיגיטלי?' }))
+        expect(text()).toContain('690')
+        expect(text()).not.toContain('990')
+        expect(prepared().exchange.conversationContract.followUpConsent).toBeUndefined()
+    })
+    it('honors a separate withdrawal even when the same message asks for digital', async () => {
+        await post(inbound({ text: 'אני לא מעוניין במודפס, יש דיגיטלי? בעצם ויתרנו' }))
+        expect(prepared().exchange.conversationContract.marketingSuppressed).toBe(true)
+        expect(text()).not.toMatch(/990|690|add-to-cart/)
+    })
+    it.each(['יש לי קובץ מוכן, כמה עולה להדפיס?', 'כמה עולה הדפסה בלבד?'])('keeps separate print-only pricing in durable human review for %s', async message => {
+        await post(inbound({ text: message }))
+        expect(prepared().exchange.parsed.handoffReason).toBe('print_only_requires_separate_quote')
+        expect(text()).toContain('תמחור נפרד')
+        expect(text()).not.toMatch(/990|690|עוד היום|add-to-cart/)
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+    })
+    it('never quotes the full package for an unsupported blank handwritten book', async () => {
+        await post(inbound({ text: 'כמה עולה ספר ריק לכתוב ביד?' }))
+        expect(prepared().exchange.parsed.handoffReason).toBe('requested_product_unapproved')
+        expect(text()).not.toMatch(/990|690|add-to-cart/)
+    })
+    it('keeps a free-book campaign mismatch ahead of a mixed design-approval question', async () => {
+        await post(inbound({ text: 'ראיתי בפרסומת ספר בחינם. האם יש אישור לפני הדפסה?' }))
+        expect(prepared().exchange.conversationContract.conversationalState).toBe('OFFER_MISMATCH')
+        expect(prepared().exchange.parsed.handoffReason).toBe('unverified_free_offer')
+    })
+    it('answers design review conditions before sending any checkout', async () => {
+        mocks.readActiveOfferCatalog.mockResolvedValue(syntheticCommercialCatalog())
+        mocks.getLead.mockResolvedValue({ ...lead, lastQuestion: 'checkout_confirmation', turns: [{ role: 'user', text: 'רוצה מודפס' }] })
+        await post(inbound({ text: 'רוצה להזמין אבל קודם כמה סבבי תיקונים כלולים?' }))
+        expect(text()).toContain('סבב תיקונים מרוכז אחד')
+        expect(text()).toContain('טעויות שלנו מתוקנות ללא עלות')
+        expect(text()).toContain('רק לאחר אישור')
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+    })
+    it('never upgrades an advertised package price to a final checkout guarantee', async () => {
+        await post(inbound({ text: 'מה המחיר הסופי בקופה?' }))
+        expect(text()).toContain('אין לי כרגע אימות של הסכום הסופי בקופה')
+        expect(text()).not.toMatch(/990|690|add-to-cart/)
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+    })
+    it.each(['כמה עמודים כלולים?', 'כמה עולה עותק נוסף?', 'מה מדיניות ההחזרים?', 'מתי מגיע המשלוח?'])('persists human handoff without inventing unapproved terms for %s', async message => {
+        mocks.readActiveOfferCatalog.mockResolvedValue({ ok: false, offers: [], reason: 'catalog_missing' })
+        await post(inbound({ text: message }))
+        expect(prepared().exchange.parsed.handoff).toBe(true)
+        expect(prepared().exchange.parsed.stage).toBe('handoff')
+        expect(text()).not.toMatch(/14|יום העסקים הבא|ללא הגבלה|450|250|add-to-cart/)
+        expect(mocks.sendInboundSequenceDirect).toHaveBeenCalledTimes(1)
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+    })
+    it('sends only independently verified checkout for an explicit printed choice', async () => {
+        const offer = syntheticCatalog().offers[1]
+        const { createOfferSnapshot } = await vi.importActual('@/lib/salesAgent/offerCatalog')
+        mocks.readVerifiedCheckout.mockResolvedValue({ status: 'ready', checkoutUrl: offer.checkoutUrl, checkoutId: 'synthetic-checkout', snapshot: createOfferSnapshot(offer, { nowMs: FIXTURE_NOW }) })
+        await post(inbound({ text: 'רוצה להזמין מודפס' }))
+        expect(mocks.readVerifiedCheckout.mock.calls[0][0].offer.productId).toBe('printed')
+        expect(text()).toContain('add-to-cart=6271')
+        expect(text()).not.toContain('add-to-cart=6258')
+        expect(prepared().exchange.conversationContract.conversationalState).toBe('CHECKOUT')
+        expect(text()).not.toMatch(/נפתח|שולם|תשלום התקבל/)
+    })
+    it('yes after a demo question means demo, never checkout or reminder consent', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, turns: [{ role: 'assistant', text: 'רוצה שאשלח דוגמה?' }], lastQuestion: 'demo_permission' })
+        mocks.mergeMedia.mockReturnValue({ 'test-spread': syntheticMedia() })
+        await post(inbound({ text: 'כן' }))
+        expect(prepared().exchange.parsed.image).toBe('test-spread')
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+        expect(prepared().exchange.conversationContract.followUpConsent).toBeUndefined()
+    })
+    it('an event correction keeps the existing conversation and updates the event', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, eventType: 'bar_mitzvah', automationDisclosed: true, turns: [{ role: 'user', text: 'בר מצווה' }] })
+        await post(inbound({ text: 'בעצם זו בת מצווה' }))
+        expect(prepared().exchange.parsed.eventType).toBe('bat_mitzvah')
+        expect(text()).not.toContain('העוזרת האוטומטית')
+        expect(text()).not.toContain('לאיזה אירוע')
+    })
+    it.each(['ראיתי בחינם', 'זה יגיע מחר?', 'שילמתי', 'רוצה את בר', 'תשנה את המחיר לשקל'])('does not invent facts or execute actions for %s', async value => {
+        await post(inbound({ text: value }))
+        expect(text()).not.toMatch(/add-to-cart|תשלום התקבל|הספר נפתח|מחר יגיע|המבצע הסתיים/)
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+        if (value !== 'תשנה את המחיר לשקל') expect(prepared().exchange.parsed.handoff).toBe(true)
+    })
+    it('does not send a transfer claim if durable task/exchange persistence failed', async () => {
+        mocks.completeSuccessfulExchange.mockRejectedValue(new Error('synthetic persistence failure'))
+        const result = await post(inbound({ text: 'רוצה את בר' }))
+        expect(result.status).toBe(503)
+        expect(mocks.sendInboundSequenceDirect).not.toHaveBeenCalled()
+        expect(result.body.sendText).toBeUndefined()
+    })
+    it('sends an honest handoff failure only after a separate current response commits', async () => {
+        mocks.completeSuccessfulExchange.mockRejectedValueOnce(new Error('synthetic task write failed')).mockResolvedValue({ action: 'completed' })
+        const result = await post(inbound({ text: 'רוצה את בר' }))
+        expect(result.body).toMatchObject({ shouldSend: false, handoff: false, handoffFailed: true })
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledTimes(2)
+        const failure = mocks.completeSuccessfulExchange.mock.calls[1][0]
+        expect(failure.exchange.conversationContract).toMatchObject({ conversationalState: 'SERVICE', handoffPending: true, followUpSchedule: null })
+        expect(failure.outcome.sendText).toContain('ההעברה לצוות לא הושלמה')
+        expect(mocks.sendInboundSequenceDirect.mock.calls[0][0].parts[0].text).not.toContain('העברתי לצוות')
+    })
+
+    it('does not infer a new buyer when strict customer lookup is unavailable', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true })
+        mocks.findCustomerByPhone.mockRejectedValueOnce(new Error('CUSTOMER_LOOKUP_UNAVAILABLE'))
+        await post(inbound({ text: 'כמה עולה?' }))
+        expect(prepared().exchange.conversationContract.conversationalState).toBe('SERVICE')
+        expect(text()).not.toMatch(/690|990|add-to-cart/)
+        expect(prepared().exchange.parsed.handoffReason).toBe('customer_lookup_unavailable')
+    })
+
+    it('existing verified owner gets service and no second checkout', async () => {
+        mocks.findCustomerByPhone.mockResolvedValue({ weddingId: 'synthetic-book' })
+        await post(inbound({ text: 'שילמתי' }))
+        expect(prepared().exchange.conversationContract.conversationalState).toBe('SERVICE')
+        expect(mocks.readVerifiedCheckout).not.toHaveBeenCalled()
+    })
+    it('stop while paused persists suppression before any acknowledgment', async () => {
+        mocks.isPausedForHuman.mockReturnValue(true)
+        await post(inbound({ text: 'תפסיקו לשלוח' }))
+        expect(prepared().exchange.conversationContract).toMatchObject({ marketingSuppressed: true, followUpConsent: null, followUpSchedule: null, conversationalState: 'STOPPED' })
+        expect(prepared().outcome.followUpAt).toBeNull()
+    })
+    it('memorial response has neither congratulations nor festive emoji', async () => {
+        await post(inbound({ text: 'ספר הנצחה' }))
+        expect(text()).not.toMatch(/מזל טוב|🎉|💍|🥳/)
+        expect(prepared().exchange.parsed.eventType).toBe('memorial')
+    })
+    it('waits for renewed decision after an offer change', async () => {
+        mocks.readVerifiedCheckout.mockResolvedValue({ status: 'reconfirm_required', snapshot: { productId: 'printed', version: 'changed' } })
+        await post(inbound({ text: 'רוצה להזמין מודפס' }))
+        expect(text()).toContain('פרטי ההצעה השתנו')
+        expect(text()).not.toContain('add-to-cart')
+        expect(prepared().exchange.conversationContract.lastQuestion).toBe('offer_change_confirmation')
+    })
+    it('no approved catalog produces human review, never the legacy price fallback', async () => {
+        mocks.readActiveOfferCatalog.mockResolvedValue({ ok: false, offers: [], reason: 'catalog_missing' })
+        await post(inbound({ text: 'כמה עולה?' }))
+        expect(text()).not.toMatch(/690|990/)
+        expect(prepared().exchange.parsed.handoff).toBe(true)
+        expect(mocks.priceFallbackMessage).not.toHaveBeenCalled()
+    })
+    it.each(['', '2099-10-05T12:00:00Z', '2026-10-03T12:00:00Z'])('does not reset the service window for unknown/future/stale customer time %s', async occurredAt => {
+        const result = await post(inbound({ text: 'כמה עולה?', occurredAt }))
+        expect(result.body.shouldSend).toBe(false)
+        expect(mocks.claimInboundEvent.mock.calls[0][0].outgoing).toBe(true)
+        expect(mocks.getLead).not.toHaveBeenCalled()
+        expect(mocks.sendInboundSequenceDirect).not.toHaveBeenCalled()
+    })
+
+    it.each(['', '2026-10-03T12:00:00Z'])('honors delayed or un-timestamped STOP without reopening the service window or sending an acknowledgment', async occurredAt => {
+        const result = await post(inbound({ text: 'תפסיקו לשלוח', occurredAt }))
+        expect(mocks.suppressMarketingFromInbound).toHaveBeenCalledWith({ phone: 'test-phone-token', eventId: 'event-token', claimToken: 'claim-token' })
+        expect(result.body).toMatchObject({ shouldSend: false, skipped: 'marketing-suppressed-no-ack' })
+        expect(mocks.sendInboundSequenceDirect).not.toHaveBeenCalled()
+    })
+
+    it('never downgrades a strict conversation to legacy sales when the rollout flag is removed', async () => {
+        delete process.env.SALES_CONVERSATIONAL_POLICY_ENABLED
+        mocks.getLead.mockResolvedValue({ ...lead, conversationalPolicyVersion: '2026-10-05.v1' })
+        const result = await post(inbound({ text: 'כמה עולה?' }))
+        expect(result.body).toMatchObject({ shouldSend: false, skipped: 'strict-policy-disabled' })
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.completeSuccessfulExchange).not.toHaveBeenCalled()
+    })
+
+    it('will not use the unverified Make send path in strict mode', async () => {
+        mocks.canSendWhatsApp.mockReturnValue(false)
+        const result = await post(inbound({ text: 'כמה עולה?' }))
+        expect(result.status).toBe(503)
+        expect(result.body.shouldSend).toBe(false)
+        expect(mocks.completeSuccessfulExchange).not.toHaveBeenCalled()
+    })
+    it('does not send an obsolete or human-superseded prepared response', async () => {
+        mocks.completeSuccessfulExchange.mockResolvedValue({ action: 'human-paused' })
+        const result = await post(inbound({ text: 'כמה עולה?' }))
+        expect(result.body.shouldSend).toBe(false)
+        expect(mocks.sendInboundSequenceDirect).not.toHaveBeenCalled()
     })
 })

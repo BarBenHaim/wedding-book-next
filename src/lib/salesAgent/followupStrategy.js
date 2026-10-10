@@ -1,5 +1,5 @@
 import { CONCESSION, proofLine } from './catalog'
-import { preEventTouchDate, daysUntil } from './followupPolicy'
+import { preEventTouchDate, daysUntil, readStrictFollowUpPolicy } from './followupPolicy'
 const LANDING_URL = 'https://weddingtales.co.il'
 // The first nudge used to point at the website, then briefly at the
 // demo. Both are homework. 24.9: one line about what they get, one
@@ -86,6 +86,7 @@ export function readFollowUpOffer(env = process.env, nowMs = Date.now()) {
 // catch that only logged "lead failed": one follow-up a day went out
 // instead of twenty-five. One list, imported by both sides.
 export const FOLLOWUP_STRATEGY_IDS = Object.freeze([
+    'consent_reminder', 'consent_callback', 'consent_close',
     'one_line', 'one_question', 'real_page', 'deadline_offer',
     'until_event', 'pre_event',
     'resolve_blocker', 'qualified_offer', 'graceful_close',
@@ -134,7 +135,27 @@ export function planFollowUp(lead = {}, {
     offer = null,
     customerName = '',
     todayISO = null,
+    policy = readStrictFollowUpPolicy(),
 } = {}) {
+    if (policy.enabled) {
+        const final = (lead.followUpConsent?.usedReminders || 0) + 1 >= (lead.followUpConsent?.maxReminders || 1)
+        const callback = lead.followUpConsent?.callbackAtMs != null
+        const messageText = callback
+            ? 'חוזרת אליכם במועד שביקשתם לגבי ספר הברכות. מתאים להמשיך מכאן?'
+            : final && (lead.followUpConsent?.usedReminders || 0) > 0
+                ? 'משאירה כאן את הפרטים. אם תרצו להמשיך בהמשך, אפשר לכתוב כאן.'
+                : lead.stage === 'ready_to_pay'
+                    ? 'נתקלתם בבעיה בהזמנה, או שיש משהו שצריך לברר לפני שממשיכים?'
+                    : 'נשאר משהו לא ברור לגבי הספר, המחיר או איך אוספים ברכות?'
+        return {
+            ...plan({ name: customerLabel(customerName),
+                id: callback ? 'consent_callback' : final ? 'consent_close' : 'consent_reminder',
+                objective: 'תזכורת קצרה בהסכמה בלבד, ללא מבצע, דחיפות, מדיה או טענות פעולה שלא אומתו',
+                cta: final && !callback ? 'none' : 'reply', templateText: messageText,
+            }),
+            messageText, strict: true,
+        }
+    }
     const number = Math.max(1, Math.min(4, Number(attempt) || 1))
     const name = customerLabel(customerName)
     const preEventDate = preEventTouchDate(lead?.eventDate, todayISO)

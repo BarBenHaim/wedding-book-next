@@ -30,7 +30,7 @@
 // thread back up is worse than one that never handed over at all. Those
 // go to Lord as a list and stay his.
 
-import { MAX_ATTEMPTS } from './followupPolicy'
+import { MAX_ATTEMPTS, readStrictFollowUpPolicy, STRICT_FOLLOWUP_VERSION, isStrictFollowUpLead } from './followupPolicy'
 import { HUMAN_PAUSE_HOURS } from './leadsCore'
 
 // How long after the customer's last message a lead counts as forgotten.
@@ -74,10 +74,14 @@ export const hoursSince = (ms, nowMs = Date.now()) =>
  * phone number we cannot prove ever wrote to us is the one mistake here
  * with a real cost. Those surface in the admin table instead.
  */
-export function findOrphans(leads, { nowMs = Date.now(), maxAttempts = MAX_ATTEMPTS } = {}) {
+export function findOrphans(leads, { nowMs = Date.now(), maxAttempts = MAX_ATTEMPTS, policy = readStrictFollowUpPolicy() } = {}) {
+    // A missing strict schedule is a missing authorization, not an orphan.
+    // Never enroll/recover old leads, even if they once had a legacy date.
+    if (policy.enabled) return []
     return (Array.isArray(leads) ? leads : []).filter(lead => {
         if (!lead || !lead.phone) return false
         if (isClosed(lead.stage)) return false
+        if (isStrictFollowUpLead(lead)) return false // never downgrade strict consent to the legacy ladder
         if (lead.customerDeferred === true) return false
         if (lead.stage === 'commit_later' && !lead.callbackPromised) return false
         if (lead.followUpAt) return false // already has a next step
@@ -145,11 +149,12 @@ export function findStaleHandoffs(leads, { nowMs = Date.now(), afterHours = HUMA
  * `pendingStatus` is followupPolicy.pendingFollowUpStatus, passed in so
  * this file stays free of that import cycle.
  */
-export function findStaleDeliveries(leads, { nowMs = Date.now(), pendingStatus } = {}) {
+export function findStaleDeliveries(leads, { nowMs = Date.now(), pendingStatus, policy = readStrictFollowUpPolicy() } = {}) {
     if (typeof pendingStatus !== 'function') return []
     return (Array.isArray(leads) ? leads : []).filter(lead => {
         if (!lead || !lead.phone) return false
         if (isClosed(lead.stage)) return false
+        if (policy.enabled && lead.followUpSchedule?.policyVersion !== STRICT_FOLLOWUP_VERSION) return false
         const status = pendingStatus(lead, nowMs)
         return status === 'stale' || status === 'stale-requested'
     })

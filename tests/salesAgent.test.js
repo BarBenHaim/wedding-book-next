@@ -704,12 +704,10 @@ describe('human handoff pause', () => {
         expect(isPausedForHuman({ human: true, humanSince: now }, now + 1000)).toBe(true)
     })
 
-    it('lets the bot resume once the pause expires', () => {
-        // A lead nobody remembers to un-pause is lost more quietly than
-        // one never contacted, so the mute has to time out.
+    it('requires explicit release even after the escalation threshold', () => {
         const now = Date.now()
         const later = now + (HUMAN_PAUSE_HOURS + 1) * 3600 * 1000
-        expect(isPausedForHuman({ human: true, humanSince: now }, later)).toBe(false)
+        expect(isPausedForHuman({ human: true, humanSince: now }, later)).toBe(true)
     })
 
     it('stays quiet when the pause has no timestamp at all', () => {

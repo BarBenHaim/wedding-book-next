@@ -68,7 +68,9 @@ function normalizeInboundBody(input) {
     if (!body.referral || typeof body.referral !== 'object' || Array.isArray(body.referral)) {
         const referral = {}
         for (const key of REFERRAL_KEYS) {
-            if (body[key] != null && String(body[key]).trim()) referral[key] = String(body[key])
+            // Attribution IDs must retain their original type. Coercing an
+            // unsafe number, array or object into a string invents identity.
+            if (typeof body[key] === 'string' && body[key].trim()) referral[key] = body[key]
         }
         body.referral = Object.keys(referral).length ? referral : null
     }

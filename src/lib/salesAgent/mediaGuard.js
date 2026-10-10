@@ -1,3 +1,5 @@
+import { filterApprovedMedia } from './mediaLibrary'
+
 // src/lib/salesAgent/mediaGuard.js
 //
 // The net under "אשמח להראות לך".
@@ -69,7 +71,8 @@ export function offeredToShow(messages) {
  * to fix a dropped promise, and promising a video the transport cannot
  * send yet would be making the original mistake in a second place.
  */
-export function pickMediaFor({ incomingText = '', eventType = null, seen = [], library = {} } = {}) {
+export function pickMediaFor({ incomingText = '', eventType = null, seen = [], library = {}, strict = false, nowMs = Date.now() } = {}) {
+    if (strict) return pickApprovedDemo({ incomingText, eventType, seen, library, nowMs })
     const et = String(eventType || '')
     const bookByEvent = et.includes('mitzvah') ? 'book_bar_mitzvah'
         : et === 'wedding' ? 'book_wedding'
@@ -99,9 +102,24 @@ export function pickMediaFor({ incomingText = '', eventType = null, seen = [], l
  * The one call the route makes.
  * Returns a key to attach, or null to leave the reply alone.
  */
-export function mediaGuard({ incomingText, messages, eventType, seen, library } = {}) {
+export function mediaGuard({ incomingText, messages, eventType, seen, library, strict = false, nowMs = Date.now() } = {}) {
     if (!wantsToSee(incomingText) && !offeredToShow(messages)) return null
-    return pickMediaFor({ incomingText, eventType, seen, library })
+    return pickMediaFor({ incomingText, eventType, seen, library, strict, nowMs })
 }
 
 export default { wantsToSee, offeredToShow, pickMediaFor, mediaGuard }
+
+
+export function pickApprovedDemo({ incomingText = '', eventType = null, seen = [], library = {}, nowMs = Date.now() } = {}) {
+    const seenSet = new Set(Array.isArray(seen) ? seen : [])
+    const eligible = Object.entries(filterApprovedMedia(library, { nowMs, eventType }))
+        .filter(([key, asset]) => !seenSet.has(key) && (eventType || asset.eventTypes.includes('generic')))
+    const purpose = hasAny(incomingText, HOW_IT_WORKS) ? 'workflow' : hasAny(incomingText, COVER) ? 'cover' : 'spread'
+    // Event-specific, correctly represented media wins over generic material.
+    eligible.sort((a, b) => {
+        const score = ([, asset]) => (asset.eventTypes.includes(eventType) ? 4 : 0)
+            + (asset.purpose === purpose ? 2 : 0) + (asset.representation === 'actual_product' ? 1 : 0)
+        return score(b) - score(a)
+    })
+    return eligible[0]?.[0] || null
+}
