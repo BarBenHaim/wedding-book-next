@@ -2,7 +2,7 @@
 //
 //   GET    /api/admin/qrcodes               → list every QR (with weddingId, target, scans, label)
 //   POST   /api/admin/qrcodes               → create a new QR
-//   PATCH  /api/admin/qrcodes               → update target / label / active / weddingId
+//   PATCH  /api/admin/qrcodes               → update target / label / active / weddingId / style
 //   DELETE /api/admin/qrcodes?code=xxx      → delete a QR doc
 //
 // The model: each QR is a short random code stored in `qrcodes/{code}`
@@ -17,6 +17,7 @@ import { NextResponse } from 'next/server'
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { isSuperAdmin } from '@/lib/superAdmin'
+import { normalizeQrStyle } from '@/lib/qrStyle'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -119,7 +120,9 @@ export async function POST(req) {
     }
 }
 
-// PATCH — update an existing QR. Body: { code, targetUrl?, label?, active?, weddingId? }
+// PATCH — update an existing QR. Body: { code, targetUrl?, label?, active?, weddingId?, style? }
+// `style` = { dark, light, margin } — the printed look, validated so an
+// unscannable pair never gets saved.
 export async function PATCH(req) {
     const auth = await authenticate(req)
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
@@ -134,6 +137,7 @@ export async function PATCH(req) {
     if (typeof body.label === 'string') patch.label = body.label.slice(0, 100)
     if (typeof body.active === 'boolean') patch.active = body.active
     if (typeof body.weddingId === 'string') patch.weddingId = body.weddingId.trim() || null
+    if (body.style && typeof body.style === 'object') patch.style = normalizeQrStyle(body.style)
 
     try {
         await adminDb.collection('qrcodes').doc(code).update(patch)
