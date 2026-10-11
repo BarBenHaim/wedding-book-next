@@ -56,3 +56,28 @@ export function insertAfter(order, afterId, newId) {
 export function withoutBlankPages(entries) {
     return (Array.isArray(entries) ? entries : []).filter(e => !isBlankPage(e))
 }
+
+// The photo a blank page shows edge to edge, if it has one. It lives in
+// the page's own style (`pageStyle.backgroundUrl`, set from the viewer's
+// "תמונה על כל העמוד"), not in `imageUrl` — the blessings screen reads it
+// from here so a blank page with a photo is recognisable in the list
+// instead of an empty card.
+export function blankPagePhoto(entry) {
+    if (!isBlankPage(entry)) return null
+    const url = entry && entry.pageStyle && entry.pageStyle.backgroundUrl
+    return typeof url === 'string' && url.trim() ? url : null
+}
+
+// Move one item to a 0-based position in a list. Out-of-range targets
+// clamp to the ends; an unknown id returns the list unchanged. Pure, so
+// the screen and the tests agree on what "move to 5" means.
+export function moveToIndex(list, id, target) {
+    const from = list.findIndex(e => e && e.id === id)
+    if (from < 0) return list
+    const to = Math.max(0, Math.min(list.length - 1, Math.trunc(Number(target)) || 0))
+    if (to === from) return list
+    const out = list.slice()
+    const [moved] = out.splice(from, 1)
+    out.splice(to, 0, moved)
+    return out
+}

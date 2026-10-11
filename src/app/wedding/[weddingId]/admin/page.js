@@ -8,7 +8,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { db, storage, auth } from '../../../../lib/firebaseClient'
 import { onAuthStateChanged, getIdToken } from 'firebase/auth'
 import { isSuperAdmin } from '@/lib/superAdmin'
-import { isBlankPage, withoutBlankPages } from '@/lib/entryKinds'
+import { isBlankPage, withoutBlankPages, blankPagePhoto, moveToIndex } from '@/lib/entryKinds'
 import imageCompression from 'browser-image-compression'
 import { getBlessingText, normalizeBlessing, formatBlessingSmart } from '../../../../lib/normalizeText'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
@@ -103,6 +103,121 @@ const ImageIcon = () => (
         <path fillRule='evenodd' d='M1.5 6a2.25 2.25 0 0 1 2.25-2.25h16.5A2.25 2.25 0 0 1 22.5 6v12a2.25 2.25 0 0 1-2.25 2.25H3.75A2.25 2.25 0 0 1 1.5 18V6ZM3 16.06V18c0 .414.336.75.75.75h16.5A.75.75 0 0 0 21 18v-1.94l-2.69-2.689a1.5 1.5 0 0 0-2.12 0l-.88.879.97.97a.75.75 0 1 1-1.06 1.06l-5.16-5.159a1.5 1.5 0 0 0-2.12 0L3 16.061Zm10.125-7.81a1.125 1.125 0 1 1 2.25 0 1.125 1.125 0 0 1-2.25 0Z' clipRule='evenodd' />
     </svg>
 )
+
+// "Move to place N" — typed, not dragged. The list is paginated and a
+// blank page inserted at the end of a 150-blessing book is six pages of
+// cards away from where it belongs; arrows move one step and drag only
+// works inside the visible page. Positions are 1-based on screen.
+function MoveToPlace({ index, total, onMove }) {
+    const [open, setOpen] = useState(false)
+    const [value, setValue] = useState('')
+    useEffect(() => { if (open) setValue(String(index + 1)) }, [open, index])
+    const go = () => {
+        const n = Number.parseInt(value, 10)
+        if (Number.isFinite(n)) onMove(Math.max(1, Math.min(total, n)) - 1)
+        setOpen(false)
+    }
+    if (!open) {
+        return (
+            <button
+                onClick={() => setOpen(true)}
+                className='px-2 py-1.5 text-[11px] font-semibold text-gray-400 hover:text-[#AA8840] hover:bg-[#AA8840]/5 rounded-md active:scale-95 transition-all'
+                title='העבר למקום מסוים ברשימה'
+            >
+                העבר למקום…
+            </button>
+        )
+    }
+    return (
+        <span className='inline-flex items-center gap-1' onMouseDown={e => e.stopPropagation()}>
+            <input
+                type='number'
+                min={1}
+                max={total}
+                value={value}
+                autoFocus
+                onChange={e => setValue(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') go(); if (e.key === 'Escape') setOpen(false) }}
+                className='w-16 h-8 rounded-md border border-[#AA8840]/30 px-2 text-xs text-center tabular-nums outline-none focus:ring-2 focus:ring-[#AA8840]/20'
+                aria-label={`מקום חדש, 1 עד ${total}`}
+            />
+            <span className='text-[10.5px] text-gray-400'>/ {total}</span>
+            <button onClick={go} className='px-2 py-1.5 text-[11px] font-bold text-white rounded-md' style={{ background: '#AA8840' }}>העבר</button>
+            <button onClick={() => setOpen(false)} className='px-1.5 py-1.5 text-[11px] text-gray-400 hover:text-gray-600'>ביטול</button>
+        </span>
+    )
+}
+
+// A blank leaf in the blessings list. It has no name, text or guest
+// photo, so the blessing card's actions (edit, duplicate, add photo,
+// framing, line breaks, split) would only confuse — and "add photo"
+// would write a guest-photo field onto a page that paints its photo
+// as the background. What it needs is to be RECOGNISABLE and MOVABLE.
+function BlankPageCard({ entry, place, total, pageText, onMove, onDelete, deleting }) {
+    const photo = blankPagePhoto(entry)
+    const pos = entry.pageStyle?.backgroundPosition
+    return (
+        <>
+            {photo ? (
+                <div className='relative w-full aspect-[4/3] bg-gray-50 overflow-hidden'>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src={photo}
+                        alt=''
+                        loading='lazy'
+                        className='w-full h-full object-cover'
+                        style={{ objectPosition: pos === 'top' ? 'center top' : pos === 'bottom' ? 'center bottom' : 'center' }}
+                    />
+                    <span className='absolute top-2 right-2 text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-white/90 text-[#AA8840] border border-[#ead9b3]'>
+                        תמונה על כל העמוד
+                    </span>
+                </div>
+            ) : (
+                <div className='w-full aspect-[4/3] flex flex-col items-center justify-center gap-1 text-[#AA8840]/70 border-b border-dashed border-[#AA8840]/25' style={{ background: '#fbf6ec' }}>
+                    <svg className='w-7 h-7' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.4}><rect x='4' y='3' width='16' height='18' rx='1.5' /></svg>
+                    <span className='text-xs font-semibold'>עמוד ריק — רק הרקע של הספר</span>
+                </div>
+            )}
+            <div className='p-4'>
+                <div className='flex items-center justify-between gap-2'>
+                    <h3 className='text-[15px] font-bold text-gray-900 flex items-center gap-1.5 min-w-0'>
+                        {pageText && (
+                            <span
+                                className='shrink-0 text-[10.5px] font-extrabold px-1.5 py-0.5 rounded-md tabular-nums'
+                                style={{ background: '#f5efe3', color: '#AA8840', border: '1px solid #ead9b3' }}
+                                dir='ltr'
+                                title='עמוד בספר המודפס'
+                            >
+                                {pageText}
+                            </span>
+                        )}
+                        <span className='truncate'>{photo ? 'עמוד תמונה' : 'עמוד ריק'}</span>
+                    </h3>
+                    <span className='text-[11px] text-gray-400 tabular-nums shrink-0'>מקום {place} מתוך {total}</span>
+                </div>
+                <p className='text-[11.5px] text-gray-400 mt-1'>את התמונה מחליפים בתצוגת הספר, בעורך העמוד.</p>
+                <div
+                    className='flex flex-wrap items-center gap-1.5 mt-3 pt-2.5 border-t border-gray-50 [&>button]:shrink-0'
+                    onMouseDown={e => e.stopPropagation()}
+                >
+                    <button onClick={() => onMove('top')} className='px-2.5 py-1.5 text-[11px] font-semibold text-[#AA8840] border border-[#AA8840]/20 rounded-lg hover:bg-[#AA8840]/5'>↑ לראש</button>
+                    <button onClick={() => onMove('up')} className='px-2.5 py-1.5 text-[11px] font-semibold text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50'>מעלה</button>
+                    <button onClick={() => onMove('down')} className='px-2.5 py-1.5 text-[11px] font-semibold text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50'>מטה</button>
+                    <button onClick={() => onMove('bottom')} className='px-2.5 py-1.5 text-[11px] font-semibold text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50'>↓ לסוף</button>
+                    <MoveToPlace index={place - 1} total={total} onMove={onMove} />
+                    <button
+                        onClick={onDelete}
+                        disabled={deleting}
+                        className='mr-auto flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50'
+                    >
+                        <TrashIcon />
+                        <span>{deleting ? 'מוחק…' : 'הסר עמוד'}</span>
+                    </button>
+                </div>
+            </div>
+        </>
+    )
+}
 
 export default function AdminDashboard() {
     const [entries, setEntries] = useState([])
@@ -261,6 +376,8 @@ export default function AdminDashboard() {
     // Move a single entry across the FULL list — works regardless of which
     // pagination page it's on, so you can send an entry to the very front
     // or nudge it past a page boundary without dragging.
+    // `where` is 'top' | 'bottom' | 'up' | 'down', or a 0-based index —
+    // "move to place 37" without dragging across six pages of cards.
     async function moveEntry(entryId, where) {
         const idx = entries.findIndex(e => e.id === entryId)
         if (idx < 0) return
@@ -269,10 +386,9 @@ export default function AdminDashboard() {
         else if (where === 'bottom') target = entries.length - 1
         else if (where === 'up') target = Math.max(0, idx - 1)
         else if (where === 'down') target = Math.min(entries.length - 1, idx + 1)
-        if (target === idx) return
-        const reordered = Array.from(entries)
-        const [moved] = reordered.splice(idx, 1)
-        reordered.splice(target, 0, moved)
+        else if (Number.isFinite(where)) target = where
+        const reordered = moveToIndex(entries, entryId, target)
+        if (reordered === entries) return
         setEntries(reordered)
         await persistOrder(reordered)
     }
@@ -714,8 +830,17 @@ export default function AdminDashboard() {
                                                                     </div>
                                                                 )}
                                                             </div>
-                                                            {/* Thumbnail */}
-                                                            {entry.imageUrl ? (
+                                                            {/* Thumbnail — a blank page shows its full-page photo, or a dashed leaf */}
+                                                            {isBlankPage(entry) ? (
+                                                                blankPagePhoto(entry) ? (
+                                                                    <div className='w-12 h-12 rounded-lg overflow-hidden bg-gray-50 shrink-0 ring-1 ring-[#AA8840]/30'>
+                                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                                        <img src={blankPagePhoto(entry)} alt='' loading='lazy' className='w-full h-full object-cover' />
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className='w-12 h-12 rounded-lg shrink-0 border border-dashed border-[#AA8840]/40' style={{ background: '#fbf6ec' }} />
+                                                                )
+                                                            ) : entry.imageUrl ? (
                                                                 <div className='w-12 h-12 rounded-lg overflow-hidden bg-gray-50 shrink-0'>
                                                                     <img
                                                                         src={entry.imageUrl}
@@ -732,8 +857,8 @@ export default function AdminDashboard() {
                                                             )}
                                                             {/* Name + snippet */}
                                                             <div className='flex-1 min-w-0'>
-                                                                <div className='font-bold text-sm text-gray-900 truncate'>{isBlankPage(entry) ? 'עמוד ריק' : entry.name || 'אורח/ת'}</div>
-                                                                <div className='text-xs text-gray-500 truncate'>{entry.text || (entry.imageUrl ? 'ברכה עם תמונה' : '')}</div>
+                                                                <div className='font-bold text-sm text-gray-900 truncate'>{isBlankPage(entry) ? (blankPagePhoto(entry) ? 'עמוד תמונה' : 'עמוד ריק') : entry.name || 'אורח/ת'}</div>
+                                                                <div className='text-xs text-gray-500 truncate'>{isBlankPage(entry) ? (blankPagePhoto(entry) ? 'תמונה על כל העמוד' : 'רק הרקע של הספר') : entry.text || (entry.imageUrl ? 'ברכה עם תמונה' : '')}</div>
                                                                 {tsMs(entry.timestamp) > 0 && (
                                                                     <div className='text-[10px] text-gray-400 mt-0.5'>הועלתה {fmtUploadedAt(entry.timestamp)}</div>
                                                                 )}
@@ -747,6 +872,7 @@ export default function AdminDashboard() {
                                                             >
                                                                 ↑ לראש
                                                             </button>
+                                                            <MoveToPlace index={index} total={entries.length} onMove={where => moveEntry(entry.id, where)} />
                                                         </div>
                                                     )}
                                                 </Draggable>
@@ -783,7 +909,17 @@ export default function AdminDashboard() {
                                                                 }
                                                             `}
                                                         >
-                                                            {editingId === entry.id ? (
+                                                            {isBlankPage(entry) ? (
+                                                                <BlankPageCard
+                                                                    entry={entry}
+                                                                    place={pageOffset + index + 1}
+                                                                    total={entries.length}
+                                                                    pageText={adminUser ? pageLabel(pageIndex.byEntry[entry.id]) : ''}
+                                                                    onMove={where => moveEntry(entry.id, where)}
+                                                                    onDelete={() => handleDeleteEntry(entry.id)}
+                                                                    deleting={deletingId === entry.id}
+                                                                />
+                                                            ) : editingId === entry.id ? (
                                                                 /* Edit mode */
                                                                 <div className='p-4' onClick={e => e.stopPropagation()}>
                                                                     <div className='space-y-3'>
@@ -1033,6 +1169,7 @@ export default function AdminDashboard() {
                                                                                 >
                                                                                     <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={2} className='w-4 h-4'><path strokeLinecap='round' strokeLinejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5' /></svg>
                                                                                 </button>
+                                                                                <MoveToPlace index={pageOffset + index} total={entries.length} onMove={where => moveEntry(entry.id, where)} />
                                                                                 <span className='text-gray-200 ms-0.5'>
                                                                                     <DragIcon />
                                                                                 </span>

@@ -518,6 +518,26 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 11.10 (later) — finding and moving the blank page in ניהול ברכות
+
+Blank pages were always in the owner's list and draggable, but a blank
+page with a full-page photo rendered as an empty "ללא תוכן" card with the
+blessing actions on it — unrecognisable, and "הוסף תמונה" would have
+written a guest-photo field onto a page that paints its photo as the
+background. Lord asked to be able to move it from there.
+
+- `BlankPageCard` (card view): the full-page photo (`blankPagePhoto(entry)`
+  = `pageStyle.backgroundUrl`, blank pages only) with its crop anchor, or
+  a dashed "רק הרקע של הספר" leaf; "מקום N מתוך M"; actions are only
+  לראש / מעלה / מטה / לסוף / העבר למקום… / הסר עמוד. The photo itself is
+  changed in the viewer's page editor, and the card says so.
+- Reorder mode shows the same thumbnail and "עמוד תמונה" / "עמוד ריק".
+- `MoveToPlace` ("העבר למקום…", typed 1-based position) on every card and
+  every reorder row — the list is paginated and drag only works inside
+  the visible page, so a page inserted at the end of a long book was six
+  pages of cards from where it belonged. `moveToIndex(list, id, i)` in
+  entryKinds.js is the pure move; `moveEntry` now also takes an index.
+
 ### 8.10 — the QR code, from the event itself
 
 Lord: in the super-admin table, open an event → mint its QR right

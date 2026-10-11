@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { expandBookPages } from '@/lib/bookPages'
-import { blankPageDoc, insertAfter, isBlankPage, withoutBlankPages, BLANK_KIND } from '@/lib/entryKinds'
+import { blankPageDoc, insertAfter, isBlankPage, withoutBlankPages, BLANK_KIND, blankPagePhoto, moveToIndex } from '@/lib/entryKinds'
 
 const blessing = id => ({ id, name: 'דנה', text: 'מזל טוב!', imageUrl: null })
 const blank = id => ({ id, kind: BLANK_KIND, name: '', text: '', imageUrl: null })
@@ -120,5 +120,26 @@ describe('POST /api/entries/blank', () => {
         expect((await POST(req({ weddingId: 'w1', afterEntryId: 'ghost' }))).status).toBe(404)
         expect((await POST(req({ weddingId: 'nope', afterEntryId: 'a' }))).status).toBe(404)
         expect(harness.added).toEqual(['new-1'])
+    })
+})
+
+describe('the blessings screen', () => {
+    it('reads a blank page\'s full-page photo from its page style, and only for blank pages', () => {
+        const url = 'https://firebasestorage.googleapis.com/v0/b/x/o/weddings%2F1%2Fpagebg.jpg?alt=media'
+        expect(blankPagePhoto({ ...blank('b'), pageStyle: { backgroundUrl: url } })).toBe(url)
+        expect(blankPagePhoto(blank('b'))).toBe(null)
+        expect(blankPagePhoto({ ...blank('b'), pageStyle: { backgroundUrl: null } })).toBe(null)
+        expect(blankPagePhoto({ ...blessing('a'), pageStyle: { backgroundUrl: url } })).toBe(null)
+    })
+
+    it('moves one page to a given place, clamping to the ends', () => {
+        const list = ['a', 'b', 'c', 'd', 'e'].map(id => ({ id }))
+        const ids = l => l.map(e => e.id)
+        expect(ids(moveToIndex(list, 'e', 1))).toEqual(['a', 'e', 'b', 'c', 'd'])
+        expect(ids(moveToIndex(list, 'a', 3))).toEqual(['b', 'c', 'd', 'a', 'e'])
+        expect(ids(moveToIndex(list, 'c', 99))).toEqual(['a', 'b', 'd', 'e', 'c'])
+        expect(ids(moveToIndex(list, 'c', -4))).toEqual(['c', 'a', 'b', 'd', 'e'])
+        expect(moveToIndex(list, 'c', 2)).toBe(list)
+        expect(moveToIndex(list, 'zzz', 0)).toBe(list)
     })
 })
