@@ -30,7 +30,7 @@
 // They are excluded by whitelist rather than by documentation.
 
 const PAGE_SURFACE_KEYS = [
-    'backgroundColor', 'backgroundUrl', 'texture', 'frame',
+    'backgroundColor', 'backgroundUrl', 'backgroundPosition', 'texture', 'frame',
     'pagePadding', 'borderRadius',
 ]
 
@@ -81,6 +81,8 @@ export function sanitizePageStyle(raw) {
     for (const [key, value] of Object.entries(raw)) {
         if (!ALLOWED.has(key)) continue
         if (value === undefined) continue
+        // Three anchors, nothing else reaches a CSS property.
+        if (key === 'backgroundPosition' && value !== null && !BACKGROUND_POSITIONS.includes(value)) continue
         if (key === 'imageStyle' || key === 'albumPhoto') {
             if (value === null) { out[key] = null; continue }
             if (!isPlainObject(value)) continue
@@ -153,4 +155,20 @@ export function overriddenKeys(pageStyle) {
 export default {
     PAGE_OVERRIDABLE_KEYS, PAGINATION_KEYS,
     sanitizePageStyle, mergePageStyle, pageStyleOf, hasOverrides, overriddenKeys,
+}
+
+// ── Where a full-page background photo is anchored ──────────────────
+//
+// A photo uploaded as one page's background is painted `cover`, so on a
+// square page a portrait photo loses its top and bottom. Three anchors,
+// not a free focal point: "keep the heads" (top), the middle, the feet.
+// Every surface that paints `backgroundUrl` reads it through here, and
+// anything that is not one of the three is the old behaviour — centre.
+export const BACKGROUND_POSITIONS = ['top', 'center', 'bottom']
+
+export function surfacePosition(style) {
+    const v = style && style.backgroundPosition
+    if (v === 'top') return 'center top'
+    if (v === 'bottom') return 'center bottom'
+    return 'center'
 }
