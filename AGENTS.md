@@ -493,6 +493,31 @@ empty card and sparkles on those.
   header) exclude blanks; the owner admin list and the arrange link label
   them "עמוד ריק" so they can be ordered like anything else.
 
+### 11.10 — a photo as the whole page
+
+Lord: on a blank page (or any page), add a picture that fills the whole
+background. No new rendering path — it is the page's own `backgroundUrl`,
+which every surface already paints `cover` edge to edge (blank leaf,
+classic, duo, composed) and which the html2canvas exporters already
+rasterise the same way they do uploaded studio backgrounds.
+
+- Page editor row "תמונה על כל העמוד": upload (browser → Storage
+  `weddings/{id}/pagebg_{entryId}_{ts}.jpg`, compressed to ≤4MB/3000px),
+  replace, remove, and "מה לשמור בחיתוך": למעלה / מרכז / למטה. Saved
+  through the normal debounced page-style write; the route's own-storage
+  check covers the URL.
+- New per-page key `backgroundPosition` ('top'|'center'|'bottom', in the
+  canonical defaults as 'center'); `surfacePosition(style)` in
+  pageStyle.js maps it to CSS and every surface reads it through there.
+  The sanitizer drops any other value — nothing free-form reaches CSS.
+- On a blank page the row comes first and the name/blessing/photo rows
+  are hidden (they move nothing there). On a blessing page it sits above
+  the page colour. Not offered on polaroid/scrapbook/notebook/collage/
+  window: those paint their own texture and ignore `backgroundUrl`.
+- The upload remembers which page it started on; if the operator moved
+  to another page meanwhile it refuses instead of pinning the photo to
+  the wrong page.
+
 ### 8.10 — the QR code, from the event itself
 
 Lord: in the super-admin table, open an event → mint its QR right
