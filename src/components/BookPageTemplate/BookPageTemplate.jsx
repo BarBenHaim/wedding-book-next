@@ -5,7 +5,7 @@ import { resolveActiveTemplate } from '@/lib/presetFilters'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
 import { resolvePhotoStyle } from '@/lib/bookDesignSchema'
-import { mergePageStyle, pageStyleOf } from '@/lib/pageStyle'
+import { mergePageStyle, pageStyleOf, surfacePosition } from '@/lib/pageStyle'
 import { isBlankPage } from '@/lib/entryKinds'
 import { pageFitFactor, nameFontPercent } from '@/lib/fontFit'
 import FramedPhoto from '../FramedPhoto/FramedPhoto'
@@ -70,7 +70,7 @@ export default function BookPageTemplate({ entry, styleSettings: incomingStyle, 
                     backgroundColor: styleSettings.backgroundColor || '#fdfaf3',
                     backgroundImage: dividerSurface ? `url(${dividerSurface})` : 'none',
                     backgroundSize: 'cover',
-                    backgroundPosition: 'center',
+                    backgroundPosition: surfacePosition(styleSettings),
                     backgroundRepeat: 'repeat',
                 }}
             >
@@ -103,7 +103,7 @@ export default function BookPageTemplate({ entry, styleSettings: incomingStyle, 
                     backgroundImage: blankSurface ? `url(${blankSurface})` : 'none',
                     backgroundRepeat: 'repeat',
                     backgroundSize: 'cover',
-                    backgroundPosition: 'center',
+                    backgroundPosition: surfacePosition(styleSettings),
                     borderRadius: bw(styleSettings.borderRadius || 0),
                     padding: bh(styleSettings.pagePadding ?? 4),
                 }}
@@ -272,7 +272,7 @@ export default function BookPageTemplate({ entry, styleSettings: incomingStyle, 
                     backgroundImage: surfaceUrl ? `url(${surfaceUrl})` : 'none',
                     backgroundRepeat: 'repeat',
                     backgroundSize: 'cover',
-                    backgroundPosition: 'center',
+                    backgroundPosition: surfacePosition(styleSettings),
                     padding: pad,
                     gap,
                 }}
@@ -318,7 +318,7 @@ export default function BookPageTemplate({ entry, styleSettings: incomingStyle, 
                 backgroundImage: surfaceUrl ? `url(${surfaceUrl})` : 'none',
                 backgroundRepeat: 'repeat',
                 backgroundSize: 'cover',
-                backgroundPosition: 'center',
+                backgroundPosition: surfacePosition(styleSettings),
                 color: styleSettings.fontColor,
                 borderRadius: w(styleSettings.borderRadius || 0),
                 padding: h(styleSettings.pagePadding ?? 4),
