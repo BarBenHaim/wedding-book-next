@@ -57,6 +57,7 @@ export const CANONICAL_STYLE_DEFAULTS = {
     // ── Page surface ─────────────────────────────────────────────────
     backgroundColor: '#ffffff',
     backgroundUrl: null, // unified background (spring 2026); wins over texture
+    backgroundPosition: 'center', // where a cover background anchors: top | center | bottom (pageStyle.surfacePosition)
     texture: null,
     frame: null,
 

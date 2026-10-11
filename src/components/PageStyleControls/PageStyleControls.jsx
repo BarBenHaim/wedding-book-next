@@ -34,6 +34,7 @@ import { PHOTO_FRAMES } from '@/lib/photoFrames'
 import { TEXTURES_REGISTRY } from '@/lib/studioPresets'
 import { buildPageIndex, pageLabel } from '@/lib/bookPageIndex'
 import { sanitizePageStyle, overriddenKeys, mergePageStyle } from '@/lib/pageStyle'
+import { isBlankPage } from '@/lib/entryKinds'
 import { getBlessingText } from '@/lib/normalizeText'
 import { pageFitFactor, effectiveFontPercent, nameFontPercent, DEFAULT_MIN_FACTOR } from '@/lib/fontFit'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
@@ -113,6 +114,11 @@ export default function PageStyleControls({
     const [draft, setDraft] = useState({})
     const [photoBusy, setPhotoBusy] = useState(false)
     const photoInput = useRef(null)
+    const [bgBusy, setBgBusy] = useState(false)
+    const bgInput = useRef(null)
+    // The upload takes seconds; what it lands on must be the page and the
+    // draft as they are when it FINISHES, not when the file was picked.
+    const latest = useRef({ draft: {}, selectedId: null })
     const timer = useRef(null)
     // What is waiting on the debounce, and which page it belongs to.
     const pending = useRef(null)
@@ -144,6 +150,7 @@ export default function PageStyleControls({
     }, [selectedId])
 
     const pinned = useMemo(() => new Set(overriddenKeys(draft)), [draft])
+    latest.current = { draft, selectedId }
 
     // The values the controls display: the book's design with this page's
     // pins on top. An inherited slider therefore shows the book's number
@@ -223,6 +230,49 @@ export default function PageStyleControls({
         apply(next)
     }
     const resetAll = () => apply({})
+
+    // ── A photo as the whole page's background ───────────────────────
+    //
+    // Not a new rendering path: it is the page's own `backgroundUrl`,
+    // which every surface already paints `cover` from edge to edge —
+    // the blank leaf, the classic page, duo, composed — and which the
+    // print exporters already rasterise (uploaded studio backgrounds
+    // travel the same way). The file goes browser → Storage; only the
+    // URL is saved, through the same debounced page-style write as every
+    // other control here, and the server accepts only our own storage.
+    const uploadBackground = useCallback(async file => {
+        if (!file || !selected) return
+        const forId = selected.id
+        setBgBusy(true)
+        setError(null)
+        try {
+            const compressed = await imageCompression(file, {
+                maxSizeMB: 4,
+                maxWidthOrHeight: 3000,
+                useWebWorker: true,
+            })
+            const path = `weddings/${weddingId}/pagebg_${selected.id}_${Date.now()}.jpg`
+            const snap = await uploadBytes(storageRef(storage, path), compressed, { contentType: compressed.type || 'image/jpeg' })
+            const url = await getDownloadURL(snap.ref)
+            if (latest.current.selectedId !== forId) {
+                setError('עברת לעמוד אחר באמצע ההעלאה — פתח את העמוד שוב והעלה מחדש')
+                return
+            }
+            apply({ ...latest.current.draft, backgroundUrl: url })
+        } catch (err) {
+            setError(err?.message || 'העלאת התמונה נכשלה')
+        } finally {
+            setBgBusy(false)
+            if (bgInput.current) bgInput.current.value = ''
+        }
+    }, [selected, weddingId, apply])
+
+    const removeBackgroundPhoto = () => {
+        const next = { ...draft }
+        delete next.backgroundUrl
+        delete next.backgroundPosition
+        apply(next)
+    }
 
     // ── Replacing the photo ──────────────────────────────────────────
     //
@@ -402,6 +452,79 @@ export default function PageStyleControls({
         )
     }
 
+    // Which surfaces can show it. The four "scene" templates paint their
+    // own texture and ignore the page's background, so the control is not
+    // offered where it would do nothing. A blank leaf always shows it —
+    // it renders before any template is chosen.
+    const isBlank = isBlankPage(selected)
+    const SCENE_TEMPLATES = ['polaroid', 'scrapbook', 'notebook', 'collage', 'window']
+    const canPhotoBackground = isBlank || !SCENE_TEMPLATES.includes(effective.template)
+    const bgPhoto = typeof effective.backgroundUrl === 'string'
+        && pinned.has('backgroundUrl')
+        && !TEXTURES_REGISTRY.some(t => t.src === effective.backgroundUrl)
+        ? effective.backgroundUrl
+        : null
+    const photoBackgroundRow = canPhotoBackground && (
+        <Row
+            label='תמונה על כל העמוד'
+            pinned={!!bgPhoto}
+            onUnpin={removeBackgroundPhoto}
+            hint={isBlank
+                ? 'התמונה ממלאת את כל העמוד, מקצה לקצה — גם בהדפסה'
+                : 'התמונה ממלאת את רקע העמוד והברכה נשארת מעליה'}
+        >
+            <div className='flex items-center gap-2'>
+                {bgPhoto ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                        src={bgPhoto}
+                        alt=''
+                        className='w-14 h-14 rounded-lg object-cover shrink-0'
+                        style={{ border: '1px solid #ead9b3', objectPosition: effective.backgroundPosition === 'top' ? 'center top' : effective.backgroundPosition === 'bottom' ? 'center bottom' : 'center' }}
+                    />
+                ) : (
+                    <div className='w-14 h-14 rounded-lg shrink-0 flex items-center justify-center text-[9px] text-gray-400'
+                        style={{ background: '#f5efe3', border: '1px solid #ead9b3' }}>
+                        בלי
+                    </div>
+                )}
+                <label
+                    className={`px-3 py-2 rounded-lg text-[11.5px] font-bold cursor-pointer ${bgBusy ? 'opacity-60 pointer-events-none' : ''}`}
+                    style={{ background: GOLD, color: '#fff' }}
+                >
+                    {bgBusy ? 'מעלה…' : bgPhoto ? 'החלף תמונה' : 'העלה תמונה'}
+                    <input
+                        ref={bgInput}
+                        type='file'
+                        accept='image/*'
+                        className='hidden'
+                        disabled={bgBusy}
+                        onChange={e => uploadBackground(e.target.files?.[0])}
+                    />
+                </label>
+                {bgPhoto && (
+                    <button onClick={removeBackgroundPhoto} className='text-[11px] font-bold text-red-500 hover:text-red-600'>
+                        הסר
+                    </button>
+                )}
+            </div>
+            {bgPhoto && (
+                <div className='mt-2 flex items-center gap-2'>
+                    <span className='text-[10.5px] text-gray-500'>מה לשמור בחיתוך:</span>
+                    <Choice
+                        value={effective.backgroundPosition ?? 'center'}
+                        onChange={v => set('backgroundPosition', v)}
+                        options={[
+                            { value: 'top', label: 'למעלה' },
+                            { value: 'center', label: 'מרכז' },
+                            { value: 'bottom', label: 'למטה' },
+                        ]}
+                    />
+                </div>
+            )}
+        </Row>
+    )
+
     return (
         <div className='shrink-0 border-t border-[#f0e6d2] bg-white/95'>
             <div className='flex items-center justify-between gap-2 px-4 py-2'>
@@ -434,6 +557,11 @@ export default function PageStyleControls({
             )}
 
             <div className='px-4 pb-3 max-h-[46vh] overflow-y-auto'>
+                {/* A blank leaf has no name, blessing or guest photo — the
+                    rows for those would move nothing. It gets the photo
+                    first, then the surface rows below. */}
+                {isBlank && photoBackgroundRow}
+                {!isBlank && (<>
                 <Row
                     label='גודל שם האורח'
                     pinned={pinned.has('nameFontSizePercent')}
@@ -609,6 +737,10 @@ export default function PageStyleControls({
                         suffix='%'
                     />
                 </Row>
+
+                </>)}
+
+                {!isBlank && photoBackgroundRow}
 
                 <Row label='ריפוד העמוד' pinned={pinned.has('pagePadding')} onUnpin={() => unpin('pagePadding')}>
                     <Slider value={effective.pagePadding ?? 4} min={0} max={20} onChange={v => set('pagePadding', v)} suffix='%' />

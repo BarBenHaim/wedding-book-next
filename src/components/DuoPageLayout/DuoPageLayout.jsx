@@ -20,6 +20,7 @@
 // Photo frames (styleSettings.photoFrame) apply inside each block via
 // the shared FramedPhoto, so frames look identical in solo and duo.
 
+import { surfacePosition } from '@/lib/pageStyle'
 import { getBlessingText } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
@@ -150,7 +151,7 @@ export default function DuoPageLayout({ entry, styleSettings, scaledWidth, scale
                 backgroundImage: surfaceUrl ? `url(${surfaceUrl})` : 'none',
                 backgroundRepeat: 'repeat',
                 backgroundSize: 'cover',
-                backgroundPosition: 'center',
+                backgroundPosition: surfacePosition(styleSettings),
                 color: styleSettings.fontColor,
                 borderRadius: w(styleSettings.borderRadius || 0),
                 padding: h(styleSettings.pagePadding ?? 4),
