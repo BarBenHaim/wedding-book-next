@@ -30,6 +30,7 @@
 // the measured aspect so it can size itself without loading pixels -
 // which matters because the PDF pass renders before images decode.
 
+import { surfacePosition } from '@/lib/pageStyle'
 import { getBlessingText } from '@/lib/normalizeText'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { pageScale } from '@/lib/pageGeometry'
@@ -354,7 +355,7 @@ export default function ComposedPageLayout({ entry, styleSettings, scaledWidth, 
                 backgroundImage: surfaceUrl ? `url(${surfaceUrl})` : 'none',
                 backgroundRepeat: 'repeat',
                 backgroundSize: 'cover',
-                backgroundPosition: 'center',
+                backgroundPosition: surfacePosition(styleSettings),
                 color: styleSettings.fontColor,
                 borderRadius: w(styleSettings.borderRadius || 0),
                 boxSizing: 'border-box',
