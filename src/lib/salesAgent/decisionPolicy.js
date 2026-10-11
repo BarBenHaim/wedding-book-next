@@ -43,7 +43,7 @@ function ambiguousOrWithdrawnPackage(text) {
         || /(?:לא\s+|מתלבט|במקום).{0,45}(?:מודפס|דיגיטל)/.test(value)
 }
 
-function explicitPackageChoice(text) {
+export function explicitPackageChoice(text) {
     const value = normalizedText(text)
     if (ambiguousOrWithdrawnPackage(value)) return null
     const linkRequest = /(?:שלח|אפשר|צריך).{0,14}(?:קישור|לינק).{0,12}(?:לתשלום|להזמנה)/.test(value)
@@ -54,7 +54,7 @@ function explicitPackageChoice(text) {
     return digital !== printed ? (digital ? 'digital' : 'printed') : null
 }
 
-function confirmedPackageId(lead, incomingText) {
+export function confirmedPackageId(lead, incomingText) {
     const current = explicitPackageChoice(incomingText)
     if (current) return current
     if (ambiguousOrWithdrawnPackage(incomingText)) return null
@@ -77,6 +77,10 @@ function needsQuantityScope(text, lead) {
 
 const UNVERIFIED_POLICY = /מדיניות\s+(?:ביטול|החזר)|ביטול|לבטל|החזר\s+כספי|מקדמה|(?:כל\s+הסכום|הכל).{0,15}(?:מראש|לפני)|משלמ.{0,35}(?:לפני|מראש|קודם)|כמה\s+עמודים|מגבלת\s+עמודים|תוספת\s+עמודים|40.{0,15}100/
 const AUTHENTIC_PROOF = /(?:דוגמ|תמונ|ספר).{0,20}אמיתי|לא\s*ai\b|לא\s+בינה\s+מלאכותית/i
+const LANGUAGE_CORRECTION = /^(?:(?:אני\s+)?(?:רציתי|רוצה|צריך|צריכה|התכוונתי)|לא[, ]*)?\s*(?:ל?גרסה\s+)?(?:[בל](?:אנגלית|עברית|רוסית|ערבית)|in\s+english)[\s?!.]*$/i
+const TRANSLATION_TARGET_QUESTION = /(?:^|[\s,:])(?:מה|איזה|איזו|אילו|לאיזה|ספציפי|מסוים)(?:\s|[?!]).{0,65}(?:לתרגם|תרגום)|לאיזה\s+טקסט\s+התכוונתם/
+const TRANSLATION_SERVICE = /(?:אתם|אפשר|תוכלו|יכולים|שירות|רוצה|רוצים|צריך|צריכה).{0,35}(?:לתרגם|מתרגמ|תרגום)/
+const TRANSLATION_TARGET_ANSWER = /^(?:(?:כן|yes)[,\s]+)?(?:את\s+)?(?:כל\s+)?(?:ה)?(?:ברכות|כותרת|כותרות|טקסט|תוכן|הוראות|עמודים|דפים|ספר|הכול|הכל)(?:\s|[.!?,]|$)/
 const PROOF_REQUEST = /לראות.{0,24}(?:דוגמ|תמונ|ספר)|(?:תשלח|שלח|אפשר).{0,24}(?:דוגמ|תמונ)|דוגמ.{0,20}לפני|איך\s+זה\s+נראה/
 
 // Did the bot already state the catalog prices in its last two turns? A
@@ -113,9 +117,15 @@ export function detectSalesIntent(text = '', lead = null) {
     if (UNVERIFIED_POLICY.test(value) || AUTHENTIC_PROOF.test(value)) return 'needs_verified_answer'
     if (/אותו\s+ספר.{0,25}ספר\s+נפרד/.test(lastAssistantText(lead))
         && /נפרד|אירועים\s+שונים|שני\s+אירועים/.test(value)) return 'needs_verified_answer'
+    // A language correction supplies no text/target. Clarify it rather
+    // than turning an old printing answer into a translation promise.
+    if (LANGUAGE_CORRECTION.test(value)) return 'language_clarification'
     if (PROOF_REQUEST.test(value)) return 'demo'
     const asksAlongsideDeferral = asksPrice(value) || /איך\s+זה\s+עובד|מה\s+(?:מקבלים|כלול)|איך\s+האורחים|מתי.{0,12}(?:מגיע|מוכן)|האם/.test(value)
     if (isCustomerDeferral(value) && !asksAlongsideDeferral) return 'defer_request'
+    if (TRANSLATION_SERVICE.test(value)) return 'needs_verified_answer'
+    if (TRANSLATION_TARGET_QUESTION.test(lastAssistantRequest(lead))
+        && TRANSLATION_TARGET_ANSWER.test(value)) return 'needs_verified_answer'
     if (explicitPackageChoice(value) && /איזה\s+ספר\s+תרצו/.test(lastAssistantText(lead))) return 'payment_intent'
     if (/רוצה\s+להזמין|רוצ[הים]\s+לסגור|איך\s+משלמ|אפשר\s+לשלם|קישור.{0,12}תשלום|אקח\s+את|נלך\s+על|אפשר\s+להזמין/.test(value)) {
         // Answer a condition/question in THIS turn before looking up a
@@ -271,6 +281,7 @@ function nextAction(intent, lead, incomingText) {
     if (intent === 'not_our_product') return 'close_lost'
     if (intent === 'call_request') return 'offer_call'
     if (intent === 'needs_verified_answer') return 'handoff_question'
+    if (intent === 'language_clarification') return 'clarify_translation_target'
     if (intent === 'defer_request') return 'respect_timing'
     if (intent === 'question_before_checkout') return 'answer'
     if (intent === 'payment_intent') {
@@ -294,6 +305,7 @@ function nextAction(intent, lead, incomingText) {
     // checkout, and opening a book is not selecting its printed package.
     if (intent === 'affirmative') {
         const previous = lastAssistantRequest(lead)
+        if (TRANSLATION_TARGET_QUESTION.test(previous)) return 'clarify_translation_target'
         if (PROOF_REQUEST.test(previous) || /(?:רוצה|תרצו|תרצי|תרצה).{0,18}(?:דוגמ|תמונ)/.test(previous)) return 'show_proof'
         if (/(?:רוצה|תרצו|תרצי|תרצה|שאשלח|לשלוח).{0,35}(?:קישור|לינק).{0,16}(?:לתשלום|להזמנה)|(?:רוצה|תרצו).{0,12}לשלם\s+עכשיו/.test(previous)) {
             return confirmedPackageId(lead, incomingText) ? 'send_payment_link' : 'clarify_package'
@@ -518,6 +530,7 @@ function deterministicMessage({ parsed, decision, lead, incomingText }) {
         const dateQuestion = parsed.eventDate || lead.eventDate ? '' : ' מתי האירוע?'
         return `אפשר לנסות כאן איך האורחים כותבים ברכה ומצרפים תמונה מהטלפון: ${DEMO.writeBlessing}${dateQuestion}`
     }
+    if (decision.nextBestAction === 'clarify_translation_target') return 'לאיזה טקסט התכוונתם, למשל ההוראות לאורחים או תוכן הספר?'
     if (decision.nextBestAction === 'respect_timing') return customerWillReturn(incomingText)
         ? 'כמובן, נמתין שתפנו אלינו כשתרצו להמשיך.'
         : 'אין בעיה, נתקדם בזמן שמתאים לכם. מתי נוח שנחזור לזה?'
@@ -776,7 +789,7 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         || decision.nextBestAction === 'show_workflow'
         || decision.nextBestAction === 'quote_price'
         || decision.nextBestAction === 'handle_objection'
-        || ['clarify_package', 'confirm_checkout', 'clarify_quantity', 'respect_timing'].includes(decision.nextBestAction)
+        || ['clarify_package', 'confirm_checkout', 'clarify_quantity', 'respect_timing', 'clarify_translation_target'].includes(decision.nextBestAction)
         || (decision.nextBestAction !== 'send_payment_link' && /https?:\/\/\S*checkout/i.test(candidates.join(' ')))
         || (decision.intent === 'price' && !hasOnlyCurrentCatalogPrices(candidates.join('\n')))
         || candidates.length === 0
@@ -845,7 +858,7 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         && !['send_payment_link', 'diagnose_checkout'].includes(decision.nextBestAction)) {
         result.stage = lead.stage || 'engaged'
     }
-    if (['clarify_package', 'confirm_checkout', 'clarify_quantity'].includes(decision.nextBestAction)) {
+    if (['clarify_package', 'confirm_checkout', 'clarify_quantity', 'clarify_translation_target'].includes(decision.nextBestAction)) {
         result.stage = lead.stage || 'engaged'
         result.packageInterest = lead.packageInterest || null
         result.image = null

@@ -70,3 +70,33 @@ describe('direct inbound WhatsApp delivery', () => {
         expect(deps.sendText).toHaveBeenCalledTimes(1)
     })
 })
+
+describe('strict pre-send and media-failure boundary', () => {
+    it('suppresses every part after newer inbound or human takeover', async () => {
+        const deps = transport()
+        const check = vi.fn().mockResolvedValueOnce({ ok: true }).mockResolvedValue({ ok: false, reason: 'conversation-changed' })
+        const result = await sendInboundSequenceDirect({ phone: 'synthetic-contact', dependencies: deps, validateBeforePart: check, parts: [
+            { kind: 'text', partId: 'answer', text: 'first' }, { kind: 'image', partId: 'demo', url: 'https://example.test/demo.jpg' },
+        ] })
+        expect(result.status).toBe('suppressed')
+        expect(deps.sendText).toHaveBeenCalledTimes(1)
+        expect(deps.sendImage).not.toHaveBeenCalled()
+    })
+    it('retries approved media once only after a definite rejection', async () => {
+        const deps = transport({ sendImage: vi.fn().mockRejectedValueOnce(Object.assign(new Error('synthetic'), { errorCode: 'GRAPH_REJECTED', providerCode: 131053 })).mockResolvedValue({ providerMessageId: 'synthetic-accepted' }) })
+        const result = await sendInboundSequenceDirect({ phone: 'synthetic-contact', dependencies: deps, allowMediaRetry: true, parts: [{ kind: 'image', partId: 'demo', url: 'https://example.test/demo.jpg' }] })
+        expect(result.status).toBe('accepted')
+        expect(deps.sendImage).toHaveBeenCalledTimes(2)
+        expect(deps.recordDelivery).toHaveBeenCalledTimes(1)
+    })
+    it('does not retry uncertain acceptance and registers a distinct truthful text fallback', async () => {
+        const deps = transport({ sendImage: vi.fn().mockRejectedValue(Object.assign(new Error('synthetic'), { errorCode: 'GRAPH_TIMEOUT' })) })
+        const fallback = vi.fn(async () => ({ part: { kind: 'text', partId: 'separate-fallback', text: 'Delivery is unconfirmed.' } }))
+        const result = await sendInboundSequenceDirect({ phone: 'synthetic-contact', dependencies: deps, allowMediaRetry: true, onMediaFailure: fallback, parts: [{ kind: 'image', partId: 'demo', url: 'https://example.test/demo.jpg' }] })
+        expect(deps.sendImage).toHaveBeenCalledTimes(1)
+        expect(fallback).toHaveBeenCalledTimes(1)
+        expect(result.fallbackStatus).toBe('accepted')
+        expect(deps.recordDelivery).toHaveBeenNthCalledWith(1, expect.objectContaining({ outboundId: 'demo', status: 'failed' }))
+        expect(deps.recordDelivery).toHaveBeenNthCalledWith(2, expect.objectContaining({ outboundId: 'separate-fallback', status: 'accepted' }))
+    })
+})

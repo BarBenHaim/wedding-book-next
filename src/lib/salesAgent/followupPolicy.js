@@ -32,7 +32,8 @@
 // quoted is pressure; the same nudge three days later is service.
 
 import { addDaysISO } from './prompt'
-import { followUpEvidence } from './followupEvidence'
+import { followUpEvidence, normalizeFollowUpConsent } from './followupEvidence'
+import { isConversationalPolicyEnabled } from './salesContract'
 
 export { followUpEvidence }
 
@@ -209,7 +210,7 @@ function lastInboundMs(lead) {
     // `lastMessageAt` also advances on our outbound delivery and
     // `updatedAt` advances on admin/system writes, so neither is evidence
     // that free-form WhatsApp delivery is legal.
-    return timestampMs(lead?.lastInboundAt)
+    return timestampMs(lead?.lastInboundAtMs) ?? timestampMs(lead?.lastInboundAt)
 }
 
 export function isInsideWhatsAppWindow(lead, nowMs = Date.now()) {
@@ -220,6 +221,7 @@ export function isInsideWhatsAppWindow(lead, nowMs = Date.now()) {
 }
 
 export function isDueFollowUpCandidate(lead, todayISO, nowMs = Date.now()) {
+    if (isConversationalPolicyEnabled() || isStrictFollowUpLead(lead)) return strictFollowUpEligibility(lead, { nowMs }).ok
     if (!lead?.followUpAt || !todayISO || lead.followUpAt > todayISO) return false
     if (lead.customerDeferred === true && (!lead.customerCallbackAt || lead.customerCallbackAt > todayISO)) return false
     if (lead.stage === 'commit_later' && !lead.customerCallbackAt && !lead.callbackPromised) return false
@@ -345,7 +347,8 @@ export const FRIDAY_CUTOFF_HOUR = 14
  * purchase? Returns a reason rather than a bare false, so the daily run
  * can log why it did nothing instead of looking broken.
  */
-export function sendableNow(ms = Date.now()) {
+export function sendableNow(ms = Date.now(), policy = readStrictFollowUpPolicy()) {
+    if (policy.enabled) return strictSendableNow(ms, policy)
     const { weekday, hour } = israelClock(ms)
     if (weekday === 6) return { ok: false, reason: 'shabbat' }
     if (weekday === 5 && hour >= FRIDAY_CUTOFF_HOUR) return { ok: false, reason: 'erev-shabbat' }
@@ -371,3 +374,163 @@ const followupPolicy = {
 }
 
 export default followupPolicy
+
+// Strict rollout is opt-in and fails closed without separately approved business
+// configuration. Legacy constants above are not approved hours for this mode.
+// WhatsApp policy, verified 2026-10-05: https://whatsappbusiness.com/policy/
+// Sections 1–2: opt-in and opt-out, correct designated template purpose, and
+// a 24-hour service window reset only by a customer message. An approved
+// template is a transport authorization, never customer consent.
+export const STRICT_FOLLOWUP_VERSION = 'consent-v1'
+export const MAX_UNANSWERED_SALES_REMINDERS = 2
+
+const parseConfig = raw => {
+    try { return JSON.parse(String(raw || '')) } catch { return null }
+}
+const clockMinutes = text => {
+    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(text || ''))) return null
+    return Number(text.slice(0, 2)) * 60 + Number(text.slice(3))
+}
+
+export function readStrictFollowUpPolicy(env = process.env) {
+    const enabled = isConversationalPolicyEnabled(env)
+    const hours = parseConfig(env.SALES_CONSENT_FOLLOWUP_HOURS_JSON)
+    const delays = parseConfig(env.SALES_CONSENT_FOLLOWUP_DELAYS_HOURS)
+    const approval = parseConfig(env.SALES_FOLLOWUP_TEMPLATE_APPROVAL_JSON)
+    const activatedAtMs = Date.parse(env.SALES_CONSENT_FOLLOWUPS_ACTIVATED_AT || '')
+    const weekly = hours?.weekly
+    const hoursValid = hours?.timeZone === 'Asia/Jerusalem' && weekly && typeof weekly === 'object'
+        && !Array.isArray(weekly) && Object.keys(weekly).length > 0
+        && Object.entries(weekly).every(([day, intervals]) => /^[0-6]$/.test(day)
+            && Array.isArray(intervals) && intervals.every(interval => Array.isArray(interval) && interval.length === 2
+                && clockMinutes(interval[0]) != null && clockMinutes(interval[1]) != null
+                && clockMinutes(interval[0]) < clockMinutes(interval[1])))
+        && Object.values(weekly).some(intervals => intervals.length > 0)
+    const delaysValid = Array.isArray(delays) && delays.length === 2
+        && delays.every(n => Number.isFinite(n) && n > 0) && delays[0] >= 3 && delays[1] >= 48
+    return {
+        enabled,
+        active: enabled && env.SALES_CONSENT_FOLLOWUPS_ENABLED === 'true' && Number.isFinite(activatedAtMs),
+        activatedAtMs: Number.isFinite(activatedAtMs) ? activatedAtMs : null,
+        weekly: hoursValid ? weekly : null,
+        delaysHours: delaysValid ? delays : null,
+        template: approval?.status === 'APPROVED' && approval.category === 'MARKETING'
+            && approval.purpose === 'sales_reminders' && approval.language === 'he'
+            && ['wt_followup_he', 'wt_followup'].includes(approval.name)
+            && typeof approval.source === 'string' && approval.source.trim()
+            && Number.isFinite(approval.checkedAtMs) && approval.checkedAtMs > 0
+            && env.SALES_FOLLOWUP_TEMPLATE_ENABLED === 'true'
+            && approval.name === String(env.SALES_FOLLOWUP_TEMPLATE_NAME || 'wt_followup_he').trim()
+            ? approval : null,
+    }
+}
+
+export function strictSendableNow(nowMs = Date.now(), policy = readStrictFollowUpPolicy()) {
+    if (!policy.active || policy.activatedAtMs > nowMs) return { ok: false, reason: 'strict-followups-not-activated' }
+    if (!policy.weekly || !policy.delaysHours) return { ok: false, reason: 'strict-followup-config-missing' }
+    const { weekday, hour, minute } = israelClock(nowMs)
+    const now = hour * 60 + minute
+    const ok = (policy.weekly[String(weekday)] || []).some(([start, end]) => now >= clockMinutes(start) && now < clockMinutes(end))
+    return { ok, reason: ok ? null : 'outside-approved-hours' }
+}
+
+export function strictFollowUpStopReason(lead = {}) {
+    const stage = String(lead.stage || '').toLowerCase()
+    const state = String(lead.conversationalState || '').toLowerCase()
+    if (lead.handoffPending || lead.human || lead.humanTakeover || lead.human_takeover
+        || ['requested', 'pending', 'open', 'acknowledged', 'assigned', 'in_progress', 'resolved'].includes(lead.humanTaskStatus)
+        || ['human', 'handoff'].includes(stage) || state === 'human') return 'human-takeover'
+    if (lead.paymentVerified || lead.paymentClaimed || lead.existingCustomer
+        || ['paid', 'closed_won', 'onboarding', 'service'].includes(stage) || ['paid', 'onboarding', 'service'].includes(state)
+        || ['paid', 'verified', 'processing', 'completed'].includes(lead.orderStatus)) return 'payment-or-service'
+    if (lead.marketingSuppressed || lead.optedOut || lead.optOut || lead.optOutAt
+        || lead.followUpConsent?.status === 'revoked' || ['closed_lost', 'stopped'].includes(stage) || state === 'stopped') return 'marketing-suppressed'
+    if (lead.offerMismatch || lead.offerMismatchAt || stage === 'offer_mismatch' || state === 'offer_mismatch') return 'offer-mismatch'
+    return null
+}
+
+export const isStrictFollowUpLead = lead => !!lead?.conversationalPolicyVersion
+    || lead?.followUpSchedule?.policyVersion === STRICT_FOLLOWUP_VERSION
+    || lead?.followUpConsent?.scope === 'sales_reminders'
+
+const sameStrictSchedule = (left, right) => !!left && !!right
+    && ['policyVersion', 'generation', 'consentSourceMessageId', 'scheduledAtMs', 'dueAtMs', 'lastInboundAtMs', 'attemptNumber']
+        .every(key => left[key] === right[key])
+
+/** Pure guard used at selection, transaction claim, and again before dispatch. */
+export function strictFollowUpEligibility(lead = {}, {
+    nowMs = Date.now(), policy = readStrictFollowUpPolicy(), expectedSchedule = null,
+    checkDue = true, checkHours = true, checkPending = true, transport = null, templateName = null,
+    claimedAttemptNumber = null,
+} = {}) {
+    if (!policy.enabled) return isStrictFollowUpLead(lead)
+        ? { ok: false, strict: true, reason: 'strict-followups-not-activated' }
+        : { ok: true, strict: false, reason: null }
+    const deny = reason => ({ ok: false, strict: true, reason })
+    if (!policy.active || policy.activatedAtMs > nowMs) return deny('strict-followups-not-activated')
+    if (!policy.weekly || !policy.delaysHours) return deny('strict-followup-config-missing')
+    const stopped = strictFollowUpStopReason(lead)
+    if (stopped) return deny(stopped)
+    const consent = normalizeFollowUpConsent(lead.followUpConsent, nowMs)
+    if (!consent || consent.recordedAtMs < policy.activatedAtMs) return deny('followup-consent-missing')
+    if (consent.callbackPending === true) return deny('customer-callback-unresolved')
+    const schedule = lead.followUpSchedule
+    if (schedule?.policyVersion !== STRICT_FOLLOWUP_VERSION
+        || !Number.isInteger(schedule.generation) || schedule.generation < 1
+        || schedule.generation !== lead.conversationRevision
+        || schedule.consentSourceMessageId !== consent.sourceMessageId
+        || !Number.isFinite(schedule.scheduledAtMs) || schedule.scheduledAtMs < consent.recordedAtMs
+        || schedule.scheduledAtMs > nowMs
+        || !Number.isFinite(schedule.dueAtMs) || schedule.dueAtMs < schedule.scheduledAtMs
+        || schedule.lastInboundAtMs !== lastInboundMs(lead)
+        || schedule.lastInboundAtMs == null || schedule.lastInboundAtMs > schedule.scheduledAtMs
+        || !Number.isInteger(schedule.attemptNumber) || schedule.attemptNumber < 1
+        || (expectedSchedule && !sameStrictSchedule(schedule, expectedSchedule))) return deny('stale-or-missing-followup-schedule')
+    const claimed = claimedAttemptNumber === schedule.attemptNumber
+    const used = consent.usedReminders
+    const unanswered = Number(lead.unansweredSalesReminders || 0)
+    if (!Number.isInteger(unanswered) || unanswered < 0
+        || (claimed ? used !== schedule.attemptNumber : used + 1 !== schedule.attemptNumber)
+        || schedule.attemptNumber > consent.maxReminders
+        || (claimed ? unanswered > MAX_UNANSWERED_SALES_REMINDERS : unanswered >= MAX_UNANSWERED_SALES_REMINDERS)) return deny('reminder-limit')
+    if (consent.callbackAtMs != null && (schedule.dueAtMs < consent.callbackAtMs || (checkDue && nowMs < consent.callbackAtMs))) return deny('customer-callback-not-due')
+    if ((lead.customerDeferred || String(lead.stage).toLowerCase() === 'commit_later') && consent.callbackAtMs == null) return deny('customer-callback-unresolved')
+    if (checkDue && schedule.dueAtMs > nowMs) return deny('followup-not-due')
+    if (checkPending && pendingFollowUpStatus(lead, nowMs) !== 'none') return deny('followup-attempt-unsettled')
+    if (checkHours) {
+        const hours = strictSendableNow(nowMs, policy)
+        if (!hours.ok) return deny(hours.reason)
+    }
+    if (daysUntil(lead.eventDate, new Date(nowMs).toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })) < 0) return deny('event-passed')
+    const withinWindow = isInsideWhatsAppWindow(lead, nowMs)
+    if (!withinWindow && (!policy.template || policy.template.checkedAtMs > nowMs)) return deny('approved-marketing-template-required')
+    if (!withinWindow && transport && transport !== 'template') return deny('whatsapp-window-closed')
+    if (transport === 'template' && (!policy.template || templateName !== policy.template.name)) return deny('template-not-approved-for-purpose')
+    return { ok: true, strict: true, reason: null, consent, schedule, withinWindow }
+}
+
+/** Schedule only following explicit permission/current inbound, never a sweep. */
+export function createStrictFollowUpSchedule(lead = {}, { nowMs = Date.now(), policy = readStrictFollowUpPolicy() } = {}) {
+    if (!policy.enabled || !policy.active || policy.activatedAtMs > nowMs || !policy.weekly || !policy.delaysHours
+        || strictFollowUpStopReason(lead)) return null
+    const consent = normalizeFollowUpConsent(lead.followUpConsent, nowMs)
+    const last = lastInboundMs(lead)
+    if (!consent || consent.callbackPending === true || consent.recordedAtMs < policy.activatedAtMs || consent.usedReminders >= consent.maxReminders
+        || (lead.unansweredSalesReminders || 0) >= MAX_UNANSWERED_SALES_REMINDERS
+        || last == null || !Number.isInteger(lead.conversationRevision) || lead.conversationRevision < 1
+        || ((lead.customerDeferred || lead.stage === 'commit_later') && consent.callbackAtMs == null)) return null
+    const afterPrevious = consent.usedReminders > 0
+    const anchor = afterPrevious ? timestampMs(lead.lastSalesReminderClaimedAtMs) : Math.max(last, consent.recordedAtMs)
+    if (anchor == null) return null
+    const dueAtMs = !afterPrevious && consent.callbackAtMs != null
+        ? Math.max(consent.callbackAtMs, nowMs)
+        : Math.max(nowMs, anchor + policy.delaysHours[afterPrevious ? 1 : 0] * HOUR_MS)
+    return {
+        policyVersion: STRICT_FOLLOWUP_VERSION, generation: lead.conversationRevision,
+        consentSourceMessageId: consent.sourceMessageId, scheduledAtMs: nowMs, dueAtMs,
+        lastInboundAtMs: last, attemptNumber: consent.usedReminders + 1,
+    }
+}
+
+export const strictFollowUpDate = schedule => schedule?.dueAtMs != null
+    ? new Date(schedule.dueAtMs).toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }) : null

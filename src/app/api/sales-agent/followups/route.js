@@ -50,8 +50,8 @@ import { adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { buildFollowUpPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, resolveFollowUp } from '@/lib/salesAgent/agent'
-import { dueFollowUps, prepareFollowUpDelivery, recordDeliveryEvent, listLeads, reviveOrphans, settleStaleDeliveries, listMedia, recordFollowUpRun } from '@/lib/salesAgent/leads'
-import { sendableNow, MAX_PER_RUN, isFinalAttempt, isInsideWhatsAppWindow, pendingFollowUpStatus } from '@/lib/salesAgent/followupPolicy'
+import { dueFollowUps, prepareFollowUpDelivery, recordDeliveryEvent, listLeads, reviveOrphans, settleStaleDeliveries, listMedia, recordFollowUpRun, validateFollowUpBeforeSend } from '@/lib/salesAgent/leads'
+import { sendableNow, MAX_PER_RUN, isFinalAttempt, isInsideWhatsAppWindow, pendingFollowUpStatus, readStrictFollowUpPolicy, strictFollowUpEligibility, strictSendableNow } from '@/lib/salesAgent/followupPolicy'
 import { MEDIA } from '@/lib/salesAgent/catalog'
 import { mergeMedia, performanceNote } from '@/lib/salesAgent/mediaLibrary'
 import { findOrphans, findStaleDeliveries, findStaleHandoffs, handoffAlert } from '@/lib/salesAgent/sweep'
@@ -106,18 +106,18 @@ function todayISO() {
 //
 // Never throws. A sweep that fails must not stop the follow-ups that
 // were already due - that would trade a quiet leak for a loud one.
-async function sweep(today, { templateDeliveryEnabled = false, nowMs = Date.now() } = {}) {
+async function sweep(today, { templateDeliveryEnabled = false, nowMs = Date.now(), policy = readStrictFollowUpPolicy() } = {}) {
     try {
         const all = await listLeads({ limit: 500 })
         // First, attempts that expired without an outcome: count them as
         // the touch they were, so they stop being re-sent and stop taking
         // places in this run. Settled leads are not re-selected below
         // because their followUpAt has moved. See sweep.findStaleDeliveries.
-        const expired = findStaleDeliveries(all, { nowMs, pendingStatus: pendingFollowUpStatus })
+        const expired = findStaleDeliveries(all, { nowMs, pendingStatus: pendingFollowUpStatus, readStrictFollowUpPolicy, strictFollowUpEligibility, strictSendableNow })
         const settled = expired.length ? await settleStaleDeliveries(expired, today) : { settled: 0, ids: [] }
         const settledIds = new Set(settled.ids)
         const live = settledIds.size ? all.filter(l => !settledIds.has(l.phone)) : all
-        const orphans = findOrphans(live)
+        const orphans = policy.enabled ? [] : findOrphans(live)
         const stale = findStaleHandoffs(live)
         const blocked = templateDeliveryEnabled
             ? []
@@ -172,6 +172,11 @@ export async function GET(req) {
     // does. A dry run also ignores quiet hours, because the point of it
     // is to look, and looking at 23:00 is fine.
     const dry = new URL(req.url).searchParams.get('dry') === '1'
+    const strictPolicy = readStrictFollowUpPolicy()
+    if (strictPolicy.enabled && (!strictPolicy.active || !strictPolicy.weekly || !strictPolicy.delaysHours
+        || strictPolicy.activatedAtMs > Date.now())) {
+        return NextResponse.json({ ok: true, skipped: 'strict-followups-not-configured', delivery: 'none', date: today, count: 0, items: [] })
+    }
     // ── Who actually delivers ────────────────────────────────────────
     //
     // Two legitimate callers, two delivery models. Make calls with the
@@ -192,14 +197,14 @@ export async function GET(req) {
     // Nothing goes out on Shabbat, or before nine, or after nine. The
     // leads stay due - `dueFollowUps` compares with `<=` - so a skipped
     // Saturday becomes a Sunday morning send, not a lost one.
-    const when = sendableNow()
+    const when = strictPolicy.enabled ? strictSendableNow(Date.now(), strictPolicy) : sendableNow()
     if (!dry && !when.ok) {
         return NextResponse.json({ ok: true, skipped: when.reason, date: today, count: 0, items: [] })
     }
 
     const { revived, stale, blockedTemplateCount: sweepBlockedTemplateCount = 0, settledStale = 0, error: sweepError } = dry
         ? { revived: [], stale: findStaleHandoffs(await listLeads({ limit: 500 }).catch(() => [])), blockedTemplateCount: 0 }
-        : await sweep(today, { templateDeliveryEnabled })
+        : await sweep(today, { templateDeliveryEnabled, policy: strictPolicy })
 
     // A dry run composes a model call per lead and has no deadline of its
     // own; with 160 leads due it never returned (18.9, twice, >5 min against
@@ -221,6 +226,7 @@ export async function GET(req) {
     const items = []
     let blockedTemplateCount = sweepBlockedTemplateCount
     let blockedConversationCount = 0
+    let blockedConsentCount = 0
     let failedCount = 0
     // A small worker pool rather than a sequential loop: twenty-five
     // model calls in a row is 60-90 seconds of wall time, which is the
@@ -234,6 +240,19 @@ export async function GET(req) {
             // existed and nothing passed it, so every third follow-up was
             // written as another nudge - and a clean goodbye gets replies
             // that a fourth reminder never will.
+            const strictGuard = strictFollowUpEligibility(lead, { policy: strictPolicy, checkHours: !dry })
+            if (!strictGuard.ok) {
+                if (strictGuard.reason === 'approved-marketing-template-required') blockedTemplateCount += 1
+                else blockedConsentCount += 1
+                return
+            }
+            // The legacy Make pipe cannot perform a final generation check.
+            // Until that transport contract is upgraded, strict reminders are
+            // direct-send only; never return a stale-capable sendable item.
+            if (strictPolicy.enabled && callerDelivers && !dry) {
+                blockedConversationCount += 1
+                return
+            }
             const withinWindow = isInsideWhatsAppWindow(lead)
             if (!dry && !withinWindow && !templateDeliveryEnabled) {
                 // Production currently has no approved proactive template.
@@ -243,20 +262,22 @@ export async function GET(req) {
                 blockedTemplateCount += 1
                 return
             }
-            const followUpNumber = (lead.followUpCount || 0) + 1
-            const isFinal = isFinalAttempt(lead.followUpCount || 0, { eventDate: lead.eventDate || null, todayISO: today })
+            const followUpNumber = strictPolicy.enabled ? strictGuard.schedule.attemptNumber : (lead.followUpCount || 0) + 1
+            const isFinal = strictPolicy.enabled ? followUpNumber >= strictGuard.consent.maxReminders
+                : isFinalAttempt(lead.followUpCount || 0, { eventDate: lead.eventDate || null, todayISO: today })
             const strategy = planFollowUp(lead, {
                 attempt: followUpNumber,
                 isFinal,
                 offer: readFollowUpOffer(),
                 customerName: lead.name || lead.profileName || '',
                 todayISO: today,
+                policy: strictPolicy,
             })
             let parsed
             let text
             // The offer with its date is one sentence for everyone; the
             // model would only add variance to the date. It goes as written.
-            const scripted = ['deadline_offer', 'until_event', 'pre_event'].includes(strategy.id)
+            const scripted = strictPolicy.enabled || ['deadline_offer', 'until_event', 'pre_event'].includes(strategy.id)
             if (withinWindow && scripted) {
                 parsed = {
                     stage: lead.stage,
@@ -266,7 +287,7 @@ export async function GET(req) {
                     handoff: false,
                     image: null,
                 }
-                text = strategy.templateText
+                text = strategy.messageText || strategy.templateText
             } else if (withinWindow) {
                 const system = buildFollowUpPrompt(lead, today, {
                     isFinal,
@@ -313,7 +334,7 @@ export async function GET(req) {
                 parsed.customerDeferred = true
                 parsed.customerCallbackAt = null
             }
-            const nextFollowUpAt = resolveFollowUp({
+            const nextFollowUpAt = strictPolicy.enabled ? null : resolveFollowUp({
                 parsed,
                 todayISO: today,
                 followUpCount: followUpNumber,
@@ -400,6 +421,7 @@ export async function GET(req) {
                 followUpMediaKind: item.hasVideo ? 'video' : item.hasImage ? 'image' : 'none',
                 logicalAttemptId,
                 templateName: part === 'template' ? strategy.templateName : null,
+                ...(strictPolicy.enabled ? { expectedSchedule: lead.followUpSchedule } : {}),
                 requestedAt,
             })
             const primaryPreparation = await preparePart(primaryPart, primaryOutboundId, true)
@@ -453,6 +475,15 @@ export async function GET(req) {
                 errorCode,
                 occurredAt: new Date().toISOString(),
             })
+
+            if (strictPolicy.enabled) {
+                const dispatch = await validateFollowUpBeforeSend({ phone: lead.phone, outboundId: primaryOutboundId, nowMs: Date.now() })
+                if (!dispatch.ok) {
+                    blockedConversationCount += 1
+                    await fail(primaryOutboundId, 'CONVERSATION_CHANGED')
+                    return
+                }
+            }
 
             let primaryEvidence
             try {
@@ -610,11 +641,12 @@ export async function GET(req) {
         count: items.length,
         items,
         templateDelivery: {
-            status: templateDeliveryEnabled ? 'enabled' : blockedTemplateCount ? 'blocked' : 'disabled',
+            status: (strictPolicy.enabled ? !!strictPolicy.template : templateDeliveryEnabled) ? 'enabled' : blockedTemplateCount ? 'blocked' : 'disabled',
             blockedCount: blockedTemplateCount,
         },
         failedCount,
         blockedConversationCount,
+        blockedConsentCount,
         settledStale,
         recovered: revived.length,
         recoveredLeads: revived,

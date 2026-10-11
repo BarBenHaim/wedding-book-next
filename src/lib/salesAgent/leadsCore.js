@@ -14,17 +14,14 @@ import { normalizePhone } from './agent'
 
 const MAX_TURNS = 24 // 12 exchanges — plenty for a sale, cheap to send
 
-// How long a human handoff silences the bot. Without an expiry a single
-// handoff would mute that lead forever, and a lead nobody remembers to
-// resume is a lead lost more quietly than one never contacted.
+// Operational escalation threshold only. It NEVER grants permission to resume.
 const HUMAN_PAUSE_HOURS = 48
 
-// True when a human took the wheel and the pause has not expired yet.
-export function isPausedForHuman(lead, nowMs = Date.now()) {
-    if (!lead?.human) return false
-    const since = lead.humanSince?.toMillis ? lead.humanSince.toMillis() : Number(lead.humanSince) || 0
-    if (!since) return true // paused with no timestamp — stay quiet, be safe
-    return nowMs - since < HUMAN_PAUSE_HOURS * 3600 * 1000
+// Human ownership lasts until an intentional authenticated release. Treat old
+// records and incomplete writes conservatively, including resolved tasks.
+export function isPausedForHuman(lead) {
+    return !!(lead?.human || lead?.humanTakeover
+        || ['requested', 'acknowledged', 'resolved'].includes(lead?.humanTaskStatus))
 }
 
 // Trim to the last MAX_TURNS, always keeping whole turns.

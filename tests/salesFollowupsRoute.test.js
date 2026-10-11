@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
     verifyIdToken: vi.fn(),
@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
     resolveFollowUp: vi.fn(),
     dueFollowUps: vi.fn(),
     prepareFollowUpDelivery: vi.fn(),
+    validateFollowUpBeforeSend: vi.fn(),
     recordDeliveryEvent: vi.fn(),
     listLeads: vi.fn(),
     reviveOrphans: vi.fn(),
@@ -41,6 +42,7 @@ vi.mock('@/lib/salesAgent/agent', () => ({ callClaude: mocks.callClaude, parseAg
 vi.mock('@/lib/salesAgent/leads', () => ({
     dueFollowUps: mocks.dueFollowUps,
     prepareFollowUpDelivery: mocks.prepareFollowUpDelivery,
+    validateFollowUpBeforeSend: mocks.validateFollowUpBeforeSend,
     recordDeliveryEvent: mocks.recordDeliveryEvent,
     listLeads: mocks.listLeads, reviveOrphans: mocks.reviveOrphans,
     settleStaleDeliveries: mocks.settleStaleDeliveries,
@@ -106,6 +108,8 @@ beforeEach(async () => {
     process.env.CRON_SECRET = 'cron-test-secret'
     process.env.SALES_AGENT_SECRET = 'shared-secret-fixture'
     process.env.SALES_AGENT_OWNER_PHONE = 'non-dialable-owner-fixture'
+    delete process.env.SALES_CONVERSATIONAL_POLICY_ENABLED
+    delete process.env.SALES_CONSENT_FOLLOWUPS_ENABLED
     process.env.SALES_FOLLOWUP_TEMPLATE_ENABLED = 'true'
     // These transport tests were written against the universal template;
     // production defaults to the approved name-only one (whatsapp.js).
@@ -135,6 +139,7 @@ beforeEach(async () => {
     mocks.resolveFollowUp.mockReturnValue(null)
     mocks.createOutboundId.mockImplementation(({ part }) => `outbound-fixture:${part}`)
     mocks.prepareFollowUpDelivery.mockResolvedValue({ action: 'requested' })
+    mocks.validateFollowUpBeforeSend.mockResolvedValue({ ok: true })
     mocks.sendWhatsAppText.mockResolvedValue({ accepted: true, providerMessageId: 'wamid-text-fixture' })
     mocks.sendWhatsAppImage.mockResolvedValue({ accepted: true, providerMessageId: 'wamid-image-fixture' })
     mocks.sendWhatsAppVideo.mockResolvedValue({ accepted: true, providerMessageId: 'wamid-video-fixture' })
@@ -719,5 +724,133 @@ describe('last-moment conversation suppression never escapes to a transport', ()
         expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
         expect(mocks.sendWhatsAppImage).not.toHaveBeenCalled()
         expect(mocks.sendWhatsAppVideo).not.toHaveBeenCalled()
+    })
+})
+
+describe('strict consent-aware reminders (synthetic effects only)', () => {
+    const now = Date.parse('2026-10-05T09:00:00Z')
+    const hour = 3600_000
+    function strictLead(patch = {}) {
+        return {
+            ...lead, stage: 'offer_sent', conversationRevision: 7,
+            lastInboundAtMs: now - 4 * hour,
+            unansweredSalesReminders: 0,
+            followUpConsent: {
+                status: 'granted', scope: 'sales_reminders', source: 'customer_message',
+                sourceMessageId: 'synthetic-customer-message', recordedAtMs: now - 4 * hour,
+                maxReminders: 1, usedReminders: 0,
+            },
+            followUpSchedule: {
+                policyVersion: 'consent-v1', generation: 7, consentSourceMessageId: 'synthetic-customer-message',
+                scheduledAtMs: now - 4 * hour, dueAtMs: now,
+                lastInboundAtMs: now - 4 * hour, attemptNumber: 1,
+            },
+            ...patch,
+        }
+    }
+    beforeEach(() => {
+        vi.useFakeTimers()
+        vi.setSystemTime(now)
+        vi.stubEnv('SALES_CONVERSATIONAL_POLICY_ENABLED', 'true')
+        vi.stubEnv('SALES_CONSENT_FOLLOWUPS_ENABLED', 'true')
+        vi.stubEnv('SALES_CONSENT_FOLLOWUPS_ACTIVATED_AT', '2026-10-01T00:00:00Z')
+        vi.stubEnv('SALES_CONSENT_FOLLOWUP_HOURS_JSON', JSON.stringify({ timeZone: 'Asia/Jerusalem', weekly: { 1: [['09:30', '17:30']] } }))
+        vi.stubEnv('SALES_CONSENT_FOLLOWUP_DELAYS_HOURS', '[4,72]')
+        vi.stubEnv('SALES_FOLLOWUP_TEMPLATE_NAME', 'wt_followup_he')
+        vi.stubEnv('SALES_FOLLOWUP_TEMPLATE_APPROVAL_JSON', JSON.stringify({
+            name: 'wt_followup_he', language: 'he', status: 'APPROVED', category: 'MARKETING',
+            purpose: 'sales_reminders', source: 'synthetic-fixture', checkedAtMs: now - hour,
+        }))
+        mocks.dueFollowUps.mockResolvedValue([strictLead()])
+    })
+    afterEach(() => {
+        vi.useRealTimers()
+        vi.unstubAllEnvs()
+    })
+    it('has no new activation without separately approved schedule configuration', async () => {
+        vi.stubEnv('SALES_CONSENT_FOLLOWUPS_ENABLED', '')
+        const { body } = await runCron()
+        expect(body.skipped).toBe('strict-followups-not-configured')
+        expect(mocks.dueFollowUps).not.toHaveBeenCalled()
+        expect(mocks.reviveOrphans).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+    })
+    it('blocks missing consent even inside an open service window', async () => {
+        mocks.dueFollowUps.mockResolvedValue([strictLead({ followUpConsent: null })])
+        const { body } = await runCron()
+        expect(body.items).toEqual([])
+        expect(body.blockedConsentCount).toBe(1)
+        expect(mocks.prepareFollowUpDelivery).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+    })
+    it('does not recover a legacy backlog even when an approved template is configured', async () => {
+        mocks.findOrphans.mockReturnValue([{ phone: 'synthetic-legacy', lastInboundAt: now - 100 * hour }])
+        await runCron()
+        expect(mocks.findOrphans).not.toHaveBeenCalled()
+        expect(mocks.reviveOrphans).not.toHaveBeenCalled()
+    })
+    it('dispatches one concise deterministic message after the final current-generation guard', async () => {
+        const { body } = await runCron()
+        expect(body.items).toHaveLength(1)
+        expect(body.items[0]).toMatchObject({ isFinal: true, followUpNumber: 1, accepted: true })
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.prepareFollowUpDelivery).toHaveBeenCalledWith(expect.objectContaining({ expectedSchedule: strictLead().followUpSchedule }))
+        expect(mocks.validateFollowUpBeforeSend).toHaveBeenCalledWith(expect.objectContaining({ phone: lead.phone }))
+        expect(mocks.sendWhatsAppText).toHaveBeenCalledOnce()
+        expect(mocks.sendWhatsAppText.mock.calls[0][1]).not.toMatch(/מתנה|שמרתי|פוסטר/)
+        expect(mocks.sendWhatsAppImage).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppVideo).not.toHaveBeenCalled()
+    })
+    it('cancels a reminder when fresh inbound or takeover invalidates it before dispatch', async () => {
+        mocks.validateFollowUpBeforeSend.mockResolvedValue({ ok: false, reason: 'conversation-changed' })
+        const { body } = await runCron()
+        expect(body.items).toEqual([])
+        expect(body.blockedConversationCount).toBe(1)
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+        expect(mocks.recordDeliveryEvent).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed', errorCode: 'CONVERSATION_CHANGED' }))
+    })
+    it('does not return an unguarded sendable item to the legacy Make pipe', async () => {
+        const { body } = await runMake()
+        expect(body.items).toEqual([])
+        expect(body.blockedConversationCount).toBe(1)
+        expect(mocks.prepareFollowUpDelivery).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+    })
+    it('requires a purpose/category-approved template outside the actual customer window', async () => {
+        const value = strictLead({ lastInboundAtMs: now - 25 * hour })
+        value.followUpSchedule.lastInboundAtMs = now - 25 * hour
+        mocks.dueFollowUps.mockResolvedValue([value])
+        vi.stubEnv('SALES_FOLLOWUP_TEMPLATE_APPROVAL_JSON', '')
+        const { body } = await runCron()
+        expect(body.templateDelivery.blockedCount).toBe(1)
+        expect(mocks.prepareFollowUpDelivery).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
+    })
+    it('uses only approved marketing template when consent exists outside 24 hours', async () => {
+        const value = strictLead({ lastInboundAtMs: now - 25 * hour })
+        value.followUpSchedule.lastInboundAtMs = now - 25 * hour
+        mocks.dueFollowUps.mockResolvedValue([value])
+        await runCron()
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(lead.phone, 'wt_followup_he', expect.any(Array))
+    })
+    it('prevents a callback from being sent early on the agreed day', async () => {
+        const value = strictLead()
+        value.followUpConsent.callbackAtMs = now + hour
+        value.followUpSchedule.dueAtMs = now + hour
+        mocks.dueFollowUps.mockResolvedValue([value])
+        const { body } = await runCron()
+        expect(body.items).toEqual([])
+        expect(mocks.prepareFollowUpDelivery).not.toHaveBeenCalled()
+    })
+    it('dry run does not claim permission or call any provider/model', async () => {
+        const { body } = await runCron('?dry=1')
+        expect(body.items).toHaveLength(1)
+        expect(body.items[0].deliveryStatus).toBe('dry')
+        expect(mocks.prepareFollowUpDelivery).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
     })
 })

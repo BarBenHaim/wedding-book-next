@@ -1,3 +1,5 @@
+import { validApproval } from './offerCatalog'
+
 // src/lib/salesAgent/mediaLibrary.js
 //
 // The media the bot is allowed to send, and how we find out which of it
@@ -111,7 +113,7 @@ export function keyFrom(label, existing = []) {
  * after a built-in, and the thing he just uploaded is the thing he wants
  * tried.
  */
-export function mergeMedia(catalogMedia = {}, custom = []) {
+export function mergeMedia(catalogMedia = {}, custom = [], { strict = false, nowMs = Date.now() } = {}) {
     const out = {}
     for (const [key, m] of Object.entries(catalogMedia)) {
         out[key] = { ...m, kind: 'image', source: 'catalog' }
@@ -119,6 +121,7 @@ export function mergeMedia(catalogMedia = {}, custom = []) {
     for (const item of Array.isArray(custom) ? custom : []) {
         if (!item?.key || !item?.url || item.disabled) continue
         out[item.key] = {
+            ...item,
             url: item.url,
             caption: item.caption || '',
             when: item.when || '',
@@ -126,7 +129,7 @@ export function mergeMedia(catalogMedia = {}, custom = []) {
             source: 'upload',
         }
     }
-    return out
+    return strict ? filterApprovedMedia(out, { nowMs }) : out
 }
 
 const rate = (num, den) => (den > 0 ? num / den : 0)
@@ -196,4 +199,40 @@ export function performanceNote(stats = {}, media = {}) {
 export default {
     LIMITS, KIND_HE, MIN_SENDS_FOR_RATE,
     validateUpload, keyFrom, mergeMedia, scoreMedia, rankMedia, performanceNote,
+}
+
+
+// Approval is attached to the exact asset version and URL. Existing public
+// files/uploads are not grandfathered; absent consent/provenance fails closed.
+export function isApprovedSalesMedia(asset, { nowMs = Date.now(), eventType = null } = {}) {
+    if (!asset || asset.disabled || !asset.assetId || !asset.version || !validApproval(asset.approval, nowMs)) return false
+    if (asset.approval.assetVersion !== asset.version || asset.approval.assetUrl !== asset.url) return false
+    if (asset.audience !== 'public' || !asset.usageScopes?.includes('sales_demo') || !asset.channels?.includes('whatsapp')) return false
+    if (!Array.isArray(asset.eventTypes) || !asset.eventTypes.length) return false
+    if (eventType && !asset.eventTypes.includes(eventType) && !asset.eventTypes.includes('generic')) return false
+    if (!['image', 'video'].includes(asset.kind || 'image')) return false
+    const rights = asset.rights
+    if (!['owned', 'licensed', 'customer_permission'].includes(rights?.basis) || !rights.evidenceRef) return false
+    if (!['none', 'consented'].includes(rights.personalData) || !['none', 'consented'].includes(rights.minorData)) return false
+    if ((rights.personalData === 'consented' || rights.minorData === 'consented' || rights.basis === 'customer_permission') && !rights.consentEvidenceRef) return false
+    if (!['actual_product', 'workflow', 'illustration'].includes(asset.representation)) return false
+    if (asset.expiresAt && (!Number.isFinite(Date.parse(asset.expiresAt)) || Date.parse(asset.expiresAt) <= nowMs)) return false
+    try {
+        const url = new URL(asset.url)
+        if (url.protocol !== 'https:' || url.username || url.password || url.hash) return false
+        // A private owner/book URL is never a demo-media URL.
+        if (/\/(?:wedding|admin|arrange|owner|b|book|portal|viewer|stats|account|api)(?:\/|$)/i.test(url.pathname)) return false
+    } catch { return false }
+    return true
+}
+
+export function filterApprovedMedia(library = {}, options = {}) {
+    return Object.fromEntries(Object.entries(library || {}).filter(([, asset]) => isApprovedSalesMedia(asset, options)))
+}
+
+export const MEDIA_TEXT_FALLBACK = 'כרגע אין לי דוגמה מאושרת שאפשר לשלוח. אפשר להמשיך עם הסבר כתוב, או לבדוק דוגמה מתאימה עם הצוות.'
+
+export function mediaDeliveryFallback({ asset = null, attempts = 0, nowMs = Date.now() } = {}) {
+    if (isApprovedSalesMedia(asset, { nowMs }) && Number.isInteger(attempts) && attempts === 0) return { action: 'retry', maxAttempts: 1, asset }
+    return { action: 'text', text: MEDIA_TEXT_FALLBACK, asset: null }
 }

@@ -93,6 +93,7 @@ import {
     releaseProviderProbe,
 } from '@/lib/salesAgent/leads'
 import { createOutboundId } from '@/lib/salesAgent/delivery'
+import { humanTaskId, humanPausePatch } from '@/lib/salesAgent/humanHandoff'
 import { providerCircuitRuntimeId } from '@/lib/salesAgent/circuitIdentity'
 
 const RUNTIME = 'sales_runtime/anthropic'
@@ -317,10 +318,11 @@ describe('Firestore atomic provider fallback matrix', () => {
         expect(store.entries().find(([key]) => key.startsWith('sales_leads/'))?.[1]).toMatchObject({
             human: true,
             handoffReason: 'תקלה בשירות ה-AI',
-            followUpAt: '2026-08-17',
+            followUpAt: null,
+            humanTaskStatus: 'requested',
         })
         expect(store.get(EVENT)).toMatchObject({ status: 'completed', outcome: { handoff: true } })
-        expect(store.committed().map(write => write.key).sort()).toEqual([EVENT, 'sales_leads/123'].sort())
+        expect(store.committed().map(write => write.key).sort()).toEqual([EVENT, 'sales_leads/123', `sales_human_tasks/${humanTaskId('123', 1)}`].sort())
     })
 
     it('fallback stale generation writes neither lead nor event', async () => {
@@ -364,7 +366,7 @@ describe('Firestore atomic provider fallback matrix', () => {
 
         await expect(completeProviderFallback(fallbackArgs())).rejects.toThrow('injected commit failure')
 
-        expect(store.staged().map(write => write.key).sort()).toEqual([EVENT, 'sales_leads/123'].sort())
+        expect(store.staged().map(write => write.key).sort()).toEqual([EVENT, 'sales_leads/123', `sales_human_tasks/${humanTaskId('123', 1)}`].sort())
         expect(store.committed()).toEqual([])
         expect(store.get(EVENT)).toEqual(processingEvent())
         expect(store.entries().find(([key]) => key.startsWith('sales_leads/'))).toBeUndefined()
@@ -457,7 +459,7 @@ describe('Firestore atomic successful exchange matrix', () => {
 
         await expect(completeSuccessfulExchange(successArgs())).resolves.toMatchObject({ action: 'completed' })
 
-        expect(store.get(`sales_leads/${expected.id}`)).toEqual(expected.patch)
+        expect(store.get(`sales_leads/${expected.id}`)).toEqual({ ...expected.patch, ...humanPausePatch({ taskId: humanTaskId(expected.id, 1), generation: 1, now: 'SERVER_TIME' }) })
         expect(store.get(EVENT)).toMatchObject({ status: 'completed', outcome: { sendText: 'answer', handoff: true } })
         expect(store.get(`sales_delivery_events/${textOutboundId}`)).toMatchObject({
             outboundId: textOutboundId,
@@ -472,6 +474,7 @@ describe('Firestore atomic successful exchange matrix', () => {
         expect(store.committed().map(write => write.key).sort()).toEqual([
             EVENT,
             `sales_leads/${expected.id}`,
+            `sales_human_tasks/${humanTaskId(expected.id, 1)}`,
             `sales_delivery_events/${textOutboundId}`,
         ].sort())
     })
@@ -646,6 +649,7 @@ describe('Firestore atomic successful exchange matrix', () => {
         expect(store.staged().map(write => write.key).sort()).toEqual([
             EVENT,
             'sales_leads/456',
+            `sales_human_tasks/${humanTaskId('456', 1)}`,
             `sales_delivery_events/${textOutboundId}`,
         ].sort())
         expect(store.committed()).toEqual([])
