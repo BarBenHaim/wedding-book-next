@@ -160,3 +160,37 @@ describe('hasOverrides / overriddenKeys', () => {
             .toEqual(['backgroundColor', 'pagePadding'])
     })
 })
+
+describe('a photo as the whole page background', () => {
+    it('lets one page pin its background photo and where the crop anchors', async () => {
+        const { surfacePosition } = await import('@/lib/pageStyle')
+        expect(PAGE_OVERRIDABLE_KEYS).toContain('backgroundUrl')
+        expect(PAGE_OVERRIDABLE_KEYS).toContain('backgroundPosition')
+        expect(sanitizePageStyle({ backgroundUrl: 'https://firebasestorage.googleapis.com/x.jpg', backgroundPosition: 'top' }))
+            .toEqual({ backgroundUrl: 'https://firebasestorage.googleapis.com/x.jpg', backgroundPosition: 'top' })
+        expect(surfacePosition({ backgroundPosition: 'top' })).toBe('center top')
+        expect(surfacePosition({ backgroundPosition: 'bottom' })).toBe('center bottom')
+        expect(surfacePosition({})).toBe('center')
+    })
+
+    it('only the three anchors reach CSS', async () => {
+        const { surfacePosition } = await import('@/lib/pageStyle')
+        expect(sanitizePageStyle({ backgroundPosition: 'left; background:url(evil)' })).toEqual({})
+        expect(sanitizePageStyle({ backgroundPosition: null })).toEqual({ backgroundPosition: null })
+        expect(surfacePosition({ backgroundPosition: '10% 20%' })).toBe('center')
+    })
+
+    it('every surface that paints the page background honours the anchor', async () => {
+        const { readFileSync } = await import('node:fs')
+        const { resolve } = await import('node:path')
+        for (const f of [
+            'src/components/BookPageTemplate/BookPageTemplate.jsx',
+            'src/components/DuoPageLayout/DuoPageLayout.jsx',
+            'src/components/ComposedPageLayout/ComposedPageLayout.jsx',
+        ]) {
+            const src = readFileSync(resolve(process.cwd(), f), 'utf8')
+            expect(src, f).not.toMatch(/backgroundPosition: 'center'/)
+            expect(src, f).toMatch(/backgroundPosition: surfacePosition\(styleSettings\)/)
+        }
+    })
+})
