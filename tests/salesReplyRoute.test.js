@@ -873,13 +873,13 @@ afterEach(() => {
 })
 
 describe('inbound event duplicate fencing', () => {
-    it('durably suppresses an inbound event older than fifteen minutes before lead or provider work', async () => {
+    it.each(['2026-08-16T11:44:59.000Z', 1786880699, 1786880699000, '1786880699', '1786880699000'])('durably suppresses stale timestamp %j before lead or provider work', async occurredAt => {
         vi.useFakeTimers()
         vi.setSystemTime(new Date('2026-08-16T12:00:00.000Z'))
 
         const result = await post(inbound({
             text: 'stale private fixture',
-            occurredAt: '2026-08-16T11:44:59.999Z',
+            occurredAt,
         }))
 
         expect(result).toEqual({
@@ -901,20 +901,21 @@ describe('inbound event duplicate fencing', () => {
                 sendText: '', handoff: false, noReply: true, skipped: 'stale-inbound',
             }),
         }))
+        expect(mocks.sendInboundSequenceDirect).not.toHaveBeenCalled()
         expect(mocks.getLead).not.toHaveBeenCalled()
         expect(mocks.listMedia).not.toHaveBeenCalled()
         expect(mocks.callClaude).not.toHaveBeenCalled()
         expectNoProviderWork()
     })
 
-    it('processes an event exactly fifteen minutes old instead of classifying it as stale', async () => {
+    it.each(['2026-08-16T11:45:00.000Z', 1786880700, 1786880700000, '1786880700', '1786880700000'])('processes boundary timestamp %j instead of classifying it as stale', async occurredAt => {
         vi.useFakeTimers()
         vi.setSystemTime(new Date('2026-08-16T12:00:00.000Z'))
 
         const result = await post(inbound({
             text: '',
             messageType: 'image',
-            occurredAt: '2026-08-16T11:45:00.000Z',
+            occurredAt,
         }))
 
         expect(result.status).toBe(200)
@@ -924,10 +925,10 @@ describe('inbound event duplicate fencing', () => {
         expect(mocks.setHuman).toHaveBeenCalledTimes(1)
     })
 
-    it('keeps a replay of a completed stale event silent', async () => {
+    it.each(['2026-08-16T11:40:00.000Z', 1786880400, 1786880400000, '1786880400', '1786880400000'])('keeps a replay of completed stale timestamp %j silent', async occurredAt => {
         vi.useFakeTimers()
         vi.setSystemTime(new Date('2026-08-16T12:00:00.000Z'))
-        const body = inbound({ text: 'stale replay fixture', occurredAt: '2026-08-16T11:40:00.000Z' })
+        const body = inbound({ text: 'stale replay fixture', occurredAt })
 
         const first = await post(body)
         mocks.claimInboundEvent.mockResolvedValueOnce({

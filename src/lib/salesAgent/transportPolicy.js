@@ -1,6 +1,15 @@
 export const MAX_LIVE_INBOUND_AGE_MS = 15 * 60 * 1000
 
 function parseOccurredAt(value) {
+    // parseInboundBody preserves provider fields as strings, including JSON
+    // numbers. Recognize unsigned integer Unix timestamps before Date.parse,
+    // which does not parse contemporary seconds/milliseconds digit strings.
+    // Keep signed/malformed strings on their existing compatibility path.
+    if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+        const numeric = Number(value.trim())
+        if (!Number.isSafeInteger(numeric)) return null
+        value = numeric
+    }
     if (typeof value === 'number' && Number.isFinite(value)) {
         return value < 10_000_000_000 ? value * 1000 : value
     }
