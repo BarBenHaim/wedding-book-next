@@ -62,6 +62,10 @@ import { readSalesSettings } from '@/lib/salesAgent/settingsStore'
 import { planFollowUp, readFollowUpOffer, buildFollowUpMessages } from '@/lib/salesAgent/followupStrategy'
 import { hasMixedScript, repeatsKnownSalesQuestion } from '@/lib/salesAgent/decisionPolicy'
 
+// Incident containment: pause automated follow-ups until message/template and
+// duplicate-delivery fixes are verified. Inbound /reply remains unchanged.
+const AUTOMATED_FOLLOWUPS_PAUSED_FOR_REPAIR = true
+
 function unsentVideo(library, lead, strategy) {
     if (strategy?.mediaPreference !== 'video') return null
     const sent = new Set([
@@ -141,6 +145,10 @@ async function sweep(today, { templateDeliveryEnabled = false, nowMs = Date.now(
 
 export async function GET(req) {
     if (!(await authorized(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    if (AUTOMATED_FOLLOWUPS_PAUSED_FOR_REPAIR) {
+        return NextResponse.json({ ok: true, skipped: 'followups-paused-for-repair', delivery: 'none', count: 0, items: [] })
+    }
 
     const today = todayISO()
     let settings
