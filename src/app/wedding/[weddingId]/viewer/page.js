@@ -8,7 +8,7 @@ import { storage, db, auth } from '@/lib/firebaseClient'
 import { onAuthStateChanged, getIdToken } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 // html2canvas + jsPDF are ~400 KB combined and only used by the
-// admin's "Send to Lulu" + "Download PDFs" flows — never by normal
+// admin's export flows (including single-page JPG) — never by normal
 // viewing. Dynamically imported inside the handlers below so a
 // regular viewer load never pays for them.
 
@@ -32,6 +32,8 @@ import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
 import BookLoader from '@/components/BookLoader/BookLoader'
+import useBookPageDownload from '@/components/BookPageDownload/useBookPageDownload'
+import BookPageDownloadButton from '@/components/BookPageDownload/BookPageDownloadButton'
 
 // --- הגדרות דפוס (LULU COMPLIANT) ---
 //
@@ -85,6 +87,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // the panel, because the click that sets it happens on the book.
     const [editingId, setEditingId] = useState(null)
     useEffect(() => onAuthStateChanged(auth, user => setIsAdmin(isSuperAdmin(user?.email))), [])
+    const pageDownload = useBookPageDownload({ enabled: isAdmin && mode === 'book', t })
     const [viewerSize, setViewerSize] = useState(500)
     const [isMobile, setIsMobile] = useState(false)
     // styleSettings drives the page interior (BookPageTemplate).
@@ -862,6 +865,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                     )}
                 </aside>
 
+                {pageDownload.captureStage}
                 <main
                     // Centered on both axes: mobile (preset strip
                     // above + book below) and desktop (book filling
@@ -958,7 +962,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                 <div className='demo-page shadow-inner'>
                                     <BookBackCoverTemplate scaledWidth={viewerSize} scaledHeight={viewerSize} />
                                 </div>
-                                {displayPages.map(entry => {
+                                {displayPages.map((entry, pageIndex) => {
                                     // A page carries one blessing, two, or
                                     // none (a blank alignment leaf). Only a
                                     // single-blessing page is editable: two
@@ -985,6 +989,18 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                                 scaledWidth={viewerSize}
                                                 scaledHeight={viewerSize}
                                             />
+                                            {isAdmin && (
+                                                <BookPageDownloadButton
+                                                    label={t('downloadPageJpg')}
+                                                    busyLabel={t('pageDownloadPreparing')}
+                                                    disabled={pageDownload.downloading}
+                                                    busy={pageDownload.downloading && pageDownload.downloadingIndex === pageIndex}
+                                                    onClick={() => pageDownload.downloadPage({
+                                                        entry, styleSettings: styleWithLocale, index: pageIndex,
+                                                        weddingId, width: viewerSize, height: viewerSize, locale,
+                                                    })}
+                                                />
+                                            )}
                                             {/* Click-to-edit is a pill, not
                                                 the whole surface: the
                                                 flipbook turns pages on
@@ -1068,6 +1084,12 @@ function BookViewerInner({ onLocaleDiscovered }) {
                             </HTMLFlipBook>
                         )}
                     </div>
+
+                    {isAdmin && pageDownload.message && (
+                        <p role={pageDownload.error ? 'alert' : 'status'} className={`mt-2 max-w-lg text-center text-xs ${pageDownload.error ? 'text-red-700' : 'text-[#7a6a52]'}`}>
+                            {pageDownload.message}
+                        </p>
+                    )}
 
                     {/* Prev/next arrows below the book — useful on
                         mobile (no keyboard) and a nice extra on
