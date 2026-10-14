@@ -271,6 +271,10 @@
     "savePresetError": "No se pudo guardar el estilo."
   },
   "viewer": {
+    "downloadPageJpg": "Descargar página JPG",
+    "pageDownloadPreparing": "Preparando imagen…",
+    "pageDownloadStarted": "La descarga de la imagen de la página ha comenzado.",
+    "pageDownloadError": "No se pudo descargar la página. Es posible que una imagen o fuente no se haya cargado. Inténtalo de nuevo.",
     "loadingCover": "Cargando diseño de portada...",
     "oneMoment": "Un momento",
     "waitingBook": "Esperando el libro...",

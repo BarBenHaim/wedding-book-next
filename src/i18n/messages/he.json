@@ -271,6 +271,10 @@
     "savePresetError": "שמירת הסגנון נכשלה."
   },
   "viewer": {
+    "downloadPageJpg": "הורד עמוד JPG",
+    "pageDownloadPreparing": "מכין תמונה…",
+    "pageDownloadStarted": "הורדת תמונת העמוד החלה.",
+    "pageDownloadError": "לא ניתן להוריד את העמוד. ייתכן שתמונה או גופן לא נטענו. נסו שוב.",
     "loadingCover": "טוען את עיצוב הכריכה...",
     "oneMoment": "רגע אחד בלבד",
     "waitingBook": "ממתין לטעינת הספר...",
