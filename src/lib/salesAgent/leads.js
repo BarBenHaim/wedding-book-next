@@ -1372,8 +1372,9 @@ export async function readDueFollowUpHealth(todayISO) {
 // types. It misses exotic formatting, and that is an acceptable miss:
 // the fallback is the bot behaving exactly as it does today.
 //
-// Called only on a lead's FIRST message, so this is one query per new
-// conversation, not one per message.
+// Called on a lead's first message and bounded support-like continuations
+// from existing leads. The route still requires a real ownerPhone match;
+// support wording alone does not prove a customer relationship or payment.
 export async function findCustomerByPhone(rawPhone) {
     const intl = normalizePhone(rawPhone) // 972501234567
     if (!intl || intl.length < 11) return null

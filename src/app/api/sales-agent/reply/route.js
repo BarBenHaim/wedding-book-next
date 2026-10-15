@@ -69,6 +69,7 @@ import {
     signOpeningVariableDownload,
 } from '@/lib/salesAgent/openingVariableRuntimeStore'
 import { readPriorConversationContext } from '@/lib/salesAgent/priorContext'
+import { shouldLookupCustomerByPhone } from '@/lib/salesAgent/customerContext'
 import { canSendWhatsApp } from '@/lib/salesAgent/whatsapp'
 import { sendInboundSequenceDirect } from '@/lib/salesAgent/inboundDirectDelivery'
 
@@ -470,14 +471,15 @@ export async function POST(req) {
     // support, not sales. So the bot acknowledges, pings Lord, and mutes
     // itself.
     //
-    // Two ways to be a customer: the bot closed them (stage), or they
-    // bought before the bot existed (a wedding with their phone on it).
-    // The second is checked only on a first message, so it costs one
-    // query per new conversation rather than one per message.
+    // Stored customer/payment truth takes precedence over a stale sales
+    // stage. Otherwise, only a real wedding ownerPhone match proves the
+    // customer relationship. Check first contacts and bounded support-like
+    // turns from existing leads; ordinary sales turns need no extra query.
+    // Neither the lookup hint nor its result establishes a payment amount.
     let customer = null
-    if (lead.stage === 'closed_won') {
+    if (lead.stage === 'closed_won' || lead.paymentVerified === true) {
         customer = { weddingId: lead.weddingId || null, ownerName: lead.name || null }
-    } else if (lead.isNew) {
+    } else if (shouldLookupCustomerByPhone({ lead, incomingText: text })) {
         customer = await findCustomerByPhone(phone)
     }
     if (customer) {
