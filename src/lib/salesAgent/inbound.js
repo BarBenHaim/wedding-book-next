@@ -37,7 +37,8 @@
 // who types something that looks like JSON cannot make us mis-read a
 // field that was already read.
 export const BODY_KEYS = [
-    'eventId', 'phone', 'text', 'profileName', 'source', 'from', 'to',
+    'eventId', 'providerMessageId', 'providerAccountId', 'providerChannel',
+    'phone', 'text', 'profileName', 'source', 'from', 'to',
     'businessPhone', 'field', 'messageType', 'mediaId', 'occurredAt',
     'conversationId', 'campaignId', 'campaignName', 'adsetId', 'adId',
     'adName', 'ctwaClid', 'sourceUrl', 'headline',
@@ -54,6 +55,9 @@ function normalizeInboundBody(input) {
     const body = { ...input }
     const requestedType = String(body.messageType || 'text').toLowerCase()
     body.eventId = String(body.eventId || '')
+    body.providerMessageId = String(body.providerMessageId || '')
+    body.providerAccountId = String(body.providerAccountId || '')
+    body.providerChannel = String(body.providerChannel || '')
     body.phone = String(body.phone || '')
     body.text = String(body.text || '')
     body.profileName = String(body.profileName || '')

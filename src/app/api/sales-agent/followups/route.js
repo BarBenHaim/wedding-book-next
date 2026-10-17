@@ -62,6 +62,12 @@ import { readSalesSettings } from '@/lib/salesAgent/settingsStore'
 import { planFollowUp, readFollowUpOffer, buildFollowUpMessages } from '@/lib/salesAgent/followupStrategy'
 import { hasMixedScript, repeatsKnownSalesQuestion } from '@/lib/salesAgent/decisionPolicy'
 
+// This deployment is intentionally inbound-only. Proactive follow-ups stay
+// disabled until they are separately reviewed and explicitly authorized.
+function proactiveFollowUpsEnabled() {
+    return process.env.SALES_PROACTIVE_FOLLOWUPS_APPROVED === 'true'
+}
+
 function unsentVideo(library, lead, strategy) {
     if (strategy?.mediaPreference !== 'video') return null
     const sent = new Set([
@@ -143,6 +149,16 @@ export async function GET(req) {
     if (!(await authorized(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const today = todayISO()
+    if (!proactiveFollowUpsEnabled()) {
+        return NextResponse.json({
+            ok: true,
+            skipped: 'proactive-followups-disabled',
+            delivery: 'none',
+            date: today,
+            count: 0,
+            items: [],
+        })
+    }
     let settings
     let custom
     let library

@@ -591,21 +591,40 @@ export async function completeSuccessfulExchange({
 
 /**
  * Claim the one durable unit of inbound work before a reply can spend
- * money or write a lead. The event id is Meta's stable delivery id; the
- * phone is deliberately reduced to a hash before it reaches Firestore.
+ * money or write a lead. The event id is a hash of Meta's stable message,
+ * account, and channel identity; the phone is deliberately reduced to a
+ * hash before it reaches Firestore.
  */
-export async function claimInboundEvent({ eventId, phone, occurredAt }) {
+export async function claimInboundEvent({
+    eventId, wrapperEventId = null, providerMessageId, providerAccountId, providerChannel,
+    phone, occurredAt,
+}) {
+    const identity = {
+        providerMessageId: typeof providerMessageId === 'string' ? providerMessageId.trim() : '',
+        providerAccountId: typeof providerAccountId === 'string' ? providerAccountId.trim() : '',
+        providerChannel: typeof providerChannel === 'string' ? providerChannel.trim() : '',
+    }
+    if (!identity.providerMessageId || !identity.providerAccountId || identity.providerChannel !== 'meta_whatsapp') {
+        throw new Error('inbound provider identity required')
+    }
     const eventRef = inboundEventRef(eventId)
     const claimToken = crypto.randomUUID()
     return adminDb.runTransaction(async tx => {
         const snap = await tx.get(eventRef)
         const stored = snap.exists ? snap.data() : null
+        if (stored && (
+            stored.providerMessageId !== identity.providerMessageId
+            || stored.providerAccountId !== identity.providerAccountId
+            || stored.providerChannel !== identity.providerChannel
+        )) throw new Error('inbound provider identity conflict')
         const nowMs = Date.now()
         const claim = startInboundClaim(stored, nowMs, claimToken)
         if (claim.action !== 'process') return claim
 
         tx.set(eventRef, {
             eventId: String(eventId),
+            wrapperEventId: wrapperEventId == null ? null : String(wrapperEventId).slice(0, 500),
+            ...identity,
             phoneHash: crypto.createHash('sha256').update(String(phone)).digest('hex'),
             occurredAt: occurredAt || new Date().toISOString(),
             status: 'processing',

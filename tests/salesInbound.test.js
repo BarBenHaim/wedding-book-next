@@ -7,6 +7,10 @@ import { parseInboundBody, MAX_BODY_CHARS } from '@/lib/salesAgent/inbound'
 // case below is a shape a real person can type into WhatsApp.
 
 const good = {
+    eventId: 'make-wrapper-event-1',
+    providerMessageId: 'wamid.original-meta-message-1',
+    providerAccountId: 'phone-number-id-1',
+    providerChannel: 'meta_whatsapp',
     phone: '972544924495',
     text: 'שלום',
     profileName: 'נועה',
@@ -18,7 +22,7 @@ const good = {
 }
 
 // Exactly the template Make sends, with values interpolated unescaped.
-const asMakeSendsIt = v => `{"phone":"${v.phone}","text":"${v.text}","profileName":"${v.profileName}","source":"${v.source}","from":"${v.from}","to":"${v.to}","businessPhone":"${v.businessPhone}","field":"${v.field}"}`
+const asMakeSendsIt = v => `{"eventId":"${v.eventId}","providerMessageId":"${v.providerMessageId}","providerAccountId":"${v.providerAccountId}","providerChannel":"${v.providerChannel}","phone":"${v.phone}","text":"${v.text}","profileName":"${v.profileName}","source":"${v.source}","from":"${v.from}","to":"${v.to}","businessPhone":"${v.businessPhone}","field":"${v.field}"}`
 
 describe('valid JSON', () => {
     it('parses valid JSON without marking it repaired', () => {
@@ -105,8 +109,12 @@ describe('the message that broke it', () => {
     })
 
     it('repairs Make raw JSON with the expanded ordered keys', () => {
-        const raw = '{"eventId":"wamid.1","phone":"9725","text":"שורה 1\nשורה 2","profileName":"בר","messageType":"text","mediaId":"","occurredAt":"2026-08-14T09:00:00Z","conversationId":"c1"}'
-        expect(parseInboundBody(raw).body).toMatchObject({ eventId: 'wamid.1', text: 'שורה 1\nשורה 2', messageType: 'text' })
+        const raw = '{"eventId":"make-wrapper-1","providerMessageId":"wamid.original-meta-1","providerAccountId":"phone-number-id-1","providerChannel":"meta_whatsapp","phone":"9725","text":"שורה 1\nשורה 2","profileName":"בר","messageType":"text","mediaId":"","occurredAt":"2026-08-14T09:00:00Z","conversationId":"c1"}'
+        expect(parseInboundBody(raw).body).toMatchObject({
+            eventId: 'make-wrapper-1', providerMessageId: 'wamid.original-meta-1',
+            providerAccountId: 'phone-number-id-1', providerChannel: 'meta_whatsapp',
+            text: 'שורה 1\nשורה 2', messageType: 'text',
+        })
     })
 })
 

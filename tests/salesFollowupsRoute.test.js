@@ -106,6 +106,7 @@ beforeEach(async () => {
     process.env.CRON_SECRET = 'cron-test-secret'
     process.env.SALES_AGENT_SECRET = 'shared-secret-fixture'
     process.env.SALES_AGENT_OWNER_PHONE = 'non-dialable-owner-fixture'
+    process.env.SALES_PROACTIVE_FOLLOWUPS_APPROVED = 'true'
     process.env.SALES_FOLLOWUP_TEMPLATE_ENABLED = 'true'
     // These transport tests were written against the universal template;
     // production defaults to the approved name-only one (whatsapp.js).
@@ -142,6 +143,32 @@ beforeEach(async () => {
     mocks.recordDeliveryEvent.mockResolvedValue({ action: 'applied', status: 'accepted', advanced: false })
     mocks.readSalesSettings.mockResolvedValue({ enabled: true, mode: 'full_conversation' })
     ;({ GET } = await import('@/app/api/sales-agent/followups/route'))
+})
+
+describe('inbound-only safety mode', () => {
+    it('returns an empty result before reading, sweeping, writing, or sending proactive follow-ups', async () => {
+        delete process.env.SALES_PROACTIVE_FOLLOWUPS_APPROVED
+        const result = await runCron()
+
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({
+            ok: true,
+            skipped: 'proactive-followups-disabled',
+            delivery: 'none',
+            count: 0,
+            items: [],
+        })
+        expect(mocks.listMedia).not.toHaveBeenCalled()
+        expect(mocks.readSalesSettings).not.toHaveBeenCalled()
+        expect(mocks.listLeads).not.toHaveBeenCalled()
+        expect(mocks.dueFollowUps).not.toHaveBeenCalled()
+        expect(mocks.reviveOrphans).not.toHaveBeenCalled()
+        expect(mocks.settleStaleDeliveries).not.toHaveBeenCalled()
+        expect(mocks.prepareFollowUpDelivery).not.toHaveBeenCalled()
+        expect(mocks.recordFollowUpRun).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppText).not.toHaveBeenCalled()
+        expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled()
+    })
 })
 
 describe('opening-only mode', () => {

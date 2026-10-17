@@ -69,8 +69,6 @@ import {
     signOpeningVariableDownload,
 } from '@/lib/salesAgent/openingVariableRuntimeStore'
 import { readPriorConversationContext } from '@/lib/salesAgent/priorContext'
-import { canSendWhatsApp } from '@/lib/salesAgent/whatsapp'
-import { sendInboundSequenceDirect } from '@/lib/salesAgent/inboundDirectDelivery'
 
 // What the customer sees when the machinery breaks. Deliberately honest
 // and short — no apology theatre, no invented reason.
@@ -101,6 +99,85 @@ function authorized(req) {
     if (!secret) return false // fail CLOSED: an unset secret must not open the door
     const given = req.headers.get('x-wt-secret') || ''
     return given === secret
+}
+
+function metaInboundIdentity(body) {
+    const providerMessageId = typeof body?.providerMessageId === 'string' ? body.providerMessageId.trim() : ''
+    const providerAccountId = typeof body?.providerAccountId === 'string' ? body.providerAccountId.trim() : ''
+    const providerChannel = typeof body?.providerChannel === 'string' ? body.providerChannel.trim() : ''
+    if (!providerMessageId || !providerAccountId || providerChannel !== 'meta_whatsapp') return null
+    if (providerMessageId.length > 500 || providerAccountId.length > 500) return null
+    return { providerMessageId, providerAccountId, providerChannel }
+}
+
+function inboundClaimEventId(identity) {
+    return `meta-inbound-${createHash('sha256')
+        .update(JSON.stringify([identity.providerChannel, identity.providerAccountId, identity.providerMessageId]))
+        .digest('hex')}`
+}
+
+const EMPTY_DELIVERY_FIELDS = {
+    shouldSend: false,
+    send: [],
+    sendText: '',
+    sendImage: null,
+    sendImageCaption: null,
+    sendVideo: null,
+    sendVideoCaption: null,
+    sendAudio: null,
+    sendAudioCaption: null,
+    sendAudioVoiceNote: false,
+    hasImage: false,
+    hasVideo: false,
+    hasAudio: false,
+    openingMediaCount: 0,
+    openingMediaParts: [],
+    openingSequenceParts: [],
+    openingAnswerId: null,
+    openingAnswerText: null,
+    openingImage1Id: null,
+    openingImage1Url: null,
+    openingImage1Caption: null,
+    openingImage2Id: null,
+    openingImage2Url: null,
+    openingImage2Caption: null,
+    openingClosingId: null,
+    openingClosingText: null,
+    postOpeningText: '',
+    notifyOwner: null,
+    ...Object.fromEntries([1, 2, 3].flatMap(slot => [
+        [`openingMedia${slot}Id`, null],
+        [`openingMedia${slot}Kind`, null],
+        [`openingMedia${slot}Url`, null],
+        [`openingMedia${slot}Caption`, null],
+        [`openingMedia${slot}VoiceNote`, false],
+    ])),
+}
+
+function noDeliveryEnvelope(details = {}) {
+    return {
+        ok: details.ok !== false,
+        ...(details.duplicate ? { duplicate: true } : {}),
+        ...(details.processing ? { processing: true } : {}),
+        handoff: false,
+        noReply: details.noReply === true,
+        ...(details.skipped ? { skipped: details.skipped } : {}),
+        ...(details.paused ? { paused: true } : {}),
+        ...(details.reason ? { reason: details.reason } : {}),
+        ...EMPTY_DELIVERY_FIELDS,
+    }
+}
+
+function hasDeliveryInstruction(payload) {
+    if (!payload || typeof payload !== 'object') return false
+    if (Array.isArray(payload.send) && payload.send.some(item => String(item || '').trim())) return true
+    return [
+        payload.sendText, payload.sendImage, payload.sendVideo, payload.sendAudio, payload.notifyOwner,
+    ].some(value => typeof value === 'string' && value.trim())
+}
+
+function transportEnvelope(payload) {
+    return hasDeliveryInstruction(payload) ? payload : noDeliveryEnvelope(payload)
 }
 
 function todayISO() {
@@ -152,8 +229,20 @@ export async function POST(req) {
         console.warn('[sales-agent] repaired a malformed body from Make')
     }
 
-    const eventId = String(body.eventId || '').trim()
-    if (!eventId) return NextResponse.json({ error: 'missing-event-id' }, { status: 400 })
+    const wrapperEventId = String(body.eventId || '').trim()
+    if (!wrapperEventId) return NextResponse.json({ error: 'missing-event-id' }, { status: 400 })
+    const providerIdentity = metaInboundIdentity(body)
+    if (!providerIdentity) {
+        return NextResponse.json(noDeliveryEnvelope({
+            ok: true,
+            noReply: true,
+            skipped: 'missing-provider-identity',
+        }))
+    }
+    // Make can wrap one Meta delivery in more than one execution. Only the
+    // original provider identity may fence the send; never derive it from
+    // text, time, or Make's mutable wrapper id.
+    const eventId = inboundClaimEventId(providerIdentity)
 
     // This authenticated request is already the Make heartbeat. Persist a
     // timestamp only; never copy the event ID, phone, message, or payload.
@@ -184,25 +273,22 @@ export async function POST(req) {
 
     let claim
     try {
-        claim = await claimInboundEvent({ eventId, phone, occurredAt: body.occurredAt })
+        claim = await claimInboundEvent({
+            eventId,
+            wrapperEventId,
+            ...providerIdentity,
+            phone,
+            occurredAt: body.occurredAt,
+        })
     } catch {
         console.error('[sales-agent] event claim failed')
         return NextResponse.json({ error: 'event-claim-failed' }, { status: 503 })
     }
     if (claim.action === 'cached') {
-        return NextResponse.json({
-            ok: true,
-            duplicate: true,
-            shouldSend: false,
-            cachedOutcome: claim.outcome,
-            sendText: '',
-            hasImage: false,
-            hasVideo: false,
-            handoff: false,
-        })
+        return NextResponse.json(noDeliveryEnvelope({ ok: true, duplicate: true }))
     }
     if (claim.action === 'busy') {
-        return NextResponse.json({ ok: true, duplicate: true, processing: true, shouldSend: false }, { status: 202 })
+        return NextResponse.json(noDeliveryEnvelope({ ok: true, duplicate: true, processing: true }), { status: 202 })
     }
     const providerDeadlineAtMs = routeDeadlineAtMs - FALLBACK_COMMIT_RESERVE_MS
 
@@ -228,14 +314,11 @@ export async function POST(req) {
         }
         try {
             const result = await completeInboundEvent({ eventId, claimToken: claim.claimToken, outcome })
-            if (result.action === 'completed') return NextResponse.json(transport)
+            if (result.action === 'completed') return NextResponse.json(transportEnvelope(transport))
             if (result.action === 'cached') {
-                return NextResponse.json({
-                    ok: true, duplicate: true, shouldSend: false, cachedOutcome: result.outcome,
-                    sendText: '', hasImage: false, hasVideo: false, handoff: false,
-                })
+                return NextResponse.json(noDeliveryEnvelope({ ok: true, duplicate: true }))
             }
-            return NextResponse.json({ ok: true, duplicate: true, processing: true, shouldSend: false }, { status: 202 })
+            return NextResponse.json(noDeliveryEnvelope({ ok: true, duplicate: true, processing: true }), { status: 202 })
         } catch {
             console.error('[sales-agent] event completion failed')
             return NextResponse.json({ error: 'event-completion-failed' }, { status: 503 })
@@ -248,7 +331,13 @@ export async function POST(req) {
     // the event durably so provider retries stay silent, but do no lead,
     // media, breaker, or model work.
     const inboundAge = decideInboundAge({ occurredAt: body.occurredAt })
-    if (inboundAge.action === 'skip-stale') {
+    if (inboundAge.action !== 'process') {
+        const skipped = {
+            'skip-stale': 'stale-inbound',
+            'skip-pre-cutover': 'pre-cutover-inbound',
+            'skip-invalid-timestamp': 'invalid-inbound-timestamp',
+            'skip-future-timestamp': 'future-inbound-timestamp',
+        }[inboundAge.action] || 'invalid-inbound-timestamp'
         return complete({
             ok: true,
             shouldSend: false,
@@ -256,7 +345,7 @@ export async function POST(req) {
             sendText: '',
             handoff: false,
             noReply: true,
-            skipped: 'stale-inbound',
+            skipped,
         })
     }
 
@@ -296,9 +385,9 @@ export async function POST(req) {
                 })
             }
             if (result.action === 'cached') {
-                return NextResponse.json({ ok: true, duplicate: true, shouldSend: false, cachedOutcome: result.outcome, sendText: '', hasImage: false, hasVideo: false, handoff: false })
+                return NextResponse.json(noDeliveryEnvelope({ ok: true, duplicate: true }))
             }
-            if (result.action === 'busy') return NextResponse.json({ ok: true, duplicate: true, processing: true, shouldSend: false }, { status: 202 })
+            if (result.action === 'busy') return NextResponse.json(noDeliveryEnvelope({ ok: true, duplicate: true, processing: true }), { status: 202 })
             return NextResponse.json({ error: 'provider-fallback-stale' }, { status: 503 })
         } catch {
             console.error('[sales-agent] provider fallback commit failed')
@@ -668,9 +757,6 @@ export async function POST(req) {
                 exposedAt: lead.openingExposedAt || null,
             },
         }
-        const useDirectGraph = shouldSend
-            && process.env.SALES_AGENT_DIRECT_GRAPH === 'true'
-            && canSendWhatsApp()
         try {
             const durable = await completeSuccessfulExchange({
                 eventId,
@@ -679,21 +765,16 @@ export async function POST(req) {
                 exchange,
                 outcome: responsePayload,
                 deadlineAtMs: routeDeadlineAtMs,
-                deliveryChannel: useDirectGraph ? 'whatsapp_graph' : 'make',
+                // This route is the Make relay boundary. It must never call
+                // Graph directly, or one inbound can be delivered twice.
+                deliveryChannel: 'make',
             })
             if (durable.action === 'completed') {
                 compactLeadBestEffort(phone)
-                if (useDirectGraph) {
-                    const directDelivery = await sendInboundSequenceDirect({ phone, parts: transportSequenceParts })
-                    return NextResponse.json({ ...responsePayload, shouldSend: false, directDelivery })
-                }
                 return NextResponse.json(responsePayload)
             }
             if (durable.action === 'cached') {
-                return NextResponse.json({
-                    ok: true, duplicate: true, shouldSend: false, cachedOutcome: durable.outcome,
-                    sendText: '', hasImage: false, hasVideo: false, hasAudio: false, handoff: false,
-                })
+                return NextResponse.json(noDeliveryEnvelope({ ok: true, duplicate: true }))
             }
             console.warn(`[sales-agent] opening terminal opening-experiment-${String(durable.action || 'unknown')}`)
             return NextResponse.json({ error: 'opening-experiment-commit-stale' }, { status: 503 })
@@ -839,10 +920,7 @@ export async function POST(req) {
                 return NextResponse.json(responsePayload)
             }
             if (durable.action === 'cached') {
-                return NextResponse.json({
-                    ok: true, duplicate: true, shouldSend: false, cachedOutcome: durable.outcome,
-                    sendText: '', hasImage: false, hasVideo: false, handoff: false,
-                })
+                return NextResponse.json(noDeliveryEnvelope({ ok: true, duplicate: true }))
             }
             return NextResponse.json({
                 error: durable.action === 'deadline'
@@ -1306,7 +1384,7 @@ export async function POST(req) {
             Promise.allSettled(spends).catch(() => {})
             return NextResponse.json(responsePayload)
         }
-        if (durable.action === 'cached') return NextResponse.json({ ok: true, duplicate: true, shouldSend: false, cachedOutcome: durable.outcome, sendText: '', hasImage: false, hasVideo: false, handoff: false })
+        if (durable.action === 'cached') return NextResponse.json(noDeliveryEnvelope({ ok: true, duplicate: true }))
         return NextResponse.json({ error: durable.action === 'deadline' ? 'success-commit-deadline-exhausted' : 'success-commit-stale' }, { status: 503 })
     } catch {
         console.error('[sales-agent] success commit failed')

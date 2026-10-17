@@ -120,7 +120,66 @@ vi.mock('@/lib/salesAgent/whatsapp', () => ({ canSendWhatsApp: mocks.canSendWhat
 vi.mock('@/lib/salesAgent/inboundDirectDelivery', () => ({ sendInboundSequenceDirect: mocks.sendInboundSequenceDirect }))
 
 const lead = { isNew: false, stage: 'engaged', turns: [], followUpCount: 0, imagesSent: [], mediaSent: [] }
-const inbound = overrides => ({ eventId: 'event-token', phone: 'test-phone-token', text: '', messageType: 'text', ...overrides })
+const inbound = overrides => ({
+    eventId: 'make-wrapper-token',
+    providerMessageId: 'wamid-original-meta-message-token',
+    providerAccountId: 'phone-number-id-token',
+    providerChannel: 'meta_whatsapp',
+    phone: 'test-phone-token', text: '', messageType: 'text', occurredAt: new Date().toISOString(),
+    ...overrides,
+})
+
+const EMPTY_DELIVERY_FIELDS = {
+    shouldSend: false,
+    send: [],
+    sendText: '',
+    sendImage: null,
+    sendImageCaption: null,
+    sendVideo: null,
+    sendVideoCaption: null,
+    sendAudio: null,
+    sendAudioCaption: null,
+    sendAudioVoiceNote: false,
+    hasImage: false,
+    hasVideo: false,
+    hasAudio: false,
+    openingMediaCount: 0,
+    openingMediaParts: [],
+    openingSequenceParts: [],
+    openingAnswerId: null,
+    openingAnswerText: null,
+    openingImage1Id: null,
+    openingImage1Url: null,
+    openingImage1Caption: null,
+    openingImage2Id: null,
+    openingImage2Url: null,
+    openingImage2Caption: null,
+    openingClosingId: null,
+    openingClosingText: null,
+    postOpeningText: '',
+    notifyOwner: null,
+    openingMedia1Id: null,
+    openingMedia1Kind: null,
+    openingMedia1Url: null,
+    openingMedia1Caption: null,
+    openingMedia1VoiceNote: false,
+    openingMedia2Id: null,
+    openingMedia2Kind: null,
+    openingMedia2Url: null,
+    openingMedia2Caption: null,
+    openingMedia2VoiceNote: false,
+    openingMedia3Id: null,
+    openingMedia3Kind: null,
+    openingMedia3Url: null,
+    openingMedia3Caption: null,
+    openingMedia3VoiceNote: false,
+}
+
+function expectEmptyDeliveryEnvelope(body, details = {}) {
+    expect(body).toMatchObject({ ...EMPTY_DELIVERY_FIELDS, ...details })
+    expect(body).not.toHaveProperty('cachedOutcome')
+    expect(body).not.toHaveProperty('directDelivery')
+}
 
 let POST
 
@@ -259,7 +318,7 @@ describe('model revenue experiment runtime', () => {
         await post(inbound({ text: 'אשמח לפרטים' }))
 
         expect(mocks.resolveOrEnrollModelAssignment).toHaveBeenCalledWith(expect.objectContaining({
-            eventId: 'event-token', leadId: 'test-phone-token', experiment: activeExperiment,
+            eventId: expect.any(String), leadId: 'test-phone-token', experiment: activeExperiment,
             claimToken: 'claim-token', generation: 1,
         }))
         expect(mocks.callClaude).toHaveBeenCalledWith(expect.objectContaining({
@@ -334,7 +393,7 @@ describe('model revenue experiment runtime', () => {
 })
 
 describe('deterministic opening experiment runtime', () => {
-    it('uses direct Graph delivery for the published journey and tells Make not to resend it', async () => {
+    it('keeps a Make inbound journey on Make even when the direct Graph flag is enabled', async () => {
         process.env.SALES_AGENT_DIRECT_GRAPH = 'true'
         const parts = [
             { partId: 'a'.repeat(32), blockId: 'a-explain', order: 1, kind: 'text', text: 'כך הספר עובד' },
@@ -350,12 +409,9 @@ describe('deterministic opening experiment runtime', () => {
         const result = await post(inbound({ text: 'אשמח לפרטים' }))
 
         expect(result.status).toBe(200)
-        expect(result.body).toMatchObject({
-            shouldSend: false,
-            directDelivery: { status: 'accepted', acceptedParts: 2, totalParts: 2, persistenceDegraded: false },
-        })
-        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({ deliveryChannel: 'whatsapp_graph' }))
-        expect(mocks.sendInboundSequenceDirect).toHaveBeenCalledWith({ phone: 'test-phone-token', parts })
+        expect(result.body).toMatchObject({ shouldSend: true, openingSequenceParts: parts })
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({ deliveryChannel: 'make' }))
+        expect(mocks.sendInboundSequenceDirect).not.toHaveBeenCalled()
     })
 
     it('persists and returns an ordered published journey without model work', async () => {
@@ -873,29 +929,62 @@ afterEach(() => {
 })
 
 describe('inbound event duplicate fencing', () => {
-    it.each(['2026-08-16T11:44:59.000Z', 1786880699, 1786880699000, '1786880699', '1786880699000'])('durably suppresses stale timestamp %j before lead or provider work', async occurredAt => {
+    it('uses the original Meta message identity for both Make wrapper retries', async () => {
+        prepareDecisionPath()
+        const originalMetaMessage = 'wamid.same-message-through-two-wrappers'
+        const first = inbound({ eventId: 'make-wrapper-a', providerMessageId: originalMetaMessage, text: 'שלום' })
+        const replay = inbound({ eventId: 'make-wrapper-b', providerMessageId: originalMetaMessage, text: 'שלום' })
+        mocks.claimInboundEvent
+            .mockResolvedValueOnce({ action: 'process', claimToken: 'claim-token', claimGeneration: 1 })
+            .mockResolvedValueOnce({ action: 'cached', outcome: { sendText: 'private prior answer', handoff: false } })
+
+        await post(first)
+        const second = await post(replay)
+
+        const [firstClaim, secondClaim] = mocks.claimInboundEvent.mock.calls.map(([input]) => input)
+        expect(firstClaim).toMatchObject({
+            wrapperEventId: 'make-wrapper-a', providerMessageId: originalMetaMessage,
+            providerAccountId: 'phone-number-id-token', providerChannel: 'meta_whatsapp',
+        })
+        expect(secondClaim).toMatchObject({
+            wrapperEventId: 'make-wrapper-b', providerMessageId: originalMetaMessage,
+            providerAccountId: 'phone-number-id-token', providerChannel: 'meta_whatsapp',
+        })
+        expect(secondClaim.eventId).toBe(firstClaim.eventId)
+        expectEmptyDeliveryEnvelope(second.body, { ok: true, duplicate: true })
+        expect(mocks.callClaude).toHaveBeenCalledTimes(1)
+    })
+
+    it('blocks delivery when Make omits the original Meta provider identity', async () => {
+        const result = await post(inbound({
+            providerMessageId: '', providerAccountId: '', providerChannel: '', text: 'שלום',
+        }))
+
+        expect(result.status).toBe(200)
+        expectEmptyDeliveryEnvelope(result.body, {
+            ok: true, noReply: true, skipped: 'missing-provider-identity',
+        })
+        expect(mocks.claimInboundEvent).not.toHaveBeenCalled()
+        expect(mocks.getLead).not.toHaveBeenCalled()
+        expect(mocks.sendInboundSequenceDirect).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it.each(['2026-10-17T20:14:59.000Z', 1792268099, 1792268099000, '1792268099', '1792268099000'])('durably suppresses stale timestamp %j before lead or provider work', async occurredAt => {
         vi.useFakeTimers()
-        vi.setSystemTime(new Date('2026-08-16T12:00:00.000Z'))
+        vi.setSystemTime(new Date('2026-10-17T20:30:00.000Z'))
 
         const result = await post(inbound({
             text: 'stale private fixture',
             occurredAt,
         }))
 
-        expect(result).toEqual({
-            status: 200,
-            body: {
-                ok: true,
-                shouldSend: false,
-                send: [],
-                sendText: '',
-                handoff: false,
-                noReply: true,
-                skipped: 'stale-inbound',
-            },
+        expect(result.status).toBe(200)
+        expectEmptyDeliveryEnvelope(result.body, {
+            ok: true, handoff: false, noReply: true, skipped: 'stale-inbound',
         })
         expect(mocks.completeInboundEvent).toHaveBeenCalledWith(expect.objectContaining({
-            eventId: 'event-token',
+            eventId: expect.any(String),
             claimToken: 'claim-token',
             outcome: expect.objectContaining({
                 sendText: '', handoff: false, noReply: true, skipped: 'stale-inbound',
@@ -908,9 +997,9 @@ describe('inbound event duplicate fencing', () => {
         expectNoProviderWork()
     })
 
-    it.each(['2026-08-16T11:45:00.000Z', 1786880700, 1786880700000, '1786880700', '1786880700000'])('processes boundary timestamp %j instead of classifying it as stale', async occurredAt => {
+    it.each(['2026-10-17T20:15:00.000Z', 1792268100, 1792268100000, '1792268100', '1792268100000'])('processes boundary timestamp %j instead of classifying it as stale', async occurredAt => {
         vi.useFakeTimers()
-        vi.setSystemTime(new Date('2026-08-16T12:00:00.000Z'))
+        vi.setSystemTime(new Date('2026-10-17T20:30:00.000Z'))
 
         const result = await post(inbound({
             text: '',
@@ -925,9 +1014,9 @@ describe('inbound event duplicate fencing', () => {
         expect(mocks.setHuman).toHaveBeenCalledTimes(1)
     })
 
-    it.each(['2026-08-16T11:40:00.000Z', 1786880400, 1786880400000, '1786880400', '1786880400000'])('keeps a replay of completed stale timestamp %j silent', async occurredAt => {
+    it.each(['2026-10-17T20:10:00.000Z', 1792267800, 1792267800000, '1792267800', '1792267800000'])('keeps a replay of completed stale timestamp %j silent', async occurredAt => {
         vi.useFakeTimers()
-        vi.setSystemTime(new Date('2026-08-16T12:00:00.000Z'))
+        vi.setSystemTime(new Date('2026-10-17T20:30:00.000Z'))
         const body = inbound({ text: 'stale replay fixture', occurredAt })
 
         const first = await post(body)
@@ -938,12 +1027,46 @@ describe('inbound event duplicate fencing', () => {
         const duplicate = await post(body)
 
         expect(first.body).toMatchObject({ shouldSend: false, noReply: true, skipped: 'stale-inbound' })
-        expect(duplicate.body).toMatchObject({ duplicate: true, shouldSend: false, sendText: '', handoff: false })
-        expect(duplicate.body.cachedOutcome).toEqual({
-            sendText: '', handoff: false, noReply: true, skipped: 'stale-inbound',
-        })
+        expectEmptyDeliveryEnvelope(duplicate.body, { ok: true, duplicate: true, handoff: false })
         expect(mocks.completeInboundEvent).toHaveBeenCalledTimes(1)
         expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it.each([
+        ['missing timestamp', undefined, 'invalid-inbound-timestamp'],
+        ['invalid timestamp', 'not-a-provider-time', 'invalid-inbound-timestamp'],
+        ['future timestamp', '2026-10-17T20:31:00.000Z', 'future-inbound-timestamp'],
+    ])('durably blocks a %s before lead or provider work', async (_label, occurredAt, skipped) => {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date('2026-10-17T20:30:00.000Z'))
+
+        const result = await post(inbound({ occurredAt }))
+
+        expect(result.status).toBe(200)
+        expectEmptyDeliveryEnvelope(result.body, {
+            ok: true, handoff: false, noReply: true, skipped,
+        })
+        expect(mocks.getLead).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+        expectNoProviderWork()
+    })
+
+    it('keeps a replay of a pre-cutover event silent', async () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date('2026-10-17T20:30:00.000Z'))
+        const body = inbound({ eventId: 'pre-cutover-event', occurredAt: '2026-10-17T20:04:59.999Z' })
+
+        const first = await post(body)
+        mocks.claimInboundEvent.mockResolvedValueOnce({
+            action: 'cached',
+            outcome: { sendText: '', handoff: false, noReply: true, skipped: 'pre-cutover-inbound' },
+        })
+        const replay = await post(body)
+
+        expect(first.body).toMatchObject({ shouldSend: false, noReply: true, skipped: 'pre-cutover-inbound' })
+        expectEmptyDeliveryEnvelope(replay.body, { ok: true, duplicate: true })
+        expect(mocks.completeInboundEvent).toHaveBeenCalledTimes(1)
         expectNoProviderWork()
     })
 
@@ -975,14 +1098,9 @@ describe('inbound event duplicate fencing', () => {
         expect(mocks.claimInboundEvent).not.toHaveBeenCalled()
         await vi.advanceTimersByTimeAsync(1)
 
-        await expect(pending).resolves.toEqual({
-            status: 200,
-            body: {
-                ok: true, duplicate: true, shouldSend: false,
-                cachedOutcome: { sendText: '', handoff: false },
-                sendText: '', hasImage: false, hasVideo: false, handoff: false,
-            },
-        })
+        const result = await pending
+        expect(result.status).toBe(200)
+        expectEmptyDeliveryEnvelope(result.body, { ok: true, duplicate: true, handoff: false })
         expect(mocks.claimInboundEvent).toHaveBeenCalledTimes(1)
         expect(mocks.completeInboundEvent).not.toHaveBeenCalled()
         expect(mocks.callClaude).not.toHaveBeenCalled()
@@ -996,14 +1114,8 @@ describe('inbound event duplicate fencing', () => {
 
         const result = await post(inbound({ text: 'שלום' }))
 
-        expect(result).toEqual({
-            status: 200,
-            body: {
-                ok: true, duplicate: true, shouldSend: false,
-                cachedOutcome: { sendText: '', handoff: false, noReply: true, skipped: 'own-echo' },
-                sendText: '', hasImage: false, hasVideo: false, handoff: false,
-            },
-        })
+        expect(result.status).toBe(200)
+        expectEmptyDeliveryEnvelope(result.body, { ok: true, duplicate: true, handoff: false })
         expect(mocks.callClaude).not.toHaveBeenCalled()
         expect(mocks.recordMediaSent).not.toHaveBeenCalled()
         expect(mocks.compactLeadBestEffort).not.toHaveBeenCalled()
@@ -1017,7 +1129,8 @@ describe('inbound event duplicate fencing', () => {
 
         const result = await post(inbound({ text: 'שלום' }))
 
-        expect(result).toEqual({ status: 202, body: { ok: true, duplicate: true, processing: true, shouldSend: false } })
+        expect(result.status).toBe(202)
+        expectEmptyDeliveryEnvelope(result.body, { ok: true, duplicate: true, processing: true })
         expect(mocks.callClaude).not.toHaveBeenCalled()
         expectNoProviderWork()
     })
@@ -1028,8 +1141,7 @@ describe('inbound event duplicate fencing', () => {
 
         const result = await post(inbound({ text: 'שלום' }))
 
-        expect(result.body).toMatchObject({ duplicate: true, shouldSend: false, sendText: '', handoff: false })
-        expect(result.body.cachedOutcome).toEqual({ sendText: safeFallback, handoff: true })
+        expectEmptyDeliveryEnvelope(result.body, { ok: true, duplicate: true, handoff: false })
         expect(mocks.callClaude).not.toHaveBeenCalled()
         expectNoProviderWork()
     })
@@ -1082,10 +1194,11 @@ describe('Anthropic outage handling', () => {
 
     it('uses the POST-entry deadline before breaker acquire when preparation consumes the model budget', async () => {
         prepareModelPath()
+        const startedAtMs = Date.parse('2026-10-17T20:30:00.000Z')
         let ticks = 0
-        vi.spyOn(Date, 'now').mockImplementation(() => ticks++ === 0 ? 0 : 21_000)
+        vi.spyOn(Date, 'now').mockImplementation(() => ticks++ === 0 ? startedAtMs : startedAtMs + 21_000)
 
-        const result = await post(inbound({ text: 'צריך מחיר' }))
+        const result = await post(inbound({ text: 'צריך מחיר', occurredAt: new Date(startedAtMs).toISOString() }))
 
         expect(result.body).toMatchObject({ sendText: deterministicFallback, handoff: false })
         expect(mocks.acquireProviderCircuit).not.toHaveBeenCalled()
@@ -1661,12 +1774,9 @@ describe('owner takeover persistence and transport', () => {
         expect(mocks.completeInboundEvent).toHaveBeenCalledWith(expect.objectContaining({
             outcome: expect.objectContaining({ handoff: true, noReply: false }),
         }))
-        expect(result).toEqual({
-            status: 200,
-            body: {
-                ok: true, send: [], sendText: '', hasImage: false, hasVideo: false,
-                shouldSend: false, handoff: false, noReply: true, paused: true, reason: 'owner-replied',
-            },
+        expect(result.status).toBe(200)
+        expectEmptyDeliveryEnvelope(result.body, {
+            ok: true, handoff: false, noReply: true, paused: true, reason: 'owner-replied',
         })
         expect(mocks.callClaude).not.toHaveBeenCalled()
         expectNoProviderWork()
