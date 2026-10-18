@@ -33,7 +33,9 @@ import {
     restoreSalesSettingsRevision,
     saveSalesSettings,
 } from '@/lib/salesAgent/settingsStore'
+import salesSettingsStore from '@/lib/salesAgent/settingsStore'
 import { DEFAULT_OPENING_EXPERIMENT } from '@/lib/salesAgent/openingExperiment'
+import { BIRTHDAY_VARIABLE_KEYS } from '@/lib/salesAgent/birthdayExperiment'
 
 const dynamicVariant = (id, { label = 'מסלול משוכפל', revision = 1 } = {}) => ({
     id,
@@ -43,6 +45,20 @@ const dynamicVariant = (id, { label = 'מסלול משוכפל', revision = 1 } 
     revision,
     blocks: [{ id: `${id}-stop`, type: 'stop' }],
 })
+
+const publishBirthday = input => salesSettingsStore.publishBirthdayExperimentSnapshot?.(input, {
+    updatedBy: 'owner@example.test',
+})
+
+const birthdayDraft = (key, versionId) => {
+    store.set(`sales_variables/${key}`, {
+        key, label: key, kind: 'text', archived: false,
+        draftVersionId: versionId, publishedVersionId: null,
+    })
+    store.set(`sales_variables/${key}/versions/${versionId}`, {
+        id: versionId, kind: 'text', value: `${key} draft`, status: 'draft', createdAtMs: 1_777_000_000_000,
+    })
+}
 
 beforeEach(() => {
     store.reset()
@@ -55,6 +71,124 @@ describe('sales settings Firestore store', () => {
     it('reads a safe default without creating a document', async () => {
         expect(await readSalesSettings()).toMatchObject({ revision: 0, enabled: true, provider: 'auto' })
         expect(store.get('sales_agent_settings/active')).toBeUndefined()
+    })
+
+    it('publishes only the four birthday drafts and preserves the current opening experiment byte-for-byte', async () => {
+        const openingExperiment = structuredClone(DEFAULT_OPENING_EXPERIMENT)
+        openingExperiment.enabled = true
+        openingExperiment.variants[0].weight = 100
+        openingExperiment.variants[1].enabled = false
+        openingExperiment.variants[1].weight = 0
+        openingExperiment.variants[2].enabled = false
+        openingExperiment.variants[2].weight = 0
+        store.set('sales_agent_settings/active', {
+            revision: 33, enabled: true, mode: 'opening_only', openingText: 'פתיחה',
+            provider: 'auto', model: 'claude-sonnet-4-5', activeOpeningIds: ['answer_first'],
+            openingMediaSequence: [], openingExperiment,
+        })
+        const expectedVariableDrafts = {}
+        for (const key of Object.values(BIRTHDAY_VARIABLE_KEYS)) {
+            const versionId = `${key}-draft-1`
+            birthdayDraft(key, versionId)
+            expectedVariableDrafts[key] = versionId
+        }
+        birthdayDraft('bless', 'bless-draft-1')
+
+        const published = await publishBirthday({
+            revision: 33,
+            birthdayExperiment: {
+                enabled: false,
+                weight: 0,
+                sourceAllowlist: [],
+                variables: BIRTHDAY_VARIABLE_KEYS,
+            },
+            expectedVariableDrafts,
+        })
+
+        expect(published).toMatchObject({
+            revision: 34,
+            birthdayExperiment: {
+                enabled: false, weight: 0,
+                variableVersions: {
+                    opening: 'birthday_gift_opening_v1-draft-1',
+                    explainer: 'birthday_gift_explainer_v1-draft-1',
+                    prices: 'birthday_gift_prices_v1-draft-1',
+                    timing: 'birthday_gift_timing_v1-draft-1',
+                },
+            },
+        })
+        expect(store.get('sales_agent_settings/active').openingExperiment).toEqual(openingExperiment)
+        for (const key of Object.values(BIRTHDAY_VARIABLE_KEYS)) {
+            expect(store.get(`sales_variables/${key}`).publishedVersionId).toBe(expectedVariableDrafts[key])
+            expect(store.get(`sales_variables/${key}/versions/${expectedVariableDrafts[key]}`).status).toBe('published')
+        }
+        expect(store.get('sales_variables/bless').publishedVersionId).toBeNull()
+        expect(store.get('sales_variables/bless/versions/bless-draft-1').status).toBe('draft')
+    })
+
+    it('exposes a dedicated disable that changes only birthday activation and does not republish variables', async () => {
+        expect(salesSettingsStore.disableBirthdayExperiment).toBeTypeOf('function')
+        const variableVersions = Object.fromEntries(Object.entries(BIRTHDAY_VARIABLE_KEYS)
+            .map(([slot, key]) => [slot, key + '-published-1']))
+        store.set('sales_agent_settings/active', {
+            revision: 33, enabled: true, mode: 'opening_only', provider: 'auto', model: 'claude-sonnet-4-5',
+            openingText: 'opening', activeOpeningIds: ['answer_first'], openingMediaSequence: [],
+            birthdayExperiment: {
+                id: 'birthday_gift', revision: 1, enabled: true, weight: 100,
+                sourceAllowlist: ['real-meta-source'],
+                variables: BIRTHDAY_VARIABLE_KEYS,
+                variableVersions,
+            },
+        })
+        for (const [slot, key] of Object.entries(BIRTHDAY_VARIABLE_KEYS)) {
+            const versionId = variableVersions[slot]
+            store.set('sales_variables/' + key, {
+                key, label: key, kind: 'text', archived: false,
+                draftVersionId: versionId, publishedVersionId: versionId,
+            })
+            store.set('sales_variables/' + key + '/versions/' + versionId, {
+                id: versionId, kind: 'text', value: key + ' published',
+                status: 'published', createdAtMs: 1,
+            })
+        }
+
+        const disabled = await salesSettingsStore.disableBirthdayExperiment({
+            revision: 33,
+            changeNote: 'pause birthday',
+        }, { updatedBy: 'owner@example.test' })
+
+        expect(disabled).toMatchObject({
+            revision: 34,
+            birthdayExperiment: {
+                enabled: false,
+                weight: 0,
+                sourceAllowlist: ['real-meta-source'],
+                variableVersions,
+            },
+        })
+        for (const [slot, key] of Object.entries(BIRTHDAY_VARIABLE_KEYS)) {
+            expect(store.get('sales_variables/' + key).publishedVersionId).toBe(variableVersions[slot])
+            expect(store.get('sales_variables/' + key + '/versions/' + variableVersions[slot]).status).toBe('published')
+        }
+    })
+
+    it('rejects birthday control mutations through the generic settings writer', async () => {
+        store.set('sales_agent_settings/active', {
+            revision: 44, enabled: true, mode: 'opening_only', provider: 'auto', model: 'claude-sonnet-4-5',
+            openingText: 'opening', activeOpeningIds: ['answer_first'], openingMediaSequence: [],
+        })
+
+        await expect(saveSalesSettings({
+            revision: 44,
+            birthdayExperiment: {
+                id: 'birthday_gift', revision: 1, enabled: false, weight: 0,
+                sourceAllowlist: ['real-meta-source'],
+                variables: BIRTHDAY_VARIABLE_KEYS,
+                variableVersions: {},
+            },
+        }, { updatedBy: 'owner@example.test' }))
+            .rejects.toThrow('BIRTHDAY_EXPERIMENT_REQUIRES_PUBLISH')
+        expect(store.get('sales_agent_settings/active')).toMatchObject({ revision: 44 })
     })
 
     it('saves with optimistic concurrency and snapshots the prior version', async () => {

@@ -64,7 +64,9 @@ import { buildDeterministicSalesReply, decideSalesTurn, enforceSalesReply, liftI
 import { buildOpeningPlan } from '@/lib/salesAgent/openingPlan'
 import { buildOpeningOnlyPlan } from '@/lib/salesAgent/openingOnly'
 import { prepareOpeningRuntime, openingNoteFor } from '@/lib/salesAgent/openingRuntime'
+import { prepareBirthdayRuntime } from '@/lib/salesAgent/birthdayExperiment'
 import {
+    loadBirthdayVariableVersions,
     loadOpeningVariableVersions,
     signOpeningVariableDownload,
 } from '@/lib/salesAgent/openingVariableRuntimeStore'
@@ -604,6 +606,118 @@ export async function POST(req) {
                 lastText: text,
             }),
         })
+    }
+
+    // The birthday journey is independent from the A/B/C opening
+    // experiment. It is deliberately evaluated only after the provider
+    // claim, age fence, history lookup, human pause, and paid-customer
+    // checks above. Disabled or weight-zero control leaves this route on
+    // its existing path without loading any birthday copy.
+    const birthdayExperiment = settings.birthdayExperiment
+    if (birthdayExperiment?.enabled === true && Number(birthdayExperiment.weight) > 0) {
+        let birthdayRuntime
+        try {
+            const variableVersions = await loadBirthdayVariableVersions(birthdayExperiment)
+            birthdayRuntime = prepareBirthdayRuntime({
+                lead,
+                experiment: birthdayExperiment,
+                inbound: { kind: messageType, text, mediaId: body.mediaId },
+                provider: providerIdentity,
+                variableVersions,
+                eventId,
+            })
+        } catch {
+            console.warn('[sales-agent] birthday copy resolution failed')
+            return NextResponse.json({ error: 'birthday-copy-resolution-failed' }, { status: 503 })
+        }
+        if (birthdayRuntime.eligible) {
+            const result = birthdayRuntime.result
+            const parts = Array.isArray(result?.parts) ? result.parts : []
+            const textParts = parts.filter(part => part?.kind === 'text' && String(part.text || '').trim())
+            const sendText = textParts.map(part => String(part.text).trim()).join('\n\n')
+            if (!sendText || textParts.length !== 1) {
+                return NextResponse.json({ error: 'birthday-copy-invalid' }, { status: 503 })
+            }
+            const answerPart = textParts[0]
+            const parsed = {
+                malformed: false,
+                messages: [sendText],
+                stage: 'engaged',
+                handoff: false,
+                handoffReason: null,
+                image: null,
+                openingMediaKeys: [],
+                eventType: lead.eventType || null,
+                eventDate: lead.eventDate || null,
+                callbackPromised: null,
+                followUpAt: null,
+            }
+            const responsePayload = {
+                ok: true,
+                shouldSend: true,
+                send: [sendText],
+                sendText,
+                sendImage: null,
+                sendImageCaption: null,
+                hasImage: false,
+                sendVideo: null,
+                sendVideoCaption: null,
+                hasVideo: false,
+                sendAudio: null,
+                sendAudioCaption: null,
+                sendAudioVoiceNote: false,
+                hasAudio: false,
+                openingMediaCount: 0,
+                openingMediaParts: [],
+                openingSequenceParts: [{ ...answerPart, order: 1 }],
+                postOpeningText: '',
+                openingAnswerId: answerPart.partId,
+                openingAnswerText: sendText,
+                openingClosingId: null,
+                openingClosingText: null,
+                stage: 'engaged',
+                handoff: false,
+                followUpAt: null,
+                notifyOwner: null,
+                birthdayGift: { responseSlot: result.responseSlot, action: result.action },
+            }
+            const exchange = {
+                phone,
+                incomingText: text || `[${messageType}]`,
+                parsed,
+                followUpAt: null,
+                profileName: body?.profileName,
+                source: resolveSource({ isNew: !!lead.isNew, text, existing: lead.source, fallback: body?.source }),
+                variant: null,
+                isNew: !!lead.isNew,
+                birthdayRuntime: {
+                    expectedStateVersion: birthdayRuntime.expectedStateVersion,
+                    enrollment: birthdayRuntime.enrollment,
+                    state: birthdayRuntime.state,
+                    action: result.action,
+                    responseSlot: result.responseSlot,
+                },
+            }
+            try {
+                const durable = await completeSuccessfulExchange({
+                    eventId,
+                    claimToken: claim.claimToken,
+                    claimGeneration: claim.claimGeneration,
+                    exchange,
+                    outcome: responsePayload,
+                    deadlineAtMs: routeDeadlineAtMs,
+                })
+                if (durable.action === 'completed') {
+                    compactLeadBestEffort(phone)
+                    return NextResponse.json(responsePayload)
+                }
+                if (durable.action === 'cached') return NextResponse.json(noDeliveryEnvelope({ ok: true, duplicate: true }))
+                return NextResponse.json({ error: durable.action === 'deadline' ? 'birthday-commit-deadline-exhausted' : 'birthday-commit-stale' }, { status: 503 })
+            } catch {
+                console.error('[sales-agent] birthday exchange commit failed')
+                return NextResponse.json({ error: 'birthday-exchange-commit-failed' }, { status: 503 })
+            }
+        }
     }
 
     // The published A/B/C opening experiment is deterministic and has no

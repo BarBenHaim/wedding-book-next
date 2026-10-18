@@ -89,6 +89,9 @@ export async function PUT(req) {
     if (body && Object.prototype.hasOwnProperty.call(body, 'openingExperiment')) {
         return NextResponse.json({ error: 'OPENING_EXPERIMENT_REQUIRES_PUBLISH' }, { status: 400 })
     }
+    if (body && Object.prototype.hasOwnProperty.call(body, 'birthdayExperiment')) {
+        return NextResponse.json({ error: 'BIRTHDAY_EXPERIMENT_REQUIRES_PUBLISH' }, { status: 400 })
+    }
     try {
         const { library, registeredMediaKeys } = await context()
         const settings = await saveSalesSettings(body, { updatedBy, registeredMediaKeys })

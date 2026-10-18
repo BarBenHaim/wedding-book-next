@@ -88,6 +88,26 @@ describe('sales agent settings route', () => {
         expect(mocks.saveSalesSettings).not.toHaveBeenCalled()
     })
 
+    it('rejects birthday experiment changes through the generic settings writer', async () => {
+        const response = await PUT(request('PUT', {
+            revision: 3,
+            birthdayExperiment: {
+                id: 'birthday_gift', revision: 1, enabled: false, weight: 0, sourceAllowlist: [],
+                variables: {
+                    opening: 'birthday_gift_opening_v1',
+                    explainer: 'birthday_gift_explainer_v1',
+                    prices: 'birthday_gift_prices_v1',
+                    timing: 'birthday_gift_timing_v1',
+                },
+                variableVersions: {},
+            },
+        }))
+
+        expect(response.status).toBe(400)
+        expect(await response.json()).toEqual({ error: 'BIRTHDAY_EXPERIMENT_REQUIRES_PUBLISH' })
+        expect(mocks.saveSalesSettings).not.toHaveBeenCalled()
+    })
+
     it('returns a private stale-revision conflict', async () => {
         mocks.saveSalesSettings.mockRejectedValue(new Error('STALE_REVISION'))
         const response = await PUT(request('PUT', { revision: 2 }))

@@ -579,6 +579,46 @@ describe('Firestore atomic successful exchange matrix', () => {
         expect(JSON.stringify(approvals[0][1])).not.toContain('http')
     })
 
+    it('pins the birthday opening separately from the legacy opening experiment and advances only its own state fence', async () => {
+        store.set(EVENT, processingEvent())
+        const birthdayRuntime = {
+            expectedStateVersion: 0,
+            enrollment: {
+                source: 'verified-referral',
+                flow: {
+                    id: 'birthday_gift', revision: 1,
+                    variables: { opening: 'birthday_gift_opening_v1' },
+                    variableVersions: { opening: 'opening-v1' },
+                },
+            },
+            state: { opened: true },
+            result: { action: 'wait', responseSlot: 'opening' },
+        }
+
+        await expect(completeSuccessfulExchange(successArgs({
+            exchange: { ...exchange, birthdayRuntime },
+            outcome: {
+                sendText: 'birthday opening', handoff: false,
+                openingSequenceParts: [{
+                    partId: 'f'.repeat(32), order: 1, kind: 'text', text: 'birthday opening',
+                    variableKey: 'birthday_gift_opening_v1', variableVersionId: 'opening-v1',
+                }],
+            },
+        }))).resolves.toEqual(expect.objectContaining({ action: 'completed' }))
+
+        expect(store.get('sales_leads/456')).toMatchObject({
+            birthdayGiftFlow: birthdayRuntime.enrollment.flow,
+            birthdayGiftState: { opened: true },
+            birthdayGiftStateVersion: 1,
+            birthdayGiftStatus: 'wait',
+            birthdayGiftResponseSlot: 'opening',
+        })
+        expect(store.get('sales_leads/456')).not.toHaveProperty('openingFlow')
+        expect(store.get(`sales_delivery_events/${'f'.repeat(32)}`)).toMatchObject({
+            variableKey: 'birthday_gift_opening_v1', variableVersionId: 'opening-v1',
+        })
+    })
+
     it('rejects a stale opening state version without mutating lead, event, or deliveries', async () => {
         store.set(EVENT, processingEvent())
         store.set('sales_leads/456', { openingStateVersion: 2, openingVariantId: 'A' })

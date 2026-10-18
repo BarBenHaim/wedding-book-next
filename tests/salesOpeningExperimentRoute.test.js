@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_OPENING_EXPERIMENT } from '@/lib/salesAgent/openingExperiment'
+import { DEFAULT_BIRTHDAY_EXPERIMENT, BIRTHDAY_VARIABLE_KEYS } from '@/lib/salesAgent/birthdayExperiment'
 
 const mocks = vi.hoisted(() => ({
     verifyIdToken: vi.fn(),
@@ -7,6 +8,8 @@ const mocks = vi.hoisted(() => ({
     readSalesSettings: vi.fn(),
     saveSalesSettings: vi.fn(),
     publishSalesSettingsSnapshot: vi.fn(),
+    publishBirthdayExperimentSnapshot: vi.fn(),
+    disableBirthdayExperiment: vi.fn(),
     restoreSalesSettingsRevision: vi.fn(),
     listSalesSettingsHistory: vi.fn(),
     listMedia: vi.fn(),
@@ -24,6 +27,8 @@ vi.mock('@/lib/salesAgent/settingsStore', () => ({
     readSalesSettings: mocks.readSalesSettings,
     saveSalesSettings: mocks.saveSalesSettings,
     publishSalesSettingsSnapshot: mocks.publishSalesSettingsSnapshot,
+    publishBirthdayExperimentSnapshot: mocks.publishBirthdayExperimentSnapshot,
+    disableBirthdayExperiment: mocks.disableBirthdayExperiment,
     restoreSalesSettingsRevision: mocks.restoreSalesSettingsRevision,
     listSalesSettingsHistory: mocks.listSalesSettingsHistory,
 }))
@@ -45,6 +50,7 @@ const settings = {
     enabled: false,
     mode: 'opening_only',
     openingExperiment: DEFAULT_OPENING_EXPERIMENT,
+    birthdayExperiment: DEFAULT_BIRTHDAY_EXPERIMENT,
 }
 
 beforeEach(async () => {
@@ -54,6 +60,8 @@ beforeEach(async () => {
     mocks.readSalesSettings.mockResolvedValue(settings)
     mocks.saveSalesSettings.mockResolvedValue({ ...settings, revision: 8 })
     mocks.publishSalesSettingsSnapshot.mockResolvedValue({ ...settings, revision: 8 })
+    mocks.publishBirthdayExperimentSnapshot.mockResolvedValue({ ...settings, revision: 8 })
+    mocks.disableBirthdayExperiment.mockResolvedValue({ ...settings, revision: 8 })
     mocks.restoreSalesSettingsRevision.mockResolvedValue({ ...settings, revision: 8 })
     mocks.listSalesSettingsHistory.mockResolvedValue([{ revision: 6, updatedAt: 123, updatedBy: 'owner', changeNote: 'copy' }])
     mocks.listMedia.mockResolvedValue([{ key: 'owner-voice', kind: 'audio', url: 'https://storage.test/voice.ogg' }])
@@ -90,6 +98,7 @@ describe('opening experiment route', () => {
             revision: 7,
             enabled: false,
             experiment: DEFAULT_OPENING_EXPERIMENT,
+            birthdayExperiment: DEFAULT_BIRTHDAY_EXPERIMENT,
             history: [{ revision: 6, updatedAt: 123, updatedBy: 'owner', changeNote: 'copy' }],
             media: [{ key: 'owner-voice', kind: 'audio', url: 'https://storage.test/voice.ogg', caption: '', when: '', source: 'upload' }],
             metrics: { trendReady: false, variants: {} },
@@ -121,6 +130,46 @@ describe('opening experiment route', () => {
         }))
         expect(mocks.saveSalesSettings).not.toHaveBeenCalled()
         expect(JSON.stringify(mocks.publishSalesSettingsSnapshot.mock.calls[0])).not.toContain('attacker-value')
+    })
+
+    it('publishes only the explicitly supplied birthday experiment and its four expected drafts', async () => {
+        const birthdayExperiment = {
+            enabled: false,
+            weight: 0,
+            sourceAllowlist: [],
+            variables: BIRTHDAY_VARIABLE_KEYS,
+        }
+        const expectedVariableDrafts = Object.fromEntries(Object.values(BIRTHDAY_VARIABLE_KEYS)
+            .map(key => [key, `${key}-draft-1`]))
+        const response = await POST(request('POST', {
+            action: 'publish_birthday', revision: 7, birthdayExperiment, expectedVariableDrafts,
+            changeNote: 'טיוטת יום הולדת', openingExperiment: { attacker: 'must-not-be-read' },
+        }))
+
+        expect(response.status).toBe(200)
+        expect(mocks.publishBirthdayExperimentSnapshot).toHaveBeenCalledWith({
+            revision: 7,
+            birthdayExperiment,
+            expectedVariableDrafts,
+            changeNote: 'טיוטת יום הולדת',
+        }, expect.objectContaining({ updatedBy: 'shared-secret' }))
+        expect(mocks.publishSalesSettingsSnapshot).not.toHaveBeenCalled()
+        expect(JSON.stringify(mocks.publishBirthdayExperimentSnapshot.mock.calls[0])).not.toContain('must-not-be-read')
+    })
+
+    it('uses a dedicated action to disable birthday routing without accepting birthday configuration input', async () => {
+        const response = await POST(request('POST', {
+            action: 'disable_birthday', revision: 7, changeNote: 'pause',
+            birthdayExperiment: { enabled: true, sourceAllowlist: ['attacker-source'] },
+        }))
+
+        expect(response.status).toBe(200)
+        expect(mocks.disableBirthdayExperiment).toHaveBeenCalledWith({
+            revision: 7,
+            changeNote: 'pause',
+        }, expect.objectContaining({ updatedBy: 'shared-secret' }))
+        expect(mocks.publishBirthdayExperimentSnapshot).not.toHaveBeenCalled()
+        expect(JSON.stringify(mocks.disableBirthdayExperiment.mock.calls[0])).not.toContain('attacker-source')
     })
 
     it('restores a historical revision as a new current revision', async () => {

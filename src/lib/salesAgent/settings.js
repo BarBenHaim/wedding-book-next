@@ -1,6 +1,7 @@
 import { ACTIVE_VARIANT_IDS } from './experiments'
 import { DEFAULT_OPENING_EXPERIMENT, normalizeOpeningExperiment } from './openingExperiment'
 import { normalizeModelExperiment } from './modelExperiment'
+import { DEFAULT_BIRTHDAY_EXPERIMENT, normalizeBirthdayExperiment } from './birthdayExperiment'
 
 export const MODEL_REGISTRY = Object.freeze([
     { id: 'claude-sonnet-4-5', provider: 'anthropic', label: 'Claude Sonnet 4.5', role: 'primary' },
@@ -58,6 +59,7 @@ export const DEFAULT_SALES_SETTINGS = Object.freeze({
     activeOpeningIds: [...ACTIVE_VARIANT_IDS],
     openingMediaSequence: [],
     openingExperiment: DEFAULT_OPENING_EXPERIMENT,
+    birthdayExperiment: DEFAULT_BIRTHDAY_EXPERIMENT,
     modelExperiment: DEFAULT_MODEL_EXPERIMENT,
     updatedAt: null,
     updatedBy: null,
@@ -135,6 +137,9 @@ export function normalizeSalesSettings(input = {}, {
             ])],
         },
     )
+    const birthdayExperiment = normalizeBirthdayExperiment(
+        input.birthdayExperiment === undefined ? DEFAULT_BIRTHDAY_EXPERIMENT : input.birthdayExperiment,
+    )
     const modelExperiment = normalizeModelExperiment(
         input.modelExperiment === undefined ? DEFAULT_MODEL_EXPERIMENT : input.modelExperiment,
         MODEL_REGISTRY,
@@ -151,6 +156,7 @@ export function normalizeSalesSettings(input = {}, {
         activeOpeningIds,
         openingMediaSequence,
         openingExperiment,
+        birthdayExperiment,
         modelExperiment,
         changeNote: cleanText(input.changeNote, MAX_CHANGE_NOTE),
     }

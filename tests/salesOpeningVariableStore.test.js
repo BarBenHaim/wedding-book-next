@@ -16,6 +16,21 @@ const experiment = {
     }],
 }
 
+const birthdayExperiment = {
+    variables: {
+        opening: 'birthday_gift_opening_v1',
+        explainer: 'birthday_gift_explainer_v1',
+        prices: 'birthday_gift_prices_v1',
+        timing: 'birthday_gift_timing_v1',
+    },
+    variableVersions: {
+        opening: 'opening-v1',
+        explainer: 'explainer-v1',
+        prices: 'prices-v1',
+        timing: 'timing-v1',
+    },
+}
+
 describe('opening variable runtime storage boundary', () => {
     it('loads only exact published version identities and signs a 15-minute private read', async () => {
         const docs = new Map([
@@ -39,6 +54,27 @@ describe('opening variable runtime storage boundary', () => {
             .resolves.toBe('https://storage.test/private-read')
         expect(getSignedUrl).toHaveBeenCalledWith({
             version: 'v4', action: 'read', expires: 1_777_000_900_000,
+        })
+    })
+
+    it('loads only the four exact published birthday copy versions', async () => {
+        const docs = new Map(Object.entries(birthdayExperiment.variables).map(([slot, key]) => {
+            const versionId = birthdayExperiment.variableVersions[slot]
+            return [`sales_variables/${key}/versions/${versionId}`, {
+                id: versionId, kind: 'text', value: `${slot} copy`, status: 'published', createdAtMs: 1,
+            }]
+        }))
+        const store = createOpeningVariableRuntimeStore({
+            readDoc: vi.fn(async path => docs.get(path) || null),
+            fileForPath: vi.fn(),
+            now: () => 1,
+        })
+
+        await expect(store.loadBirthdayVariableVersions?.(birthdayExperiment)).resolves.toEqual({
+            'birthday_gift_opening_v1:opening-v1': expect.objectContaining({ value: 'opening copy' }),
+            'birthday_gift_explainer_v1:explainer-v1': expect.objectContaining({ value: 'explainer copy' }),
+            'birthday_gift_prices_v1:prices-v1': expect.objectContaining({ value: 'prices copy' }),
+            'birthday_gift_timing_v1:timing-v1': expect.objectContaining({ value: 'timing copy' }),
         })
     })
 

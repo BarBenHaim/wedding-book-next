@@ -11,6 +11,8 @@ import { decideOpeningApproval, generateOpeningApproval, listOpeningApprovals } 
 import { openingLeadRow, summarizeOpeningExperiment } from '@/lib/salesAgent/openingAnalytics'
 import {
     listSalesSettingsHistory,
+    disableBirthdayExperiment,
+    publishBirthdayExperimentSnapshot,
     publishSalesSettingsSnapshot,
     readSalesSettings,
     restoreSalesSettingsRevision,
@@ -59,6 +61,7 @@ async function bodyFor(settings, custom, history = null) {
         revision: settings.revision,
         enabled: settings.enabled,
         experiment: settings.openingExperiment,
+        birthdayExperiment: settings.birthdayExperiment,
         history: rows,
         media: publicMedia(custom),
         metrics: summarizeOpeningExperiment(experimentLeads, { experiment: settings.openingExperiment, nowMs }),
@@ -85,6 +88,9 @@ function failure(error) {
         'OPENING_VARIANT_SET_CHANGED',
         'INVALID_OPENING_VARIABLE', 'INVALID_OPENING_VARIABLE_VERSION', 'AMBIGUOUS_OPENING_VARIABLE',
         'OPENING_VARIABLE_ARCHIVED', 'OPENING_VARIABLE_UNPUBLISHED', 'OPENING_VARIABLE_KIND_MISMATCH',
+        'INVALID_BIRTHDAY_EXPERIMENT', 'INVALID_BIRTHDAY_REVISION', 'INVALID_BIRTHDAY_WEIGHT',
+        'INVALID_BIRTHDAY_SOURCE', 'INVALID_BIRTHDAY_VARIABLE', 'INVALID_BIRTHDAY_VARIABLE_VERSION',
+        'BIRTHDAY_VARIABLE_VERSION_REQUIRED', 'BIRTHDAY_VARIABLE_KIND',
     ])
     if (bad.has(code)) return NextResponse.json({ error: code }, { status: 400 })
     if (['APPROVAL_NOT_FOUND'].includes(code)) return NextResponse.json({ error: code }, { status: 404 })
@@ -136,6 +142,21 @@ export async function POST(req) {
                     && !Array.isArray(input.expectedVariableDrafts)
                     ? input.expectedVariableDrafts
                     : {},
+                changeNote: typeof input.changeNote === 'string' ? input.changeNote : '',
+            }, { updatedBy, registeredMediaKeys })
+        } else if (input.action === 'publish_birthday') {
+            settings = await publishBirthdayExperimentSnapshot({
+                revision: Number(input.revision),
+                birthdayExperiment: input.birthdayExperiment,
+                expectedVariableDrafts: input.expectedVariableDrafts && typeof input.expectedVariableDrafts === 'object'
+                    && !Array.isArray(input.expectedVariableDrafts)
+                    ? input.expectedVariableDrafts
+                    : {},
+                changeNote: typeof input.changeNote === 'string' ? input.changeNote : '',
+            }, { updatedBy, registeredMediaKeys })
+        } else if (input.action === 'disable_birthday') {
+            settings = await disableBirthdayExperiment({
+                revision: Number(input.revision),
                 changeNote: typeof input.changeNote === 'string' ? input.changeNote : '',
             }, { updatedBy, registeredMediaKeys })
         } else if (input.action === 'restore') {

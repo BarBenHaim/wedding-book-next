@@ -54,7 +54,9 @@ const mocks = vi.hoisted(() => ({
     buildOpeningPlan: vi.fn(),
     buildOpeningOnlyPlan: vi.fn(),
     prepareOpeningRuntime: vi.fn(),
+    prepareBirthdayRuntime: vi.fn(),
     loadOpeningVariableVersions: vi.fn(),
+    loadBirthdayVariableVersions: vi.fn(),
     signOpeningVariableDownload: vi.fn(),
     readPriorConversationContext: vi.fn(),
     canSendWhatsApp: vi.fn(),
@@ -111,8 +113,13 @@ vi.mock('@/lib/salesAgent/openingRuntime', async importOriginal => ({
     ...(await importOriginal()),
     prepareOpeningRuntime: mocks.prepareOpeningRuntime,
 }))
+vi.mock('@/lib/salesAgent/birthdayExperiment', async importOriginal => ({
+    ...(await importOriginal()),
+    prepareBirthdayRuntime: mocks.prepareBirthdayRuntime,
+}))
 vi.mock('@/lib/salesAgent/openingVariableRuntimeStore', () => ({
     loadOpeningVariableVersions: mocks.loadOpeningVariableVersions,
+    loadBirthdayVariableVersions: mocks.loadBirthdayVariableVersions,
     signOpeningVariableDownload: mocks.signOpeningVariableDownload,
 }))
 vi.mock('@/lib/salesAgent/priorContext', () => ({ readPriorConversationContext: mocks.readPriorConversationContext }))
@@ -272,12 +279,91 @@ beforeEach(async () => {
         eligible: false, text: '', mediaParts: [], sequenceParts: [],
     })
     mocks.prepareOpeningRuntime.mockReturnValue({ eligible: false, reason: 'experiment-stopped' })
+    mocks.prepareBirthdayRuntime.mockReturnValue({ eligible: false, reason: 'birthday-experiment-stopped' })
     mocks.loadOpeningVariableVersions.mockResolvedValue({})
+    mocks.loadBirthdayVariableVersions.mockResolvedValue({})
     mocks.signOpeningVariableDownload.mockResolvedValue('https://storage.test/signed')
     mocks.readPriorConversationContext.mockResolvedValue({ state: 'none', hasPriorConversation: false })
     mocks.canSendWhatsApp.mockReturnValue(true)
     mocks.sendInboundSequenceDirect.mockResolvedValue({ status: 'accepted', acceptedParts: 2, totalParts: 2, persistenceDegraded: false })
     ;({ POST } = await import('@/app/api/sales-agent/reply/route'))
+})
+
+describe('birthday gift opening runtime', () => {
+    const birthdayExperiment = {
+        id: 'birthday_gift', revision: 1, enabled: true, weight: 100,
+        sourceAllowlist: ['meta-source-123'],
+        variables: {
+            opening: 'birthday_gift_opening_v1',
+            explainer: 'birthday_gift_explainer_v1',
+            prices: 'birthday_gift_prices_v1',
+            timing: 'birthday_gift_timing_v1',
+        },
+        variableVersions: {
+            opening: 'opening-v1', explainer: 'explainer-v1', prices: 'prices-v1', timing: 'timing-v1',
+        },
+    }
+
+    it('runs the exact pinned birthday opening after the inbound guards without passing client referral data to the birthday runtime', async () => {
+        mocks.creditPendingMedia.mockResolvedValue(undefined)
+        mocks.getLead.mockResolvedValue({ isNew: true, stage: 'new', turns: [], followUpCount: 0, imagesSent: [], mediaSent: [] })
+        mocks.readSalesSettings.mockResolvedValue({
+            revision: 33, enabled: true, mode: 'full_sales', provider: 'anthropic', model: 'claude-haiku-4-5',
+            fallbackModel: 'claude-haiku-4-5', businessInstructions: '', activeOpeningIds: ['question_first'],
+            openingMediaSequence: [], birthdayExperiment,
+        })
+        mocks.loadBirthdayVariableVersions.mockResolvedValue({
+            'birthday_gift_opening_v1:opening-v1': { id: 'opening-v1', kind: 'text', status: 'published', value: 'birthday opening' },
+        })
+        mocks.prepareBirthdayRuntime.mockReturnValue({
+            eligible: true,
+            flow: { id: 'birthday_gift', revision: 1 },
+            enrollment: { source: 'verified-referral', flow: { id: 'birthday_gift', revision: 1 } },
+            state: { opened: true },
+            result: {
+                action: 'wait', responseSlot: 'opening', completed: false,
+                parts: [{ partId: 'birthday-opening-part', order: 1, kind: 'text', text: 'birthday opening', variableKey: 'birthday_gift_opening_v1', variableVersionId: 'opening-v1' }],
+            },
+        })
+
+        const result = await post(inbound({
+            text: 'adult birthday inquiry', referral: { source_id: 'meta-source-123' },
+        }))
+
+        expect(result.status).toBe(200)
+        expect(result.body).toMatchObject({
+            shouldSend: true,
+            send: ['birthday opening'],
+            sendText: 'birthday opening',
+            birthdayGift: { responseSlot: 'opening', action: 'wait' },
+        })
+        expect(mocks.loadBirthdayVariableVersions).toHaveBeenCalledWith(birthdayExperiment)
+        expect(mocks.prepareBirthdayRuntime).toHaveBeenCalledWith(expect.objectContaining({
+            experiment: birthdayExperiment,
+            provider: {
+                providerChannel: 'meta_whatsapp', providerAccountId: 'phone-number-id-token', providerMessageId: 'wamid-original-meta-message-token',
+            },
+            inbound: expect.not.objectContaining({ referral: expect.anything() }),
+        }))
+        expect(mocks.prepareOpeningRuntime).not.toHaveBeenCalled()
+        expectNoProviderWork()
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            exchange: expect.objectContaining({ birthdayRuntime: expect.objectContaining({ state: { opened: true } }) }),
+        }))
+    })
+
+    it('keeps a duplicate inbound event silent before birthday source or copy work', async () => {
+        mocks.claimInboundEvent.mockResolvedValue({ action: 'cached' })
+
+        const result = await post(inbound({
+            text: 'adult birthday inquiry', referral: { source_id: 'meta-source-123' },
+        }))
+
+        expectEmptyDeliveryEnvelope(result.body, { ok: true, duplicate: true })
+        expect(mocks.getLead).not.toHaveBeenCalled()
+        expect(mocks.loadBirthdayVariableVersions).not.toHaveBeenCalled()
+        expect(mocks.prepareBirthdayRuntime).not.toHaveBeenCalled()
+    })
 })
 
 describe('model revenue experiment runtime', () => {
@@ -993,6 +1079,7 @@ describe('inbound event duplicate fencing', () => {
         expect(mocks.sendInboundSequenceDirect).not.toHaveBeenCalled()
         expect(mocks.getLead).not.toHaveBeenCalled()
         expect(mocks.listMedia).not.toHaveBeenCalled()
+        expect(mocks.prepareBirthdayRuntime).not.toHaveBeenCalled()
         expect(mocks.callClaude).not.toHaveBeenCalled()
         expectNoProviderWork()
     })

@@ -3,6 +3,7 @@ import { adminDb } from '@/lib/firebaseAdmin'
 import { DEFAULT_SALES_SETTINGS, normalizeSalesSettings, resolveSalesSettings } from './settings'
 import { isOpeningVariantId } from './openingExperiment'
 import { bindOpeningVariables } from './salesVariables'
+import { bindBirthdayVariableVersions, normalizeBirthdayExperiment } from './birthdayExperiment'
 
 const MAX_OPENING_VARIANT_LINEAGES = 512
 const MAX_MODEL_ARM_LINEAGES = 64
@@ -27,6 +28,10 @@ function variableBindings(experiment) {
 }
 
 const variableKeys = experiment => [...new Set(variableBindings(experiment).map(row => row.key))]
+
+const birthdayVariableBindings = experiment => Object.entries(experiment?.variables || {})
+    .map(([slot, key]) => ({ slot: String(slot), key: String(key).trim().toLowerCase() }))
+    .filter(row => row.key)
 
 const toMs = value => {
     if (!value) return null
@@ -254,9 +259,162 @@ export async function publishSalesSettingsSnapshot(input, {
     })
 }
 
+export async function publishBirthdayExperimentSnapshot(input, {
+    updatedBy,
+    registeredMediaKeys = [],
+} = {}) {
+    return adminDb.runTransaction(async tx => {
+        const active = activeRef()
+        const activeSnap = await tx.get(active)
+        const current = activeSnap.exists ? activeSnap.data() : DEFAULT_SALES_SETTINGS
+        const currentRevision = Number(current.revision) || 0
+        if (Number(input?.revision) !== currentRevision) throw new Error('STALE_REVISION')
+
+        const requested = normalizeBirthdayExperiment(input?.birthdayExperiment, { requireVariableVersions: false })
+        const bindings = birthdayVariableBindings(requested)
+        if (bindings.length !== 4 || new Set(bindings.map(row => row.key)).size !== 4) {
+            throw new Error('INVALID_BIRTHDAY_VARIABLE')
+        }
+        const expected = input?.expectedVariableDrafts && typeof input.expectedVariableDrafts === 'object'
+            && !Array.isArray(input.expectedVariableDrafts)
+            ? input.expectedVariableDrafts
+            : {}
+        const bindingKeys = new Set(bindings.map(row => row.key))
+        if (Object.keys(expected).some(key => !bindingKeys.has(String(key).trim().toLowerCase()))) {
+            throw new Error('INVALID_BIRTHDAY_VARIABLE')
+        }
+        const records = await Promise.all(bindings.map(async ({ slot, key }) => {
+            const ref = variableRef(key)
+            const variableSnap = await tx.get(ref)
+            if (!variableSnap.exists) throw new Error('OPENING_VARIABLE_NOT_FOUND')
+            const variable = variableSnap.data()
+            if (variable.archived === true) throw new Error('OPENING_VARIABLE_ARCHIVED')
+            if (variable.kind !== 'text') throw new Error('BIRTHDAY_VARIABLE_KIND')
+            const draftVersionId = variable.draftVersionId == null ? null : String(variable.draftVersionId)
+            if (!draftVersionId) throw new Error('OPENING_VARIABLE_UNPUBLISHED')
+            if (String(expected[key] ?? '') !== draftVersionId) throw new Error('STALE_VARIABLE_DRAFT')
+            const versionRef = variableVersionRef(key, draftVersionId)
+            const versionSnap = await tx.get(versionRef)
+            if (!versionSnap.exists) throw new Error('OPENING_VARIABLE_VERSION_MISSING')
+            const version = versionSnap.data()
+            if (version.status !== 'draft' && version.status !== 'published') throw new Error('OPENING_VARIABLE_UNPUBLISHED')
+            if (version.kind !== 'text') throw new Error('BIRTHDAY_VARIABLE_KIND')
+            return { slot, key, ref, versionRef, variable, version: { ...version, status: 'published' } }
+        }))
+        const birthdayExperiment = bindBirthdayVariableVersions(requested, Object.fromEntries(records.map(record => [record.slot, record.version.id])))
+        const migratedCurrent = resolveSalesSettings(current, {
+            registeredMediaKeys,
+            registeredVariables: variableKeys(current?.openingExperiment),
+        })
+        const normalized = normalizeSalesSettings({
+            ...migratedCurrent,
+            revision: currentRevision,
+            birthdayExperiment,
+            changeNote: typeof input.changeNote === 'string' ? input.changeNote : '',
+        }, {
+            registeredMediaKeys,
+            registeredVariables: variableKeys(current?.openingExperiment),
+        })
+        const timestamp = FieldValue.serverTimestamp()
+        const next = {
+            ...normalized,
+            revision: currentRevision + 1,
+            fallbackModel: DEFAULT_SALES_SETTINGS.fallbackModel,
+            openingVariantLineages: trustedOpeningVariantLineages(
+                current?.openingVariantLineages,
+                migratedCurrent.openingExperiment,
+            ),
+            modelArmLineages: trustedModelArmLineages(current?.modelArmLineages, normalized.modelExperiment),
+            updatedAt: timestamp,
+            updatedBy: String(updatedBy || 'system').slice(0, 160),
+        }
+        if (activeSnap.exists) {
+            tx.set(historyRef(currentRevision), {
+                ...current,
+                replacedByRevision: next.revision,
+                replacedAt: timestamp,
+            })
+        }
+        for (const record of records) {
+            tx.set(record.versionRef, { ...record.version, publishedAt: timestamp })
+            tx.set(record.ref, {
+                ...record.variable,
+                publishedVersionId: record.version.id,
+                updatedAt: timestamp,
+                updatedBy: String(updatedBy || 'system').slice(0, 160),
+            })
+        }
+        tx.set(active, next)
+        return resolveSalesSettings(next, {
+            registeredMediaKeys,
+            registeredVariables: variableKeys(next?.openingExperiment),
+        })
+    })
+}
+
+export async function disableBirthdayExperiment(input, {
+    updatedBy,
+    registeredMediaKeys = [],
+} = {}) {
+    return adminDb.runTransaction(async tx => {
+        const active = activeRef()
+        const activeSnap = await tx.get(active)
+        const current = activeSnap.exists ? activeSnap.data() : DEFAULT_SALES_SETTINGS
+        const currentRevision = Number(current.revision) || 0
+        if (Number(input?.revision) !== currentRevision) throw new Error('STALE_REVISION')
+
+        const migratedCurrent = resolveSalesSettings(current, {
+            registeredMediaKeys,
+            registeredVariables: variableKeys(current?.openingExperiment),
+        })
+        const birthdayExperiment = normalizeBirthdayExperiment({
+            ...migratedCurrent.birthdayExperiment,
+            enabled: false,
+            weight: 0,
+        }, { requireVariableVersions: false })
+        const normalized = normalizeSalesSettings({
+            ...migratedCurrent,
+            revision: currentRevision,
+            birthdayExperiment,
+            changeNote: typeof input.changeNote === 'string' ? input.changeNote : '',
+        }, {
+            registeredMediaKeys,
+            registeredVariables: variableKeys(current?.openingExperiment),
+        })
+        const timestamp = FieldValue.serverTimestamp()
+        const next = {
+            ...normalized,
+            revision: currentRevision + 1,
+            fallbackModel: DEFAULT_SALES_SETTINGS.fallbackModel,
+            openingVariantLineages: trustedOpeningVariantLineages(
+                current?.openingVariantLineages,
+                migratedCurrent.openingExperiment,
+            ),
+            modelArmLineages: trustedModelArmLineages(current?.modelArmLineages, normalized.modelExperiment),
+            updatedAt: timestamp,
+            updatedBy: String(updatedBy || 'system').slice(0, 160),
+        }
+        if (activeSnap.exists) {
+            tx.set(historyRef(currentRevision), {
+                ...current,
+                replacedByRevision: next.revision,
+                replacedAt: timestamp,
+            })
+        }
+        tx.set(active, next)
+        return resolveSalesSettings(next, {
+            registeredMediaKeys,
+            registeredVariables: variableKeys(next?.openingExperiment),
+        })
+    })
+}
+
 export async function saveSalesSettings(input, { updatedBy, registeredMediaKeys = [] } = {}) {
     if (input && Object.prototype.hasOwnProperty.call(input, 'openingExperiment')) {
         throw new Error('OPENING_EXPERIMENT_REQUIRES_PUBLISH')
+    }
+    if (input && Object.prototype.hasOwnProperty.call(input, 'birthdayExperiment')) {
+        throw new Error('BIRTHDAY_EXPERIMENT_REQUIRES_PUBLISH')
     }
     return adminDb.runTransaction(async tx => {
         const ref = activeRef()
@@ -391,6 +549,8 @@ export async function listSalesSettingsHistory({ limit = 20 } = {}) {
 const salesSettingsStore = {
     readSalesSettings,
     publishSalesSettingsSnapshot,
+    publishBirthdayExperimentSnapshot,
+    disableBirthdayExperiment,
     saveSalesSettings,
     restoreSalesSettingsRevision,
     listSalesSettingsHistory,

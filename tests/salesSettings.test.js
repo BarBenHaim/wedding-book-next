@@ -27,6 +27,19 @@ describe('sales agent settings', () => {
                     expect.objectContaining({ id: 'C' }),
                 ]),
             },
+            birthdayExperiment: {
+                id: 'birthday_gift',
+                revision: 1,
+                enabled: false,
+                weight: 0,
+                sourceAllowlist: [],
+                variables: {
+                    opening: 'birthday_gift_opening_v1',
+                    explainer: 'birthday_gift_explainer_v1',
+                    prices: 'birthday_gift_prices_v1',
+                    timing: 'birthday_gift_timing_v1',
+                },
+            },
             modelExperiment: {
                 enabled: false,
                 targetVerifiedSalesPerDay: 2,
@@ -86,6 +99,7 @@ describe('sales agent settings', () => {
                 enabled: true,
                 variants: [expect.objectContaining({ id: 'A', revision: 1 })],
             }),
+            birthdayExperiment: DEFAULT_SALES_SETTINGS.birthdayExperiment,
             modelExperiment: DEFAULT_SALES_SETTINGS.modelExperiment,
         })
         expect(JSON.stringify(normalized)).not.toContain('ignore policy')

@@ -18,18 +18,37 @@ function bindingsOf(experiment) {
     return [...new Map(rows.map(row => [`${row.key}:${row.versionId}`, row])).values()]
 }
 
+function birthdayBindingsOf(experiment) {
+    const variables = experiment?.variables && typeof experiment.variables === 'object' ? experiment.variables : {}
+    const versions = experiment?.variableVersions && typeof experiment.variableVersions === 'object' ? experiment.variableVersions : {}
+    const slots = ['opening', 'explainer', 'prices', 'timing']
+    return slots.map(slot => {
+        const key = normalizeVariableKey(variables[slot])
+        const versionId = String(versions[slot] || '').trim()
+        if (!VERSION_ID_PATTERN.test(versionId)) throw new Error('BIRTHDAY_VARIABLE_VERSION_MISSING')
+        return { key, versionId }
+    })
+}
+
 export function createOpeningVariableRuntimeStore(deps) {
+    const loadVariableVersions = async bindings => {
+        const entries = await Promise.all(bindings.map(async binding => {
+            const row = await deps.readDoc(`sales_variables/${binding.key}/versions/${binding.versionId}`)
+            if (!row) throw new Error('OPENING_VARIABLE_VERSION_MISSING')
+            const version = normalizeSalesVariableVersion(row)
+            if (version.id !== binding.versionId) throw new Error('OPENING_VARIABLE_VERSION_MISMATCH')
+            if (version.status !== 'published') throw new Error('OPENING_VARIABLE_UNPUBLISHED')
+            return [`${binding.key}:${binding.versionId}`, version]
+        }))
+        return Object.fromEntries(entries)
+    }
     return {
         async loadOpeningVariableVersions(experiment) {
-            const entries = await Promise.all(bindingsOf(experiment).map(async binding => {
-                const row = await deps.readDoc(`sales_variables/${binding.key}/versions/${binding.versionId}`)
-                if (!row) throw new Error('OPENING_VARIABLE_VERSION_MISSING')
-                const version = normalizeSalesVariableVersion(row)
-                if (version.id !== binding.versionId) throw new Error('OPENING_VARIABLE_VERSION_MISMATCH')
-                if (version.status !== 'published') throw new Error('OPENING_VARIABLE_UNPUBLISHED')
-                return [`${binding.key}:${binding.versionId}`, version]
-            }))
-            return Object.fromEntries(entries)
+            return loadVariableVersions(bindingsOf(experiment))
+        },
+
+        async loadBirthdayVariableVersions(experiment) {
+            return loadVariableVersions(birthdayBindingsOf(experiment))
         },
 
         async signOpeningVariableDownload(version) {
@@ -56,6 +75,7 @@ const productionStore = createOpeningVariableRuntimeStore({
 })
 
 export const loadOpeningVariableVersions = productionStore.loadOpeningVariableVersions
+export const loadBirthdayVariableVersions = productionStore.loadBirthdayVariableVersions
 export const signOpeningVariableDownload = productionStore.signOpeningVariableDownload
 
 export default productionStore

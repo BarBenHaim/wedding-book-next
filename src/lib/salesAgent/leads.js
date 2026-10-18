@@ -496,6 +496,10 @@ export async function completeSuccessfulExchange({
             const storedStateVersion = Number(storedLead.openingStateVersion || 0)
             if (storedStateVersion !== Number(exchange.openingRuntime.expectedStateVersion || 0)) return { action: 'stale' }
         }
+        if (exchange?.birthdayRuntime) {
+            const storedStateVersion = Number(storedLead.birthdayGiftStateVersion || 0)
+            if (storedStateVersion !== Number(exchange.birthdayRuntime.expectedStateVersion || 0)) return { action: 'stale' }
+        }
         let execution = null
         if (modelAssignment) {
             const canonicalAssignment = modelAssignmentFields(modelAssignment)
@@ -678,7 +682,7 @@ export async function getLead(rawPhone) {
  * Persist one exchange. Undefined values are stripped — the Firestore
  * client rejects them, and a half-written lead is worse than a stale one.
  */
-export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, profileName, source, variant, isNew, openingRuntime = null }) {
+export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, profileName, source, variant, isNew, openingRuntime = null, birthdayRuntime = null }) {
     const id = normalizePhone(phone)
     if (!id) throw new Error('bad phone')
 
@@ -786,6 +790,21 @@ export function buildExchangePatch({ phone, incomingText, parsed, followUpAt, pr
         }
         if (captures.childPhotoReceived === true || captures.eventType || captures.eventDate) {
             patch.openingContinuedAt = now
+        }
+    }
+    if (birthdayRuntime) {
+        const expectedVersion = Number(birthdayRuntime.expectedStateVersion || 0)
+        patch.birthdayGiftStateVersion = expectedVersion + 1
+        patch.birthdayGiftState = { opened: birthdayRuntime.state?.opened === true }
+        patch.birthdayGiftStatus = String(birthdayRuntime.action || birthdayRuntime.result?.action || '').slice(0, 40) || 'wait'
+        const responseSlot = String(birthdayRuntime.responseSlot || birthdayRuntime.result?.responseSlot || '')
+        if (['opening', 'prices', 'explainer', 'timing'].includes(responseSlot)) {
+            patch.birthdayGiftResponseSlot = responseSlot
+        }
+        if (birthdayRuntime.enrollment?.flow) {
+            patch.birthdayGiftFlow = birthdayRuntime.enrollment.flow
+            patch.birthdayGiftEnrolledAt = now
+            patch.birthdayGiftSource = String(birthdayRuntime.enrollment.source || '').slice(0, 40) || null
         }
     }
 
