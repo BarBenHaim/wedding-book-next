@@ -23,7 +23,10 @@ const h = vi.hoisted(() => {
     const entryCol = wid => ({
         doc: id => entryDoc(wid, id),
         get: async () => ({ docs: [...(entries.get(wid) || [])].map(([id, data]) => ({ id, data: () => data })) }),
-        add: async data => writes.push({ wid, data }),
+        add: async data => {
+            writes.push({ wid, data })
+            entries.get(wid).set('legacy-created', data)
+        },
     })
     const db = {
         collection: vi.fn(name => {
@@ -161,6 +164,8 @@ describe('authenticated owner delete, reorder and legacy API', () => {
         expect((await list(req(null, 'owner-a', '?weddingId=event-a'))).status).toBe(200)
         expect((await create(req({ type: 'text', content: 'dummy' }, 'owner-a', '?weddingId=event-a'))).status).toBe(200)
         expect(h.writes).toEqual([expect.objectContaining({ wid: 'event-a', data: expect.objectContaining({ user: 'owner-a' }) })])
+        const records = await (await list(req(null, 'owner-a', '?weddingId=event-a'))).json()
+        expect(records.find(entry => entry.id === 'legacy-created')).toMatchObject({ type: 'text', content: 'dummy', user: 'owner-a' })
     })
 
     it('validates the owner path before querying Firestore', async () => {

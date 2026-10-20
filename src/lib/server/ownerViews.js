@@ -19,7 +19,7 @@ export function ownerWeddingView(wedding) {
 export function ownerEntryView(id, entry) {
     return {
         id,
-        ...pick(entry, ['name', 'text', 'imageUrl', 'photoUrl', 'imageUrlOverride', 'imgAspect', 'imgAspectOverride', 'photoPosition', 'photoRotation', 'orderIndex', 'kind', 'forceSplit', 'preserveLineBreaks', 'pageStyle']),
+        ...pick(entry, ['name', 'text', 'type', 'content', 'user', 'imageUrl', 'photoUrl', 'imageUrlOverride', 'imgAspect', 'imgAspectOverride', 'photoPosition', 'photoRotation', 'orderIndex', 'kind', 'forceSplit', 'preserveLineBreaks', 'pageStyle']),
         timestamp: typeof entry.timestamp?.seconds === 'number'
             ? { seconds: entry.timestamp.seconds, nanoseconds: entry.timestamp.nanoseconds || 0 }
             : (typeof entry.timestamp === 'number' ? { seconds: Math.floor(entry.timestamp / 1000), nanoseconds: 0 } : null),

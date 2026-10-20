@@ -101,33 +101,78 @@ export default function PortalApp() {
     useEffect(() => {
         if (!weddingId) return
         let cancelled = false
-        const unsub = onAuthStateChanged(auth, async user => {
+        let stopRefresh = () => {}
+        const unsub = onAuthStateChanged(auth, user => {
+            stopRefresh()
             setW(null)
             setEntries(null)
             if (!user) {
                 window.location.assign('/login')
                 return
             }
-            try {
-                const idToken = await user.getIdToken()
-                const options = { headers: { Authorization: `Bearer ${idToken}` }, cache: 'no-store' }
-                const query = `?weddingId=${encodeURIComponent(weddingId)}`
-                const [wRes, eRes] = await Promise.all([
-                    fetch(`/api/owner/wedding${query}`, options),
-                    fetch(`/api/entries${query}`, options),
-                ])
-                if (!wRes.ok || !eRes.ok) throw new Error('portal-access-denied')
-                const [wData, eData] = await Promise.all([wRes.json(), eRes.json()])
-                if (cancelled || auth.currentUser?.uid !== user.uid) return
-                setW(wData.wedding)
-                const list = eData.map(x => ({ ...x, imageUrl: x.imageUrl || x.photoUrl || null }))
-                list.sort((a, b) => ((a.orderIndex ?? Infinity) - (b.orderIndex ?? Infinity)) || ((a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0)))
-                setEntries(list)
-            } catch {
-                if (!cancelled && auth.currentUser?.uid === user.uid) window.location.assign('/login')
+
+            let active = true
+            let inFlight = false
+            let controller = null
+            let deadline = null
+            const isCurrent = () => !cancelled && active && auth.currentUser?.uid === user.uid
+            async function refresh() {
+                if (!isCurrent() || inFlight || document.visibilityState === 'hidden') return
+                inFlight = true
+                controller = new AbortController()
+                deadline = setTimeout(() => controller?.abort(), 10000)
+                try {
+                    const idToken = await user.getIdToken()
+                    if (!isCurrent()) return
+                    const options = { headers: { Authorization: `Bearer ${idToken}` }, cache: 'no-store', signal: controller.signal }
+                    const query = `?weddingId=${encodeURIComponent(weddingId)}`
+                    const [wRes, eRes] = await Promise.all([
+                        fetch(`/api/owner/wedding${query}`, options),
+                        fetch(`/api/entries${query}`, options),
+                    ])
+                    if ([wRes.status, eRes.status].some(status => status === 401 || status === 403)) {
+                        if (isCurrent()) {
+                            setW(null)
+                            setEntries(null)
+                            window.location.assign('/login')
+                        }
+                        return
+                    }
+                    if (!wRes.ok || !eRes.ok) throw new Error('portal-refresh-failed')
+                    const [wData, eData] = await Promise.all([wRes.json(), eRes.json()])
+                    if (!isCurrent()) return
+                    setW(wData.wedding)
+                    const list = eData.map(x => ({ ...x, imageUrl: x.imageUrl || x.photoUrl || null }))
+                    list.sort((a, b) => ((a.orderIndex ?? Infinity) - (b.orderIndex ?? Infinity)) || ((a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0)))
+                    setEntries(list)
+                } catch {
+                    // Keep the last successful view during a network failure;
+                    // the next tick/foreground event retries with a fresh token.
+                } finally {
+                    clearTimeout(deadline)
+                    controller = null
+                    inFlight = false
+                }
             }
+
+            // Poll the authenticated APIs so new blessings, photo counts and
+            // external edits appear without restoring public Firestore reads.
+            const timer = setInterval(refresh, 15000)
+            window.addEventListener('focus', refresh)
+            window.addEventListener('online', refresh)
+            document.addEventListener('visibilitychange', refresh)
+            stopRefresh = () => {
+                active = false
+                clearInterval(timer)
+                clearTimeout(deadline)
+                controller?.abort()
+                window.removeEventListener('focus', refresh)
+                window.removeEventListener('online', refresh)
+                document.removeEventListener('visibilitychange', refresh)
+            }
+            void refresh()
         })
-        return () => { cancelled = true; unsub() }
+        return () => { cancelled = true; stopRefresh(); unsub() }
     }, [weddingId])
 
     const face = useMemo(() => coverFace(w), [w])
