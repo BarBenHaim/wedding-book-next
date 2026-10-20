@@ -14,7 +14,7 @@ import { adminDb, adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 
 export async function authorizeWeddingAccess(req, weddingId) {
-    if (!weddingId || typeof weddingId !== 'string') {
+    if (typeof weddingId !== 'string' || !weddingId || weddingId.length >= 200 || weddingId.includes('/') || weddingId.includes('\\') || weddingId.includes('..')) {
         return { ok: false, status: 400, error: 'Missing weddingId' }
     }
 

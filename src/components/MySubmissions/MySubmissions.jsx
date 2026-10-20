@@ -54,7 +54,7 @@ export default function MySubmissions({ weddingId, locale = 'he', style }) {
 
     useEffect(() => {
         let cancelled = false
-        const recorded = getSubmissions(weddingId)
+        const recorded = getSubmissions(weddingId).filter(entry => entry.editToken)
         if (!recorded.length) {
             setReady(true)
             return

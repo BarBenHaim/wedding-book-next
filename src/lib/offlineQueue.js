@@ -20,6 +20,7 @@
 //   {
 //     id: string (UUID)          — also the Firestore doc id, for idempotency
 //     weddingId: string
+//     editToken: string          - private capability, never uploaded raw
 //     name: string
 //     text: string
 //     image: Blob | null         — already compressed by imageCompress
@@ -88,7 +89,7 @@ export function genId() {
 }
 
 /** Adds a new entry to the queue. `id` is optional; generated if omitted. */
-export async function enqueue({ id, weddingId, name, text, image, blessFor }) {
+export async function enqueue({ id, weddingId, name, text, image, blessFor, editToken }) {
     const record = {
         id: id || genId(),
         weddingId,
@@ -97,6 +98,7 @@ export async function enqueue({ id, weddingId, name, text, image, blessFor }) {
         image: image || null,
         // Twins bar mitzvah only ('a' | 'b' | 'both'); see lib/twins.js.
         ...(blessFor ? { blessFor } : {}),
+        editToken,
         createdAt: Date.now(),
         attempts: 0,
         lastError: null,

@@ -7,8 +7,8 @@
 // artwork, same icons, same glass, same gold.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore'
-import { db } from '../../../../lib/firebaseClient'
+import { onAuthStateChanged } from 'firebase/auth'
+import { auth } from '../../../../lib/firebaseClient'
 import QRCode from 'react-qr-code'
 import PosterSheet from './PosterSheet'
 import { Heebo } from 'next/font/google'
@@ -100,14 +100,34 @@ export default function PortalApp() {
 
     useEffect(() => {
         if (!weddingId) return
-        getDoc(doc(db, 'weddings', weddingId)).then(s => s.exists() && setW(s.data())).catch(() => {})
-        const unsub = onSnapshot(collection(db, 'weddings', weddingId, 'entries'), snap => {
-            const list = []
-            snap.forEach(d => { const x = d.data(); list.push({ id: d.id, ...x, imageUrl: x.imageUrl || x.photoUrl || null }) })
-            list.sort((a, b) => ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)) || ((a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0)))
-            setEntries(list)
-        }, () => {})
-        return unsub
+        let cancelled = false
+        const unsub = onAuthStateChanged(auth, async user => {
+            setW(null)
+            setEntries(null)
+            if (!user) {
+                window.location.assign('/login')
+                return
+            }
+            try {
+                const idToken = await user.getIdToken()
+                const options = { headers: { Authorization: `Bearer ${idToken}` }, cache: 'no-store' }
+                const query = `?weddingId=${encodeURIComponent(weddingId)}`
+                const [wRes, eRes] = await Promise.all([
+                    fetch(`/api/owner/wedding${query}`, options),
+                    fetch(`/api/entries${query}`, options),
+                ])
+                if (!wRes.ok || !eRes.ok) throw new Error('portal-access-denied')
+                const [wData, eData] = await Promise.all([wRes.json(), eRes.json()])
+                if (cancelled || auth.currentUser?.uid !== user.uid) return
+                setW(wData.wedding)
+                const list = eData.map(x => ({ ...x, imageUrl: x.imageUrl || x.photoUrl || null }))
+                list.sort((a, b) => ((a.orderIndex ?? Infinity) - (b.orderIndex ?? Infinity)) || ((a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0)))
+                setEntries(list)
+            } catch {
+                if (!cancelled && auth.currentUser?.uid === user.uid) window.location.assign('/login')
+            }
+        })
+        return () => { cancelled = true; unsub() }
     }, [weddingId])
 
     const face = useMemo(() => coverFace(w), [w])
@@ -164,8 +184,10 @@ export default function PortalApp() {
             const body = { weddingId, entryId: editing.id, name: eName, text: eText }
             if (eImg === 'REMOVE') body.removeImage = true
             else if (eImg) body.image = eImg
+            const idToken = await auth.currentUser?.getIdToken()
+            if (!idToken) throw new Error('sign-in-required')
             const res = await fetch('/api/guest/update-entry', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+                method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` }, body: JSON.stringify(body),
             })
             const json = await res.json().catch(() => ({}))
             if (!res.ok || json?.ok === false) throw new Error('save')

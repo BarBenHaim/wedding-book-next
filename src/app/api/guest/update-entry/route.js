@@ -7,17 +7,18 @@
 // photo of a blessing they already sent, via the Admin SDK (which bypasses
 // the client rules).
 //
-// PUBLIC route (no super-admin gate) — same trust model as the open create
-// flow. Entry IDs are unguessable UUIDs, and the client only surfaces edit
-// links for blessings THIS device submitted (localStorage). We still validate
-// + cap everything here, and only ever touch name/text/imageUrl of an
-// EXISTING entry — never create, never delete, never touch other fields
-// (orderIndex, photoPosition, timestamp stay as the admin/owner set them).
+// Entry IDs and content are public, so neither is proof of authorship.
+// Owners authenticate with a Firebase ID token. Returning guests present
+// a device-held capability whose ID-bound SHA-256 commitment was saved
+// when the entry was created. Legacy entries without a commitment require
+// an authenticated owner; localStorage alone cannot prove who wrote them.
 
 import { NextResponse } from 'next/server'
 import { adminDb, adminStorage } from '@/lib/firebaseAdmin'
 import crypto from 'crypto'
 import sharp from 'sharp'
+import { authorizeWeddingAccess } from '@/app/api/guests/_auth'
+import { guestEditMessage, isGuestEditToken } from '@/lib/guestEditCapability'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -46,6 +47,17 @@ export async function POST(req) {
     const entryId = String(body?.entryId || '').trim()
     if (!isSafeSegment(weddingId) || !isSafeSegment(entryId)) return bad(400, 'bad-ids')
 
+    // An explicitly supplied owner credential must pass the owner gate;
+    // an invalid/foreign token never silently falls back to guest access.
+    let ownerAuthorized = false
+    if (req.headers.get('authorization')) {
+        const auth = await authorizeWeddingAccess(req, weddingId)
+        if (!auth.ok) return bad(auth.status, auth.error)
+        ownerAuthorized = true
+    } else if (!isGuestEditToken(body?.editToken)) {
+        return bad(401, 'edit-authorization-required')
+    }
+
     const docRef = adminDb.collection('weddings').doc(weddingId).collection('entries').doc(entryId)
     let snap
     try {
@@ -55,6 +67,13 @@ export async function POST(req) {
         return bad(502, 'read-failed')
     }
     if (!snap.exists) return bad(404, 'not-found')
+    if (!ownerAuthorized) {
+        const storedHash = snap.data()?.guestEditTokenHash
+        const suppliedHash = crypto.createHash('sha256').update(guestEditMessage(weddingId, entryId, body.editToken)).digest('hex')
+        if (!isGuestEditToken(storedHash) || !crypto.timingSafeEqual(Buffer.from(storedHash, 'hex'), Buffer.from(suppliedHash, 'hex'))) {
+            return bad(403, 'forbidden')
+        }
+    }
 
     const update = {}
     // No anonymous fallback (owner decision): empty name stays empty —

@@ -7,8 +7,9 @@
 //
 // Best-effort by design: private mode, cleared storage, or a different phone
 // simply means the edit shortcuts don't appear (adding new always works). We
-// never block submission on this. We store only a tiny preview (id + name +
-// short text snippet + timestamp) — never the photo blob.
+// never block submission on this. We store a tiny preview and the private
+// per-entry edit capability. Neither this capability nor the photo blob
+// belongs in a public entry document or an edit URL.
 
 const KEY = 'wt_my_submissions_v1'
 const SNIPPET_MAX = 280
@@ -42,7 +43,7 @@ export function getSubmissions(weddingId) {
 }
 
 /** Record (or refresh) a submission this device just sent. */
-export function recordSubmission(weddingId, { id, name, text } = {}) {
+export function recordSubmission(weddingId, { id, name, text, editToken } = {}) {
     if (typeof window === 'undefined' || !weddingId || !id) return
     const all = readAll()
     const list = Array.isArray(all[weddingId]) ? all[weddingId] : []
@@ -51,6 +52,7 @@ export function recordSubmission(weddingId, { id, name, text } = {}) {
         name: name || '',
         text: (text || '').slice(0, SNIPPET_MAX),
         ts: Date.now(),
+        ...(editToken ? { editToken } : {}),
     }
     const i = list.findIndex(e => e && e.id === id)
     if (i >= 0) list[i] = { ...list[i], ...rec }
@@ -79,6 +81,11 @@ export function updateSubmissionMeta(weddingId, id, { name, text } = {}) {
 /** Did THIS device submit this entry? (Used to soft-gate the edit screen.) */
 export function ownsSubmission(weddingId, id) {
     return getSubmissions(weddingId).some(e => e.id === id)
+}
+
+/** Private edit capability; never put it in a URL or a Firestore document. */
+export function getSubmissionEditToken(weddingId, id) {
+    return getSubmissions(weddingId).find(e => e.id === id)?.editToken || null
 }
 
 /** Forget a submission on this device (e.g. the entry was deleted/moderated). */

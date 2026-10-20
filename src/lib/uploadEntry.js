@@ -21,6 +21,8 @@ import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore'
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { updateEntry } from './offlineQueue'
 import { normalizeBlessFor } from './twins'
+import { createGuestEditToken, hashGuestEditToken } from './guestEditCapability'
+import { recordSubmission } from './mySubmissions'
 
 const MAX_ATTEMPTS = 4
 const BASE_BACKOFF_MS = 1500 // 1.5s → 3s → 6s → 12s
@@ -37,6 +39,13 @@ export async function uploadQueuedEntry(entry) {
     await updateEntry(entry.id, { status: 'uploading', attempts: (entry.attempts || 0) + 1 })
 
     try {
+        // Persist before sending, including old pending queue records. A
+        // retry must retain the same secret as the original create.
+        if (!entry.editToken) {
+            entry.editToken = createGuestEditToken()
+            await updateEntry(entry.id, { editToken: entry.editToken })
+        }
+        const guestEditTokenHash = await hashGuestEditToken(entry.weddingId, entry.id, entry.editToken)
         // ─── 1. Image upload (if needed) ─────────────────────────────────
         let imageUrl = entry.imageUrl || null
         // Measure the photo's aspect once, before upload — stored on the
@@ -71,7 +80,13 @@ export async function uploadQueuedEntry(entry) {
                 // Twins bar mitzvah: which boy the blessing is for. Only
                 // written when set, so every other entry is unchanged.
                 ...(normalizeBlessFor(entry.blessFor) ? { blessFor: normalizeBlessFor(entry.blessFor) } : {}),
+                guestEditTokenHash,
             })
+        }
+
+        // Never claim an already-existing public entry by knowing its ID.
+        if (!existing?.exists() || existing.data()?.guestEditTokenHash === guestEditTokenHash) {
+            recordSubmission(entry.weddingId, entry)
         }
 
         await updateEntry(entry.id, { status: 'done', lastError: null })

@@ -3,52 +3,32 @@ export const runtime = 'nodejs'
 export const fetchCache = 'force-no-store'
 
 import { NextResponse } from 'next/server'
-import { adminDb as db, adminAuth as auth } from '@/lib/firebaseAdmin'
+import { authorizeWeddingAccess } from '@/app/api/guests/_auth'
+import { ownerEntryView } from '@/lib/server/ownerViews'
 
 export async function GET(req) {
-    const authHeader = req.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const token = authHeader.split('Bearer ')[1]
-    let decoded
-    try {
-        decoded = await auth.verifyIdToken(token)
-    } catch {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { searchParams } = new URL(req.url)
     const weddingId = searchParams.get('weddingId')
     if (!weddingId) {
         return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
     }
 
-    const snapshot = await db.collection('weddings').doc(weddingId).collection('entries').get()
-    const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-    return NextResponse.json(entries)
+    const auth = await authorizeWeddingAccess(req, weddingId)
+    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+    const snapshot = await auth.weddingRef.collection('entries').get()
+    const entries = snapshot.docs.map(doc => ownerEntryView(doc.id, doc.data()))
+    return NextResponse.json(entries, { headers: { 'Cache-Control': 'private, no-store' } })
 }
 
 export async function POST(req) {
-    const authHeader = req.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const token = authHeader.split('Bearer ')[1]
-    let decoded
-    try {
-        decoded = await auth.verifyIdToken(token)
-    } catch {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { searchParams } = new URL(req.url)
     const weddingId = searchParams.get('weddingId')
     if (!weddingId) {
         return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
     }
+
+    const auth = await authorizeWeddingAccess(req, weddingId)
+    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
     let body
     try {
@@ -62,10 +42,10 @@ export async function POST(req) {
         return NextResponse.json({ error: 'Missing type or content' }, { status: 400 })
     }
 
-    await db.collection('weddings').doc(weddingId).collection('entries').add({
+    await auth.weddingRef.collection('entries').add({
         type,
         content,
-        user: decoded.uid,
+        user: auth.decoded.uid,
         timestamp: new Date(),
     })
 

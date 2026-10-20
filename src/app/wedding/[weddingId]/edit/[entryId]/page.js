@@ -18,7 +18,7 @@ import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebaseClient'
 import imageCompression from 'browser-image-compression'
 import { normalizeLocale } from '@/i18n/locales'
-import { updateSubmissionMeta } from '@/lib/mySubmissions'
+import { getSubmissionEditToken, updateSubmissionMeta } from '@/lib/mySubmissions'
 import BookLoader from '@/components/BookLoader/BookLoader'
 
 const COMPRESS = { maxSizeMB: 1.5, maxWidthOrHeight: 2560, initialQuality: 0.92, useWebWorker: true }
@@ -93,6 +93,10 @@ export default function EditBlessingPage() {
         let cancelled = false
         ;(async () => {
             try {
+                if (!getSubmissionEditToken(weddingId, entryId)) {
+                    setStatus('notfound')
+                    return
+                }
                 const [wSnap, eSnap] = await Promise.all([
                     getDoc(doc(db, 'weddings', weddingId)),
                     getDoc(doc(db, 'weddings', weddingId, 'entries', entryId)),
@@ -165,6 +169,7 @@ export default function EditBlessingPage() {
             const payload = {
                 weddingId,
                 entryId,
+                editToken: getSubmissionEditToken(weddingId, entryId),
                 name: name.trim(),
                 // Store as-typed; the book templates collapse whitespace
                 // at display time unless preserveLineBreaks is set.

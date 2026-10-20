@@ -19,6 +19,7 @@ import { logEvent } from '@/lib/logEvent'
 // BlessingAssist (the AI writing helper) is switched off for now — the
 // component stays in src/components/BlessingAssist for when it returns.
 import { recordSubmission } from '@/lib/mySubmissions'
+import { createGuestEditToken } from '@/lib/guestEditCapability'
 import MySubmissions from '@/components/MySubmissions/MySubmissions'
 import BookLoader from '@/components/BookLoader/BookLoader'
 import { frankRuhl } from '@/app/fonts'
@@ -862,6 +863,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
 
         const entry = {
             id: genId(),
+            editToken: createGuestEditToken(),
             weddingId,
             name: name || '',
             // Store the text as the guest typed it (line breaks and all).
@@ -957,7 +959,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
             // Remember (on this device only) what we just sent, so the guest
             // can come back and edit this blessing/photo later — without it
             // replacing their ability to add more from the same phone.
-            recordSubmission(weddingId, { id: entry.id, name: entry.name, text: entry.text })
+            recordSubmission(weddingId, entry)
             logEvent(weddingId, 'blessing_sent_success')
             reportGuestWrote(entry.id)
             router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}${thanksNoPhoto}`)
@@ -973,7 +975,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
             // Remember (on this device only) what we just sent, so the guest
             // can come back and edit this blessing/photo later — without it
             // replacing their ability to add more from the same phone.
-            recordSubmission(weddingId, { id: entry.id, name: entry.name, text: entry.text })
+            recordSubmission(weddingId, entry)
             logEvent(weddingId, 'blessing_sent_success')
             reportGuestWrote(entry.id)
             router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}${thanksNoPhoto}`)
