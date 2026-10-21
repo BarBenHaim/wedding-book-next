@@ -165,6 +165,8 @@
     "momentPhotoCta": "Toca para subir una foto",
     "momentPhotoCtaSub": "De tu galería o toma una ahora",
     "momentPhotoOptional": "(opcional)",
+    "momentPhotoRequired": "(obligatoria)",
+    "photoRequiredNudge": "Añade una foto para enviar tu mensaje",
     "momentSubmit": "Envíanos el momento",
     "momentTakeNow": "Tomar ahora",
     "momentChooseGallery": "Elegir de la galería",

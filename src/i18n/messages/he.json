@@ -165,6 +165,8 @@
     "momentPhotoCta": "לחצו כדי להעלות תמונה",
     "momentPhotoCtaSub": "אפשר מהגלריה או לצלם עכשיו",
     "momentPhotoOptional": "(לא חובה)",
+    "momentPhotoRequired": "(חובה)",
+    "photoRequiredNudge": "צריך להוסיף תמונה כדי לשלוח את הברכה",
     "momentSubmit": "שלחו לנו את הרגע",
     "momentTakeNow": "צלמו עכשיו",
     "momentChooseGallery": "בחרו מהגלריה",

@@ -1,8 +1,11 @@
-// /api/admin/arrange-links — mint, list and revoke "arrange the
-// blessings" links for one event. Super-admin only.
+// /api/admin/arrange-links — mint, list and revoke the no-login links
+// for one event. Super-admin only. Two kinds share the collection:
+//   scope 'arrange' (default) → /arrange/[token], put the blessings in order
+//   scope 'manage'            → /manage/[token], edit / photo / delete / order
+//                               (see src/lib/manageLinks.js)
 //
-//   POST   { weddingId }          → { ok, token, link, message }
-//   GET    ?weddingId=            → { ok, links: [{ token, link, createdAt, createdBy }] }
+//   POST   { weddingId, scope? }  → { ok, token, link, message, scope }
+//   GET    ?weddingId=&scope=     → { ok, links: [{ token, link, scope, createdAt, createdBy, ... }] }
 //   DELETE { token }              → { ok }
 //
 // The link opens /arrange/[token]: a no-login page where the book
@@ -26,6 +29,11 @@ import {
     arrangeLinkMessage,
     isArrangeLinkActive,
 } from '@/lib/arrangeLinks'
+import { MANAGE_SCOPE, ARRANGE_SCOPE, linkScope, manageLinkUrl, manageLinkMessage } from '@/lib/manageLinks'
+
+function urlFor(origin, token, scope) {
+    return scope === MANAGE_SCOPE ? manageLinkUrl(origin, token) : arrangeLinkUrl(origin, token)
+}
 
 async function authenticate(req) {
     const authHeader = req.headers.get('authorization') || ''
@@ -63,6 +71,7 @@ export async function POST(req) {
     const body = await req.json().catch(() => ({}))
     const weddingId = typeof body.weddingId === 'string' ? body.weddingId.trim() : ''
     if (!weddingId) return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
+    const scope = body.scope === MANAGE_SCOPE ? MANAGE_SCOPE : ARRANGE_SCOPE
 
     try {
         const snap = await adminDb.collection('weddings').doc(weddingId).get()
@@ -72,6 +81,7 @@ export async function POST(req) {
         const token = newArrangeToken()
         await adminDb.collection(ARRANGE_LINKS_COLLECTION).doc(token).set({
             weddingId,
+            scope,
             createdAt: FieldValue.serverTimestamp(),
             createdBy: auth.email,
             revokedAt: null,
@@ -79,12 +89,14 @@ export async function POST(req) {
             saves: 0,
         })
 
-        const link = arrangeLinkUrl(originOf(req), token)
+        const link = urlFor(originOf(req), token, scope)
+        const messageOf = scope === MANAGE_SCOPE ? manageLinkMessage : arrangeLinkMessage
         return NextResponse.json({
             ok: true,
             token,
+            scope,
             link,
-            message: arrangeLinkMessage({ ownerName: wedding.ownerName, eventLabel: eventLabelOf(wedding), link }),
+            message: messageOf({ ownerName: wedding.ownerName, eventLabel: eventLabelOf(wedding), link }),
         })
     } catch (err) {
         console.error('[arrange-links POST] failed:', err?.message || err)
@@ -96,8 +108,10 @@ export async function GET(req) {
     const auth = await authenticate(req)
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
-    const weddingId = (new URL(req.url).searchParams.get('weddingId') || '').trim()
+    const sp = new URL(req.url).searchParams
+    const weddingId = (sp.get('weddingId') || '').trim()
     if (!weddingId) return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
+    const wantScope = sp.get('scope') === MANAGE_SCOPE ? MANAGE_SCOPE : sp.get('scope') === ARRANGE_SCOPE ? ARRANGE_SCOPE : null
 
     try {
         const qs = await adminDb.collection(ARRANGE_LINKS_COLLECTION).where('weddingId', '==', weddingId).get()
@@ -105,9 +119,12 @@ export async function GET(req) {
         const links = qs.docs
             .map(d => ({ token: d.id, ...(d.data() || {}) }))
             .filter(isArrangeLinkActive)
+            .filter(d => !wantScope || linkScope(d) === wantScope)
             .map(d => ({
                 token: d.token,
-                link: arrangeLinkUrl(origin, d.token),
+                scope: linkScope(d),
+                link: urlFor(origin, d.token, linkScope(d)),
+                edits: Number.isInteger(d.edits) ? d.edits : 0,
                 createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toISOString() : null,
                 createdBy: d.createdBy || null,
                 lastUsedAt: d.lastUsedAt?.toDate ? d.lastUsedAt.toDate().toISOString() : null,

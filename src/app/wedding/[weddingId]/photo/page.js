@@ -15,7 +15,8 @@ import { NextIntlClientProvider, useTranslations } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
 import { logEvent } from '@/lib/logEvent'
-import BlessingAssist from '@/components/BlessingAssist/BlessingAssist'
+// BlessingAssist (the AI writing helper) is switched off for now — the
+// component stays in src/components/BlessingAssist for when it returns.
 import { recordSubmission } from '@/lib/mySubmissions'
 import MySubmissions from '@/components/MySubmissions/MySubmissions'
 import BookLoader from '@/components/BookLoader/BookLoader'
@@ -87,6 +88,9 @@ export default function TextPage() {
     const [recipients, setRecipients] = useState({ bride: '', groom: '', celebrant: '' })
     // Per-event max blessing length (admin-settable, 210 default, up to 1200).
     const [maxChars, setMaxChars] = useState(210)
+    // Per-event: the super-admin can require a photo with every blessing
+    // (books built around the pictures). Off unless explicitly true.
+    const [photoRequired, setPhotoRequired] = useState(false)
     // Super-admin privilege: when the signed-in browser user is a super
     // admin, the composer allows up to 2600 characters on ANY book.
     // Guests keep the per-event limit — this only raises the ceiling
@@ -201,6 +205,7 @@ export default function TextPage() {
                     if (previewVariant) setDesignVariant(previewVariant)
                     else if (data.designVariant) setDesignVariant(data.designVariant)
                     if (data.blessingMaxChars) setMaxChars(Number(data.blessingMaxChars) || 210)
+                    setPhotoRequired(data.photoRequired === true)
                     // Prefer the Hebrew-script names for the headline
                     // ("השאירו ברכה ל..."). Fall back to the original
                     // names when the super-admin didn't fill the Hebrew
@@ -276,6 +281,7 @@ export default function TextPage() {
                 locale={locale}
                 initialName={guestGreetingName}
                 guestId={guestId}
+                photoRequired={photoRequired}
             />
         </NextIntlClientProvider>
     )
@@ -339,7 +345,7 @@ function ChipBadge({ number, active, done, isPoker }) {
     )
 }
 
-function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign, maxChars = 210, locale = 'he', initialName = '', guestId = '' }) {
+function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign, maxChars = 210, locale = 'he', initialName = '', guestId = '', photoRequired = false }) {
     const t = useTranslations('photo')
 
     // Resolve every form string to either the per-event admin override
@@ -516,6 +522,13 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     const [isUpload, setIsUpload] = useState(false)
 
     const [submitting, setSubmitting] = useState(false)
+    // Photo-required events: the send button stays tappable (the page never
+    // dims it), and a tap without a photo explains what is missing instead
+    // of doing nothing.
+    const hasPhoto = Boolean(photoUrl || photoBlob)
+    const missingPhoto = photoRequired && !hasPhoto
+    const [photoNudge, setPhotoNudge] = useState(false)
+    useEffect(() => { if (hasPhoto) setPhotoNudge(false) }, [hasPhoto])
     const liveVideoRef = useRef(null)
     const router = useRouter()
     const { weddingId } = useParams()
@@ -662,6 +675,10 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
         // hasImage - because the "image processing failed, save anyway"
         // fallback below has always produced exactly this shape.
         if (!text.trim()) return
+        if (missingPhoto) {
+            setPhotoNudge(true)
+            return
+        }
 
         // Analytics — guest pressed "send" on the blessing form.
         // Fire-and-forget; doesn't affect the actual submit path.
@@ -736,6 +753,12 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
 
         // If image processing definitively failed AND we have no blob to
         // ship, ask the user whether to save without a photo.
+        if (imageProcessingError && !finalBlob && photoRequired) {
+            // This event needs the picture; saving without it is not an option.
+            setPhotoNudge(true)
+            setSubmitting(false)
+            return
+        }
         if (imageProcessingError && !finalBlob) {
             const proceed = window.confirm(t('imageProcessFail'))
             if (!proceed) {
@@ -1444,21 +1467,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 onFocus={e => (e.currentTarget.style.borderColor = md.inputFocusBorder)}
                                 onBlur={e => (e.currentTarget.style.borderColor = md.inputBorder)}
                             />
-                            <div className='flex items-center justify-between gap-2 mt-1'>
-                                <BlessingAssist
-                                    weddingId={weddingId}
-                                    draft={text}
-                                    onUse={s => setText((s || '').slice(0, maxChars))}
-                                    locale={locale}
-                                    theme={{
-                                        accent: md.accentColor,
-                                        title: md.titleColor,
-                                        sub: md.subtitleColor,
-                                        inputBg: md.inputBg,
-                                        inputBorder: md.inputBorder,
-                                        text: md.inputTextColor,
-                                    }}
-                                />
+                            <div className='flex items-center justify-end gap-2 mt-1'>
                                 <span style={{ color: md.cardCounterColor, fontSize: '10.5px' }}>
                                     {text.length}/{maxChars}
                                 </span>
@@ -1487,7 +1496,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                         fontWeight: 600,
                                     }}
                                 >
-                                    {t('momentPhotoOptional')}
+                                    {photoRequired ? t('momentPhotoRequired') : t('momentPhotoOptional')}
                                 </span>
                             </span>
                             <svg
@@ -1806,6 +1815,11 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                         disabled-opacity dimming, ever — only
                         cursor + active-scale change when it can't
                         be submitted yet. ── */}
+                    {photoNudge && missingPhoto && (
+                        <p role='alert' className='mt-3 text-center font-bold' style={{ color: isPoker ? '#ffb4a8' : '#b42318', fontSize: '13.5px' }}>
+                            {t('photoRequiredNudge')}
+                        </p>
+                    )}
                     <button
                         onClick={onSubmit}
                         disabled={submitting || !text.trim()}
@@ -2609,7 +2623,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                             >
                                 {t('pageTitleStep2')}{' '}
                                 <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 600, opacity: 0.85 }}>
-                                    {t('momentPhotoOptional')}
+                                    {photoRequired ? t('momentPhotoRequired') : t('momentPhotoOptional')}
                                 </span>
                             </span>
                             <span
@@ -2967,6 +2981,35 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                         </svg>
                                     </button>
                                 )}
+                            </div>
+                        )}
+
+                        {/* No photo picked yet. This layout used to show its send
+                            button only next to a chosen photo, so a guest without
+                            one had no way to send although the label said the
+                            photo was optional. Now: send works without a photo,
+                            unless the event requires one — then the tap explains. */}
+                        {!photoUrl && !cameraOpen && (
+                            <div className='mt-6'>
+                                {photoNudge && missingPhoto && (
+                                    <p role='alert' className='mb-2 text-center font-bold' style={{ color: isPoker ? '#ffb4a8' : '#b42318', fontSize: '13.5px' }}>
+                                        {t('photoRequiredNudge')}
+                                    </p>
+                                )}
+                                <button
+                                    onClick={onSubmit}
+                                    disabled={submitting || !text.trim()}
+                                    className='w-full rounded-2xl text-white font-bold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 active:scale-[0.99]'
+                                    style={{
+                                        background: theme.buttonGradient,
+                                        boxShadow: theme.buttonShadow,
+                                        padding: '14px 18px',
+                                        fontSize: '15px',
+                                        letterSpacing: '0.01em',
+                                    }}
+                                >
+                                    <span>{submitting ? t('submitting') : t('submit')}</span>
+                                </button>
                             </div>
                         )}
 

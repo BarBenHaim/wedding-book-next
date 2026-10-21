@@ -165,6 +165,8 @@
     "momentPhotoCta": "Tap to upload a photo",
     "momentPhotoCtaSub": "From your gallery or take one now",
     "momentPhotoOptional": "(optional)",
+    "momentPhotoRequired": "(required)",
+    "photoRequiredNudge": "Please add a photo to send your blessing",
     "momentSubmit": "Send us the moment",
     "momentTakeNow": "Take now",
     "momentChooseGallery": "Choose from gallery",
