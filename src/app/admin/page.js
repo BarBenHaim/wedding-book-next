@@ -560,6 +560,7 @@ function EventTypeEditor({ wedding, onSave }) {
         amountPaid: w.amountPaid ?? '',
         currency: w.currency || 'ILS',
         blessingMaxChars: w.blessingMaxChars || 210,
+        photoRequired: w.photoRequired === true,
         // Customer contact (phone doubles as the /portal login credential).
         ownerName: w.ownerName || '',
         ownerPhone: w.ownerPhone || '',
@@ -632,6 +633,7 @@ function EventTypeEditor({ wedding, onSave }) {
         patch.amountPaid = draft.amountPaid === '' ? null : draft.amountPaid
         patch.currency = draft.currency
         patch.blessingMaxChars = draft.blessingMaxChars
+        patch.photoRequired = draft.photoRequired === true
         return patch
     }
 
@@ -693,6 +695,30 @@ function EventTypeEditor({ wedding, onSave }) {
                     <option value={1200}>מקסימלי — 1200 תווים</option>
                 </select>
                 <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>ככל שהמגבלה גבוהה יותר, הטקסט בספר יוקטן אוטומטית כדי להישאר קריא לצד התמונה.</p>
+            </div>
+
+            {/* Photo required — for books built around the pictures, where a
+                text-only blessing would leave a hole in the book. Off by
+                default: most events want every guest to be able to write. */}
+            <div className='mb-3'>
+                <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>תמונה בברכה</label>
+                <div className='grid grid-cols-2 gap-2'>
+                    {[
+                        { v: false, label: 'לא חובה', sub: 'אפשר לשלוח ברכה בלי תמונה' },
+                        { v: true, label: 'חובה', sub: 'אי אפשר לשלוח בלי תמונה' },
+                    ].map(o => (
+                        <button
+                            key={String(o.v)}
+                            type='button'
+                            onClick={() => set('photoRequired', o.v)}
+                            className={`text-right px-3 py-2.5 rounded-xl border transition-all ${draft.photoRequired === o.v ? 'border-[#AA8840] bg-[#AA8840]/10' : 'border-[#ead9b3] bg-white hover:border-[#AA8840]/40'}`}
+                        >
+                            <span className={`block text-sm font-bold ${draft.photoRequired === o.v ? 'text-[#AA8840]' : 'text-[#3d3225]'}`}>{o.label}</span>
+                            <span className='block text-[10.5px] text-[#a89378]'>{o.sub}</span>
+                        </button>
+                    ))}
+                </div>
+                <p className='text-[10px] text-[#a89378] mt-1 leading-relaxed'>לספרים שבנויים סביב התמונות. דף האורחים יציג &quot;חובה&quot; ליד התמונה, וכפתור השליחה יפתח רק אחרי שנבחרה תמונה.</p>
             </div>
 
             {/* Customer contact — the mobile number is ALSO the customer's
@@ -1654,7 +1680,11 @@ function FunnelView({ stats, loading }) {
 // message (first name, the event, the link) so sending is one tap to
 // wa.me with the owner's phone. Existing links are listed from GET so a
 // link sent last month can be copied again or revoked.
-function ArrangeLinkPanel({ wedding }) {
+// One panel, two kinds of link (src/lib/manageLinks.js):
+//   scope 'manage'  → /manage/[token]: edit, photo, delete, order
+//   scope 'arrange' → /arrange/[token]: order only
+function ArrangeLinkPanel({ wedding, scope = 'arrange' }) {
+    const isManage = scope === 'manage'
     const [links, setLinks] = useState(null) // null = not loaded yet
     const [busy, setBusy] = useState(false)
     const [fresh, setFresh] = useState(null) // { link, message }
@@ -1665,7 +1695,7 @@ function ArrangeLinkPanel({ wedding }) {
     const refresh = useCallback(async () => {
         try {
             const token = await getToken()
-            const res = await fetch(`/api/admin/arrange-links?weddingId=${encodeURIComponent(wedding.id)}`, {
+            const res = await fetch(`/api/admin/arrange-links?weddingId=${encodeURIComponent(wedding.id)}&scope=${scope}`, {
                 headers: { Authorization: `Bearer ${token}` },
             })
             const data = await res.json().catch(() => ({}))
@@ -1675,7 +1705,7 @@ function ArrangeLinkPanel({ wedding }) {
             setLinks([])
             setError(e.message || 'שגיאה')
         }
-    }, [wedding.id])
+    }, [wedding.id, scope])
 
     useEffect(() => { setFresh(null); setError(''); setLinks(null); refresh() }, [refresh])
 
@@ -1688,7 +1718,7 @@ function ArrangeLinkPanel({ wedding }) {
             const res = await fetch('/api/admin/arrange-links', {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ weddingId: wedding.id }),
+                body: JSON.stringify({ weddingId: wedding.id, scope }),
             })
             const data = await res.json().catch(() => ({}))
             if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
@@ -1702,7 +1732,7 @@ function ArrangeLinkPanel({ wedding }) {
     }
 
     async function revoke(token) {
-        if (!confirm('לבטל את הקישור? מי שפתח אותו לא יוכל יותר לסדר את הברכות.')) return
+        if (!confirm(isManage ? 'לבטל את הקישור? מי שפתח אותו לא יוכל יותר לערוך את הברכות.' : 'לבטל את הקישור? מי שפתח אותו לא יוכל יותר לסדר את הברכות.')) return
         try {
             const idToken = await getToken()
             const res = await fetch('/api/admin/arrange-links', {
@@ -1736,7 +1766,7 @@ function ArrangeLinkPanel({ wedding }) {
                 {links === null
                     ? 'טוען…'
                     : links.length === 0
-                        ? 'עדיין לא הופק קישור סידור לאירוע הזה.'
+                        ? (isManage ? 'עדיין לא הופק קישור ניהול לאירוע הזה.' : 'עדיין לא הופק קישור סידור לאירוע הזה.')
                         : `${links.length} ${links.length === 1 ? 'קישור פעיל' : 'קישורים פעילים'}`}
             </p>
 
@@ -1747,8 +1777,8 @@ function ArrangeLinkPanel({ wedding }) {
                     className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white disabled:opacity-50'
                     style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}
                 >
-                    {busy ? <Loader2 size={12} className='animate-spin' /> : <ArrowUpDown size={12} />}
-                    צור קישור סידור
+                    {busy ? <Loader2 size={12} className='animate-spin' /> : isManage ? <Settings2 size={12} /> : <ArrowUpDown size={12} />}
+                    {isManage ? 'צור קישור ניהול' : 'צור קישור סידור'}
                 </button>
             </div>
 
@@ -1818,8 +1848,8 @@ function ArrangeLinkPanel({ wedding }) {
                                 <code className='flex-1 text-[10px] bg-[#fbf6ec] border border-[#ead9b3] rounded-md px-2 py-1 font-mono text-[#7a6a52] truncate' dir='ltr' title={l.link}>
                                     {l.link}
                                 </code>
-                                <span className='shrink-0 text-[10px] text-[#a89378] tabular-nums' title='שמירות / נגיעה אחרונה'>
-                                    {l.saves || 0}{l.lastUsedAt ? ` · ${new Date(l.lastUsedAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })}` : ''}
+                                <span className='shrink-0 text-[10px] text-[#a89378] tabular-nums' title={isManage ? 'שינויים / נגיעה אחרונה' : 'שמירות / נגיעה אחרונה'}>
+                                    {isManage ? (l.edits || 0) + (l.saves || 0) : (l.saves || 0)}{l.lastUsedAt ? ` · ${new Date(l.lastUsedAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })}` : ''}
                                 </span>
                                 <button
                                     onClick={() => copy(l.link, l.token)}
@@ -2325,6 +2355,16 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
             <div className='px-6 py-5 border-b border-[#f0e8d4]'>
                 <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>קישור צפייה לזוג</p>
                 <PublicLinkPanel wedding={wedding} />
+            </div>
+
+            {/* ── Manage-the-blessings link ──
+                The owner's whole blessings screen without a login: fix a
+                name or a typo, swap or add a photo, take a blessing out
+                (into a trash we can restore from), and reorder. */}
+            <div className='px-6 py-5 border-b border-[#f0e8d4]'>
+                <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-1'>קישור ניהול ברכות לבעלי הספר (בלי התחברות)</p>
+                <p className='text-[11px] text-[#a89378] mb-3 leading-relaxed'>עריכת שם וטקסט, החלפה או הוספה של תמונה, הוצאת ברכה מהספר (ניתן לשחזר) וסידור.</p>
+                <ArrangeLinkPanel wedding={wedding} scope='manage' />
             </div>
 
             {/* ── Arrange-the-blessings link ──
