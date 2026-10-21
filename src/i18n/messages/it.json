@@ -165,6 +165,8 @@
     "momentPhotoCta": "Tocca per caricare una foto",
     "momentPhotoCtaSub": "Dalla galleria o scattane una ora",
     "momentPhotoOptional": "(facoltativa)",
+    "momentPhotoRequired": "(obbligatoria)",
+    "photoRequiredNudge": "Aggiungi una foto per inviare il tuo augurio",
     "momentSubmit": "Inviaci il momento",
     "momentTakeNow": "Scatta ora",
     "momentChooseGallery": "Scegli dalla galleria",
