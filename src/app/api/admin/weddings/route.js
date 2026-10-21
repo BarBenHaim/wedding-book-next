@@ -149,6 +149,8 @@ export async function GET(req) {
                     lastAppBookOpenAt: tsToIso(data.lastAppBookOpenAt),
                     locale: data.locale ?? null,
                     noPhotoCrop: data.noPhotoCrop === true,
+                    // Guests must attach a photo to send a blessing (per event).
+                    photoRequired: data.photoRequired === true,
                     adminNotes: data.adminNotes ?? null,
                     // Per-event guest-page copy overrides. Same story as
                     // designVariant: the editor writes them and could never
@@ -240,6 +242,10 @@ export async function PATCH(req) {
             // photoFit stored in there would be silently reset. Overlaid onto
             // the resolved design by withNoCropOverride().
             'noPhotoCrop',
+            // Guest /photo page: a blessing cannot be sent without a photo.
+            // For books built around the pictures (an album, a framed-photo
+            // template) where a text-only page would be a hole in the book.
+            'photoRequired',
             'brideName', 'brideNameHe', 'groomName', 'groomNameHe',
             // Customer contact — the super-admin can set/fix the owner's
             // mobile (also the /portal phone-login credential) and email.
@@ -350,6 +356,13 @@ export async function PATCH(req) {
                 // a runaway client cannot bloat the doc. null clears.
                 clean[key] =
                     v && typeof v === 'object' && !Array.isArray(v) && JSON.stringify(v).length < 200000 ? v : null
+                continue
+            }
+
+            if (key === 'photoRequired') {
+                // Strictly boolean, default off: guests can always send a
+                // blessing unless the super-admin explicitly asked for a photo.
+                clean[key] = v === true
                 continue
             }
 
