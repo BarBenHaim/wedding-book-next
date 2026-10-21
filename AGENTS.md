@@ -518,6 +518,40 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 21.10 — photo required per event, AI helper off, the manage link
+
+Lord, three asks.
+
+**Photo required (per event).** `photoRequired: true` on the wedding doc,
+set in /admin → event panel → "תמונה בברכה: לא חובה / חובה" (PATCH whitelist
++ GET round trip in /api/admin/weddings, strictly boolean, default off).
+The guest page reads it, shows "(חובה)" instead of "(לא חובה)", and a send
+without a photo shows `photoRequiredNudge` instead of submitting; the
+"image processing failed — save without photo?" fallback is skipped for
+these events. Client-side only: firestore.rules `isValidEntry` could
+enforce it server-side (read the wedding doc's `photoRequired`), but rules
+are not deployed from here.
+Found on the way: the classic two-card layout (poker, romantic wedding,
+night/dawn framed designs) only rendered its send button next to a chosen
+photo, so on those designs a photo was already de facto required while
+the label said optional. It now has a send button without a photo too.
+Not looked at in a browser on the framed designs (no Firebase env here).
+
+**AI writing helper off.** `BlessingAssist` is no longer mounted on the
+guest page; the component stays in src/components/BlessingAssist.
+
+**The manage link** (`src/lib/manageLinks.js`, `/api/manage/[token]`,
+`/manage/[token]`). An `arrange_links` doc with `scope: 'manage'` — same
+closed collection, same revocation, and /arrange/[token] accepts it for
+drag-ordering. Old docs have no scope and stay arrange-only; the manage
+API 404s them. Per blessing: edit name/text, swap or add a photo (to
+`imageUrlOverride`, never over the guest's file; URL must be our storage
+AND `weddings/<id>/`), undo the photo, remove (copied to
+`weddings/{id}/entries_trash/{entryId}` in the same batch, then deleted —
+undo on the page, and recoverable by us after), move. Blank pages: move
+only. /admin event panel: "קישור ניהול ברכות לבעלי הספר" above the arrange
+panel, same component with `scope='manage'` and its own WhatsApp text.
+
 ### 11.10 (later) — finding and moving the blank page in ניהול ברכות
 
 Blank pages were always in the owner's list and draggable, but a blank
