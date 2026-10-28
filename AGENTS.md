@@ -518,6 +518,32 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 28.10 — twins bar mitzvah: guests pick which boy they bless
+
+Lord: a new event type for twins, where the QR landing offers
+"ברכו את דניאל" / "ברכו את נועם" (and a blessing for both).
+
+- `eventType: 'twins_bar_mitzvah'` (eventTypes.js, blue default, copy in
+  all four message files). Names: `celebrantName` = first twin,
+  `celebrantName2` = second (new, PATCH whitelist + GET round trip).
+  `celebrantNameHe` is ignored for twins on purpose — a stale value from a
+  former plain bar mitzvah would put the wrong name on a button.
+- Landing `/wedding/[id]`: with both names set, two marble buttons + a
+  quieter "ברכה לשניהם", linking to `/photo?for=a|b|both`. With a name
+  missing it falls back to the single CTA.
+- Blessing form: a twins event renders as `bar_mitzvah` addressed to the
+  chosen boy ("בשביל נועם" / "בשביל דניאל ונועם"), so every layout and
+  design works unchanged. A three-way `TwinPicker` under the title lets
+  the guest switch; no `?for=` → both.
+- The entry gets `blessFor: 'a'|'b'|'both'` (offline queue → uploadEntry),
+  only on twins events. 7 fields, inside isValidEntry's `size() <= 12`.
+- Shown as a chip ("לדניאל" / "לשניהם") in the owner's ניהול ברכות and on
+  the manage-link page. NOT printed in the book — the book pages do not
+  know about `blessFor` yet.
+- Checked in a real browser against a mocked event doc (garden + night):
+  landing buttons, picker, and the queued entry carrying `blessFor`.
+- Helpers + tests: src/lib/twins.js, tests/twins.test.js.
+
 ### 21.10 — photo required per event, AI helper off, the manage link
 
 Lord, three asks.
