@@ -25,6 +25,7 @@ const heebo = Heebo({ subsets: ['hebrew'], weight: ['400', '700', '900'] })
 const EVENT_LABEL = {
     wedding: 'החתונה',
     bar_mitzvah: 'הבר מצווה',
+    twins_bar_mitzvah: 'הבר מצווה',
     bat_mitzvah: 'הבת מצווה',
     birthday: 'יום ההולדת',
     brit: 'הברית',
