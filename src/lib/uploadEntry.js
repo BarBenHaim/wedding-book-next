@@ -20,6 +20,7 @@ import { db, storage } from './firebaseClient'
 import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore'
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { updateEntry } from './offlineQueue'
+import { normalizeBlessFor } from './twins'
 
 const MAX_ATTEMPTS = 4
 const BASE_BACKOFF_MS = 1500 // 1.5s → 3s → 6s → 12s
@@ -67,6 +68,9 @@ export async function uploadQueuedEntry(entry) {
                 imgAspect: imgAspect ?? null,
                 timestamp: serverTimestamp(),
                 orderIndex: null,
+                // Twins bar mitzvah: which boy the blessing is for. Only
+                // written when set, so every other entry is unchanged.
+                ...(normalizeBlessFor(entry.blessFor) ? { blessFor: normalizeBlessFor(entry.blessFor) } : {}),
             })
         }
 

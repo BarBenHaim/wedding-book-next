@@ -12,6 +12,7 @@ const PREFIX = {
     wedding: 'ספר הברכות של',
     birthday: 'ספר הברכות ליום ההולדת של',
     bar_mitzvah: 'ספר הברכות לבר המצווה של',
+    twins_bar_mitzvah: 'ספר הברכות לבר המצווה של',
     bat_mitzvah: 'ספר הברכות לבת המצווה של',
     poker: 'אלבום המשחק של',
     travel: 'ספר המסע של',
@@ -22,6 +23,7 @@ const NOUN = {
     wedding: 'החתונה',
     birthday: 'יום ההולדת',
     bar_mitzvah: 'בר המצווה',
+    twins_bar_mitzvah: 'בר המצווה',
     bat_mitzvah: 'בת המצווה',
     poker: 'הערב',
     travel: 'המסע',
@@ -46,6 +48,11 @@ export function buildShareCopy(data = {}) {
         // owner name as the single fallback. Better one real name
         // than the generic catch-all.
         names = joined || owner
+    } else if (type === 'twins_bar_mitzvah') {
+        // Both boys, the way the family writes it: "דניאל ונועם".
+        const second = (data?.celebrantName2 || '').trim()
+        const first = (data?.celebrantName || '').trim()
+        names = [first, second].filter(Boolean).join(' ו') || owner
     } else {
         names = celebrant || owner
     }
@@ -76,6 +83,7 @@ export function buildShareCopy(data = {}) {
 // card is 150 KB as JPEG against 1.1 MB as PNG.
 const SHARE_IMAGE = {
     bar_mitzvah: { path: '/og/bar-mitzvah-book.jpg', type: 'image/jpeg', alt: 'ספר הברכות לבר מצווה' },
+    twins_bar_mitzvah: { path: '/og/bar-mitzvah-book.jpg', type: 'image/jpeg', alt: 'ספר הברכות לבר מצווה' },
 }
 const DEFAULT_SHARE_IMAGE = { path: '/og/wedding-tales-book.png', type: 'image/png', alt: 'Wedding Tales' }
 

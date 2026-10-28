@@ -36,11 +36,12 @@
 // asymmetry: the direction toggle controls the order of real payments,
 // not whether zero is interesting.
 
-const EVENT_TYPES = ['wedding', 'bar_mitzvah', 'bat_mitzvah', 'birthday', 'brit']
+const EVENT_TYPES = ['wedding', 'bar_mitzvah', 'twins_bar_mitzvah', 'bat_mitzvah', 'birthday', 'brit']
 
 export const EVENT_TYPE_LABEL = {
     wedding: 'חתונה',
     bar_mitzvah: 'בר מצווה',
+    twins_bar_mitzvah: 'בר מצווה תאומים',
     bat_mitzvah: 'בת מצווה',
     birthday: 'יום הולדת',
     brit: 'ברית',

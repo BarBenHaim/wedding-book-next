@@ -60,6 +60,7 @@ const THEMES = {
         wordmark: '#d8b876',
         sparkle: '#e8c66a',
     },
+    // Twins share the bar mitzvah card (assigned below the table).
     bat_mitzvah: {
         bg: ['#5e2440', '#7a2f52', '#3f1830'],
         glow: '#a8456f',
@@ -70,6 +71,8 @@ const THEMES = {
         sparkle: '#f0cf8a',
     },
 }
+
+THEMES.twins_bar_mitzvah = THEMES.bar_mitzvah
 
 function resolveTheme(eventType) {
     return THEMES[normalizeEventType(eventType)] || THEMES.default
