@@ -54,6 +54,10 @@ async function loadLink(token) {
 }
 
 function titleOf(w) {
+    if (w.eventType === 'twins_bar_mitzvah') {
+        const pair = [(w.celebrantName || '').trim(), (w.celebrantName2 || '').trim()].filter(Boolean)
+        if (pair.length) return pair.join(' ו')
+    }
     const celebrant = (w.celebrantNameHe || w.celebrantName || '').trim()
     if (celebrant) return celebrant
     const bride = (w.brideNameHe || w.brideName || '').trim()
@@ -98,7 +102,14 @@ export async function GET(_req, { params }) {
         const entries = await loadEntries(weddingId)
         return NextResponse.json({
             ok: true,
-            wedding: { id: weddingId, title: titleOf(w), eventType: w.eventType || null },
+            wedding: {
+                id: weddingId,
+                title: titleOf(w),
+                eventType: w.eventType || null,
+                // Twins: both names, so each card can say who it is for.
+                celebrantName: w.eventType === 'twins_bar_mitzvah' ? w.celebrantName || '' : undefined,
+                celebrantName2: w.eventType === 'twins_bar_mitzvah' ? w.celebrantName2 || '' : undefined,
+            },
             entries: entries.map(publicManageEntry),
         })
     } catch (err) {

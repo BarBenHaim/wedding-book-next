@@ -9,6 +9,7 @@ import { db, storage, auth } from '../../../../lib/firebaseClient'
 import { onAuthStateChanged, getIdToken } from 'firebase/auth'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { isBlankPage, withoutBlankPages, blankPagePhoto, moveToIndex } from '@/lib/entryKinds'
+import { blessForTag } from '@/lib/twins'
 import imageCompression from 'browser-image-compression'
 import { getBlessingText, normalizeBlessing, formatBlessingSmart } from '../../../../lib/normalizeText'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
@@ -857,7 +858,15 @@ export default function AdminDashboard() {
                                                             )}
                                                             {/* Name + snippet */}
                                                             <div className='flex-1 min-w-0'>
-                                                                <div className='font-bold text-sm text-gray-900 truncate'>{isBlankPage(entry) ? (blankPagePhoto(entry) ? 'עמוד תמונה' : 'עמוד ריק') : entry.name || 'אורח/ת'}</div>
+                                                                <div className='flex items-center gap-1.5 min-w-0'>
+                                                                    <div className='font-bold text-sm text-gray-900 truncate'>{isBlankPage(entry) ? (blankPagePhoto(entry) ? 'עמוד תמונה' : 'עמוד ריק') : entry.name || 'אורח/ת'}</div>
+                                                                    {/* Twins bar mitzvah: who the guest wrote to. */}
+                                                                    {!isBlankPage(entry) && blessForTag(weddingDoc, entry.blessFor) && (
+                                                                        <span className='shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[#e8f0fb] text-[#3b5b9a]'>
+                                                                            {blessForTag(weddingDoc, entry.blessFor)}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                                 <div className='text-xs text-gray-500 truncate'>{isBlankPage(entry) ? (blankPagePhoto(entry) ? 'תמונה על כל העמוד' : 'רק הרקע של הספר') : entry.text || (entry.imageUrl ? 'ברכה עם תמונה' : '')}</div>
                                                                 {tsMs(entry.timestamp) > 0 && (
                                                                     <div className='text-[10px] text-gray-400 mt-0.5'>הועלתה {fmtUploadedAt(entry.timestamp)}</div>

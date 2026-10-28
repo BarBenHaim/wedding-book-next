@@ -117,6 +117,8 @@ export async function GET(req) {
                     eventType: normalizeEventType(data.eventType),
                     themeColor: normalizeThemeColor(data.themeColor), // null = use event-type default
                     celebrantName: data.celebrantName ?? null,
+                    // Twins bar mitzvah — the second boy's name.
+                    celebrantName2: data.celebrantName2 ?? null,
                     age: data.age ?? null,
                     customTitle: data.customTitle ?? null,
                     customSubtitle: data.customSubtitle ?? null,
@@ -202,7 +204,7 @@ export async function PATCH(req) {
 
         const ALLOWED = [
             'eventType', 'designVariant', 'locale', 'themeColor',
-            'celebrantName', 'celebrantNameHe', 'age',
+            'celebrantName', 'celebrantNameHe', 'celebrantName2', 'age',
             'customTitle', 'customSubtitle', 'customDescription',
             'customNameLabel', 'customNamePlaceholder',
             'customBlessingLabel', 'customBlessingPlaceholder',

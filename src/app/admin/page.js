@@ -159,6 +159,7 @@ const urgencyClass = (map, w, nowMs) => map[rowUrgency(w, nowMs)] || map.default
 
 function coupleLabel(w) {
     if (w.brideName || w.groomName) return [w.brideName, w.groomName].filter(Boolean).join(' & ')
+    if (w.celebrantName && w.celebrantName2) return `${w.celebrantName} & ${w.celebrantName2}`
     if (w.celebrantName) return w.celebrantName
     return w.ownerEmail || '—'
 }
@@ -190,6 +191,7 @@ function waMeLink(w) {
 const EVENT_TYPE_META = {
     wedding: { label: 'חתונה', bg: '#fdeef2', color: '#b84a6a' },
     bar_mitzvah: { label: 'בר מצווה', bg: '#eef2fd', color: '#4a5fb8' },
+    twins_bar_mitzvah: { label: 'בר מצווה תאומים', bg: '#e8f0fb', color: '#3b5b9a' },
     bat_mitzvah: { label: 'בת מצווה', bg: '#f6eefd', color: '#8a4ab8' },
     birthday: { label: 'יום הולדת', bg: '#fef6e9', color: '#b8862f' },
 }
@@ -530,6 +532,7 @@ function EventTypeEditor({ wedding, onSave }) {
         groomNameHe: w.groomNameHe || '',
         celebrantName: w.celebrantName || '',
         celebrantNameHe: w.celebrantNameHe || '',
+        celebrantName2: w.celebrantName2 || '',
         age: w.age ?? '',
         customTitle: w.customTitle || '',
         customSubtitle: w.customSubtitle || '',
@@ -581,6 +584,7 @@ function EventTypeEditor({ wedding, onSave }) {
     const showBrideGroom = typeFields.includes('brideName')
     const showCelebrant = typeFields.includes('celebrantName')
     const showAge = typeFields.includes('age')
+    const showTwins = typeFields.includes('celebrantName2')
 
     // Build the PATCH body: only keys relevant to the current event type,
     // plus overrides. We always send eventType + themeColor so changes persist.
@@ -605,6 +609,7 @@ function EventTypeEditor({ wedding, onSave }) {
             patch.celebrantName = draft.celebrantName
             patch.celebrantNameHe = draft.celebrantNameHe
         }
+        if (showTwins) patch.celebrantName2 = draft.celebrantName2
         if (showAge) patch.age = draft.age === '' ? null : draft.age
         // Always include overrides so clearing them also persists.
         patch.customTitle = draft.customTitle
@@ -960,13 +965,16 @@ function EventTypeEditor({ wedding, onSave }) {
                 const celebrantLabel =
                     draft.eventType === 'poker' ? 'מיקום האירוע'
                     : draft.eventType === 'travel' ? 'שם המטייל'
+                    : showTwins ? 'שם התאום הראשון'
                     : 'שם החוגג/ת'
                 const celebrantPlaceholder =
                     draft.eventType === 'poker' ? 'הממלכה'
                     : draft.eventType === 'travel' ? 'דניאל'
+                    : showTwins ? 'דניאל'
                     : 'Tikva'
                 return (
-                <div className={`grid gap-3 mb-3 ${showAge ? 'grid-cols-[2fr_1fr]' : 'grid-cols-1'}`}>
+                <>
+                <div className={`grid gap-3 mb-3 ${showAge || showTwins ? 'grid-cols-2' : 'grid-cols-1'}`}>
                     <div>
                         <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>{celebrantLabel}</label>
                         <input
@@ -987,11 +995,28 @@ function EventTypeEditor({ wedding, onSave }) {
                             />
                         </div>
                     )}
+                    {showTwins && (
+                        <div>
+                            <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>שם התאום השני</label>
+                            <input
+                                type='text' value={draft.celebrantName2}
+                                onChange={e => set('celebrantName2', e.target.value)}
+                                placeholder='נועם'
+                                className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all'
+                            />
+                        </div>
+                    )}
                 </div>
+                {showTwins && (
+                    <p className='text-[11px] text-[#a89378] -mt-1.5 mb-3 leading-relaxed'>
+                        כתוב את השמות כמו שהאורחים יראו אותם. בעמוד הסריקה יופיעו כפתורים &quot;ברכו את {draft.celebrantName || 'דניאל'}&quot;, &quot;ברכו את {draft.celebrantName2 || 'נועם'}&quot; ו&quot;ברכה לשניהם&quot;, וכל ברכה נשמרת עם התאום שנבחר.
+                    </p>
+                )}
+                </>
                 )
             })()}
 
-            {showCelebrant && draft.eventType !== 'poker' && draft.eventType !== 'travel' && (
+            {showCelebrant && !showTwins && draft.eventType !== 'poker' && draft.eventType !== 'travel' && (
                 <div className='mb-3'>
                     <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>שם החוגג/ת בעברית</label>
                     <input

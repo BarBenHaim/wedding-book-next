@@ -10,6 +10,7 @@ import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale, dirFor } from '@/i18n/locales'
 import { logEvent } from '@/lib/logEvent'
 import MySubmissions from '@/components/MySubmissions/MySubmissions'
+import { isTwinsEvent, twinNames, hasBothTwinNames, blessForHref } from '@/lib/twins'
 
 // ── Outer: owns the runtime locale and wires the i18n provider so the
 // guest sees the page in the language the super-admin configured for the
@@ -87,6 +88,10 @@ function GuestLanding({ weddingId, onLocaleDiscovered }) {
     const title = buildTitle(data || {}, locale)
     const subtitle = buildSubtitle(data || {}, locale)
     const description = buildDescription(data || {}, locale)
+    // [a, b] on a twins event with both names filled; null otherwise
+    // (a twins event mid-setup keeps the single button until it has
+    // two names to put on two buttons).
+    const twins = data && isTwinsEvent(data.eventType) && hasBothTwinNames(data) ? twinNames(data) : null
 
     return (
         <div
@@ -138,50 +143,46 @@ function GuestLanding({ weddingId, onLocaleDiscovered }) {
                     {description}
                 </p>
 
-                {/* CTA Button with marble texture */}
-                <Link
-                    href={`/wedding/${weddingId}/photo`}
-                    className='group relative overflow-hidden rounded-full transition-all duration-300 hover:-translate-y-[2px]'
-                    style={{
-                        boxShadow: '0 8px 30px rgba(100,80,50,0.15), 0 2px 6px rgba(0,0,0,0.05)',
-                        textDecoration: 'none',
-                    }}
-                >
-                    {/* Marble texture background */}
-                    <div
-                        className='absolute inset-0'
-                        style={{
-                            backgroundImage: 'url(/backgrounds/buttonbg.webp)',
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
-                        }}
-                    />
-                    {/* Soft overlay for readability — tinted per event type */}
-                    <div
-                        className='absolute inset-0'
-                        style={{ background: palette.button }}
-                    />
-                    {/* Shimmer on hover */}
-                    <div
-                        className='absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500'
-                        style={{
-                            background:
-                                'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%, rgba(255,255,255,0.15) 100%)',
-                        }}
-                    />
-                    {/* Accent border */}
-                    <div
-                        className='absolute inset-0 rounded-full'
-                        style={{ border: `1px solid ${palette.accent}4D` }}
-                    />
-
-                    <span
-                        className='relative z-10 block px-12 py-4 text-[17px] font-bold'
-                        style={{ color: palette.name }}
-                    >
+                {twins ? (
+                    // Twins bar mitzvah: the guest picks who the blessing
+                    // is for. Two equal buttons, one per boy, then a
+                    // quieter one for both — the choice rides along to
+                    // the form as ?for=a|b|both (src/lib/twins.js).
+                    <div className='w-full flex flex-col items-center'>
+                        <p className='text-[14px] font-semibold mb-3.5' style={{ color: palette.label }}>
+                            {t('twinsChoose')}
+                        </p>
+                        <div className='w-full grid grid-cols-2 gap-3'>
+                            {['a', 'b'].map((who, i) => (
+                                <MarbleButton
+                                    key={who}
+                                    href={blessForHref(weddingId, who)}
+                                    palette={palette}
+                                    className='w-full'
+                                    labelClassName='px-3 py-4 text-[16px] leading-snug'
+                                >
+                                    {t('twinsBless', { name: twins[i] })}
+                                </MarbleButton>
+                            ))}
+                        </div>
+                        <Link
+                            href={blessForHref(weddingId, 'both')}
+                            className='mt-3 w-full rounded-full py-3 text-[15px] font-bold transition-all duration-300 hover:-translate-y-[1px]'
+                            style={{
+                                color: palette.name,
+                                background: 'rgba(255,255,255,0.65)',
+                                border: `1px solid ${palette.accent}80`,
+                                textDecoration: 'none',
+                            }}
+                        >
+                            {t('twinsBoth')}
+                        </Link>
+                    </div>
+                ) : (
+                    <MarbleButton href={`/wedding/${weddingId}/photo`} palette={palette}>
                         {cfg.ctaLabel}
-                    </span>
-                </Link>
+                    </MarbleButton>
+                )}
 
                 {/* Edit-your-own panel — only shows if THIS device already sent
                     a blessing. Sits below the "add a blessing" CTA so it's an
@@ -196,5 +197,46 @@ function GuestLanding({ weddingId, onLocaleDiscovered }) {
                 </p>
             </div>
         </div>
+    )
+}
+
+// The marble-textured call to action, tinted per event palette. One
+// component so the twins buttons look exactly like the single CTA.
+function MarbleButton({ href, palette, children, className = '', labelClassName = 'px-12 py-4 text-[17px]' }) {
+    return (
+        <Link
+            href={href}
+            className={`group relative block overflow-hidden rounded-full transition-all duration-300 hover:-translate-y-[2px] ${className}`}
+            style={{
+                boxShadow: '0 8px 30px rgba(100,80,50,0.15), 0 2px 6px rgba(0,0,0,0.05)',
+                textDecoration: 'none',
+            }}
+        >
+            {/* Marble texture background */}
+            <div
+                className='absolute inset-0'
+                style={{
+                    backgroundImage: 'url(/backgrounds/buttonbg.webp)',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                }}
+            />
+            {/* Soft overlay for readability — tinted per event type */}
+            <div className='absolute inset-0' style={{ background: palette.button }} />
+            {/* Shimmer on hover */}
+            <div
+                className='absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500'
+                style={{
+                    background:
+                        'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%, rgba(255,255,255,0.15) 100%)',
+                }}
+            />
+            {/* Accent border */}
+            <div className='absolute inset-0 rounded-full' style={{ border: `1px solid ${palette.accent}4D` }} />
+
+            <span className={`relative z-10 block font-bold ${labelClassName}`} style={{ color: palette.name }}>
+                {children}
+            </span>
+        </Link>
     )
 }

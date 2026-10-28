@@ -36,6 +36,7 @@ const EVENT_TYPES = [
     { id: 'wedding', label: 'חתונה' },
     { id: 'birthday', label: 'יום הולדת' },
     { id: 'bar_mitzvah', label: 'בר מצווה' },
+    { id: 'twins_bar_mitzvah', label: 'בר מצווה תאומים' },
     { id: 'bat_mitzvah', label: 'בת מצווה' },
 ]
 

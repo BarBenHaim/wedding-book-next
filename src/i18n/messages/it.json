@@ -33,6 +33,13 @@
       "ctaLabel": "Scrivi un augurio",
       "footer": "Bar Mitzvah Tales"
     },
+    "twins_bar_mitzvah": {
+      "label": "Bar Mitzvah dei gemelli",
+      "subtitle": "Un libro di auguri per il Bar Mitzvah di",
+      "description": "Due fratelli, un giorno, un libro. Scegli a chi fare gli auguri, oppure scrivi a entrambi.",
+      "ctaLabel": "Scrivi un augurio",
+      "footer": "Bar Mitzvah Tales"
+    },
     "bat_mitzvah": {
       "label": "Bat Mitzvah",
       "subtitle": "Un libro di auguri per il Bat Mitzvah di",
@@ -130,6 +137,8 @@
     "pageTitleBatMitzvah": "Lascia un augurio al Bat Mitzvah",
     "pageTitleWithCouple": "Lascia un augurio a {first} e {second}",
     "pageTitleWithName": "Lascia un augurio a {name}",
+    "twinsPickerLabel": "Questo augurio è per",
+    "twinsBothShort": "Entrambi",
     "pageTitleGeneric": "Lascia un augurio",
     "pageTitlePoker": "Il Regno",
     "pageTitlePokerWithVenue": "{name}",
@@ -232,7 +241,10 @@
   "guestPage": {
     "notFound": "Evento non trovato",
     "linkNotFound": "Link non trovato",
-    "linkExpired": "Il link potrebbe non essere valido o essere scaduto"
+    "linkExpired": "Il link potrebbe non essere valido o essere scaduto",
+    "twinsChoose": "Chi vuoi festeggiare?",
+    "twinsBless": "Auguri a {name}",
+    "twinsBoth": "Un augurio per entrambi"
   },
   "designControls": {
     "saving": "Salvataggio...",

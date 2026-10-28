@@ -85,7 +85,7 @@ function QrCodesContent() {
                     // Event-type prefix so a bar-mitzvah (e.g. "בר מצווה · אורי")
                     // is identifiable at a glance among many QR codes — not just
                     // a bare name that could be anything.
-                    const ET = { wedding: 'חתונה', bar_mitzvah: 'בר מצווה', bat_mitzvah: 'בת מצווה', birthday: 'יום הולדת' }
+                    const ET = { wedding: 'חתונה', bar_mitzvah: 'בר מצווה', twins_bar_mitzvah: 'בר מצווה תאומים', bat_mitzvah: 'בת מצווה', birthday: 'יום הולדת' }
                     const etLabel = ET[data.eventType] || 'חתונה'
                     const names = (bride && groom) ? `${bride} ו${groom}` : (celeb || `אירוע ${d.id.slice(0, 6)}`)
                     let dateStr = ''

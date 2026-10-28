@@ -30,6 +30,8 @@
 //
 // Pure helpers only — the route does the I/O, and the tests run here.
 
+import { normalizeBlessFor } from './twins'
+
 export const MANAGE_SCOPE = 'manage'
 export const ARRANGE_SCOPE = 'arrange'
 export const TRASH_SUBCOLLECTION = 'entries_trash'
@@ -119,6 +121,8 @@ export function publicManageEntry(entry) {
         // away one that was added to a text-only blessing.
         guestHadPhoto: typeof entry.originalImageUrl === 'string' && entry.originalImageUrl.length > 0,
         preserveLineBreaks: entry.preserveLineBreaks === true,
+        // Twins bar mitzvah: which boy the guest wrote to ('a'|'b'|'both').
+        blessFor: normalizeBlessFor(entry.blessFor),
         timestamp: Number.isFinite(entry.timestamp) ? entry.timestamp : null,
         orderIndex: Number.isInteger(entry.orderIndex) ? entry.orderIndex : null,
     }

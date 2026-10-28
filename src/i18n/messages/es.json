@@ -33,6 +33,13 @@
       "ctaLabel": "Escribir una bendición",
       "footer": "Bar Mitzvah Tales"
     },
+    "twins_bar_mitzvah": {
+      "label": "Bar Mitzvá de gemelos",
+      "subtitle": "Un libro de bendiciones para el Bar Mitzvá de",
+      "description": "Dos hermanos, un día, un libro. Elige a quién felicitas, o escríbeles a los dos.",
+      "ctaLabel": "Escribir una bendición",
+      "footer": "Bar Mitzvah Tales"
+    },
     "bat_mitzvah": {
       "label": "Bat Mitzvá",
       "subtitle": "Un libro de bendiciones para el Bat Mitzvá de",
@@ -130,6 +137,8 @@
     "pageTitleBatMitzvah": "Deja una bendición al Bat Mitzvá",
     "pageTitleWithCouple": "Deja una bendición a {first} y {second}",
     "pageTitleWithName": "Deja una bendición a {name}",
+    "twinsPickerLabel": "Este mensaje es para",
+    "twinsBothShort": "Los dos",
     "pageTitleGeneric": "Deja una bendición",
     "pageTitlePoker": "El Reino",
     "pageTitlePokerWithVenue": "{name}",
@@ -232,7 +241,10 @@
   "guestPage": {
     "notFound": "No se encontró este evento",
     "linkNotFound": "Enlace no encontrado",
-    "linkExpired": "El enlace puede ser inválido o haber expirado"
+    "linkExpired": "El enlace puede ser inválido o haber expirado",
+    "twinsChoose": "¿A quién quieres felicitar?",
+    "twinsBless": "Felicita a {name}",
+    "twinsBoth": "Un mensaje para los dos"
   },
   "designControls": {
     "saving": "Guardando...",

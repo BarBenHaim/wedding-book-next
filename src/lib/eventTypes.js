@@ -101,9 +101,12 @@ export const EVENT_TYPES = {
     bat_mitzvah: 'bat_mitzvah',
     poker: 'poker',
     travel: 'travel',
+    // Two boys, one book. Guests pick which twin they are blessing on
+    // the landing page — see src/lib/twins.js.
+    twins_bar_mitzvah: 'twins_bar_mitzvah',
 }
 
-export const EVENT_TYPE_ORDER = ['wedding', 'birthday', 'bar_mitzvah', 'bat_mitzvah', 'poker', 'travel']
+export const EVENT_TYPE_ORDER = ['wedding', 'birthday', 'bar_mitzvah', 'twins_bar_mitzvah', 'bat_mitzvah', 'poker', 'travel']
 
 // Per-event-type config that's NOT locale-dependent. The user-facing
 // strings (label, subtitle, description, ctaLabel, footer) live in
@@ -120,6 +123,7 @@ const EVENT_TYPE_META = {
     // can spin up dedicated palettes later if needed.
     poker: { id: 'poker', defaultTheme: 'gold' },
     travel: { id: 'travel', defaultTheme: 'blue' },
+    twins_bar_mitzvah: { id: 'twins_bar_mitzvah', defaultTheme: 'blue' },
 }
 
 // Lazy-loaded fallback message catalogue. We ALWAYS resolve via the JSON
@@ -271,6 +275,16 @@ export function buildTitle(data = {}, locale = 'he') {
         return { kind: 'single', text: traveler }
     }
 
+    // twins — both names side by side, the same shape as a couple, so
+    // the landing renders "דניאל & נועם" with the ornamental ampersand.
+    if (type === 'twins_bar_mitzvah') {
+        const a = (data.celebrantName || '').trim()
+        const b = (data.celebrantName2 || '').trim()
+        if (!a && !b) return { kind: 'empty' }
+        if (!a || !b) return { kind: 'single', text: a || b }
+        return { kind: 'names', left: a, right: b }
+    }
+
     // bar_mitzvah / bat_mitzvah
     const name = (data.celebrantName || '').trim()
     if (!name) return { kind: 'empty' }
@@ -326,5 +340,6 @@ export function fieldsForType(rawType) {
     // field is the same so we don't proliferate Firestore columns.
     if (type === 'poker') return ['celebrantName', 'weddingDate']
     if (type === 'travel') return ['celebrantName', 'weddingDate']
+    if (type === 'twins_bar_mitzvah') return ['celebrantName', 'celebrantName2', 'weddingDate']
     return ['celebrantName', 'weddingDate']
 }

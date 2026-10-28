@@ -88,13 +88,15 @@ export function genId() {
 }
 
 /** Adds a new entry to the queue. `id` is optional; generated if omitted. */
-export async function enqueue({ id, weddingId, name, text, image }) {
+export async function enqueue({ id, weddingId, name, text, image, blessFor }) {
     const record = {
         id: id || genId(),
         weddingId,
         name: name || '',
         text: text || '',
         image: image || null,
+        // Twins bar mitzvah only ('a' | 'b' | 'both'); see lib/twins.js.
+        ...(blessFor ? { blessFor } : {}),
         createdAt: Date.now(),
         attempts: 0,
         lastError: null,

@@ -22,6 +22,7 @@ import MySubmissions from '@/components/MySubmissions/MySubmissions'
 import BookLoader from '@/components/BookLoader/BookLoader'
 import { frankRuhl } from '@/app/fonts'
 import { panelRect, fitScale } from '@/lib/framedPanel'
+import { isTwinsEvent, twinNames, normalizeBlessFor, joinTwinNames } from '@/lib/twins'
 
 // The width the framed form is AUTHORED at. It is drawn at whatever
 // size the panel turns out to be, so this is a design decision and
@@ -91,6 +92,19 @@ export default function TextPage() {
     // Per-event: the super-admin can require a photo with every blessing
     // (books built around the pictures). Off unless explicitly true.
     const [photoRequired, setPhotoRequired] = useState(false)
+    // Twins bar mitzvah — [a, b] names and who this blessing is for.
+    // The landing page sends ?for=a|b|both; a guest who reached this
+    // page some other way (old QR, shared link) starts on "both" and
+    // can switch with the picker above the form.
+    const [twins, setTwins] = useState(null)
+    const [blessFor, setBlessFor] = useState(() => {
+        if (typeof window === 'undefined') return 'both'
+        try {
+            return normalizeBlessFor(new URLSearchParams(window.location.search).get('for')) || 'both'
+        } catch {
+            return 'both'
+        }
+    })
     // Super-admin privilege: when the signed-in browser user is a super
     // admin, the composer allows up to 2600 characters on ANY book.
     // Guests keep the per-event limit — this only raises the ceiling
@@ -206,6 +220,10 @@ export default function TextPage() {
                     else if (data.designVariant) setDesignVariant(data.designVariant)
                     if (data.blessingMaxChars) setMaxChars(Number(data.blessingMaxChars) || 210)
                     setPhotoRequired(data.photoRequired === true)
+                    if (isTwinsEvent(data.eventType)) {
+                        const [a, b] = twinNames(data)
+                        if (a && b) setTwins([a, b])
+                    }
                     // Prefer the Hebrew-script names for the headline
                     // ("השאירו ברכה ל..."). Fall back to the original
                     // names when the super-admin didn't fill the Hebrew
@@ -272,9 +290,23 @@ export default function TextPage() {
                 </div>
             )}
             <PhotoApp
-                eventType={eventType}
+                // A twins event renders as a bar mitzvah addressed to
+                // whoever was picked — every layout, theme and string
+                // already knows how to say "for {name}".
+                eventType={twins ? 'bar_mitzvah' : eventType}
                 designVariant={designVariant}
-                recipients={recipients}
+                recipients={
+                    twins
+                        ? {
+                              ...recipients,
+                              celebrant:
+                                  blessFor === 'a' ? twins[0] : blessFor === 'b' ? twins[1] : joinTwinNames(twins[0], twins[1], locale),
+                          }
+                        : recipients
+                }
+                twins={twins}
+                blessFor={twins ? blessFor : null}
+                onBlessForChange={setBlessFor}
                 formCopy={formCopy}
                 guestDesign={guestDesign}
                 maxChars={adminWriter ? Math.max(maxChars, 2600) : maxChars}
@@ -345,8 +377,23 @@ function ChipBadge({ number, active, done, isPoker }) {
     )
 }
 
-function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign, maxChars = 210, locale = 'he', initialName = '', guestId = '', photoRequired = false }) {
+function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign, maxChars = 210, locale = 'he', initialName = '', guestId = '', photoRequired = false, twins = null, blessFor = null, onBlessForChange }) {
     const t = useTranslations('photo')
+
+    // Twins: who is this blessing for. Rendered under the title in every
+    // layout; null (renders nothing) on every other event.
+    const renderTwinPicker = ({ accent, text }) =>
+        twins ? (
+            <TwinPicker
+                names={twins}
+                value={blessFor}
+                onChange={onBlessForChange}
+                label={t('twinsPickerLabel')}
+                bothLabel={t('twinsBothShort')}
+                accent={accent}
+                text={text}
+            />
+        ) : null
 
     // Resolve every form string to either the per-event admin override
     // (if non-empty) or the i18n default. Poker uses its own copy keys
@@ -808,6 +855,9 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
             // exactly as written.
             text: text || '',
             image: finalBlob,
+            // Twins only — absent everywhere else, so other events'
+            // entries are written exactly as before.
+            ...(blessFor ? { blessFor } : {}),
         }
 
         // The thanks page says "your blessing and photo are saved". With
@@ -1326,6 +1376,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                     >
                         {formCopy?.momentSubtitle || t('momentSubtitle')}
                     </p>
+                    {twins && <div className='mt-3'>{renderTwinPicker({ accent: md.accentColor, text: md.titleColor })}</div>}
 
                     {/* ── Form card ──
                         Holds the entire form + the floral overflow
@@ -2190,6 +2241,11 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                         className='block h-px w-10'
                                         style={{ background: `linear-gradient(to right, transparent, ${theme.accentColor})` }}
                                     />
+                                </div>
+                            )}
+                            {twins && (
+                                <div className='mb-2'>
+                                    {renderTwinPicker({ accent: theme.accentColor, text: theme.titleColor })}
                                 </div>
                             )}
                             <p
@@ -3087,6 +3143,56 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                 >
                     נוצר עם 💛 Wedding Tales — פתחו ספר לאירוע שלכם, חינם
                 </a>
+            </div>
+        </div>
+    )
+}
+
+// ── Twins picker ──
+// "הברכה עבור  [דניאל] [נועם] [שניהם]" — a three-way segmented control
+// under the title on a twins bar mitzvah. Colours come from whichever
+// layout hosts it, so it sits in the garden, the night panel or the
+// classic card without its own palette.
+function TwinPicker({ names, value, onChange, label, bothLabel, accent, text }) {
+    const options = [
+        { id: 'a', label: names[0] },
+        { id: 'b', label: names[1] },
+        { id: 'both', label: bothLabel },
+    ]
+    return (
+        <div className='flex flex-col items-center gap-1.5'>
+            <span className='text-[11.5px] font-semibold' style={{ color: text, opacity: 0.75 }}>
+                {label}
+            </span>
+            <div
+                role='radiogroup'
+                aria-label={label}
+                className='inline-flex items-center gap-1 p-1 rounded-full max-w-full'
+                style={{ background: 'rgba(255,255,255,0.78)', border: `1px solid ${accent}66`, boxShadow: '0 2px 10px rgba(0,0,0,0.06)' }}
+            >
+                {options.map(o => {
+                    const active = value === o.id
+                    return (
+                        <button
+                            key={o.id}
+                            type='button'
+                            role='radio'
+                            aria-checked={active}
+                            onClick={() => onChange?.(o.id)}
+                            className='px-3.5 py-1.5 rounded-full text-[13px] font-bold whitespace-nowrap overflow-hidden text-ellipsis transition-colors'
+                            style={
+                                active
+                                    ? { background: accent, color: '#fff', boxShadow: `0 2px 8px ${accent}55` }
+                                    // Dark on the white track whatever the
+                                    // layout — a night design's light
+                                    // title colour would vanish here.
+                                    : { background: 'transparent', color: '#3d3225' }
+                            }
+                        >
+                            {o.label}
+                        </button>
+                    )
+                })}
             </div>
         </div>
     )
