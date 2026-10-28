@@ -23,12 +23,14 @@ import {
 import { Heebo } from 'next/font/google'
 import { storage } from '@/lib/firebaseClient'
 import BookLoader from '@/components/BookLoader/BookLoader'
+import { blessForTag } from '@/lib/twins'
 
 const heebo = Heebo({ subsets: ['hebrew'], weight: ['400', '700', '900'] })
 
 const EVENT_LABEL = {
     wedding: 'החתונה',
     bar_mitzvah: 'הבר מצווה',
+    twins_bar_mitzvah: 'הבר מצווה',
     bat_mitzvah: 'הבת מצווה',
     birthday: 'יום ההולדת',
     brit: 'הברית',
@@ -407,7 +409,14 @@ export default function ManagePage() {
                                                 </div>
                                             ) : (
                                                 <>
-                                                    <div className='font-bold text-[15px] text-[#1a1410] truncate'>{entry.name || 'ברכה ללא שם'}</div>
+                                                    <div className='flex items-center gap-2 min-w-0'>
+                                                        <div className='font-bold text-[15px] text-[#1a1410] truncate'>{entry.name || 'ברכה ללא שם'}</div>
+                                                        {blessForTag(wedding, entry.blessFor) && (
+                                                            <span className='shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#e8f0fb] text-[#3b5b9a]'>
+                                                                {blessForTag(wedding, entry.blessFor)}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <p className='text-[13px] text-[#5b4a30] leading-relaxed mt-0.5 line-clamp-4' style={entry.preserveLineBreaks ? { whiteSpace: 'pre-line' } : undefined}>
                                                         {entry.text || <span className='text-[#b8a07a]'>אין טקסט</span>}
                                                     </p>
