@@ -33,6 +33,13 @@
       "ctaLabel": "יצירת ברכה",
       "footer": "Bar Mitzvah Tales"
     },
+    "twins_bar_mitzvah": {
+      "label": "בר מצווה תאומים",
+      "subtitle": "ספר הברכות לבר המצווה של",
+      "description": "שני אחים, יום אחד, ספר אחד. בחרו את מי אתם מברכים, או כתבו ברכה לשניהם יחד.",
+      "ctaLabel": "יצירת ברכה",
+      "footer": "Bar Mitzvah Tales"
+    },
     "bat_mitzvah": {
       "label": "בת מצווה",
       "subtitle": "ספר הברכות לבת המצווה של",
@@ -130,6 +137,8 @@
     "pageTitleBatMitzvah": "השאירו ברכה לבת המצווה",
     "pageTitleWithCouple": "השאירו ברכה ל{first} ול{second}",
     "pageTitleWithName": "השאירו ברכה ל{name}",
+    "twinsPickerLabel": "הברכה עבור",
+    "twinsBothShort": "שניהם",
     "pageTitleGeneric": "השאירו ברכה",
     "pageTitlePoker": "הממלכה",
     "pageTitlePokerWithVenue": "{name}",
@@ -232,7 +241,10 @@
   "guestPage": {
     "notFound": "לא נמצאה החתונה הזו",
     "linkNotFound": "הקישור לא נמצא",
-    "linkExpired": "ייתכן שהקישור שגוי או שפג תוקפו"
+    "linkExpired": "ייתכן שהקישור שגוי או שפג תוקפו",
+    "twinsChoose": "את מי תרצו לברך?",
+    "twinsBless": "ברכו את {name}",
+    "twinsBoth": "ברכה לשניהם"
   },
   "designControls": {
     "saving": "שומר...",

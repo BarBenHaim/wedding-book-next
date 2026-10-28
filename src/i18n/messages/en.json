@@ -33,6 +33,13 @@
       "ctaLabel": "Write a greeting",
       "footer": "Bar Mitzvah Tales"
     },
+    "twins_bar_mitzvah": {
+      "label": "Twins Bar Mitzvah",
+      "subtitle": "A greetings book for the Bar Mitzvah of",
+      "description": "Two brothers, one day, one book. Choose who you're greeting, or write one for both.",
+      "ctaLabel": "Write a greeting",
+      "footer": "Bar Mitzvah Tales"
+    },
     "bat_mitzvah": {
       "label": "Bat Mitzvah",
       "subtitle": "A greetings book for the Bat Mitzvah of",
@@ -130,6 +137,8 @@
     "pageTitleBatMitzvah": "Leave a greeting for the Bat Mitzvah",
     "pageTitleWithCouple": "Leave a greeting for {first} & {second}",
     "pageTitleWithName": "Leave a greeting for {name}",
+    "twinsPickerLabel": "This greeting is for",
+    "twinsBothShort": "Both",
     "pageTitleGeneric": "Leave a greeting",
     "pageTitlePoker": "The Kingdom",
     "pageTitlePokerWithVenue": "{name}",
@@ -232,7 +241,10 @@
   "guestPage": {
     "notFound": "This event was not found",
     "linkNotFound": "Link not found",
-    "linkExpired": "The link may be invalid or expired"
+    "linkExpired": "The link may be invalid or expired",
+    "twinsChoose": "Who would you like to greet?",
+    "twinsBless": "Greet {name}",
+    "twinsBoth": "A greeting for both"
   },
   "designControls": {
     "saving": "Saving...",
