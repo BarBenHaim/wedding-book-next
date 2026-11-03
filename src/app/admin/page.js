@@ -131,6 +131,20 @@ async function createUser(data) {
     return res.json()
 }
 
+// Move an event to another email — moves the login (ownerId), not just
+// the label. See src/lib/ownerTransfer.js.
+async function transferOwner(weddingId, email, notify) {
+    const token = await getToken()
+    const res = await fetch('/api/admin/transfer-owner', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ weddingId, email, notify }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok || !json.ok) throw new Error(json.error || 'ההעברה נכשלה')
+    return json
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDate(isoString) {
     if (!isoString) return '—'
@@ -633,7 +647,9 @@ function EventTypeEditor({ wedding, onSave }) {
         patch.adminNotes = draft.adminNotes
         patch.ownerName = draft.ownerName
         patch.ownerPhone = draft.ownerPhone
-        patch.ownerEmail = draft.ownerEmail
+        // ownerEmail is NOT sent from here: it moves only together with
+        // the login (ownerId), through OwnerTransferPanel. A stale draft
+        // saved after a transfer would otherwise put the old address back.
         // Amount paid — '' clears it; otherwise the API coerces to a number.
         patch.amountPaid = draft.amountPaid === '' ? null : draft.amountPaid
         patch.currency = draft.currency
@@ -751,14 +767,10 @@ function EventTypeEditor({ wedding, onSave }) {
             </div>
             <div className='mb-3'>
                 <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>אימייל הלקוח</label>
-                <input
-                    type='email'
-                    dir='ltr'
-                    value={draft.ownerEmail}
-                    onChange={e => set('ownerEmail', e.target.value)}
-                    placeholder='name@example.com'
-                    className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
-                />
+                <div dir='ltr' className='w-full px-3 py-2.5 rounded-xl border border-[#f0e8d4] text-sm text-[#7a6a52] bg-[#fbf6ec] truncate text-right'>
+                    {wedding.ownerEmail || '—'}
+                </div>
+                <p className='text-[10.5px] text-[#a89378] mt-1'>לשינוי המייל: &quot;בעלים של האירוע&quot; בראש החלון. שם המייל עובר יחד עם הכניסה לחשבון.</p>
             </div>
 
             {/* Amount paid — auto-captured from the order, editable here so
@@ -2220,7 +2232,114 @@ function QrCodePanel({ wedding }) {
     )
 }
 
-function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onCheckLuluStatus, onSaveEdit }) {
+// ── Owner of the event ──
+// Who can log in and manage this event. Typing a new email here moves the
+// event to that person's account (created on the spot if they have none),
+// and can email them how to get in.
+function OwnerTransferPanel({ wedding, onOwnerChanged }) {
+    const [email, setEmail] = useState('')
+    const [notify, setNotify] = useState(true)
+    const [phase, setPhase] = useState('idle') // idle | confirm | busy | done | error
+    const [result, setResult] = useState(null)
+    const [error, setError] = useState('')
+
+    useEffect(() => {
+        setEmail('')
+        setPhase('idle')
+        setResult(null)
+        setError('')
+    }, [wedding.id])
+
+    const current = wedding.ownerEmail || wedding.email || ''
+    const next = email.trim().toLowerCase()
+    const valid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(next)
+
+    async function run() {
+        setPhase('busy')
+        setError('')
+        try {
+            const r = await transferOwner(wedding.id, next, notify)
+            setResult(r)
+            setPhase('done')
+            setEmail('')
+            onOwnerChanged?.(wedding.id, { ownerEmail: r.ownerEmail, ownerId: r.ownerId })
+        } catch (err) {
+            setError(err?.message || 'ההעברה נכשלה')
+            setPhase('error')
+        }
+    }
+
+    return (
+        <div className='px-6 py-5 border-b border-[#f0e8d4]'>
+            <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold mb-3'>בעלים של האירוע</p>
+
+            <div className='rounded-xl bg-[#fbf6ec] border border-[#f0e8d4] px-3 py-2.5 mb-3'>
+                <div className='text-[11px] text-[#a89378]'>משויך עכשיו ל</div>
+                <div dir='ltr' className='text-sm font-bold text-[#3d3225] truncate text-right'>{current || 'אין מייל'}</div>
+                {!wedding.ownerId && <div className='text-[11px] text-amber-700 mt-0.5'>אין חשבון מחובר — אף אחד לא יכול להיכנס לאירוע הזה</div>}
+            </div>
+
+            <label className='text-xs font-semibold text-[#7a6a52] mb-1 block'>להעביר למייל אחר</label>
+            <input
+                type='email'
+                dir='ltr'
+                value={email}
+                onChange={e => { setEmail(e.target.value); if (phase !== 'busy') setPhase('idle') }}
+                placeholder='new-owner@example.com'
+                className='w-full px-3 py-2.5 rounded-xl border border-[#ead9b3] text-sm text-[#3d3225] outline-none focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/10 transition-all bg-white'
+            />
+            <label className='flex items-center gap-2 mt-2 text-[12px] text-[#5c4a2f] cursor-pointer select-none'>
+                <input type='checkbox' checked={notify} onChange={e => setNotify(e.target.checked)} className='accent-[#AA8840]' />
+                לשלוח למייל החדש הודעה עם פרטי הכניסה
+            </label>
+
+            {phase === 'confirm' ? (
+                <div className='mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3'>
+                    <p className='text-[12.5px] text-[#5c4a2f] leading-relaxed'>
+                        האירוע יעבור ל-<b dir='ltr'>{next}</b>.{' '}
+                        {current ? <>ל-<span dir='ltr'>{current}</span> לא תהיה יותר גישה אליו.</> : null}{' '}
+                        {notify ? 'אם אין לו חשבון, ייפתח חשבון ותישלח אליו סיסמה.' : 'לא יישלח מייל — תצטרך למסור לו את פרטי הכניסה בעצמך.'}
+                    </p>
+                    <div className='flex gap-2 mt-2.5'>
+                        <button onClick={run} className='flex-1 py-2 rounded-lg text-sm font-bold text-white' style={{ background: 'linear-gradient(180deg,#c9a44e 0%,#a8843a 100%)' }}>
+                            כן, להעביר
+                        </button>
+                        <button onClick={() => setPhase('idle')} className='px-4 py-2 rounded-lg text-sm font-semibold text-[#7a6a52] bg-white border border-[#ead9b3]'>
+                            ביטול
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <button
+                    onClick={() => setPhase('confirm')}
+                    disabled={!valid || phase === 'busy' || next === current.toLowerCase()}
+                    className='mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all'
+                    style={{ background: 'linear-gradient(180deg,#c9a44e 0%,#a8843a 100%)' }}
+                >
+                    {phase === 'busy' ? <Loader2 size={15} className='animate-spin' /> : <UserPlus size={15} />}
+                    העבר את האירוע למייל הזה
+                </button>
+            )}
+
+            {phase === 'done' && result && (
+                <div className='mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-[12.5px] text-emerald-800 leading-relaxed'>
+                    <b>האירוע עבר ל-<span dir='ltr'>{result.ownerEmail}</span>.</b>{' '}
+                    {result.isNewUser ? 'נפתח לו חשבון חדש.' : 'הוא כבר היה רשום — האירוע נוסף לחשבון שלו.'}{' '}
+                    {result.emailSent
+                        ? (result.isNewUser ? 'נשלח אליו מייל עם סיסמה.' : 'נשלח אליו מייל שהאירוע מחכה לו.')
+                        : notify
+                            ? 'המייל לא נשלח — אפשר לשלוח לו "איפוס סיסמה" מלמטה.'
+                            : (result.isNewUser ? 'לא נשלח מייל — שלח לו "איפוס סיסמה" מלמטה כדי שיקבל סיסמה.' : 'לא נשלח מייל.')}
+                </div>
+            )}
+            {phase === 'error' && (
+                <div className='mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-[12.5px] text-red-700'>{error}</div>
+            )}
+        </div>
+    )
+}
+
+function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onCheckLuluStatus, onSaveEdit, onOwnerChanged }) {
     // ── Analytics state — funnel + recent scans pulled from
     //    /api/admin/wedding-stats. Loads fresh whenever the panel
     //    swaps to a different wedding. Hooks must be declared BEFORE
@@ -2352,6 +2471,9 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                     )}
                 </div>
             </div>
+
+            {/* ── Owner — who logs in to this event ── */}
+            <OwnerTransferPanel wedding={wedding} onOwnerChanged={onOwnerChanged} />
 
             {/* ── QR code ──
                 Mint a dynamic QR for this event, colour it, download
@@ -2959,6 +3081,10 @@ function AdminDashboardContent() {
                             onResetPassword={handleResetPassword}
                             onCheckLuluStatus={handleCheckLuluStatus}
                             onSaveEdit={handleSaveEdit}
+                            onOwnerChanged={(id, fields) => {
+                                setWeddings(prev => prev.map(w => (w.id === id ? { ...w, ...fields } : w)))
+                                setSelectedWedding(prev => (prev && prev.id === id ? { ...prev, ...fields } : prev))
+                            }}
                         />
                     </>
                 )}
