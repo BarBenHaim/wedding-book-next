@@ -106,7 +106,29 @@
     "submit": "Entrar",
     "rememberMe": "Recordarme en este dispositivo (1 semana)",
     "errorPrefix": "Error de inicio de sesión: ",
-    "helpText": "Tus credenciales se enviaron a tu correo después de la compra"
+    "helpText": "Tus datos de acceso se enviaron por correo tras la compra. ¿Sin contraseña? Pulsa \"No tengo contraseña\" y elige una.",
+    "googleButton": "Continuar con Google",
+    "or": "o con correo y contraseña",
+    "forgotLink": "No tengo contraseña / la olvidé",
+    "resetTitle": "Elegir contraseña",
+    "resetSubtitle": "Te enviaremos un enlace por correo para que elijas tu contraseña.",
+    "resetSubmit": "Enviarme un enlace",
+    "resetSending": "Enviando...",
+    "resetSent": "Si este correo está registrado, te enviamos un enlace para elegir contraseña. Revisa también la carpeta de spam.",
+    "backToLogin": "Volver a iniciar sesión",
+    "noEvent": "No encontramos un libro vinculado a {email}. Inicia sesión con el correo con el que se abrió el libro, o escríbenos por WhatsApp."
+  },
+  "setPassword": {
+    "title": "Elegir contraseña",
+    "subtitle": "Para {email}",
+    "checking": "Comprobando el enlace...",
+    "passwordLabel": "Nueva contraseña",
+    "confirmLabel": "Otra vez, para confirmar",
+    "submit": "Guardar y entrar",
+    "submitting": "Guardando...",
+    "invalid": "Este enlace caducó o ya se usó.",
+    "requestNew": "Obtener un enlace nuevo",
+    "done": "Contraseña guardada. Te llevamos a tu libro..."
   },
   "portal": {
     "logoAlt": "Wedding Tales",

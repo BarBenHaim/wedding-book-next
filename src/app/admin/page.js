@@ -2328,8 +2328,8 @@ function OwnerTransferPanel({ wedding, onOwnerChanged }) {
                     {result.emailSent
                         ? (result.isNewUser ? 'נשלח אליו מייל עם סיסמה.' : 'נשלח אליו מייל שהאירוע מחכה לו.')
                         : notify
-                            ? 'המייל לא נשלח — אפשר לשלוח לו "איפוס סיסמה" מלמטה.'
-                            : (result.isNewUser ? 'לא נשלח מייל — שלח לו "איפוס סיסמה" מלמטה כדי שיקבל סיסמה.' : 'לא נשלח מייל.')}
+                            ? 'המייל לא נשלח — אפשר לשלוח לו "קישור לבחירת סיסמה" מלמטה.'
+                            : (result.isNewUser ? 'לא נשלח מייל — שלח לו "קישור לבחירת סיסמה" מלמטה כדי שיבחר סיסמה.' : 'לא נשלח מייל.')}
                 </div>
             )}
             {phase === 'error' && (
@@ -2806,7 +2806,7 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
                 {wedding.ownerEmail && (
                     <button onClick={() => onResetPassword(wedding.ownerEmail)}
                         className='w-full flex items-center gap-3 p-3 rounded-xl bg-[#AA8840]/5 border border-[#AA8840]/15 hover:bg-[#AA8840]/10 transition-all text-sm font-semibold text-[#AA8840]'>
-                        <KeyRound size={16} /> שלח איפוס סיסמה ל-{wedding.ownerEmail}
+                        <KeyRound size={16} /> שלח קישור לבחירת סיסמה ל-{wedding.ownerEmail}
                     </button>
                 )}
                 <button onClick={() => onDelete(wedding)}
@@ -2934,15 +2934,15 @@ function AdminDashboardContent() {
     function handleResetPassword(email) {
         setModal({
             title: 'איפוס סיסמה',
-            message: `סיסמה חדשה תיווצר ותישלח למייל ${email}. האם להמשיך?`,
-            confirmLabel: 'שלח סיסמה חדשה',
+            message: `יישלח ל-${email} קישור שבו הלקוח יבחר סיסמה בעצמו. הסיסמה הנוכחית ממשיכה לעבוד עד שיבחר חדשה. להמשיך?`,
+            confirmLabel: 'שלח קישור לבחירת סיסמה',
             danger: false,
             onConfirm: async () => {
                 setModal(null)
                 setActionLoading(true)
                 try {
                     await resetPassword(email)
-                    setToast({ message: `סיסמה חדשה נשלחה ל-${email}`, type: 'success' })
+                    setToast({ message: `קישור לבחירת סיסמה נשלח ל-${email}`, type: 'success' })
                 } catch (err) {
                     setToast({ message: `שגיאה: ${err.message}`, type: 'error' })
                 } finally {

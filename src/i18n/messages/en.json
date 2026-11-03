@@ -128,7 +128,29 @@
     "submit": "Sign in",
     "rememberMe": "Remember me on this device (1 week)",
     "errorPrefix": "Sign-in error: ",
-    "helpText": "Your sign-in credentials were sent to your email after purchase"
+    "helpText": "Your sign-in details were emailed after purchase. No password? Tap \"No password\" and choose one yourself.",
+    "googleButton": "Continue with Google",
+    "or": "or with email and password",
+    "forgotLink": "No password / forgot it",
+    "resetTitle": "Choose a password",
+    "resetSubtitle": "We'll email you a link where you choose your own password.",
+    "resetSubmit": "Send me a link",
+    "resetSending": "Sending...",
+    "resetSent": "If this email is registered with us, a link to choose a password is on its way. Check your spam folder too.",
+    "backToLogin": "Back to sign in",
+    "noEvent": "We couldn't find a book linked to {email}. Sign in with the email the book was opened with, or message us on WhatsApp."
+  },
+  "setPassword": {
+    "title": "Choose a password",
+    "subtitle": "For {email}",
+    "checking": "Checking the link...",
+    "passwordLabel": "New password",
+    "confirmLabel": "Again, to confirm",
+    "submit": "Save and sign in",
+    "submitting": "Saving...",
+    "invalid": "This link has expired or was already used.",
+    "requestNew": "Get a new link",
+    "done": "Password saved. Taking you to your book..."
   },
   "photo": {
     "pageTitleWedding": "Leave a greeting for the couple",
