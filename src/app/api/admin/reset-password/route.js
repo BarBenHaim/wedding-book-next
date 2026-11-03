@@ -1,13 +1,26 @@
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
+// /api/admin/reset-password — super-admin sends a customer a link to
+// CHOOSE their own password (POST { email }).
+//
+// It used to overwrite the password with a random one and email that.
+// Now it emails the same set-password link the login page's "אין לי
+// סיסמה" button sends (src/lib/passwordLink.js): the current password
+// keeps working until the customer picks a new one, and they end up
+// with a password they will remember.
+
 import { NextResponse } from 'next/server'
-import { adminAuth } from '@/lib/firebaseAdmin'
 import nodemailer from 'nodemailer'
+import { adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
+import { oobCodeFromLink, setPasswordUrl, setPasswordEmail } from '@/lib/passwordLink'
+
+function originOf(req) {
+    return process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || new URL(req.url).origin
+}
 
 export async function POST(req) {
-    // Auth check
     const authHeader = req.headers.get('authorization')
     if (!authHeader?.startsWith('Bearer ')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -24,45 +37,24 @@ export async function POST(req) {
     try {
         const { email } = await req.json()
         if (!email) return NextResponse.json({ error: 'Missing email' }, { status: 400 })
+        const clean = String(email).trim().toLowerCase()
 
-        // Generate new random password
-        const newPassword = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-2)
+        await adminAuth.getUserByEmail(clean) // 'User not found' below if missing
+        const code = oobCodeFromLink(await adminAuth.generatePasswordResetLink(clean))
+        if (!code) throw new Error('no oobCode in reset link')
+        const { subject, html } = setPasswordEmail({ email: clean, url: setPasswordUrl(originOf(req), code), sentByUs: true })
 
-        // Get user by email and update password
-        const userRecord = await adminAuth.getUserByEmail(email)
-        await adminAuth.updateUser(userRecord.uid, { password: newPassword })
-
-        // Send email with new password
         const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS },
         })
+        await transporter.sendMail({ from: `"Wedding Tales" <${process.env.MAIL_USER}>`, to: clean, subject, html })
 
-        await transporter.sendMail({
-            from: `"Wedding Tales" <${process.env.MAIL_USER}>`,
-            to: email,
-            subject: 'הסיסמה שלך עודכנה - Wedding Tales',
-            html: `
-            <div style="font-family:Heebo,sans-serif;direction:rtl;text-align:right;padding:20px">
-                <h2>הסיסמה שלך אופסה</h2>
-                <p>הסיסמה החדשה שלך:</p>
-                <div style="background:#f5f5f5;padding:15px;border-radius:10px;font-size:18px;font-weight:bold;letter-spacing:1px;direction:ltr;text-align:center">
-                    ${newPassword}
-                </div>
-                <p style="margin-top:15px">
-                    <a href="https://app.weddingtales.co.il/login" style="color:#AA8840;font-weight:bold">לחצו כאן להתחברות</a>
-                </p>
-                <hr style="margin:25px 0;border:none;border-top:1px solid #eee"/>
-                <p style="color:#999;font-size:12px">באהבה, צוות Wedding Tales</p>
-            </div>
-            `,
-        })
-
-        console.log(`🔑 Password reset for ${email} by super admin`)
+        console.log(`🔑 Set-password link sent to ${clean} by super admin`)
         return NextResponse.json({ success: true })
     } catch (err) {
         console.error('[admin/reset-password] Error:', err)
-        const msg = err.code === 'auth/user-not-found' ? 'User not found' : 'Failed to reset password'
+        const msg = err.code === 'auth/user-not-found' ? 'אין חשבון למייל הזה — העבר אליו את האירוע ב"בעלים של האירוע"' : 'Failed to send link'
         return NextResponse.json({ error: msg }, { status: 500 })
     }
 }
