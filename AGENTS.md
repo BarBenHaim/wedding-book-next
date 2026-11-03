@@ -518,6 +518,36 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 3.11 (later) — customers pick their own password, or use Google
+
+Lord: an easy way for people who already have a book to log in — choose
+their own password, or sign in with Gmail.
+
+- /login: "אין לי סיסמה / שכחתי" → email → POST /api/auth/password-link.
+  The route answers the same whether the address exists (no account
+  enumeration), throttles to one email per address per minute
+  (`auth_link_requests/{sha256}`, closed by the catch-all deny), and mails
+  OUR link: `generatePasswordResetLink` → oobCode → `/set-password?code=`.
+- /set-password: verifies the code, two password fields (min 6, Firebase's
+  floor), confirmPasswordReset, signs in with it, goes to the book.
+  Expired/used code → "get a new link" → /login?mode=reset.
+- /admin "שלח איפוס סיסמה" now sends that same link (`sentByUs` copy)
+  instead of overwriting the password with a random one.
+- "המשך עם Google": signInWithPopup. Shown only when GET
+  /api/auth/providers says Google is enabled AND the host is an authorized
+  domain (Identity Toolkit admin API with the service account; null when
+  it can't tell → shown, errors handled). Needs Lord to enable Google in
+  the Firebase console — code can't do that. Same-email accounts: Firebase
+  links Google into the existing password account for gmail.com (same uid,
+  so ownerId still matches); other domains get
+  account-exists-with-different-credential → Hebrew "use your password".
+- Shared `afterSignIn()` (cookie, remember-me, routing). An account that
+  owns no event now gets "we found no book for X" and is signed out,
+  instead of landing on /wedding/<uid>/portal (an event that isn't there).
+- Login errors are Hebrew (`authErrorMessage`) instead of raw Firebase text.
+- Rendered in Chromium with mocked auth: login, reset request, set-password
+  validation, invalid link. Real Firebase not exercised here.
+
 ### 3.11 — moving an event to another email (super-admin)
 
 Lord: "change the email the event belongs to, even if I opened it in
