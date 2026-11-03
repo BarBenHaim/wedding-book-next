@@ -518,6 +518,29 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 3.11 — moving an event to another email (super-admin)
+
+Lord: "change the email the event belongs to, even if I opened it in
+someone else's name".
+
+- The trap: who can open an event is `ownerId` (Auth uid) — /login, /my
+  and firestore.rules all check it. The edit form's "אימייל הלקוח" field
+  only rewrote `ownerEmail`, the label, so the table showed the new
+  address while the event stayed in the old account.
+- Now: /admin → event → "בעלים של האירוע" (OwnerTransferPanel) →
+  POST /api/admin/transfer-owner. Finds the Auth user for the email or
+  creates one (random password, like create-user), writes ownerId +
+  ownerEmail + ownerChangedAt, appends the old owner to `previousOwners`,
+  and optionally emails the new owner (password for a new account, "added
+  to your account" otherwise). Old account untouched, just loses the event.
+- "Already this owner" is judged by uid, not email, so events whose label
+  was hand-edited the old way can still be moved properly.
+- The edit form shows the email read-only and no longer PATCHes it — a
+  stale draft saved after a transfer would have written the old address
+  back. The PATCH API still accepts ownerEmail for other callers.
+- Helpers + tests: src/lib/ownerTransfer.js, tests/ownerTransfer.test.js.
+  The route and panel were not exercised against real Firebase here.
+
 ### 28.10 — twins bar mitzvah: guests pick which boy they bless
 
 Lord: a new event type for twins, where the QR landing offers
