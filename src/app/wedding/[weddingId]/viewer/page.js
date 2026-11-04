@@ -352,11 +352,25 @@ function BookViewerInner({ onLocaleDiscovered }) {
         init()
     }, [weddingId])
 
+    // Phone + super-admin + cover mode: the cover editor panel takes the
+    // lower part of the screen, so the cover itself must fit above it.
+    // A ref, so calculateBookSize keeps one identity (resize listener).
+    const mobileCoverEditRef = useRef(false)
+    // The super-admin's phone also shows the ספר/כריכה switch (~52 px).
+    const mobileSwitchRef = useRef(false)
     const calculateBookSize = useCallback(() => {
         const w = window.innerWidth
         const h = window.innerHeight
         const mobile = w < 1024
         setIsMobile(mobile)
+
+        if (mobile && mobileCoverEditRef.current) {
+            // 64 header + 52 switch + the editor panel (MOBILE_COVER_PANEL_VH)
+            // + ~32 breathing room.
+            const room = h - 64 - 52 - Math.round(h * MOBILE_COVER_PANEL_VH / 100) - 32
+            setViewerSize(Math.floor(Math.max(Math.min(w - 32, room), 180)))
+            return
+        }
 
         // Vertical budget on mobile:
         //   • 64 px global header
@@ -369,7 +383,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
         // for the right-rail design panel.
         const SIDEBAR_W = 380
         const availableWidth = mobile ? w - 20 : w - SIDEBAR_W - 60
-        const availableHeight = mobile ? h - 184 : h - 160
+        const availableHeight = mobile ? h - 184 - (mobileSwitchRef.current ? 52 : 0) : h - 160
 
         const optimalSize =
             mobile ? Math.min(availableWidth, availableHeight) : Math.min(availableWidth / 2, availableHeight)
@@ -382,6 +396,14 @@ function BookViewerInner({ onLocaleDiscovered }) {
         window.addEventListener('resize', calculateBookSize)
         return () => window.removeEventListener('resize', calculateBookSize)
     }, [calculateBookSize])
+
+    // Re-fit when the phone switches between the book and the cover.
+    const mobileCoverEdit = isMobile && isAdmin && mode === 'cover'
+    useEffect(() => {
+        mobileCoverEditRef.current = mobileCoverEdit
+        mobileSwitchRef.current = isAdmin
+        calculateBookSize()
+    }, [mobileCoverEdit, isAdmin, calculateBookSize])
 
     // ── Debounced Firestore save ─────────────────────────────────────────────
     // Firestore rejects: undefined, NaN, Infinity, functions, class instances,
@@ -801,7 +823,13 @@ function BookViewerInner({ onLocaleDiscovered }) {
                     a button. Hidden on desktop where the right-rail
                     DesignControls already exposes the gallery in the
                     Card. */}
-                {isMobile && (
+                {/* MOBILE — ספר / כריכה switch (super-admin). The cover
+                    editor used to live only in the desktop rail, so on a
+                    phone there was no way to set a cover at all. */}
+                {isMobile && isAdmin && (
+                    <MobileModeSwitch mode={mode} onModeChange={setMode} />
+                )}
+                {isMobile && mode === 'book' && (
                     <MobilePresetStrip
                         styleSettings={styleSettings}
                         onApply={vals => handleStyleChange(vals)}
@@ -884,6 +912,10 @@ function BookViewerInner({ onLocaleDiscovered }) {
                     >
                         {mode === 'cover' ? (
                             <HTMLFlipBook
+                                // react-pageflip reads its size once, at
+                                // mount — remount when the phone shrinks
+                                // the cover to make room for the editor.
+                                key={`cover-${viewerSize}`}
                                 width={viewerSize}
                                 height={viewerSize}
                                 size='fixed'
@@ -1180,6 +1212,30 @@ function BookViewerInner({ onLocaleDiscovered }) {
                         </div>
                     )}
                 </main>
+
+                {/* MOBILE — the cover editor (title, photo, position,
+                    background), docked under the cover so every change
+                    shows on it right away. Same DesignControls as the
+                    desktop rail, cover mode, tabs hidden (the switch
+                    above is the tabs). */}
+                {mobileCoverEdit && (
+                    <div
+                        className='lg:hidden shrink-0 w-full border-t border-[#ead9b3] bg-[#faf8f5] overflow-hidden'
+                        style={{ height: `${MOBILE_COVER_PANEL_VH}dvh`, paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+                    >
+                        <DesignControls
+                            settings={coverStyleSettings}
+                            onChange={handleStyleChange}
+                            mode='cover'
+                            onModeChange={setMode}
+                            saveStatus={saveStatus}
+                            weddingId={weddingId}
+                            locale={locale}
+                            eventType={weddingDoc?.eventType}
+                            hideModeTabs
+                        />
+                    </div>
+                )}
             </div>
 
             {/* --- Print Order Modal --- */}
@@ -1400,6 +1456,38 @@ function BookViewerInner({ onLocaleDiscovered }) {
                 </div>
             )}
         </AdminPageWrapper>
+    )
+}
+
+// Share of the phone screen the cover editor takes (the cover sits above).
+const MOBILE_COVER_PANEL_VH = 46
+
+// ── Mobile ספר / כריכה switch ───────────────────────────────────────
+// The phone has no side rail, so this is the only way into cover mode.
+function MobileModeSwitch({ mode, onModeChange }) {
+    const tabs = [
+        { id: 'book', label: 'עיצוב הספר' },
+        { id: 'cover', label: 'כריכה' },
+    ]
+    return (
+        <div className='lg:hidden shrink-0 w-full bg-white/85 backdrop-blur-md border-b border-[#ead9b3] px-3 py-2'>
+            <div className='bg-[#ebe5da]/60 p-1 rounded-xl flex gap-1 shadow-inner' role='tablist'>
+                {tabs.map(tab => (
+                    <button
+                        key={tab.id}
+                        type='button'
+                        role='tab'
+                        aria-selected={mode === tab.id}
+                        onClick={() => onModeChange(tab.id)}
+                        className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${
+                            mode === tab.id ? 'bg-white text-[#AA8840] shadow-sm' : 'text-gray-500'
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+        </div>
     )
 }
 
