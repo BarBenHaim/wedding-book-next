@@ -518,6 +518,28 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 4.11 — setting the cover from a phone
+
+Lord: on the phone there was no way to put a cover on the book.
+
+- Cause: the cover editor (DesignControls, cover mode) lives only in the
+  desktop rail of /wedding/[id]/viewer, which is `hidden lg:flex`. The
+  phone only had the interior preset strip.
+- Now, phone + super-admin: a "עיצוב הספר / כריכה" switch
+  (MobileModeSwitch) under the header. Cover → the preset strip hides, the
+  cover shrinks to fit, and the same DesignControls in cover mode docks
+  under it (MOBILE_COVER_PANEL_VH = 46, `hideModeTabs`). Title, subtitle,
+  text position, photo upload (the phone's picker/camera), position, zoom,
+  background — all saved through the same handleStyleChange → coverDesign.
+- Same audience as desktop: the cover tabs were already super-admin only.
+- Fixed on the way: PositionPad's touchmove listener was an inline arrow
+  that was never removed, so on a phone the cover photo kept following
+  every later touch on the page. Named handler + touchcancel now.
+- The cover HTMLFlipBook is keyed on its size (react-pageflip reads size
+  only at mount) so it re-fits when the editor opens.
+- Checked at 390×844 with touch, mocked admin + event: switch, editor,
+  typing a title updates the cover live.
+
 ### 3.11 (later) — customers pick their own password, or use Google
 
 Lord: an easy way for people who already have a book to log in — choose
