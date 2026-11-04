@@ -151,17 +151,27 @@ const PositionPad = ({ x, y, onChange, t }) => {
 
         const onMouseMove = e => handleMove(e.clientX, e.clientY)
         const onMouseUp = () => setIsDragging(false)
+        // Named, so the cleanup actually removes it. It used to be an
+        // inline arrow that was never removed: on a phone, after the
+        // first drag every later touchmove anywhere on the page kept
+        // moving the cover photo.
+        const onTouchMove = e => {
+            const touch = e.touches?.[0]
+            if (touch) handleMove(touch.clientX, touch.clientY)
+        }
 
         window.addEventListener('mousemove', onMouseMove)
         window.addEventListener('mouseup', onMouseUp)
-        window.addEventListener('touchmove', e => handleMove(e.touches[0].clientX, e.touches[0].clientY))
+        window.addEventListener('touchmove', onTouchMove)
         window.addEventListener('touchend', onMouseUp)
+        window.addEventListener('touchcancel', onMouseUp)
 
         return () => {
             window.removeEventListener('mousemove', onMouseMove)
             window.removeEventListener('mouseup', onMouseUp)
-            window.removeEventListener('touchmove', () => {})
-            window.removeEventListener('touchend', () => {})
+            window.removeEventListener('touchmove', onTouchMove)
+            window.removeEventListener('touchend', onMouseUp)
+            window.removeEventListener('touchcancel', onMouseUp)
         }
     }, [isDragging])
 
@@ -224,6 +234,9 @@ export default function DesignControls({
     // in viewer/defaultStyle.js.
     noPhotoCrop = false,
     onNoPhotoCropChange = null,
+    // The mobile viewer draws its own ספר/כריכה switch above the book,
+    // so the panel's own tabs would be a second copy of it.
+    hideModeTabs = false,
 }) {
     const [activePreset, setActivePreset] = useState(null)
     const [uploadingCover, setUploadingCover] = useState(false)
@@ -457,7 +470,7 @@ export default function DesignControls({
                 experience is "pick a preset, you're done." Hiding
                 the tab also implicitly forces them onto book mode
                 (the only render branch they ever see below). */}
-            {isAdmin && (
+            {isAdmin && !hideModeTabs && (
                 <div className='bg-[#ebe5da]/60 p-1 rounded-xl flex gap-1 shadow-inner shrink-0'>
                     <button
                         onClick={() => onModeChange('book')}
