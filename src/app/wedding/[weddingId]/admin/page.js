@@ -4,8 +4,7 @@ import { useEffect, useState, useRef, useMemo } from 'react'
 import { getEntries } from '../../../../lib/classifyMedia'
 import { useParams } from 'next/navigation'
 import { doc, getDoc, updateDoc, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore'
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage, auth } from '../../../../lib/firebaseClient'
+import { db, auth } from '../../../../lib/firebaseClient'
 import { onAuthStateChanged, getIdToken } from 'firebase/auth'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { isBlankPage, withoutBlankPages, blankPagePhoto, moveToIndex } from '@/lib/entryKinds'
@@ -17,6 +16,7 @@ import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import EntryPhoto from '@/components/EntryPhoto/EntryPhoto'
 import useImageAspect from '@/lib/useImageAspect'
 import { thumbUrl, fallBackToOriginal } from '@/lib/imgProxy'
+import { uploadEventImage } from '@/lib/uploadEventImage'
 import { buildPageIndex, pageLabel } from '@/lib/bookPageIndex'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
 import { Heebo } from 'next/font/google'
@@ -598,9 +598,7 @@ export default function AdminDashboard() {
                     bmp.close?.()
                 } catch { /* aspect stays null → uniform behavior */ }
                 const filename = `album-${Date.now()}-${i}.jpg`
-                const photoRef = storageRef(storage, `weddings/${weddingId}/${filename}`)
-                await uploadBytes(photoRef, compressed)
-                const imageUrl = await getDownloadURL(photoRef)
+                const imageUrl = await uploadEventImage({ weddingId, filename, blob: compressed })
                 const docData = {
                     name: '',
                     text: null,
@@ -636,9 +634,9 @@ export default function AdminDashboard() {
         setUploadingImageId(entryId)
         try {
             const filename = `photo-${Date.now()}.jpg`
-            const photoRef = storageRef(storage, `weddings/${weddingId}/${filename}`)
-            await uploadBytes(photoRef, file)
-            const newUrl = await getDownloadURL(photoRef)
+            // Straight to Storage when the browser can reach it, through
+            // our own domain when it cannot (lib/uploadEventImage.js).
+            const newUrl = await uploadEventImage({ weddingId, filename, blob: file })
 
             // Aspect twin — keeps the smart/no-crop album layouts accurate
             // for photos replaced here too.
