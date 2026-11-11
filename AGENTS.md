@@ -776,6 +776,20 @@ and a demo form that sends nothing.
   that did not carry one. Step 3 now shows the sharp bar-mitzvah page he
   sent (`page-hanoch`), which is the same page that appears printed in the
   open-book photo further down.
+- 11.11, evening: Lord asked for more character and three removals.
+  Removed: the "לאיזה אירוע" list that led to the old event pages (those
+  links stay only in the footer), the event links in the phone menu, the
+  photograph above the footer, and the dark boards around the flip book.
+  Hero is now a pile of five real covers that take turns (`[data-deck]`).
+  It follows the same rule as the flip book: one number (which book is in
+  front), every book placed from it in draw(). It advances by itself until
+  the visitor touches it, then stops.
+  The flip book moved into "לכל אחד עמוד משלו" on the ink background, and
+  loads its inner pages only when it is about a screen away.
+  Character: two ballpoint underlines (hero, closing), a slow band of event
+  names under the hero, a little paper grain, and a real handwritten
+  blessing before the last line. Pen blue is still only for things you
+  press, real handwriting, and those pen marks.
 
 ### 4.11 — setting the cover from a phone
 

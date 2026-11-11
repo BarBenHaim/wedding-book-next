@@ -40,6 +40,91 @@
   function landed(el) { el.classList.add('is-in'); if (gsap) gsap.set(el, { clearProps: 'transform,opacity,visibility,clipPath' }); }
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
 
+  /* ── hero: real books take turns ──
+     Same idea as the flip book below: one number, k, says which book is in front (it may be 2.4 on the way
+     from the third to the second). Every book's place is computed from k, so nothing can end up half way. */
+  $$('[data-deck]').forEach(function (deck) {
+    var stack = $('.deck__stack', deck), items = $$('.dk', deck), n = items.length;
+    if (n < 3) return;
+    var who = $('.deck__who', deck), pos = $('.book-nav__pos', deck);
+    var st = { k: 0 }, target = 0, tw = null, manual = false, hover = false, seen = true, shown = 0;
+    var FRONT = { x: 0, y: 0, r: -2.5, s: 1, o: 1 }, HID = { x: 0, y: 6, r: 0, s: .7, o: 0 }, ASIDE = { x: 70, y: -10, r: 16, s: .95, o: 1 };
+    var keys = [[0, FRONT], [1, { x: -31, y: -5, r: -10, s: .86, o: 1 }], [2, { x: 31, y: 4, r: 8, s: .8, o: 1 }]];
+    for (var h = 3; h < n; h++) keys.push([h, HID]);
+    keys.push([n - .5, ASIDE], [n, FRONT]);        // the book that leaves the front steps aside, then goes under the pile
+    function at(u) {
+      for (var i = 0; i < keys.length - 1; i++) {
+        var a = keys[i], b = keys[i + 1];
+        if (u >= a[0] && u <= b[0]) {
+          var f = (u - a[0]) / (b[0] - a[0] || 1), out = {};
+          for (var key in a[1]) out[key] = a[1][key] + (b[1][key] - a[1][key]) * f;
+          return out;
+        }
+      }
+      return FRONT;
+    }
+    function draw() {
+      items.forEach(function (el, i) {
+        var u = (((i - st.k) % n) + n) % n, q = at(u);
+        el.style.transform = 'translate(' + q.x.toFixed(2) + '%,' + q.y.toFixed(2) + '%) rotate(' + q.r.toFixed(2) + 'deg) scale(' + q.s.toFixed(3) + ')';
+        el.style.opacity = q.o.toFixed(3);
+        el.style.zIndex = u > n - .5 ? 300 : (u > n - 1 ? 1 : 200 - Math.round(u * 20));
+        el.style.pointerEvents = q.o < .5 ? 'none' : '';
+      });
+    }
+    function label() {
+      var i = ((target % n) + n) % n;
+      if (pos) pos.textContent = (i + 1) + ' מתוך ' + n;
+      box_q(i);
+      if (i === shown) return;
+      shown = i;
+      var el = items[i], put = function () { who.innerHTML = '<b>הספר של ' + el.getAttribute('data-who') + '</b><span>' + el.getAttribute('data-kind') + '</span>'; };
+      if (!who) return;
+      if (!motion) { put(); return; }
+      gsap.killTweensOf(who);
+      gsap.to(who, { opacity: 0, y: 5, duration: .16, ease: 'power1.in', onComplete: function () { put(); gsap.fromTo(who, { opacity: 0, y: -5 }, { opacity: 1, y: 0, duration: .4, ease: 'power2.out' }); } });
+    }
+    function box_q(i) { deck.style.setProperty('--q', ((i + 1) / n).toFixed(4)); }
+    function go(to) {
+      var busy = !!tw;
+      if (tw) { tw.kill(); tw = null; }
+      target = to; label();
+      if (!motion) { st.k = to; draw(); return; }
+      var dist = Math.abs(to - st.k);
+      tw = gsap.to(st, { k: to, duration: clamp(.95 * Math.pow(dist, .7), .5, 1.6), ease: busy ? 'power2.out' : 'power3.inOut', onUpdate: draw, onComplete: function () { tw = null; st.k = to; draw(); } });
+    }
+    draw(); label();
+    var warm = function () { $$('img[loading="lazy"]', deck).forEach(function (im) { im.loading = 'eager'; }); };
+    if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 900 }); else setTimeout(warm, 500);
+
+    var next = $('[data-deck-next]', deck), prev = $('[data-deck-prev]', deck);
+    if (next) next.addEventListener('click', function () { manual = true; go(target + 1); });
+    if (prev) prev.addEventListener('click', function () { manual = true; go(target - 1); });
+    deck.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft') { manual = true; go(target + 1); e.preventDefault(); }
+      if (e.key === 'ArrowRight') { manual = true; go(target - 1); e.preventDefault(); }
+    });
+    var sx = null, sy = 0, swiped = false;
+    stack.addEventListener('pointerdown', function (e) { sx = e.clientX; sy = e.clientY; });
+    stack.addEventListener('pointerup', function (e) {
+      if (sx === null) return;
+      var dx = e.clientX - sx, dy = e.clientY - sy; sx = null;
+      if (Math.abs(dx) > 36 && Math.abs(dx) > Math.abs(dy) * 1.3) { swiped = true; setTimeout(function () { swiped = false; }, 80); manual = true; go(target + (dx > 0 ? 1 : -1)); }
+    });
+    stack.addEventListener('pointercancel', function () { sx = null; });
+    items.forEach(function (el, i) {
+      el.addEventListener('click', function () {
+        if (swiped) return;
+        var u = (((i - target) % n) + n) % n;
+        manual = true; go(target + (u === 0 ? 1 : u));      // the front book hands over; a book behind comes forward
+      });
+    });
+    deck.addEventListener('pointerenter', function () { hover = true; });
+    deck.addEventListener('pointerleave', function () { hover = false; });
+    if ('IntersectionObserver' in window) new IntersectionObserver(function (en) { seen = en[0].isIntersecting; }, { threshold: .35 }).observe(stack);
+    if (motion) setInterval(function () { if (!manual && !hover && seen && !d.hidden && !tw) go(target + 1); }, 3800);
+  });
+
   /* ── the book ──
      One number, p, says how far the book is turned: 0 is closed, 1 is the first spread, and so on.
      Everything on screen is drawn from p and nothing else, so a click, a drag, a second click halfway
@@ -141,9 +226,13 @@
     function spineX() { var r = book.getBoundingClientRect(); return target === 0 ? r.right + 1 : r.left + r.width / 2; }
 
     draw(); label();
-    // Pages further in are lazy; fetch them as soon as the page is idle so a turn never shows a blank leaf.
+    // Pages further in are lazy; fetch them when the book is about a screen away, so a turn never shows a blank leaf
+    // and a visitor who never scrolls this far does not pay for them.
     var warm = function () { $$('img[loading="lazy"]', book).forEach(function (im) { im.loading = 'eager'; }); };
-    if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 900 }); else setTimeout(warm, 500);
+    if ('IntersectionObserver' in window) {
+      var near = new IntersectionObserver(function (en) { if (en[0].isIntersecting) { near.disconnect(); warm(); } }, { rootMargin: '900px 0px' });
+      near.observe(holder);
+    } else setTimeout(warm, 1500);
     window.addEventListener('resize', function () { last = []; draw(); });
 
     if (next) next.addEventListener('click', function () { touched = true; turn(target + 1); });
@@ -215,6 +304,9 @@
     $$('.hero .ln').forEach(function (ln, i) {
       gsap.fromTo(ln.firstElementChild, { yPercent: 112, y: 0 }, { yPercent: 0, y: 0, duration: 1.05, ease: 'power4.out', delay: .1 + i * .11, onComplete: function () { landed(ln); gsap.set(ln.firstElementChild, { clearProps: 'transform' }); } });
     });
+    $$('.hero [data-write]').forEach(function (w) {
+      gsap.fromTo(w, { clipPath: 'inset(-40% 0% -40% 100%)' }, { clipPath: 'inset(-40% 0% -40% 0%)', duration: .8, ease: 'power2.inOut', delay: 1.05, onComplete: function () { landed(w); } });
+    });
     $$('.hero [data-in]').forEach(function (el, i) {
       gsap.fromTo(el, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: .8, ease: 'power3.out', delay: i === 0 ? 0 : .38 + i * .07, onComplete: function () { landed(el); } });
     });
@@ -236,6 +328,9 @@
         ST.create({ trigger: h, start: 'top 86%', once: true, onEnter: function () {
           $$('.ln', h).forEach(function (ln, i) {
             gsap.fromTo(ln.firstElementChild, { yPercent: 112, y: 0 }, { yPercent: 0, y: 0, duration: 1.05, ease: 'power4.out', delay: i * .11, onComplete: function () { landed(ln); gsap.set(ln.firstElementChild, { clearProps: 'transform' }); } });
+          });
+          $$('[data-write]', h).forEach(function (w) {
+            gsap.fromTo(w, { clipPath: 'inset(-40% 0% -40% 100%)' }, { clipPath: 'inset(-40% 0% -40% 0%)', duration: .8, ease: 'power2.inOut', delay: .95, onComplete: function () { landed(w); } });
           });
         } });
       });
@@ -262,6 +357,12 @@
       };
       paint();
       gsap.to(s, { f: 1, ease: 'none', onUpdate: paint, scrollTrigger: { trigger: wrap, start: 'top 82%', end: 'bottom 58%', scrub: .5 } });
+    });
+    /* the band of event names moves slowly, and only while it is on screen */
+    $$('[data-band]').forEach(function (band) {
+      var track = $('.band__track', band); if (!track) return;
+      var run = gsap.fromTo(track, { xPercent: 0 }, { xPercent: 50, duration: 46, ease: 'none', repeat: -1, paused: true });
+      ST.create({ trigger: band, start: 'top bottom', end: 'bottom top', onToggle: function (self) { if (self.isActive) run.play(); else run.pause(); } });
     });
     /* large photographs drift a little inside their frame */
     $$('[data-drift]').forEach(function (fr) {
