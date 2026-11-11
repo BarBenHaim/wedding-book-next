@@ -11,7 +11,11 @@ const nextConfig = {
     // דף הנחיתה לבר מצווה — קובץ סטטי עצמאי ב-public/lp.html.
     // ה-rewrite נותן לו כתובת נקייה: app.weddingtales.co.il/lp
     async rewrites() {
-        return [{ source: '/lp', destination: '/lp.html' }];
+        return [
+            { source: '/lp', destination: '/lp.html' },
+            // תצוגה מקדימה של דף הבית החדש של weddingtales.co.il — קבצים סטטיים ב-public/site.
+            { source: '/site', destination: '/site/index.html' },
+        ];
     },
     // /_next/image optimizer — the MOBILE APP routes guest photos through
     // it (see wedding-tales-mobile src/lib/img.ts) so 4MB uploads arrive
