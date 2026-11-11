@@ -58,12 +58,12 @@ function coverFace(w) {
     if (!/^https?:\/\//i.test(abs)) return null
     return abs.includes('/api/book-photo') && !abs.includes('?') ? `${abs}?token=${token}` : abs
 }
-// Same-origin Next image optimizer — 4MB guest uploads become ~30KB thumbs.
+// Our own resizer (src/app/api/img) — 4MB guest uploads become ~30KB thumbs.
 const SIZES = [64, 96, 128, 256, 384, 640, 750, 828, 1080]
 function opt(url, w = 640) {
     if (!url || typeof url !== 'string' || !/^https?:\/\//i.test(url)) return url || null
     const width = SIZES.find(s => s >= w) ?? 1080
-    return `/_next/image?url=${encodeURIComponent(url)}&w=${width}&q=72`
+    return `/api/img?url=${encodeURIComponent(url)}&w=${width}&q=72`
 }
 function fmtWhen(ts) {
     try {
