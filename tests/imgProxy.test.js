@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseImgRequest, snapWidth, clampQuality, cacheControlFor, outputFormat, WIDTHS, DEFAULT_QUALITY } from '@/lib/imgProxy'
+import { parseImgRequest, snapWidth, clampQuality, cacheControlFor, outputFormat, thumbUrl, fallBackToOriginal, WIDTHS, DEFAULT_QUALITY } from '@/lib/imgProxy'
 
 const SITE = 'https://app.weddingtales.co.il'
 const FB = 'https://firebasestorage.googleapis.com/v0/b/some-bucket.firebasestorage.app/o/weddings%2Fabc%2Fphoto.jpg?alt=media&token=t-1'
@@ -90,5 +90,40 @@ describe('image resizer: sizes, quality, format', () => {
         expect(outputFormat('image/*', false)).toBe('jpeg')
         expect(outputFormat('', true)).toBe('png')
         expect(outputFormat(null, false)).toBe('jpeg')
+    })
+})
+
+describe('image resizer: the address a page puts in <img src>', () => {
+    it('points a guest upload at our own domain, and the resizer accepts what it built', () => {
+        const src = thumbUrl(FB, 100)
+        expect(src.startsWith('/api/img?url=')).toBe(true)
+        expect(src).toContain('&w=128&q=72')
+        const back = parseImgRequest(new URL(src, SITE).searchParams, SITE)
+        expect(back.ok).toBe(true)
+        expect(back.src).toBe(FB)
+        expect(back.width).toBe(128)
+    })
+
+    it('leaves alone what it cannot resize', () => {
+        for (const url of ['data:image/svg+xml;utf8,<svg/>', 'blob:https://app.weddingtales.co.il/1', '/app-home/img_icon.png', 'https://evil.example/x.jpg']) {
+            expect(thumbUrl(url, 128)).toBe(url)
+        }
+        expect(thumbUrl('', 128)).toBe(null)
+        expect(thumbUrl(null, 128)).toBe(null)
+        expect(thumbUrl(undefined)).toBe(null)
+    })
+
+    it('falls back to the original once, and only once', () => {
+        const img = { dataset: { original: FB }, src: thumbUrl(FB, 128) }
+        fallBackToOriginal({ currentTarget: img })
+        expect(img.src).toBe(FB)
+        img.src = 'changed-by-something-else'
+        fallBackToOriginal({ currentTarget: img })
+        expect(img.src).toBe('changed-by-something-else')
+        // No original recorded: nothing to do, and no crash.
+        const bare = { dataset: {}, src: 'x' }
+        fallBackToOriginal({ currentTarget: bare })
+        expect(bare.src).toBe('x')
+        fallBackToOriginal(undefined)
     })
 })

@@ -518,6 +518,29 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 11.11 (afternoon) — ניהול ברכות shows its photos through our own domain
+
+Lord still saw no photos on /wedding/6128/admin from the computer he was
+on (regular and InPrivate windows), with one
+`net::ERR_CERT_AUTHORITY_INVALID` in the console; on his phone they
+showed.
+
+- The event is fine: 39 entries, all 39 photos answer 200 from Firebase
+  Storage, and the page renders them in a clean browser.
+- So something on that computer or its network refuses the secure
+  connection to `firebasestorage.googleapis.com` (a web filter or an
+  antivirus that inspects HTTPS). Not confirmed — the failing address was
+  never captured. The home PC this session is linked to was not the
+  computer he was using, so the browser checks made there say nothing
+  about it.
+- Change: the page asks for every photo as `thumbUrl(url, width)` from
+  `src/lib/imgProxy.js`, i.e. `/api/img` on our own domain, with
+  `onError={fallBackToOriginal}`. The browser no longer talks to Google's
+  storage host on this page, and a page of 12 photos is ~0.3MB instead of
+  ~5MB. Checked with that host blocked in the browser: all 12 still show.
+- Only this page was changed. The viewer, the digital book and the print
+  exports still load originals (the exports need the full files).
+
 ### 11.11 (noon) — pictures not loading: /_next/image answers 404
 
 Lord: "why aren't the pictures loading?"

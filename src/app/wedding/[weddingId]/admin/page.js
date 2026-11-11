@@ -16,6 +16,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import EntryPhoto from '@/components/EntryPhoto/EntryPhoto'
 import useImageAspect from '@/lib/useImageAspect'
+import { thumbUrl, fallBackToOriginal } from '@/lib/imgProxy'
 import { buildPageIndex, pageLabel } from '@/lib/bookPageIndex'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
 import { Heebo } from 'next/font/google'
@@ -163,7 +164,9 @@ function BlankPageCard({ entry, place, total, pageText, onMove, onDelete, deleti
                 <div className='relative w-full aspect-[4/3] bg-gray-50 overflow-hidden'>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                        src={photo}
+                        src={thumbUrl(photo, 828)}
+                        data-original={photo}
+                        onError={fallBackToOriginal}
                         alt=''
                         loading='lazy'
                         className='w-full h-full object-cover'
@@ -836,7 +839,7 @@ export default function AdminDashboard() {
                                                                 blankPagePhoto(entry) ? (
                                                                     <div className='w-12 h-12 rounded-lg overflow-hidden bg-gray-50 shrink-0 ring-1 ring-[#AA8840]/30'>
                                                                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                                        <img src={blankPagePhoto(entry)} alt='' loading='lazy' className='w-full h-full object-cover' />
+                                                                        <img src={thumbUrl(blankPagePhoto(entry), 128)} data-original={blankPagePhoto(entry)} onError={fallBackToOriginal} alt='' loading='lazy' className='w-full h-full object-cover' />
                                                                     </div>
                                                                 ) : (
                                                                     <div className='w-12 h-12 rounded-lg shrink-0 border border-dashed border-[#AA8840]/40' style={{ background: '#fbf6ec' }} />
@@ -844,7 +847,9 @@ export default function AdminDashboard() {
                                                             ) : entry.imageUrl ? (
                                                                 <div className='w-12 h-12 rounded-lg overflow-hidden bg-gray-50 shrink-0'>
                                                                     <img
-                                                                        src={entry.imageUrl}
+                                                                        src={thumbUrl(entry.imageUrl, 128)}
+                                                                        data-original={entry.imageUrl}
+                                                                        onError={fallBackToOriginal}
                                                                         alt=''
                                                                         loading='lazy'
                                                                         className='w-full h-full object-cover'
@@ -982,7 +987,9 @@ export default function AdminDashboard() {
                                                                     {entry.imageUrl && (
                                                                         <div className='relative w-full aspect-[4/3] bg-gray-50 overflow-hidden'>
                                                                             <img
-                                                                                src={entry.imageUrl}
+                                                                                src={thumbUrl(entry.imageUrl, 828)}
+                                                                                data-original={entry.imageUrl}
+                                                                                onError={fallBackToOriginal}
                                                                                 alt=''
                                                                                 loading='lazy'
                                                                                 className='w-full h-full object-cover transition-transform duration-500'
@@ -1269,7 +1276,9 @@ export default function AdminDashboard() {
                                 <div className='flex-1 min-w-0'>
                                     <div className='inline-block relative max-w-full align-top'>
                                         <img
-                                            src={fe.imageUrl}
+                                            src={thumbUrl(fe.imageUrl, 1200)}
+                                            data-original={fe.imageUrl}
+                                            onError={fallBackToOriginal}
                                             alt=''
                                             onClick={setFocalFromImageClick}
                                             className='block max-w-full max-h-[55vh] w-auto h-auto rounded-lg cursor-crosshair select-none'
@@ -1285,7 +1294,7 @@ export default function AdminDashboard() {
                                 <div className='flex-shrink-0 mx-auto md:mx-0'>
                                     <div className='rounded-lg overflow-hidden border border-gray-200 shadow-sm'>
                                         <FramingPreview
-                                            src={fe.imageUrl}
+                                            src={thumbUrl(fe.imageUrl, 640)}
                                             storedAspect={fe.imgAspect}
                                             objectPosition={framingPos}
                                             rotation={framingRot}
