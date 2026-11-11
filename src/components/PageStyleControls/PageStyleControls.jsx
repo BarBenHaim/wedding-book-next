@@ -27,8 +27,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getIdToken } from 'firebase/auth'
-import { auth, storage } from '@/lib/firebaseClient'
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { auth } from '@/lib/firebaseClient'
+import { uploadEventImage } from '@/lib/uploadEventImage'
 import imageCompression from 'browser-image-compression'
 import { PHOTO_FRAMES } from '@/lib/photoFrames'
 import { TEXTURES_REGISTRY } from '@/lib/studioPresets'
@@ -251,9 +251,12 @@ export default function PageStyleControls({
                 maxWidthOrHeight: 3000,
                 useWebWorker: true,
             })
-            const path = `weddings/${weddingId}/pagebg_${selected.id}_${Date.now()}.jpg`
-            const snap = await uploadBytes(storageRef(storage, path), compressed, { contentType: compressed.type || 'image/jpeg' })
-            const url = await getDownloadURL(snap.ref)
+            const url = await uploadEventImage({
+                weddingId,
+                filename: `pagebg_${selected.id}_${Date.now()}.jpg`,
+                blob: compressed,
+                contentType: compressed.type || 'image/jpeg',
+            })
             if (latest.current.selectedId !== forId) {
                 setError('עברת לעמוד אחר באמצע ההעלאה — פתח את העמוד שוב והעלה מחדש')
                 return
@@ -298,9 +301,12 @@ export default function PageStyleControls({
                 img.src = url
             })
 
-            const path = `weddings/${weddingId}/replace_${selected.id}_${Date.now()}.jpg`
-            const snap = await uploadBytes(storageRef(storage, path), compressed, { contentType: compressed.type || 'image/jpeg' })
-            const url = await getDownloadURL(snap.ref)
+            const url = await uploadEventImage({
+                weddingId,
+                filename: `replace_${selected.id}_${Date.now()}.jpg`,
+                blob: compressed,
+                contentType: compressed.type || 'image/jpeg',
+            })
 
             const token = await getIdToken(auth.currentUser)
             const res = await fetch('/api/entries/photo', {
