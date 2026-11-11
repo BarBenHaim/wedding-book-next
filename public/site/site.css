@@ -111,6 +111,9 @@ body.wt{margin:0;background:var(--paper);color:var(--text);font-family:"Heebo",s
    so the book can never be in two states at once. */
 .bookbox{--p:min(calc((100vw - var(--gut)*2)/2),330px);--cs:1.3;--b:calc(var(--p)*.026);--q:0;display:grid;justify-items:center;gap:14px}
 @media (min-width:980px){.bookbox{--p:clamp(220px,24vw,352px);--cs:1.2}}
+/* below the two-column layout the book is measured against its own column, not the window:
+   100vw includes a desktop scrollbar, which pushed the book 15px off a narrow window */
+@supports (width:1cqw){@media (max-width:979.98px){.hero__stage{container-type:inline-size}.bookbox{--p:min(50cqw,330px)}}}
 .book-holder{height:calc(var(--p)*var(--cs));width:calc(var(--p)*2);display:grid;align-items:center;position:relative}
 .book{--e:0;--eb:0;--tl:1;--tr:0;direction:ltr;position:relative;width:calc(var(--p)*2);height:var(--p);transform-origin:25% 50%;transform:translateX(calc(25% * (1 - var(--e)))) scale(calc(1 + (var(--cs) - 1) * (1 - var(--e))));-webkit-user-select:none;user-select:none;touch-action:pan-y;-webkit-tap-highlight-color:transparent}
 .book i{display:block;position:absolute;pointer-events:none}
