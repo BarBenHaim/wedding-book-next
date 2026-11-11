@@ -5,7 +5,7 @@
   "scripts": {
     "prebuild": "node scripts/sync-project-code.mjs",
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "node scripts/next-build.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
