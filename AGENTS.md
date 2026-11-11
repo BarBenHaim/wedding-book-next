@@ -518,6 +518,34 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 11.11 — new weddingtales.co.il homepage, preview at /site
+
+Lord asked for the marketing site rebuilt to convert, with real examples
+and a non-default look. The live WordPress homepage (plugin
+`wedding-tales-atelier-v4`, page 6749) had no prices, no purchase button
+and a demo form that sends nothing.
+
+- Built as static files so one source serves two targets: `public/site/`
+  here (preview at app.weddingtales.co.il/site, `noindex`, rewrite in
+  next.config.mjs) and a WordPress plugin zip (`wt-site`) that renders the
+  same page on the main domain. Source + build script live outside this
+  repo, in the owner's `sales-kit/site-2026-11/` folder.
+- Direction: paper, ink, one ballpoint blue. Blue is only (a) things you
+  can press, (b) real blessings set in handwriting (Gveret Levin). Heebo.
+- Every image is real and already published by the owner: Jerry's 90th
+  book (the public digital edition, captured page by page), the covers,
+  the bar-mitzvah page and open spread, the QR signs (codes blurred —
+  they are live event codes), the guest phone screen, the "ארבע חתונות"
+  clip, the 40s film. No testimonials, no invented numbers.
+- Hero is a flip book of Jerry's real pages (CSS 3D, no library), with
+  the blessing on the open spread quoted underneath.
+- Buttons go straight to checkout: 6271 (990 ₪) and 6258 (690 ₪).
+- public/ pages skip the React layout, so Clarity is inlined by hand.
+- The first preview build failed in `next/font` ("Cannot read properties
+  of null (reading '1')" from /landing's Google fonts): Google returned a
+  font URL with no file extension to the build machine. Nothing in this
+  change touches fonts; if it shows up again, rebuild before debugging.
+
 ### 4.11 — setting the cover from a phone
 
 Lord: on the phone there was no way to put a cover on the book.
