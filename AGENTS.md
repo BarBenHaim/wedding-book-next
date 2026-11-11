@@ -518,6 +518,31 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 11.11 (later) — "אל תחתוך תמונות" now starts at the upload
+
+Lord: a photo a guest uploads should go into the book whole, and the
+page should take that into account, also against the blessing.
+
+- What existed: the per-event switch `weddings/{id}.noPhotoCrop` already
+  makes every book surface show photos whole, in a slot shaped like the
+  photo and capped by what else is on the page (photoSlot.js, the
+  `maxSlotH` rules in each layout), with the body font shrinking as the
+  blessing grows (`pageFitFactor`).
+- What was missing: the guest page ignored the switch. A gallery upload
+  always went through the 4:3 cropper, so a "whole photos" book only ever
+  received 4:3 photos.
+- Change (`src/lib/fullPhoto.js`, wedding/[id]/photo): when the switch is
+  on, the gallery upload shows the whole picture instead of the cropper
+  and uploads all of it, scaled so the long edge is at most 2400px
+  (enough for the 21cm printed page at 300dpi). Switch off: exactly as
+  before, same cropper, same pixels.
+- Not changed: the in-page camera still saves the 4:3 frame the guest saw
+  in the viewfinder. The mobile app is a separate repo and was not
+  touched.
+- Not decided: the switch is still off by default for new events.
+- Found on the way: `salesAgent/catalog.js` DEMO.writeBlessing points at
+  event `0oeixSvNuY9uKEmZ0GVg`, which has no document in Firestore.
+
 ### 11.11 (afternoon) — ניהול ברכות shows its photos through our own domain
 
 Lord still saw no photos on /wedding/6128/admin from the computer he was
