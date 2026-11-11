@@ -11,16 +11,24 @@ const nextConfig = {
     // דף הנחיתה לבר מצווה — קובץ סטטי עצמאי ב-public/lp.html.
     // ה-rewrite נותן לו כתובת נקייה: app.weddingtales.co.il/lp
     async rewrites() {
-        return [
-            { source: '/lp', destination: '/lp.html' },
-            // תצוגה מקדימה של דף הבית החדש של weddingtales.co.il — קבצים סטטיים ב-public/site.
-            { source: '/site', destination: '/site/index.html' },
-        ];
+        return {
+            // Before anything else: /_next/image is answered by OUR resizer
+            // (src/app/api/img). On this Vercel project the built-in
+            // optimizer answers 404, and the mobile app (wedding-tales-mobile
+            // src/lib/img.ts) asks for every guest photo at that address.
+            beforeFiles: [{ source: '/_next/image', destination: '/api/img' }],
+            afterFiles: [
+                { source: '/lp', destination: '/lp.html' },
+                // תצוגה מקדימה של דף הבית החדש של weddingtales.co.il — קבצים סטטיים ב-public/site.
+                { source: '/site', destination: '/site/index.html' },
+            ],
+            fallback: [],
+        };
     },
-    // /_next/image optimizer — the MOBILE APP routes guest photos through
-    // it (see wedding-tales-mobile src/lib/img.ts) so 4MB uploads arrive
-    // as ~30KB webp thumbs. Firebase Storage hosts the uploads; our own
-    // domain covers /api/book-photo proxy URLs passed absolutely.
+    // Kept in step with src/lib/imgProxy.js (ALLOWED_HOSTS), which is what
+    // actually serves /_next/image now — see the rewrite above. Firebase
+    // Storage hosts the uploads; our own domain covers /api/book-photo
+    // proxy URLs passed absolutely.
     images: {
         qualities: [72, 75],
         remotePatterns: [
