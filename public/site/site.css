@@ -245,6 +245,28 @@ body.wt{margin:0;background:var(--paper);color:var(--text);font-family:"Heebo",s
   .film__frame{width:100%;max-width:320px}
 }
 
+/* ── when the book arrives: printed books, and messages exactly as they were sent ── */
+.arrived{background:var(--paper-2)}
+.arrived__grid{display:grid;gap:40px}
+.arrived__a,.arrived__b{display:grid;align-content:start}
+.shot img{width:100%;border-radius:var(--r-media);box-shadow:0 30px 56px -34px rgba(11,16,32,.6)}
+.shot figcaption{margin-top:12px;font-size:14px;color:var(--text-3)}
+.shot--tall{width:min(72%,340px);justify-self:end;margin-top:26px}
+.msg{position:relative;z-index:1;justify-self:start;max-width:min(100%,25em);background:var(--ink);color:var(--d-text);border-radius:22px;border-end-end-radius:6px;padding:18px 22px 13px;display:grid;gap:10px;box-shadow:0 26px 44px -26px rgba(11,16,32,.75);transform-origin:0 100%}
+.msg blockquote{margin:0;display:grid;gap:.85em}
+.msg p{font-size:18.5px;line-height:1.5;font-weight:500}
+.msg b{font-weight:900;font-size:clamp(25px,2.5vw,33px);line-height:1.15;letter-spacing:-.025em;display:block;text-wrap:balance}
+.msg figcaption{display:flex;justify-content:space-between;gap:16px;font-size:13px;color:var(--d-text-3);font-weight:500}
+.arrived__a .msg{margin-top:-18px;margin-inline-start:16px}
+.arrived__cap{font-size:14px;color:var(--text-3);margin-top:12px}
+@media (min-width:900px){
+  .arrived__grid{grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:72px;align-items:start}
+  .arrived__a .msg{margin-top:-34px;margin-inline-start:auto;margin-inline-end:-48px;justify-self:end;max-width:29em}
+  .arrived__b{padding-top:28px}
+  .msg--big{padding:26px 30px 18px}
+  .shot--tall{width:min(78%,340px);margin-top:40px}
+}
+
 /* ── pricing ──────────────────────────────────────── */
 .plans{display:grid;gap:16px}
 .plan{border-radius:var(--r-panel);padding:28px 24px 26px;display:grid;gap:20px;align-content:start}
