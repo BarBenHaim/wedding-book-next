@@ -518,6 +518,30 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 11.11 (later) — builds dying in next/font, `npm run build` now retries
+
+Merging the /site preview, two builds out of three failed on files the
+change never touched (landing/LandingClient.jsx, wedding/[id]/guests):
+
+    An error occurred in `next/font`.
+    TypeError: Cannot read properties of null (reading '1')
+
+- Cause: next/font/google downloads the font CSS from Google on every
+  build. That night Google answered, some of the time, with font URLs like
+  `fonts.gstatic.com/l/font?kit=…` (no `.woff2`), and Next 15.5.9's loader
+  (`google/loader.js`, the `/\.(woff|woff2|eot|ttf|otf)$/` match) crashes
+  on them. Reproduced with curl and Next's own User-Agent: roughly one
+  answer in ten for Noto Serif Hebrew; the app asks for ~14 families.
+- Production was never down: a failed build leaves the last good
+  deployment serving.
+- Fix: `npm run build` is now `node scripts/next-build.mjs`. It runs
+  `next build` and, only when the output says the failure was next/font
+  talking to Google (`scripts/lib/font-flake.mjs`), waits 15s and builds
+  again, up to 5 times. Any other failure exits at once, as before.
+- Not done, worth doing: move the fonts into the repo with
+  `next/font/local`, so a build never needs Google. That changes how every
+  page loads its type, so it should be looked at on real pages first.
+
 ### 11.11 — new weddingtales.co.il homepage, preview at /site
 
 Lord asked for the marketing site rebuilt to convert, with real examples
@@ -541,10 +565,6 @@ and a demo form that sends nothing.
   the blessing on the open spread quoted underneath.
 - Buttons go straight to checkout: 6271 (990 ₪) and 6258 (690 ₪).
 - public/ pages skip the React layout, so Clarity is inlined by hand.
-- The first preview build failed in `next/font` ("Cannot read properties
-  of null (reading '1')" from /landing's Google fonts): Google returned a
-  font URL with no file extension to the build machine. Nothing in this
-  change touches fonts; if it shows up again, rebuild before debugging.
 
 ### 4.11 — setting the cover from a phone
 
