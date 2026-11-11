@@ -8,6 +8,7 @@ import { db, auth } from '../../../../lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { buildGuestPageTheme } from '@/lib/guestPageTheme'
 import Cropper from 'react-easy-crop'
+import { keepsWholePhoto, photoDrawPlan } from '@/lib/fullPhoto'
 import imageCompression from 'browser-image-compression'
 import { enqueue, genId } from '../../../../lib/offlineQueue'
 import { uploadQueuedEntry } from '../../../../lib/uploadEntry'
@@ -92,6 +93,9 @@ export default function TextPage() {
     // Per-event: the super-admin can require a photo with every blessing
     // (books built around the pictures). Off unless explicitly true.
     const [photoRequired, setPhotoRequired] = useState(false)
+    // The event keeps photos whole (the "אל תחתוך תמונות" switch) — the
+    // gallery upload then skips the 4:3 cropper. See src/lib/fullPhoto.js.
+    const [wholePhoto, setWholePhoto] = useState(false)
     // Twins bar mitzvah — [a, b] names and who this blessing is for.
     // The landing page sends ?for=a|b|both; a guest who reached this
     // page some other way (old QR, shared link) starts on "both" and
@@ -220,6 +224,7 @@ export default function TextPage() {
                     else if (data.designVariant) setDesignVariant(data.designVariant)
                     if (data.blessingMaxChars) setMaxChars(Number(data.blessingMaxChars) || 210)
                     setPhotoRequired(data.photoRequired === true)
+                    setWholePhoto(keepsWholePhoto(data))
                     if (isTwinsEvent(data.eventType)) {
                         const [a, b] = twinNames(data)
                         if (a && b) setTwins([a, b])
@@ -314,6 +319,7 @@ export default function TextPage() {
                 initialName={guestGreetingName}
                 guestId={guestId}
                 photoRequired={photoRequired}
+                wholePhoto={wholePhoto}
             />
         </NextIntlClientProvider>
     )
@@ -377,7 +383,7 @@ function ChipBadge({ number, active, done, isPoker }) {
     )
 }
 
-function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign, maxChars = 210, locale = 'he', initialName = '', guestId = '', photoRequired = false, twins = null, blessFor = null, onBlessForChange }) {
+function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign, maxChars = 210, locale = 'he', initialName = '', guestId = '', photoRequired = false, wholePhoto = false, twins = null, blessFor = null, onBlessForChange }) {
     const t = useTranslations('photo')
 
     // Twins: who is this blessing for. Rendered under the title in every
@@ -740,37 +746,29 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
         let finalBlob = photoBlob
         let imageProcessingError = null
 
-        if (isUpload && photoUrl && croppedAreaPixels) {
+        if (isUpload && photoUrl && (wholePhoto || croppedAreaPixels)) {
             try {
-                // Guard against degenerate crop boxes that the cropper can
-                // briefly emit (zero width/height crashes canvas creation).
-                if (
-                    !croppedAreaPixels.width ||
-                    !croppedAreaPixels.height ||
-                    croppedAreaPixels.width < 1 ||
-                    croppedAreaPixels.height < 1
-                ) {
-                    throw new Error('crop-invalid-size')
-                }
-
                 const image = await createImage(photoUrl)
+                // What to keep and at what size: the cropper's box, or —
+                // when the event keeps photos whole — the entire picture
+                // (photoDrawPlan). It also guards against the degenerate
+                // boxes the cropper can briefly emit (zero width/height
+                // crashes canvas creation).
+                const plan = photoDrawPlan({
+                    wholePhoto,
+                    naturalWidth: image.naturalWidth || image.width,
+                    naturalHeight: image.naturalHeight || image.height,
+                    crop: croppedAreaPixels,
+                })
+                if (!plan) throw new Error('crop-invalid-size')
+
                 const canvas = document.createElement('canvas')
-                canvas.width = croppedAreaPixels.width
-                canvas.height = croppedAreaPixels.height
+                canvas.width = plan.width
+                canvas.height = plan.height
                 const ctx = canvas.getContext('2d')
                 if (!ctx) throw new Error('canvas-no-2d-context')
 
-                ctx.drawImage(
-                    image,
-                    croppedAreaPixels.x,
-                    croppedAreaPixels.y,
-                    croppedAreaPixels.width,
-                    croppedAreaPixels.height,
-                    0,
-                    0,
-                    croppedAreaPixels.width,
-                    croppedAreaPixels.height,
-                )
+                ctx.drawImage(image, plan.sx, plan.sy, plan.sw, plan.sh, 0, 0, plan.width, plan.height)
 
                 const cropped = await new Promise((resolve, reject) => {
                     canvas.toBlob(
@@ -1734,7 +1732,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                             )}
 
                             {/* Cropper */}
-                            {photoUrl && isUpload && !cameraOpen && (
+                            {photoUrl && isUpload && !wholePhoto && !cameraOpen && (
                                 <div className='absolute inset-0'>
                                     <Cropper
                                         image={photoUrl}
@@ -1754,7 +1752,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 170px-tall well. Thin cream margins
                                 on the sides are fine; preview
                                 matches what lands in the book. */}
-                            {photoUrl && !isUpload && !cameraOpen && (
+                            {photoUrl && (!isUpload || wholePhoto) && !cameraOpen && (
                                 <img src={photoUrl} className='w-full h-full object-contain' alt='Preview' />
                             )}
                         </div>
@@ -2906,7 +2904,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 )}
 
                                 {/* 3. עריכה (Cropper) */}
-                                {photoUrl && isUpload && !cameraOpen && (
+                                {photoUrl && isUpload && !wholePhoto && !cameraOpen && (
                                     <div className='absolute inset-0'>
                                         <Cropper
                                             image={photoUrl}
@@ -2931,7 +2929,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                     sees the FULL captured image, which
                                     is the same `objectFit` rule
                                     EntryPhoto uses on the book page. */}
-                                {photoUrl && !isUpload && !cameraOpen && (
+                                {photoUrl && (!isUpload || wholePhoto) && !cameraOpen && (
                                     <img src={photoUrl} className='w-full h-full object-contain' alt='Preview' />
                                 )}
                             </div>
