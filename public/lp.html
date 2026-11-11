@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light only">
 <meta name="theme-color" content="#f7f3ea">
 <title>ספר הברכות לבר מצווה | Wedding Tales — ערב אחד. ספר אחד. זיכרון לכל החיים.</title>
-<meta name="description" content="האורחים סורקים QR מעוצב אישית, כותבים ברכה ומעלים תמונה — והכול נארג לספר מזכרת ברמת הוצאה לאור. דיגיטלי ₪690 · מודפס ₪990 · פרימיום ₪1,490.">
+<meta name="description" content="האורחים סורקים QR מעוצב אישית, כותבים ברכה ומעלים תמונה — והכול נארג לספר מזכרת ברמת הוצאה לאור. דיגיטלי ₪690 · מודפס ₪990.">
 <meta property="og:title" content="ספר הברכות לבר מצווה — ערב אחד. ספר אחד. זיכרון לכל החיים.">
 <meta property="og:description" content="פוסטר QR בעיצוב אישי, איסוף ברכות ותמונות בזמן אמת, וספר מזכרת ברמה של הוצאה לאור.">
 <meta property="og:type" content="website">
@@ -402,7 +402,7 @@ header.on-dark:not(.scrolled) #burger span{color:var(--paper)}
 /* ---------- pricing ---------- */
 .pricing{padding:60px 0 46px;background:transparent}
 .slots{display:inline-flex;align-items:center;gap:9px;background:rgba(171,60,32,.07);border:1px solid rgba(171,60,32,.25);color:#a03c20;font-weight:700;font-size:.86rem;padding:8px 18px;border-radius:40px;margin-top:18px}
-.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:60px;align-items:stretch}
+.plans{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin-top:60px;align-items:stretch;max-width:880px;margin-inline:auto}
 .plan{background:#fffdf9;border-radius:24px;padding:30px 24px 24px;position:relative;display:flex;flex-direction:column;box-shadow:0 18px 44px -20px rgba(23,35,60,.22),inset 0 0 0 1px rgba(202,165,79,.28);transition:transform .45s var(--ease),box-shadow .45s}
 .plan:hover{transform:translateY(-10px);box-shadow:0 38px 80px -28px rgba(23,35,60,.35),inset 0 0 0 1px rgba(202,165,79,.4)}
 .plan.hot{background:linear-gradient(172deg,#21395f,#132747);color:#f4f7fc;transform:scale(1.05);box-shadow:0 44px 95px -30px rgba(20,41,75,.55),inset 0 0 0 1.5px rgba(207,169,82,.6);z-index:1}
@@ -1024,24 +1024,6 @@ html.js #waFloat.show,html.jsfail #waFloat{opacity:1;pointer-events:auto}
         <a class="btn btn-gold" data-buy="printed" href="https://weddingtales.co.il/checkout/?add-to-cart=6271">להזמנת הספר המודפס <span class="arr">←</span></a>
         <div class="wa-line">מתלבטים? <a data-wa href="https://wa.link/rduj2s">דברו איתנו בוואטסאפ</a></div>
       </div>
-
-      <div class="plan reveal">
-        <div class="p-name">פרימיום מלכותי</div>
-        <div class="p-desc">החוויה המלאה למשפחות גדולות</div>
-        <ul>
-          <li class="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>כל מה שבמודפס, ועוד:</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>עותק נוסף — לסבא ולסבתא</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>פוסטר A2 מוקשח לעמדה</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>עדיפות בתור ההפקה</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>ליווי אישי צמוד בוואטסאפ</li>
-        </ul>
-        <div class="p-pricebox">
-          <div class="price-row"><span class="price">₪1,490</span><span class="price-old">₪1,790</span></div>
-          <div class="price-note">תשלום חד־פעמי</div>
-        </div>
-        <a class="btn btn-ink" data-buy="premium" href="https://weddingtales.co.il/checkout/?add-to-cart=5480">להזמנת הפרימיום <span class="arr">←</span></a>
-        <div class="wa-line">מתלבטים? <a data-wa href="https://wa.link/rduj2s">דברו איתנו בוואטסאפ</a></div>
-      </div>
     </div>
 
     <div class="addons reveal">
@@ -1232,8 +1214,7 @@ html.js #waFloat.show,html.jsfail #waFloat{opacity:1;pointer-events:auto}
   "brand": {"@type": "Brand", "name": "Wedding Tales"},
   "offers": [
     {"@type": "Offer", "name": "ספר דיגיטלי", "price": "690", "priceCurrency": "ILS", "availability": "https://schema.org/InStock"},
-    {"@type": "Offer", "name": "ספר מודפס", "price": "990", "priceCurrency": "ILS", "availability": "https://schema.org/InStock"},
-    {"@type": "Offer", "name": "פרימיום מלכותי", "price": "1490", "priceCurrency": "ILS", "availability": "https://schema.org/InStock"}
+    {"@type": "Offer", "name": "ספר מודפס", "price": "990", "priceCurrency": "ILS", "availability": "https://schema.org/InStock"}
   ]
 }
 </script>
@@ -1248,8 +1229,7 @@ const CONFIG = {
   demo:     "https://app.weddingtales.co.il/wedding/0oeixSvNuY9uKEmZ0GVg/photo", // דמו חי — ספר הברכות של נועם
   buy: {                                               // קישורי רכישה (אפשר ?add-to-cart=ID)
     digital: "https://weddingtales.co.il/checkout/?add-to-cart=6258",
-    printed: "https://weddingtales.co.il/checkout/?add-to-cart=6271",
-    premium: "https://weddingtales.co.il/checkout/?add-to-cart=5480"
+    printed: "https://weddingtales.co.il/checkout/?add-to-cart=6271"
   },
   stats: { events: "240+", blessings: "18,500+", rating: "4.9" },
   slots: 4,          // משבצות הפקה לשבוע — 0 מסתיר את הצ'יפ
