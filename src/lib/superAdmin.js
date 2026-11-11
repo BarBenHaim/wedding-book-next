@@ -37,3 +37,13 @@ export function isSuperAdmin(email) {
     if (!email) return false
     return SUPER_ADMIN_EMAILS.includes(email.toLowerCase())
 }
+
+/** Where the super-admin works. */
+export const SUPER_ADMIN_HOME = '/admin'
+
+/** Where a just-signed-in person goes if they run the system — or null
+ *  for everybody else. The super-admin usually owns no event of his own,
+ *  so "find his event and open its portal" has nowhere to send him. */
+export function superAdminHomeFor(email) {
+    return isSuperAdmin(email) ? SUPER_ADMIN_HOME : null
+}

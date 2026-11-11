@@ -518,6 +518,26 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 11.11 (morning) — the super-admin could not log in
+
+Lord: "it looks like I have no user on barbenbh@gmail.com".
+
+- The account exists: /api/auth/password-link only sends its email when
+  `getUserByEmail` finds the user, and that email reached his inbox the
+  same morning.
+- Cause: the 3.11 login change (#16). `afterSignIn` looks for an event
+  owned by the account and, finding none, returns `{ path: null }`; the
+  login page then shows "לא מצאנו ספר ברכות שמשויך ל-…" and signs out.
+  The super-admin owns no event, so he was thrown out on every login,
+  and after choosing a new password on /set-password too. Before #16 the
+  login fell through to a portal that did not exist, and he went on to
+  /admin from there.
+- Fix: `superAdminHomeFor(email)` in lib/superAdmin.js. `afterSignIn`
+  asks it first and sends a super-admin to /admin, with or without an
+  event. Customers are unaffected.
+- No password was set for him. He logs in with his own password, or
+  picks a new one with "אין לי סיסמה / שכחתי" on /login.
+
 ### 11.11 (later still) — /lp no longer sells a package that does not exist
 
 `public/lp.html` (the page the sales bot sends leads to) still showed a

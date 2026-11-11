@@ -8,7 +8,9 @@
 //   1. hand the ID token to /api/login so the server-side `session`
 //      cookie exists;
 //   2. stamp or clear the 7-day "remember me" expiry;
-//   3. find the person's events by ownerId and say where to go:
+//   3. the super-admin goes to /admin, whether or not he owns an event;
+//   4. everybody else: find the person's events by ownerId and say where
+//      to go:
 //        one event   → its portal
 //        several     → /my (the events hub)
 //        none        → a legacy doc keyed by uid, if there is one;
@@ -21,6 +23,7 @@ import { getIdToken, signOut } from 'firebase/auth'
 import { collection, query, where, getDocs, limit, doc, getDoc } from 'firebase/firestore'
 import { auth, db } from './firebaseClient'
 import { setExpiryWeek, clearExpiry } from './sessionExpiry'
+import { superAdminHomeFor } from './superAdmin'
 
 export async function afterSignIn(user, { rememberMe = true } = {}) {
     const token = await getIdToken(user, true)
@@ -31,6 +34,12 @@ export async function afterSignIn(user, { rememberMe = true } = {}) {
     })
     if (rememberMe) setExpiryWeek()
     else clearExpiry()
+
+    // The super-admin runs the system and usually owns no event. Without
+    // this he hit the "no book for this email" branch below and was signed
+    // straight out again — it looked as if his account did not exist.
+    const adminHome = superAdminHomeFor(user.email)
+    if (adminHome) return { path: adminHome }
 
     const snap = await getDocs(query(collection(db, 'weddings'), where('ownerId', '==', user.uid), limit(2)))
     if (snap.size > 1) return { path: '/my' }
