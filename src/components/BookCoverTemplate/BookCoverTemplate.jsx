@@ -1,5 +1,6 @@
 'use client'
 
+import { useStorageBlocked, useViaOurDomain } from '@/lib/storageReach'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { buildTitle, normalizeEventType } from '@/lib/eventTypes'
 import { normalizeLocale } from '@/i18n/locales'
@@ -101,7 +102,11 @@ function inferAlignItems(position, explicitAlign) {
     }
 }
 
-export default function BookCoverTemplate({ wedding, styleSettings, scaledWidth, scaledHeight, fillImage = false }) {
+export default function BookCoverTemplate({ wedding, styleSettings: savedStyle, scaledWidth, scaledHeight, fillImage = false }) {
+    // Blocked storage host → the cover's pictures come through our own
+    // domain (src/lib/storageReach.js). Otherwise the same object back.
+    const storageBlocked = useStorageBlocked(savedStyle)
+    const styleSettings = useViaOurDomain(savedStyle, storageBlocked)
     // fillImage: render the cover photo edge-to-edge (objectFit: cover) instead
     // of the default inset (maxWidth 80% / contain). Used by the PRINT exports
     // so a full-bleed cover artwork fills the whole panel — matching what the

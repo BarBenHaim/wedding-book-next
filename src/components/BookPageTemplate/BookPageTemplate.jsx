@@ -1,5 +1,6 @@
 'use client'
 
+import { useStorageBlocked, useViaOurDomain } from '@/lib/storageReach'
 import { getBlessingText } from '@/lib/normalizeText'
 import { resolveActiveTemplate } from '@/lib/presetFilters'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
@@ -17,7 +18,13 @@ import WindowPageLayout from '../WindowPageLayout/WindowPageLayout'
 import DuoPageLayout from '../DuoPageLayout/DuoPageLayout'
 import ComposedPageLayout from '../ComposedPageLayout/ComposedPageLayout'
 
-export default function BookPageTemplate({ entry, styleSettings: incomingStyle, scaledWidth, scaledHeight }) {
+export default function BookPageTemplate({ entry: savedEntry, styleSettings: savedStyle, scaledWidth, scaledHeight }) {
+    // On a network that blocks Google's storage host, show the photo and
+    // the page's artwork through our own domain (src/lib/storageReach.js).
+    // Everywhere else these two lines hand back the very same objects.
+    const storageBlocked = useStorageBlocked(savedEntry, savedStyle)
+    const entry = useViaOurDomain(savedEntry, storageBlocked)
+    const incomingStyle = useViaOurDomain(savedStyle, storageBlocked)
     // ── Album-mode photo overrides ───────────────────────────────────
     // Resolved ONCE, here, before anything reads the design — every
     // layout below (duo, polaroid, scrapbook, notebook, collage) and

@@ -46,8 +46,6 @@ export async function GET(req) {
         if (!type.startsWith('image/')) {
             return new NextResponse('The requested resource is not an image', { status: 400, headers: { 'Cache-Control': 'no-store' } })
         }
-        // Vector art has no pixels to shrink, and we do not re-serve markup.
-        if (type === 'image/svg+xml') return original()
         if (Number(upstream.headers.get('content-length') || 0) > MAX_SOURCE_BYTES) return original()
 
         const input = Buffer.from(await upstream.arrayBuffer())
@@ -55,8 +53,14 @@ export async function GET(req) {
 
         // .rotate() with no angle applies the camera's EXIF orientation —
         // without it phone photos come out sideways once the tag is dropped.
-        const image = sharp(input, { failOn: 'none' }).rotate().resize({ width, withoutEnlargement: true })
-        const { hasAlpha } = await sharp(input, { failOn: 'none' }).metadata()
+        // Vector artwork (studio backgrounds) is DRAWN here and sent as a
+        // picture — we never re-serve SVG markup from our own domain. It
+        // has no pixel size of its own, so it is rendered sharp enough for
+        // the width asked and may grow to it.
+        const isSvg = type === 'image/svg+xml'
+        const read = isSvg ? { failOn: 'none', density: 192 } : { failOn: 'none' }
+        const image = sharp(input, read).rotate().resize({ width, withoutEnlargement: !isSvg })
+        const { hasAlpha } = await sharp(input, read).metadata()
         const format = outputFormat(req.headers.get('accept'), hasAlpha)
         const output =
             format === 'webp'
