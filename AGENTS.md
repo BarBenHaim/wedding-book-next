@@ -518,6 +518,31 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 11.11 (night) — "החלף תמונה" spins forever on the same computer
+
+Lord: "I press replace photo, it loads for a long time and nothing
+happens." Same computer on which guest photos fail from Firebase Storage
+with ERR_CERT_AUTHORITY_INVALID (entry below).
+
+- The management screens upload straight from the browser to Storage.
+  When the browser cannot reach that host the SDK does not fail — it
+  retries quietly for up to ten minutes. Hence a spinner and nothing.
+  (Likely cause; the failing upload request itself was not captured.)
+- `src/lib/uploadEventImage.js`: the direct upload is now watched. If it
+  errors, or no byte moves for 12 seconds, it is cancelled and the same
+  file is posted to our own domain. Once that happened, later uploads on
+  the page go straight through us.
+- `POST /api/upload/event-image` (rules in `src/lib/eventImageRules.js`):
+  signed-in user, a real decodable jpeg/png/webp up to 4MB, an event
+  that exists, a new file name under `weddings/{id}/` — never an
+  overwrite. Stricter than storage.rules, which lets anyone create there.
+- Using it: replace photo and album upload in ניהול ברכות, replace photo
+  and page background in the viewer's per-page controls.
+- Not using it yet: cover upload (it overwrites `cover.ext`, which this
+  route refuses), the studio pages, and the guests' own upload flow.
+- Not tested end to end: the route needs the service account, which this
+  session does not have. Only its refusals were exercised after deploy.
+
 ### 11.11 (evening) — the book shows its pictures on a network that blocks storage
 
 After ניהול ברכות moved to our own domain Lord saw its photos on his
