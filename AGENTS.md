@@ -732,6 +732,17 @@ and a demo form that sends nothing.
   the blessing on the open spread quoted underneath.
 - Buttons go straight to checkout: 6271 (990 ₪) and 6258 (690 ₪).
 - public/ pages skip the React layout, so Clarity is inlined by hand.
+- Second pass, 11.11 ("make it better"): says what it is above the
+  headline ("ספר ברכות מהאירוע", inside the h1), a second quiet action in
+  the hero that opens Jerry's whole book, a four-point timeline under the
+  steps (today / 48 hours / at the event and after / 14 business days),
+  the digital plan lists what the catalog really includes (unlimited, PDF,
+  a full year), a line under the plans that nothing is printed before
+  approval, an FAQ answer for guests who missed the event, a film poster
+  that shows phone and paper together, a WhatsApp row in the phone menu,
+  and the covers shelf is reachable by keyboard. Every claim is from
+  `src/lib/salesAgent/catalog.js`. The 300 ₪ upgrade price stays out of
+  the page on purpose: the catalog keeps it for price objections.
 
 ### 4.11 — setting the cover from a phone
 
