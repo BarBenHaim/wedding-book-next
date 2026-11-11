@@ -107,3 +107,41 @@ export function outputFormat(acceptHeader, hasAlpha) {
     if (/image\/webp/i.test(String(acceptHeader || ''))) return 'webp'
     return hasAlpha ? 'png' : 'jpeg'
 }
+
+/**
+ * The address of a small version of `url`, served from OUR domain.
+ *
+ * Two reasons to show a guest photo this way instead of straight from
+ * Firebase Storage: a 64px thumbnail does not need the 1MB original, and
+ * some networks (office and campus web filters) block Google's storage
+ * host outright — the page loads, the pictures do not. Our own domain is
+ * the one address a visitor can certainly reach, since the page came
+ * from it.
+ *
+ * Anything we cannot resize (data:, blob:, a relative path, another
+ * host) comes back unchanged.
+ */
+export function thumbUrl(url, w = 640, q = DEFAULT_QUALITY) {
+    if (typeof url !== 'string' || !/^https:\/\//i.test(url)) return url || null
+    let host
+    try {
+        host = new URL(url).hostname
+    } catch {
+        return url
+    }
+    if (!ALLOWED_HOSTS.includes(host)) return url
+    return `/api/img?url=${encodeURIComponent(url)}&w=${snapWidth(w) || 640}&q=${clampQuality(q)}`
+}
+
+/**
+ * onError for an <img src={thumbUrl(original)} data-original={original}>:
+ * if the small version fails, show the original once, so a problem in
+ * the resizer never leaves an empty frame.
+ */
+export function fallBackToOriginal(event) {
+    const img = event?.currentTarget
+    const original = img?.dataset?.original
+    if (!img || !original || img.dataset.fellBack) return
+    img.dataset.fellBack = '1'
+    img.src = original
+}
