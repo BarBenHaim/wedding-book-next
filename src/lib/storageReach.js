@@ -155,6 +155,16 @@ function setBlocked() {
     listeners.forEach(notify => notify())
 }
 
+/** The current answer, for code that is not a component (uploads). */
+export function isStorageBlocked() {
+    if (blocked) return true
+    try {
+        return typeof window !== 'undefined' && window.sessionStorage.getItem(CACHE_KEY) === '1'
+    } catch {
+        return false
+    }
+}
+
 /**
  * Check one picture, once: does it load straight from storage, and if
  * not, does it load through us? Costs nothing extra when it loads — the
