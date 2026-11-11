@@ -518,6 +518,36 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 11.11 (noon) — pictures not loading: /_next/image answers 404
+
+Lord: "why aren't the pictures loading?"
+
+- Found: `https://app.weddingtales.co.il/_next/image?...` answers 404
+  (`x-matched-path: /404`), for any source, with or without parameters.
+  The portal builds every cover and every guest-photo thumbnail from that
+  address (`opt()` in wedding/[id]/portal), and the mobile app does the
+  same (wedding-tales-mobile src/lib/img.ts). So those pictures were
+  broken, while pages that load photos directly (viewer, digital book,
+  guest pages, landing) were fine.
+- Not caused by the build wrapper from the night before: the preview
+  built with plain `next build` (#18) and the production deployments of
+  3.11 and 4.11 answer 404 at that address too. The optimizer came in on
+  26.8; `vercel.json` moved to `services` (Next + the Flask assist
+  service in one project) on 14.9. Most likely the built-in optimizer has
+  not been wired up since then. Not proven — deployments older than 3.11
+  were not tested.
+- Fix: our own resizer. `src/app/api/img/route.js` (sharp: EXIF rotate,
+  resize, webp/jpeg/png) with the rules in `src/lib/imgProxy.js` (same
+  two source hosts as before, widths snapped to a short list, an hour in
+  the browser and a day on the CDN, private for /api/book-photo sources).
+  If resizing fails, it redirects to the original picture instead of
+  showing a broken one.
+- `next.config.mjs` rewrites `/_next/image` → `/api/img` (beforeFiles),
+  so the installed mobile app works again without an update. The portal
+  now asks `/api/img` directly.
+- Do not use `next/image` or `/_next/image` in this project while
+  `vercel.json` has `services`. Use `/api/img?url=…&w=…&q=72`.
+
 ### 11.11 (morning) — the super-admin could not log in
 
 Lord: "it looks like I have no user on barbenbh@gmail.com".
