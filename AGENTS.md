@@ -541,6 +541,10 @@ and a demo form that sends nothing.
   the blessing on the open spread quoted underneath.
 - Buttons go straight to checkout: 6271 (990 ₪) and 6258 (690 ₪).
 - public/ pages skip the React layout, so Clarity is inlined by hand.
+- The first preview build failed in `next/font` ("Cannot read properties
+  of null (reading '1')" from /landing's Google fonts): Google returned a
+  font URL with no file extension to the build machine. Nothing in this
+  change touches fonts; if it shows up again, rebuild before debugging.
 
 ### 4.11 — setting the cover from a phone
 
