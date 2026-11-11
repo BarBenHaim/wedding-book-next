@@ -743,6 +743,31 @@ and a demo form that sends nothing.
   and the covers shelf is reachable by keyboard. Every claim is from
   `src/lib/salesAgent/catalog.js`. The 300 ₪ upgrade price stays out of
   the page on purpose: the catalog keeps it for price objections.
+- Third pass, 11.11: Lord said the flip book "goes crazy". It did. Cause:
+  each flip armed a timer that, when it fired, compared the book's state
+  to the target *that flip* was given and called go() again if they
+  differed. Two flips started close together (a second click, or a click
+  the other way) each kept "correcting" the other, so the pages turned
+  back and forth forever. z-order was also reset by those stale timers
+  while a page was still in the air.
+  **The rule now:** the book has one number, p (0 closed, 1 first spread,
+  …). Every pixel is drawn from p in one function, draw(). Clicks, drags,
+  keys and the auto-open only move p. There are no per-page timers, no CSS
+  transitions on the leaves and no preserve-3d / backface-visibility (the
+  back of a leaf is a mirrored face that is switched on at 90°, when the
+  leaf is edge-on). Do not add a transition to .leaf or .book.
+- GSAP 3.13 + ScrollTrigger are self-hosted in `public/site/assets/js/`
+  (free "no charge" licence). GSAP only tweens p and the entrance/scroll
+  states. Without it (blocked, or reduced motion) site.js falls back to
+  rAF for the book and shows everything else at rest.
+- "Before" states for motion exist only while `<html>` has `.wt-anim`.
+  The head script adds it when motion is welcome and removes it after 3s
+  if site.js never took over, so a failed script can not leave the page
+  blank. Anything animated in gets `.is-in` and its inline styles cleared.
+  `tools/motion.mjs` (in the sales-kit folder) checks all of this frame by
+  frame: entrance, drag, touch swipe, 12 clicks in a second, vertical
+  scroll that starts on the book, timeline, FAQ, reduced motion, no GSAP,
+  no scripts at all.
 
 ### 4.11 — setting the cover from a phone
 
