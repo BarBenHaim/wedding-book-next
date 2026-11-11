@@ -518,6 +518,36 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 11.11 (evening) — the book shows its pictures on a network that blocks storage
+
+After ניהול ברכות moved to our own domain Lord saw its photos on his
+computer, but in the book viewer the cover showed and the guest photos
+did not. So on that computer the guest photos (JPEG) fail straight from
+`firebasestorage.googleapis.com` while the cover (PNG) loads from the
+same host. Why is not known — a filter or antivirus on that machine that
+treats photos differently is the likely kind of cause; nothing on our
+side differs between the two files except type and name.
+
+- `src/lib/storageReach.js`: a shared answer per page load. EVERY
+  storage picture a template is about to show is checked once (it shares
+  the browser's own request, so it costs nothing when it loads). If any
+  picture fails from storage and the same picture loads through
+  `/api/img`, the page is "blocked". Checking only one sample would have
+  picked the cover on his machine and concluded all was well.
+- `BookPageTemplate` and `BookCoverTemplate` read that answer and, when
+  blocked, pass every storage address in the entry and the style through
+  `viaOurDomain` (→ `/api/img`, 1920px, quality 88). Those two templates
+  are what every surface renders through, so the viewer, the digital
+  book, the design galleries and the exports are covered from one place.
+- When storage is reachable nothing changes: same objects, same original
+  files, no request to `/api/img`. Checked three ways on event 6128:
+  photos failing and cover loading, the whole host failing, and normal.
+- `/api/img` now draws SVG artwork (studio backgrounds) to a picture
+  instead of redirecting to the original.
+- `viaOurDomain` is for rendering only. Never save what it returns.
+- Still loading straight from storage: `<img>` thumbnails outside the
+  two templates (background pickers in DesignControls, the studio pages).
+
 ### 11.11 (later) — "אל תחתוך תמונות" now starts at the upload
 
 Lord: a photo a guest uploads should go into the book whole, and the
