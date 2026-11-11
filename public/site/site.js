@@ -219,6 +219,10 @@
       gsap.fromTo(el, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: .8, ease: 'power3.out', delay: i === 0 ? 0 : .38 + i * .07, onComplete: function () { landed(el); } });
     });
     var rise = function (el, delay) {
+      if (el.hasAttribute('data-pop')) {   // a message arrives: it grows out of its tail, a beat after the picture
+        gsap.fromTo(el, { opacity: 0, y: 14, scale: .86 }, { opacity: 1, y: 0, scale: 1, duration: .7, ease: 'back.out(1.7)', delay: delay + .28, onComplete: function () { landed(el); } });
+        return;
+      }
       gsap.fromTo(el, { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: .9, ease: 'power3.out', delay: delay, onComplete: function () { landed(el); } });
       var obj = el.classList.contains('step') && $('.step__obj img', el);
       if (obj) gsap.from(obj, { yPercent: 12, scale: .93, duration: 1.15, ease: 'power3.out', delay: delay + .05, clearProps: 'transform' });

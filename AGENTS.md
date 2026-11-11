@@ -768,6 +768,14 @@ and a demo form that sends nothing.
   frame: entrance, drag, touch swipe, 12 clicks in a second, vertical
   scroll that starts on the book, timeline, FAQ, reduced motion, no GSAP,
   no scripts at all.
+- 11.11, later: Lord sent real material. A new part before the prices,
+  "כשהספר מגיע הביתה": two photos of printed books (Elia, Meital & Bar)
+  and two WhatsApp messages from customers, typed out **word for word**
+  from his screenshots, with no names added (the screenshots had none).
+  Never tidy their wording and never attach a name or a book to a message
+  that did not carry one. Step 3 now shows the sharp bar-mitzvah page he
+  sent (`page-hanoch`), which is the same page that appears printed in the
+  open-book photo further down.
 
 ### 4.11 — setting the cover from a phone
 
