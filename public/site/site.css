@@ -303,3 +303,28 @@ body.wt{margin:0;background:var(--paper);color:var(--text);font-family:"Heebo",s
   html{scroll-behavior:auto}
   .wt *,.wt *::before,.wt *::after{transition-duration:.01ms!important;animation-duration:.01ms!important}
 }
+
+/* ── additions, 11.11 ── */
+.display__k{display:block;font-size:clamp(15px,1.45vw,18px);font-weight:800;letter-spacing:0;line-height:1.3;color:var(--text-2);margin-bottom:.85em;white-space:normal}
+.hero__row{display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px}
+.hero__row .link{font-size:16.5px}
+
+.when{margin-top:56px;padding-top:36px;border-top:1px solid var(--line)}
+.when__t{font-size:15px;font-weight:800;color:var(--text-2);margin-bottom:26px}
+.when__row{display:grid}
+.when__i{position:relative;padding-inline-start:26px;padding-bottom:28px;border-inline-start:2px solid var(--line)}
+.when__i:last-child{padding-bottom:0;border-inline-start-color:transparent}
+.when__i::before{content:"";position:absolute;inset-inline-start:-8px;top:5px;width:14px;height:14px;border-radius:50%;background:var(--paper);box-shadow:inset 0 0 0 2.5px var(--text)}
+.when__i:last-child::before{background:var(--text)}
+.when__i b{display:block;font-weight:900;font-size:clamp(23px,2.6vw,30px);line-height:1.1;letter-spacing:-.02em}
+.when__i span{display:block;margin-top:8px;color:var(--text-2);font-size:16px;line-height:1.5;max-width:23em}
+@media (min-width:860px){
+  .when{margin-top:88px;padding-top:0;border-top:0}
+  .when__i:last-child{border-top-color:var(--line)}
+  .when__row{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .when__i,.when__i:last-child{border-inline-start:0;border-top:2px solid var(--line);padding:26px 0 0;padding-inline-end:28px}
+  .when__i::before{inset-inline-start:0;top:-8px}
+}
+
+.plans__promise{color:var(--text)!important;font-weight:700;font-size:17px}
+.shelf:focus-visible{outline:2px solid var(--focus);outline-offset:4px}
