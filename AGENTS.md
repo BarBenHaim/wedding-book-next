@@ -518,6 +518,20 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 11.11 (later still) — /lp no longer sells a package that does not exist
+
+`public/lp.html` (the page the sales bot sends leads to) still showed a
+third package, "פרימיום מלכותי" at ₪1,490, whose button went to
+`add-to-cart=5480`, a product the shop does not have. It was removed from
+`salesAgent/catalog.js` on 19.9 at Lord's instruction but stayed on the
+page, and three weekly marketing reports flagged it.
+
+- Removed the card, its schema.org Offer, its CONFIG.buy link and the
+  price from the meta description. The grid is two columns now.
+- Left alone, for Lord to decide: the "נותרו 4 משבצות" chip, the stats
+  (240+ / 18,500+ / 4.9), the struck-through prices and the testimonials
+  on that page. None of them could be checked against real data.
+
 ### 11.11 (later) — builds dying in next/font, `npm run build` now retries
 
 Merging the /site preview, two builds out of three failed on files the
