@@ -806,6 +806,22 @@ and a demo form that sends nothing.
   arrows scroll to the matching place). Below that width it is tapped and
   dragged as before.
   New "מה מקבלים" grid: six facts, all from the sales catalog.
+- 12.11, event pages: the four SEO pages (bar mitzvah, bat mitzvah,
+  wedding guide, birthday) now exist in the same design. Preview:
+  /site/bar-mitzvah, /site/bat-mitzvah, /site/wedding, /site/birthday.
+  **Their words were not rewritten.** `tools/events_extract.py` reads the
+  live pages into `src/events/<key>.json`; `src/events.py` lays that copy
+  out again between the shared parts of the homepage (how it works, facts,
+  real messages, prices, closing). One h1 per page (the live pages had
+  two), FAQPage structured data where there are questions.
+  In the plugin they are served at the **existing addresses**, behind a
+  second checkbox, and keep the title, description and canonical the SEO
+  plugin already gives them. Left out on purpose: the invented sample
+  blessing and the AI illustrations of the old birthday page, and the old
+  price blocks (the shared price section replaces them).
+  Bug found on the way: a floor shadow under the hero pile was 3px wider
+  than a phone, which let the page slide sideways by a pixel. The hero now
+  clips horizontally.
 
 ### 4.11 — setting the cover from a phone
 
