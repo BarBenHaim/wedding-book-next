@@ -790,6 +790,22 @@ and a demo form that sends nothing.
   names under the hero, a little paper grain, and a real handwritten
   blessing before the last line. Pen blue is still only for things you
   press, real handwriting, and those pen marks.
+- 12.11: Lord still found it "default", was shown eight rendered directions
+  (print, colour field, night, scrapbook, magazine, retro, pastel, candy)
+  and rejected all of them. What he then said is the brief: **premium,
+  clearly a blessings book, not gaudy, not childish, but special; "like
+  Apple in the experience"; use the real examples well.** So: product-first
+  and calm. White and one soft grey (#F5F5F7), near-black text, weight 700
+  instead of 900, 28px tiles, the books carry all the colour. The band,
+  the pen underlines and the paper grain are gone. Do not bring back
+  stickers, starbursts, hard shadows, gradients on text or loud colour.
+  Hero is centred: name, one line, one sentence, two actions, then the
+  pile of real covers, large.
+  On screens ≥980px the flip book is pinned and **the scroll turns the
+  pages** (ScrollTrigger pin + scrub writes the same single number p; the
+  arrows scroll to the matching place). Below that width it is tapped and
+  dragged as before.
+  New "מה מקבלים" grid: six facts, all from the sales catalog.
 
 ### 4.11 — setting the cover from a phone
 
