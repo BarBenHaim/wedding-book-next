@@ -198,6 +198,7 @@
     }
     function turn(to, opts) {
       to = clamp(Math.round(to), 0, max);
+      if (scrub) { window.scrollTo({ top: scrub.start + (scrub.end - scrub.start) * (to / max) + 1, behavior: reduce ? 'auto' : 'smooth' }); return; }
       var moving = !!tw || !!raf;
       stop();
       target = to; label();
@@ -225,6 +226,18 @@
     }
     function spineX() { var r = book.getBoundingClientRect(); return target === 0 ? r.right + 1 : r.left + r.width / 2; }
 
+    /* On a wide screen the page holds still while you scroll and the scroll turns the pages. */
+    var scrub = null, pinEl = box.closest('.inside');
+    if (motion && ST && pinEl && box.hasAttribute('data-book-scrub') && window.matchMedia('(min-width:980px) and (min-height:640px)').matches) {
+      scrub = ST.create({ trigger: pinEl, start: 'center center', end: '+=' + (max * 80) + '%', pin: true, scrub: .6, anticipatePin: 1,
+        onUpdate: function (self) {
+          if (tw) { tw.kill(); tw = null; }
+          st.peek = 0; st.p = self.progress * max; draw();
+          var t = Math.round(st.p); if (t !== target) { target = t; label(); }
+        } });
+      box.classList.add('is-scrub');
+      var hint = $('.inside__hint', pinEl); if (hint) hint.textContent = 'גללו, והספר מתדפדף. זה ספר אמיתי: הספר של ג׳רי, ליום הולדת 90.';
+    }
     draw(); label();
     // Pages further in are lazy; fetch them when the book is about a screen away, so a turn never shows a blank leaf
     // and a visitor who never scrolls this far does not pay for them.
@@ -250,12 +263,12 @@
       turn(e.clientX < spineX() ? target + 1 : target - 1);
     });
     book.addEventListener('pointerdown', function (e) {
-      if (e.button || e.target.closest('a')) return;
+      if (scrub || e.button || e.target.closest('a')) return;
       drag = { id: e.pointerId, x: e.clientX, y: e.clientY, on: false, base: 0, dx: 0 };
     });
     book.addEventListener('pointermove', function (e) {
       if (!drag) {
-        if (e.pointerType === 'mouse') peek(e.clientX < spineX() ? (target < max ? .055 : 0) : (target > 0 ? -.055 : 0));
+        if (e.pointerType === 'mouse' && !scrub) peek(e.clientX < spineX() ? (target < max ? .055 : 0) : (target > 0 ? -.055 : 0));
         return;
       }
       if (e.pointerId !== drag.id) return;
@@ -292,7 +305,7 @@
       var io = new IntersectionObserver(function (en) {
         if (en[0].isIntersecting && en[0].intersectionRatio >= .5) {
           io.disconnect();
-          setTimeout(function () { if (!touched && target === 0 && !drag) turn(1, { dur: 1.5, ease: 'power3.inOut' }); }, 1250);
+          setTimeout(function () { if (!scrub && !touched && target === 0 && !drag) turn(1, { dur: 1.5, ease: 'power3.inOut' }); }, 1250);
         }
       }, { threshold: [.5] });
       io.observe(holder);
@@ -369,6 +382,9 @@
       var im = $('img', fr); if (!im) return;
       gsap.set(im, { scale: 1.1 });
       gsap.fromTo(im, { yPercent: -4.2 }, { yPercent: 4.2, ease: 'none', scrollTrigger: { trigger: fr, start: 'top bottom', end: 'bottom top', scrub: true } });
+    });
+    $$('.spread__img').forEach(function (fr) {
+      gsap.fromTo(fr, { scale: .84 }, { scale: 1, ease: 'none', scrollTrigger: { trigger: fr, start: 'top 96%', end: 'top 30%', scrub: true } });
     });
     window.addEventListener('load', function () { ST.refresh(); });
   }
