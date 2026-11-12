@@ -10,7 +10,7 @@
   var head = $('.head');
   if (head && 'IntersectionObserver' in window) {
     var sentinel = d.createElement('div');
-    sentinel.style.cssText = 'position:absolute;top:0;height:1px;width:1px';
+    sentinel.style.cssText = 'position:absolute;top:0;left:0;height:1px;width:1px;pointer-events:none';   // left:0 — in RTL an unplaced box sits one pixel past the right edge
     d.body.insertBefore(sentinel, d.body.firstChild);
     new IntersectionObserver(function (e) { head.classList.toggle('is-stuck', !e[0].isIntersecting); }).observe(sentinel);
   }
