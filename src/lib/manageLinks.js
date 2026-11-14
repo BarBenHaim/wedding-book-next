@@ -20,6 +20,9 @@
 // ── What a link can NOT do ───────────────────────────────────────────
 // • Overwrite the guest's own photo. A new photo is written to
 //   `imageUrlOverride` (lib/entryPhoto.js), so "restore" is one field.
+// • Lose a photo. Taking a photo out of the book (the photos-only page,
+//   /manage/[token]/photos) moves it into `removedPhoto` on the same
+//   entry, and "return" moves it back.
 // • Delete for good. A deleted blessing is moved to
 //   `weddings/{id}/entries_trash/{entryId}` first, so a forwarded link,
 //   a mis-tap or a family argument is recoverable by us.
@@ -51,6 +54,11 @@ export function canManage(data) {
 export function manageLinkUrl(origin, token) {
     const base = String(origin || '').replace(/\/$/, '')
     return `${base}/manage/${token}`
+}
+
+/** The photos-only view of the same link. */
+export function managePhotosUrl(origin, token) {
+    return `${manageLinkUrl(origin, token)}/photos`
 }
 
 // Only our Firebase Storage, and only this event's folder. Upload paths
@@ -90,7 +98,7 @@ export function validateEdit(body) {
     return { ok: true, fields: out }
 }
 
-export const MANAGE_ACTIONS = ['edit', 'photo', 'restorePhoto', 'delete', 'undoDelete', 'order']
+export const MANAGE_ACTIONS = ['edit', 'photo', 'restorePhoto', 'removePhoto', 'returnPhoto', 'delete', 'undoDelete', 'order']
 
 export function isManageAction(a) {
     return MANAGE_ACTIONS.includes(a)
@@ -102,6 +110,123 @@ export function actionAllowedOn(action, entry) {
     if (!entry) return false
     if (entry.kind === 'blank') return action === 'order'
     return true
+}
+
+// ── Taking a photo out of the book, and putting it back ──────────────
+//
+// The photos-only page lets the owner go through the pictures and decide
+// which ones stay. Two things can happen to a photo that goes out:
+//
+//   • The blessing has words. The words stay in the book, on a page
+//     without a picture. The photo fields move into `removedPhoto` on
+//     the same entry.
+//   • The page is only a photo (an album page, or a guest who sent a
+//     picture and nothing else). Without the photo there is nothing to
+//     print, so the whole page goes to the trash, like "delete".
+//
+// Why the fields MOVE instead of a "hidden" flag beside them: half the
+// app reads `imageUrl` straight from the document (the portal, the
+// public gallery, the mobile app) and five different doors write a new
+// photo to it. A flag would have to be honoured by every reader and
+// cleared by every writer, and the first one that forgot would either
+// print a photo the family took out or swallow one they added. With
+// `imageUrl: null` the entry simply IS a blessing without a photo,
+// everywhere, and the picture waits in `removedPhoto`.
+
+function str(v) {
+    return typeof v === 'string' && v.trim() ? v.trim() : null
+}
+
+function aspect(v) {
+    const n = Number(v)
+    return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/** Does this entry have words of its own (so it survives without a photo)? */
+export function hasBlessingText(entry) {
+    return typeof entry?.text === 'string' && entry.text.trim().length > 0
+}
+
+/** The photo the book shows for this entry right now, or null. */
+export function shownPhotoUrl(entry) {
+    return str(entry?.imageUrlOverride) || str(entry?.imageUrl)
+}
+
+/** The photo that was taken out and is waiting in `removedPhoto`, or null. */
+export function removedPhotoUrl(entry) {
+    const r = entry?.removedPhoto
+    if (!r || typeof r !== 'object') return null
+    return str(r.imageUrlOverride) || str(r.imageUrl)
+}
+
+/**
+ * What "take this photo out" does to an entry.
+ *
+ *   { ok: false, error }                 nothing to take out
+ *   { ok: true, mode: 'page' }           photo-only page → the caller trashes it
+ *   { ok: true, mode: 'photo', fields }  write `fields` (the caller adds timestamps)
+ */
+export function planPhotoRemoval(entry) {
+    if (!entry || entry.kind === 'blank') return { ok: false, error: 'no-photo' }
+    if (!shownPhotoUrl(entry)) return { ok: false, error: 'no-photo' }
+    if (!hasBlessingText(entry)) return { ok: true, mode: 'page' }
+    return {
+        ok: true,
+        mode: 'photo',
+        fields: {
+            removedPhoto: {
+                imageUrl: str(entry.imageUrl),
+                imgAspect: aspect(entry.imgAspect),
+                imageUrlOverride: str(entry.imageUrlOverride),
+                imgAspectOverride: aspect(entry.imgAspectOverride),
+            },
+            imageUrl: null,
+            // A stale number here would frame the NEXT photo someone adds
+            // to a box it does not fit; null makes the book measure it.
+            imgAspect: null,
+            imageUrlOverride: null,
+            imgAspectOverride: null,
+        },
+    }
+}
+
+/**
+ * What "put the photo back" writes.
+ *
+ *   { ok: false, error: 'nothing-removed' }   no photo is waiting
+ *   { ok: false, error: 'entry-has-photo' }   a different photo was added since — not ours to overwrite
+ *   { ok: true, fields }                      write `fields` and delete `removedPhoto`
+ */
+export function planPhotoReturn(entry) {
+    if (!removedPhotoUrl(entry)) return { ok: false, error: 'nothing-removed' }
+    if (shownPhotoUrl(entry)) return { ok: false, error: 'entry-has-photo' }
+    const r = entry.removedPhoto
+    return {
+        ok: true,
+        fields: {
+            imageUrl: str(r.imageUrl),
+            imgAspect: aspect(r.imgAspect),
+            imageUrlOverride: str(r.imageUrlOverride),
+            imgAspectOverride: aspect(r.imgAspectOverride),
+        },
+    }
+}
+
+/**
+ * A trashed page as the photos page lists it under "taken out" — only
+ * pages that were nothing but a photo. A trashed blessing with words is
+ * a decision about a blessing, and belongs to the main manage page.
+ */
+export function publicRemovedPage(entry) {
+    if (!entry || entry.kind === 'blank' || hasBlessingText(entry)) return null
+    const url = shownPhotoUrl(entry)
+    if (!url) return null
+    return {
+        id: entry.id,
+        name: typeof entry.name === 'string' ? entry.name : '',
+        imageUrl: url,
+        photoRotation: Number.isFinite(entry.photoRotation) ? entry.photoRotation : 0,
+    }
 }
 
 // What the page needs to show and edit one blessing — nothing more.
@@ -120,6 +245,10 @@ export function publicManageEntry(entry) {
         // Whether "restore" brings back the guest's photo or simply takes
         // away one that was added to a text-only blessing.
         guestHadPhoto: typeof entry.originalImageUrl === 'string' && entry.originalImageUrl.length > 0,
+        // A photo taken out on the photos page, waiting to be put back.
+        removedPhotoUrl: removedPhotoUrl(entry),
+        // Whether the page survives without its photo (photos page copy).
+        hasText: hasBlessingText(entry),
         preserveLineBreaks: entry.preserveLineBreaks === true,
         // Twins bar mitzvah: which boy the guest wrote to ('a'|'b'|'both').
         blessFor: normalizeBlessFor(entry.blessFor),
