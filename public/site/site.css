@@ -484,6 +484,8 @@ body.wt{margin:0;background:var(--paper);color:var(--text);font-family:"Heebo",s
 .deck{--s:min(60vw,330px);width:100%!important}
 @media (min-width:980px){.deck{--s:clamp(360px,32vw,490px)}}
 .deck__stack{margin-block:calc(var(--s)*.11) calc(var(--s)*.1)}
+/* the books order themselves with z-index up to 300. Kept inside the pile, or they float over the menu and the header */
+.deck__stack{isolation:isolate}
 .deck__stack::before{content:"";position:absolute;inset:auto -26% -9% -26%;height:16%;background:radial-gradient(closest-side,rgba(0,0,0,.2),transparent);filter:blur(14px)}
 .dk{box-shadow:-1px 0 0 #F3EAD6,-2px 0 0 #BDB092,-3px 0 0 #EFE5CF,-4px 0 0 #AC9F82,-5px 0 0 #F3EAD6,0 2px 6px rgba(0,0,0,.16),0 40px 60px -30px rgba(0,0,0,.5)}
 .deck__cap{padding-bottom:52px;gap:12px}
