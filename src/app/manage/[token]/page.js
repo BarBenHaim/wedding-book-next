@@ -18,7 +18,7 @@ import { useParams } from 'next/navigation'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import imageCompression from 'browser-image-compression'
 import {
-    Lock, Check, Loader2, RefreshCcw, ArrowUp, ArrowDown, Pencil, ImagePlus, Trash2, Undo2, GripVertical, X,
+    Lock, Check, Loader2, RefreshCcw, ArrowUp, ArrowDown, Pencil, ImagePlus, Trash2, Undo2, GripVertical, X, Images,
 } from 'lucide-react'
 import { Heebo } from 'next/font/google'
 import { storage } from '@/lib/firebaseClient'
@@ -289,11 +289,19 @@ export default function ManagePage() {
                 </div>
 
                 {/* Toolbar */}
-                <div className='flex items-center justify-between gap-2 mb-3'>
+                <div className='flex flex-wrap items-center justify-between gap-2 mb-3'>
                     <div className='text-[12.5px] text-[#7a6a52]'>
                         {blessingCount} {blessingCount === 1 ? 'ברכה' : 'ברכות'}
                     </div>
                     <div className='flex items-center gap-2'>
+                        {/* The same book with the words taken away: every photo, large, to decide which stay. */}
+                        <a
+                            href={`/manage/${encodeURIComponent(token)}/photos`}
+                            className='inline-flex items-center gap-1.5 bg-white text-[#AA8840] px-3 py-2 rounded-xl text-[12px] font-semibold border border-[#AA8840]/20'
+                        >
+                            <Images size={13} />
+                            רק התמונות
+                        </a>
                         <a
                             href={`/arrange/${encodeURIComponent(token)}`}
                             className='inline-flex items-center gap-1.5 bg-white text-[#AA8840] px-3 py-2 rounded-xl text-[12px] font-semibold border border-[#AA8840]/20'

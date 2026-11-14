@@ -518,6 +518,45 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 14.11 — the manage link gets a photos-only page
+
+Lord: in the manage-the-blessings link, also a link to see only the
+photos, without the blessings, and choose which stay.
+
+- `/manage/[token]/photos` (same token, same API). A contact sheet of
+  every photo in the book, shown whole (contain, never cropped, turned by
+  `photoRotation` like the book), a full-screen viewer (swipe, arrows,
+  the phone's back button closes it), and two lists: "בספר" and "הוצאו
+  מהספר". Reached from "רק התמונות" on `/manage/[token]`. The site header
+  is hidden on this page (Header.jsx), like on `/arrange/`.
+- Two new actions on `/api/manage/[token]`: `removePhoto`, `returnPhoto`.
+  The server decides what "out" means (`planPhotoRemoval` in
+  `src/lib/manageLinks.js`):
+  - a blessing WITH words keeps its page. `imageUrl`, `imgAspect`,
+    `imageUrlOverride`, `imgAspectOverride` move into `removedPhoto` on
+    the same entry and are set to null;
+  - a page that is ONLY a photo (album pages, a guest who sent just a
+    picture) goes to `entries_trash` whole, same as `delete`.
+  `returnPhoto` undoes either. It refuses (409 `entry-has-photo`) when a
+  different photo was added to the blessing in the meantime.
+- Why the fields move instead of a `photoHidden` flag: the portal, the
+  public gallery and the mobile app read `imageUrl` raw, and five doors
+  write a new photo to it. A flag would need every reader to honour it
+  and every writer to clear it. With `imageUrl: null` the entry simply is
+  a blessing without a photo on every surface, print included.
+- `GET /api/manage/[token]?photos=1` adds `removedPages` (photo-only
+  pages in the trash), so the "taken out" list survives a reload. The
+  main manage page does not ask for it.
+- Nothing is deleted from Storage, here or anywhere on this path.
+- Checked: tests/managePhotos.test.js runs the real route against an
+  in-memory Firestore (14 tests); the page was driven in a real browser
+  (phone and desktop) against a mocked API. NOT run against the real
+  Firestore from here — there are no Firebase credentials in this
+  environment.
+- Not done: the owner's logged-in ניהול ברכות (`/wedding/[id]/admin`) has
+  no photos-only view, and the main manage page does not say "a photo
+  was taken out" on a blessing whose photo is waiting in `removedPhoto`.
+
 ### 11.11 (night) — "החלף תמונה" spins forever on the same computer
 
 Lord: "I press replace photo, it loads for a long time and nothing

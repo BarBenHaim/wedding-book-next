@@ -1,10 +1,16 @@
 // /api/manage/[token] — the no-login "manage the blessings" API.
 //
 //   GET   → { ok, wedding: { id, title, eventType }, entries: [...] }
+//   GET ?photos=1 → the same, plus removedPages: photo-only pages in the
+//         trash, for the photos-only page (/manage/[token]/photos)
 //   POST  { action, ... } → { ok, ... }
 //         edit          { entryId, name?, text? }
 //         photo         { entryId, imageUrl, imgAspect? }  (URL from this event's storage folder)
 //         restorePhoto  { entryId }
+//         removePhoto   { entryId }    → the photo leaves the book. A blessing with
+//                                         words keeps its page (mode 'photo'); a page
+//                                         that is only a photo goes to the trash (mode 'page')
+//         returnPhoto   { entryId }    → the photo (or the photo-only page) comes back
 //         delete        { entryId }    → moved to entries_trash, then removed
 //         undoDelete    { entryId }    → moved back from entries_trash
 //         order         { order: [entryId, ...] }
@@ -36,6 +42,9 @@ import {
     validateEdit,
     isOwnEventPhotoUrl,
     publicManageEntry,
+    publicRemovedPage,
+    planPhotoRemoval,
+    planPhotoReturn,
     TRASH_SUBCOLLECTION,
 } from '@/lib/manageLinks'
 import { writeEntryOrder } from '@/lib/server/entryOrder'
@@ -80,6 +89,48 @@ async function loadEntries(weddingId) {
     return sortForArrange(entries)
 }
 
+// Photo-only pages that were taken out, newest first. The photos page
+// lists them beside the photos that were only detached from a blessing,
+// so "what is not in the book" is one list whichever way it left.
+async function loadRemovedPages(weddingId) {
+    const qs = await adminDb.collection('weddings').doc(weddingId).collection(TRASH_SUBCOLLECTION).get()
+    return qs.docs
+        .map(d => {
+            const data = d.data() || {}
+            const page = publicRemovedPage({ id: d.id, ...data })
+            return page ? { ...page, at: toMs(data.deletedAt) || 0 } : null
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.at - a.at)
+        .map(({ at, ...page }) => page)
+}
+
+// Entry → trash, in one batch, so a page is never gone without a copy.
+async function moveToTrash(weddingRef, entryRef, entryId, entry, link) {
+    const batch = adminDb.batch()
+    batch.set(weddingRef.collection(TRASH_SUBCOLLECTION).doc(entryId), {
+        ...entry,
+        deletedAt: FieldValue.serverTimestamp(),
+        deletedVia: 'manage-link',
+        deletedToken: String(link.ref.id).slice(0, 8),
+    })
+    batch.delete(entryRef)
+    await batch.commit()
+}
+
+// Trash → entry. Returns the restored entry, or null when it is not there.
+async function restoreFromTrash(weddingRef, entryRef, entryId) {
+    const trashRef = weddingRef.collection(TRASH_SUBCOLLECTION).doc(entryId)
+    const tSnap = await trashRef.get()
+    if (!tSnap.exists) return null
+    const { deletedAt, deletedVia, deletedToken, ...original } = tSnap.data() || {}
+    const batch = adminDb.batch()
+    batch.set(entryRef, original)
+    batch.delete(trashRef)
+    await batch.commit()
+    return resolveEntryPhoto({ id: entryId, ...original, timestamp: toMs(original.timestamp) })
+}
+
 function isSafeId(s) {
     return typeof s === 'string' && s.length > 0 && s.length < 200 && !/[/\\]/.test(s) && !s.includes('..')
 }
@@ -90,7 +141,7 @@ function touch(link, field) {
     link.ref.set({ lastUsedAt: FieldValue.serverTimestamp(), [field]: FieldValue.increment(1) }, { merge: true }).catch(() => {})
 }
 
-export async function GET(_req, { params }) {
+export async function GET(req, { params }) {
     try {
         const { token } = await params
         const link = await loadLink(token)
@@ -100,6 +151,8 @@ export async function GET(_req, { params }) {
         if (!wSnap.exists) return NOT_FOUND()
         const w = wSnap.data() || {}
         const entries = await loadEntries(weddingId)
+        const wantPhotos = new URL(req.url).searchParams.get('photos') === '1'
+        const removedPages = wantPhotos ? await loadRemovedPages(weddingId) : undefined
         return NextResponse.json({
             ok: true,
             wedding: {
@@ -111,6 +164,7 @@ export async function GET(_req, { params }) {
                 celebrantName2: w.eventType === 'twins_bar_mitzvah' ? w.celebrantName2 || '' : undefined,
             },
             entries: entries.map(publicManageEntry),
+            removedPages,
         })
     } catch (err) {
         console.error('[manage GET] failed:', err?.message || err)
@@ -144,23 +198,62 @@ export async function POST(req, { params }) {
         const entryRef = weddingRef.collection('entries').doc(entryId)
 
         if (action === 'undoDelete') {
-            const trashRef = weddingRef.collection(TRASH_SUBCOLLECTION).doc(entryId)
-            const tSnap = await trashRef.get()
-            if (!tSnap.exists) return bad(404, 'not-in-trash')
-            const { deletedAt, deletedVia, deletedToken, ...original } = tSnap.data() || {}
-            const batch = adminDb.batch()
-            batch.set(entryRef, original)
-            batch.delete(trashRef)
-            await batch.commit()
+            const restored = await restoreFromTrash(weddingRef, entryRef, entryId)
+            if (!restored) return bad(404, 'not-in-trash')
             touch(link, 'edits')
-            const restored = resolveEntryPhoto({ id: entryId, ...original, timestamp: toMs(original.timestamp) })
             return NextResponse.json({ ok: true, entry: publicManageEntry(restored) })
         }
 
         const snap = await entryRef.get()
+
+        // The photo comes back. It is waiting in one of two places: on
+        // the entry itself (a blessing that kept its words), or in the
+        // trash with the whole page (a page that was only a photo).
+        if (action === 'returnPhoto') {
+            if (!snap.exists) {
+                const restored = await restoreFromTrash(weddingRef, entryRef, entryId)
+                if (!restored) return bad(404, 'nothing-removed')
+                touch(link, 'edits')
+                return NextResponse.json({ ok: true, mode: 'page', entry: publicManageEntry(restored) })
+            }
+            const current = snap.data() || {}
+            const plan = planPhotoReturn(current)
+            if (!plan.ok) return bad(plan.error === 'entry-has-photo' ? 409 : 404, plan.error)
+            await entryRef.set(
+                { ...plan.fields, removedPhoto: FieldValue.delete(), editedAt: FieldValue.serverTimestamp(), editedVia: 'manage-link' },
+                { merge: true },
+            )
+            touch(link, 'edits')
+            const { removedPhoto, ...rest } = current
+            const restored = resolveEntryPhoto({ id: entryId, ...rest, ...plan.fields, timestamp: toMs(current.timestamp) })
+            return NextResponse.json({ ok: true, mode: 'photo', entry: publicManageEntry(restored) })
+        }
+
         if (!snap.exists) return bad(404, 'entry-not-found')
         const entry = snap.data() || {}
         if (!actionAllowedOn(action, entry)) return bad(403, 'blank-page-locked')
+
+        if (action === 'removePhoto') {
+            const plan = planPhotoRemoval(entry)
+            if (!plan.ok) return bad(404, plan.error)
+            if (plan.mode === 'page') {
+                await moveToTrash(weddingRef, entryRef, entryId, entry, link)
+                touch(link, 'edits')
+                return NextResponse.json({ ok: true, mode: 'page', page: publicRemovedPage({ id: entryId, ...entry }) })
+            }
+            await entryRef.set(
+                {
+                    ...plan.fields,
+                    removedPhoto: { ...plan.fields.removedPhoto, removedAt: FieldValue.serverTimestamp(), removedVia: 'manage-link' },
+                    editedAt: FieldValue.serverTimestamp(),
+                    editedVia: 'manage-link',
+                },
+                { merge: true },
+            )
+            touch(link, 'edits')
+            const after = resolveEntryPhoto({ id: entryId, ...entry, ...plan.fields, timestamp: toMs(entry.timestamp) })
+            return NextResponse.json({ ok: true, mode: 'photo', entry: publicManageEntry(after) })
+        }
 
         if (action === 'edit') {
             const check = validateEdit(body)
@@ -189,15 +282,7 @@ export async function POST(req, { params }) {
         if (action === 'delete') {
             // Into the trash first, in the same batch as the delete, so a
             // blessing is never gone without a copy.
-            const batch = adminDb.batch()
-            batch.set(weddingRef.collection(TRASH_SUBCOLLECTION).doc(entryId), {
-                ...entry,
-                deletedAt: FieldValue.serverTimestamp(),
-                deletedVia: 'manage-link',
-                deletedToken: String(link.ref.id).slice(0, 8),
-            })
-            batch.delete(entryRef)
-            await batch.commit()
+            await moveToTrash(weddingRef, entryRef, entryId, entry, link)
             touch(link, 'edits')
             return NextResponse.json({ ok: true, deleted: entryId })
         }

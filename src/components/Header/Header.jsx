@@ -169,7 +169,11 @@ export default function Header() {
     // /arrange/[token] is the no-login "arrange the blessings" page the
     // owner opens from a WhatsApp link; a site nav with a login button
     // on it would only invite the password they do not have.
+    // /manage/[token]/photos is the same link's photos-only view: a
+    // contact sheet and a full-screen viewer, where a sticky site bar
+    // would take a sixth of a phone screen away from the pictures.
     if (pathname === '/start' || pathname === '/my' || pathname === '/app' || pathname?.startsWith('/arrange/')) return null
+    if (/^\/manage\/[^/]+\/photos\/?$/.test(pathname || '')) return null
 
     return (
         <>
