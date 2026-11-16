@@ -518,6 +518,60 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 16.11 — sales page v2 at /site2: build the book, then order it
+
+Lord gave mebook.ai as the reference and asked for a full sales page for
+the blessings book, "with purchase and creation of the book", with every
+honest conversion device, and media made together with Codex.
+
+- Preview: `https://app.weddingtales.co.il/site2` (static files in
+  `public/site2`, rewrite in `next.config.mjs`, `noindex`). The first
+  homepage at `/site` is untouched. Nothing is installed on
+  weddingtales.co.il.
+- What was taken from the reference is how the page sells, not how it
+  looks: the offer and the price sit in the hero, the visitor sees their
+  own product before paying, every chapter ends with the same button,
+  objections are answered by a comparison table, "nothing is printed
+  before you approve" is repeated, and soft tinted grounds split a long
+  page into chapters.
+- The builder (`#make`): event type → name(s), optional date, optional
+  photo → cover style → package → order. It is a SIMULATION and says so
+  under the cover; the real cover is made by the designer after the
+  order (catalog.js). The photo is read with `URL.createObjectURL` and
+  never leaves the device. The cover backgrounds are the app's own page
+  textures (`public/textures/tex4..8`).
+- The name the visitor types is echoed on the page: the hero headline,
+  the order button, the bar on phones, the last call to action.
+- The accent colour follows the event type (`html[data-ev]`), and the
+  hero book shows real covers of that event type.
+- The date gives a true sentence, not a countdown: days until the event
+  and the 48-hours fact; "write to us first" under three days; "you can
+  start after the event" for a past date.
+- Prices: printed 990 ₪ with 1,190 ₪ struck through — checked against
+  the shop's Store API on 16.11 (regular 1190, sale 990, on sale).
+  Digital 690 ₪ has no higher regular price in the shop, so no
+  strike-through there. The 300 ₪ upgrade price stays off the page.
+- Left out on purpose: countdown timers, "limited time", pop-ups, email
+  capture, counters of customers, invented reviews. The reference uses
+  several; none would be true here. Proof on the page is the same real
+  material as `/site`: seven real covers, real pages, two photos of
+  printed books, two WhatsApp messages word for word, the TV clip.
+- The order buttons go to the same add-to-cart links as before (6271,
+  6258). The builder's choices are saved in this browser
+  (`localStorage` `wt_book`) and in a cookie `wt_draft` on
+  `.weddingtales.co.il` (no photo, no personal details beyond the names
+  typed). NOTHING READS THAT COOKIE YET: the shop and the app do not
+  receive the brief. The page does not claim they do.
+- Source: the session's `site2/` folder (`src/build.py`, `site.css`,
+  `site.js`, `tools/`), copied to `sales-kit/site-2026-11-v2/` in Lord's
+  folder. Build: `python3 src/build.py` → `dist/next/site2/`.
+- Checked in a real browser: the whole builder on a phone and a desktop
+  (`tools/flow.mjs`), no sideways scroll from 320px up, axe WCAG 2 AA
+  clean on both, first load about 0.7MB on a phone.
+- Not done: Codex media (Codex CLI is installed in the session and waits
+  for Lord's device login), carrying the brief into the order, the
+  WordPress plugin for v2, the four event pages in this design.
+
 ### 14.11 — the manage link gets a photos-only page
 
 Lord: in the manage-the-blessings link, also a link to see only the
