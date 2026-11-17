@@ -23,6 +23,8 @@ const nextConfig = {
                 { source: '/site', destination: '/site/index.html' },
                 // ארבעת עמודי האירועים באותו עיצוב (תצוגה מקדימה בלבד; באתר עצמו הם בכתובות הקיימות דרך התוסף).
                 { source: '/site/:event(bar-mitzvah|bat-mitzvah|wedding|birthday)', destination: '/site/:event/index.html' },
+                // דף המכירה החדש (גרסה 2: בונים את הספר ואז מזמינים) — תצוגה מקדימה, קבצים סטטיים ב-public/site2.
+                { source: '/site2', destination: '/site2/index.html' },
             ],
             fallback: [],
         };
