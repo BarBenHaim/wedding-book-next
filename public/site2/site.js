@@ -1,24 +1,33 @@
-/* Wedding Tales — sales page v2.
-   One state object (the visitor's book), drawn everywhere it shows:
-   the cover preview, the headings that say whose book it is, the order button.
-   Nothing here talks to a server. The photo never leaves the device. */
+/* Wedding Tales — sales page v2, second pass.
+   One state object (the visitor's book), drawn everywhere it shows: the cover,
+   the sample page, the headings that say whose book it is, the order buttons.
+   Nothing here talks to a server. Photos and typed words never leave the device. */
 (function () {
   'use strict';
   var d = document, w = window, root = d.documentElement;
   var CFG = w.WT || { buy: {}, events: {}, styles: {} };
   var reduce = w.matchMedia && w.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var fine = w.matchMedia && w.matchMedia('(hover: hover) and (pointer: fine)').matches;
   var $ = function (s, c) { return (c || d).querySelector(s); };
   var $$ = function (s, c) { return Array.prototype.slice.call((c || d).querySelectorAll(s)); };
 
   var PRICE = { print: '990 ₪', digital: '690 ₪' };
   var ASK = {
-    bar: { q: 'מה השם של חתן בר המצווה?', l: 'שם', ph: 'למשל: נועם' },
-    bat: { q: 'מה השם של כלת בת המצווה?', l: 'שם', ph: 'למשל: טליה' },
-    wedding: { q: 'מה השמות שלכם?', l: 'שם', ph: 'למשל: מיטל' },
-    birthday: { q: 'של מי יום ההולדת?', l: 'שם', ph: 'למשל: סבא ג׳רי' }
+    bar: { q: 'מה השם של חתן בר המצווה?', ph: 'למשל: נועם' },
+    bat: { q: 'מה השם של כלת בת המצווה?', ph: 'למשל: טליה' },
+    wedding: { q: 'מה השמות שלכם?', ph: 'למשל: מיטל' },
+    birthday: { q: 'של מי יום ההולדת?', ph: 'למשל: סבא ג׳רי' }
+  };
+  // The headline before a name is known, per event.
+  var HOOK = {
+    bar: 'כל מי שאוהב אותו.',
+    bat: 'כל מי שאוהב אותה.',
+    wedding: 'כל מי שאוהב אתכם.',
+    birthday: 'כל המשפחה והחברים.'
   };
 
   var state = { ev: 'bar', n1: '', n2: '', date: '', style: 'gold', pack: 'print', step: 1, photo: false };
+  var demo = { name: 'סבתא רותי', text: '', touched: false, typed: false, timer: null };
 
   /* ── memory: this browser only ─────────────────────────────── */
   function save() {
@@ -78,9 +87,17 @@
     var n = s.length;
     return n <= 3 ? 23 : n <= 5 ? 19.5 : n <= 8 ? 15.5 : n <= 12 ? 12 : n <= 18 ? 9.5 : 7.5;
   }
+  // A sample blessing, in the voice of a guest. It is shown as a sample and says so.
+  function sampleText() {
+    var n = who();
+    if (state.ev === 'wedding') return (n ? n + ' האהובים,' : 'זוג יקר,') + '\nמזל טוב! שתמיד תצחקו יחד כמו שצחקתם הערב, ושהבית שלכם יהיה מלא חברים ואור.\nאוהבים אתכם מאוד';
+    if (state.ev === 'bat') return (n ? n + ' שלנו,' : 'ילדה יקרה שלנו,') + '\nמזל טוב לבת המצווה! איזו גאווה לראות אותך גדלה. שתמשיכי לחלום בגדול וללכת בדרך שלך.\nאוהבים אותך מאוד';
+    if (state.ev === 'birthday') return (n ? 'ל' + n + ',' : 'ליום ההולדת,') + '\nמזל טוב! תודה על כל הרגעים, הסיפורים והצחוק. שנזכה לחגוג איתך עוד הרבה שנים.\nבאהבה גדולה';
+    return (n ? n + ' שלנו,' : 'ילד יקר שלנו,') + '\nמזל טוב לבר המצווה! איזו גאווה לראות אותך עולה לתורה. שתמשיך לגדול עם הלב הטוב שלך.\nאוהבים אותך מאוד';
+  }
 
   /* ── draw ──────────────────────────────────────────────────── */
-  var cv = $('[data-cv]');
+  var cv = $('[data-cv]'), dp = $('[data-dp]');
   function draw() {
     var name = who(), ev = CFG.events[state.ev] || { label: '' };
     root.setAttribute('data-ev', state.ev);
@@ -98,6 +115,7 @@
       $('[data-cv-date]', cv).textContent = niceDate(state.date);
       cv.setAttribute('aria-label', 'הדמיית כריכה: ספר הברכות של ' + shown + ', ' + ev.label);
     }
+    if (dp) dp.setAttribute('data-style', state.style);
 
     var ask = ASK[state.ev] || ASK.bar;
     var q = $('[data-q-name]'); if (q) q.textContent = ask.q;
@@ -108,12 +126,13 @@
     if (dl) { var t = dateLine(); dl.textContent = t; dl.hidden = !t; }
 
     var echo = {
-      hero: name ? 'ספר הברכות של ' + name + '.' : 'ספר הברכות שלכם.',
+      hero: name ? 'כל מי שאוהב את ' + name + '.' : (HOOK[state.ev] || HOOK.bar),
       book: name ? 'הספר של ' + name : 'הספר שלכם',
       'book-inline': name ? 'הספר של ' + name : 'הספר שלי',
       bar: name ? 'הספר של ' + name : 'ספר מודפס ודיגיטלי'
     };
     $$('[data-echo]').forEach(function (el) { var k = el.getAttribute('data-echo'); if (echo[k] !== undefined) el.textContent = echo[k]; });
+    var dfor = $('[data-demo-for]'); if (dfor) dfor.textContent = name ? 'בשביל ' + name : 'בשביל האירוע שלכם';
 
     var sum = $('[data-summary]');
     if (sum) {
@@ -137,13 +156,16 @@
       if (state.step === 4) { bb.href = CFG.buy[state.pack] || '#pricing'; bb.textContent = 'להזמנה · ' + PRICE[state.pack]; }
       else { bb.href = '#make'; bb.textContent = 'יוצרים ספר'; }
     }
+
+    // The sample page follows the event and the name until the visitor writes their own.
+    if (!demo.touched && demo.typed) setDemoText(sampleText(), true);
   }
 
   /* ── the hero book: real covers, one at a time ─────────────── */
-  var stage = $('[data-stage]');
-  var covers = stage ? $$('.hb', stage) : [];
-  var dots = stage ? $('[data-stage-dots]', stage) : null;
-  var cap = stage ? $('[data-stage-cap]', stage) : null;
+  var scene = $('[data-scene]');
+  var covers = scene ? $$('.hb', scene) : [];
+  var dots = scene ? $('[data-stage-dots]') : null;
+  var cap = scene ? $('[data-stage-cap]') : null;
   var pool = [], at = 0, spin = null, touched = false;
   function showCover(i, animate) {
     if (!pool.length) return;
@@ -151,7 +173,8 @@
     // Never turn to a cover that has not arrived yet: an empty book is worse than a late one.
     var pic = pool[next].querySelector('img');
     if (animate && pic && !pic.complete && next !== at) {
-      pic.addEventListener('load', function () { if (pool[next] && pool.indexOf(pool[next]) === next) showCover(next, true); }, { once: true });
+      var target = pool[next];
+      pic.addEventListener('load', function () { var k = pool.indexOf(target); if (k > -1) showCover(k, true); }, { once: true });
       return;
     }
     at = next;
@@ -161,7 +184,7 @@
     if (dots) $$('button', dots).forEach(function (b, k) { b.setAttribute('aria-pressed', String(k === at)); });
   }
   function setPool() {
-    if (!stage) return;
+    if (!scene) return;
     pool = covers.filter(function (c) { return (' ' + c.getAttribute('data-evs') + ' ').indexOf(' ' + state.ev + ' ') > -1; });
     if (!pool.length) pool = covers.slice(0, 1);
     pool.forEach(function (c) { var im = c.querySelector('img'); if (im) im.loading = 'eager'; });
@@ -174,7 +197,8 @@
         dots.appendChild(b);
       });
     }
-    showCover(0, true);
+    at = -1;
+    showCover(0, false);
     startSpin();
   }
   function stopSpin() { if (spin) { clearInterval(spin); spin = null; } }
@@ -182,6 +206,125 @@
     stopSpin();
     if (reduce || touched || pool.length < 2) return;
     spin = setInterval(function () { if (!d.hidden) showCover(at + 1, true); }, 4200);
+  }
+
+  /* ── books lean a little toward the pointer (one number each way) ── */
+  if (fine && !reduce) $$('[data-tilt]').forEach(function (box) {
+    var host = box.closest('.scene, .mk__preview') || box, raf = 0, tx = 0, ty = 0;
+    function apply() { raf = 0; box.style.setProperty('--ry', tx.toFixed(2) + 'deg'); box.style.setProperty('--rx', ty.toFixed(2) + 'deg'); }
+    host.addEventListener('pointermove', function (e) {
+      var r = host.getBoundingClientRect();
+      tx = ((e.clientX - r.left) / r.width - 0.5) * 16;
+      ty = -((e.clientY - r.top) / r.height - 0.5) * 9;
+      if (!raf) raf = requestAnimationFrame(apply);
+    });
+    host.addEventListener('pointerleave', function () { tx = 0; ty = 0; if (!raf) raf = requestAnimationFrame(apply); });
+  });
+
+  /* ── envelope against page: one number, 0..100 ─────────────── */
+  $$('[data-cmpx]').forEach(function (box) {
+    var r = $('.cmpx__range', box);
+    if (!r) return;
+    var set = function () { box.style.setProperty('--x', r.value + '%'); };
+    r.addEventListener('input', function () { box.setAttribute('data-moved', '1'); set(); });
+    set();
+  });
+
+  /* ── try it: what is typed on the phone is set on the page ─── */
+  var dmBox = $('[data-demo]');
+  var outName = $('[data-demo-out="name"]'), outText = $('[data-demo-out="text"]');
+  var inName = $('[data-demo-in="name"]'), inText = $('[data-demo-in="text"]');
+  function fitDemo(s) {
+    var n = s.length;
+    return n <= 70 ? 5 : n <= 130 ? 4.4 : n <= 190 ? 3.9 : n <= 260 ? 3.4 : 3.05;
+  }
+  function setDemoText(s, alsoInput) {
+    demo.text = s;
+    if (outText) { outText.textContent = s; outText.style.setProperty('--fs', fitDemo(s)); }
+    if (alsoInput && inText) inText.value = s;
+  }
+  function typeDemo() {
+    if (demo.typed || demo.touched || !outText) return;
+    demo.typed = true;
+    var full = sampleText();
+    if (inText) inText.value = full;
+    if (reduce) { setDemoText(full, false); return; }
+    var i = 0;
+    outText.style.setProperty('--fs', fitDemo(full));
+    outText.classList.add('is-typing');
+    demo.timer = setInterval(function () {
+      i += 2;
+      outText.textContent = full.slice(0, i);
+      if (i >= full.length) { clearInterval(demo.timer); demo.timer = null; outText.classList.remove('is-typing'); demo.text = full; }
+    }, 34);
+  }
+  function stopTyping() { if (demo.timer) { clearInterval(demo.timer); demo.timer = null; } if (outText) outText.classList.remove('is-typing'); }
+  if (dmBox) {
+    dmBox.addEventListener('input', function (e) {
+      var k = e.target.getAttribute && e.target.getAttribute('data-demo-in');
+      if (k === 'name') { demo.name = e.target.value; if (outName) outName.textContent = clean(demo.name); }
+      else if (k === 'text') { demo.touched = true; demo.typed = true; stopTyping(); setDemoText(e.target.value, false); }
+    });
+    dmBox.addEventListener('focusin', function (e) {
+      if (e.target === inText && demo.timer) { stopTyping(); setDemoText(sampleText(), true); }
+    });
+    dmBox.addEventListener('change', function (e) {
+      if (e.target.getAttribute('data-demo-in') !== 'photo') return;
+      var file = e.target.files && e.target.files[0];
+      if (!file || !/^image\//.test(file.type)) return;
+      var img = $('[data-demo-photo]');
+      if (img.src && img.src.indexOf('blob:') === 0) URL.revokeObjectURL(img.src);
+      img.src = URL.createObjectURL(file);
+      dp.setAttribute('data-has-photo', '1');
+      var lab = $('[data-demo-photo-label]'); if (lab) lab.textContent = 'החלפת תמונה';
+      track('demo-photo');
+    });
+  }
+
+  /* ── price, per guest: plain division ──────────────────────── */
+  $$('[data-calc]').forEach(function (box) {
+    var inp = $('[data-calc-in]', box), n = $('[data-calc-n]', box), out = $('[data-calc-out]', box);
+    if (!inp) return;
+    var set = function () {
+      var g = Math.max(1, Number(inp.value) || 200);
+      var per = 990 / g;
+      n.textContent = g;
+      out.textContent = (per >= 10 ? per.toFixed(0) : per.toFixed(2)) + ' ₪ לאורח';
+    };
+    inp.addEventListener('input', set); set();
+  });
+
+  /* ── the window that opens on a real book ──────────────────── */
+  var modal = $('#wt-book'), lastOpener = null, modalEv = null;
+  if (modal && typeof modal.showModal === 'function') {
+    d.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-book]');
+      if (!b) return;
+      lastOpener = b; modalEv = b.getAttribute('data-book-ev');
+      var f = b.getAttribute('data-book'), wd = b.getAttribute('data-book-w'), n = b.getAttribute('data-book-name'), t = b.getAttribute('data-book-type');
+      var im = $('[data-modal-cover]', modal);
+      im.src = (CFG.base || '') + 'assets/img/' + f + '-' + wd + '.webp';
+      im.alt = 'כריכת ספר הברכות של ' + n + ', ' + t;
+      $('[data-modal-title]', modal).textContent = 'הספר של ' + n;
+      $('[data-modal-type]', modal).textContent = t;
+      var isJerry = f === 'cover-jerry';
+      $('[data-modal-pages]', modal).hidden = !isJerry;
+      $('[data-modal-lead]', modal).textContent = isJerry
+        ? 'ספר אמיתי שהוכן בהפתעה: המשפחה והחברים כתבו מראש, בעברית ובאנגלית, וג׳רי קיבל את הספר ביום ההולדת.'
+        : 'ספר אמיתי שהכנו. הכריכה עוצבה סביב השם והתמונה, ובפנים עמוד לכל אורח שכתב.';
+      modal.showModal();
+      track('book-open-' + f);
+    });
+    modal.addEventListener('click', function (e) { if (e.target === modal) modal.close(); });
+    modal.addEventListener('close', function () { if (lastOpener && d.contains(lastOpener) && !modal.dataset.go) lastOpener.focus(); delete modal.dataset.go; });
+    var mk = $('[data-modal-make]', modal);
+    if (mk) mk.addEventListener('click', function () {
+      modal.dataset.go = '1';
+      modal.close();
+      if (modalEv && CFG.events[modalEv] && modalEv !== state.ev) { state.ev = modalEv; touched = false; save(); draw(); setPool(); }
+      var target = $('#make');
+      if (target) target.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    });
   }
 
   /* ── the builder ───────────────────────────────────────────── */
@@ -226,9 +369,8 @@
 
   if (make) {
     make.addEventListener('click', function (e) {
-      var t = e.target.closest('[data-next],[data-back],[data-style-set]');
+      var t = e.target.closest('[data-next],[data-back]');
       if (!t) return;
-      if (t.hasAttribute('data-style-set')) { state.style = t.getAttribute('data-style-set'); save(); draw(); return; }
       if (t.hasAttribute('data-back')) { goStep(state.step - 1, true); return; }
       if (state.step === 2 && !needName()) return;
       goStep(state.step + 1, true);
@@ -276,8 +418,10 @@
     });
   }
 
-  /* ── event chips, anywhere on the page ─────────────────────── */
+  /* ── choices that live anywhere on the page ────────────────── */
   d.addEventListener('click', function (e) {
+    var s = e.target.closest('[data-style-set]');
+    if (s) { state.style = s.getAttribute('data-style-set'); save(); draw(); return; }
     var b = e.target.closest('[data-ev-set]');
     if (!b) return;
     var ev = b.getAttribute('data-ev-set');
@@ -314,7 +458,7 @@
       es.forEach(function (en) { quiet[en.target.getAttribute('data-quiet')] = en.isIntersecting; });
       onScroll();
     }, { threshold: 0.12 });
-    [['make', make], ['plans', $('.plans')]].forEach(function (p) { if (p[1]) { p[1].setAttribute('data-quiet', p[0]); hush.observe(p[1]); } });
+    [['make', make], ['plans', $('.offerx')]].forEach(function (p) { if (p[1]) { p[1].setAttribute('data-quiet', p[0]); hush.observe(p[1]); } });
 
     var vids = new IntersectionObserver(function (es) {
       es.forEach(function (en) {
@@ -326,8 +470,16 @@
       });
     }, { threshold: 0.35 });
     $$('video[data-loop]').forEach(function (v) { vids.observe(v); });
+
+    if (dmBox) {
+      var once = new IntersectionObserver(function (es) {
+        es.forEach(function (en) { if (en.isIntersecting) { typeDemo(); once.disconnect(); } });
+      }, { threshold: 0.3 });
+      once.observe(dmBox);
+    }
   } else {
     $$('[data-rise]').forEach(function (el) { el.classList.add('is-in'); });
+    typeDemo();
   }
 
   $$('[data-film]').forEach(function (box) {
@@ -359,4 +511,5 @@
   if (make) goStep(1, false); else draw();
   setPool();
   onScroll();
+  if (scene) requestAnimationFrame(function () { requestAnimationFrame(function () { scene.classList.add('is-in'); }); });
 })();
