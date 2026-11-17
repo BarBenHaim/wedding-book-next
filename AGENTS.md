@@ -518,6 +518,59 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 17.11 — /site2, second pass: the table at the entrance
+
+Lord: better selling ideas, a page that looks special and designed, not
+default; use media, build elements and windows; content and conversion
+too.
+
+- The page is now laid out as a sales letter: hook → what is lost
+  without the book → the mechanism, tried by hand → make it yours → how
+  it runs → real books → why not a paper guest book → proof → the offer
+  and its price, reframed → the promise → questions → close.
+- Hero: a composed scene of the real parts — a real QR poster
+  (`sign-elia`), the guest page on a phone, two real pages, and the book
+  as a hardcover with real thickness (`.b3`, CSS 3D: front, page block,
+  top, back). It leans toward the pointer on desktops. Numbered tags say
+  the mechanism in three words. Under it, a strip of the seven real
+  covers passes by.
+- The headline is about people, and takes the name once it is typed:
+  "כל מי שאוהב אותו. בספר אחד." → "כל מי שאוהב את נועם. בספר אחד."
+  (per event: אותו / אותה / אתכם / "כל המשפחה והחברים").
+- New pieces, each a single number or a plain mapping, no timers that
+  can fight each other:
+  - `#lost`: envelope against page, a drag-to-compare (`--x`, a range
+    input underneath so it works by keyboard). The envelope is drawn in
+    CSS; the page is a real page.
+  - `#demo`: type a blessing on a phone and see it set on a book page.
+    A sample types itself once when the block comes into view and stops
+    the moment the visitor writes. Labelled as a sample page; what is
+    typed stays in the browser.
+  - `#how`: four stations with real media — a real poster, the guest
+    page, a real page with the approve controls, the printed book — and
+    the 40-second film in its own block.
+  - `#books`: each cover opens a window (`<dialog>`) with the book in
+    3D and "make one like it", which sets the event type and goes to
+    the builder. Jerry's also shows real pages.
+  - Pricing: what is in the 990 as an itemised list, a per-guest
+    division (990 ÷ guests, plain arithmetic), and the promise as its
+    own dark block.
+- The page style chosen anywhere (demo or builder) is one value and
+  applies to both the sample page and the cover.
+- Still true: no timers, pop-ups, counters or invented reviews; the
+  sample blessing is in a guest's voice and marked as a sample, never
+  attributed to a customer.
+- Checked in a real browser, phone and desktop: the builder end to end
+  (`tools/flow.mjs`), the new pieces (`tools/widgets.mjs`: slider by
+  drag value and by keyboard, typewriter then own text, 320 characters
+  still inside the page, shared style, per-guest numbers, the window
+  opening, Escape returning focus, "make one like it"), axe WCAG 2 AA
+  clean, no sideways scroll from 320px. First load on a phone is about
+  0.95MB (the hero now carries four real images).
+- Not done: Codex media (still waiting for Lord's device login; two
+  codes expired), carrying the brief into the order, the WordPress
+  plugin for this version.
+
 ### 16.11 — sales page v2 at /site2: build the book, then order it
 
 Lord gave mebook.ai as the reference and asked for a full sales page for
