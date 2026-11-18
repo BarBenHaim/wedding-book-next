@@ -1096,3 +1096,103 @@ html[data-ev="bar"] .cv__name{color:#1f2a52}
 @media (prefers-reduced-motion: reduce){
   .ob__leafsh{animation:none !important}
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Fifth pass. One product, the guarantee where a decision is made, colour back
+   in the headings, and the demo set on the table at the event.
+   ════════════════════════════════════════════════════════════════════════════ */
+::selection{background:var(--ink);color:#fff}
+.h2 .acc{color:var(--acc-ink)}
+.btn:not(.btn--ghost) svg{width:26px;height:26px;padding:5px;border-radius:50%;background:var(--acc);color:#fff;margin-inline-start:8px;stroke-width:2.8;transition:transform .2s var(--ease),background .5s}
+.btn--sm:not(.btn--ghost) svg{width:22px;height:22px;padding:4px}
+.tick b,.assure b{color:var(--ink)}
+
+/* ── the offer, repeated where a decision is likely ─────────── */
+.deal-strip{display:flex;flex-direction:column;gap:14px;margin:34px auto 0;padding:18px 20px;border-radius:var(--r-l);background:var(--paper);box-shadow:var(--sh-1);max-width:920px}
+.deal-strip p{display:flex;flex-direction:column;gap:3px;font-size:15px;color:var(--text-2);line-height:1.4}
+.deal-strip b{font-size:19px;font-weight:800;color:var(--ink)}
+.deal-strip s{color:var(--text-3)}
+.deal-strip i{display:inline-flex;align-items:center;gap:6px;font-style:normal;font-weight:700;color:var(--ok)}
+.deal-strip i svg{width:18px;height:18px;padding:3px;border-radius:50%;background:var(--mint);stroke-width:3.2}
+.deal-strip .btn{width:100%}
+
+/* ── the demo: a phone and a page on the table, in candlelight ─ */
+.demo .sec__head{margin-bottom:30px}
+.dmt{position:relative;isolation:isolate;width:min(100% - 24px,1360px);margin-inline:auto;border-radius:26px;overflow:hidden;padding:40px 14px 30px;background:#C7A57C}
+.dmt__bg,.dmt__bg img{position:absolute;inset:0;z-index:-1;width:100%;height:100%;object-fit:cover}
+.dmt .dm{gap:30px}
+.dmt .dm__phone{width:min(86%,300px)}
+.dmt .ph--ui{box-shadow:0 0 0 1px rgba(255,255,255,.08) inset,4px 6px 8px -2px rgba(40,24,8,.45),24px 36px 46px -14px rgba(40,24,8,.6)}
+.dmt .dp{box-shadow:3px 4px 5px -2px rgba(40,24,8,.32),22px 32px 42px -14px rgba(40,24,8,.55)}
+.dmt .dm__note{align-self:center;padding:6px 14px;border-radius:999px;background:rgba(255,250,241,.82);color:#3F3222}
+.dmt .dm__styles{align-self:center;padding:2px 6px 2px 16px;border-radius:999px;background:rgba(255,250,241,.86);color:#3F3222}
+.gp{background:radial-gradient(120% 60% at 50% 0%,#232C6B 0%,#141B46 46%,#0F1433 100%)}
+.gp::before{content:"";display:block;height:14px;margin:-18px 0 2px;background:radial-gradient(circle,#E3C57A 1.2px,transparent 1.6px) 6% 20%/38px 14px,radial-gradient(circle,#F3DFA6 .9px,transparent 1.3px) 60% 80%/27px 14px;opacity:.75}
+.gp__f input,.gp__f textarea{box-shadow:inset 0 1px 2px rgba(20,24,58,.12)}
+.gp__send{border:0;cursor:pointer;font:inherit;font-size:13.5px;font-weight:800;transition:transform .15s var(--ease),filter .2s}
+.gp__send:hover{filter:brightness(1.06)}
+.gp__send:active{transform:translateY(1px)}
+.gp__send:focus-visible{outline:3px solid #9fb0ff;outline-offset:2px}
+.dp__stamp{position:absolute;top:-13px;left:-8px;display:inline-flex;align-items:center;gap:6px;padding:7px 14px 7px 11px;border-radius:999px;background:var(--ok);color:#fff;font-size:13.5px;box-shadow:var(--sh-2);opacity:0;translate:0 6px;transition:opacity .35s,translate .35s var(--ease);pointer-events:none}
+.dp__stamp svg{width:16px;height:16px;stroke-width:3.2}
+.dp.is-sent .dp__stamp{opacity:1;translate:0 0}
+.dp.is-sent{animation:sent .8s var(--ease)}
+@keyframes sent{0%{scale:1;translate:0 0}35%{scale:1.035;translate:0 -10px}100%{scale:1;translate:0 0}}
+
+/* ── builder: plaster wall behind, one product at the end ───── */
+.make{background:#E9E6DF}
+html.lit .make{background:#E9E6DF url(/site2/assets/img/shelf-wall-1536.webp) center top/cover no-repeat}
+.mk__price{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:14px 16px;border-radius:var(--r-m);background:#F3F1EB;box-shadow:inset 0 0 0 2px var(--ink)}
+.mk__price b{display:block;font-size:17px;color:var(--ink)}
+.mk__price em{display:block;font-style:normal;font-size:13.5px;line-height:1.4;color:var(--text-3)}
+.mk__price-n{text-align:end;white-space:nowrap}
+.mk__price-n s{display:block;font-size:13.5px;color:var(--text-3)}
+.mk__price-n strong{font-size:26px;font-weight:900;color:var(--ink);letter-spacing:-.02em}
+
+/* ── pricing: one offer ─────────────────────────────────────── */
+.deal{display:grid;gap:22px;max-width:1120px;margin-inline:auto;padding:14px;border-radius:var(--r-xl);background:var(--paper);box-shadow:var(--sh-2)}
+.deal .kit{gap:12px}
+.deal .kit__pic{border-radius:var(--r-l)}
+.deal .seal{border-radius:var(--r-l);padding:18px 20px}
+.deal .seal__ring{width:68px;height:68px}
+.deal__body{display:flex;flex-direction:column;gap:12px;padding:4px 6px 8px}
+.deal__price{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 12px;margin-top:4px}
+.deal__price b{font-size:58px;line-height:1;font-weight:900;letter-spacing:-.035em;color:var(--ink);white-space:nowrap}
+.deal__price s{font-size:20px;color:var(--text-3)}
+.deal__save{font-size:13.5px;font-weight:700;padding:4px 11px;border-radius:999px;background:var(--mint);color:var(--ok)}
+.deal__note{font-size:14px;color:var(--text-3);margin-top:-4px}
+.deal .stack{grid-template-columns:1fr;box-shadow:none;background:transparent;border-block:1px solid var(--line);border-radius:0}
+.deal .stack li{padding:10px 2px;border-inline-end:0 !important;border-top:1px solid var(--line) !important}
+.deal .stack li:first-child{border-top:0 !important}
+.deal .stack p{flex-direction:row;flex-wrap:wrap;gap:0 8px;align-items:baseline}
+.deal .btn{width:100%;white-space:normal;text-align:center;line-height:1.2;padding-block:10px;margin-top:4px}
+.deal__mini{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 20px;font-size:13.5px;color:var(--text-2)}
+.deal__mini li{display:inline-flex;align-items:center;gap:6px}
+.deal__mini svg{width:15px;height:15px}
+
+@media (min-width:640px){
+  .dmt .dm{grid-template-columns:auto auto;justify-content:center;gap:44px;max-width:none}
+}
+@media (min-width:980px){
+  .deal-strip{flex-direction:row;align-items:center;justify-content:space-between;gap:28px;padding:18px 20px 18px 26px;margin-top:56px}
+  .deal-strip p{flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:4px 18px}
+  .deal-strip .btn{width:auto;flex:none}
+  .dmt{padding:76px 40px 56px;border-radius:32px}
+  .dmt .dm{gap:84px}
+  .dmt .dm__phone{width:300px;rotate:-3deg}
+  .dmt .dm__page{width:440px;rotate:1.5deg}
+  .deal{grid-template-columns:1.08fr .92fr;gap:34px;padding:22px;align-items:start}
+  .deal__body{padding:14px 12px 12px 4px}
+  .deal__price b{font-size:72px}
+}
+/* on phones the price and the order button come before the list, and the guarantee right after them */
+@media (max-width:979px){
+  .deal .kit{display:contents}
+  .deal .kit__pic{order:1}
+  .deal .kit figcaption{order:2;margin-top:-12px}
+  .deal__body{order:3}
+  .deal .seal{order:4}
+  .deal__body .btn{order:3}
+  .deal__mini{order:4}
+  .deal__body .stack{order:5;margin-top:8px}
+}

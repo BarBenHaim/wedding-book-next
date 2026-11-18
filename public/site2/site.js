@@ -50,7 +50,6 @@
         if (typeof k.n2 === 'string') state.n2 = k.n2.slice(0, 24);
         if (/^\d{4}-\d{2}-\d{2}$/.test(k.date || '')) state.date = k.date;
         if (CFG.styles[k.style]) state.style = k.style;
-        if (k.pack === 'digital') state.pack = 'digital';
       }
     } catch (e) { /* nothing saved */ }
   }
@@ -129,7 +128,7 @@
       hero: name ? 'כל מי שאוהב את ' + name + '.' : (HOOK[state.ev] || HOOK.bar),
       book: name ? 'הספר של ' + name : 'הספר שלכם',
       'book-inline': name ? 'הספר של ' + name : 'הספר שלי',
-      bar: name ? 'הספר של ' + name : 'ספר מודפס ודיגיטלי'
+      bar: name ? 'הספר של ' + name : 'ספר ברכות אישי'
     };
     $$('[data-echo]').forEach(function (el) { var k = el.getAttribute('data-echo'); if (echo[k] !== undefined) el.textContent = echo[k]; });
     var dfor = $('[data-demo-for]'); if (dfor) dfor.textContent = name ? 'בשביל ' + name : 'בשביל האירוע שלכם';

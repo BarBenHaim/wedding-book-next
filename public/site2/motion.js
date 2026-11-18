@@ -40,6 +40,15 @@
     try { history.pushState(null, '', '#' + id); } catch (err) { /* sandboxed */ }
   });
 
+  /* ── the send button on the demo phone: the page answers ───── */
+  d.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-demo-send]');
+    var dp = b && $('[data-dp]');
+    if (!dp) return;
+    dp.classList.remove('is-sent'); void dp.offsetWidth; dp.classList.add('is-sent');
+    if (w.innerWidth < 640) dp.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' });
+  });
+
   var pin = $('[data-hero-pin]'), hero = $('[data-hero]'), head = $('[data-head]'), strip = $('.strip'), closing = $('.close');
   var ob = $('[data-ob]'), cam = $('[data-ob-cam]'), shadow = $('[data-ob-shadow]');
   var txt = $('[data-hero-txt]'), foot = $('[data-stage-foot]'), hint = $('[data-hero-hint]');
