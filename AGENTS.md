@@ -580,6 +580,20 @@ approval.
   the real open book (`.vs`); three repeated order buttons were removed.
   Lighthouse mobile, interleaved runs: 93-96 before, 92-93 after (the
   largest paint is now the hero photo, not text); desktop 100.
+- Third round the same day (Lord): one product only, "ספר ברכות אישי",
+  990 ₪. The digital plan (690 ₪, product 6258) is off the page: no plan
+  card, no choice in the builder, no FAQ rows, no JSON-LD offer, and a
+  saved "digital" choice in a visitor's browser is ignored. The
+  per-guest calculator is gone. "100% החזר כספי" is written, at his
+  instruction, in the top bar, under the hero button, in the builder's
+  last step, in the offer strips, in the pricing seal, in the FAQ and at
+  the close. Its terms are NOT defined on the page or in the terms of
+  use: Lord has to say until when it applies. Heading emphasis is back
+  in the event colour (he found the grey tired). The demo sits on a
+  candlelit event table (Codex, `table-*.webp`), and its send button
+  answers on the page. A `deal_strip()` repeats the offer after the demo,
+  the film and the proof. Pricing is one block: the kit photo, the
+  price, what is included, the button, the guarantee.
 - Kept as is: builder, state, order links (6271 / 6258), demo, modal,
   per-guest calculator, FAQ + JSON-LD, title, description, canonical,
   `noindex`, Clarity events.
