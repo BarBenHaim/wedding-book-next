@@ -166,7 +166,7 @@
   var covers = scene ? $$('.hb', scene) : [];
   var dots = scene ? $('[data-stage-dots]') : null;
   var cap = scene ? $('[data-stage-cap]') : null;
-  var pool = [], at = 0, spin = null, touched = false;
+  var pool = [], at = 0, spin = null, touched = false, firstPool = true;
   function showCover(i, animate) {
     if (!pool.length) return;
     var next = (i + pool.length) % pool.length;
@@ -187,7 +187,10 @@
     if (!scene) return;
     pool = covers.filter(function (c) { return (' ' + c.getAttribute('data-evs') + ' ').indexOf(' ' + state.ev + ' ') > -1; });
     if (!pool.length) pool = covers.slice(0, 1);
-    pool.forEach(function (c) { var im = c.querySelector('img'); if (im) im.loading = 'eager'; });
+    // The cover on show is already eager. The rest of the pool is fetched a moment after the first paint.
+    var rest = pool.slice();
+    var fetchRest = function () { rest.forEach(function (c) { var im = c.querySelector('img'); if (im) im.loading = 'eager'; }); };
+    if (firstPool) { firstPool = false; setTimeout(fetchRest, 1800); } else fetchRest();
     if (dots) {
       dots.innerHTML = '';
       if (pool.length > 1) pool.forEach(function (c, k) {
