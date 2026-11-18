@@ -45,7 +45,8 @@
   var txt = $('[data-hero-txt]'), foot = $('[data-stage-foot]'), hint = $('[data-hero-hint]');
   var night = $('[data-hero-night]'), fade = $('.hero__fade'), leaves = $('.hero__leaves');
   var props = $$('[data-prop]');
-  var cap1 = $('[data-obc-s="1"]'), cap2 = $('[data-obc-s="2"]');
+  var cap1 = $('[data-obc-s="1"]'), cap2 = $('[data-obc-s="2"]'), capQ = $('[data-obc-s="q"]'), qbox = $('[data-ob-qbox]');
+  var leafsh = $('[data-ob-leafsh]'), dim = $('[data-ob-dim]');
 
   /* ── which real pages are inside the book: Elia's for a bar mitzvah, Jerry's otherwise ── */
   function setPages() {
@@ -54,6 +55,19 @@
     ob.setAttribute('data-set', set);
     var src = $('[data-ob-src]');
     if (src) src.textContent = set === 'elia' ? 'אלה עמודים אמיתיים מהספר של אליה.' : 'אלה עמודים אמיתיים מהספר של ג׳רי.';
+    // the blessing that is read when the camera goes in: copied from the page itself, word for word
+    var q = $('[data-ob-quote]'), by = $('[data-ob-by]');
+    if (q && by) {
+      if (set === 'elia') {
+        q.textContent = 'אני מסתכל עליך ומתמלא בגאווה עצומה גדלת והפכת לילד חכם טוב לב ומוקף באנשים שאוהבים אותך';
+        q.dir = 'rtl'; q.lang = 'he';
+        by.textContent = 'סבא וסבתא, בספר בר המצווה של הנכד שלהם. מילה במילה.';
+      } else {
+        q.textContent = 'It is a tremendous privilege and blessing to have you as my father-in-law and Saba to our boys.';
+        q.dir = 'ltr'; q.lang = 'en';
+        by.textContent = 'מתוך ספר שהוכן בהפתעה ליום הולדת 90. מילה במילה.';
+      }
+    }
   }
   setPages();
   if (w.MutationObserver) new MutationObserver(function () { setPages(); locked = false; }).observe(root, { attributes: true, attributeFilter: ['data-ev'] });
@@ -64,19 +78,27 @@
   function off(el, anc) { var x = 0, y = 0; while (el && el !== anc) { x += el.offsetLeft; y += el.offsetTop; el = el.offsetParent; } return { x: x, y: y }; }
   function build() {
     var want = (!gsap || calm || !pin || !ob) ? '' : mq(DESK) ? 'desk' : mq(MOB) ? 'mob' : '';
-    if (tl) { tl.progress(0).kill(); tl = null; gsap.set([txt, foot, hint, ob, cam, shadow, night, fade, leaves, cap1, cap2].concat(props), { clearProps: 'all' }); }
+    if (tl) { tl.progress(0).kill(); tl = null; gsap.set([txt, foot, hint, ob, cam, shadow, night, fade, leaves, leafsh, dim, cap1, cap2, capQ, qbox].concat(props), { clearProps: 'all' }); }
     mode = want; shown = -1;
     root.classList.toggle('has-open', !!want);
     if (!want) return;
     var desk = want === 'desk';
     if (night && root.classList.contains('lit')) { var ns = night.getAttribute(desk ? 'data-src' : 'data-src-m'); if (night.getAttribute('src') !== ns) night.src = ns; }
-    var o = off(ob, hero);
-    var tx = hero.clientWidth / 2 - (o.x + ob.offsetWidth), ty = hero.clientHeight * (desk ? 0.6 : 0.54) - (o.y + ob.offsetHeight / 2);
+    var o = off(ob, hero), W = hero.clientWidth, H = hero.clientHeight, sz = ob.offsetWidth;
+    var tx = W / 2 - (o.x + sz), ty = H * (desk ? 0.6 : 0.54) - (o.y + sz / 2);
+    // going in on the left page: how big it gets, where it sits, and where the words go
+    var Z = desk ? Math.min(1.6, (H * 0.7) / sz) : Math.min((W * 0.84) / sz, (H * 0.48) / sz);
+    var cx = desk ? W * 0.56 : W / 2, cy = desk ? H * 0.53 : H * 0.36;
+    var zx = cx - (o.x + sz / 2), zy = cy - (o.y + sz / 2);
+    if (qbox) {
+      if (desk) gsap.set(qbox, { left: Math.round(W * 0.05), width: Math.round(cx - Z * sz / 2 - W * 0.09), top: '50%', yPercent: -50, right: 'auto' });
+      else gsap.set(qbox, { left: '6%', right: '6%', width: 'auto', top: Math.round(cy + Z * sz / 2 + 22), yPercent: 0 });
+    }
     tl = gsap.timeline({ paused: true, defaults: { ease: 'none' } })
       .to(txt, { autoAlpha: 0, y: -34, duration: 1.0, ease: 'power1.in' }, 0.5)
       .to([foot, hint], { autoAlpha: 0, duration: 0.5 }, 0.5)
       .to(props, { autoAlpha: 0, scale: 0.92, duration: 0.9 }, 0.6)
-      .to(leaves, { opacity: 0, duration: 1.2 }, 0.8)
+      .to([leaves, leafsh], { opacity: 0, duration: 1.2 }, 0.8)
       .to([night, fade], { opacity: 1, duration: 2.0 }, 0.9)
       .to(ob, { x: tx, y: ty, scale: 1, perspectiveOrigin: '100% 50%', duration: 2.2, ease: 'power2.inOut' }, 0.6)
       .to(cam, { '--rx': desk ? '32deg' : '26deg', '--ry': '0deg', '--rz': '0deg', duration: 2.2, ease: 'power2.inOut' }, 0.6)
@@ -85,11 +107,22 @@
       .to(cam, { '--a0': '180deg', duration: 2.0, ease: 'power2.inOut' }, 2.9)
       .to(shadow, { '--sw': 2, duration: 2.0, ease: 'power2.inOut' }, 2.9)
       .fromTo(cap1, { autoAlpha: 0, y: 22 }, { autoAlpha: 1, y: 0, duration: 0.9, ease: 'power2.out' }, 3.7)
-      // a page turns
-      .to(cap1, { autoAlpha: 0, y: -16, duration: 0.6, ease: 'power1.in' }, 5.9)
-      .to(cam, { '--a1': '180deg', duration: 1.9, ease: 'power2.inOut' }, 6.2)
-      .fromTo(cap2, { autoAlpha: 0, y: 22 }, { autoAlpha: 1, y: 0, duration: 0.9, ease: 'power2.out' }, 7.3)
-      .to({}, { duration: 1.5 });
+      // the camera goes in on one page, and its words can be read
+      .to(cap1, { autoAlpha: 0, y: -16, duration: 0.5, ease: 'power1.in' }, 5.4)
+      .to(ob, { x: zx, y: zy, scale: Z, perspectiveOrigin: '50% 50%', duration: 1.6, ease: 'power2.inOut' }, 5.5)
+      .to(cam, { '--rx': '9deg', duration: 1.6, ease: 'power2.inOut' }, 5.5)
+      .to(dim, { opacity: 1, duration: 1.2 }, 5.6)
+      .fromTo(capQ, { autoAlpha: 0, y: 18 }, { autoAlpha: 1, y: 0, duration: 0.8, ease: 'power2.out' }, 6.5)
+      // back out, and a page turns, bending as it goes
+      .to(capQ, { autoAlpha: 0, y: -12, duration: 0.5, ease: 'power1.in' }, 8.3)
+      .to(ob, { x: tx, y: ty, scale: 1, perspectiveOrigin: '100% 50%', duration: 1.5, ease: 'power2.inOut' }, 8.4)
+      .to(cam, { '--rx': desk ? '32deg' : '26deg', duration: 1.5, ease: 'power2.inOut' }, 8.4)
+      .to(dim, { opacity: 0, duration: 1.0 }, 8.4)
+      .to(cam, { '--a1': '180deg', duration: 2.0, ease: 'power1.inOut' }, 8.9)
+      .to(cam, { '--b': '-34deg', '--curl': 1, duration: 0.8, ease: 'sine.out' }, 8.9)
+      .to(cam, { '--b': '0deg', '--curl': 0, duration: 1.2, ease: 'sine.inOut' }, 9.7)
+      .fromTo(cap2, { autoAlpha: 0, y: 22 }, { autoAlpha: 1, y: 0, duration: 0.9, ease: 'power2.out' }, 10.2)
+      .to({}, { duration: 1.4 });
   }
 
   /* ── one scroll reader: the book's progress, and whether the header stands over the night ── */
