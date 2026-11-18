@@ -518,6 +518,62 @@ rasterise the same way they do uploaded studio backgrounds.
   to another page meanwhile it refuses instead of pinning the photo to
   the wrong page.
 
+### 18.11 — /site2, third pass ("wow"), on branch `wow-redesign` — NOT merged until Lord approves
+
+Lord: free hand to take the site to the next level; people should say
+"wow"; a leading studio's work, not a template. Use the creative-engine
+skill: images through Codex, 3D and video through the Creative Engine,
+animation in code. Work on `wow-redesign`, no merge to main without his
+approval.
+
+- Art direction: a still life on a linen table by a window, late
+  afternoon, top-down. Stone ground (`--bg:#F1EFEA`), night-ink type, one
+  accent that follows the event. Heebo 900, large, set to the start edge.
+- Signature interaction: the hero book opens as the page is scrolled.
+  The hero is held by CSS (`.hero` is `position:sticky` inside the tall
+  `.hero-pin`), and one number, the scroll progress of that wrapper,
+  positions a paused GSAP timeline (`wow.js`): day turns to evening (two
+  photos cross-fade), the book moves to the centre, the cover opens
+  (`.ob__leaf--0`), a page turns (`.ob__leaf--1`), and the last page is
+  the visitor's, with the order button. The next section then slides over
+  the still-pinned hero like a curtain, so a 3D book is never drawn half
+  off screen (Chromium mis-sorts it). Off for reduced motion and for
+  viewports under 590/620 px tall; `html.has-open` is set by an inline
+  script in the head so the layout never jumps.
+- The book (`.ob`) is CSS 3D with real thickness. Pages inside are real:
+  Elia's (`page-hanoch`, `page-nino`) for a bar mitzvah, Jerry's for the
+  other events, and the caption says whose they are. When the book starts
+  to move, the cover locks to the first of the pool.
+- Generated photos (Codex, gpt-image-2; no text in any of them): the
+  linen table by day (desktop + phone crop) and the same table relit for
+  evening, envelopes on linen, a reception table with a blank sign, hands
+  with a blank phone, an oak shelf on a plaster wall, a sideboard at home
+  in the evening. The real poster and the real guest-page screenshot are
+  laid over the blank sign and the blank phone in HTML (`.sc__in`), and
+  both scenes are captioned as simulations. Covers, pages, printed-book
+  photos, films and customer messages are still the real ones.
+- Coded: the window-leaf shadow that sways over the hero
+  (`tools/gobo.py` → `light-leaves.webp`), parallax and the line of the
+  four stations (CSS scroll-driven animations, no script), the shelf, the
+  layered proof block.
+- No video loop and no GLB from the Creative Engine: its Hugging Face
+  ZeroGPU quota was used up that day. The book is CSS 3D on purpose.
+- Performance: GSAP core only (ScrollTrigger was dropped: pinning is
+  CSS), `motion.js` is injected after `load`, and everything the first
+  paint does not need waits for `html.lit` (set ~0.8 s after load or on
+  first interaction): textures, shelf, strip and envelope pictures, the
+  evening photo, the inside pages of the book. Lighthouse on a local gzip
+  server, mobile, median of four: 93 before, 93.5 after; accessibility
+  97 → 100; desktop 100 → 100.
+- `html{scroll-behavior:auto}` now, with in-page links eased in
+  `wow.js`, because the progress must never be read mid-flight.
+- Kept as is: builder, state, order links (6271 / 6258), demo, modal,
+  per-guest calculator, FAQ + JSON-LD, title, description, canonical,
+  `noindex`, Clarity events.
+- Source: the session's `wow/site/` folder (`src/build.py`, `site.css`,
+  `wow.css`, `site.js`, `wow.js`, `tools/`), copied to
+  `sales-kit/site-2026-11-v3/` in Lord's folder.
+
 ### 17.11 — /site2, second pass: the table at the entrance
 
 Lord: better selling ideas, a page that looks special and designed, not
