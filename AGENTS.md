@@ -567,6 +567,19 @@ approval.
   97 → 100; desktop 100 → 100.
 - `html{scroll-behavior:auto}` now, with in-page links eased in
   `wow.js`, because the progress must never be read mid-flight.
+- Second round the same day (Lord: "do everything you said"): the leaf
+  shadow now crosses the cover and the book casts a long shadow; after
+  the cover opens the camera goes in on one real page and its blessing is
+  set beside it in HTML, word for word (`.obc__s--q`); the turning leaf
+  is two halves so it bends (`.ob__seg`, `--b`); buttons are night-ink
+  and the second half of each `h2` is muted ink instead of blue; the
+  builder cover gets painted art per event (`art-*.webp`, multiplied over
+  the paper of the chosen style); pricing shows a flat-lay of what
+  arrives with the real cover, poster and screen laid on it (`.kit`); the
+  comparison table became two objects, a plain paper guest book against
+  the real open book (`.vs`); three repeated order buttons were removed.
+  Lighthouse mobile, interleaved runs: 93-96 before, 92-93 after (the
+  largest paint is now the hero photo, not text); desktop 100.
 - Kept as is: builder, state, order links (6271 / 6258), demo, modal,
   per-guest calculator, FAQ + JSON-LD, title, description, canonical,
   `noindex`, Clarity events.
