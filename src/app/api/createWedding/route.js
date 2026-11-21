@@ -3,6 +3,8 @@ export const runtime = 'nodejs'
 export const fetchCache = 'force-no-store'
 export const preferredRegion = 'iad1'
 
+import { eventDisplayTitle } from '@/lib/onboarding'
+import { orderEventDetails } from '@/lib/orderEventDetails'
 import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import crypto from 'crypto'
@@ -120,6 +122,8 @@ export async function POST(req) {
         // עיצוב מבלי להזדהות, ולשתף את הקישור עם בני הזוג.
         const viewerToken = crypto.randomUUID()
 
+        const details = orderEventDetails(body)
+
         await db.collection('weddings').doc(weddingId).set(
             {
                 // Provenance, written at the door. Before this a paid
@@ -142,6 +146,7 @@ export async function POST(req) {
                     issuedAt: new Date().toISOString(),
                     issuedBy: 'createWedding',
                 }),
+                ...details.fields,
             },
             { merge: true },
         )
@@ -165,42 +170,50 @@ export async function POST(req) {
             ? `<p style="margin:4px 0;font-size:14px;color:#3d2e1a;"><b>סיסמה:</b> ${password}</p>`
             : `<p style="margin:4px 0;font-size:14px;color:#7a6a52;">השתמשו בסיסמה הקיימת שלכם (שכחתם? אפשר לאפס בעמוד ההתחברות).</p>`
 
+        const guestUrl = `${baseUrl}/w/${slug}`
+        const posterUrl = `${baseUrl}/api/generate-qr-pdf?weddingId=${encodeURIComponent(weddingId)}&slug=${encodeURIComponent(slug)}&bg=wedding-bg2.png`
+        const bookTitle = details.value ? eventDisplayTitle(details.value) : ''
+        const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+        const shareText = `${bookTitle ? `ספר הברכות של ${bookTitle}` : 'ספר הברכות שלנו'}: נשמח שתכתבו ברכה ותוסיפו תמונה, לוקח שתי דקות מהטלפון 💛\n${guestUrl}`
+        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`
+        const depositNote = details.deposit
+            ? `<p style="margin:14px 0 0;font-size:13px;line-height:1.6;color:#4b5563;">שילמתם מקדמה.${details.deposit.balanceDue ? ` את ${details.deposit.balanceDue} ₪ הנותרים` : ' את היתרה'} משלמים רק כשהספר מוכן ואישרתם אותו להדפסה.</p>`
+            : ''
+        const btn = (href, label, solid) => `<a href="${href}" style="display:inline-block;margin:6px 4px;padding:13px 22px;border-radius:12px;font-weight:700;font-size:15px;text-decoration:none;${solid ? 'background:#14183A;color:#ffffff;' : 'background:#ffffff;color:#14183A;border:1.5px solid #14183A;'}">${label}</a>`
+
         const html = `
-<div style="font-family:Arial,'Heebo',sans-serif;direction:rtl;text-align:right;max-width:600px;margin:0 auto;background:#fdf9ef;border-radius:16px;overflow:hidden;">
-  <div style="background:linear-gradient(135deg,#aa8840,#c9a44e);padding:28px 24px;color:#fff;">
-    <h1 style="margin:0;font-size:22px;">מזל טוב${name ? ` ${name}` : ''}! 💍</h1>
-    <p style="margin:8px 0 0;opacity:.9;font-size:14px;">החתונה שלכם נוצרה בהצלחה ב-Wedding Tales</p>
+<div style="font-family:Arial,'Heebo',sans-serif;direction:rtl;text-align:right;max-width:600px;margin:0 auto;background:#FAF7F1;border-radius:16px;overflow:hidden;color:#14183A;">
+  <div style="background:#14183A;padding:26px 24px;color:#fff;">
+    <h1 style="margin:0;font-size:22px;line-height:1.3;">${bookTitle ? `ספר הברכות של ${esc(bookTitle)} נפתח` : 'ספר הברכות שלכם נפתח'}${name ? `, ${esc(name)}` : ''}</h1>
+    <p style="margin:8px 0 0;opacity:.85;font-size:14px;">שלושה צעדים, והאורחים כבר כותבים.</p>
   </div>
 
-  <div style="padding:24px;">
-    <h2 style="font-size:16px;color:#3d2e1a;margin:0 0 12px;">הכניסה האישית שלכם לניהול</h2>
-    <div style="background:#fff;border:1px solid rgba(170,136,64,0.2);border-radius:12px;padding:16px;margin-bottom:12px;">
-      <p style="margin:4px 0;font-size:14px;color:#3d2e1a;"><b>אימייל:</b> ${email}</p>
+  <div style="padding:22px 24px 6px;">
+    <h2 style="font-size:16px;margin:0 0 6px;">1. שולחים לאורחים</h2>
+    <p style="font-size:14px;line-height:1.7;color:#4b5563;margin:0 0 10px;">זה הקישור שבו כותבים ברכה ומוסיפים תמונה, בלי אפליקציה ובלי הרשמה. אפשר לשלוח אותו כבר עכשיו, וגם אחרי האירוע.</p>
+    <div style="text-align:center;">${btn(whatsappUrl, 'שליחה בוואטסאפ', true)}${btn(guestUrl, 'פתיחת הקישור', false)}</div>
+    <p style="font-size:12px;color:#6b7280;text-align:center;margin:8px 0 0;word-break:break-all;">${guestUrl}</p>
+  </div>
+
+  <div style="padding:16px 24px 6px;">
+    <h2 style="font-size:16px;margin:0 0 6px;">2. מדפיסים QR לאירוע</h2>
+    <p style="font-size:14px;line-height:1.7;color:#4b5563;margin:0 0 10px;">דף A4 עם ה־QR של הספר שלכם, מוכן להדפסה ולהצבה בכניסה או על השולחנות.</p>
+    <div style="text-align:center;">${btn(posterUrl, 'הורדת דף ה־QR', false)}</div>
+  </div>
+
+  <div style="padding:16px 24px 20px;">
+    <h2 style="font-size:16px;margin:0 0 6px;">3. האזור האישי שלכם</h2>
+    <p style="font-size:14px;line-height:1.7;color:#4b5563;margin:0 0 10px;">שם רואים כל ברכה שנכנסת, מעלים תמונה לכריכה, בוחרים עיצוב ומאשרים את העמודים לפני ההדפסה.</p>
+    <div style="background:#fff;border:1px solid #E5E0D5;border-radius:12px;padding:14px 16px;margin-bottom:10px;">
+      <p style="margin:4px 0;font-size:14px;"><b>אימייל:</b> ${esc(email)}</p>
       ${passwordRow}
     </div>
-    <div style="text-align:center;margin:8px 0 4px;">
-      <a href="${loginUrl}" style="background:linear-gradient(180deg,#d3b46a,#b8893d);color:#fff;text-decoration:none;padding:13px 26px;border-radius:14px;font-weight:700;font-size:15px;display:inline-block;">
-        כניסה למערכת →
-      </a>
-    </div>
-    <p style="font-size:12px;color:#9a8665;text-align:center;margin:10px 0 0;">בעמוד הניהול תוכלו לערוך פרטים, לצפות בברכות ולשתף את הקישור לאורחים.</p>
-
-    <div style="height:1px;background:rgba(170,136,64,0.2);margin:24px 0;"></div>
-
-    <h2 style="font-size:16px;color:#3d2e1a;margin:0 0 8px;">הספר שלכם — לצפייה ובחירת עיצוב ✨</h2>
-    <p style="font-size:14px;line-height:1.7;color:#7a6a52;margin:0 0 16px;">
-      קישור אישי לצפייה בספר ולבחירת העיצוב שאתם הכי אוהבים — בלי צורך בהתחברות. אפשר לפתוח בכל מכשיר ולשתף עם בן/בת הזוג.
-    </p>
-    <div style="text-align:center;margin:8px 0;">
-      <a href="${viewerUrl}" style="background:#fff;border:2px solid #aa8840;color:#aa8840;text-decoration:none;padding:12px 24px;border-radius:14px;font-weight:700;font-size:15px;display:inline-block;">
-        צפו בספר ובחרו עיצוב →
-      </a>
-    </div>
-    <p style="font-size:11px;color:#9a8665;text-align:center;margin:12px 0 0;word-break:break-all;">${viewerUrl}</p>
+    <div style="text-align:center;">${btn(loginUrl, 'כניסה לאזור האישי', true)}${btn(viewerUrl, 'צפייה בספר', false)}</div>
+    ${depositNote}
   </div>
 
-  <div style="background:#fdf9ef;padding:16px 24px;border-top:1px solid rgba(170,136,64,0.2);text-align:center;color:#9a8665;font-size:11px;">
-    באהבה, צוות Wedding Tales — Your moments, forever
+  <div style="padding:14px 24px;border-top:1px solid #E5E0D5;text-align:center;color:#6b7280;font-size:12px;">
+    משהו לא עובד? עונים למייל הזה ואנחנו שם. Wedding Tales
   </div>
 </div>
 `
@@ -208,7 +221,7 @@ export async function POST(req) {
         await transporter.sendMail({
             from: `"Wedding Tales" <${process.env.MAIL_USER}>`,
             to: email,
-            subject: 'החתונה שלך מוכנה',
+            subject: bookTitle ? `ספר הברכות של ${bookTitle} נפתח: הקישור לאורחים בפנים` : 'ספר הברכות שלכם נפתח: הקישור לאורחים בפנים',
             html,
         })
 
