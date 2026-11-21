@@ -10,6 +10,7 @@ import { useParams } from 'next/navigation'
 import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore'
 import { db } from '../../../../lib/firebaseClient'
 import QRCode from 'react-qr-code'
+import PosterSheet from './PosterSheet'
 import { Heebo } from 'next/font/google'
 
 const heebo = Heebo({ subsets: ['latin'], weight: ['400', '600', '700', '900'] })
@@ -93,6 +94,9 @@ export default function PortalApp() {
     const [saving, setSaving] = useState(false)
     const [copied, setCopied] = useState('')
     const fileRef = useRef(null)
+    // ?view=poster shows the printable event sign instead of the app-like home
+    const [view, setView] = useState('')
+    useEffect(() => { try { setView(new URLSearchParams(window.location.search).get('view') || '') } catch { /* ignore */ } }, [])
 
     useEffect(() => {
         if (!weddingId) return
@@ -118,6 +122,24 @@ export default function PortalApp() {
         if (!s) return entries
         return entries.filter(e => (e.name || '').includes(s) || (e.text || '').includes(s))
     }, [entries, q])
+
+    // The road from payment to a printed book, in order. What is done is read
+    // from the event itself, so the list is right on every device.
+    const stage = w?.paymentStage || ''
+    const balanceDue = Number(w?.balanceDue) || 0
+    const steps = [
+        { key: 'share', title: 'שולחים את הקישור לאורחים', note: blessings ? `כבר נכנסו ${blessings} ברכות. אפשר לשלוח שוב גם אחרי האירוע.` : 'בוואטסאפ, בהודעה מוכנה. אפשר כבר עכשיו.', done: blessings > 0, go: () => setTab('share') },
+        { key: 'poster', title: 'מדפיסים את השלט לאירוע', note: 'שלט "ברכו את" עם ה־QR שלכם, מוכן להדפסה.', done: false, href: `/wedding/${weddingId}/portal?view=poster` },
+        { key: 'design', title: 'בוחרים עיצוב וכריכה', note: face ? 'יש כריכה. אפשר לשנות בכל רגע.' : 'בוחרים סגנון ומעלים תמונה לכריכה.', done: !!face, go: () => setTab('book') },
+        { key: 'review', title: 'עוברים על הברכות', note: 'אחרי האירוע: מתקנים, מחליפים תמונה, מסדרים.', done: stage === 'paid', go: () => setTab('blessings') },
+        stage === 'deposit'
+            ? { key: 'pay', title: `משלמים את היתרה${balanceDue ? ` (${balanceDue} ₪)` : ''} ומדפיסים`, note: 'רק כשהספר מוכן ואתם מרוצים ממנו. אחרי התשלום הוא יוצא לדפוס.', done: false, href: `https://weddingtales.co.il/checkout/?add-to-cart=6271&wt_bal=${encodeURIComponent(weddingId)}` }
+            : stage === 'paid'
+                ? { key: 'pay', title: 'היתרה שולמה', note: 'הספר יוצא לדפוס ומגיע עד הבית.', done: true, go: () => setTab('book') }
+                : { key: 'pay', title: 'מאשרים הדפסה', note: 'כשהספר מוכן, כותבים לנו והוא יוצא לדפוס.', done: false, href: 'https://wa.me/972515350253' },
+    ]
+    // the sign has no "done" of its own, so it never holds the list up
+    const nextStep = steps.findIndex(s => !s.done && s.key !== 'poster')
 
     const waShare = () => {
         const msg = `הוזמנתם להשאיר לנו ברכה בספר של ${titleOf(w)} 💛\n${guestLink}`
@@ -154,6 +176,8 @@ export default function PortalApp() {
     }
 
     // ── הספר — immersive: fixed iframe, dock hidden, back arrow ──
+    if (view === 'poster') return <PosterSheet />
+
     if (tab === 'book') {
         return (
             <div className={heebo.className} dir='rtl' style={{ position: 'fixed', inset: 0, background: '#fdf8ee' }}>
@@ -227,6 +251,35 @@ export default function PortalApp() {
                             <img src='/app-home/check_icon.png' width='28' height='28' alt='' />
                             <div style={{ fontSize: 12.5, fontWeight: 700, color: INK, marginTop: 7 }}>מוכן לעריכה</div>
                         </div>
+                    </div>
+                    <div style={{ ...card, borderRadius: 22, padding: '14px 14px 8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ fontSize: 16, fontWeight: 900, color: INK }}>הצעדים שלכם</span>
+                            <span style={{ fontSize: 12, color: MUT }}>{steps.filter(s => s.done).length} מתוך {steps.length}</span>
+                        </div>
+                        {steps.map((s, i) => {
+                            const isNext = i === nextStep
+                            const Row = s.href ? 'a' : 'div'
+                            return (
+                                <Row key={s.key} {...(s.href ? { href: s.href, target: '_blank', rel: 'noopener' } : { onClick: s.go, role: 'button', tabIndex: 0 })} className='wt-press' style={{
+                                    display: 'flex', alignItems: 'center', gap: 11, padding: '10px 2px', minHeight: 44, textDecoration: 'none', cursor: 'pointer',
+                                    borderTop: i ? '1px solid rgba(120,90,40,0.14)' : 'none',
+                                }}>
+                                    <span style={{
+                                        flex: 'none', width: 28, height: 28, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontSize: 13.5, fontWeight: 900,
+                                        background: s.done ? '#1f8f5f' : isNext ? INK : 'rgba(255,253,246,0.9)',
+                                        color: s.done || isNext ? '#fff' : MUT,
+                                        border: s.done || isNext ? 'none' : '1px solid rgba(120,90,40,0.3)',
+                                    }}>{s.done ? '✓' : i + 1}</span>
+                                    <span style={{ flex: 1, minWidth: 0 }}>
+                                        <span style={{ display: 'block', fontSize: 14.5, fontWeight: isNext ? 900 : 700, color: INK }}>{s.title}</span>
+                                        <span style={{ display: 'block', fontSize: 12.5, color: MUT, lineHeight: 1.35 }}>{s.note}</span>
+                                    </span>
+                                    <span aria-hidden='true' style={{ flex: 'none', fontSize: 18, color: isNext ? INK : '#b9a47c' }}>‹</span>
+                                </Row>
+                            )
+                        })}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                         <span style={{ fontSize: 10, color: '#c9a44e' }}>♥</span>

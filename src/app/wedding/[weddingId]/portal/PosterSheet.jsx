@@ -1,0 +1,129 @@
+'use client'
+
+// The sign for the event: "ברכו את …" with the book's QR, A4, ready to print
+// or to save as PDF. It used to be designed by hand for every order; now the
+// owner opens it from the personal area (/wedding/[id]/portal?view=poster).
+// Text is live HTML (perfect Hebrew, real fonts); nothing is baked into an image.
+
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../../../../lib/firebaseClient'
+import QRCode from 'react-qr-code'
+import { Heebo } from 'next/font/google'
+
+const heebo = Heebo({ subsets: ['latin'], weight: ['400', '600', '700', '900'] })
+const SITE = 'https://app.weddingtales.co.il'
+
+const EVENT_LABEL = { wedding: 'חתונה', bar_mitzvah: 'בר מצווה', bat_mitzvah: 'בת מצווה', birthday: 'יום הולדת' }
+
+const LOOKS = {
+    light: { name: 'בהיר', paper: '#FBF8F1', ink: '#14183A', soft: '#5A5D75', line: 'rgba(20,24,58,0.22)', accent: '#2748E8', qrBg: '#FFFFFF', qrFg: '#14183A' },
+    night: { name: 'כחול לילה', paper: '#14183A', ink: '#FFFFFF', soft: 'rgba(255,255,255,0.78)', line: 'rgba(255,255,255,0.3)', accent: '#E9C877', qrBg: '#FFFFFF', qrFg: '#14183A' },
+    gold: { name: 'זהב', paper: '#FFFDF7', ink: '#3B2A14', soft: '#7A6441', line: 'rgba(168,132,58,0.55)', accent: '#A8843A', qrBg: '#FFFFFF', qrFg: '#3B2A14' },
+}
+
+function posterNames(w) {
+    if (!w) return ''
+    if (w.eventType === 'wedding' || w.brideName || w.groomName) {
+        const a = (w.brideNameHe || w.brideName || '').trim()
+        const b = (w.groomNameHe || w.groomName || '').trim()
+        if (a && b) return `${a} ו${b}`
+        if (a || b) return a || b
+    }
+    return (w.celebrantNameHe || w.celebrantName || w.customTitle || '').trim()
+}
+
+function fmtDate(s) {
+    if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return ''
+    const [y, m, d] = s.split('-')
+    return `${Number(d)}.${Number(m)}.${y}`
+}
+
+export default function PosterSheet() {
+    const { weddingId } = useParams()
+    const [w, setW] = useState(undefined)
+    const [look, setLook] = useState('light')
+
+    useEffect(() => {
+        if (!weddingId) return
+        getDoc(doc(db, 'weddings', weddingId)).then(s => setW(s.exists() ? s.data() : null)).catch(() => setW(null))
+    }, [weddingId])
+
+    const L = LOOKS[look]
+    const names = posterNames(w)
+    const guestLink = w?.slug ? `${SITE}/w/${w.slug}?go=photo` : `${SITE}/wedding/${weddingId}/photo`
+    const shortLink = guestLink.replace(/^https?:\/\//, '').replace(/\?go=photo$/, '')
+    const sub = [EVENT_LABEL[w?.eventType] || '', fmtDate(w?.weddingDate)].filter(Boolean).join(' · ')
+
+    return (
+        <div className={heebo.className} dir='rtl' style={{ minHeight: '100vh', background: '#E9E5DC', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '18px 12px 40px', gap: 14 }}>
+            <style>{`
+                @page { size: A4 portrait; margin: 0; }
+                .wt-sheet { width: min(100%, 210mm); aspect-ratio: 210 / 297; }
+                @media print {
+                    html, body { background: #fff !important; }
+                    .wt-noprint { display: none !important; }
+                    .wt-wrap { padding: 0 !important; background: none !important; }
+                    .wt-sheet { width: 210mm !important; height: 297mm !important; box-shadow: none !important; border-radius: 0 !important; }
+                    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                }
+            `}</style>
+
+            <div className='wt-noprint' style={{ width: 'min(100%, 210mm)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <div>
+                    <h1 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: '#14183A' }}>השלט לאירוע</h1>
+                    <p style={{ margin: '2px 0 0', fontSize: 13.5, color: '#5A5D75' }}>מדפיסים ב־A4 ומציבים בכניסה או על השולחנות. האורחים סורקים וכותבים.</p>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {Object.entries(LOOKS).map(([k, v]) => (
+                        <button key={k} type='button' onClick={() => setLook(k)} aria-pressed={look === k} style={{
+                            minHeight: 44, padding: '0 14px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 700,
+                            background: look === k ? '#14183A' : '#fff', color: look === k ? '#fff' : '#14183A', border: '1.5px solid #14183A',
+                        }}>{v.name}</button>
+                    ))}
+                    <button type='button' onClick={() => window.print()} style={{
+                        minHeight: 44, padding: '0 20px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: 15, fontWeight: 900,
+                        background: '#2748E8', color: '#fff', border: 'none',
+                    }}>הדפסה / שמירה כ־PDF</button>
+                </div>
+            </div>
+
+            {w === null && <p className='wt-noprint' style={{ color: '#8A1F1F', fontSize: 15 }}>לא מצאנו את האירוע. נסו להיכנס שוב מהאזור האישי.</p>}
+
+            <div className='wt-wrap' style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+                <div className='wt-sheet' style={{
+                    position: 'relative', background: L.paper, color: L.ink, borderRadius: 6, overflow: 'hidden',
+                    boxShadow: '0 24px 60px -30px rgba(20,24,58,0.45)', containerType: 'inline-size',
+                }}>
+                    <div style={{ position: 'absolute', inset: '4.2cqw', border: `0.28cqw solid ${L.line}`, borderRadius: '1.2cqw' }} />
+                    <div style={{ position: 'absolute', inset: '5.4cqw', border: `0.12cqw solid ${L.line}`, borderRadius: '0.8cqw' }} />
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', textAlign: 'center', padding: '13cqw 10cqw 11cqw' }}>
+                        <div>
+                            <p style={{ margin: 0, fontSize: '3.4cqw', fontWeight: 600, letterSpacing: '0.04em', color: L.soft }}>{names ? 'ספר הברכות של' : 'ספר הברכות שלנו'}</p>
+                            <h2 style={{ margin: '1.6cqw 0 0', fontSize: names && names.length > 14 ? '10.5cqw' : '14cqw', lineHeight: 1.02, fontWeight: 900, letterSpacing: '-0.02em', textWrap: 'balance' }}>
+                                {names ? <>ברכו את <span style={{ color: L.accent }}>{names}</span></> : 'כתבו לנו ברכה'}
+                            </h2>
+                            {sub && <p style={{ margin: '2.4cqw 0 0', fontSize: '3.6cqw', fontWeight: 600, color: L.soft }}>{sub}</p>}
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3cqw' }}>
+                            <div style={{ background: L.qrBg, padding: '3.4cqw', borderRadius: '3cqw', boxShadow: look === 'night' ? 'none' : '0 1.4cqw 4cqw -2cqw rgba(20,24,58,0.35)', border: look === 'night' ? 'none' : `0.2cqw solid ${L.line}` }}>
+                                {w ? <QRCode value={guestLink} level='H' fgColor={L.qrFg} bgColor={L.qrBg} style={{ display: 'block', width: '34cqw', height: '34cqw' }} /> : <div style={{ width: '34cqw', height: '34cqw' }} />}
+                            </div>
+                            <div>
+                                <p style={{ margin: 0, fontSize: '5.2cqw', fontWeight: 900 }}>סורקים, כותבים ברכה ומוסיפים תמונה</p>
+                                <p style={{ margin: '1cqw 0 0', fontSize: '3.5cqw', fontWeight: 600, color: L.soft }}>שתי דקות מהטלפון. בלי אפליקציה ובלי הרשמה.</p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <p style={{ margin: 0, fontSize: '3.1cqw', fontWeight: 600, color: L.soft }}>כל ברכה נכנסת לספר מודפס שיישאר אצלנו</p>
+                            <p dir='ltr' style={{ margin: '1.2cqw 0 0', fontSize: '2.6cqw', color: L.soft, opacity: 0.85 }}>{shortLink}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
