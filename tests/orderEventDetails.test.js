@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { orderEventDetails } from '../src/lib/orderEventDetails'
+import { orderEventDetails, orderMeta, balanceTarget } from '../src/lib/orderEventDetails'
 
 const order = meta => ({ id: 1, meta_data: Object.entries(meta).map(([key, value]) => ({ key, value })) })
 
@@ -34,5 +34,17 @@ describe('orderEventDetails', () => {
     })
     it('the checkout date field is used when the builder gave none', () => {
         expect(orderEventDetails(order({ wt_event: 'bar', wt_name1: 'א', event_date: '2027-03-02' })).fields.weddingDate).toBe('2027-03-02')
+    })
+})
+
+describe('balanceTarget', () => {
+    it('reads the event a balance order pays for', () => {
+        expect(balanceTarget(order({ wt_balance_for: ' 6412 ' }))).toBe('6412')
+        expect(orderMeta(order({ wt_balance_for: 6412 }), 'wt_balance_for')).toBe('6412')
+    })
+    it('is empty for ordinary orders and for junk', () => {
+        expect(balanceTarget({ id: 1 })).toBe('')
+        expect(balanceTarget(order({ wt_balance_for: '../weddings/x' }))).toBe('')
+        expect(balanceTarget(order({ wt_balance_for: '' }))).toBe('')
     })
 })
