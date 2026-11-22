@@ -246,6 +246,15 @@ export const ART_FRAMES = [
     { id: 'oak', label: 'עץ אלון', url: '/frames/art/oak.png', slicePct: 7.5 },
     { id: 'olive', label: 'ענפי זית', url: '/frames/art/olive.png', slicePct: 11.5 },
     { id: 'watercolor', label: 'צבעי מים', url: '/frames/art/watercolor.png', slicePct: 10.5 },
+    // the second set (22.11.2026, evening): one made for each design that asked for its own
+    { id: 'stardust', label: 'אבק כוכבים', url: '/frames/art/stardust.png', slicePct: 9 },
+    { id: 'linen-stitch', label: 'פשתן ותפירה', url: '/frames/art/linen-stitch.png', slicePct: 9.5 },
+    { id: 'ice-gold', label: 'קרח וזהב', url: '/frames/art/ice-gold.png', slicePct: 11 },
+    { id: 'peach-cloud', label: 'ענני אפרסק', url: '/frames/art/peach-cloud.png', slicePct: 10.5 },
+    { id: 'indigo-shibori', label: 'אינדיגו שיבורי', url: '/frames/art/indigo-shibori.png', slicePct: 11.5 },
+    { id: 'marble-gold', label: 'שיש וזהב', url: '/frames/art/marble-gold.png', slicePct: 9.5 },
+    { id: 'silk-ribbon', label: 'סרט משי', url: '/frames/art/silk-ribbon.png', slicePct: 9 },
+    { id: 'sand-stone', label: 'אבן ירושלמית', url: '/frames/art/sand-stone.png', slicePct: 10.5 },
 ]
 
 /** The art frame a stored `photoFrameUrl` belongs to, or null. */

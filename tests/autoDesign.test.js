@@ -6,12 +6,12 @@ import { ART_FRAMES, resolvePhotoFrame } from '@/lib/photoFrames'
 
 describe('the design a new event starts with', () => {
     it('each occasion gets its own look, and anything else gets the plain paper one', () => {
-        expect(autoDesignKeyFor('wedding')).toBe('wd-blush')
-        expect(autoDesignKeyFor('bar_mitzvah')).toBe('bm-tallit')
-        expect(autoDesignKeyFor('twins_bar_mitzvah')).toBe('bm-tallit')
+        expect(autoDesignKeyFor('wedding')).toBe('wd-silk')
+        expect(autoDesignKeyFor('bar_mitzvah')).toBe('bm-jerusalem')
+        expect(autoDesignKeyFor('twins_bar_mitzvah')).toBe('bm-jerusalem')
         expect(autoDesignKeyFor('bat_mitzvah')).toBe('bm-iceblue')
-        expect(autoDesignKeyFor('birthday')).toBe('bd-bunting')
-        for (const other of ['poker', 'travel', 'nope', undefined]) expect(autoDesignKeyFor(other)).toBe('cl-letterpress')
+        expect(autoDesignKeyFor('birthday')).toBe('bd-balloons')
+        for (const other of ['poker', 'travel', 'nope', undefined]) expect(autoDesignKeyFor(other)).toBe('nt-linen')
     })
 
     it('is a full book design: every canonical key present, nothing that a server cannot store', () => {

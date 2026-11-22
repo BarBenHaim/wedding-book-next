@@ -101,39 +101,22 @@ export const TEXTURES_REGISTRY = Array.from({ length: 9 }, (_, i) => ({
 // `studio_backgrounds`) and the picker will merge both lists — that
 // wires up in commit 5.
 export const STATIC_BACKGROUNDS = [
-    // ── The house page backgrounds (22.11.2026) ──────────────────────
+    // ── The house page backgrounds (22.11.2026), sorted to the 13 that stayed ──
     // Frameless on purpose: a window or border box baked into a page
     // background fights every page that is split or has only a blessing.
     // All decoration sits at the edges, the middle is calm. Made with
     // Codex, 1254px webp under public/backgrounds/book/.
-    { id: 'wd-blush', label: 'ורדים ורודים', src: '/backgrounds/book/wd-blush.webp', tags: ['wedding', 'romantic'] },
-    { id: 'wd-pampas', label: 'פמפס ופרחי שדה', src: '/backgrounds/book/wd-pampas.webp', tags: ['wedding', 'romantic'] },
     { id: 'wd-silk', label: 'משי שמפניה', src: '/backgrounds/book/wd-silk.webp', tags: ['wedding', 'romantic'] },
-    { id: 'wd-sage', label: 'ענפי זית', src: '/backgrounds/book/wd-sage.webp', tags: ['wedding', 'romantic'] },
     { id: 'bm-jerusalem', label: 'ירושלים', src: '/backgrounds/book/bm-jerusalem.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration'] },
     { id: 'bm-iceblue', label: 'שמיים וזהב', src: '/backgrounds/book/bm-iceblue.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration'] },
-    { id: 'bm-navy', label: 'לילה של אורות', src: '/backgrounds/book/bm-navy.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration', 'dark'] },
-    { id: 'bm-royal', label: 'כחול מלכותי', src: '/backgrounds/book/bm-royal.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration', 'dark'] },
-    { id: 'bd-confetti', label: 'קונפטי', src: '/backgrounds/book/bd-confetti.webp', tags: ['birthday', 'celebration'] },
     { id: 'bd-balloons', label: 'בלונים', src: '/backgrounds/book/bd-balloons.webp', tags: ['birthday', 'celebration'] },
-    { id: 'nt-lilac', label: 'לילך', src: '/backgrounds/book/nt-lilac.webp', tags: ['neutral'] },
-    { id: 'nt-botanical', label: 'עלים עדינים', src: '/backgrounds/book/nt-botanical.webp', tags: ['neutral'] },
     { id: 'nt-linen', label: 'פשתן', src: '/backgrounds/book/nt-linen.webp', tags: ['neutral'] },
     { id: 'nt-marble', label: 'שיש', src: '/backgrounds/book/nt-marble.webp', tags: ['neutral'] },
     { id: 'bm-tallit', label: 'טלית', src: '/backgrounds/book/bm-tallit.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration'] },
-    { id: 'bm-crown', label: 'כתר ופיתוחי זהב', src: '/backgrounds/book/bm-crown.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration'] },
-    { id: 'bm-geometric', label: 'כוכבים גאומטריים', src: '/backgrounds/book/bm-geometric.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration'] },
     { id: 'bm-jerusalem-gold', label: 'ירושלים של זהב', src: '/backgrounds/book/bm-jerusalem-gold.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration'] },
-    { id: 'bm-navy-marble', label: 'שיש כחול וזהב', src: '/backgrounds/book/bm-navy-marble.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration'] },
     { id: 'bm-night-stars', label: 'שמי לילה', src: '/backgrounds/book/bm-night-stars.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration', 'dark'] },
     { id: 'bd-arches', label: 'קשתות בוהו', src: '/backgrounds/book/bd-arches.webp', tags: ['birthday', 'celebration'] },
-    { id: 'bd-gold-balloons', label: 'בלוני זהב', src: '/backgrounds/book/bd-gold-balloons.webp', tags: ['birthday', 'celebration'] },
-    { id: 'bd-bunting', label: 'דגלונים', src: '/backgrounds/book/bd-bunting.webp', tags: ['birthday', 'celebration'] },
     { id: 'bd-splash', label: 'צבעי מים שמחים', src: '/backgrounds/book/bd-splash.webp', tags: ['birthday', 'celebration'] },
-    { id: 'cl-damask', label: 'דמשק שנהב', src: '/backgrounds/book/cl-damask.webp', tags: ['classic'] },
-    { id: 'cl-gold-corners', label: 'פינות זהב', src: '/backgrounds/book/cl-gold-corners.webp', tags: ['classic'] },
-    { id: 'cl-letterpress', label: 'נייר כותנה', src: '/backgrounds/book/cl-letterpress.webp', tags: ['classic'] },
-    { id: 'cl-garden-roses', label: 'ורדי גן', src: '/backgrounds/book/cl-garden-roses.webp', tags: ['classic', 'wedding', 'romantic'] },
     { id: 'cl-indigo-wash', label: 'אינדיגו', src: '/backgrounds/book/cl-indigo-wash.webp', tags: ['classic'] },
     { id: 'cl-peach-sky', label: 'שחר אפרסק', src: '/backgrounds/book/cl-peach-sky.webp', tags: ['classic'] },
     // Older ones that books still use. wedding-bg, wedding-bg2 and

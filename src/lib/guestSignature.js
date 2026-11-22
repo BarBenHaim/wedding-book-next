@@ -27,8 +27,9 @@ const SHARED = {
     inputFocusBorder: '#2545E0',
     inputTextColor: '#14183A',
     inputPlaceholderColor: '#9A9DB0',
-    pillBg: 'rgba(37,69,224,0.10)',
-    pillBorder: 'rgba(37,69,224,0.35)',
+    // solid: the pill straddles the card's top edge, and a see-through one shows that edge through its text
+    pillBg: '#E6EBFF',
+    pillBorder: '#9FB2FF',
     pillText: '#2545E0',
     pillHeart: '#2545E0',
     wellBg: '#EEF1FF',

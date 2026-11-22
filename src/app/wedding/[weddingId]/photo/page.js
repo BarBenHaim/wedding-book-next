@@ -7,6 +7,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '../../../../lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { buildGuestPageTheme } from '@/lib/guestPageTheme'
+import { signatureDesign } from '@/lib/guestSignature'
 import Cropper from 'react-easy-crop'
 import { keepsWholePhoto, photoDrawPlan } from '@/lib/fullPhoto'
 import imageCompression from 'browser-image-compression'
@@ -262,7 +263,10 @@ export default function TextPage() {
                         momentSubmit: (data.customMomentSubmit || '').trim(),
                         momentSecurityNote: (data.customMomentSecurityNote || '').trim(),
                     })
-                    setGuestDesign(previewGd || data.guestDesign || null)
+                    // An event nobody has styled gets the house look for its occasion (guestSignature.js),
+                    // not the old garden: a bar mitzvah used to open on roses and an arch. A design the
+                    // owner or the studio saved is untouched, and nothing is written to the event.
+                    setGuestDesign(previewGd || data.guestDesign || signatureDesign(data.eventType))
                     setBookDoc({ bookDesign: data.bookDesign, coverDesign: data.coverDesign, book: data.book, noPhotoCrop: data.noPhotoCrop })
                     if (previewCopy) setFormCopy(prev => ({ ...prev, ...previewCopy }))
                 }

@@ -17,42 +17,46 @@
 // design (see the studio_house_* presets) with fonts added.
 
 import { applyPresetClean } from './bookDesignSchema'
+import { ART_FRAMES } from './photoFrames'
 
 const BASE = {
     template: 'classic', blessingTemplate: null, autoSplit: false, splitThreshold: 240, entriesPerPage: 1,
     backgroundColor: '#ffffff', texture: null, frame: null,
     textAlign: 'center', nameAlign: 'center', imageAlign: 'center',
-    fontSizePercent: 2.7, nameFontSizePercent: 2.8, nameMarginTop: 0, nameMarginBottom: 1, nameMaxWidth: 60,
-    imageStyle: { width: 60, borderRadius: 0, height: 45 }, photoFit: 'cover', photoLayout: 'uniform',
+    fontSizePercent: 3.2, nameFontSizePercent: 3, nameMarginTop: 0, nameMarginBottom: 1, nameMaxWidth: 60,
+    imageStyle: { width: 62, borderRadius: 0, height: 46 }, photoFit: 'cover', photoLayout: 'uniform',
     imageMarginTop: 5.5, imageMarginBottom: 2, photoFrameInset: 6,
-    textMaxWidth: 61, textMarginTop: 5, textLineHeight: 1.5, pagePadding: 3.5, borderRadius: 0,
+    textMaxWidth: 62, textMarginTop: 5, textLineHeight: 1.5, pagePadding: 3.5, borderRadius: 0,
 }
 
-// Slice (% of the artwork that is border) per art frame, kept with ART_FRAMES in photoFrames.js.
-const ART = { 'gold-floral': 9.5, 'navy-gold': 8, oak: 7.5 }
-const art = id => ({ photoFrame: null, photoFrameUrl: `/frames/art/${id}.png`, photoFrameSlice: ART[id] })
+// The slice of an art frame is measured once, in photoFrames.js, and read from there.
+const art = id => {
+    const f = ART_FRAMES.find(x => x.id === id)
+    return { photoFrame: null, photoFrameUrl: f.url, photoFrameSlice: f.slicePct }
+}
 const built = id => ({ photoFrame: id, photoFrameUrl: null, photoFrameSlice: null })
 
+// The designs the owners picked out (22.11.2026). `pagePadding` keeps the content clear of art
+// painted along the page edge (the Jerusalem skyline along the bottom).
 export const AUTO_DESIGNS = Object.freeze({
-    'wd-blush': { backgroundUrl: '/backgrounds/book/wd-blush.webp', fontColor: '#4a2f35', nameColor: '#8a4a5a', ...art('gold-floral') },
-    // pagePadding keeps the content clear of the stripes and the garland painted along the edges
-    'bm-tallit': { pagePadding: 12, backgroundUrl: '/backgrounds/book/bm-tallit.webp', fontColor: '#14305a', nameColor: '#2545E0', ...built('navy-line') },
-    'bm-iceblue': { backgroundUrl: '/backgrounds/book/bm-iceblue.webp', fontColor: '#14305a', nameColor: '#2545E0', ...built('navy-line') },
-    'bd-bunting': { pagePadding: 10, backgroundUrl: '/backgrounds/book/bd-bunting.webp', fontColor: '#5a3b4d', nameColor: '#c0507a', ...built('soft-card') },
-    'cl-letterpress': { backgroundUrl: '/backgrounds/book/cl-letterpress.webp', fontColor: '#3a2f22', nameColor: '#7a5c3a', ...built('soft-card') },
+    'wd-silk': { backgroundUrl: '/backgrounds/book/wd-silk.webp', fontColor: '#4a3a22', nameColor: '#8a6a34', ...art('silk-ribbon') },
+    'bm-jerusalem': { pagePadding: 8, backgroundUrl: '/backgrounds/book/bm-jerusalem.webp', fontColor: '#4a3520', nameColor: '#8a6234', ...art('sand-stone') },
+    'bm-iceblue': { backgroundUrl: '/backgrounds/book/bm-iceblue.webp', fontColor: '#14305a', nameColor: '#2545E0', ...art('ice-gold') },
+    'bd-balloons': { pagePadding: 5, backgroundUrl: '/backgrounds/book/bd-balloons.webp', fontColor: '#6a3a30', nameColor: '#d0705a', ...built('rounded') },
+    'nt-linen': { backgroundUrl: '/backgrounds/book/nt-linen.webp', fontColor: '#3a2f22', nameColor: '#7a5c3a', ...art('linen-stitch') },
 })
 
 const BY_EVENT = {
-    wedding: 'wd-blush',
-    bar_mitzvah: 'bm-tallit',
-    twins_bar_mitzvah: 'bm-tallit',
+    wedding: 'wd-silk',
+    bar_mitzvah: 'bm-jerusalem',
+    twins_bar_mitzvah: 'bm-jerusalem',
     bat_mitzvah: 'bm-iceblue',
-    birthday: 'bd-bunting',
+    birthday: 'bd-balloons',
 }
 
-/** The house design key for an event type; any other type gets the plain paper one. */
+/** The house design key for an event type; any other type gets the plain linen one. */
 export function autoDesignKeyFor(eventType) {
-    return BY_EVENT[eventType] || 'cl-letterpress'
+    return BY_EVENT[eventType] || 'nt-linen'
 }
 
 /** The complete `bookDesign` for a new event of this type, in the shape applyPresetClean gives. */
