@@ -52,9 +52,9 @@ describe('enter token', () => {
         expect(verifyEnterToken('a.b', { secret: '' }).reason).toBe('no-secret')
     })
 
-    it('reads the secret from the environment, with a fallback', () => {
+    it('reads its own secret and never falls back to the WooCommerce one', () => {
         expect(enterSecret({ ENTER_LINK_SECRET: 'a', WC_WEBHOOK_SECRET: 'b' })).toBe('a')
-        expect(enterSecret({ WC_WEBHOOK_SECRET: 'b' })).toBe('b')
+        expect(enterSecret({ WC_WEBHOOK_SECRET: 'b' })).toBe('')
         expect(enterSecret({})).toBe('')
     })
 })
@@ -80,12 +80,30 @@ describe('enter url and e-mail', () => {
 describe('wiring', () => {
     it('the first e-mail links the owner in with a signed link', () => {
         const src = readFileSync('src/app/api/createWedding/route.js', 'utf8')
-        expect(src).toContain('signEnterToken(userRecord.uid')
+        expect(src).toContain('signEnterToken(wedding.ownerId')
         expect(src).toContain('enterUrl(baseUrl, enterToken)')
     })
 
     it('the login page offers the link by e-mail, and /enter exists', () => {
         expect(readFileSync('src/app/login/page.js', 'utf8')).toContain('/api/auth/enter-link')
         expect(readFileSync('src/app/enter/page.js', 'utf8')).toContain('signInWithCustomToken')
+    })
+})
+
+describe('the enter routes keep the admin out', () => {
+    it('/api/auth/enter refuses a super-admin account', () => {
+        const src = readFileSync('src/app/api/auth/enter/route.js', 'utf8')
+        expect(src).toContain('isSuperAdmin(user?.email)')
+        expect(src.indexOf('isSuperAdmin(')).toBeLessThan(src.indexOf('createCustomToken('))
+    })
+
+    it('/api/auth/enter-link never mails a link to a super-admin', () => {
+        const src = readFileSync('src/app/api/auth/enter-link/route.js', 'utf8')
+        expect(src).toContain('isSuperAdmin(email)')
+    })
+
+    it('the providers answer says whether links are configured', () => {
+        const src = readFileSync('src/app/api/auth/providers/route.js', 'utf8')
+        expect(src).toContain('enterLink: !!enterSecret()')
     })
 })

@@ -17,8 +17,14 @@ const b64 = s => Buffer.from(s, 'utf8').toString('base64url')
 const unb64 = s => Buffer.from(s, 'base64url').toString('utf8')
 const sign = (data, secret) => createHmac('sha256', secret).update(data).digest('base64url')
 
+/**
+ * The signing secret: its own variable, on purpose. It used to fall back to the
+ * WooCommerce webhook secret, but WordPress holds that one too, and whoever has
+ * the signing secret can sign in as anyone. No secret means no links (the e-mail
+ * then points at the login page and /login shows the password form).
+ */
 export function enterSecret(env = process.env) {
-    return env.ENTER_LINK_SECRET || env.WC_WEBHOOK_SECRET || ''
+    return env.ENTER_LINK_SECRET || ''
 }
 
 /** A token for one account, or '' when there is no secret to sign with. */

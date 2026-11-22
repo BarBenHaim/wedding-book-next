@@ -1,6 +1,7 @@
 // /api/auth/providers — is "Continue with Google" switched on?
 //
-//   GET → { google: true | false | null }
+//   GET → { google: true | false | null, enterLink: boolean }
+//   (enterLink: is the "send me a link" sign-in configured: ENTER_LINK_SECRET)
 //
 // Google sign-in only works once it is enabled in the Firebase console
 // AND app.weddingtales.co.il is an authorized domain there. Asking the
@@ -16,6 +17,7 @@ export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { getApp } from 'firebase-admin/app'
 import '@/lib/firebaseAdmin' // initialises the default admin app
+import { enterSecret } from '@/lib/enterLink'
 
 const TTL_MS = 5 * 60 * 1000
 let cache = null // { at, value }
@@ -42,7 +44,7 @@ async function googleEnabled(host) {
 export async function GET(req) {
     const host = new URL(req.url).hostname
     if (cache && Date.now() - cache.at < TTL_MS && cache.host === host) {
-        return NextResponse.json({ google: cache.value })
+        return NextResponse.json({ google: cache.value, enterLink: !!enterSecret() })
     }
     let value = null
     try {
@@ -51,5 +53,5 @@ export async function GET(req) {
         console.error('[auth/providers] check failed:', err?.message || err)
     }
     cache = { at: Date.now(), host, value }
-    return NextResponse.json({ google: value })
+    return NextResponse.json({ google: value, enterLink: !!enterSecret() })
 }

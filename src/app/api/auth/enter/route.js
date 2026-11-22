@@ -12,6 +12,7 @@ export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { adminAuth } from '@/lib/firebaseAdmin'
 import { enterSecret, verifyEnterToken } from '@/lib/enterLink'
+import { isSuperAdmin } from '@/lib/superAdmin'
 
 export async function POST(req) {
     try {
@@ -24,13 +25,19 @@ export async function POST(req) {
                 { status: 400 },
             )
         }
+        let user
         try {
-            await adminAuth.getUser(checked.uid)
+            user = await adminAuth.getUser(checked.uid)
         } catch (err) {
             if (err?.code === 'auth/user-not-found') {
                 return NextResponse.json({ ok: false, error: 'החשבון לא נמצא' }, { status: 404 })
             }
             throw err
+        }
+        // The people who run the system sign in with a password or Google, never
+        // with a link: a link that leaks must not open the admin.
+        if (isSuperAdmin(user?.email)) {
+            return NextResponse.json({ ok: false, error: 'הקישור לא תקין' }, { status: 403 })
         }
         const customToken = await adminAuth.createCustomToken(checked.uid)
         return NextResponse.json({ ok: true, customToken })

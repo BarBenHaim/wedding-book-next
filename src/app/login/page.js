@@ -42,6 +42,7 @@ export default function LoginPage() {
     // 'start' | 'sent' | 'password' | 'reset' | 'resetSent'
     const [view, setView] = useState('start')
     const [googleOn, setGoogleOn] = useState(false)
+    const [linkOn, setLinkOn] = useState(true)
     const [seconds, setSeconds] = useState(0)
     const emailRef = useRef(null)
 
@@ -49,7 +50,12 @@ export default function LoginPage() {
         let cancelled = false
         fetch('/api/auth/providers', { cache: 'no-store' })
             .then(r => r.json())
-            .then(j => { if (!cancelled) setGoogleOn(j?.google !== false) })
+            .then(j => {
+                if (cancelled) return
+                setGoogleOn(j?.google !== false)
+                // No signing secret on the server: the link button would only fail.
+                if (j?.enterLink === false) { setLinkOn(false); setView(v => (v === 'start' ? 'password' : v)) }
+            })
             .catch(() => {})
         try {
             const q = new URLSearchParams(window.location.search)
@@ -265,7 +271,7 @@ export default function LoginPage() {
                         {loading ? 'נכנסים…' : 'כניסה'}
                     </button>
                     {link('שכחתי סיסמה', () => { setView('reset'); setError('') })}
-                    {link('עדיף קישור במייל', () => { setView('start'); setError('') })}
+                    {linkOn && link('עדיף קישור במייל', () => { setView('start'); setError('') })}
                 </form>
                 {errorBox}
             </AuthShell>

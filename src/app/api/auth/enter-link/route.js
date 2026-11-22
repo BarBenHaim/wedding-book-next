@@ -16,6 +16,7 @@ import nodemailer from 'nodemailer'
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin'
 import { normalizeOwnerEmail } from '@/lib/ownerTransfer'
 import { inCooldown } from '@/lib/passwordLink'
+import { isSuperAdmin } from '@/lib/superAdmin'
 import { enterSecret, signEnterToken, enterUrl, enterLinkEmail, LOGIN_LINK_TTL_MS } from '@/lib/enterLink'
 
 const OK = () => NextResponse.json({ ok: true })
@@ -45,9 +46,9 @@ export async function POST(req) {
             throw err
         }
 
-        const secret = enterSecret()
-        const token = signEnterToken(user.uid, { secret, ttlMs: LOGIN_LINK_TTL_MS })
-        if (!token) throw new Error('no secret to sign the enter link with')
+        if (isSuperAdmin(email)) return OK() // same answer, no link: see /api/auth/enter
+        const token = signEnterToken(user.uid, { secret: enterSecret(), ttlMs: LOGIN_LINK_TTL_MS })
+        if (!token) throw new Error('ENTER_LINK_SECRET is not set')
         const { subject, html, text } = enterLinkEmail({ email, url: enterUrl(originOf(req), token) })
 
         const transporter = nodemailer.createTransport({

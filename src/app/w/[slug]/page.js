@@ -7,6 +7,9 @@ import { db } from '../../../lib/firebaseClient'
 import { getMessages } from '@/i18n/getMessages'
 import { dirFor } from '@/i18n/locales'
 import BookLoader from '@/components/BookLoader/BookLoader'
+import { logEvent } from '@/lib/logEvent'
+import { getSubmissions } from '@/lib/mySubmissions'
+import { isTwinsEvent } from '@/lib/twins'
 
 // The not-found state on /w/[slug] doesn't have a wedding doc to read
 // locale from (the slug failed to resolve). We default to Hebrew rather
@@ -44,12 +47,20 @@ export default function SlugRedirect() {
                     return
                 }
                 const weddingId = snap.docs[0].id
-                // Don't log a scan event here — the /wedding/{id} page
-                // we're about to redirect to logs one itself. Logging
-                // both would double-count every short-link visit.
-                // Honor ?go=photo from the QR code: skip the welcome
-                // landing and drop the guest straight onto the form.
-                const dest = goTarget === 'photo' ? `/wedding/${weddingId}/photo` : `/wedding/${weddingId}`
+                const data = snap.docs[0].data() || {}
+                // Where the guest lands. The shortest road is the best one: a
+                // link opened from WhatsApp now goes straight to the form, as
+                // the QR always did. The welcome page stays for the two cases
+                // that need it: twins (the guest picks who the blessing is
+                // for) and a phone that already sent a blessing (it shows the
+                // "edit yours" shortcuts). ?go=photo (the QR) always goes
+                // straight to the form.
+                const direct =
+                    goTarget === 'photo' ||
+                    (!isTwinsEvent(data.eventType) && getSubmissions(weddingId).length === 0)
+                // The welcome page logs the scan itself; going past it, we do.
+                if (direct) logEvent(weddingId, 'scan')
+                const dest = direct ? `/wedding/${weddingId}/photo` : `/wedding/${weddingId}`
                 router.replace(dest)
             } catch (err) {
                 console.error('Error resolving slug:', err)
