@@ -50,7 +50,12 @@ export async function GET(req) {
     const dry = new URL(req.url).searchParams.get('dry') === '1'
     const now = Date.now()
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://app.weddingtales.co.il'
-    const out = { ok: true, dry, checked: 0, due: [], sent: 0, failed: 0, digest: 0, summary: false }
+    // PAUSED by default (22.11.2026, the owner asked to hold the reminders and the balance mails).
+    // Nothing goes to a customer until LIFECYCLE_CUSTOMER_MAILS is set to 'on'. The owner's own daily
+    // summary and exception lines still go. Nothing is marked as sent while paused, so what is still
+    // due when it is switched on goes then.
+    const customerMailsOn = process.env.LIFECYCLE_CUSTOMER_MAILS === 'on'
+    const out = { ok: true, dry, customerMailsOn, checked: 0, due: [], sent: 0, failed: 0, digest: 0, summary: false }
     const dayAgo = now - 24 * 60 * 60 * 1000
     const newOrders = []
     const balancesPaid = []
@@ -83,7 +88,7 @@ export async function GET(req) {
             const due = nextMessage({ w, entries, now, sent })
             if (!due) continue
             out.due.push({ id: doc.id, key: due.key, kind: due.kind })
-            if (dry || out.sent >= MAX_SENDS_PER_RUN) continue
+            if (dry || !customerMailsOn || out.sent >= MAX_SENDS_PER_RUN) continue
 
             try {
                 const mail = renderLifecycleEmail(

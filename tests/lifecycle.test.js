@@ -192,3 +192,19 @@ describe('the daily summary to the owner of the business', () => {
         expect(dailySummary({ failedLocks: [{ orderId: '1' }] })).not.toBe(null)
     })
 })
+
+describe('the reminders are paused until switched on', () => {
+    it('no mail goes to a customer unless LIFECYCLE_CUSTOMER_MAILS is on, and nothing is marked sent', async () => {
+        const { readFileSync } = await import('fs')
+        const src = readFileSync('src/app/api/cron/lifecycle/route.js', 'utf8')
+        expect(src).toContain("process.env.LIFECYCLE_CUSTOMER_MAILS === 'on'")
+        expect(src).toContain('if (dry || !customerMailsOn || out.sent >= MAX_SENDS_PER_RUN) continue')
+        // the gate sits before the send and before the mark, so a paused run changes nothing
+        const gate = src.indexOf('!customerMailsOn')
+        const send = src.search(/transporter\.sendMail\(\{\s*from: `"Wedding Tales" <\$\{process\.env\.MAIL_USER\}>`,\s*to: w\.ownerEmail/)
+        const mark = src.indexOf('lifecycleSent: { [due.key]')
+        expect(gate).toBeGreaterThan(0)
+        expect(send).toBeGreaterThan(gate)
+        expect(mark).toBeGreaterThan(gate)
+    })
+})
