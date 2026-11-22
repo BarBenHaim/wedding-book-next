@@ -11,6 +11,7 @@ import { enterSecret, signEnterToken, enterUrl } from '@/lib/enterLink'
 import { lockDecision, needsWelcomeResume, briefError } from '@/lib/orderLock'
 import { renderBalancePaidEmail, bookTitleOf } from '@/lib/lifecycle'
 import { signatureDesign } from '@/lib/guestSignature'
+import { autoBookDesign } from '@/lib/autoDesign'
 import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import crypto from 'crypto'
@@ -241,6 +242,10 @@ export async function POST(req) {
                     // The house look of the blessing page for a new event (the owner's own
                     // choice in the design studio replaces it; existing events are untouched).
                     ...(details.fields.eventType ? { guestDesign: signatureDesign(details.fields.eventType) } : {}),
+                    // The book itself starts dressed for its occasion (lib/autoDesign.js), so the
+                    // owner's first look is a finished design rather than the plain default.
+                    // Written only here, when the event is created: the owner's own pick replaces it.
+                    ...(details.fields.eventType ? { bookDesign: autoBookDesign(details.fields.eventType) } : {}),
                     ...details.fields,
                 },
                 { merge: true },
