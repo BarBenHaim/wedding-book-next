@@ -153,6 +153,27 @@ function formatDate(isoString) {
 
 import { eventTypeOf, eventTypeLabel, matchesSearch, amountOf, compareByAmount, countByEventType, EVENT_TYPES, rowUrgency, countdownLabel, SOON_WINDOW_DAYS, originOf, originLabel, appPresence, countByOrigin, createdAtMs, ORIGIN_LABEL } from '@/lib/adminEventsView'
 
+import { JourneyCell, JourneyPanelBlock, JourneyStrip, stagePredicate } from './JourneyUI'
+import { journeyOf, urgencyOf } from '@/lib/journeyStage'
+
+// The message Bar sends himself from the row. Only for the two stages where the customer
+// has to act; the wording matches the e-mails the lifecycle engine would send.
+function journeyWaLink(w, j) {
+    const p = normalizePhoneIntl(w.ownerPhone)
+    if (!p || p.length < 9) return null
+    const first = (w.ownerName || '').trim().split(/\s+/)[0]
+    const hi = `היי${first ? ' ' + first : ''}! כאן צוות Wedding Tales 💛\n`
+    let text = null
+    if (j.action === 'link') {
+        const link = w.slug ? `https://app.weddingtales.co.il/w/${w.slug}` : `https://app.weddingtales.co.il/wedding/${w.id}`
+        text = `${hi}שלחתם כבר לאורחים את הקישור לספר? זה לוקח חצי דקה: שולחים אותו בקבוצה בוואטסאפ, וכל מי שכותב ברכה מוסיף עוד עמוד לספר.\n${link}`
+    } else if (j.action === 'balance') {
+        const due = Number(w.balanceDue) || 800
+        text = `${hi}הספר מוכן ומחכה לכם. כשעברתם עליו ואתם מרוצים, משלמים את היתרה (${due} ₪) והוא יוצא לדפוס ומגיע עד הבית:\nhttps://weddingtales.co.il/checkout/?add-to-cart=6271&wt_bal=${encodeURIComponent(w.id)}`
+    }
+    return text ? `https://wa.me/${p}?text=${encodeURIComponent(text)}` : null
+}
+
 // How a row is tinted by how close its event is.
 //
 // Classes, not inline styles, on purpose: an inline backgroundColor
@@ -2339,7 +2360,7 @@ function OwnerTransferPanel({ wedding, onOwnerChanged }) {
     )
 }
 
-function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onCheckLuluStatus, onSaveEdit, onOwnerChanged }) {
+function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onCheckLuluStatus, onSaveEdit, onOwnerChanged, onMark }) {
     // ── Analytics state — funnel + recent scans pulled from
     //    /api/admin/wedding-stats. Loads fresh whenever the panel
     //    swaps to a different wedding. Hooks must be declared BEFORE
@@ -2446,9 +2467,7 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
             </div>
 
             {/* Status */}
-            <div className='px-6 py-4 border-b border-[#f0e8d4]'>
-                <StatusBadge weddingDate={wedding.weddingDate} />
-            </div>
+            <JourneyPanelBlock j={journeyOf(wedding, Date.now())} w={wedding} waHref={journeyWaLink(wedding, journeyOf(wedding, Date.now()))} onMark={onMark} />
 
             {/* ── Quick Links ──
                 Direct shortcuts to every guest- and couple-facing page
@@ -2837,6 +2856,8 @@ function AdminDashboardContent() {
     // signed themselves up on the site" is a question about where the
     // business comes from, not about what state an event is in.
     const [originFilter, setOriginFilter] = useState('all')
+    // The journey strip's cards: all | queue | before | after | print_now | in_print | free.
+    const [stageFilter, setStageFilter] = useState('all')
     const [sort, setSort] = useState({ key: 'date', dir: 'asc' })
     const [selectedWedding, setSelectedWedding] = useState(null)
     const [modal, setModal] = useState(null)
@@ -2864,8 +2885,12 @@ function AdminDashboardContent() {
     const typeCounts = useMemo(() => countByEventType(weddings), [weddings])
     const originCounts = useMemo(() => countByOrigin(weddings), [weddings])
 
+    // One journey per event, computed once per load: the table, the strip and the queue all read it.
+    const journeys = useMemo(() => new Map(weddings.map(w => [w.id, journeyOf(w, Date.now())])), [weddings])
+
     const filtered = useMemo(() => {
         let list = weddings
+        if (stageFilter !== 'all') list = list.filter(w => stagePredicate(stageFilter, journeys.get(w.id)))
         // matchesSearch covers the celebrant, the Hebrew name fields, the
         // phone (digits-only, so "052-661" works) and the type label —
         // none of which the old four-field check could see.
@@ -2886,9 +2911,11 @@ function AdminDashboardContent() {
         }
         if (originFilter !== 'all') list = list.filter(w => originOf(w) === originFilter)
         return list
-    }, [weddings, searchQuery, statusFilter, typeFilter, originFilter])
+    }, [weddings, searchQuery, statusFilter, typeFilter, originFilter, stageFilter, journeys])
 
     const sorted = useMemo(() => {
+        // "Needs me today" is a queue, not a table: the most urgent first, whatever the sort chip says.
+        if (stageFilter === 'queue') return [...filtered].sort((a, b) => urgencyOf(journeys.get(b.id)) - urgencyOf(journeys.get(a.id)))
         if (!sort.key) return filtered
         return [...filtered].sort((a, b) => {
             // Money is its own comparator: the unpaid sink in BOTH
@@ -2905,9 +2932,36 @@ function AdminDashboardContent() {
             else if (sort.key === 'created') { vA = createdAtMs(a) ?? 0; vB = createdAtMs(b) ?? 0 }
             return vA < vB ? (sort.dir === 'asc' ? -1 : 1) : vA > vB ? (sort.dir === 'asc' ? 1 : -1) : 0
         })
-    }, [filtered, sort])
+    }, [filtered, sort, stageFilter, journeys])
 
     // ─── Actions ──
+    // Stamp or clear one of the milestones only a person can know. Asks first, because a
+    // wrong "ordered" hides an event from the print queue.
+    function handleMark(w, field, on, label) {
+        setModal({
+            title: label,
+            message: `${coupleLabel(w)}: ${on ? 'לסמן' : 'לבטל'} "${label}"?`,
+            confirmLabel: 'כן',
+            danger: false,
+            onConfirm: async () => {
+                setModal(null)
+                setActionLoading(true)
+                try {
+                    await updateWedding(w.id, { [field]: on })
+                    const stamp = on ? new Date().toISOString() : null
+                    const patch = { [field]: stamp, ...(field === 'closedAt' && !on ? { closedReason: null } : {}) }
+                    setWeddings(prev => prev.map(x => (x.id === w.id ? { ...x, ...patch } : x)))
+                    setSelectedWedding(prev => (prev && prev.id === w.id ? { ...prev, ...patch } : prev))
+                    setToast({ message: 'עודכן', type: 'success' })
+                } catch (err) {
+                    setToast({ message: `שגיאה: ${err.message}`, type: 'error' })
+                } finally {
+                    setActionLoading(false)
+                }
+            },
+        })
+    }
+
     function handleDeleteWedding(wedding) {
         setModal({
             title: 'מחיקת חתונה',
@@ -3080,6 +3134,7 @@ function AdminDashboardContent() {
                             onDelete={handleDeleteWedding}
                             onResetPassword={handleResetPassword}
                             onCheckLuluStatus={handleCheckLuluStatus}
+                            onMark={handleMark}
                             onSaveEdit={handleSaveEdit}
                             onOwnerChanged={(id, fields) => {
                                 setWeddings(prev => prev.map(w => (w.id === id ? { ...w, ...fields } : w)))
@@ -3426,6 +3481,9 @@ function AdminDashboardContent() {
                         )}
                     </div>
 
+                    {/* Where every customer is on the road, and what needs Bar today. */}
+                    {status === 'ok' && <JourneyStrip weddings={weddings} now={nowMs} active={stageFilter} onPick={setStageFilter} />}
+
                     {/* Event-type filter. Counts live in the chip so the
                         row doubles as a breakdown of the whole book of
                         business, and 'לא הוגדר' is a to-do list. */}
@@ -3634,7 +3692,7 @@ function AdminDashboardContent() {
                                             </div>
                                             {w.ownerEmail && <div className='text-xs text-[#a89378] mt-0.5 truncate'>{w.ownerEmail}</div>}
                                         </div>
-                                        <StatusBadge weddingDate={w.weddingDate} />
+                                        <JourneyCell j={journeys.get(w.id)} w={w} waHref={journeyWaLink(w, journeys.get(w.id))} onMark={handleMark} compact />
                                     </div>
                                     <div className='flex items-center gap-2 flex-wrap mt-2 text-xs text-[#7a6a52]'>
                                         <span className='inline-flex items-center gap-1 tabular-nums'><CalendarDays size={12} /> {formatDate(w.weddingDate)}</span>
@@ -3746,7 +3804,7 @@ function AdminDashboardContent() {
                                                 )}
                                             </td>
                                             <td className='px-6 py-4 text-[#7a6a52] whitespace-nowrap text-sm tabular-nums'>{w.createdAt ? formatDate(w.createdAt) : '—'}</td>
-                                            <td className='px-6 py-4 text-center'><StatusBadge weddingDate={w.weddingDate} /></td>
+                                            <td className='px-4 py-4 text-center'><JourneyCell j={journeys.get(w.id)} w={w} waHref={journeyWaLink(w, journeys.get(w.id))} onMark={handleMark} /></td>
                                             <td className='px-6 py-4 text-center'><GreetingsBadge count={w.greetingsCount} /></td>
                                             <td className='px-6 py-4 text-center'><PrintBadge printOrder={w.printOrder} /></td>
                                             <td className='px-6 py-4 text-center'><AppBadge wedding={w} /></td>

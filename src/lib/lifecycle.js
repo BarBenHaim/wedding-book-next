@@ -15,7 +15,8 @@
 //  - Pure: no Firebase, no mailer, no clock. The caller passes `now`.
 
 // Events created before this moment are not this engine's business.
-export const LIFECYCLE_START_MS = Date.parse('2026-11-23T00:00:00+02:00')
+// The sales page and the deposit flow went live on 22.11, so events opened that day belong here too.
+export const LIFECYCLE_START_MS = Date.parse('2026-11-22T00:00:00+02:00')
 
 const DAY = 24 * 60 * 60 * 1000
 
@@ -265,10 +266,16 @@ export function digestLines({ failedLocks = [], quietEvents = [], overdueBalance
  *   failedLocks    [{ orderId, error }]             paid orders that did not open an event
  *   exceptionLines the lines from digestLines()
  */
-export function dailySummary({ newOrders = [], balancesPaid = [], greetings = 0, failedLocks = [], exceptionLines = [] } = {}) {
-    const alerts = failedLocks.length + exceptionLines.length
-    if (!newOrders.length && !balancesPaid.length && !alerts) return null
+export function dailySummary({ newOrders = [], balancesPaid = [], greetings = 0, failedLocks = [], exceptionLines = [], printNow = [], queueLines = [] } = {}) {
+    const alerts = failedLocks.length + exceptionLines.length + queueLines.length
+    if (!newOrders.length && !balancesPaid.length && !alerts && !printNow.length) return null
     const out = []
+    // Every day until it is marked ordered in the admin: a paid book must never wait unseen.
+    if (printNow.length) {
+        out.push(`להדפיס עכשיו (שולם): ${printNow.length}`)
+        for (const p of printNow) out.push(`  • ${p.title || 'ספר'}${p.days >= 1 ? ` (ממתין ${p.days} ימים)` : ''}`)
+        out.push('  אחרי שמזמינים: באדמין, "סמן: הוזמן להדפסה".')
+    }
     if (newOrders.length) {
         out.push(`הזמנות חדשות: ${newOrders.length}`)
         for (const o of newOrders) out.push(`  • ${o.title || 'ספר חדש'}${o.amount ? ` (${o.amount} ₪)` : ''}`)
@@ -282,10 +289,13 @@ export function dailySummary({ newOrders = [], balancesPaid = [], greetings = 0,
         out.push('', 'דורש תשומת לב:')
         for (const l of failedLocks) out.push(`  • הזמנה ${l.orderId}: שולמה והאירוע לא נפתח (${l.error || 'שגיאה'}). WooCommerce ינסה שוב.`)
         for (const l of exceptionLines) out.push(`  • ${l}`)
+        for (const l of queueLines.slice(0, 8)) out.push(`  • ${l}`)
+        if (queueLines.length > 8) out.push(`  • ועוד ${queueLines.length - 8} באדמין (צריך אותי היום)`)
     }
     const bits = []
     if (newOrders.length) bits.push(`${newOrders.length} הזמנות`)
-    if (balancesPaid.length) bits.push(`${balancesPaid.length} להדפסה`)
+    if (printNow.length) bits.push(`${printNow.length} להדפיס עכשיו`)
+    else if (balancesPaid.length) bits.push(`${balancesPaid.length} להדפסה`)
     if (alerts) bits.push(`${alerts} לבדוק`)
     return { subject: `Wedding Tales, סיכום יומי: ${bits.join(', ')}`, text: out.join('\n') + '\n\nניהול: https://app.weddingtales.co.il/admin' }
 }

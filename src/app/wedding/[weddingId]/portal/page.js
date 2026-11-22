@@ -198,7 +198,7 @@ export default function PortalApp() {
         { key: 'design', cta: 'לעיצוב הספר', title: 'בוחרים עיצוב וכריכה', note: face ? 'יש כריכה. אפשר לשנות בכל רגע.' : 'בוחרים סגנון ומעלים תמונה לכריכה.', done: !!face, go: () => setTab('book') },
         { key: 'review', cta: 'לעבור על הברכות', title: 'עוברים על הברכות', note: 'אחרי האירוע: מתקנים, מחליפים תמונה, מסדרים.', done: stage === 'paid', go: () => setTab('blessings') },
         stage === 'deposit'
-            ? { key: 'pay', cta: 'לתשלום היתרה', title: `משלמים את היתרה${balanceDue ? ` (${balanceDue} ₪)` : ''} ומדפיסים`, note: 'רק כשהספר מוכן ואתם מרוצים ממנו. אחרי התשלום הוא יוצא לדפוס.', done: false, href: `https://weddingtales.co.il/checkout/?add-to-cart=6271&wt_bal=${encodeURIComponent(weddingId)}` }
+            ? { key: 'pay', cta: 'לתשלום היתרה', title: `משלמים את היתרה${balanceDue ? ` (${balanceDue} ₪)` : ''} ומדפיסים`, note: 'רק כשהספר מוכן ואתם מרוצים ממנו. אחרי התשלום הוא יוצא לדפוס.', done: false, href: `https://weddingtales.co.il/checkout/?add-to-cart=6271&wt_bal=${encodeURIComponent(weddingId)}`, mark: 'balance_click' }
             : stage === 'paid'
                 ? { key: 'pay', title: 'היתרה שולמה', note: 'הספר יוצא לדפוס ומגיע עד הבית.', done: true, go: () => setTab('book') }
                 : { key: 'pay', cta: 'לאישור ההדפסה', title: 'מאשרים הדפסה', note: 'כשהספר מוכן, כותבים לנו והוא יוצא לדפוס.', done: false, href: 'https://wa.me/972515350253' },
@@ -215,11 +215,20 @@ export default function PortalApp() {
     const eventLabel = { wedding: 'חתונה', bar_mitzvah: 'בר מצווה', bat_mitzvah: 'בת מצווה', twins_bar_mitzvah: 'בר מצווה', birthday: 'יום הולדת' }[w?.eventType || (isWedding ? 'wedding' : '')] || ''
     const recent = useMemo(() => (entries || []).slice().sort((x, y) => (y.timestamp?.seconds || 0) - (x.timestamp?.seconds || 0)).slice(0, 8), [entries])
 
+    // First time only (the server keeps the first stamp): the admin reads these to tell a customer
+    // who shared the link, or started paying, from one who has not.
+    const stamp = ev => {
+        try {
+            fetch('/api/log-event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weddingId, event: ev }), keepalive: true }).catch(() => {})
+        } catch { /* a tracker never breaks the page */ }
+    }
     const waShare = () => {
+        stamp('link_shared')
         const msg = `הוזמנתם להשאיר לנו ברכה בספר של ${titleOf(w)} 💛\n${guestLink}`
         window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
     }
     const copy = (link, key) => {
+        if (link === guestLink) stamp('link_shared')
         navigator.clipboard?.writeText(link).then(() => { setCopied(key); setTimeout(() => setCopied(''), 2000) }).catch(() => {})
     }
     const openEdit = e => { setEName(e.name || ''); setEText(e.text || ''); setEImg(null); setEditing(e); setSelected(null) }
@@ -386,7 +395,7 @@ export default function PortalApp() {
                                 <div style={{ position: 'relative', fontSize: 20, fontWeight: 900, lineHeight: 1.25 }}>{s.title}</div>
                                 <div style={{ position: 'relative', fontSize: 13.5, color: '#C9CDEB', lineHeight: 1.45, marginTop: 4 }}>{s.note}</div>
                                 <Act
-                                    {...(s.href ? { href: s.href, target: '_blank', rel: 'noopener' } : { type: 'button', onClick: s.go })}
+                                    {...(s.href ? { href: s.href, target: '_blank', rel: 'noopener', onClick: s.mark ? () => stamp(s.mark) : undefined } : { type: 'button', onClick: s.go })}
                                     className='wt-press'
                                     style={{
                                         position: 'relative', marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 48,
@@ -477,7 +486,7 @@ export default function PortalApp() {
                             const isNext = i === nextStep
                             const Row = s.href ? 'a' : 'div'
                             return (
-                                <Row key={s.key} {...(s.href ? { href: s.href, target: '_blank', rel: 'noopener' } : { onClick: s.go, role: 'button', tabIndex: 0 })} className='wt-press' style={{
+                                <Row key={s.key} {...(s.href ? { href: s.href, target: '_blank', rel: 'noopener', onClick: s.mark ? () => stamp(s.mark) : undefined } : { onClick: s.go, role: 'button', tabIndex: 0 })} className='wt-press' style={{
                                     display: 'flex', alignItems: 'center', gap: 11, padding: '9px 0', minHeight: 44, textDecoration: 'none', cursor: 'pointer',
                                     borderTop: i ? '1px solid #EFEBE2' : 'none',
                                 }}>

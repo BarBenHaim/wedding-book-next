@@ -39,6 +39,10 @@ const ALLOWED_EVENTS = new Set([
     // the admin table is really asking.
     'app_open',
     'app_book_open',
+    // Sent by the owner's portal: the customer shared the guest link, or
+    // pressed the pay-the-balance button. The admin's journey stage reads them.
+    'link_shared',
+    'balance_click',
 ])
 
 // Events that also stamp a "last seen" field on the wedding doc, so the
@@ -50,7 +54,12 @@ const STAMPS = { app_open: 'lastAppOpenAt', app_book_open: 'lastAppBookOpenAt' }
 // so neither the IP nor a city derived from it tells us anything we
 // asked. Skipping both keeps "approximate location" off the app's Play
 // Data Safety declaration, which is a category users read closely.
-const OWNER_EVENTS = new Set(['app_open', 'app_book_open'])
+const OWNER_EVENTS = new Set(['app_open', 'app_book_open', 'link_shared', 'balance_click'])
+
+// Milestones: only the FIRST one counts, so a later (or forged) call can never move
+// a customer backwards or reset a clock. The endpoint is open, so these feed display
+// and nudges to the business owner only, never money.
+const FIRST_STAMPS = { link_shared: 'linkSharedAt', balance_click: 'balanceClickAt' }
 
 // Best-effort GeoIP lookup. ipapi.co's free tier allows 1000 lookups/
 // day per source IP without an API key — comfortable for a wedding's
@@ -133,6 +142,19 @@ export async function POST(req) {
                 .collection('weddings')
                 .doc(weddingId)
                 .set({ [STAMPS[event]]: FieldValue.serverTimestamp() }, { merge: true })
+                .catch(() => {})
+        }
+
+        if (FIRST_STAMPS[event]) {
+            const ref = adminDb.collection('weddings').doc(weddingId)
+            await ref
+                .get()
+                .then(snap => {
+                    // an id that is not an event must not be created by a stray call
+                    if (snap.exists && !snap.data()?.[FIRST_STAMPS[event]]) {
+                        return ref.set({ [FIRST_STAMPS[event]]: FieldValue.serverTimestamp() }, { merge: true })
+                    }
+                })
                 .catch(() => {})
         }
 

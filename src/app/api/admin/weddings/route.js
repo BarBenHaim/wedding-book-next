@@ -147,6 +147,17 @@ export async function GET(req) {
                     appDevices: Array.isArray(data.pushTokens)
                         ? data.pushTokens.filter(t => typeof t === 'string' && t.startsWith('ExponentPushToken')).length
                         : 0,
+                    // Journey (src/lib/journeyStage.js): money stage and the milestones that
+                    // place a customer on the road from deposit to a delivered book.
+                    paymentStage: data.paymentStage ?? null,
+                    balanceDue: data.balanceDue ?? null,
+                    balancePaidAt: tsToIso(data.balancePaidAt),
+                    balanceClickAt: tsToIso(data.balanceClickAt),
+                    linkSharedAt: tsToIso(data.linkSharedAt),
+                    printOrderedAt: tsToIso(data.printOrderedAt),
+                    deliveredAt: tsToIso(data.deliveredAt),
+                    closedAt: tsToIso(data.closedAt),
+                    closedReason: data.closedReason ?? null,
                     lastAppOpenAt: tsToIso(data.lastAppOpenAt),
                     lastAppBookOpenAt: tsToIso(data.lastAppBookOpenAt),
                     locale: data.locale ?? null,
@@ -252,6 +263,10 @@ export async function PATCH(req) {
             // Customer contact — the super-admin can set/fix the owner's
             // mobile (also the /portal phone-login credential) and email.
             'ownerName', 'ownerPhone', 'ownerEmail',
+            // Journey milestones only a person can know: the print was ordered, the book
+            // arrived, the order was refunded or cancelled. true stamps the server time,
+            // false clears it (a misclick must be undoable).
+            'printOrderedAt', 'deliveredAt', 'closedAt', 'closedReason',
         ]
         const clean = {}
 
@@ -261,6 +276,17 @@ export async function PATCH(req) {
 
             if (key === 'eventType') {
                 clean[key] = normalizeEventType(v)
+                continue
+            }
+
+            if (key === 'printOrderedAt' || key === 'deliveredAt' || key === 'closedAt') {
+                clean[key] = v === true ? FieldValue.serverTimestamp() : FieldValue.delete()
+                continue
+            }
+
+            if (key === 'closedReason') {
+                const t = typeof v === 'string' ? v.trim() : ''
+                clean[key] = ['refunded', 'cancelled', 'other'].includes(t) ? t : FieldValue.delete()
                 continue
             }
 

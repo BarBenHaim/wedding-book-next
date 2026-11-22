@@ -18,6 +18,7 @@ import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import { adminDb as db } from '@/lib/firebaseAdmin'
 import { Timestamp } from 'firebase-admin/firestore'
+import { journeyOf } from '@/lib/journeyStage'
 import { nextMessage, renderLifecycleEmail, bookTitleOf, digestLines, dailySummary, israelDate, daysBetween, LIFECYCLE_START_MS } from '@/lib/lifecycle'
 import { enterSecret, signEnterToken, enterUrl } from '@/lib/enterLink'
 import { eventSignUrl } from '@/lib/eventLinks'
@@ -59,6 +60,8 @@ export async function GET(req) {
     const dayAgo = now - 24 * 60 * 60 * 1000
     const newOrders = []
     const balancesPaid = []
+    const printNow = []
+    const queueLines = []
 
     try {
         const snap = await db.collection('weddings').where('createdAt', '>=', Timestamp.fromMillis(LIFECYCLE_START_MS)).get()
@@ -77,6 +80,14 @@ export async function GET(req) {
             if (paidMs >= dayAgo) balancesPaid.push({ title: bookTitleOf(w) })
             const entries = (await doc.ref.collection('entries').count().get()).data().count
             const sent = w.lifecycleSent || {}
+
+            // The journey (src/lib/journeyStage.js): paid books wait for Bar every day until he marks
+            // them ordered; the other reasons repeat until the customer moves.
+            const j = journeyOf({ ...w, greetingsCount: entries }, now)
+            if (j.stage === 'print_now') printNow.push({ title: bookTitleOf(w), days: j.days })
+            for (const a of j.attention) {
+                if (['link_unsent', 'no_date', 'balance_stuck'].includes(a.key)) queueLines.push(`${bookTitleOf(w) || doc.id}: ${a.label}`)
+            }
 
             // Exceptions for the owner of the business (each once per event).
             if (/^\d{4}-\d{2}-\d{2}$/.test(String(w.weddingDate || ''))) {
@@ -135,7 +146,7 @@ export async function GET(req) {
                 .filter(x => x.at >= now - 3 * 24 * 60 * 60 * 1000)
         } catch { /* ignore */ }
 
-        const summary = dailySummary({ newOrders, balancesPaid, greetings, failedLocks, exceptionLines: lines })
+        const summary = dailySummary({ newOrders, balancesPaid, greetings, failedLocks, exceptionLines: lines, printNow, queueLines })
         if (summary) {
             out.summary = true
             if (!dry) {
