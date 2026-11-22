@@ -50,7 +50,6 @@
         if (typeof k.n2 === 'string') state.n2 = k.n2.slice(0, 24);
         if (/^\d{4}-\d{2}-\d{2}$/.test(k.date || '')) state.date = k.date;
         if (CFG.styles[k.style]) state.style = k.style;
-        if (k.pack === 'digital') state.pack = 'digital';
       }
     } catch (e) { /* nothing saved */ }
   }
@@ -129,7 +128,7 @@
       hero: name ? 'כל מי שאוהב את ' + name + '.' : (HOOK[state.ev] || HOOK.bar),
       book: name ? 'הספר של ' + name : 'הספר שלכם',
       'book-inline': name ? 'הספר של ' + name : 'הספר שלי',
-      bar: name ? 'הספר של ' + name : 'ספר מודפס ודיגיטלי'
+      bar: name ? 'הספר של ' + name : 'ספר ברכות אישי'
     };
     $$('[data-echo]').forEach(function (el) { var k = el.getAttribute('data-echo'); if (echo[k] !== undefined) el.textContent = echo[k]; });
     var dfor = $('[data-demo-for]'); if (dfor) dfor.textContent = name ? 'בשביל ' + name : 'בשביל האירוע שלכם';
@@ -166,7 +165,7 @@
   var covers = scene ? $$('.hb', scene) : [];
   var dots = scene ? $('[data-stage-dots]') : null;
   var cap = scene ? $('[data-stage-cap]') : null;
-  var pool = [], at = 0, spin = null, touched = false;
+  var pool = [], at = 0, spin = null, touched = false, firstPool = true;
   function showCover(i, animate) {
     if (!pool.length) return;
     var next = (i + pool.length) % pool.length;
@@ -187,7 +186,10 @@
     if (!scene) return;
     pool = covers.filter(function (c) { return (' ' + c.getAttribute('data-evs') + ' ').indexOf(' ' + state.ev + ' ') > -1; });
     if (!pool.length) pool = covers.slice(0, 1);
-    pool.forEach(function (c) { var im = c.querySelector('img'); if (im) im.loading = 'eager'; });
+    // The cover on show is already eager. The rest of the pool is fetched a moment after the first paint.
+    var rest = pool.slice();
+    var fetchRest = function () { rest.forEach(function (c) { var im = c.querySelector('img'); if (im) im.loading = 'eager'; }); };
+    if (firstPool) { firstPool = false; setTimeout(fetchRest, 1800); } else fetchRest();
     if (dots) {
       dots.innerHTML = '';
       if (pool.length > 1) pool.forEach(function (c, k) {
