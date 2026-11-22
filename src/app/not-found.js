@@ -24,7 +24,7 @@ export default function NotFound() {
                 }}>
                     פתחו ספר בחינם ←
                 </Link>
-                <Link href='/landing' style={{
+                <Link href='https://weddingtales.co.il' style={{
                     border: '1.5px solid rgba(170,136,64,0.4)', color: '#7c6027', textDecoration: 'none',
                     padding: '13px 24px', borderRadius: 14, fontWeight: 700, fontSize: 15, background: 'rgba(255,255,255,0.6)',
                 }}>

@@ -8,8 +8,20 @@ const nextConfig = {
     eslint: {
         ignoreDuringBuilds: true,
     },
-    // דף הנחיתה לבר מצווה — קובץ סטטי עצמאי ב-public/lp.html.
-    // ה-rewrite נותן לו כתובת נקייה: app.weddingtales.co.il/lp
+    // The front door is the sales site (weddingtales.co.il). The old marketing pages that
+    // used to live on this domain (the home page, /lp, /bar-mitzvah, /landing, /demo,
+    // /survey, the /site and /site2 previews) sold the old full-price offer and are gone;
+    // every old link, ad and WhatsApp message lands on the sales site instead. Not
+    // permanent (307), so any of them can be brought back without a cached redirect.
+    // /portal (look an event up by phone number) is gone too: signing in is /login.
+    async redirects() {
+        const SALES = 'https://weddingtales.co.il'
+        const gone = ['/', '/landing', '/lp', '/bar-mitzvah', '/demo', '/survey', '/site', '/site/:path*', '/site2', '/site2/:path*']
+        return [
+            ...gone.map(source => ({ source, destination: SALES, permanent: false })),
+            { source: '/portal', destination: '/login', permanent: false },
+        ]
+    },
     async rewrites() {
         return {
             // Before anything else: /_next/image is answered by OUR resizer
@@ -17,15 +29,7 @@ const nextConfig = {
             // optimizer answers 404, and the mobile app (wedding-tales-mobile
             // src/lib/img.ts) asks for every guest photo at that address.
             beforeFiles: [{ source: '/_next/image', destination: '/api/img' }],
-            afterFiles: [
-                { source: '/lp', destination: '/lp.html' },
-                // תצוגה מקדימה של דף הבית החדש של weddingtales.co.il — קבצים סטטיים ב-public/site.
-                { source: '/site', destination: '/site/index.html' },
-                // ארבעת עמודי האירועים באותו עיצוב (תצוגה מקדימה בלבד; באתר עצמו הם בכתובות הקיימות דרך התוסף).
-                { source: '/site/:event(bar-mitzvah|bat-mitzvah|wedding|birthday)', destination: '/site/:event/index.html' },
-                // דף המכירה החדש (גרסה 2: בונים את הספר ואז מזמינים) — תצוגה מקדימה, קבצים סטטיים ב-public/site2.
-                { source: '/site2', destination: '/site2/index.html' },
-            ],
+            afterFiles: [],
             fallback: [],
         };
     },

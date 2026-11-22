@@ -645,7 +645,7 @@ export default function StartWizard() {
                 {/* Mobile parity: no logo on step 0, only shown for the inner
                     steps. Matches the mobile create/index.tsx top bar rule. */}
                 {step > 0 && (
-                    <Link href='/landing' className='logoLink' aria-label='Wedding Tales'>
+                    <Link href='https://weddingtales.co.il' className='logoLink' aria-label='Wedding Tales'>
                         <img src='/logo-wt.png' alt='Wedding Tales' className='logo' />
                     </Link>
                 )}

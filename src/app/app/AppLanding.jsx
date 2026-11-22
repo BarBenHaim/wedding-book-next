@@ -536,7 +536,7 @@ export default function AppLanding() {
                 <span className='dot'>·</span>
                 <Link href='/terms'>תנאים</Link>
                 <span className='dot'>·</span>
-                <Link href='/landing'>הספר המודפס</Link>
+                <Link href='https://weddingtales.co.il'>הספר המודפס</Link>
             </footer>
 
             {/* ═══ STICKY BOTTOM (mobile) ═══ */}

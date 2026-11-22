@@ -209,6 +209,40 @@ export function renderLifecycleEmail(kind, ctx, links) {
 }
 
 /**
+ * { subject, html, text } — sent at once when the balance of a deposit is paid: the
+ * customer should not have to wonder whether paying "worked". `links` = { portal }.
+ */
+export function renderBalancePaidEmail(ctx, links) {
+    const t = ctx.title ? `ספר הברכות של ${ctx.title}` : 'ספר הברכות שלכם'
+    const heading = 'היתרה שולמה, הספר יוצא לדפוס'
+    const para = 'תודה! הספר מאושר ויוצא עכשיו לדפוס. הוא מגיע עד הבית תוך 14 ימי עסקים בערך. כל מה שנשאר זה לחכות, ואפשר לראות את הספר באזור האישי בכל רגע.'
+    const html = `<!doctype html>
+<html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:${PAPER};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${PAPER}"><tr><td align="center" style="padding:24px 12px 32px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;direction:rtl;text-align:right;font-family:${FONT};color:${INK};">
+  <tr><td align="center" style="padding:6px 0 18px;font:400 22px/1 ${FONT};color:${INK};"><b style="font-weight:900;">Wedding</b> Tales</td></tr>
+  <tr><td bgcolor="#FFFFFF" style="background:#FFFFFF;border-radius:22px;border:1px solid ${LINE};padding:28px 24px;">
+    <h1 style="margin:0 0 12px;font:800 25px/1.25 ${FONT};color:${INK};">${esc(heading)}</h1>
+    <p style="margin:0 0 20px;font:400 16px/1.7 ${FONT};color:${MUTED};">${esc(para)}</p>
+    ${btn(links.portal, 'כניסה לאזור האישי', true)}
+  </td></tr>
+  <tr><td align="center" style="padding:16px 12px 0;font:400 13.5px/1.6 ${FONT};color:#7A7D93;">אפשר לעזור במשהו? עונים למייל הזה, או <a href="https://wa.me/972515350253" style="color:${INK};font-weight:700;">כותבים לנו בוואטסאפ</a>.</td></tr>
+</table>
+</td></tr></table>
+</body></html>`
+    return {
+        subject: `${t}: היתרה שולמה והוא יוצא לדפוס`,
+        html,
+        text: `${heading}
+
+${para}
+
+כניסה לאזור האישי: ${links.portal}`,
+    }
+}
+
+/**
  * The exceptions worth a line to the owner of the business: things a customer
  * will not report and nothing else will catch. Empty list = no e-mail.
  */

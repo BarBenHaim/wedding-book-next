@@ -149,3 +149,18 @@ describe('the cron route', () => {
         expect(readFileSync('src/app/api/cron/email/route.js', 'utf8')).toContain('if (!secret) return false')
     })
 })
+
+describe('the balance-paid e-mail', () => {
+    it('answers the customer at once, with the way back in', async () => {
+        const { renderBalancePaidEmail } = await import('@/lib/lifecycle')
+        const m = renderBalancePaidEmail({ title: 'נועם' }, { portal: 'https://s.test/enter?t=1' })
+        expect(m.subject).toContain('נועם')
+        expect(m.html).toContain('href="https://s.test/enter?t=1"')
+        expect(m.text).toContain('https://s.test/enter?t=1')
+    })
+
+    it('createWedding sends it when a balance order is paid', () => {
+        const src = readFileSync('src/app/api/createWedding/route.js', 'utf8')
+        expect(src).toContain('renderBalancePaidEmail(')
+    })
+})

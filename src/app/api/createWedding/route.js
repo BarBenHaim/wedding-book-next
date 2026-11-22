@@ -9,6 +9,7 @@ import { eventSignUrl } from '@/lib/eventLinks'
 import { renderWelcomeEmail } from '@/lib/welcomeEmail'
 import { enterSecret, signEnterToken, enterUrl } from '@/lib/enterLink'
 import { lockDecision, needsWelcomeResume, briefError } from '@/lib/orderLock'
+import { renderBalancePaidEmail, bookTitleOf } from '@/lib/lifecycle'
 import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import crypto from 'crypto'
@@ -108,6 +109,27 @@ export async function POST(req) {
                         })
                     } catch {
                         console.warn('[createWedding] balance notice e-mail failed')
+                    }
+                    // And the customer: paying the balance should answer itself.
+                    try {
+                        const w = snap.data() || {}
+                        if (w.ownerEmail) {
+                            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://app.weddingtales.co.il'
+                            const token = signEnterToken(w.ownerId, { secret: enterSecret() })
+                            const mail = renderBalancePaidEmail(
+                                { title: bookTitleOf(w) },
+                                { portal: token ? enterUrl(baseUrl, token) : `${baseUrl}/wedding/${balanceFor}/portal` },
+                            )
+                            await mailTransport().sendMail({
+                                from: `"Wedding Tales" <${process.env.MAIL_USER}>`,
+                                to: w.ownerEmail,
+                                subject: mail.subject,
+                                html: mail.html,
+                                text: mail.text,
+                            })
+                        }
+                    } catch {
+                        console.warn('[createWedding] balance paid customer e-mail failed')
                     }
                 }
                 console.log(`💳 Balance order ${orderId} → event ${balanceFor} marked paid`)
