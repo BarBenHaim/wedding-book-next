@@ -178,24 +178,24 @@ export default function Header() {
 
     return (
         <>
-            <header className='sticky top-0 left-0 right-0 z-50 bg-[#F5F5F5]/80 backdrop-blur-md shadow-sm border-b border-[#AA8840]/10'>
+            <header className='sticky top-0 left-0 right-0 z-50 bg-[#F3F0EA]/85 backdrop-blur-md shadow-sm border-b border-[#2545E0]/10'>
                 <nav className='mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 py-3'>
-                    {/* Hamburger — premium gold style */}
+                    {/* Hamburger — brand blue */}
                     {user && activeId && (
                         <div className='md:hidden'>
                             <button
                                 onClick={() => setMenuOpen(prev => !prev)}
-                                className='relative w-11 h-11 flex flex-col justify-center items-center rounded-xl border border-[#AA8840]/20 bg-white/60 backdrop-blur-sm shadow-sm hover:shadow-md hover:border-[#AA8840]/40 active:scale-95 transition-all duration-200'
+                                className='relative w-11 h-11 flex flex-col justify-center items-center rounded-xl border border-[#2545E0]/20 bg-white/60 backdrop-blur-sm shadow-sm hover:shadow-md hover:border-[#2545E0]/40 active:scale-95 transition-all duration-200'
                                 aria-label={t.menuOpen}
                             >
                                 <span
-                                    className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out ${menuOpen ? 'w-[18px] bg-[#AA8840] rotate-45 translate-y-[5px]' : 'w-[18px] bg-[#AA8840]/70'}`}
+                                    className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out ${menuOpen ? 'w-[18px] bg-[#2545E0] rotate-45 translate-y-[5px]' : 'w-[18px] bg-[#2545E0]/70'}`}
                                 />
                                 <span
-                                    className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out mt-[4px] ${menuOpen ? 'w-0 opacity-0' : 'w-[12px] bg-[#AA8840]/50'}`}
+                                    className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out mt-[4px] ${menuOpen ? 'w-0 opacity-0' : 'w-[12px] bg-[#2545E0]/50'}`}
                                 />
                                 <span
-                                    className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out mt-[4px] ${menuOpen ? 'w-[18px] bg-[#AA8840] -rotate-45 -translate-y-[5px]' : 'w-[18px] bg-[#AA8840]/70'}`}
+                                    className={`block h-[1.5px] rounded-full transition-all duration-300 ease-out mt-[4px] ${menuOpen ? 'w-[18px] bg-[#2545E0] -rotate-45 -translate-y-[5px]' : 'w-[18px] bg-[#2545E0]/70'}`}
                                 />
                             </button>
                         </div>
@@ -206,7 +206,7 @@ export default function Header() {
                         {!user && !weddingIdFromUrl && (
                             <button
                                 onClick={() => router.push('/login')}
-                                className='rounded-full bg-gradient-to-r from-[#AA8840] to-[#c9a44e] px-5 py-2 text-sm font-medium text-white shadow-md cursor-pointer'
+                                className='rounded-full bg-gradient-to-r from-[#2545E0] to-[#3358F0] px-5 py-2 text-sm font-medium text-white shadow-md cursor-pointer'
                             >
                                 {t.login}
                             </button>
@@ -216,7 +216,7 @@ export default function Header() {
                             <>
                                 <button
                                     onClick={() => router.push(`/wedding/${activeId}/viewer`)}
-                                    className='rounded-full bg-[#AA8840]/10 px-4 py-2 text-sm font-medium text-[#AA8840] hover:bg-[#AA8840]/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer'
+                                    className='rounded-full bg-[#2545E0]/10 px-4 py-2 text-sm font-medium text-[#2545E0] hover:bg-[#2545E0]/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer'
                                 >
                                     {t.designBook}
                                 </button>
@@ -230,7 +230,7 @@ export default function Header() {
 
                                 <button
                                     onClick={() => router.push(`/wedding/${activeId}/portal`)}
-                                    className='rounded-full bg-gradient-to-r from-[#AA8840] to-[#c9a44e] px-4 py-2 text-sm font-medium text-white shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer'
+                                    className='rounded-full bg-gradient-to-r from-[#2545E0] to-[#3358F0] px-4 py-2 text-sm font-medium text-white shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer'
                                 >
                                     {t.qrShare}
                                 </button>
@@ -302,8 +302,8 @@ export default function Header() {
                         <img src='/logo-wt.png' alt='Wedding Tales' className='h-7 w-auto' />
                     </div>
 
-                    {/* Gold accent line */}
-                    <div className='w-full h-px bg-gradient-to-r from-[#AA8840]/30 via-[#AA8840]/15 to-transparent mb-6'></div>
+                    {/* Brand accent line */}
+                    <div className='w-full h-px bg-gradient-to-r from-[#2545E0]/30 via-[#2545E0]/15 to-transparent mb-6'></div>
 
                     {/* Menu items */}
                     <div className='flex-1 space-y-1'>
@@ -351,7 +351,7 @@ export default function Header() {
 
                     {/* Bottom logout */}
                     {user && (
-                        <div className='pt-4 border-t border-[#AA8840]/10'>
+                        <div className='pt-4 border-t border-[#2545E0]/10'>
                             <DrawerItem icon={<LogoutIcon />} label={t.logout} onClick={handleLogout} muted />
                         </div>
                     )}
@@ -368,21 +368,21 @@ function DrawerItem({ icon, label, onClick, active, gold, muted }) {
             onClick={onClick}
             className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-start transition-all duration-200 ${
                 active
-                    ? 'bg-[#AA8840]/10 text-[#AA8840] font-bold'
+                    ? 'bg-[#2545E0]/10 text-[#2545E0] font-bold'
                     : gold
-                      ? 'text-[#AA8840] font-semibold hover:bg-[#AA8840]/5'
+                      ? 'text-[#2545E0] font-semibold hover:bg-[#2545E0]/5'
                       : muted
                         ? 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                        : 'text-gray-700 font-medium hover:bg-white/80 hover:text-[#AA8840]'
+                        : 'text-gray-700 font-medium hover:bg-white/80 hover:text-[#2545E0]'
             }`}
         >
             <span
-                className={`flex-shrink-0 ${active ? 'text-[#AA8840]' : gold ? 'text-[#AA8840]' : muted ? 'text-gray-400' : 'text-gray-500'}`}
+                className={`flex-shrink-0 ${active ? 'text-[#2545E0]' : gold ? 'text-[#2545E0]' : muted ? 'text-gray-400' : 'text-gray-500'}`}
             >
                 {icon}
             </span>
             <span className='text-base'>{label}</span>
-            {active && <span className='ms-auto w-1.5 h-1.5 rounded-full bg-[#AA8840]'></span>}
+            {active && <span className='ms-auto w-1.5 h-1.5 rounded-full bg-[#2545E0]'></span>}
         </button>
     )
 }

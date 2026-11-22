@@ -276,7 +276,7 @@ function InvalidScreen() {
             style={{ background: 'radial-gradient(ellipse at 50% 30%, #2a1f17 0%, #14100c 100%)' }}
         >
             <div>
-                <svg viewBox='0 0 24 24' className='w-12 h-12 mx-auto mb-4' fill='none' stroke='#c9a44e' strokeWidth={1.4}>
+                <svg viewBox='0 0 24 24' className='w-12 h-12 mx-auto mb-4' fill='none' stroke='#2545E0' strokeWidth={1.4}>
                     <path strokeLinecap='round' strokeLinejoin='round' d='M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z' />
                 </svg>
                 <h2 style={{ color: '#f5ead2', fontSize: '24px', fontWeight: 700, marginBottom: 8 }}>הקישור לא תקף</h2>
@@ -653,7 +653,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                             style={{
                                 width: 2 + (i % 3),
                                 height: 2 + (i % 3),
-                                background: '#c9a44e',
+                                background: '#2545E0',
                                 opacity: 0.4,
                                 top: `${(i * 37) % 100}%`,
                                 left: `${(i * 61) % 100}%`,
@@ -666,17 +666,17 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
 
                 <div className='relative z-10 max-w-md animate-[fadeUp_900ms_ease-out_both]'>
                     {/* Tiny tag */}
-                    <p style={{ color: '#c9a44e', fontSize: '11px', letterSpacing: '0.3em', marginBottom: 18 }}>
+                    <p style={{ color: '#2545E0', fontSize: '11px', letterSpacing: '0.3em', marginBottom: 18 }}>
                         WEDDING TALES · ספר הברכות
                     </p>
 
                     {/* Ornament cap */}
                     <div className='flex items-center justify-center gap-2 mb-4'>
-                        <span className='block h-px w-14' style={{ background: 'linear-gradient(to left, transparent, #c9a44e, transparent)' }} />
-                        <svg viewBox='0 0 24 24' className='w-3 h-3' fill='#c9a44e'>
+                        <span className='block h-px w-14' style={{ background: 'linear-gradient(to left, transparent, #2545E0, transparent)' }} />
+                        <svg viewBox='0 0 24 24' className='w-3 h-3' fill='#2545E0'>
                             <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                         </svg>
-                        <span className='block h-px w-14' style={{ background: 'linear-gradient(to right, transparent, #c9a44e, transparent)' }} />
+                        <span className='block h-px w-14' style={{ background: 'linear-gradient(to right, transparent, #2545E0, transparent)' }} />
                     </div>
 
                     {/* Names */}
@@ -736,8 +736,8 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                     <div className='flex items-center justify-center mt-7'>
                         <button
                             onClick={share}
-                            className='inline-flex items-center gap-1.5 transition-colors hover:text-[#c9a44e]'
-                            style={{ color: '#7a6a52', fontSize: '12px', letterSpacing: '0.05em' }}
+                            className='inline-flex items-center gap-1.5 transition-colors hover:text-[#2545E0]'
+                            style={{ color: '#5A5D75', fontSize: '12px', letterSpacing: '0.05em' }}
                         >
                             <svg viewBox='0 0 24 24' className='w-[13px] h-[13px]' fill='none' stroke='currentColor' strokeWidth={1.7}>
                                 <path strokeLinecap='round' strokeLinejoin='round' d='M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z' />
@@ -750,7 +750,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                 {shareToast && (
                     <div
                         className='fixed bottom-8 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full text-xs animate-[fadeUp_300ms_ease-out_both] z-50'
-                        style={{ background: 'rgba(201,164,78,0.15)', border: '1px solid rgba(201,164,78,0.5)', color: '#f5ead2', backdropFilter: 'blur(6px)' }}
+                        style={{ background: 'rgba(37,69,224,0.15)', border: '1px solid rgba(37,69,224,0.5)', color: '#f5ead2', backdropFilter: 'blur(6px)' }}
                     >
                         ✓ הקישור הועתק
                     </div>
@@ -818,7 +818,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                     background: 'rgba(253,249,239,0.85)',
                     backdropFilter: 'blur(10px)',
                     WebkitBackdropFilter: 'blur(10px)',
-                    borderBottom: '1px solid rgba(201,164,78,0.20)',
+                    borderBottom: '1px solid rgba(37,69,224,0.20)',
                 }}
             >
                 {/* Brand cluster */}
@@ -834,8 +834,8 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                             height: 36,
                             borderRadius: 10,
                             background: '#fff',
-                            border: '1px solid rgba(201,164,78,0.30)',
-                            color: '#aa8840',
+                            border: '1px solid rgba(37,69,224,0.30)',
+                            color: '#2545E0',
                             fontSize: '13px',
                             fontWeight: 700,
                             letterSpacing: '0.05em',
@@ -848,7 +848,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                         <div style={{ color: '#3d2e1a', fontSize: '14px', fontWeight: 700, letterSpacing: '0.02em' }}>
                             Wedding Tales
                         </div>
-                        <div style={{ color: '#aa8840', fontSize: '10.5px', letterSpacing: '0.18em' }}>
+                        <div style={{ color: '#2545E0', fontSize: '10.5px', letterSpacing: '0.18em' }}>
                             ספר הברכות
                         </div>
                     </div>
@@ -879,7 +879,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                         style={{
                             width: 1.5,
                             height: 1.5,
-                            background: '#c9a44e',
+                            background: '#2545E0',
                             opacity: 0.25,
                             top: `${(i * 47) % 100}%`,
                             left: `${(i * 71) % 100}%`,
@@ -912,7 +912,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                             // user reported). box-shadow stays around
                             // the wrapper rectangle and renders for
                             // free at composition time.
-                            boxShadow: '0 30px 60px -10px rgba(45,30,16,0.30), 0 0 40px rgba(201,164,78,0.20)',
+                            boxShadow: '0 30px 60px -10px rgba(45,30,16,0.30), 0 0 40px rgba(37,69,224,0.20)',
                         }}
                     >
                         <HTMLFlipBook
@@ -1008,7 +1008,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                             className='absolute inset-0 pointer-events-none'
                             style={{
                                 backgroundImage:
-                                    "repeating-linear-gradient(-30deg, transparent 0 80px, rgba(201,164,78,0.04) 80px 81px)",
+                                    "repeating-linear-gradient(-30deg, transparent 0 80px, rgba(37,69,224,0.04) 80px 81px)",
                                 mixBlendMode: 'overlay',
                             }}
                         />
@@ -1033,8 +1033,8 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                         height: 44,
                         borderRadius: '50%',
                         background: 'rgba(253,249,239,0.92)',
-                        border: '1px solid rgba(201,164,78,0.35)',
-                        color: '#aa8840',
+                        border: '1px solid rgba(37,69,224,0.35)',
+                        color: '#2545E0',
                         boxShadow: '0 4px 12px -4px rgba(45,30,16,0.18)',
                         backdropFilter: 'blur(8px)',
                     }}
@@ -1048,18 +1048,18 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                     className='inline-flex items-center gap-3 rounded-full'
                     style={{
                         background: 'rgba(253,249,239,0.92)',
-                        border: '1px solid rgba(201,164,78,0.30)',
+                        border: '1px solid rgba(37,69,224,0.30)',
                         padding: '7px 18px',
                         backdropFilter: 'blur(8px)',
                         boxShadow: '0 4px 14px -4px rgba(45,30,16,0.15)',
                     }}
                 >
-                    <svg viewBox='0 0 24 24' className='w-[10px] h-[10px]' fill='#c9a44e'>
+                    <svg viewBox='0 0 24 24' className='w-[10px] h-[10px]' fill='#2545E0'>
                         <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                     </svg>
                     <span
                         style={{
-                            color: '#aa8840',
+                            color: '#2545E0',
                             fontSize: '13px',
                             fontFamily: "'David Libre', 'Frank Ruhl Libre', 'Times New Roman', serif",
                             letterSpacing: '0.12em',
@@ -1080,8 +1080,8 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                         height: 44,
                         borderRadius: '50%',
                         background: 'rgba(253,249,239,0.92)',
-                        border: '1px solid rgba(201,164,78,0.35)',
-                        color: '#aa8840',
+                        border: '1px solid rgba(37,69,224,0.35)',
+                        color: '#2545E0',
                         boxShadow: '0 4px 12px -4px rgba(45,30,16,0.18)',
                         backdropFilter: 'blur(8px)',
                     }}
@@ -1104,7 +1104,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
             {shareToast && (
                 <div
                     className='fixed bottom-20 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full text-xs animate-[fadeUp_300ms_ease-out_both] z-50'
-                    style={{ background: 'rgba(201,164,78,0.15)', border: '1px solid rgba(201,164,78,0.5)', color: '#f5ead2', backdropFilter: 'blur(6px)' }}
+                    style={{ background: 'rgba(37,69,224,0.15)', border: '1px solid rgba(37,69,224,0.5)', color: '#f5ead2', backdropFilter: 'blur(6px)' }}
                 >
                     ✓ הקישור הועתק
                 </div>
@@ -1114,8 +1114,8 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                 <div
                     className='fixed bottom-20 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full text-xs z-50'
                     style={{
-                        background: designSave === 'error' ? 'rgba(180,60,60,0.18)' : 'rgba(201,164,78,0.15)',
-                        border: designSave === 'error' ? '1px solid rgba(180,60,60,0.5)' : '1px solid rgba(201,164,78,0.5)',
+                        background: designSave === 'error' ? 'rgba(180,60,60,0.18)' : 'rgba(37,69,224,0.15)',
+                        border: designSave === 'error' ? '1px solid rgba(180,60,60,0.5)' : '1px solid rgba(37,69,224,0.5)',
                         color: '#f5ead2',
                         backdropFilter: 'blur(6px)',
                     }}
@@ -1168,7 +1168,7 @@ function PresetStrip({ presets, activeStyle, onApply, noCrop = false }) {
             <div
                 style={{
                     background: 'rgba(253,248,238,0.9)',
-                    border: '1px solid rgba(201,164,78,0.38)',
+                    border: '1px solid rgba(37,69,224,0.38)',
                     borderRadius: 22,
                     backdropFilter: 'blur(10px)',
                     WebkitBackdropFilter: 'blur(10px)',
@@ -1182,7 +1182,7 @@ function PresetStrip({ presets, activeStyle, onApply, noCrop = false }) {
             <p
                 className='text-center mb-2 px-4'
                 style={{
-                    color: '#7a6a52',
+                    color: '#5A5D75',
                     fontSize: '11px',
                     letterSpacing: '0.18em',
                     textTransform: 'uppercase',
@@ -1245,8 +1245,8 @@ function PresetStrip({ presets, activeStyle, onApply, noCrop = false }) {
                                     overflow: 'hidden',
                                     background: '#fff',
                                     border: isActive
-                                        ? '2px solid #aa8840'
-                                        : '1px solid rgba(201,164,78,0.30)',
+                                        ? '2px solid #2545E0'
+                                        : '1px solid rgba(37,69,224,0.30)',
                                     boxShadow: isActive
                                         ? '0 8px 18px -6px rgba(170,136,64,0.50), 0 0 0 4px rgba(170,136,64,0.10)'
                                         : '0 4px 10px -5px rgba(45,30,16,0.20)',
@@ -1275,7 +1275,7 @@ function PresetStrip({ presets, activeStyle, onApply, noCrop = false }) {
                             <span
                                 className='text-[10.5px] font-semibold whitespace-nowrap max-w-[110px] truncate'
                                 style={{
-                                    color: isActive ? '#aa8840' : '#7a6a52',
+                                    color: isActive ? '#2545E0' : '#5A5D75',
                                     letterSpacing: '0.02em',
                                 }}
                             >
@@ -1317,14 +1317,14 @@ function NavIconButton({ onClick, label, children }) {
                     width: 38,
                     height: 38,
                     background: '#fff',
-                    border: '1px solid rgba(201,164,78,0.30)',
-                    color: '#aa8840',
+                    border: '1px solid rgba(37,69,224,0.30)',
+                    color: '#2545E0',
                     boxShadow: '0 2px 6px -2px rgba(170,136,64,0.15)',
                 }}
             >
                 {children}
             </span>
-            <span style={{ color: '#7a6a52', fontSize: '10px', letterSpacing: '0.05em' }}>{label}</span>
+            <span style={{ color: '#5A5D75', fontSize: '10px', letterSpacing: '0.05em' }}>{label}</span>
         </button>
     )
 }
