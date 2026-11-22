@@ -8,7 +8,10 @@ const COVER_FIELDS = ['coverImage', 'coverTexture', 'texture']
 
 export function ownerWeddingView(wedding) {
     return {
-        ...pick(wedding, ['customTitle', 'brideNameHe', 'brideName', 'groomNameHe', 'groomName', 'celebrantNameHe', 'celebrantName', 'slug']),
+        ...pick(wedding, ['customTitle', 'brideNameHe', 'brideName', 'groomNameHe', 'groomName', 'celebrantNameHe', 'celebrantName', 'slug',
+            // what the portal needs to show the right look and the right next step:
+            // the kind of event, and where the order stands (deposit paid, balance due)
+            'eventType', 'paymentStage', 'balanceDue']),
         // An owner-only response, never the public guest metadata endpoint.
         digitalTokens: typeof wedding.digitalTokens?.[0] === 'string' ? [wedding.digitalTokens[0]] : [],
         coverDesign: pick(wedding.coverDesign, COVER_FIELDS),

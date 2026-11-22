@@ -193,18 +193,25 @@ export default function PortalApp() {
     const stage = w?.paymentStage || ''
     const balanceDue = Number(w?.balanceDue) || 0
     const steps = [
-        { key: 'share', title: 'שולחים את הקישור לאורחים', note: blessings ? `כבר נכנסו ${blessings} ברכות. אפשר לשלוח שוב גם אחרי האירוע.` : 'בוואטסאפ, בהודעה מוכנה. אפשר כבר עכשיו.', done: blessings > 0, go: () => setTab('share') },
-        { key: 'poster', title: 'מדפיסים את השלט לאירוע', note: 'שלט "ברכו את" עם ה־QR שלכם, מוכן להדפסה.', done: false, href: `/wedding/${weddingId}/portal?view=poster` },
-        { key: 'design', title: 'בוחרים עיצוב וכריכה', note: face ? 'יש כריכה. אפשר לשנות בכל רגע.' : 'בוחרים סגנון ומעלים תמונה לכריכה.', done: !!face, go: () => setTab('book') },
-        { key: 'review', title: 'עוברים על הברכות', note: 'אחרי האירוע: מתקנים, מחליפים תמונה, מסדרים.', done: stage === 'paid', go: () => setTab('blessings') },
+        { key: 'share', cta: 'לשליחת הקישור', title: 'שולחים את הקישור לאורחים', note: blessings ? `כבר נכנסו ${blessings} ברכות. אפשר לשלוח שוב גם אחרי האירוע.` : 'בוואטסאפ, בהודעה מוכנה. אפשר כבר עכשיו.', done: blessings > 0, go: () => setTab('share') },
+        { key: 'poster', cta: 'להדפסת השלט', title: 'מדפיסים את השלט לאירוע', note: 'שלט "ברכו את" עם ה־QR שלכם, מוכן להדפסה.', done: false, href: `/wedding/${weddingId}/portal?view=poster` },
+        { key: 'design', cta: 'לעיצוב הספר', title: 'בוחרים עיצוב וכריכה', note: face ? 'יש כריכה. אפשר לשנות בכל רגע.' : 'בוחרים סגנון ומעלים תמונה לכריכה.', done: !!face, go: () => setTab('book') },
+        { key: 'review', cta: 'לעבור על הברכות', title: 'עוברים על הברכות', note: 'אחרי האירוע: מתקנים, מחליפים תמונה, מסדרים.', done: stage === 'paid', go: () => setTab('blessings') },
         stage === 'deposit'
-            ? { key: 'pay', title: `משלמים את היתרה${balanceDue ? ` (${balanceDue} ₪)` : ''} ומדפיסים`, note: 'רק כשהספר מוכן ואתם מרוצים ממנו. אחרי התשלום הוא יוצא לדפוס.', done: false, href: `https://weddingtales.co.il/checkout/?add-to-cart=6271&wt_bal=${encodeURIComponent(weddingId)}` }
+            ? { key: 'pay', cta: 'לתשלום היתרה', title: `משלמים את היתרה${balanceDue ? ` (${balanceDue} ₪)` : ''} ומדפיסים`, note: 'רק כשהספר מוכן ואתם מרוצים ממנו. אחרי התשלום הוא יוצא לדפוס.', done: false, href: `https://weddingtales.co.il/checkout/?add-to-cart=6271&wt_bal=${encodeURIComponent(weddingId)}` }
             : stage === 'paid'
                 ? { key: 'pay', title: 'היתרה שולמה', note: 'הספר יוצא לדפוס ומגיע עד הבית.', done: true, go: () => setTab('book') }
-                : { key: 'pay', title: 'מאשרים הדפסה', note: 'כשהספר מוכן, כותבים לנו והוא יוצא לדפוס.', done: false, href: 'https://wa.me/972515350253' },
+                : { key: 'pay', cta: 'לאישור ההדפסה', title: 'מאשרים הדפסה', note: 'כשהספר מוכן, כותבים לנו והוא יוצא לדפוס.', done: false, href: 'https://wa.me/972515350253' },
     ]
     // the sign has no "done" of its own, so it never holds the list up
     const nextStep = steps.findIndex(s => !s.done && s.key !== 'poster')
+    const doneCount = steps.filter(s => s.done).length
+    // The hero is the event's own stage: paper for a wedding, an evening of lights for the rest
+    const dark = !!w && w.eventType !== 'wedding'
+    const heroInk = dark ? '#FFFFFF' : INK
+    const heroSoft = dark ? '#C9CDEB' : MUT
+    const eventLabel = { wedding: 'חתונה', bar_mitzvah: 'בר מצווה', bat_mitzvah: 'בת מצווה', twins_bar_mitzvah: 'בר מצווה', birthday: 'יום הולדת' }[w?.eventType] || ''
+    const recent = useMemo(() => (entries || []).slice().sort((x, y) => (y.timestamp?.seconds || 0) - (x.timestamp?.seconds || 0)).slice(0, 8), [entries])
 
     const waShare = () => {
         const msg = `הוזמנתם להשאיר לנו ברכה בספר של ${titleOf(w)} 💛\n${guestLink}`
@@ -269,127 +276,223 @@ export default function PortalApp() {
                 .wt-press { transition: transform 0.12s; cursor: pointer; }
                 .wt-press:active { transform: scale(0.96); }
                 input::placeholder { color: #9A9DB0; }
+                .wt-rail { scrollbar-width: none; }
+                .wt-rail::-webkit-scrollbar { display: none; }
             `}</style>
-            <div style={{ width: '100%', maxWidth: 430, padding: '14px 18px 118px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ width: '100%', maxWidth: 480, padding: '14px 18px 118px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
                 {tab === 'home' && (<>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4 }}>
-                        <a href={`/wedding/${weddingId}/portal/classic`} aria-label='הגדרות' className='wt-press' style={{
-                            width: 40, height: 40, borderRadius: 20, background: '#fff',
-                            border: '1px solid #E4DFD3', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none',
-                        }}><Ic d={<><circle cx='12' cy='8' r='3.4' /><path d='M4.5 20c1.2-3.4 4-5 7.5-5s6.3 1.6 7.5 5' /></>} color={MUT} size={20} /></a>
-                        <span style={{ width: 40 }} />
-                        <span style={{ width: 40 }} />
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                        <h1 style={{ margin: 0, fontSize: 21, fontWeight: 900, color: INK }}>ברוכים הבאים לספר שלכם</h1>
-                        <p style={{ margin: '3px 0 0', fontSize: 12.5, color: MUT }}>מכאן תוכלו לצפות, לשתף ולעצב</p>
-                        <div style={{ fontSize: 10, color: '#2545E0', marginTop: 2 }}>♥</div>
-                    </div>
-                    <div className='wt-press' onClick={() => setTab('book')} style={{ ...card, borderRadius: 28, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0 12px' }}>
-                        <div style={{ position: 'relative', width: 176, height: 176, animation: 'wtFloat 5.2s ease-in-out infinite' }}>
+                    {/* ── Hero: the event's own stage, the book standing on it ── */}
+                    <div style={{
+                        margin: '-14px -18px 0', padding: '16px 18px 0', position: 'relative', overflow: 'hidden',
+                        borderRadius: '0 0 36px 36px', minHeight: 452,
+                        backgroundColor: dark ? '#0C1030' : '#F3F0EA',
+                        // until the event is read, a neutral wash: no night-to-paper flash for a wedding
+                        backgroundImage: w ? `url(/backgrounds/portal-hero-${dark ? 'night' : 'paper'}.webp)` : 'linear-gradient(180deg,#E6EBFF,#F3F0EA)',
+                        backgroundSize: 'cover', backgroundPosition: 'center bottom',
+                        boxShadow: dark ? '0 24px 40px -28px rgba(12,16,48,0.8)' : '0 24px 40px -30px rgba(90,70,140,0.45)',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    }}>
+                        <div style={{ alignSelf: 'stretch', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <a href={`/wedding/${weddingId}/portal/classic`} aria-label='הגדרות' className='wt-press' style={{
+                                width: 40, height: 40, borderRadius: 20, textDecoration: 'none',
+                                background: dark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.72)',
+                                border: `1px solid ${dark ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.9)'}`,
+                                backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}><Ic d={<><circle cx='12' cy='8' r='3.4' /><path d='M4.5 20c1.2-3.4 4-5 7.5-5s6.3 1.6 7.5 5' /></>} color={heroInk} size={20} /></a>
+                            {eventLabel ? (
+                                <span style={{
+                                    fontSize: 12.5, fontWeight: 700, color: heroInk, padding: '6px 14px', borderRadius: 999,
+                                    background: dark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.72)',
+                                    border: `1px solid ${dark ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.9)'}`,
+                                    backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+                                }}>{eventLabel}</span>
+                            ) : <span />}
+                            <span style={{ width: 40 }} />
+                        </div>
+
+                        <div style={{ textAlign: 'center', marginTop: 14 }}>
+                            <h1 style={{
+                                margin: 0, fontSize: 32, fontWeight: 900, lineHeight: 1.1,
+                                color: heroInk, letterSpacing: '-0.01em',
+                                textShadow: dark ? '0 2px 18px rgba(37,69,224,0.55)' : 'none',
+                            }}>ברוכים הבאים</h1>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: heroSoft, marginTop: 4 }}>
+                                {entries && blessings > 0 ? `${blessings} ברכות כבר מחכות בספר` : 'הספר מוכן לברכות הראשונות'}
+                            </div>
+                        </div>
+
+                        <div className='wt-press' onClick={() => setTab('book')} style={{ position: 'relative', marginTop: 20, width: 196, height: 196, animation: 'wtFloat 5.2s ease-in-out infinite' }}>
                             <div style={{
-                                position: 'absolute', inset: '0 7px 0 0', borderRadius: '10px 4px 4px 10px', overflow: 'hidden',
-                                border: '1px solid rgba(20,24,58,0.35)', boxShadow: '0 14px 28px -10px rgba(20,24,58,0.55)',
+                                position: 'absolute', inset: '0 8px 0 0', borderRadius: '10px 4px 4px 10px', overflow: 'hidden',
+                                border: '1px solid rgba(20,24,58,0.35)', boxShadow: '0 22px 34px -12px rgba(5,8,30,0.7)',
                                 background: face ? `url(${opt(face, 640) || face}) center/cover` : 'linear-gradient(160deg,#252C68,#14183A 62%,#0C1030)',
                             }}>
                                 {!face && (
                                     // No cover chosen yet: the book still carries its own name, so the first
                                     // screen is "the book of Noam", not an empty box.
-                                    <div style={{ position: 'absolute', inset: 9, borderRadius: 6, border: '1.2px solid rgba(255,255,255,0.28)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '0 10px', textAlign: 'center' }}>
-                                        <span style={{ fontSize: 11, fontWeight: 600, color: '#C9CDEB' }}>ספר הברכות של</span>
-                                        <span style={{ width: 26, height: 1.5, background: '#7C93FF', borderRadius: 1 }} />
-                                        <span style={{ fontSize: titleOf(w).length > 14 ? 17 : 24, fontWeight: 900, lineHeight: 1.15, color: '#fff', wordBreak: 'break-word' }}>{w ? titleOf(w) : ''}</span>
+                                    <div style={{ position: 'absolute', inset: 10, borderRadius: 6, border: '1.2px solid rgba(255,255,255,0.28)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '0 10px', textAlign: 'center' }}>
+                                        <span style={{ fontSize: 11.5, fontWeight: 600, color: '#C9CDEB' }}>ספר הברכות של</span>
+                                        <span style={{ width: 28, height: 1.5, background: '#7C93FF', borderRadius: 1 }} />
+                                        <span style={{ fontSize: titleOf(w).length > 14 ? 18 : 26, fontWeight: 900, lineHeight: 1.15, color: '#fff', wordBreak: 'break-word' }}>{w ? titleOf(w) : ''}</span>
                                     </div>
                                 )}
                                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.22), rgba(255,255,255,0) 45%, rgba(10,14,40,0.28))' }} />
                             </div>
                             <div style={{ position: 'absolute', top: 5, bottom: 5, left: -5, width: 7, background: '#F3F0EA', border: '1px solid rgba(20,24,58,0.25)', borderRadius: '2px 0 0 2px' }} />
-                            <div style={{ position: 'absolute', top: 1, bottom: 1, right: 0, width: 8, background: '#2545E0', opacity: 0.95, borderRadius: '0 4px 4px 0' }} />
+                            <div style={{ position: 'absolute', top: 1, bottom: 1, right: 0, width: 9, background: '#2545E0', opacity: 0.95, borderRadius: '0 4px 4px 0' }} />
                         </div>
-                        <div style={{ width: 186, height: 26, marginTop: 8, background: 'radial-gradient(ellipse at center, rgba(20,24,58,0.30), rgba(20,24,58,0.12) 55%, transparent 75%)' }} />
+                        <div style={{ width: 230, height: 22, marginTop: 6, background: 'radial-gradient(ellipse at center, rgba(5,8,30,0.50), rgba(5,8,30,0.16) 55%, transparent 75%)' }} />
                     </div>
-                    <div style={{ ...card, display: 'flex', alignItems: 'center', padding: '11px 8px' }}>
-                        <div style={{ flex: 1, textAlign: 'center' }}>
-                            <span style={{ display: 'inline-flex', width: 32, height: 32, borderRadius: 16, background: '#E6EBFF', alignItems: 'center', justifyContent: 'center' }}><Ic d={<path d='M4 6h16v10H9l-4 4V6Z' />} color={GOLD} size={17} /></span>
-                            <div style={{ fontSize: 18, fontWeight: 900, color: INK }}>{entries ? blessings : '…'}</div>
-                            <div style={{ fontSize: 11.5, color: MUT }}>ברכות</div>
-                        </div>
-                        <div style={{ width: 1, alignSelf: 'stretch', background: '#E4DFD3', margin: '4px 0' }} />
-                        <div style={{ flex: 1, textAlign: 'center' }}>
-                            <span style={{ display: 'inline-flex', width: 32, height: 32, borderRadius: 16, background: '#E6EBFF', alignItems: 'center', justifyContent: 'center' }}><Ic d={<><rect x='3.5' y='5' width='17' height='14' rx='2.5' /><circle cx='9' cy='10' r='1.6' /><path d='m4 17 5-4.5 4 3 3-2.5 4 3.5' /></>} color={GOLD} size={17} /></span>
-                            <div style={{ fontSize: 18, fontWeight: 900, color: INK }}>{entries ? photos : '…'}</div>
-                            <div style={{ fontSize: 11.5, color: MUT }}>תמונות</div>
-                        </div>
-                        <div style={{ width: 1, alignSelf: 'stretch', background: '#E4DFD3', margin: '4px 0' }} />
-                        <div style={{ flex: 1, textAlign: 'center' }}>
-                            <span style={{ display: 'inline-flex', width: 32, height: 32, borderRadius: 16, background: '#E6EBFF', alignItems: 'center', justifyContent: 'center' }}><Ic d={<path d='M5 12.5l4.5 4.5L19 7.5' />} color={GOLD} size={17} sw={2.2} /></span>
-                            <div style={{ fontSize: 12.5, fontWeight: 700, color: INK, marginTop: 7 }}>מוכן לעריכה</div>
-                        </div>
+
+                    {/* ── The numbers: overlap the hero's edge ── */}
+                    <div style={{ ...card, borderRadius: 24, display: 'flex', alignItems: 'stretch', padding: '14px 6px', margin: '-52px 6px 0', position: 'relative', zIndex: 2, boxShadow: '0 1px 2px rgba(20,24,58,0.06), 0 22px 40px -24px rgba(20,24,58,0.5)' }}>
+                        {[
+                            { n: entries ? blessings : '…', label: 'ברכות', icon: <Ic d={<path d='M4 6h16v10H9l-4 4V6Z' />} color={GOLD} size={18} /> },
+                            { n: entries ? photos : '…', label: 'תמונות', icon: <Ic d={<><rect x='3.5' y='5' width='17' height='14' rx='2.5' /><circle cx='9' cy='10' r='1.6' /><path d='m4 17 5-4.5 4 3 3-2.5 4 3.5' /></>} color={GOLD} size={18} /> },
+                            { n: stage === 'paid' ? 'שולם' : stage === 'deposit' ? 'מקדמה' : 'פתוח', label: 'הזמנה', small: true, icon: <Ic d={<path d='M5 12.5l4.5 4.5L19 7.5' />} color={GOLD} size={18} sw={2.2} /> },
+                        ].map((s, i) => (
+                            <div key={s.label} style={{ flex: 1, textAlign: 'center', borderInlineStart: i ? '1px solid #EFEBE2' : 'none' }}>
+                                <span style={{ display: 'inline-flex', width: 34, height: 34, borderRadius: 17, background: '#E6EBFF', alignItems: 'center', justifyContent: 'center' }}>{s.icon}</span>
+                                <div style={{ fontSize: s.small ? 17 : 22, lineHeight: '26px', fontWeight: 900, color: INK }}>{s.n}</div>
+                                <div style={{ fontSize: 11.5, color: MUT }}>{s.label}</div>
+                            </div>
+                        ))}
                     </div>
-                    <div style={{ ...card, borderRadius: 22, padding: '14px 14px 8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 16, fontWeight: 900, color: INK }}>הצעדים שלכם</span>
-                            <span style={{ fontSize: 12, color: MUT }}>{steps.filter(s => s.done).length} מתוך {steps.length}</span>
+
+                    {/* ── The next step, as the one thing to do now ── */}
+                    {nextStep >= 0 ? (() => {
+                        const s = steps[nextStep]
+                        const Act = s.href ? 'a' : 'button'
+                        return (
+                            <div style={{
+                                position: 'relative', overflow: 'hidden', borderRadius: 26, padding: '18px 18px 16px', color: '#fff',
+                                background: 'linear-gradient(165deg,#252C68 0%,#171C47 55%,#0F1236 100%)',
+                                boxShadow: '0 20px 36px -22px rgba(15,18,54,0.9)', marginTop: 4,
+                            }}>
+                                <div aria-hidden='true' style={{ position: 'absolute', top: -46, insetInlineStart: -30, width: 160, height: 160, borderRadius: 80, background: 'radial-gradient(circle, rgba(76,111,255,0.55), transparent 70%)' }} />
+                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <span style={{ fontSize: 12.5, fontWeight: 700, color: '#AEB9FF' }}>הצעד הבא</span>
+                                    <span style={{ fontSize: 12, color: '#C9CDEB' }}>{doneCount} מתוך {steps.length}</span>
+                                </div>
+                                <div style={{ position: 'relative', display: 'flex', gap: 5, margin: '10px 0 14px' }}>
+                                    {steps.map((x, i) => (
+                                        <span key={x.key} style={{ flex: 1, height: 4, borderRadius: 2, background: x.done ? '#7C93FF' : i === nextStep ? 'rgba(124,147,255,0.55)' : 'rgba(255,255,255,0.16)' }} />
+                                    ))}
+                                </div>
+                                <div style={{ position: 'relative', fontSize: 20, fontWeight: 900, lineHeight: 1.25 }}>{s.title}</div>
+                                <div style={{ position: 'relative', fontSize: 13.5, color: '#C9CDEB', lineHeight: 1.45, marginTop: 4 }}>{s.note}</div>
+                                <Act
+                                    {...(s.href ? { href: s.href, target: '_blank', rel: 'noopener' } : { type: 'button', onClick: s.go })}
+                                    className='wt-press'
+                                    style={{
+                                        position: 'relative', marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 48,
+                                        borderRadius: 16, border: 'none', textDecoration: 'none', fontFamily: 'inherit', fontSize: 16, fontWeight: 900, color: '#fff',
+                                        background: 'linear-gradient(180deg,#3358F0 0%,#2545E0 55%,#1B34B8 100%)',
+                                        boxShadow: '0 14px 24px -12px rgba(28,52,184,0.9), inset 0 1px 0 rgba(255,255,255,0.28)',
+                                    }}
+                                >{s.cta || 'לצעד הזה'}<span aria-hidden='true' style={{ fontSize: 18 }}>‹</span></Act>
+                            </div>
+                        )
+                    })() : (
+                        <div style={{ ...card, borderRadius: 26, padding: '18px', textAlign: 'center', marginTop: 4 }}>
+                            <span style={{ display: 'inline-flex', width: 44, height: 44, borderRadius: 22, background: '#1f8f5f', alignItems: 'center', justifyContent: 'center' }}><Ic d={<path d='M5 12.5l4.5 4.5L19 7.5' />} color='#fff' size={24} sw={2.4} /></span>
+                            <div style={{ fontSize: 18, fontWeight: 900, color: INK, marginTop: 8 }}>הכול מוכן</div>
+                            <div style={{ fontSize: 13.5, color: MUT, marginTop: 2 }}>כל הצעדים הושלמו. הספר בדרך אליכם.</div>
                         </div>
+                    )}
+
+                    {/* ── Latest blessings: the real thing, right on the home screen ── */}
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', margin: '10px 4px 0' }}>
+                        <span style={{ fontSize: 17, fontWeight: 900, color: INK }}>הברכות האחרונות</span>
+                        {blessings > 0 && <button type='button' onClick={() => setTab('blessings')} className='wt-press' style={{ background: 'none', border: 'none', padding: '6px 0', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, color: GOLD }}>לכל הברכות ‹</button>}
+                    </div>
+                    {!entries ? (
+                        <div style={{ ...card, height: 132, opacity: 0.6 }} />
+                    ) : blessings === 0 ? (
+                        <div style={{ ...card, borderRadius: 24, padding: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
+                            <div style={{ flex: 'none', padding: 7, background: '#fff', borderRadius: 14, border: '1px solid #CDD3F5' }}>
+                                <QRCode value={guestLink} size={78} fgColor={INK} />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 15.5, fontWeight: 900, color: INK }}>ממתינים לברכה הראשונה</div>
+                                <div style={{ fontSize: 12.5, color: MUT, lineHeight: 1.4, margin: '2px 0 9px' }}>שולחים את הקישור והברכות מגיעות לכאן לבד.</div>
+                                <button type='button' onClick={waShare} className='wt-press' style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 38, padding: '0 14px', borderRadius: 12, border: 'none', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 900, color: '#fff', background: 'linear-gradient(180deg,#252C68 0%,#171C47 48%,#101433 100%)' }}>{I.wa}שליחה בוואטסאפ</button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className='wt-rail' style={{ display: 'flex', gap: 12, margin: '0 -18px', padding: '2px 18px 14px', overflowX: 'auto', scrollSnapType: 'x mandatory', scrollPaddingInline: 18 }}>
+                            {recent.map(e => (
+                                <div key={e.id} className='wt-press' onClick={() => { setTab('blessings'); setSelected(e) }} style={{
+                                    ...card, flex: 'none', width: 262, scrollSnapAlign: 'start', borderRadius: 22, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+                                }}>
+                                    {e.imageUrl && <div style={{ height: 118, background: `url(${opt(e.imageUrl, 384)}) center/cover #E6EBFF` }} />}
+                                    <div style={{ padding: '12px 14px 13px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+                                        <span aria-hidden='true' style={{ fontSize: 34, lineHeight: '16px', height: 14, fontWeight: 900, color: '#B9C5FF' }}>״</span>
+                                        <div style={{
+                                            fontSize: 14, lineHeight: 1.5, color: INK, flex: 1,
+                                            display: '-webkit-box', WebkitLineClamp: e.imageUrl ? 2 : 4, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                                        }}>{e.text || 'ברכה בתמונה'}</div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span style={{ width: 26, height: 26, borderRadius: 13, background: '#E6EBFF', color: GOLD, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 900 }}>{(e.name || '♥').trim().charAt(0)}</span>
+                                            <span style={{ fontSize: 13, fontWeight: 700, color: MUT, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.name || 'אורח'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* ── Everything else, one tap away ── */}
+                    <div style={{ fontSize: 17, fontWeight: 900, color: INK, margin: '4px 4px 0' }}>מה עוד אפשר לעשות</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        {[
+                            { label: 'עיצוב הספר', sub: 'כריכה וסגנון', icon: I.brush, go: () => setTab('book') },
+                            { label: 'שיתוף הקישור', sub: 'וואטסאפ ו־QR', icon: I.link, go: () => setTab('share') },
+                            { label: 'ניהול הברכות', sub: 'עריכה ותמונות', icon: I.bookT, go: () => setTab('blessings') },
+                            { label: 'שלט להדפסה', sub: 'QR לשולחן ולכניסה', icon: <Ic d={<><rect x='3.5' y='3.5' width='7' height='7' rx='1.2' /><rect x='13.5' y='3.5' width='7' height='7' rx='1.2' /><rect x='3.5' y='13.5' width='7' height='7' rx='1.2' /><path d='M14 14h2.5v2.5H14zM18 18h2.5M18 14v1.5' /></>} color={GOLD} />, href: `/wedding/${weddingId}/portal?view=poster` },
+                        ].map(t => {
+                            const Tile = t.href ? 'a' : 'div'
+                            return (
+                                <Tile key={t.label} {...(t.href ? { href: t.href, target: '_blank', rel: 'noopener' } : { onClick: t.go, role: 'button', tabIndex: 0 })} className='wt-press' style={{
+                                    ...card, borderRadius: 20, padding: '14px 12px', display: 'flex', alignItems: 'center', gap: 11, textDecoration: 'none', minHeight: 72,
+                                }}>
+                                    <span style={{ flex: 'none', width: 42, height: 42, borderRadius: 14, background: '#E6EBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{t.icon}</span>
+                                    <span style={{ minWidth: 0 }}>
+                                        <span style={{ display: 'block', fontSize: 14, fontWeight: 900, color: INK, lineHeight: 1.25 }}>{t.label}</span>
+                                        <span style={{ display: 'block', fontSize: 12, color: MUT, lineHeight: 1.3 }}>{t.sub}</span>
+                                    </span>
+                                </Tile>
+                            )
+                        })}
+                    </div>
+
+                    {/* ── The whole road, compact ── */}
+                    <div style={{ ...card, borderRadius: 22, padding: '12px 14px 6px', marginTop: 4 }}>
+                        <div style={{ fontSize: 15, fontWeight: 900, color: INK, marginBottom: 2 }}>הדרך עד הספר המודפס</div>
                         {steps.map((s, i) => {
                             const isNext = i === nextStep
                             const Row = s.href ? 'a' : 'div'
                             return (
                                 <Row key={s.key} {...(s.href ? { href: s.href, target: '_blank', rel: 'noopener' } : { onClick: s.go, role: 'button', tabIndex: 0 })} className='wt-press' style={{
-                                    display: 'flex', alignItems: 'center', gap: 11, padding: '10px 2px', minHeight: 44, textDecoration: 'none', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', gap: 11, padding: '9px 0', minHeight: 44, textDecoration: 'none', cursor: 'pointer',
                                     borderTop: i ? '1px solid #EFEBE2' : 'none',
                                 }}>
                                     <span style={{
-                                        flex: 'none', width: 28, height: 28, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontSize: 13.5, fontWeight: 900,
+                                        flex: 'none', width: 26, height: 26, borderRadius: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontSize: 12.5, fontWeight: 900,
                                         background: s.done ? '#1f8f5f' : isNext ? INK : '#fff',
                                         color: s.done || isNext ? '#fff' : MUT,
                                         border: s.done || isNext ? 'none' : '1px solid #CDD3F5',
                                     }}>{s.done ? '✓' : i + 1}</span>
-                                    <span style={{ flex: 1, minWidth: 0 }}>
-                                        <span style={{ display: 'block', fontSize: 14.5, fontWeight: isNext ? 900 : 700, color: INK }}>{s.title}</span>
-                                        <span style={{ display: 'block', fontSize: 12.5, color: MUT, lineHeight: 1.35 }}>{s.note}</span>
-                                    </span>
-                                    <span aria-hidden='true' style={{ flex: 'none', fontSize: 18, color: isNext ? INK : '#9A9DB0' }}>‹</span>
+                                    <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: isNext ? 900 : 600, color: s.done ? MUT : INK }}>{s.title}</span>
+                                    <span aria-hidden='true' style={{ flex: 'none', fontSize: 18, color: '#9A9DB0' }}>‹</span>
                                 </Row>
                             )
                         })}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 10, color: '#2545E0' }}>♥</span>
-                        <span style={{ fontSize: 15.5, fontWeight: 700, color: INK }}>מה תרצו לעשות עכשיו?</span>
-                        <span style={{ fontSize: 10, color: '#2545E0' }}>♥</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 10 }}>
-                        {[
-                            { label: 'צפייה בברכות', icon: I.bookT, bg: '#E6EBFF', go: () => setTab('blessings') },
-                            { label: 'עיצוב הספר', icon: I.brush, bg: '#E6EBFF', go: () => setTab('book') },
-                            { label: 'שיתוף הקישור', icon: I.link, bg: '#E6EBFF', go: () => setTab('share') },
-                        ].map(t => (
-                            <div key={t.label} onClick={t.go} className='wt-press' style={{
-                                flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-                                ...card, borderRadius: 20, padding: '13px 4px',
-                            }}>
-                                <span style={{
-                                    width: 46, height: 46, borderRadius: 23, background: t.bg,
-                                    border: '1px solid #E4DFD3', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                }}>{t.icon}</span>
-                                <span style={{ fontSize: 12.5, fontWeight: 600, color: INK }}>{t.label}</span>
-                            </div>
-                        ))}
-                    </div>
-                    <div onClick={() => setTab('book')} className='wt-press' style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                        background: 'linear-gradient(180deg,#252C68 0%,#171C47 48%,#101433 100%)',
-                        borderRadius: 999, padding: '13px 16px', boxShadow: '0 7px 18px -6px rgba(28,40,120,0.55)', marginTop: 2,
-                    }}>
-                        <span style={{ width: 22, height: 22, borderRadius: 11, background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Ic d={<path d='M12 20s-6.5-4-8.2-7.8C2.4 9.2 4.2 6 7.3 6c2 0 3.4 1 4.7 2.6C13.3 7 14.7 6 16.7 6c3.1 0 4.9 3.2 3.5 6.2C18.5 16 12 20 12 20Z' />} color='#fff' size={13} fill='#fff' />
-                        </span>
-                        <span style={{ fontSize: 16, fontWeight: 900, color: '#fff' }}>כניסה לספר</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 11, color: 'rgba(90,93,117,0.85)', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 11, color: 'rgba(90,93,117,0.85)', flexWrap: 'wrap', marginTop: 4 }}>
                         <a href='/privacy' style={{ color: 'inherit', textDecoration: 'none' }}>מדיניות פרטיות</a>
                         <span>·</span>
                         <a href='/terms' style={{ color: 'inherit', textDecoration: 'none' }}>תנאי שימוש</a>
