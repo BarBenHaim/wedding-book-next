@@ -29,6 +29,8 @@
 // second render and change the page count under the operator's cursor.
 // They are excluded by whitelist rather than by documentation.
 
+import { sanitizeStickers } from './stickers'
+
 const PAGE_SURFACE_KEYS = [
     'backgroundColor', 'backgroundUrl', 'backgroundPosition', 'texture', 'frame',
     'pagePadding', 'borderRadius',
@@ -55,8 +57,12 @@ const TEXT_KEYS = [
 // in an otherwise classic book.
 const STRUCTURE_KEYS = ['template', 'blessingTemplate']
 
+// Stickers placed on this page only (src/lib/stickers.js). Never inherited from
+// the book: a page either carries them or it does not.
+const DECORATION_KEYS = ['stickers']
+
 export const PAGE_OVERRIDABLE_KEYS = [
-    ...PAGE_SURFACE_KEYS, ...PHOTO_KEYS, ...TEXT_KEYS, ...STRUCTURE_KEYS,
+    ...PAGE_SURFACE_KEYS, ...PHOTO_KEYS, ...TEXT_KEYS, ...STRUCTURE_KEYS, ...DECORATION_KEYS,
 ]
 
 // The four that decide which pages exist. Named so the test can assert
@@ -83,6 +89,12 @@ export function sanitizePageStyle(raw) {
         if (value === undefined) continue
         // Three anchors, nothing else reaches a CSS property.
         if (key === 'backgroundPosition' && value !== null && !BACKGROUND_POSITIONS.includes(value)) continue
+        if (key === 'stickers') {
+            // a clean list, and an empty one is the same as none
+            const list = sanitizeStickers(value)
+            if (list.length) out.stickers = list
+            continue
+        }
         if (key === 'imageStyle' || key === 'albumPhoto') {
             if (value === null) { out[key] = null; continue }
             if (!isPlainObject(value)) continue

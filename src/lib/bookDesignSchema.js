@@ -126,6 +126,10 @@ export const CANONICAL_STYLE_DEFAULTS = {
     windowNameColor: null,
     photoFrameSlice: null, // % of the uploaded artwork that is border
     photoFrameInset: 6, // % of slot width the photo insets under an overlay
+    // Stickers are placed on ONE page from the page editor (src/lib/stickers.js),
+    // so no book design ever sets them. The key exists so the per-page whitelist
+    // and the schema keep agreeing.
+    stickers: null,
 
     // ── Text block ───────────────────────────────────────────────────
     textMaxWidth: 85, // % of page width

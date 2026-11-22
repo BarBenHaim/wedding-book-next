@@ -17,8 +17,9 @@ import CollagePageLayout from '../CollagePageLayout/CollagePageLayout'
 import WindowPageLayout from '../WindowPageLayout/WindowPageLayout'
 import DuoPageLayout from '../DuoPageLayout/DuoPageLayout'
 import ComposedPageLayout from '../ComposedPageLayout/ComposedPageLayout'
+import StickerLayer from '../StickerLayer/StickerLayer'
 
-export default function BookPageTemplate({ entry: savedEntry, styleSettings: savedStyle, scaledWidth, scaledHeight }) {
+function BookPageBody({ entry: savedEntry, styleSettings: savedStyle, scaledWidth, scaledHeight }) {
     // On a network that blocks Google's storage host, show the photo and
     // the page's artwork through our own domain (src/lib/storageReach.js).
     // Everywhere else these two lines hand back the very same objects.
@@ -469,6 +470,20 @@ export default function BookPageTemplate({ entry: savedEntry, styleSettings: sav
                     </p>
                 </div>
             )}
+        </div>
+    )
+}
+
+// Every page goes through here, so a sticker placed in the editor shows in the
+// flipbook, the PDF and the print export alike. A page without stickers is
+// returned exactly as before: no wrapper, no extra element.
+export default function BookPageTemplate(props) {
+    const stickers = pageStyleOf(props.entry)?.stickers
+    if (!stickers?.length) return <BookPageBody {...props} />
+    return (
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            <BookPageBody {...props} />
+            <StickerLayer stickers={stickers} />
         </div>
     )
 }

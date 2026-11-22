@@ -31,15 +31,24 @@ import { auth } from '@/lib/firebaseClient'
 import { uploadEventImage } from '@/lib/uploadEventImage'
 import imageCompression from 'browser-image-compression'
 import { PHOTO_FRAMES, ART_FRAMES, artFrameByUrl } from '@/lib/photoFrames'
-import { TEXTURES_REGISTRY } from '@/lib/studioPresets'
+import { TEXTURES_REGISTRY, STATIC_BACKGROUNDS, RETIRED_BACKGROUND_IDS } from '@/lib/studioPresets'
 import { buildPageIndex, pageLabel } from '@/lib/bookPageIndex'
 import { sanitizePageStyle, overriddenKeys, mergePageStyle } from '@/lib/pageStyle'
 import { isBlankPage } from '@/lib/entryKinds'
 import { getBlessingText } from '@/lib/normalizeText'
 import { pageFitFactor, effectiveFontPercent, nameFontPercent, DEFAULT_MIN_FACTOR } from '@/lib/fontFit'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
+import StickerControls from './StickerControls'
 
 const GOLD = '#AA8840'
+
+// What the per-page background row offers: the house backgrounds first, then the
+// textures that are still on offer. The retired ones (a frame baked into the page)
+// are not offered, but a page that already uses one keeps it.
+const PAGE_SURFACES = [
+    ...STATIC_BACKGROUNDS.filter(b => b.src.startsWith('/backgrounds/book/')),
+    ...TEXTURES_REGISTRY.filter(t => !RETIRED_BACKGROUND_IDS.has(t.id)),
+]
 const SAVE_DEBOUNCE_MS = 450
 
 function Row({ label, pinned, onUnpin, children, hint }) {
@@ -467,7 +476,7 @@ export default function PageStyleControls({
     const canPhotoBackground = isBlank || !SCENE_TEMPLATES.includes(effective.template)
     const bgPhoto = typeof effective.backgroundUrl === 'string'
         && pinned.has('backgroundUrl')
-        && !TEXTURES_REGISTRY.some(t => t.src === effective.backgroundUrl)
+        && !PAGE_SURFACES.some(t => t.src === effective.backgroundUrl)
         ? effective.backgroundUrl
         : null
     const photoBackgroundRow = canPhotoBackground && (
@@ -790,7 +799,7 @@ export default function PageStyleControls({
                         >
                             בלי
                         </button>
-                        {TEXTURES_REGISTRY.map(t => (
+                        {PAGE_SURFACES.map(t => (
                             <button
                                 key={t.id}
                                 onClick={() => set('backgroundUrl', t.src)}
@@ -803,6 +812,15 @@ export default function PageStyleControls({
                             />
                         ))}
                     </div>
+                </Row>
+
+                <Row
+                    label='מדבקות'
+                    pinned={pinned.has('stickers')}
+                    onUnpin={() => unpin('stickers')}
+                    hint='המדבקות מופיעות בעמוד הזה בלבד, גם בהדפסה'
+                >
+                    <StickerControls stickers={draft.stickers} onChange={list => set('stickers', list)} />
                 </Row>
             </div>
         </div>
