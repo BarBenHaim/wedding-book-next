@@ -8,7 +8,8 @@ service firebase.storage {
   match /b/{bucket}/o {
 
     // Guest photos under each wedding folder.
-    match /weddings/{weddingId}/{filename} {
+    // Everything under an event's folder: the guests' photos, a cover, the album, a manage-link photo.
+    match /weddings/{weddingId}/{allPaths=**} {
       // Anyone can view a wedding's photos (gallery + viewer book).
       allow read: if true;
 
@@ -25,7 +26,8 @@ service firebase.storage {
     // Studio backgrounds uploaded via the design studio (super-admin /
     // signed-in user uploads through the picker). Reads are public so
     // every wedding's book can render them. Writes require auth.
-    match /studio/backgrounds/{filename} {
+    // Studio artwork: backgrounds, default covers, photo frames. Signed-in only, as before.
+    match /studio/{allPaths=**} {
       allow read: if true;
       allow create, update, delete:
         if request.auth != null
@@ -58,6 +60,16 @@ service firebase.storage {
     // Versioned sales variables are private. Uploads and previews use
     // short-lived server-created signed URLs, so Firebase client rules
     // never grant direct access to this namespace.
+    // The print PDF the viewer uploads for a book (viewer/page.js). Signed-in only; downloads use
+    // their own token URL, so reading does not depend on this rule.
+    match /wedding-books/{weddingId}/{filename} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+                            && request.resource.contentType == 'application/pdf'
+                            && request.resource.size < 1024 * 1024 * 1024;
+      allow delete: if false;
+    }
+
     match /sales-variable-media/{variableKey}/{filename} {
       allow read, write: if false;
     }

@@ -105,12 +105,12 @@ service cloud.firestore {
       // Required + size caps + type checks. Keeps malformed entries
       // out of the book layout (which assumes string fields).
       return data.size() <= 12
-        && (!('name' in data) || (data.name is string && data.name.size() < 100))
+        && (!('name' in data) || data.name == null || (data.name is string && data.name.size() < 100))
         // Ceiling raised 500→2600: the super-admin composer writes up to
         // 2600 chars. Guests are still capped client-side by the per-event
         // blessingMaxChars; this is the hard server ceiling for everyone.
-        && (!('text' in data) || (data.text is string && data.text.size() < 2600))
-        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 2000))
+        && (!('text' in data) || data.text == null || (data.text is string && data.text.size() < 2600))
+        && (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() < 2000))
         && (!('orderIndex' in data) || data.orderIndex == null || data.orderIndex is int);
     }
 
@@ -136,6 +136,11 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
     match /studio_config/{id} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    // Uploaded photo-frame overlays (src/lib/studioPresets.js, uploadPhotoFrameAsset).
+    match /studio_photo_frames/{id} {
       allow read: if true;
       allow write: if isSignedIn();
     }

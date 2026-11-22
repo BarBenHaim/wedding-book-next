@@ -2203,3 +2203,31 @@ settings, the Meta templates, and `src/app/bar-mitzvah/`, `public/lp.html`,
 calls" contradicts `offer_call`/`CALL_LINE` (a call back); decide which is true.
 Unchecked: what the WooCommerce webhook does to the lead when only the 190 deposit
 lands (`paymentTruth` reads `order.total`).
+
+
+## 22.11 (night) — the open database rules, found and closed
+
+Both Firestore and Storage were running a blanket rule set on 20 Oct 2026 15:49 UTC
+("allow read, write" on every collection except `testimonials` and `testimonial_links`), not
+the rules in this repo. For 33 days anyone with the web API key could read and write
+everything: `sales_leads` (352 leads), `ordersRaw` (payment payloads), `emailLog`, `arrange_links`
+(the secret tokens), the weddings, and upload or delete any file. The shape (an exception for two
+collections of another app) suggests the rules were overwritten by a deploy from another app that
+shares this Firebase project; if so it can happen again, so never `firebase deploy` rules from
+another project into this one.
+
+Fixed the same night through the Admin SDK (the Firebase CLI is not signed in on this PC):
+`admin.securityRules().releaseFirestoreRulesetFromSource(...)`. The released sources are this
+repo's `firestore.rules` and `storage.rules`. What changed relative to the old repo rules:
+`studio_photo_frames` is readable and signed-in writable; entries accept `null` for name/text/imageUrl
+(a text-only blessing sends `imageUrl: null`, which the old rule refused, which is very likely why
+the open rules were deployed); Storage covers everything under `weddings/{id}/**`, `studio/**`, and the
+print PDF under `wedding-books/{id}/`. The open rule sets are kept in `sales-kit/*OPEN-20-OCT-ROLLBACK.txt`;
+the previous ruleset ids (`029828bb-850f-4043-a86f-4025d56290a7`, `8d38207e-493c-4588-8183-35f1042bfc73`)
+can be re-released with `releaseFirestoreRuleset(id)` if something breaks.
+
+**Still open (phase B):** `weddings/{id}` is still publicly readable, so owner e-mail, phone,
+amount, `adminNotes` and the book `digitalTokens` can still be read by anyone who knows an event
+id. Closing it means serving the guest pages from a whitelist API instead of reading the document
+from the browser (the guest page, thanks, gallery, slug links, the token book). Storage overwrites
+of an existing object under `weddings/` are still allowed (observed).
