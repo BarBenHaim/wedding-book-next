@@ -52,3 +52,17 @@ export function orderEventDetails(order) {
     out.value = value
     return out
 }
+
+// One plain meta value of an order, trimmed; '' when it is not there.
+export function orderMeta(order, key) {
+    const meta = Array.isArray(order?.meta_data) ? order.meta_data : []
+    const m = meta.find(x => x && x.key === key)
+    return m && (typeof m.value === 'string' || typeof m.value === 'number') ? String(m.value).trim() : ''
+}
+
+// A balance order pays the rest of a deposit for an event that already exists
+// (wt_balance_for = that event's id). It must not open a second event.
+export function balanceTarget(order) {
+    const id = orderMeta(order, 'wt_balance_for')
+    return /^[A-Za-z0-9_-]{1,64}$/.test(id) ? id : ''
+}

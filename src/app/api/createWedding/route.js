@@ -4,7 +4,7 @@ export const fetchCache = 'force-no-store'
 export const preferredRegion = 'iad1'
 
 import { eventDisplayTitle } from '@/lib/onboarding'
-import { orderEventDetails } from '@/lib/orderEventDetails'
+import { orderEventDetails, balanceTarget } from '@/lib/orderEventDetails'
 import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import crypto from 'crypto'
@@ -63,6 +63,47 @@ export async function POST(req) {
             await recordVerifiedSalesOutcome(body, closeLeadOnPurchase)
         } catch {
             console.warn('[createWedding] verified sales outcome write failed')
+        }
+
+        // --- 4b. A balance order: the rest of a deposit for an event that exists ---
+        // It marks that event paid and tells the owner of the business the book
+        // can go to print. It never opens a second event. If the event is not
+        // found the order falls through and is handled like any other.
+        const balanceFor = balanceTarget(body)
+        if (balanceFor) {
+            const ref = db.collection('weddings').doc(balanceFor)
+            const snap = await ref.get()
+            if (snap.exists) {
+                const already = snap.data()?.balanceOrderId === orderId
+                if (!already) {
+                    await ref.set(
+                        {
+                            paymentStage: 'paid',
+                            balanceDue: 0,
+                            balanceOrderId: orderId,
+                            balanceAmount: body?.total ?? null,
+                            balancePaidAt: FieldValue.serverTimestamp(),
+                        },
+                        { merge: true },
+                    )
+                    try {
+                        const w = snap.data() || {}
+                        const who = [w.celebrantName, w.brideName, w.groomName].filter(Boolean).join(' / ') || balanceFor
+                        const t = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS } })
+                        await t.sendMail({
+                            from: `"Wedding Tales" <${process.env.MAIL_USER}>`,
+                            to: process.env.MAIL_USER,
+                            subject: `יתרה שולמה, הספר מוכן להדפסה: ${who}`,
+                            text: `היתרה על האירוע ${balanceFor} (${who}) שולמה בהזמנה ${orderId}, סכום ${body?.total ?? ''}.\nכתובת המשלוח נמצאת בהזמנה ב-WooCommerce.\nניהול: https://app.weddingtales.co.il/admin`,
+                        })
+                    } catch {
+                        console.warn('[createWedding] balance notice e-mail failed')
+                    }
+                }
+                console.log(`💳 Balance order ${orderId} → event ${balanceFor} marked paid`)
+                return NextResponse.json({ ok: true, balanceFor, already })
+            }
+            console.warn(`[createWedding] balance order ${orderId} names an unknown event`)
         }
 
         // --- 5. מניעת כפילויות (Idempotency) ---
