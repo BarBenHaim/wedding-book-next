@@ -22,6 +22,7 @@ import { recordSubmission } from '@/lib/mySubmissions'
 import { createGuestEditToken } from '@/lib/guestEditCapability'
 import MySubmissions from '@/components/MySubmissions/MySubmissions'
 import BookLoader from '@/components/BookLoader/BookLoader'
+import LivePagePreviewButton from '@/components/LivePagePreview/LivePagePreviewButton'
 import { frankRuhl } from '@/app/fonts'
 import { panelRect, fitScale } from '@/lib/framedPanel'
 import { isTwinsEvent, twinNames, normalizeBlessFor, joinTwinNames } from '@/lib/twins'
@@ -154,6 +155,9 @@ export default function TextPage() {
     // Optional full theme override (palette/background/etc.) from a studio
     // "guest page" preset saved on the wedding, or a live ?gd= preview.
     const [guestDesign, setGuestDesign] = useState(null)
+    // What the book renderer needs to show the guest's page in the owner's own interior design
+    // (resolved lazily, only when the guest opens the preview).
+    const [bookDoc, setBookDoc] = useState(null)
     const [loaded, setLoaded] = useState(false)
 
     // Personalised invite state — when the guest lands with ?g=<guestId>
@@ -259,6 +263,7 @@ export default function TextPage() {
                         momentSecurityNote: (data.customMomentSecurityNote || '').trim(),
                     })
                     setGuestDesign(previewGd || data.guestDesign || null)
+                    setBookDoc({ bookDesign: data.bookDesign, coverDesign: data.coverDesign, book: data.book, noPhotoCrop: data.noPhotoCrop })
                     if (previewCopy) setFormCopy(prev => ({ ...prev, ...previewCopy }))
                 }
             } catch {
@@ -315,6 +320,7 @@ export default function TextPage() {
                 onBlessForChange={setBlessFor}
                 formCopy={formCopy}
                 guestDesign={guestDesign}
+                bookDoc={bookDoc}
                 maxChars={adminWriter ? Math.max(maxChars, 2600) : maxChars}
                 locale={locale}
                 initialName={guestGreetingName}
@@ -384,7 +390,7 @@ function ChipBadge({ number, active, done, isPoker }) {
     )
 }
 
-function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign, maxChars = 210, locale = 'he', initialName = '', guestId = '', photoRequired = false, wholePhoto = false, twins = null, blessFor = null, onBlessForChange }) {
+function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign, bookDoc = null, maxChars = 210, locale = 'he', initialName = '', guestId = '', photoRequired = false, wholePhoto = false, twins = null, blessFor = null, onBlessForChange }) {
     const t = useTranslations('photo')
 
     // Twins: who is this blessing for. Rendered under the title in every
@@ -1536,7 +1542,18 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                 onFocus={e => (e.currentTarget.style.borderColor = md.inputFocusBorder)}
                                 onBlur={e => (e.currentTarget.style.borderColor = md.inputBorder)}
                             />
-                            <div className='flex items-center justify-end gap-2 mt-1'>
+                            <div className='flex items-center justify-between gap-2 mt-1'>
+                                <LivePagePreviewButton
+                                    name={name}
+                                    text={text}
+                                    photoUrl={photoUrl}
+                                    bookDoc={bookDoc}
+                                    locale={locale}
+                                    color={md.pillText}
+                                    border={md.pillBorder}
+                                    background={md.pillBg}
+                                    accent='#14183A'
+                                />
                                 <span style={{ color: md.cardCounterColor, fontSize: '10.5px' }}>
                                     {text.length}/{maxChars}
                                 </span>
@@ -1896,6 +1913,10 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                         style={{
                             background: mdButtonBg,
                             border: 'none',
+                            // Optional keys of a flat (non-painted) button: a design that sets
+                            // none of them renders exactly as before.
+                            ...(md.buttonRadius != null ? { borderRadius: md.buttonRadius } : {}),
+                            ...(md.buttonShadow ? { boxShadow: md.buttonShadow } : {}),
                             // Lock height to the asset's 185:40
                             // canvas ratio so the painted artwork
                             // stretches without cropping at any
@@ -1904,7 +1925,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                             fontSize: '17px',
                             letterSpacing: '0.01em',
                             color: md.buttonTextColor,
-                            textShadow: '0 1px 3px rgba(0,0,0,0.45)',
+                            textShadow: md.buttonTextShadow ?? '0 1px 3px rgba(0,0,0,0.45)',
                             // Crisper rendering when the browser
                             // has to upscale the small (185px)
                             // PNG to fit a wide card.

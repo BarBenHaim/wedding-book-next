@@ -10,6 +10,7 @@ import { renderWelcomeEmail } from '@/lib/welcomeEmail'
 import { enterSecret, signEnterToken, enterUrl } from '@/lib/enterLink'
 import { lockDecision, needsWelcomeResume, briefError } from '@/lib/orderLock'
 import { renderBalancePaidEmail, bookTitleOf } from '@/lib/lifecycle'
+import { signatureDesign } from '@/lib/guestSignature'
 import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import crypto from 'crypto'
@@ -237,6 +238,9 @@ export async function POST(req) {
                         issuedAt: new Date().toISOString(),
                         issuedBy: 'createWedding',
                     }),
+                    // The house look of the blessing page for a new event (the owner's own
+                    // choice in the design studio replaces it; existing events are untouched).
+                    ...(details.fields.eventType ? { guestDesign: signatureDesign(details.fields.eventType) } : {}),
                     ...details.fields,
                 },
                 { merge: true },
