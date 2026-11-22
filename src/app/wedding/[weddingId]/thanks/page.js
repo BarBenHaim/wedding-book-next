@@ -30,6 +30,7 @@ export default function ThanksPage() {
     const { weddingId } = useParams()
     const [locale, setLocale] = useState('he')
     const [signature, setSignature] = useState(null)
+    const [eventType, setEventType] = useState('')
 
     useEffect(() => {
         if (!weddingId) return
@@ -40,6 +41,7 @@ export default function ThanksPage() {
                 if (cancelled) return
                 if (snap.exists()) {
                     setLocale(normalizeLocale(snap.data().locale))
+                    setEventType(String(snap.data().eventType || ''))
                     // The house (Signature) look carries over from the blessing page to this one.
                     // Same default as the blessing page: an unstyled event shows the house look for its occasion.
                     const gd = snap.data().guestDesign || defaultGuestDesign(snap.data().eventType, snap.data().designVariant)
@@ -56,12 +58,16 @@ export default function ThanksPage() {
 
     return (
         <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
-            <ThanksApp signature={signature} />
+            <ThanksApp signature={signature} eventType={eventType} />
         </NextIntlClientProvider>
     )
 }
 
-function ThanksApp({ signature = null }) {
+// The kind of book the guest is invited to open next: the same occasion they just attended, which they can
+// change on the sales page. (The parents at a bar mitzvah are the likeliest to have the next one.)
+const NEXT_BOOK = { bar_mitzvah: 'bar', twins_bar_mitzvah: 'bar', bat_mitzvah: 'bat', wedding: 'wedding', birthday: 'birthday' }
+
+function ThanksApp({ signature = null, eventType = '' }) {
     const router = useRouter()
     const { weddingId } = useParams()
     const t = useTranslations('thanks')
@@ -413,7 +419,7 @@ function ThanksApp({ signature = null }) {
                         official WhatsApp green so the button is instantly
                         recognisable as a chat-to-us action. */}
                     <a
-                        href={`https://weddingtales.co.il/?utm_source=guest_thanks&utm_medium=referral&ref=${encodeURIComponent(weddingId)}`}
+                        href={`https://weddingtales.co.il/?utm_source=guest_thanks&utm_medium=referral&utm_campaign=class_loop&ref=${encodeURIComponent(weddingId)}${NEXT_BOOK[eventType] ? `&ev=${NEXT_BOOK[eventType]}` : ''}`}
                         target='_blank'
                         rel='noopener noreferrer'
                         className='w-full rounded-2xl text-white font-bold transition-all duration-300 flex items-center justify-center gap-2.5 active:scale-[0.99]'

@@ -29,6 +29,12 @@ export function orderEventDetails(order) {
         out.fields.paymentStage = 'deposit'
         if (out.deposit.balanceDue) out.fields.balanceDue = out.deposit.balanceDue
     }
+    // Who sent this buyer: the event whose guest page led them here (wt_ref), and the campaign source
+    // (wt_src, e.g. guest_thanks or meta). Kept on the event so guest-sourced deposits can be counted.
+    const ref = get('wt_ref')
+    if (/^[A-Za-z0-9_-]{1,64}$/.test(ref)) out.fields.referredBy = ref
+    const src = get('wt_src')
+    if (/^[a-z0-9_]{1,30}$/.test(src)) out.fields.acquisitionSource = src
     const eventType = SALES_EVENT_TYPES[get('wt_event')] || ''
     if (!eventType) return out
     const date = get('wt_date', 'event_date', 'billing_event_date')

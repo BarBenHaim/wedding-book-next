@@ -48,3 +48,16 @@ describe('balanceTarget', () => {
         expect(balanceTarget(order({ wt_balance_for: '' }))).toBe('')
     })
 })
+
+describe('who sent the buyer', () => {
+    it('keeps the guest page event and the campaign source on the event', () => {
+        const d = orderEventDetails(order({ wt_ref: 'jQKJ01LIAyRjJ6YE04zh', wt_src: 'guest_thanks' }))
+        expect(d.fields).toEqual({ referredBy: 'jQKJ01LIAyRjJ6YE04zh', acquisitionSource: 'guest_thanks' })
+    })
+    it('also when the builder was skipped, and ignores junk', () => {
+        const d = orderEventDetails(order({ wt_ref: '../weddings/x', wt_src: 'Bad Source!', wt_event: 'bar', wt_name1: 'נועם' }))
+        expect(d.fields.referredBy).toBeUndefined()
+        expect(d.fields.acquisitionSource).toBeUndefined()
+        expect(d.fields.eventType).toBe('bar_mitzvah')
+    })
+})
