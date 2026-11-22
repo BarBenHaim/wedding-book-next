@@ -16,6 +16,28 @@
 // it in BOTH places — tests/salesAgent.test.js asserts the shape but it
 // cannot know what the shop charges.
 
+// The sales page is the funnel now (22.11): the visitor types the event
+// and the name there, which sets the cookie that names the book, and only
+// then goes to checkout. So the link the bot sends a lead is the PAGE,
+// not a checkout. The direct deposit checkout skips the naming step; it is
+// the fallback for someone who cannot get through the page, never the
+// default. One constant, so a change of address is one edit.
+export const SALES_LINKS = Object.freeze({
+    page: 'https://weddingtales.co.il/',
+    depositCheckout: 'https://weddingtales.co.il/checkout/?add-to-cart=6271&wt_dep=1',
+})
+
+// The printed book is paid in two steps: a deposit today, the balance only
+// when the book is ready and the customer approved it for print. The total
+// stays 990. Full refund until print approval. After payment everything is
+// automatic (an e-mail with the guest link, a printable QR sign and the
+// personal-area link), so nothing here may promise manual work.
+export const DEPOSIT = Object.freeze({
+    amount: 190,
+    balance: 800,
+    refund: 'החזר מלא עד אישור ההדפסה',
+})
+
 export const BUSINESS = {
     brand: 'Wedding Tales',
     // What the bot calls the human it is handing over to. "לורד" was
@@ -29,8 +51,10 @@ export const BUSINESS = {
     ownerName: process.env.SALES_AGENT_OWNER_NAME || null,
     product: 'ספר ברכות — האורחים סורקים QR, כותבים ברכה ומעלים תמונה, והכול נארג לספר מזכרת',
     whatsapp: 'https://wa.link/rduj2s',
-    landing: 'https://app.weddingtales.co.il/lp',
-    infoPage: 'https://app.weddingtales.co.il/bar-mitzvah',
+    // Both used to point at app.weddingtales.co.il landing pages that no
+    // longer sell. Kept as fields because other code may read them.
+    landing: SALES_LINKS.page,
+    infoPage: SALES_LINKS.page,
     shop: 'https://weddingtales.co.il',
 }
 
@@ -58,7 +82,7 @@ export const PACKAGES = [
         checkout: 'https://weddingtales.co.il/checkout/?add-to-cart=6258',
         pitch: 'מושלם לשיתוף מיידי במשפחה',
         includes: [
-            'פוסטר QR בעיצוב אישי',
+            'שלט QR להדפסה',
             'עמוד אורחים — ללא הגבלת ברכות ותמונות',
             'ספר דיגיטלי מעוצב',
             'קובץ PDF להורדה ולהדפסה',
@@ -71,7 +95,13 @@ export const PACKAGES = [
         name: 'ספר מודפס',
         price: 990,
         wasPrice: 1190,
-        checkout: 'https://weddingtales.co.il/checkout/?add-to-cart=6271',
+        // What the bot sends a lead: the sales page (name first, then
+        // checkout). `depositCheckout` is the direct link that skips the
+        // naming step; `price` stays the total.
+        checkout: SALES_LINKS.page,
+        depositCheckout: SALES_LINKS.depositCheckout,
+        deposit: DEPOSIT.amount,
+        balance: DEPOSIT.balance,
         pitch: 'מזכרת שעוברת מדור לדור',
         // The one to steer toward — it is what most families buy and it
         // is the only package that produces the physical object the whole
@@ -79,7 +109,7 @@ export const PACKAGES = [
         recommended: true,
         includes: [
             'כל מה שבדיגיטלי',
-            'ספר מודפס בכריכה קשה',
+            'ספר מודפס בכריכה קשה 21x21',
             'עיצוב כל עמוד על ידי מעצב',
             'נייר פרימיום בגימור משי',
             'כל הברכות והתמונות בפנים',
@@ -114,14 +144,17 @@ export const FACTS = [
     'האורחים לא מורידים שום אפליקציה — סריקת QR פותחת עמוד בדפדפן, כותבים, מעלים תמונה, שולחים.',
     'אין הגבלה על מספר הברכות והתמונות, גם באירוע של 500 אורחים.',
     'יש פאנל ניהול: מאשרים כל ברכה, מתקנים שגיאות כתיב, בוחרים תמונות ומסדרים את הסדר — ורק אז לדפוס.',
-    'עמוד האורחים והפוסטר מוכנים תוך 48 שעות מאישור העיצוב.',
+    'הספר המודפס עולה 990 ₪ בסך הכול. משלמים מקדמה של 190 ₪ היום, ואת 800 ₪ הנוספים רק כשהספר מוכן והלקוח אישר אותו להדפסה.',
+    'עד אישור ההדפסה אפשר לקבל החזר מלא. הספר הדיגיטלי כלול בספר המודפס.',
+    'בונים את הספר באתר: בוחרים סוג אירוע, מקלידים את השם, ועוברים לתשלום.',
+    'אחרי התשלום הכול אוטומטי: מגיע מייל עם קישור לאורחים, שלט QR להדפסה וקישור לאזור האישי.',
     'הספר המודפס יוצא לדפוס אחרי שסוגרים את הברכות ומגיע עד הבית תוך 14 ימי עסקים. יש מסלול אקספרס בתוספת תשלום.',
     'לא מדפיסים כלום לפני אישור מלא של הלקוח — רואים כל עמוד, מבקשים תיקונים בלי הגבלה.',
     'הקישור נשאר פתוח גם אחרי האירוע — מי שפספס משלים מהבית, ואפשר גם להתחיל אחרי שהאירוע כבר עבר.',
     'מתאים לבר מצווה, בת מצווה, חתונה, ברית ויום הולדת — אותה מערכת, עיצוב מותאם לאירוע.',
-    'המחירים כוללים מע״מ, עיצוב אישי וליווי בוואטסאפ.',
+    'המחירים כוללים מע״מ.',
     'אפשר להתחיל בספר הדיגיטלי ולשדרג למודפס עד 30 ימים אחרי האירוע בהפרש של 300 ₪ — אותו ספר בדיוק, אותם עמודים, רק בכריכה קשה ומשלוח עד הבית.',
-    'אחרי התשלום נשלח מייל עם פרטי גישה, ואנחנו יוצרים קשר בוואטסאפ להתחלת העיצוב.',
+    'ספר דיגיטלי בלבד, בלי ספר מודפס, עולה 690 ₪.',
 ]
 
 // ── Images the agent is allowed to send ─────────────────────────────
@@ -255,6 +288,6 @@ export function findPackage(id) {
     return PACKAGES.find(p => p.id === id) || null
 }
 
-export const CATALOG = { BUSINESS, DEMO, PACKAGES, ADDONS, UPGRADE, FACTS, CONCESSION, PROOF, STAGES, MEDIA }
+export const CATALOG = { BUSINESS, SALES_LINKS, DEPOSIT, DEMO, PACKAGES, ADDONS, UPGRADE, FACTS, CONCESSION, PROOF, STAGES, MEDIA }
 
 export default CATALOG

@@ -90,6 +90,15 @@ describe('redacted offline model benchmark', () => {
         })).toMatchObject({ noCallCompliant: false, catalogCompliant: false })
     })
 
+    it('accepts the deposit funnel numbers (190 today, 800 later, 990 in total) and still rejects a made-up price', () => {
+        const score = text => scoreBenchmarkCandidate({
+            raw: JSON.stringify({ messages: [text], stage: 'engaged', handoff: false }),
+            benchmarkCase: privateCase,
+        })
+        expect(score('הספר המודפס עולה 990 ₪: 190 ₪ היום ו-800 ₪ כשהספר מוכן. דיגיטלי בלבד 690 ₪. לאיזה אירוע?').catalogCompliant).toBe(true)
+        expect(score('הספר המודפס עולה 450 ₪, ו-190 ₪ היום. לאיזה אירוע?').catalogCompliant).toBe(false)
+    })
+
     it('balances strata and enforces the hard case cap', () => {
         const cases = Array.from({ length: 140 }, (_, index) => ({
             incomingText: `case ${index}`, stage: index % 2 ? 'engaged' : 'offer_sent',

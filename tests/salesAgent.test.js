@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { PACKAGES, ADDONS, STAGES, findPackage, FACTS, MEDIA_KEYS, findMedia } from '@/lib/salesAgent/catalog'
+import { PACKAGES, ADDONS, STAGES, findPackage, FACTS, MEDIA_KEYS, findMedia, BUSINESS, DEPOSIT, SALES_LINKS } from '@/lib/salesAgent/catalog'
 import { buildSystemPrompt, buildFollowUpPrompt, addDaysISO, formatHebrewDate } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, normalizePhone, resolveFollowUp, sanitizeReply } from '@/lib/salesAgent/agent'
 // leadsCore, not leads: importing leads.js boots the Firebase Admin SDK,
@@ -300,10 +300,31 @@ describe('catalog — the only facts the agent may state', () => {
         expect(findPackage('premium')).toBeFalsy()
         expect(findPackage('printed').includes).toEqual(expect.arrayContaining([
             'כל מה שבדיגיטלי',
-            'ספר מודפס בכריכה קשה',
+            'ספר מודפס בכריכה קשה 21x21',
         ]))
-        expect(findPackage('printed').checkout).toContain('add-to-cart=6271')
+        // 22.11: the printed book is paid as a deposit, and what the bot
+        // sends a lead is the sales page, not a bare checkout.
+        expect(findPackage('printed').checkout).toBe(SALES_LINKS.page)
+        expect(findPackage('printed').depositCheckout).toContain('add-to-cart=6271')
+        expect(findPackage('printed').depositCheckout).toContain('wt_dep=1')
         expect(findPackage('digital').checkout).toContain('add-to-cart=6258')
+    })
+
+    it('carries the deposit funnel as facts, and nothing that promises manual work', () => {
+        // The total stays 990; 190 today and 800 at print approval add up to it.
+        expect(DEPOSIT.amount + DEPOSIT.balance).toBe(findPackage('printed').price)
+        expect(findPackage('printed')).toMatchObject({ deposit: 190, balance: 800 })
+        expect(findPackage('digital').deposit).toBeUndefined()
+        const facts = FACTS.join(' ')
+        expect(facts).toContain('190')
+        expect(facts).toContain('800')
+        expect(facts).toMatch(/החזר מלא/)
+        // Everything after payment is automatic since 22.11.
+        expect(facts).not.toMatch(/48 שעות|ליווי|יוצרים קשר בוואטסאפ|להתחלת העיצוב/)
+        expect(facts).toMatch(/אחרי התשלום הכול אוטומטי/)
+        // Both old landing fields point at the sales page now.
+        expect(BUSINESS.landing).toBe(SALES_LINKS.page)
+        expect(BUSINESS.infoPage).toBe(SALES_LINKS.page)
     })
 
     it('marks exactly one package as the recommendation', () => {
@@ -376,12 +397,23 @@ describe('system prompt — what actually reaches the model', () => {
         expect(answer).not.toContain('מה שעוד לא ידוע ומותר לשאול')
     })
 
+    it('leads with the deposit, names the sales page, and promises no manual work', () => {
+        const prompt = buildSystemPrompt({}, '2026-11-22')
+        expect(prompt).toContain('מקדמה של ₪190 היום')
+        expect(prompt).toContain('₪800')
+        expect(prompt).toContain('החזר מלא עד אישור ההדפסה')
+        expect(prompt).toContain(`עמוד המכירה: ${SALES_LINKS.page}`)
+        expect(prompt).toContain('אחרי התשלום הכול אוטומטי')
+        // The old manual-fulfilment promises are gone from everything the model reads.
+        expect(prompt).not.toMatch(/48 שעות|ליווי בוואטסאפ|יוצרים קשר בוואטסאפ|להתחלת העיצוב|תוך רגע|app\.weddingtales\.co\.il\/lp/)
+    })
+
     it('shows worked examples with live catalog prices', () => {
         const prompt = buildSystemPrompt({}, '2026-08-16')
         expect(prompt).toContain('## ככה זה נשמע כשזה טוב')
         expect(prompt).toContain('הלקוח: "מבררת עבור בר מצווה של אחיין"')
-        expect(prompt).toContain('דיגיטלי 690 שח, מודפס בכריכה קשה 990 שח')
-        expect(prompt).toContain('https://weddingtales.co.il/checkout/?add-to-cart=6271')
+        expect(prompt).toContain('ספר מודפס בכריכה קשה עד הבית, 990 שח: 190 שח היום והשאר רק כשהוא מוכן ומאושר להדפסה. דיגיטלי בלבד 690 שח')
+        expect(prompt).toContain(SALES_LINKS.page)
         expect(prompt).not.toContain('1,490')
         expect(prompt).not.toContain('1490')
     })
@@ -1074,7 +1106,7 @@ describe('digital first, printed later (22.9)', () => {
 
     it('shows the upgrade in the "יקר" example and never prices the digital below catalog', () => {
         const p = buildSystemPrompt({}, '2026-09-22')
-        expect(p).toContain('להתחיל בדיגיטלי ב-690 שח')
+        expect(p).toContain('להתחיל בדיגיטלי ב-690')
         expect(p).toContain('לשדרג למודפס ב-300 שח')
         expect(p).not.toMatch(/\b590\b/)
     })

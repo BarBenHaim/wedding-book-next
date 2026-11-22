@@ -2,7 +2,7 @@
 // move. This policy turns the current message and durable lead facts into
 // one small, testable instruction before any provider is called.
 
-import { PACKAGES, ADDONS, UPGRADE, CONCESSION, BUSINESS, DEMO, proofLine } from './catalog'
+import { PACKAGES, ADDONS, UPGRADE, CONCESSION, BUSINESS, DEMO, DEPOSIT, SALES_LINKS, proofLine } from './catalog'
 import { asksPrice } from './selling'
 import { eventTypeOf, EVENT_HE } from './eventType'
 import { isCustomerDeferral, customerWillReturn, applyCustomerTiming } from './journeyMemory'
@@ -28,6 +28,18 @@ const KNOWN_FACT_FIELDS = Object.freeze([
 
 function normalizedText(text) {
     return String(text || '').trim().toLowerCase()
+}
+
+// The way to pay is a link, and since 22.11 the first link on that way is
+// the sales page itself (name the book there, then checkout). A model line
+// carrying either one, outside a turn where the customer chose a package,
+// is a payment link nobody authorised and is replaced by the policy's own.
+// The sales-page pattern is the bare origin only: the demo and every other
+// page keep their own paths. (A test pins it to SALES_LINKS.page.)
+const SALES_PAGE_URL = /(?<![\w.-])(?:https?:\/\/)?(?:www\.)?weddingtales\.co\.il\/?(?![\w/?=&%#-])/i
+export function hasCheckoutLink(text) {
+    const value = String(text || '')
+    return /https?:\/\/\S*checkout/i.test(value) || SALES_PAGE_URL.test(value)
 }
 
 function hasCheckoutFriction(text) {
@@ -75,7 +87,14 @@ function needsQuantityScope(text, lead) {
     return !/עותקים|אותו\s+ספר|ספר\s+נפרד|ספרים\s+נפרדים|שני\s+אירועים/.test(context)
 }
 
-const UNVERIFIED_POLICY = /מדיניות\s+(?:ביטול|החזר)|ביטול|לבטל|החזר\s+כספי|מקדמה|(?:כל\s+הסכום|הכל).{0,15}(?:מראש|לפני)|משלמ.{0,35}(?:לפני|מראש|קודם)|כמה\s+עמודים|מגבלת\s+עמודים|תוספת\s+עמודים|40.{0,15}100/
+// Since 22.11 the printed book is a 190 ₪ deposit today and 800 ₪ at print
+// approval, with a full refund until that approval. So "מקדמה" and "do I
+// pay everything upfront" are ordinary sales questions with an answer in
+// the catalog, and no longer go to a human. What stays with a person:
+// a refund/cancellation POLICY question, cancelling an order that already
+// exists, and anything about a refund AFTER the approval, the shipping or
+// the event - the catalog only knows the period before print approval.
+const UNVERIFIED_POLICY = /(?:מדיניות|תנאי|דמי|עמלת|קנס)\s+(?:ה)?(?:ביטול|החזר)|(?:לבטל|ביטול)\s+(?:את\s+)?(?:ה)?(?:הזמנה|תשלום|רכישה)|(?:ביטול|לבטל|החזר).{0,40}(?:אחרי|לאחר|נשלח|משלוח|הגיע)|(?:אחרי|לאחר).{0,30}(?:ביטול|לבטל|החזר)|כמה\s+עמודים|מגבלת\s+עמודים|תוספת\s+עמודים|40.{0,15}100/
 const AUTHENTIC_PROOF = /(?:דוגמ|תמונ|ספר).{0,20}אמיתי|לא\s*ai\b|לא\s+בינה\s+מלאכותית/i
 const PROOF_REQUEST = /לראות.{0,24}(?:דוגמ|תמונ|ספר)|(?:תשלח|שלח|אפשר).{0,24}(?:דוגמ|תמונ)|דוגמ.{0,20}לפני|איך\s+זה\s+נראה/
 
@@ -240,9 +259,13 @@ function lastAssistantRequest(lead) {
 // pricing sheet excluded: that is an image the bot cannot read back).
 export function pricesStated(lead = {}) {
     if (['offer_sent', 'objection', 'commit_later', 'ready_to_pay'].includes(lead?.stage)) return true
+    // The total plus EITHER the digital price or the deposit: the new
+    // price line leads with 990 / 190 / 800 and mentions 690 as the
+    // digital-only option, but a shorter line may carry only some of them.
     const printed = PACKAGES.find(p => p.id === 'printed')?.price
     const digital = PACKAGES.find(p => p.id === 'digital')?.price
-    return assistantTexts(lead).some(t => t.includes(String(printed)) && t.includes(String(digital)))
+    return assistantTexts(lead).some(t => t.includes(String(printed))
+        && (t.includes(String(digital)) || t.includes(String(DEPOSIT.amount))))
 }
 
 // The one concession goes out once per conversation, whatever the model
@@ -440,7 +463,14 @@ export function concessionLine(todayISO) {
 }
 
 const price = id => PACKAGES.find(p => p.id === id)?.price || 0
-const PRICE_LINE = () => `דיגיטלי ${price('digital')} שח, מודפס בכריכה קשה ${price('printed')} שח כולל משלוח.`
+// The printed book leads: 990 in total, 190 today, 800 only when the book
+// is ready and approved for print. Digital-only is the last clause.
+// Kept short on purpose: the offer is this line plus an event line plus
+// the close, and all of it has to fit one 260-char bubble, or the close is
+// what gets clipped. So the offer (which already has the event line)
+// leaves the digital-only clause out; a plain price answer keeps it.
+const DEPOSIT_TERMS = () => `${DEPOSIT.amount} שח היום, ו-${DEPOSIT.balance} שח רק כשהספר מוכן ומאושר להדפסה`
+const PRICE_LINE = ({ withDigital = true } = {}) => `ספר מודפס בכריכה קשה עד הבית, ${price('printed')} שח: ${DEPOSIT_TERMS()}.${withDigital ? ` דיגיטלי בלבד ${price('digital')} שח.` : ''}`
 
 // One sentence that puts the book at THEIR event. The generic line
 // ("האורחים סורקים QR...") is what the opening already said; here the
@@ -468,7 +498,7 @@ function presentOfferMessage({ parsed, lead, incomingText }) {
     const line = EVENT_LINE[type] || EVENT_LINE.other
     // Prices already given (they asked "כמה עולה" before naming the
     // event): the event line and the close, not the prices again.
-    const prices = pricesStated(lead) ? '' : `${PRICE_LINE()} `
+    const prices = pricesStated(lead) ? '' : `${PRICE_LINE({ withDigital: false })} `
     return `${line} ${prices}${closeQuestion(lead, parsed)}`
 }
 
@@ -493,16 +523,19 @@ function objectionMessage({ decision, lead, incomingText, parsed }) {
     if (isPriceObjection(incomingText)) {
         // First door: a real page. Second door: digital now, printed
         // later. Third and last: the one concession, with its date.
-        const upgradeLine = `אפשר גם להתחיל בדיגיטלי ב-${price('digital')} שח ולשדרג למודפס ב-${UPGRADE.price} שח עד ${UPGRADE.windowDays} יום אחרי האירוע, אותו ספר בדיוק.`
+        // The deposit IS the first door now: nothing like the full price
+        // today, and the money back until the print approval. The digital
+        // book and its upgrade stay in the catalog the model reads, but no
+        // longer ride in this bubble.
         if (!(lead?.objectionCount > 0) && !offered) {
-            return `מבין. תסתכלו רגע על עמוד מספר אמיתי שהדפסנו, ${proofLine(0)}. ${upgradeLine}`
+            return `מבין. לא צריך לשלם הכול עכשיו: ${DEPOSIT.amount} שח היום, ואת ה-${DEPOSIT.balance} שח רק כשהספר מוכן ואישרתם אותו, ועד אז אפשר לקבל החזר מלא. הנה עמוד מספר אמיתי שהדפסנו, ${proofLine(0)}.`
         }
         if (!offered) return `אני יכול לעשות דבר אחד: ${concessionLine(today)}. זה הכי רחוק שאני יכול ללכת. ${CALL_LINE()} ${closeQuestion(lead, parsed)}`
-        return `זה המחיר, ובלי מזלגות: עיצוב, כריכה קשה ומשלוח בפנים. ${closeQuestion(lead, parsed)}`
+        return `זה המחיר, בלי הפתעות: כריכה קשה ומשלוח בפנים, ו-${DEPOSIT.amount} שח היום מספיקים כדי להתחיל. ${closeQuestion(lead, parsed)}`
     }
     if (isFarDateObjection(incomingText)) {
         const extra = offered ? '' : ` ${concessionLine(today)}, אז שווה להחליט השבוע.`
-        return `דווקא כשיש זמן שווה לפתוח עכשיו: הפוסטר וקישור האורחים מוכנים מראש, שולחים אותו עם ההזמנה, ומי שלא מגיע כותב לפני.${extra}`
+        return `דווקא כשיש זמן שווה לפתוח עכשיו: אחרי התשלום מגיע קישור לאורחים ושלט QR, שולחים את הקישור עם ההזמנה, ומי שלא מגיע כותב לפני.${extra}`
     }
     // "אחשוב", "אתייעץ": a polite pause. A date on the offer and one
     // question, so the pause has an end.
@@ -511,7 +544,7 @@ function objectionMessage({ decision, lead, incomingText, parsed }) {
 }
 
 const OWNER = () => BUSINESS.ownerName || 'מישהו מהצוות'
-const CALL_LINE = () => `ואם נוח יותר בטלפון, ${OWNER()} יחזור אלייך לדקה.`
+const CALL_LINE = () => `ואם נוח יותר בטלפון, ${OWNER()} יחזור אלייך בשעות הפעילות.`
 
 function deterministicMessage({ parsed, decision, lead, incomingText }) {
     if (decision.nextBestAction === 'show_workflow') {
@@ -522,16 +555,23 @@ function deterministicMessage({ parsed, decision, lead, incomingText }) {
         ? 'כמובן, נמתין שתפנו אלינו כשתרצו להמשיך.'
         : 'אין בעיה, נתקדם בזמן שמתאים לכם. מתי נוח שנחזור לזה?'
     if (decision.nextBestAction === 'clarify_quantity') return 'מדובר בשני עותקים של אותו ספר, או בספר נפרד לכל אירוע?'
-    if (decision.nextBestAction === 'clarify_package') return `כדי לשלוח את הקישור הנכון, איזה ספר תרצו: דיגיטלי ב-${price('digital')} שח או מודפס ב-${price('printed')} שח כולל משלוח?`
+    if (decision.nextBestAction === 'clarify_package') return `כדי לשלוח את הקישור הנכון, איזה ספר תרצו: מודפס ב-${price('printed')} שח (${DEPOSIT.amount} שח היום והשאר רק אחרי אישור) או דיגיטלי בלבד ב-${price('digital')} שח?`
     if (decision.nextBestAction === 'confirm_checkout') return 'תרצו שאשלח קישור לתשלום עבור הספר שבחרתם?'
     if (decision.nextBestAction === 'handoff_question') return 'השאלה הזו צריכה בדיקה של הצוות. אני מעביר אותה עם פרטי השיחה כדי לקבל תשובה מדויקת.'
-    if (decision.nextBestAction === 'offer_call') return `בטח. ${OWNER()} יתקשר אלייך היום. באיזו שעה נוח?`
+    if (decision.nextBestAction === 'offer_call') return `בטח. ${OWNER()} יחזור אלייך בשעות הפעילות. באיזו שעה נוח לך?`
     if (decision.intent === 'not_our_product') return 'הבנתי, ספר אורחים לכתיבה ביד זה לא מה שאנחנו עושים, אצלנו האורחים כותבים מהטלפון ומצרפים תמונה. בהצלחה באירוע, ואם תרצו בכל זאת, אני כאן.'
     if (decision.nextBestAction === 'close_lost') return 'תודה שעדכנת, שמחתי לעזור. אם זה יחזור להיות רלוונטי, אנחנו כאן.'
     if (decision.nextBestAction === 'diagnose_checkout') return 'איפה זה נתקע לך, בפתיחת הקישור או בשלב התשלום?'
     if (decision.nextBestAction === 'send_payment_link') {
         const selected = packageFor({ parsed, lead, incomingText })
-        return `${selected.name}, ${selected.price} שח ${selected.id === 'printed' ? 'כולל משלוח' : 'כולל מע״מ'}: ${selected.checkout}\nאחרי התשלום מגיע מייל עם הגישה, ואני שולח לכם את הפוסטר לאישור תוך 48 שעות.`
+        const afterPayment = 'אחרי התשלום מגיע מייל עם קישור לאורחים, שלט QR להדפסה וקישור לאזור האישי.'
+        // The printed book: the sales page, where they type the name that
+        // names the book, then pay the deposit. Digital-only keeps its own
+        // direct checkout (there is no deposit on it).
+        if (selected.id === 'printed') {
+            return `הספר המודפס, ${selected.price} שח: מקדמה של ${DEPOSIT.amount} שח היום, ו-${DEPOSIT.balance} שח רק כשהספר מוכן ומאושר להדפסה. עד האישור אפשר לקבל החזר מלא. מתחילים כאן: ${selected.checkout}\n${afterPayment}`
+        }
+        return `${selected.name}, ${selected.price} שח כולל מע״מ: ${selected.checkout}\n${afterPayment}`
     }
     if (decision.nextBestAction === 'present_offer') return presentOfferMessage({ parsed, lead, incomingText })
     if (decision.nextBestAction === 'quote_price') return quotePriceMessage({ parsed, lead, incomingText })
@@ -541,7 +581,7 @@ function deterministicMessage({ parsed, decision, lead, incomingText }) {
         // only useful move is the one question that starts a real chat.
         return 'הכל למעלה, איך זה עובד והמחירים. לאיזה אירוע זה אצלכם?'
     }
-    if (decision.nextBestAction === 'handoff_print') return 'הדפסה של קובץ מוכן זה משהו שמישהו מהצוות מתמחר בנפרד. אני מעביר אליו, והוא יחזור אלייך כאן עוד היום.'
+    if (decision.nextBestAction === 'handoff_print') return 'הדפסה של קובץ מוכן זה משהו שמישהו מהצוות מתמחר בנפרד. אני מעביר אליו, והוא יחזור אלייך כאן בשעות הפעילות.'
     if (decision.intent === 'price') return quotePriceMessage({ parsed, lead, incomingText })
     if (decision.nextBestAction === 'show_proof') return 'זו דוגמה למבנה הספר, עם ברכה ותמונה בעמוד.'
     if (decision.intent === 'process') return 'האורחים סורקים QR, כותבים ברכה ומעלים תמונה בלי אפליקציה. בסוף מאשרים הכול ומקבלים ספר.'
@@ -670,6 +710,9 @@ function allowedPrices() {
     for (const a of ADDONS) out.add(a.price)
     out.add(UPGRADE.price)
     for (const p of PACKAGES) out.add(p.price + UPGRADE.price)
+    // The deposit funnel: 190 today, 800 at print approval (990 in total).
+    out.add(DEPOSIT.amount)
+    out.add(DEPOSIT.balance)
     return out
 }
 function hasOnlyCurrentCatalogPrices(message) {
@@ -736,7 +779,7 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
     // The model can discover an unknown fact after the initial decision.
     // Sales copy must never erase that handoff or append a checkout to it.
     const unresolvedCheckoutQuestion = decision.intent === 'question_before_checkout'
-        && (!(parsed.messages || []).length || /https?:\/\/\S*checkout/i.test((parsed.messages || []).join(' ')))
+        && (!(parsed.messages || []).length || hasCheckoutLink((parsed.messages || []).join(' ')))
     if ((parsed.handoff === true || decision.nextBestAction === 'handoff_question' || unresolvedCheckoutQuestion)
         && decision.nextBestAction !== 'close_lost') {
         return applyCustomerTiming({ result: {
@@ -777,7 +820,7 @@ export function enforceSalesReply({ parsed = {}, decision, lead = {}, incomingTe
         || decision.nextBestAction === 'quote_price'
         || decision.nextBestAction === 'handle_objection'
         || ['clarify_package', 'confirm_checkout', 'clarify_quantity', 'respect_timing'].includes(decision.nextBestAction)
-        || (decision.nextBestAction !== 'send_payment_link' && /https?:\/\/\S*checkout/i.test(candidates.join(' ')))
+        || (decision.nextBestAction !== 'send_payment_link' && hasCheckoutLink(candidates.join(' ')))
         || (decision.intent === 'price' && !hasOnlyCurrentCatalogPrices(candidates.join('\n')))
         || candidates.length === 0
         || CALL_LANGUAGE.test(normalizedText(candidates[0]))
