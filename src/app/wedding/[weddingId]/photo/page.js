@@ -586,6 +586,23 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     const router = useRouter()
     const { weddingId } = useParams()
 
+    // A draft: switching to WhatsApp for the picture, a reload or a call must not cost the
+    // guest what they typed. Kept for this tab only, per event, and dropped on send.
+    const draftKey = `wt_draft_${weddingId}`
+    useEffect(() => {
+        try {
+            const d = JSON.parse(window.sessionStorage.getItem(draftKey) || 'null')
+            if (!d) return
+            if (d.text) setText(prev => prev || String(d.text))
+            if (d.name) setName(prev => (prev && prev.trim() ? prev : String(d.name)))
+        } catch { /* private mode: no draft */ }
+    }, [draftKey])
+    useEffect(() => {
+        try {
+            if (name || text) window.sessionStorage.setItem(draftKey, JSON.stringify({ name, text }))
+        } catch { /* private mode */ }
+    }, [draftKey, name, text])
+
     // When the guest arrived via a personalised WhatsApp link, flip their
     // status pill in the owner's guests table to "כתב ✓" on submit. This
     // is a fire-and-forget call — a failure here must never affect the
@@ -737,6 +754,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
         // Fire-and-forget; doesn't affect the actual submit path.
         logEvent(weddingId, 'form_submit')
 
+        try { window.sessionStorage.removeItem(draftKey) } catch { /* nothing to drop */ }
         setSubmitting(true)
 
         // Step 1 — produce the final image blob (with crop if needed).
@@ -3133,13 +3151,13 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                     celebrant. Quiet, tasteful, and the single cheapest
                     growth channel the product has. */}
                 <a
-                    href='/start?utm_source=guest_page'
+                    href={`https://weddingtales.co.il/?utm_source=guest_page&utm_medium=referral&ref=${encodeURIComponent(weddingId)}`}
                     target='_blank'
                     rel='noopener noreferrer'
                     className='block text-center mt-8 mb-1'
                     style={{ fontSize: 12, color: theme.subtitleColor, opacity: 0.8, textDecoration: 'none' }}
                 >
-                    נוצר עם 💛 Wedding Tales — פתחו ספר לאירוע שלכם, חינם
+                    נוצר עם 💛 Wedding Tales. רוצים ספר כזה לאירוע שלכם?
                 </a>
             </div>
         </div>

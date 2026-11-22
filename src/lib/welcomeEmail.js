@@ -57,8 +57,7 @@ export function renderWelcomeEmail({
     assetBase,
     name,
     email,
-    password,
-    isNewUser,
+    setPasswordUrl,
     bookTitle,
     guestUrl,
     whatsappUrl,
@@ -80,15 +79,14 @@ export function renderWelcomeEmail({
 </td></tr>`
         : ''
 
-    const passwordLine = isNewUser
-        ? `<tr><td style="padding:4px 0;font:400 14px/1.4 ${FONT};color:${MUTED};text-align:right;">סיסמה</td><td style="padding:4px 0;font:700 16px/1.4 'Courier New',monospace;color:${INK};text-align:left;direction:ltr;">${escapeHtml(password)}</td></tr>`
-        : `<tr><td colspan="2" style="padding:6px 0 0;font:400 14px/1.5 ${FONT};color:${MUTED};text-align:right;">הסיסמה היא הסיסמה הקיימת שלכם. שכחתם? אפשר לאפס בעמוד ההתחברות.</td></tr>`
-
+    // No password travels by e-mail: the button above signs the owner in, and for
+    // the next time there is the login page (a link by e-mail) or a password they
+    // choose themselves (the phone app asks for one).
     const credentials = `
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${PAPER}" style="background:${PAPER};border-radius:14px;margin-top:14px;"><tr><td style="padding:12px 16px;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr><td style="padding:4px 0;font:400 14px/1.4 ${FONT};color:${MUTED};text-align:right;">אימייל</td><td style="padding:4px 0;font:700 15px/1.4 ${FONT};color:${INK};text-align:left;direction:ltr;">${escapeHtml(email)}</td></tr>
-    ${passwordLine}
+    <tr><td style="padding:4px 0;font:400 14px/1.4 ${FONT};color:${MUTED};text-align:right;">המייל שלכם</td><td style="padding:4px 0;font:700 15px/1.4 ${FONT};color:${INK};text-align:left;direction:ltr;">${escapeHtml(email)}</td></tr>
+    <tr><td colspan="2" style="padding:8px 0 2px;font:400 14px/1.6 ${FONT};color:${MUTED};text-align:right;">בפעם הבאה נכנסים עם המייל הזה: מבקשים קישור במסך הכניסה, או <a href="${setPasswordUrl}" style="color:${ACCENT};font-weight:700;">בוחרים סיסמה</a> (צריך אותה לאפליקציה בטלפון).</td></tr>
   </table>
 </td></tr></table>`
 
@@ -162,7 +160,7 @@ export function renderWelcomeEmail({
         '',
         `האזור האישי: ${loginUrl}`,
         `אימייל: ${email}`,
-        isNewUser ? `סיסמה: ${password}` : 'הסיסמה היא הסיסמה הקיימת שלכם.',
+        `בפעם הבאה: מבקשים קישור כניסה במסך הכניסה, או בוחרים סיסמה: ${setPasswordUrl}`,
         `צפייה בספר בלי להתחבר: ${viewerUrl}`,
         '',
         `משהו לא ברור? עונים למייל הזה או כותבים בוואטסאפ: ${SUPPORT_WHATSAPP}`,

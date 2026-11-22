@@ -159,22 +159,20 @@ export async function POST(req) {
         try {
             // --- 6. ניהול משתמשים (Auth) - התיקון החשוב ---
             let userRecord
-            let password = null
-            let isNewUser = false
 
             try {
                 // ניסיון לאתר לקוח קיים (למשל, לקוח שקונה אלבום שני)
                 userRecord = await adminAuth.getUserByEmail(email)
                 console.log('👤 User already exists →', userRecord.uid)
             } catch {
-                // יצירת לקוח חדש רק אם לא קיים
-                password = Math.random().toString(36).slice(-10)
+                // A new customer. The password is random, long and never shown or mailed:
+                // the e-mail signs them in with a link, and they choose a password themselves
+                // if they want one (the phone app does).
                 userRecord = await adminAuth.createUser({
                     email,
-                    password,
+                    password: crypto.randomBytes(24).toString('base64url'),
                     displayName: name || undefined,
                 })
-                isNewUser = true
                 console.log('👤 Created new user →', userRecord.uid)
             }
 
@@ -231,8 +229,6 @@ export async function POST(req) {
                 body,
                 email,
                 name,
-                password,
-                isNewUser,
             })
             await db.collection('weddings').doc(weddingId).set({ welcomeEmailSentAt: FieldValue.serverTimestamp() }, { merge: true })
             await lockRef.set({ status: 'done', doneAtMs: Date.now() }, { merge: true })
@@ -264,7 +260,7 @@ function mailTransport() {
 // The first e-mail (lib/welcomeEmail.js, pure and tested): one big action (send the
 // guest link), then three short cards under it. `wedding` carries what the e-mail
 // needs from the event: slug, ownerId, viewerToken.
-async function sendWelcomeMail({ weddingId, wedding, body, email, name, password, isNewUser }) {
+async function sendWelcomeMail({ weddingId, wedding, body, email, name }) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://app.weddingtales.co.il'
     const details = orderEventDetails(body)
     // One tap from the e-mail into the book: a signed link that signs the owner
@@ -285,8 +281,7 @@ ${guestUrl}`
         baseUrl,
         name,
         email,
-        password,
-        isNewUser,
+        setPasswordUrl: `${baseUrl}/login?mode=reset&email=${encodeURIComponent(email)}`,
         bookTitle,
         guestUrl,
         whatsappUrl,
@@ -305,9 +300,8 @@ ${guestUrl}`
 }
 
 // The event exists but its welcome e-mail never went out (the delivery that opened
-// it failed afterwards). The password was generated and lost with that delivery, so
-// the e-mail goes without it: the enter link signs the owner in, and "forgot
-// password" on the login page sets one.
+// it failed afterwards). The e-mail goes out as it would have: the enter link signs
+// the owner in.
 async function resumeWelcome({ weddingId, wedding, body, orderId, lockRef }) {
     const billing = body?.billing || {}
     const email = String(wedding.ownerEmail || billing.email || '').trim()
@@ -318,8 +312,6 @@ async function resumeWelcome({ weddingId, wedding, body, orderId, lockRef }) {
         body,
         email,
         name: wedding.ownerName || `${billing.first_name || ''} ${billing.last_name || ''}`.trim(),
-        password: null,
-        isNewUser: false,
     })
     await db.collection('weddings').doc(weddingId).set({ welcomeEmailSentAt: FieldValue.serverTimestamp() }, { merge: true })
     await lockRef.set({ status: 'done', doneAtMs: Date.now() }, { merge: true })

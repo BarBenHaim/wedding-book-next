@@ -6,8 +6,7 @@ const base = {
     baseUrl: 'https://app.weddingtales.co.il',
     name: 'דנה',
     email: 'dana@example.com',
-    password: 'abc123xyz9',
-    isNewUser: true,
+    setPasswordUrl: 'https://app.weddingtales.co.il/login?mode=reset&email=dana%40example.com',
     bookTitle: 'יואב',
     guestUrl: 'https://app.weddingtales.co.il/w/abcd',
     whatsappUrl: 'https://wa.me/?text=x',
@@ -24,27 +23,25 @@ describe('welcome e-mail', () => {
         expect(m.html).toContain('ספר הברכות של יואב')
     })
 
-    it('has a plain-text part with the links and the password', () => {
+    it('has a plain-text part with the links', () => {
         const m = renderWelcomeEmail(base)
         expect(m.text).toContain(base.guestUrl)
         expect(m.text).toContain(base.posterUrl)
-        expect(m.text).toContain('abc123xyz9')
+        expect(m.text).toContain(base.setPasswordUrl)
     })
 
     it('links every action', () => {
         const { html } = renderWelcomeEmail(base)
-        for (const u of [base.whatsappUrl, base.guestUrl, base.posterUrl, base.loginUrl, base.viewerUrl]) {
+        for (const u of [base.whatsappUrl, base.guestUrl, base.posterUrl, base.loginUrl, base.viewerUrl, base.setPasswordUrl]) {
             expect(html).toContain(`href="${u}"`)
         }
     })
 
-    it('shows the password only to a new user', () => {
-        const fresh = renderWelcomeEmail(base)
-        expect(fresh.html).toContain('abc123xyz9')
-        const old = renderWelcomeEmail({ ...base, isNewUser: false, password: null })
-        expect(old.html).not.toContain('abc123xyz9')
-        expect(old.html).toContain('הסיסמה הקיימת')
-        expect(old.text).not.toContain('null')
+    it('never carries a password, only the way to choose one', () => {
+        const m = renderWelcomeEmail({ ...base, password: 'abc123xyz9', isNewUser: true })
+        expect(m.html).not.toContain('abc123xyz9')
+        expect(m.text).not.toContain('abc123xyz9')
+        expect(m.html).toContain('בוחרים סיסמה')
     })
 
     it('adds the deposit note only for a deposit order', () => {

@@ -296,6 +296,52 @@ function ThanksApp() {
                     appears when we have an entry id (skips legacy bookmarks). */}
                 {entryId && verified && <BookPagePreview weddingId={weddingId} entryId={entryId} locale={locale} />}
 
+                {/* ── Pass it on: the one thing that turns one blessing into five. The link goes
+                    straight to the form (no welcome page), through the guest's own WhatsApp. */}
+                <div
+                    className='bg-white rounded-[22px] p-6 mb-5 text-center'
+                    style={{
+                        boxShadow: '0 24px 50px -28px rgba(170,136,64,0.28), 0 4px 12px -4px rgba(170,136,64,0.10)',
+                        border: '1px solid rgba(212,184,103,0.22)',
+                    }}
+                >
+                    <h2 className='font-bold mb-2' style={{ color: '#1a1410', fontSize: '17px' }}>
+                        {t('shareHeading')}
+                    </h2>
+                    <p className='leading-relaxed mb-4' style={{ color: '#7a6a52', fontSize: '13.5px' }}>
+                        {t('shareBody')}
+                    </p>
+                    <a
+                        href={`https://wa.me/?text=${encodeURIComponent(
+                            t('shareMessage', {
+                                link: `${typeof window !== 'undefined' ? window.location.origin : 'https://app.weddingtales.co.il'}/wedding/${weddingId}/photo`,
+                            }),
+                        )}`}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        className='w-full rounded-2xl text-white font-bold flex items-center justify-center gap-2.5 active:scale-[0.99]'
+                        style={{
+                            background: 'linear-gradient(180deg, #25D366 0%, #128C7E 100%)',
+                            boxShadow: '0 14px 32px -10px rgba(18,140,126,0.45), inset 0 1px 0 rgba(255,255,255,0.20)',
+                            padding: '14px 18px',
+                            fontSize: '14.5px',
+                            textDecoration: 'none',
+                        }}
+                    >
+                        <svg viewBox='0 0 24 24' className='w-[18px] h-[18px] shrink-0' fill='currentColor'>
+                            <path d='M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z' />
+                        </svg>
+                        <span>{t('shareCta')}</span>
+                    </a>
+                    <a
+                        href={`/wedding/${weddingId}/photo`}
+                        className='block mt-3 font-semibold underline underline-offset-4'
+                        style={{ color: '#7a6a52', fontSize: '13.5px' }}
+                    >
+                        {t('writeAnother')}
+                    </a>
+                </div>
+
                 {/* ── Pitch card — soft sales hook for the guest who just
                     enjoyed the experience and might want it for their own
                     event. Pure white card, same shadow + border treatment
@@ -350,24 +396,19 @@ function ThanksApp() {
                         official WhatsApp green so the button is instantly
                         recognisable as a chat-to-us action. */}
                     <a
-                        href='https://wa.link/z4a85t'
+                        href={`https://weddingtales.co.il/?utm_source=guest_thanks&utm_medium=referral&ref=${encodeURIComponent(weddingId)}`}
                         target='_blank'
                         rel='noopener noreferrer'
                         className='w-full rounded-2xl text-white font-bold transition-all duration-300 flex items-center justify-center gap-2.5 active:scale-[0.99]'
                         style={{
-                            background: 'linear-gradient(180deg, #25D366 0%, #128C7E 100%)',
-                            boxShadow:
-                                '0 14px 32px -10px rgba(18,140,126,0.45), 0 4px 10px -4px rgba(18,140,126,0.25), inset 0 1px 0 rgba(255,255,255,0.20)',
+                            background: 'linear-gradient(180deg, #252C68 0%, #171C47 48%, #101433 100%)',
+                            boxShadow: '0 14px 30px -12px rgba(28,40,120,0.6), inset 0 1px 0 rgba(255,255,255,0.22)',
                             padding: '14px 18px',
                             fontSize: '14.5px',
                             letterSpacing: '0.01em',
                         }}
                     >
-                        {/* WhatsApp glyph */}
-                        <svg viewBox='0 0 24 24' className='w-[18px] h-[18px] shrink-0' fill='currentColor'>
-                            <path d='M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z' />
-                        </svg>
-                        <span>{t('whatsappCta')}</span>
+                        <span>{t('pitchCta')}</span>
                     </a>
                 </div>
 
