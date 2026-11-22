@@ -11,12 +11,14 @@ const nextConfig = {
     // The front door is the sales site (weddingtales.co.il). The old marketing pages that
     // used to live on this domain (the home page, /lp, /bar-mitzvah, /landing, /demo,
     // /survey, the /site and /site2 previews) sold the old full-price offer and are gone;
+    // only the pages redirect: /site2/assets/img/og.jpg stays, because the sales site's
+    // link preview (og:image) still points at it, and it now shows the new logo;
     // every old link, ad and WhatsApp message lands on the sales site instead. Not
     // permanent (307), so any of them can be brought back without a cached redirect.
     // /portal (look an event up by phone number) is gone too: signing in is /login.
     async redirects() {
         const SALES = 'https://weddingtales.co.il'
-        const gone = ['/', '/landing', '/lp', '/bar-mitzvah', '/demo', '/survey', '/site', '/site/:path*', '/site2', '/site2/:path*']
+        const gone = ['/', '/landing', '/lp', '/bar-mitzvah', '/demo', '/survey', '/site', '/site2']
         return [
             ...gone.map(source => ({ source, destination: SALES, permanent: false })),
             { source: '/portal', destination: '/login', permanent: false },
