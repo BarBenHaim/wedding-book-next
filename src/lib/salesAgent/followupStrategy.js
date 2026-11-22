@@ -1,4 +1,4 @@
-import { CONCESSION, proofLine } from './catalog'
+import { CONCESSION, DEPOSIT, proofLine } from './catalog'
 import { preEventTouchDate, daysUntil } from './followupPolicy'
 const LANDING_URL = 'https://weddingtales.co.il'
 // The first nudge used to point at the website, then briefly at the
@@ -156,9 +156,9 @@ export function planFollowUp(lead = {}, {
         const when = untilEvent != null && untilEvent <= 20 ? 'בעוד שבועיים בערך' : 'בעוד חודש בערך'
         return plan({ name,
             id: 'pre_event',
-            objective: 'נגיעה לפני האירוע: הפוסטר צריך להיות מוכן, ההצעה עם התאריך, והבקשה להזמנה.',
+            objective: 'נגיעה לפני האירוע: כדאי לפתוח עכשיו (מקדמה בלבד היום), ההצעה עם התאריך, והבקשה להזמנה.',
             cta: 'reply',
-            templateText: `${name}, האירוע ${when}, וכדי שהפוסטר וקישור האורחים יהיו מוכנים בזמן שווה לפתוח עכשיו. ${concessionText(todayISO)}. ${proofLine(1)}. רוצה שאפתח לכם את הספר? שולח קישור.`,
+            templateText: `${name}, האירוע ${when}, וכדי שקישור האורחים והשלט יגיעו אליכם בזמן שווה לפתוח עכשיו, ומשלמים היום רק מקדמה של ${DEPOSIT.amount} שח. ${concessionText(todayISO)}. ${proofLine(1)}. רוצה שאפתח לכם את הספר? שולח קישור.`,
         })
     }
 
@@ -171,7 +171,7 @@ export function planFollowUp(lead = {}, {
             id: 'until_event',
             objective: 'לא להציף: להגיד שנכתוב שוב כחודש לפני האירוע, ושאפשר לפנות קודם.',
             cta: 'reply',
-            templateText: `${name}, לא אציף. אכתוב שוב כחודש לפני האירוע, כשזה הזמן להכין את הפוסטר. ואם תרצו קודם, אני כאן.`,
+            templateText: `${name}, לא אציף. אכתוב שוב כחודש לפני האירוע, כשזה הזמן לפתוח את הספר. ואם תרצו קודם, אני כאן.`,
         })
     }
 

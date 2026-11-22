@@ -265,6 +265,10 @@ describe('context-aware follow-up sales plan', () => {
         expect(fourth.templateText).toContain('בעוד חודש')
         expect(fourth.templateText).toContain('במתנה')
         expect(fourth.templateText).toContain('«')
+        // 22.11: it leads with the deposit and promises no manual poster.
+        expect(fourth.templateText).toContain('מקדמה של 190 שח')
+        expect(fourth.templateText).not.toMatch(/הפוסטר|48/)
+        expect(third.templateText).not.toContain('הפוסטר')
         expect(fourth.templateText).toMatch(/רוצה שאפתח לכם את הספר\? שולח קישור\.$/)
         expect(planFollowUp({ stage: 'offer_sent' }, { attempt: 3, isFinal: true, customerName: 'נועה', todayISO: '2026-10-01' }).id).toBe('graceful_close')
         for (const id of ['until_event', 'pre_event']) expect(FOLLOWUP_STRATEGY_IDS).toContain(id)

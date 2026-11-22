@@ -67,7 +67,7 @@ export function eventTypeLabel(t) {
 
 export const PACKAGE_LABELS = {
     digital: 'דיגיטלי ₪690',
-    printed: 'מודפס ₪990',
+    printed: 'מודפס ₪990 (מקדמה ₪190)',
 }
 
 // The buckets, most urgent first. `key` is what the UI filters on.

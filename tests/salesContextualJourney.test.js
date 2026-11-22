@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { decideSalesTurn, enforceSalesReply, buildDeterministicSalesReply } from '@/lib/salesAgent/decisionPolicy'
+import { decideSalesTurn, enforceSalesReply, buildDeterministicSalesReply, hasCheckoutLink } from '@/lib/salesAgent/decisionPolicy'
+import { SALES_LINKS } from '@/lib/salesAgent/catalog'
 import { buildFollowUpMessages, planFollowUp } from '@/lib/salesAgent/followupStrategy'
 
 const known = { isNew: false, eventType: 'bar_mitzvah', stage: 'offer_sent', turns: [] }
@@ -10,6 +11,8 @@ function turn(incomingText, lead = known, parsed = {}) {
 }
 const noCheckout = result => {
     expect(result.messages.join(' ')).not.toMatch(/checkout|add-to-cart/)
+    // Since 22.11 the sales page is itself the way to pay.
+    expect(hasCheckoutLink(result.messages.join(' '))).toBe(false)
     expect(result.stage).not.toBe('ready_to_pay')
 }
 
@@ -33,14 +36,14 @@ describe('contextual customer journey, without live services', () => {
         noCheckout(result)
     })
     it.each([
-        ['אני רוצה להזמין ספר מודפס', 'printed', '6271'],
-        ['אני רוצה להזמין ספר דיגיטלי', 'digital', '6258'],
-        ['אפשר קישור לתשלום של הספר הדיגיטלי?', 'digital', '6258'],
-    ])('still supports an explicit checkout and format: %s', (text, id, product) => {
+        ['אני רוצה להזמין ספר מודפס', 'printed', SALES_LINKS.page],
+        ['אני רוצה להזמין ספר דיגיטלי', 'digital', 'checkout/?add-to-cart=6258'],
+        ['אפשר קישור לתשלום של הספר הדיגיטלי?', 'digital', 'checkout/?add-to-cart=6258'],
+    ])('still supports an explicit checkout and format: %s', (text, id, link) => {
         const { decision, result } = turn(text)
         expect(decision.nextBestAction).toBe('send_payment_link')
         expect(result.packageInterest).toBe(id)
-        expect(result.messages.at(-1)).toContain(`checkout/?add-to-cart=${product}`)
+        expect(result.messages.at(-1)).toContain(link)
         expect(result.stage).toBe('ready_to_pay')
     })
     it('a scoped yes to payment uses the customer-selected format, not a model override', () => {
@@ -52,7 +55,7 @@ describe('contextual customer journey, without live services', () => {
     it('completes the format clarification without restarting the journey', () => {
         const lead = { ...known, turns: [{ role: 'user', text: 'איך משלמים?' }, { role: 'assistant', text: 'כדי לשלוח את הקישור הנכון, איזה ספר תרצו: דיגיטלי או מודפס?' }] }
         const { result } = turn('מודפס', lead)
-        expect(result.messages.at(-1)).toContain('add-to-cart=6271')
+        expect(result.messages.at(-1)).toContain(SALES_LINKS.page)
     })
     it('does not reuse a choice the customer withdrew', () => {
         const context = { ...known, turns: [{ role: 'user', text: 'אני רוצה ספר מודפס' }, { role: 'user', text: 'בעצם אני לא רוצה את המודפס, מתלבט בין החבילות' }] }
@@ -112,7 +115,7 @@ describe('contextual customer journey, without live services', () => {
         'אני רוצה להזמין אבל קודם אני רוצה לראות דוגמאות אמיתיות',
         'אני רוצה להזמין אבל לפני כן מה מדיניות הביטול?',
         'כמה עמודים יש בספר המודפס?',
-        'משלמים מראש את כל הסכום לפני קבלת המוצר?',
+        'אפשר לבטל את ההזמנה אחרי שהספר נשלח?',
     ])('keeps an unresolved verified-fact question with a human: %s', text => {
         const { decision, result } = turn(text)
         expect(decision.nextBestAction).toBe('handoff_question')
@@ -207,7 +210,7 @@ describe('customer timing survives later turns and automatic recovery', () => {
     })
     it('answers a direct price question alongside a deferral without trying to close', () => {
         const { result } = turn('לא עכשיו, אבל כמה זה עולה?')
-        expect(result.messages[0]).toMatch(/690.*990/)
+        expect(result.messages[0]).toMatch(/990.*190.*800.*690/)
         expect(result.messages[0]).not.toMatch(/שאפתח|במתנה|checkout/)
         expect(result.customerDeferred).toBe(true)
     })

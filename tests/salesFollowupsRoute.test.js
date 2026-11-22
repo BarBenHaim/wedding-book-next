@@ -56,6 +56,7 @@ vi.mock('@/lib/salesAgent/followupPolicy', async importOriginal => ({
 vi.mock('@/lib/salesAgent/catalog', () => ({
     MEDIA: {},
     DEMO: { writeBlessing: 'https://demo.example/photo' },
+    DEPOSIT: { amount: 190, balance: 800, refund: 'החזר מלא עד אישור ההדפסה' },
     CONCESSION: { text: 'עותק מודפס נוסף במתנה (שווי ₪290) בסגירה עד {DATE}', validDays: 3 },
     PROOF: [{ quote: 'ההורים שלי בכו', who: 'רויטל' }],
     proofLine: () => '«ההורים שלי בכו» (רויטל)',

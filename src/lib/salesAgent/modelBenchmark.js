@@ -14,7 +14,8 @@ const MAX_TURNS = 4
 const MAX_TURN_CHARS = 320
 const MAX_CONCURRENCY = 6
 const DEFAULT_BENCHMARK_BUDGET_MS = 45_000
-const ALLOWED_PRICES = new Set([690, 990])
+// 990 in total, paid as a 190 deposit and an 800 balance; 690 digital-only.
+const ALLOWED_PRICES = new Set([190, 800, 690, 990])
 const STAGES = new Set(['new', 'engaged', 'opening_completed', 'qualified', 'demo_sent', 'offer_sent', 'objection', 'ready_to_pay', 'closed_won', 'closed_lost', 'handoff'])
 const INTENTS = new Set(['general', 'price', 'demo', 'positive_signal', 'objection', 'process', 'payment_intent', 'negative_exit', 'support', 'handoff_active'])
 const OUTCOMES = new Set(['open', 'won', 'lost', 'unresponsive'])
@@ -185,7 +186,7 @@ export async function runModelBenchmark(input = {}, deps = {}) {
                 const result = await callModel({
                     provider: candidate.provider,
                     model: candidate.model,
-                    system: 'מבחן מכירה יבש בלבד. החזר JSON עם messages, stage, handoff. אין להציע שיחת טלפון. מחירים תקינים: 690 או 990 ש״ח.',
+                    system: 'מבחן מכירה יבש בלבד. החזר JSON עם messages, stage, handoff. אין להציע שיחת טלפון. מחירים תקינים: ספר מודפס 990 ש״ח (מקדמה 190 היום ו-800 רק כשהספר מוכן ומאושר להדפסה), ספר דיגיטלי בלבד 690 ש״ח.',
                     messages: [{ role: 'user', content: JSON.stringify(benchmarkCase) }],
                     temperature: 0.3,
                     deadlineAtMs,
