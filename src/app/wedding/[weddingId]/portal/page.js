@@ -226,7 +226,15 @@ export default function PortalApp() {
                                 border: '1px solid rgba(120,90,40,0.35)', boxShadow: '0 12px 26px -8px rgba(46,32,16,0.4)',
                                 background: face ? `url(${opt(face, 640) || face}) center/cover` : 'linear-gradient(160deg,#fbf3e0,#f3e4c4 55%,#e9d3a6)',
                             }}>
-                                {!face && <div style={{ position: 'absolute', inset: 9, borderRadius: 6, border: '1.2px solid rgba(168,132,58,0.55)' }} />}
+                                {!face && (
+                                    // No cover chosen yet: the book still carries its own name, so the first
+                                    // screen is "the book of Noam", not an empty box.
+                                    <div style={{ position: 'absolute', inset: 9, borderRadius: 6, border: '1.2px solid rgba(168,132,58,0.55)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '0 10px', textAlign: 'center' }}>
+                                        <span style={{ fontSize: 11, fontWeight: 600, color: '#8a6f45' }}>ספר הברכות של</span>
+                                        <span style={{ width: 26, height: 1.5, background: 'rgba(168,132,58,0.7)', borderRadius: 1 }} />
+                                        <span style={{ fontSize: titleOf(w).length > 14 ? 17 : 24, fontWeight: 900, lineHeight: 1.15, color: '#3b2a14', wordBreak: 'break-word' }}>{w ? titleOf(w) : ''}</span>
+                                    </div>
+                                )}
                                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.22), rgba(255,255,255,0) 45%, rgba(60,40,15,0.16))' }} />
                             </div>
                             <div style={{ position: 'absolute', top: 5, bottom: 5, left: -5, width: 7, background: '#fbf5e7', border: '1px solid rgba(120,90,40,0.3)', borderRadius: '2px 0 0 2px' }} />

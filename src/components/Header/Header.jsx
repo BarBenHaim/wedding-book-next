@@ -172,7 +172,8 @@ export default function Header() {
     // /manage/[token]/photos is the same link's photos-only view: a
     // contact sheet and a full-screen viewer, where a sticky site bar
     // would take a sixth of a phone screen away from the pictures.
-    if (pathname === '/start' || pathname === '/my' || pathname === '/app' || pathname?.startsWith('/arrange/')) return null
+    // /login and /enter are the same kind of page: one goal, their own frame.
+    if (pathname === '/start' || pathname === '/my' || pathname === '/app' || pathname === '/login' || pathname === '/enter' || pathname?.startsWith('/arrange/')) return null
     if (/^\/manage\/[^/]+\/photos\/?$/.test(pathname || '')) return null
 
     return (

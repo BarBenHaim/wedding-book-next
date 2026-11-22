@@ -136,7 +136,7 @@ export function renderWelcomeEmail({
   ${stepCard({
       n: 3,
       title: 'האזור האישי',
-      text: 'שם רואים כל ברכה שנכנסת, מעלים תמונה לכריכה, בוחרים עיצוב ומאשרים את העמודים לפני ההדפסה.',
+      text: 'שם רואים כל ברכה שנכנסת, מעלים תמונה לכריכה, בוחרים עיצוב ומאשרים את העמודים לפני ההדפסה. הכפתור מכניס אתכם בלחיצה אחת.',
       extra: credentials,
       action: `${button(loginUrl, 'כניסה לאזור האישי', 'solid')}<p style="margin:12px 0 0;text-align:center;font:400 14px/1.5 ${FONT};"><a href="${viewerUrl}" style="color:${ACCENT};text-decoration:underline;">צפייה בספר, בלי להתחבר</a></p>`,
   })}

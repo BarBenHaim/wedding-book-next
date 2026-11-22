@@ -7,6 +7,7 @@ import { eventDisplayTitle } from '@/lib/onboarding'
 import { orderEventDetails, balanceTarget } from '@/lib/orderEventDetails'
 import { eventSignUrl } from '@/lib/eventLinks'
 import { renderWelcomeEmail } from '@/lib/welcomeEmail'
+import { enterSecret, signEnterToken, enterUrl } from '@/lib/enterLink'
 import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import crypto from 'crypto'
@@ -198,7 +199,11 @@ export async function POST(req) {
 
         // קישורים למייל — כניסה למערכת (עם פרטי גישה) + צפייה ללא-התחברות.
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://app.weddingtales.co.il'
-        const loginUrl = `${baseUrl}/login`
+        // One tap from the e-mail into the book: a signed link that signs the owner
+        // in (src/lib/enterLink.js, /enter). Without a signing secret it falls back
+        // to the plain login page, where the password below still works.
+        const enterToken = signEnterToken(userRecord.uid, { secret: enterSecret() })
+        const loginUrl = enterToken ? enterUrl(baseUrl, enterToken) : `${baseUrl}/login`
         const viewerUrl = `${baseUrl}/wedding/${weddingId}/book/${viewerToken}`
 
         // --- 8. שליחת מייל ללקוח ---

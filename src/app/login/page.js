@@ -1,6 +1,14 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+// /login — three ways in, the simplest first:
+//   1. Google (shown only when it is switched on in Firebase),
+//   2. "send me a link": type the e-mail, tap the link that arrives, done
+//      (/api/auth/enter-link → /enter), and
+//   3. "I have a password": e-mail + password, with "forgot" one tap away.
+// Everything ends in afterSignIn(): session cookie, remember-me, and the
+// right place to land (src/lib/afterSignIn.js).
+
+import { useState, useMemo, useEffect, useRef } from 'react'
 import {
     signInWithEmailAndPassword,
     signInWithPopup,
@@ -14,33 +22,28 @@ import { useRouter } from 'next/navigation'
 import { getMessages } from '@/i18n/getMessages'
 import { afterSignIn, signOutQuietly } from '@/lib/afterSignIn'
 import { authErrorMessage, isUserCancel } from '@/lib/passwordLink'
+import AuthShell, { AUTH, fieldCls, primaryBtnCls, primaryBtnStyle } from '@/components/Auth/AuthShell'
 
-// Login is anonymous chrome — no wedding context to read locale from.
-// We default to Hebrew (the SaaS's primary language) instead of sniffing
-// the browser, which historically caused users with English-set browsers
-// to see an English login screen even though they were Hebrew customers.
+// Login is anonymous chrome, no wedding context to read a locale from. It is
+// Hebrew: this is a Hebrew-first product, and a browser set to English used to
+// show Hebrew customers an English login.
+
+const WAIT_SECONDS = 45 // before "send again" is offered
 
 export default function LoginPage() {
+    const router = useRouter()
+    const t = useMemo(() => getMessages('he').login, [])
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [showPassword, setShowPassword] = useState(false)
+    const [rememberMe, setRememberMe] = useState(true)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
-    // "Remember me — 7 days per device" toggle. Default checked
-    // because most users hit this from their personal device; the
-    // box exists primarily so a user on a shared/public computer
-    // can opt out into a tab-lifetime session instead.
-    const [rememberMe, setRememberMe] = useState(true)
-    const router = useRouter()
-    // 'login' | 'reset' — the reset view asks for an email and mails a
-    // choose-your-password link (/api/auth/password-link → /set-password).
-    const [mode, setMode] = useState('login')
-    const [resetState, setResetState] = useState('idle') // idle | sending | sent
-    // Show "Continue with Google" only when the server says it is switched
-    // on in Firebase (null = could not tell → show it, errors are handled).
+    // 'start' | 'sent' | 'password' | 'reset' | 'resetSent'
+    const [view, setView] = useState('start')
     const [googleOn, setGoogleOn] = useState(false)
-
-    const t = useMemo(() => getMessages('he').login, [])
+    const [seconds, setSeconds] = useState(0)
+    const emailRef = useRef(null)
 
     useEffect(() => {
         let cancelled = false
@@ -48,14 +51,21 @@ export default function LoginPage() {
             .then(r => r.json())
             .then(j => { if (!cancelled) setGoogleOn(j?.google !== false) })
             .catch(() => {})
-        // ?mode=reset — /set-password links here when a link has expired.
         try {
-            if (new URLSearchParams(window.location.search).get('mode') === 'reset') setMode('reset')
+            const q = new URLSearchParams(window.location.search)
+            if (q.get('mode') === 'reset') setView('reset') // /set-password links here when a link has expired
+            const e = q.get('email')
+            if (e) setEmail(e)
         } catch { /* ignore */ }
         return () => { cancelled = true }
     }, [])
 
-    // Every way in ends here: cookie, remember-me, and where to go.
+    useEffect(() => {
+        if (seconds <= 0) return undefined
+        const id = setTimeout(() => setSeconds(s => s - 1), 1000)
+        return () => clearTimeout(id)
+    }, [seconds])
+
     async function finish(user) {
         const { path, email: who } = await afterSignIn(user, { rememberMe })
         if (!path) {
@@ -82,49 +92,52 @@ export default function LoginPage() {
         }
     }
 
-    async function handleResetRequest(e) {
-        e.preventDefault()
+    async function postEmail(url, okView) {
         setError('')
-        setResetState('sending')
+        setLoading(true)
         try {
-            const res = await fetch('/api/auth/password-link', {
+            const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email }),
+                body: JSON.stringify({ email: email.trim() }),
             })
             const json = await res.json().catch(() => ({}))
             if (!res.ok || !json.ok) {
                 setError(json.error || authErrorMessage())
-                setResetState('idle')
                 return
             }
-            setResetState('sent')
+            setSeconds(WAIT_SECONDS)
+            setView(okView)
         } catch {
             setError(authErrorMessage('auth/network-request-failed'))
-            setResetState('idle')
+        } finally {
+            setLoading(false)
         }
     }
 
-    async function handleLogin(e) {
+    const sendEnterLink = e => {
+        e?.preventDefault?.()
+        if (!email.trim()) { setError('כתבו את כתובת המייל'); emailRef.current?.focus(); return }
+        postEmail('/api/auth/enter-link', 'sent')
+    }
+    const sendResetLink = e => {
+        e?.preventDefault?.()
+        if (!email.trim()) { setError('כתבו את כתובת המייל'); return }
+        postEmail('/api/auth/password-link', 'resetSent')
+    }
+
+    async function handlePassword(e) {
         e.preventDefault()
         setError('')
         setLoading(true)
         try {
-            // Match Firebase's persistence strategy to the checkbox
-            // BEFORE the signIn call — that way the session is
-            // stamped with the right persistence from the start.
-            //   • Remember me ON  → browserLocalPersistence (survives
-            //     restarts; we expire after 7 days via the helper).
-            //   • Remember me OFF → browserSessionPersistence (auth
-            //     dies when the tab/window closes). The 7-day key
-            //     isn't needed in that case.
-            await setPersistence(
-                auth,
-                rememberMe ? browserLocalPersistence : browserSessionPersistence
-            )
-
-            const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password)
-            await finish(userCredential.user)
+            // Persistence is set BEFORE the sign-in so the session is stamped
+            // right from the start: remember-me keeps it across restarts
+            // (it expires after a week, src/lib/sessionExpiry.js), otherwise
+            // it ends with the tab.
+            await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence)
+            const cred = await signInWithEmailAndPassword(auth, email.trim(), password)
+            await finish(cred.user)
         } catch (err) {
             setError(authErrorMessage(err?.code))
         } finally {
@@ -132,178 +145,170 @@ export default function LoginPage() {
         }
     }
 
-    return (
-        <div className='relative flex min-h-[calc(100vh-4rem)] items-center justify-center bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] to-[#ebe5da] px-4 sm:px-6 py-8 font-sans'>
-            {/* Glow רקע */}
-            <div className='absolute -top-24 left-10 h-72 w-72 rounded-full bg-[#AA8840]/10 blur-3xl'></div>
-            <div className='absolute bottom-10 right-10 h-80 w-80 rounded-full bg-[#AA8840]/8 blur-3xl'></div>
+    const emailField = (
+        <div>
+            <label htmlFor='login-email' className='mb-1.5 block text-[14.5px] font-semibold'>המייל שלכם</label>
+            <input
+                id='login-email'
+                ref={emailRef}
+                type='email'
+                inputMode='email'
+                autoComplete='email'
+                autoCapitalize='none'
+                placeholder='name@example.com'
+                value={email}
+                onChange={e => { setEmail(e.target.value); setError('') }}
+                className={fieldCls}
+                style={{ borderColor: AUTH.line, direction: 'ltr', textAlign: 'start' }}
+            />
+        </div>
+    )
 
-            {/* כרטיס התחברות */}
-            <div className='relative z-10 w-full max-w-md rounded-2xl bg-white/90 backdrop-blur-md p-6 sm:p-8 shadow-xl animate-scaleIn'>
-                <img src='/logo-wt.png' alt='Wedding Tales' className='h-12 w-auto mx-auto mb-5 drop-shadow-[0_2px_8px_rgba(170,136,64,0.25)]' />
+    const errorBox = error && (
+        <p role='alert' className='mt-4 mb-0 rounded-[12px] bg-[#FDECEC] px-3.5 py-3 text-center text-[14.5px] leading-snug text-[#9B1C1C]'>
+            {error}
+        </p>
+    )
 
-                {/* Decorative icon */}
-                <div className='flex justify-center mb-3'>
-                    <div className='w-12 h-12 rounded-full bg-[#AA8840]/10 flex items-center justify-center'>
-                        <svg className='w-6 h-6 text-[#AA8840]' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.8}>
-                            <path strokeLinecap='round' strokeLinejoin='round' d='M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z' />
-                        </svg>
-                    </div>
+    const link = (label, onClick) => (
+        <button
+            type='button'
+            onClick={onClick}
+            className='block w-full cursor-pointer border-0 bg-transparent py-1 text-center text-[14.5px] font-bold underline underline-offset-4'
+            style={{ color: AUTH.ink }}
+        >
+            {label}
+        </button>
+    )
+
+    // ── the link is on its way ──
+    if (view === 'sent' || view === 'resetSent') {
+        const isReset = view === 'resetSent'
+        return (
+            <AuthShell
+                title={isReset ? 'שלחנו קישור לבחירת סיסמה' : 'שלחנו לכם קישור'}
+                subtitle={isReset ? 'לוחצים עליו ובוחרים סיסמה חדשה.' : 'לוחצים עליו במייל, ונכנסים. בלי סיסמה.'}
+            >
+                <div className='rounded-[16px] px-4 py-3.5 text-[15px] leading-relaxed' style={{ background: '#ECF7F1', color: '#12402B' }}>
+                    נשלח אל <b dir='ltr' className='break-all'>{email.trim()}</b>. אם המייל לא מגיע תוך דקה, כדאי לבדוק בספאם.
                 </div>
+                <div className='mt-5 space-y-3'>
+                    {seconds > 0 ? (
+                        <p className='m-0 text-center text-[14px]' style={{ color: AUTH.muted }}>אפשר לשלוח שוב בעוד {seconds} שניות</p>
+                    ) : (
+                        link('שלחו שוב', isReset ? sendResetLink : sendEnterLink)
+                    )}
+                    {link('לשנות כתובת', () => { setView('start'); setError('') })}
+                </div>
+                {errorBox}
+            </AuthShell>
+        )
+    }
 
-                <h1 className='mb-1.5 text-center text-2xl font-bold text-[#18140F]'>{mode === 'reset' ? t.resetTitle : t.title}</h1>
-                <p className='text-center text-sm text-[#5a5040] mb-6'>{mode === 'reset' ? t.resetSubtitle : t.subtitle}</p>
+    // ── forgot the password ──
+    if (view === 'reset') {
+        return (
+            <AuthShell title='בחירת סיסמה חדשה' subtitle='נשלח קישור למייל, שבו בוחרים סיסמה.'>
+                <form onSubmit={sendResetLink} className='space-y-4'>
+                    {emailField}
+                    <button type='submit' disabled={loading} className={primaryBtnCls} style={primaryBtnStyle}>
+                        {loading ? 'שולחים…' : 'שלחו לי קישור'}
+                    </button>
+                    {link('חזרה', () => { setView('password'); setError('') })}
+                </form>
+                {errorBox}
+            </AuthShell>
+        )
+    }
 
-                {mode === 'reset' ? (
-                    <form onSubmit={handleResetRequest} className='space-y-4'>
-                        <div className='text-start'>
-                            <label className='block text-sm font-medium text-gray-700 mb-1'>{t.emailLabel}</label>
-                            <input
-                                type='email'
-                                placeholder='name@example.com'
-                                value={email}
-                                onChange={e => { setEmail(e.target.value); setResetState('idle') }}
-                                className='w-full rounded-xl border border-[#AA8840]/20 bg-[#AA8840]/5 px-4 py-3 text-gray-700 focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/20 outline-none transition-all'
-                                dir='ltr'
-                                required
-                            />
-                        </div>
-                        {resetState === 'sent' ? (
-                            <p className='text-center text-sm text-emerald-800 bg-emerald-50 rounded-xl py-3 px-3 leading-relaxed'>{t.resetSent}</p>
-                        ) : (
-                            <button
-                                type='submit'
-                                disabled={resetState === 'sending'}
-                                className='w-full rounded-xl gold-shimmer px-6 py-3.5 text-lg font-semibold text-white shadow-lg hover:scale-[1.03] active:scale-[0.98] transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100'
-                            >
-                                {resetState === 'sending' ? t.resetSending : t.resetSubmit}
-                            </button>
-                        )}
-                        <button
-                            type='button'
-                            onClick={() => { setMode('login'); setResetState('idle'); setError('') }}
-                            className='w-full text-center text-sm font-semibold text-[#AA8840] hover:underline'
-                        >
-                            {t.backToLogin}
-                        </button>
-                    </form>
-                ) : (
-                <>
-                {googleOn && (
-                    <>
-                        <button
-                            type='button'
-                            onClick={handleGoogle}
-                            disabled={loading}
-                            className='w-full flex items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white px-6 py-3 text-[15px] font-semibold text-gray-800 shadow-sm hover:bg-gray-50 transition-all disabled:opacity-60'
-                        >
-                            <svg className='w-5 h-5' viewBox='0 0 48 48' aria-hidden='true'>
-                                <path fill='#EA4335' d='M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z' />
-                                <path fill='#4285F4' d='M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z' />
-                                <path fill='#FBBC05' d='M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z' />
-                                <path fill='#34A853' d='M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z' />
-                            </svg>
-                            {t.googleButton}
-                        </button>
-                        <div className='flex items-center gap-3 my-4'>
-                            <span className='h-px flex-1 bg-gray-200' />
-                            <span className='text-xs text-gray-400'>{t.or}</span>
-                            <span className='h-px flex-1 bg-gray-200' />
-                        </div>
-                    </>
-                )}
-
-                {/* טופס */}
-                <form onSubmit={handleLogin} className='space-y-4'>
-                    <div className='text-start'>
-                        <label className='block text-sm font-medium text-gray-700 mb-1'>{t.emailLabel}</label>
-                        <input
-                            type='email'
-                            placeholder='name@example.com'
-                            value={email}
-                            onChange={e => setEmail(e.target.value)}
-                            className='w-full rounded-xl border border-[#AA8840]/20 bg-[#AA8840]/5 px-4 py-3 text-gray-700 focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/20 outline-none transition-all'
-                            dir='ltr'
-                        />
-                    </div>
-
-                    <div className='text-start'>
-                        <label className='block text-sm font-medium text-gray-700 mb-1'>{t.passwordLabel}</label>
+    // ── e-mail and password ──
+    if (view === 'password') {
+        return (
+            <AuthShell title='כניסה עם סיסמה'>
+                <form onSubmit={handlePassword} className='space-y-4'>
+                    {emailField}
+                    <div>
+                        <label htmlFor='login-pass' className='mb-1.5 block text-[14.5px] font-semibold'>סיסמה</label>
                         <div className='relative'>
                             <input
+                                id='login-pass'
                                 type={showPassword ? 'text' : 'password'}
+                                autoComplete='current-password'
                                 placeholder='••••••••'
                                 value={password}
-                                onChange={e => setPassword(e.target.value)}
-                                className='w-full rounded-xl border border-[#AA8840]/20 bg-[#AA8840]/5 px-4 py-3 pl-12 text-gray-700 focus:border-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/20 outline-none transition-all'
-                                dir='ltr'
+                                onChange={e => { setPassword(e.target.value); setError('') }}
+                                className={`${fieldCls} pl-20`}
+                                style={{ borderColor: AUTH.line, direction: 'ltr', textAlign: 'start' }}
                             />
                             <button
                                 type='button'
-                                onClick={() => setShowPassword(!showPassword)}
-                                className='absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-[#AA8840] transition-colors'
-                                tabIndex={-1}
+                                onClick={() => setShowPassword(v => !v)}
+                                className='absolute left-3 top-1/2 -translate-y-1/2 cursor-pointer rounded-lg border-0 bg-transparent px-2 py-1 text-[13.5px] font-bold'
+                                style={{ color: AUTH.accent }}
+                                aria-label={showPassword ? 'הסתרת סיסמה' : 'הצגת סיסמה'}
                             >
-                                {showPassword ? (
-                                    <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.5}><path strokeLinecap='round' strokeLinejoin='round' d='M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88' /></svg>
-                                ) : (
-                                    <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.5}><path strokeLinecap='round' strokeLinejoin='round' d='M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z' /><path strokeLinecap='round' strokeLinejoin='round' d='M15 12a3 3 0 11-6 0 3 3 0 016 0z' /></svg>
-                                )}
+                                {showPassword ? 'הסתר' : 'הצג'}
                             </button>
                         </div>
                     </div>
-
-                    {/* Remember me — 7 days per device. Default
-                        checked. Sits right above the submit button
-                        so the user reads the choice before clicking
-                        submit. */}
-                    <label className='flex items-center gap-2.5 cursor-pointer select-none text-start py-1'>
+                    <label className='flex cursor-pointer select-none items-center gap-2.5 py-1 text-[14.5px]'>
                         <input
                             type='checkbox'
                             checked={rememberMe}
                             onChange={e => setRememberMe(e.target.checked)}
-                            className='w-4 h-4 rounded border-[#AA8840]/30 text-[#AA8840] focus:ring-2 focus:ring-[#AA8840]/30 cursor-pointer accent-[#AA8840]'
+                            className='h-[18px] w-[18px] cursor-pointer'
+                            style={{ accentColor: AUTH.ink }}
                         />
-                        <span className='text-sm text-gray-700'>
-                            {t.rememberMe}
-                        </span>
+                        {t.rememberMe}
                     </label>
-
-                    <button
-                        type='submit'
-                        disabled={loading}
-                        className='w-full rounded-xl gold-shimmer px-6 py-3.5 text-lg font-semibold text-white shadow-lg hover:scale-[1.03] active:scale-[0.98] transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100'
-                    >
-                        {loading ? (
-                            <span className='flex items-center justify-center gap-2'>
-                                <svg className='w-5 h-5 animate-spin' fill='none' viewBox='0 0 24 24'>
-                                    <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4'/>
-                                    <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8v8z'/>
-                                </svg>
-                                {t.submitting}
-                            </span>
-                        ) : t.submit}
+                    <button type='submit' disabled={loading} className={primaryBtnCls} style={primaryBtnStyle}>
+                        {loading ? 'נכנסים…' : 'כניסה'}
                     </button>
+                    {link('שכחתי סיסמה', () => { setView('reset'); setError('') })}
+                    {link('עדיף קישור במייל', () => { setView('start'); setError('') })}
+                </form>
+                {errorBox}
+            </AuthShell>
+        )
+    }
+
+    // ── start: the simplest way first ──
+    return (
+        <AuthShell title='כניסה לספר שלכם' subtitle='כותבים את המייל, ונשלח קישור כניסה. בלי סיסמה.'>
+            {googleOn && (
+                <>
                     <button
                         type='button'
-                        onClick={() => { setMode('reset'); setError('') }}
-                        className='w-full text-center text-sm font-semibold text-[#AA8840] hover:underline'
+                        onClick={handleGoogle}
+                        disabled={loading}
+                        className='flex w-full cursor-pointer items-center justify-center gap-3 rounded-[14px] border bg-white px-6 py-3.5 text-[16px] font-bold transition active:scale-[.98] disabled:opacity-60'
+                        style={{ borderColor: AUTH.line, color: AUTH.ink }}
                     >
-                        {t.forgotLink}
+                        <svg className='h-5 w-5' viewBox='0 0 48 48' aria-hidden='true'>
+                            <path fill='#EA4335' d='M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z' />
+                            <path fill='#4285F4' d='M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z' />
+                            <path fill='#FBBC05' d='M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z' />
+                            <path fill='#34A853' d='M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z' />
+                        </svg>
+                        המשך עם Google
                     </button>
-                </form>
+                    <div className='my-5 flex items-center gap-3' aria-hidden='true'>
+                        <span className='h-px flex-1' style={{ background: AUTH.line }} />
+                        <span className='text-[13px]' style={{ color: AUTH.muted }}>או</span>
+                        <span className='h-px flex-1' style={{ background: AUTH.line }} />
+                    </div>
                 </>
-                )}
-
-                {error && <p className='mt-4 text-center text-sm text-red-600 bg-red-50 rounded-xl py-2.5 px-3'>{error}</p>}
-
-                {/* Help text */}
-                <div className='mt-6 pt-5 border-t border-gray-100 text-center'>
-                    <p className='text-sm text-gray-400'>
-                        {t.helpText}
-                    </p>
-                </div>
+            )}
+            <form onSubmit={sendEnterLink} className='space-y-4' noValidate>
+                {emailField}
+                <button type='submit' disabled={loading} className={primaryBtnCls} style={primaryBtnStyle}>
+                    {loading ? 'שולחים…' : 'שלחו לי קישור כניסה'}
+                </button>
+            </form>
+            {errorBox}
+            <div className='mt-5 border-t pt-4' style={{ borderColor: AUTH.line }}>
+                {link('יש לי סיסמה', () => { setView('password'); setError('') })}
             </div>
-        </div>
+        </AuthShell>
     )
 }
