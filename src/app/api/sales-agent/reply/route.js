@@ -88,7 +88,10 @@ const AI_OUTAGE_REASON = 'תקלה בשירות ה-AI'
 // What an existing customer hears. Deliberately not a sales sentence:
 // they already bought, and the only useful thing the bot can do is
 // acknowledge them and get out of the way fast.
-const CUSTOMER_REPLY = `היי! קיבלתי את ההודעה ואני מעביר אותה ל${BUSINESS.ownerName || 'צוות'}, נחזור אליך ממש עוד מעט 🙏`
+// An existing customer writes in: nothing after payment is manual any more, so the first
+// answer already helps with the question they most often have (where is my link / how do
+// I get in), and the message still goes to a person.
+const CUSTOMER_REPLY = `היי! אם אתם מחפשים את הקישור לספר או את הכניסה לאזור האישי: https://app.weddingtales.co.il/login (כותבים את המייל ומקבלים קישור כניסה). את ההודעה עצמה העברתי ל${BUSINESS.ownerName || 'צוות'}, נחזור אליך בקרוב 🙏`
 
 // The owner's own WhatsApp number, in 972… form. When set, messages
 // arriving FROM it are treated as commands rather than as a customer,

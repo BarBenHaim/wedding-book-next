@@ -2180,3 +2180,26 @@ nine-slice ולכן **לא** צריכות אלפא — האמצע שם פשוט 
 
 `tests/adminWeddingsShape.test.js` שומר על כיוון אחד: מפתח שה-PATCH
 מקבל ושה-GET לא מחזיר הוא באג.
+
+---
+
+### 22.11 — the deposit funnel (Claude)
+
+The sales page sells ONE main product: the printed book, 990 = 190 today + 800 when
+the book is ready and approved for print; full refund until approval. `catalog.js`
+holds `SALES_LINKS` and `DEPOSIT`. The bot sends the sales page
+(`weddingtales.co.il/`), where the visitor names the book, not a checkout;
+`hasCheckoutLink` guards it so it is not sent before a package is chosen.
+`UNVERIFIED_POLICY` no longer hands deposit questions to a human; refund policy,
+cancelling an existing order and refunds after approval still go to a person.
+Nothing after payment is manual: do not promise a poster, 48 hours or WhatsApp
+accompaniment. An existing customer who writes now gets the login help first
+(`CUSTOMER_REPLY`), then the 48-hour human pause as before.
+
+Open, not in code: Firestore `sales_variables` and the pinned opening blocks, the
+opening's price image (still the 690/990 sheet), `businessInstructions` in the sales
+settings, the Meta templates, and `src/app/bar-mitzvah/`, `public/lp.html`,
+`public/site*/` (full-price pages). The `IMMUTABLE_SALES_POLICY` line "no phone
+calls" contradicts `offer_call`/`CALL_LINE` (a call back); decide which is true.
+Unchecked: what the WooCommerce webhook does to the lead when only the 190 deposit
+lands (`paymentTruth` reads `order.total`).
