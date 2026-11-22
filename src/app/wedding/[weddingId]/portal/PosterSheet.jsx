@@ -57,15 +57,16 @@ export default function PosterSheet() {
     const sub = [EVENT_LABEL[w?.eventType] || '', fmtDate(w?.weddingDate)].filter(Boolean).join(' · ')
 
     return (
-        <div className={heebo.className} dir='rtl' style={{ minHeight: '100vh', background: '#E9E5DC', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '18px 12px 40px', gap: 14 }}>
+        <div className={`${heebo.className} wt-root`} dir='rtl' style={{ minHeight: '100vh', background: '#E9E5DC', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '18px 12px 40px', gap: 14 }}>
             <style>{`
                 @page { size: A4 portrait; margin: 0; }
                 .wt-sheet { width: min(100%, 210mm); aspect-ratio: 210 / 297; }
                 @media print {
                     html, body { background: #fff !important; }
                     .wt-noprint { display: none !important; }
-                    .wt-wrap { padding: 0 !important; background: none !important; }
-                    .wt-sheet { width: 210mm !important; height: 297mm !important; box-shadow: none !important; border-radius: 0 !important; }
+                    .wt-root { display: block !important; min-height: 0 !important; padding: 0 !important; background: #fff !important; }
+                    .wt-wrap { display: block !important; padding: 0 !important; background: none !important; }
+                    .wt-sheet { width: 210mm !important; height: 296mm !important; aspect-ratio: auto !important; box-shadow: none !important; border-radius: 0 !important; break-inside: avoid; break-after: avoid; }
                     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                 }
             `}</style>
@@ -112,7 +113,7 @@ export default function PosterSheet() {
                                 {w ? <QRCode value={guestLink} level='H' fgColor={L.qrFg} bgColor={L.qrBg} style={{ display: 'block', width: '34cqw', height: '34cqw' }} /> : <div style={{ width: '34cqw', height: '34cqw' }} />}
                             </div>
                             <div>
-                                <p style={{ margin: 0, fontSize: '5.2cqw', fontWeight: 900 }}>סורקים, כותבים ברכה ומוסיפים תמונה</p>
+                                <p style={{ margin: 0, fontSize: '4.5cqw', fontWeight: 900, textWrap: 'balance' }}>סורקים, כותבים ברכה ומוסיפים תמונה</p>
                                 <p style={{ margin: '1cqw 0 0', fontSize: '3.5cqw', fontWeight: 600, color: L.soft }}>שתי דקות מהטלפון. בלי אפליקציה ובלי הרשמה.</p>
                             </div>
                         </div>
