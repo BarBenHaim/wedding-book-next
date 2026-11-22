@@ -281,7 +281,14 @@ export async function runScheduledCampaigns() {
     return out
 }
 
+// Off since 2026-11: createWedding sends the welcome mail itself, the moment the order
+// is paid. This job matched a calendar day at one fixed hour, so it only fired for
+// orders placed before 08:00 UTC and mailed those a second, older-looking welcome. The
+// customer road now lives in src/lib/lifecycle.js (/api/cron/lifecycle).
+const LEGACY_AUTOMATIONS_ON = false
+
 export async function runAutomations() {
+    if (!LEGACY_AUTOMATIONS_ON) return []
     const today = todayISO()
     const snap = await adminDb.collection(COL.automations).where('active', '==', true).get()
     const weddings = await resolveWeddings({ type: 'all' })

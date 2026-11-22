@@ -29,6 +29,7 @@
   ],
   "crons": [
     { "path": "/api/cron/email", "schedule": "0 8 * * *" },
+    { "path": "/api/cron/lifecycle", "schedule": "0 7 * * *" },
     { "path": "/api/cron/sales-model-status", "schedule": "15 8 * * *" },
     { "path": "/api/cron/sales-model-status", "schedule": "15 18 * * *" },
     { "path": "/api/sales-agent/followups", "schedule": "30 7 * * *" },

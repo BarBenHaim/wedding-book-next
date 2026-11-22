@@ -9,14 +9,12 @@ import { runScheduledCampaigns, runAutomations } from '@/lib/emailEngine'
 // campaigns whose time has arrived, and any event-relative automation
 // emails due today (deduped by emailLog so re-runs never double-send).
 //
-// Security: if CRON_SECRET is set, require `Authorization: Bearer <secret>`
-// (Vercel injects exactly this header for cron invocations when the env
-// var exists). If it's not set yet, we allow the call so the feature
-// works out of the box — set CRON_SECRET in Vercel to lock it down.
+// Security: `Authorization: Bearer <CRON_SECRET>` (Vercel injects exactly this
+// header for cron invocations). With no CRON_SECRET the job does not run.
 
 function authorized(req) {
     const secret = process.env.CRON_SECRET
-    if (!secret) return true
+    if (!secret) return false
     return (req.headers.get('authorization') || '') === `Bearer ${secret}`
 }
 
