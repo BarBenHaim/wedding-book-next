@@ -5,6 +5,7 @@ export const preferredRegion = 'iad1'
 
 import { eventDisplayTitle } from '@/lib/onboarding'
 import { orderEventDetails, balanceTarget } from '@/lib/orderEventDetails'
+import { eventSignUrl } from '@/lib/eventLinks'
 import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import crypto from 'crypto'
@@ -212,7 +213,9 @@ export async function POST(req) {
             : `<p style="margin:4px 0;font-size:14px;color:#7a6a52;">השתמשו בסיסמה הקיימת שלכם (שכחתם? אפשר לאפס בעמוד ההתחברות).</p>`
 
         const guestUrl = `${baseUrl}/w/${slug}`
-        const posterUrl = `${baseUrl}/api/generate-qr-pdf?weddingId=${encodeURIComponent(weddingId)}&slug=${encodeURIComponent(slug)}&bg=wedding-bg2.png`
+        // The event sign from the personal area: names, date and the book's QR,
+        // A4, three colours. It replaced a generic QR sheet that carried no names.
+        const posterUrl = eventSignUrl(baseUrl, weddingId)
         const bookTitle = details.value ? eventDisplayTitle(details.value) : ''
         const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
         const shareText = `${bookTitle ? `ספר הברכות של ${bookTitle}` : 'ספר הברכות שלנו'}: נשמח שתכתבו ברכה ותוסיפו תמונה, לוקח שתי דקות מהטלפון 💛\n${guestUrl}`
@@ -237,9 +240,9 @@ export async function POST(req) {
   </div>
 
   <div style="padding:16px 24px 6px;">
-    <h2 style="font-size:16px;margin:0 0 6px;">2. מדפיסים QR לאירוע</h2>
-    <p style="font-size:14px;line-height:1.7;color:#4b5563;margin:0 0 10px;">דף A4 עם ה־QR של הספר שלכם, מוכן להדפסה ולהצבה בכניסה או על השולחנות.</p>
-    <div style="text-align:center;">${btn(posterUrl, 'הורדת דף ה־QR', false)}</div>
+    <h2 style="font-size:16px;margin:0 0 6px;">2. מדפיסים שלט לאירוע</h2>
+    <p style="font-size:14px;line-height:1.7;color:#4b5563;margin:0 0 10px;">שלט "ברכו את" עם השמות, התאריך וה־QR של הספר שלכם. בוחרים צבע, ומדפיסים A4 לכניסה או לשולחנות.</p>
+    <div style="text-align:center;">${btn(posterUrl, 'פתיחת השלט להדפסה', false)}</div>
   </div>
 
   <div style="padding:16px 24px 20px;">
