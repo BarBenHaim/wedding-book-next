@@ -31,8 +31,9 @@ import { auth } from '@/lib/firebaseClient'
 import { uploadEventImage } from '@/lib/uploadEventImage'
 import imageCompression from 'browser-image-compression'
 import { PHOTO_FRAMES, ART_FRAMES, artFrameByUrl } from '@/lib/photoFrames'
-import { TEXTURES_REGISTRY, STATIC_BACKGROUNDS, RETIRED_BACKGROUND_IDS } from '@/lib/studioPresets'
+import { TEXTURES_REGISTRY, STATIC_BACKGROUNDS, RETIRED_BACKGROUND_IDS, bakesAFrame } from '@/lib/studioPresets'
 import { buildPageIndex, pageLabel } from '@/lib/bookPageIndex'
+import { expandBookPages } from '@/lib/bookPages'
 import { sanitizePageStyle, overriddenKeys, mergePageStyle } from '@/lib/pageStyle'
 import { isBlankPage } from '@/lib/entryKinds'
 import { getBlessingText } from '@/lib/normalizeText'
@@ -168,6 +169,18 @@ export default function PageStyleControls({
         () => mergePageStyle(applyPresetClean(styleSettings || {}), draft),
         [styleSettings, draft],
     )
+
+    // The page(s) the sticker stage draws: the selected entry carrying the draft,
+    // expanded the way the book expands it, so a split entry gives its two pages
+    // (blessing, photo) and a sticker can be placed on the right one.
+    const stickerPages = useMemo(() => {
+        if (!selected) return []
+        const entry = { ...selected, pageStyle: draft }
+        return expandBookPages([entry], {
+            autoSplit: styleSettings?.autoSplit === true,
+            splitThreshold: Number.isFinite(styleSettings?.splitThreshold) ? styleSettings.splitThreshold : undefined,
+        }).filter(p => !p._divider)
+    }, [selected, draft, styleSettings])
 
     // Replace, not merge: the browser holds the whole override, so an
     // unpin is simply a draft with one fewer key. Merging server-side
@@ -783,6 +796,12 @@ export default function PageStyleControls({
                     </div>
                 </Row>
 
+                {bakesAFrame(effective.backgroundUrl) || bakesAFrame(effective.texture) ? (
+                    <p className='text-[11px] mb-3 px-2 py-1.5 rounded-lg' style={{ background: '#fff4e0', color: '#8a5a10', border: '1px solid #f0d9a8' }}>
+                        הרקע בעמוד הזה כולל מסגרת לתמונה אפויה בתוכו. בעמוד מפוצל, או בעמוד של ברכה בלבד, היא תישאר ריקה. כדאי לבחור רקע אחר למטה.
+                    </p>
+                ) : null}
+
                 <Row
                     label='מרקם רקע'
                     pinned={pinned.has('backgroundUrl')}
@@ -820,7 +839,7 @@ export default function PageStyleControls({
                     onUnpin={() => unpin('stickers')}
                     hint='המדבקות מופיעות בעמוד הזה בלבד, גם בהדפסה'
                 >
-                    <StickerControls stickers={draft.stickers} onChange={list => set('stickers', list)} />
+                    <StickerControls stickers={draft.stickers} onChange={list => set('stickers', list)} pages={stickerPages} styleSettings={styleSettings} />
                 </Row>
             </div>
         </div>

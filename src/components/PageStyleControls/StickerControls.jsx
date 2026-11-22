@@ -8,6 +8,7 @@
 // whole new list (the caller sanitises and saves it).
 
 import { useState } from 'react'
+import StickerStage from './StickerStage'
 import {
     STICKER_LIBRARY, STICKER_LABELS_HE, STICKER_GROUPS_HE, STICKER_LIMITS, STICKER_ANCHORS,
     stickerById, newSticker, sanitizeStickers,
@@ -25,12 +26,15 @@ function Slider({ label, value, min, max, step = 1, onChange, suffix = '' }) {
     )
 }
 
-export default function StickerControls({ stickers = [], onChange }) {
+export default function StickerControls({ stickers = [], onChange, pages = [], styleSettings }) {
     const list = sanitizeStickers(stickers)
     const [picked, setPicked] = useState(0)
     const sel = list[Math.min(picked, list.length - 1)] ? Math.min(picked, list.length - 1) : -1
     const current = sel >= 0 ? list[sel] : null
     const full = list.length >= STICKER_LIMITS.max
+    const [stageOpen, setStageOpen] = useState(false)
+    // a split entry is two pages that share one style: a new sticker belongs to one of them
+    const split = pages.length > 1
 
     const commit = next => onChange(sanitizeStickers(next))
     const patch = (i, p) => commit(list.map((s, j) => (j === i ? { ...s, ...p } : s)))
@@ -39,7 +43,7 @@ export default function StickerControls({ stickers = [], onChange }) {
         if (full) return
         // spread new ones over the corners so they do not land on each other
         const anchors = ['tr', 'bl', 'tl', 'br', 'tc', 'bc']
-        const made = newSticker(kind, anchors[list.length % anchors.length])
+        const made = newSticker(kind, anchors[list.length % anchors.length], split ? 't' : null)
         if (!made) return
         commit([...list, made])
         setPicked(list.length)
@@ -59,6 +63,18 @@ export default function StickerControls({ stickers = [], onChange }) {
 
     return (
         <div>
+            <button
+                type='button'
+                onClick={() => setStageOpen(true)}
+                disabled={!pages.length}
+                className='w-full mb-3 py-2 rounded-xl text-[12.5px] font-bold text-white disabled:opacity-40'
+                style={{ background: '#2545E0' }}
+            >
+                פתיחת עורך מדבקות (גרירה על העמוד)
+            </button>
+            {stageOpen && (
+                <StickerStage pages={pages} styleSettings={styleSettings} stickers={list} onChange={commit} onClose={() => setStageOpen(false)} />
+            )}
             {groups.map(g => (
                 <div key={g} className='mb-2'>
                     <div className='text-[10.5px] font-bold text-gray-400 mb-1'>{STICKER_GROUPS_HE[g]}</div>
@@ -132,6 +148,20 @@ export default function StickerControls({ stickers = [], onChange }) {
                                     </button>
                                 </div>
                             </div>
+                            {split && (
+                                <div className='flex items-center gap-1.5 mb-2'>
+                                    <span className='text-[11px] font-bold text-gray-500 w-14 shrink-0'>בעמוד</span>
+                                    {[['t', 'הברכה'], ['p', 'התמונה']].map(([v, label]) => (
+                                        <button
+                                            key={v} type='button' onClick={() => patch(sel, { pg: v })}
+                                            className='px-2 py-1 rounded-lg text-[11px] font-bold'
+                                            style={(current.pg || 't') === v ? { background: GOLD, color: '#fff' } : { background: '#fff', color: '#7a6a52', border: '1px solid #ead9b3' }}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                             <Slider label='גודל' value={current.s} min={STICKER_LIMITS.minSize} max={STICKER_LIMITS.maxSize} onChange={v => patch(sel, { s: v })} suffix='%' />
                             <Slider label='סיבוב' value={current.r} min={STICKER_LIMITS.minRot} max={STICKER_LIMITS.maxRot} onChange={v => patch(sel, { r: v })} suffix='°' />
                             <Slider label='מהשמאל' value={Math.round(current.x)} min={-10} max={110} onChange={v => patch(sel, { x: v })} suffix='%' />

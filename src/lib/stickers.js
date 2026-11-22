@@ -12,6 +12,10 @@
 //   x  centre, % of the page width      y  centre, % of the page height
 //   s  width, % of the page width       r  rotation in degrees
 //   f  1 = mirrored left-right
+//   pg 't' | 'p'  only on the text page / only on the photo page of a split
+//                 entry. Absent = on the page whatever it is. A split entry
+//                 is TWO pages that share one style, so without this a
+//                 sticker would appear on both.
 //
 // Everything is a percentage of the page, so one placement is right at
 // the thumbnail, on screen and at 300 DPI in the print export.
@@ -19,6 +23,15 @@
 // Pictures are small transparent PNGs in public/stickers/, painted with
 // Codex. They are files rather than SVG because they are painted, not
 // drawn; each is ~512px, which is 4 cm at 300 DPI before it looks soft.
+
+// width / height of each picture, so the editing box can be drawn without
+// loading the file (tests check these against the files themselves).
+const ASPECT = {
+    peony: 640 / 633, rose: 631 / 640, daisy: 548 / 640, olive: 640 / 635, eucalyptus: 502 / 640, lavender: 399 / 640,
+    'gold-stars': 627 / 640, 'gold-heart': 640 / 584, 'blue-heart': 640 / 565, sparkles: 590 / 640, 'navy-bow': 640 / 460, butterfly: 640 / 500,
+    confetti: 614 / 640, balloons: 466 / 640, cake: 495 / 640, champagne: 559 / 640, rings: 640 / 411, 'magen-david': 566 / 640,
+    'tape-blush': 640 / 302, 'tape-blue': 640 / 187,
+}
 
 export const STICKER_LIBRARY = [
     // flowers and greenery
@@ -45,7 +58,7 @@ export const STICKER_LIBRARY = [
     // tape, to hold a photo down
     { id: 'tape-blush', label: 'tape pink', group: 'tape' },
     { id: 'tape-blue', label: 'tape blue', group: 'tape' },
-].map(s => ({ ...s, url: `/stickers/${s.id}.png` }))
+].map(s => ({ ...s, url: `/stickers/${s.id}.png`, ar: ASPECT[s.id] }))
 
 /** Hebrew labels and group titles, kept apart from the ids. */
 export const STICKER_LABELS_HE = {
@@ -84,6 +97,7 @@ export function sanitizeStickers(raw) {
             s: round1(clamp(num(item.s, 20), STICKER_LIMITS.minSize, STICKER_LIMITS.maxSize)),
             r: Math.round(clamp(num(item.r, 0), STICKER_LIMITS.minRot, STICKER_LIMITS.maxRot)),
             f: item.f ? 1 : 0,
+            ...(item.pg === 't' || item.pg === 'p' ? { pg: item.pg } : {}),
         })
         if (out.length >= STICKER_LIMITS.max) break
     }
@@ -103,10 +117,23 @@ export const STICKER_ANCHORS = [
     { id: 'br', label: 'למטה, ימין', x: 86, y: 86 },
 ]
 
+/**
+ * Is this sticker drawn on a page? `split` is the page's own `_split`
+ * ('text' | 'photo' | undefined for a page that is not half of a split).
+ * A page that is not split shows every sticker: if the split is switched
+ * off later, nothing the operator placed disappears.
+ */
+export function stickerShownOn(st, split) {
+    if (!st?.pg) return true
+    if (split === 'text') return st.pg === 't'
+    if (split === 'photo') return st.pg === 'p'
+    return true
+}
+
 /** A new sticker, dropped in a corner so it does not land on the blessing. */
-export function newSticker(kind, anchor = 'tr') {
+export function newSticker(kind, anchor = 'tr', pg = null) {
     const a = STICKER_ANCHORS.find(p => p.id === anchor) || STICKER_ANCHORS[2]
-    return sanitizeStickers([{ k: kind, x: a.x, y: a.y, s: kind.startsWith('tape-') ? 26 : 20, r: kind.startsWith('tape-') ? -14 : 0, f: 0 }])[0] || null
+    return sanitizeStickers([{ k: kind, x: a.x, y: a.y, s: kind.startsWith('tape-') ? 26 : 20, r: kind.startsWith('tape-') ? -14 : 0, f: 0, pg }])[0] || null
 }
 
 /** CSS for one placed sticker (the layer positions it absolutely). */

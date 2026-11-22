@@ -141,13 +141,13 @@ describe('the page backgrounds on offer', () => {
 
     it('every static background is a real file', () => {
         const files = [...staticBlock.matchAll(/src: '([^']+)'/g)].map(m => m[1])
-        expect(files.length).toBeGreaterThanOrEqual(14)
+        expect(files.length).toBeGreaterThanOrEqual(30)
         for (const f of files) expect(existsSync(`public${f}`), f).toBe(true)
     })
 
     it('the house backgrounds are small enough for a phone', () => {
         const files = [...staticBlock.matchAll(/src: '(\/backgrounds\/book\/[^']+)'/g)].map(m => m[1])
-        expect(files.length).toBe(14)
+        expect(files.length).toBe(30)
         for (const f of files) expect(statSync(`public${f}`).size).toBeLessThan(200 * 1024)
     })
 

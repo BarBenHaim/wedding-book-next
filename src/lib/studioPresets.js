@@ -120,6 +120,22 @@ export const STATIC_BACKGROUNDS = [
     { id: 'nt-botanical', label: 'עלים עדינים', src: '/backgrounds/book/nt-botanical.webp', tags: ['neutral'] },
     { id: 'nt-linen', label: 'פשתן', src: '/backgrounds/book/nt-linen.webp', tags: ['neutral'] },
     { id: 'nt-marble', label: 'שיש', src: '/backgrounds/book/nt-marble.webp', tags: ['neutral'] },
+    { id: 'bm-tallit', label: 'טלית', src: '/backgrounds/book/bm-tallit.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration'] },
+    { id: 'bm-crown', label: 'כתר ופיתוחי זהב', src: '/backgrounds/book/bm-crown.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration'] },
+    { id: 'bm-geometric', label: 'כוכבים גאומטריים', src: '/backgrounds/book/bm-geometric.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration'] },
+    { id: 'bm-jerusalem-gold', label: 'ירושלים של זהב', src: '/backgrounds/book/bm-jerusalem-gold.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration'] },
+    { id: 'bm-navy-marble', label: 'שיש כחול וזהב', src: '/backgrounds/book/bm-navy-marble.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration'] },
+    { id: 'bm-night-stars', label: 'שמי לילה', src: '/backgrounds/book/bm-night-stars.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration', 'dark'] },
+    { id: 'bd-arches', label: 'קשתות בוהו', src: '/backgrounds/book/bd-arches.webp', tags: ['birthday', 'celebration'] },
+    { id: 'bd-gold-balloons', label: 'בלוני זהב', src: '/backgrounds/book/bd-gold-balloons.webp', tags: ['birthday', 'celebration'] },
+    { id: 'bd-bunting', label: 'דגלונים', src: '/backgrounds/book/bd-bunting.webp', tags: ['birthday', 'celebration'] },
+    { id: 'bd-splash', label: 'צבעי מים שמחים', src: '/backgrounds/book/bd-splash.webp', tags: ['birthday', 'celebration'] },
+    { id: 'cl-damask', label: 'דמשק שנהב', src: '/backgrounds/book/cl-damask.webp', tags: ['classic'] },
+    { id: 'cl-gold-corners', label: 'פינות זהב', src: '/backgrounds/book/cl-gold-corners.webp', tags: ['classic'] },
+    { id: 'cl-letterpress', label: 'נייר כותנה', src: '/backgrounds/book/cl-letterpress.webp', tags: ['classic'] },
+    { id: 'cl-garden-roses', label: 'ורדי גן', src: '/backgrounds/book/cl-garden-roses.webp', tags: ['classic', 'wedding', 'romantic'] },
+    { id: 'cl-indigo-wash', label: 'אינדיגו', src: '/backgrounds/book/cl-indigo-wash.webp', tags: ['classic'] },
+    { id: 'cl-peach-sky', label: 'שחר אפרסק', src: '/backgrounds/book/cl-peach-sky.webp', tags: ['classic'] },
     // Older ones that books still use. wedding-bg, wedding-bg2 and
     // weddingdesign1 were dropped from the picker: the first two carry
     // the "scan, shoot and bless" flyer text and the third is a tall
@@ -169,6 +185,17 @@ export const RETIRED_BACKGROUND_IDS = new Set([
     'bg_zcwi4m7ptal2',
 ])
 const offered = b => !RETIRED_BACKGROUND_IDS.has(b.id)
+
+// Surfaces that bake a photo window or border box into the page. Books that
+// already use one keep it, and the page editor says so on a page that has one,
+// because on a split page the photo cannot sit in a window painted on the other.
+const BAKED_FRAME_MARKERS = [
+    '/textures/tex3.png', '/textures/tex4.png', '/textures/tex6.png', '/textures/tex7.png',
+    'bg_4469zgr3r0og', 'bg_dj059v9s1hu9', 'bg_fw6e8108xc8a', 'bg_m6ydjpgoggbx', 'bg_uvx1z5toel4e',
+]
+export function bakesAFrame(url) {
+    return typeof url === 'string' && url !== '' && BAKED_FRAME_MARKERS.some(m => url.includes(m))
+}
 
 // ── UNIFIED BACKGROUNDS ──────────────────────────────────────────────
 // Per the spring 2026 redesign the studio collapses three distinct

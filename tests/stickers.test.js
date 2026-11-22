@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync, statSync } from 'fs'
-import { STICKER_LIBRARY, STICKER_LIMITS, STICKER_ANCHORS, STICKER_LABELS_HE, sanitizeStickers, newSticker, stickerById, stickerStyle } from '@/lib/stickers'
+import { STICKER_LIBRARY, STICKER_LIMITS, STICKER_ANCHORS, STICKER_LABELS_HE, sanitizeStickers, newSticker, stickerById, stickerStyle, stickerShownOn } from '@/lib/stickers'
+import sharp from 'sharp'
+import { expandBookPages } from '@/lib/bookPages'
 import { sanitizePageStyle, mergePageStyle, pageStyleOf, overriddenKeys } from '@/lib/pageStyle'
 
 describe('the sticker library', () => {
@@ -80,13 +82,69 @@ describe('stickers in the page style', () => {
 describe('where they are drawn', () => {
     it('every page goes through BookPageTemplate, which wraps only a page that has stickers', () => {
         const src = readFileSync('src/components/BookPageTemplate/BookPageTemplate.jsx', 'utf8')
-        expect(src).toContain('<StickerLayer stickers={stickers} />')
-        expect(src).toContain('if (!stickers?.length) return <BookPageBody {...props} />')
+        expect(src).toContain('<StickerLayer stickers={stickers} split={split} />')
+        expect(src).toContain('if (!stickers?.some(st => stickerShownOn(st, split))) return <BookPageBody {...props} />')
     })
 
     it('the page editor offers the sticker section', () => {
         const src = readFileSync('src/components/PageStyleControls/PageStyleControls.jsx', 'utf8')
         expect(src).toContain("label='מדבקות'")
         expect(src).toContain("set('stickers', list)")
+    })
+})
+
+describe('the drag stage', () => {
+    it('the recorded aspect of every sticker matches its file', async () => {
+        for (const s of STICKER_LIBRARY) {
+            const m = await sharp(`public${s.url}`).metadata()
+            expect(s.ar, s.id).toBeCloseTo(m.width / m.height, 2)
+        }
+    })
+
+    it('the editor opens the stage with the page(s) of the selected entry', () => {
+        const ctl = readFileSync('src/components/PageStyleControls/StickerControls.jsx', 'utf8')
+        expect(ctl).toContain('<StickerStage')
+        const editor = readFileSync('src/components/PageStyleControls/PageStyleControls.jsx', 'utf8')
+        expect(editor).toContain('pages={stickerPages}')
+        expect(editor).toContain('expandBookPages([entry]')
+        const stage = readFileSync('src/components/PageStyleControls/StickerStage.jsx', 'utf8')
+        // a window of its own: a drag must never turn the flipbook
+        expect(stage).toContain('createPortal')
+        expect(stage).toContain('setPointerCapture')
+    })
+})
+
+describe('stickers and split pages', () => {
+    const long = 'ברכה ארוכה '.repeat(40)
+    const entry = {
+        id: 'e1', name: 'רחל', text: long, imageUrl: 'https://x/y.jpg',
+        pageStyle: { stickers: [{ k: 'peony', pg: 't' }, { k: 'olive', pg: 'p' }, { k: 'gold-heart' }] },
+    }
+    const pages = expandBookPages([entry], { autoSplit: true, splitThreshold: 50 })
+
+    it('a long blessing with a photo is two pages that carry the same style', () => {
+        expect(pages.map(p => p._split)).toEqual(['text', 'photo'])
+        expect(pages[0].pageStyle).toBe(pages[1].pageStyle)
+    })
+
+    it('a sticker placed on one page of the pair is on that page only', () => {
+        const forText = pages[0].pageStyle.stickers.filter(st => stickerShownOn(sanitizeStickers([st])[0], pages[0]._split)).map(st => st.k)
+        const forPhoto = pages[1].pageStyle.stickers.filter(st => stickerShownOn(sanitizeStickers([st])[0], pages[1]._split)).map(st => st.k)
+        expect(forText).toEqual(['peony', 'gold-heart'])
+        expect(forPhoto).toEqual(['olive', 'gold-heart'])
+    })
+
+    it('with no side given a sticker shows on both, and a page that is not split shows everything', () => {
+        expect(stickerShownOn({ k: 'rose' }, 'text')).toBe(true)
+        expect(stickerShownOn({ k: 'rose' }, 'photo')).toBe(true)
+        expect(stickerShownOn({ k: 'rose', pg: 'p' }, undefined)).toBe(true)
+        expect(stickerShownOn({ k: 'rose', pg: 't' }, undefined)).toBe(true)
+    })
+
+    it('the side survives sanitising, and junk sides are dropped', () => {
+        expect(sanitizeStickers([{ k: 'rose', pg: 'p' }])[0].pg).toBe('p')
+        expect(sanitizeStickers([{ k: 'rose', pg: 'x' }])[0]).not.toHaveProperty('pg')
+        expect(newSticker('rose', 'mc', 't').pg).toBe('t')
+        expect(newSticker('rose', 'mc')).not.toHaveProperty('pg')
     })
 })

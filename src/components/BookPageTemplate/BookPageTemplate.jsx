@@ -18,6 +18,7 @@ import WindowPageLayout from '../WindowPageLayout/WindowPageLayout'
 import DuoPageLayout from '../DuoPageLayout/DuoPageLayout'
 import ComposedPageLayout from '../ComposedPageLayout/ComposedPageLayout'
 import StickerLayer from '../StickerLayer/StickerLayer'
+import { stickerShownOn } from '@/lib/stickers'
 
 function BookPageBody({ entry: savedEntry, styleSettings: savedStyle, scaledWidth, scaledHeight }) {
     // On a network that blocks Google's storage host, show the photo and
@@ -478,12 +479,14 @@ function BookPageBody({ entry: savedEntry, styleSettings: savedStyle, scaledWidt
 // flipbook, the PDF and the print export alike. A page without stickers is
 // returned exactly as before: no wrapper, no extra element.
 export default function BookPageTemplate(props) {
+    const split = props.entry?._split
     const stickers = pageStyleOf(props.entry)?.stickers
-    if (!stickers?.length) return <BookPageBody {...props} />
+    // a page that has none of ITS OWN (a split entry's other half) stays unwrapped
+    if (!stickers?.some(st => stickerShownOn(st, split))) return <BookPageBody {...props} />
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
             <BookPageBody {...props} />
-            <StickerLayer stickers={stickers} />
+            <StickerLayer stickers={stickers} split={split} />
         </div>
     )
 }
