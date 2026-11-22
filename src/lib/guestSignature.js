@@ -76,3 +76,16 @@ export function signatureKeyFor(eventType) {
 export function signatureDesign(eventType) {
     return { ...SIGNATURE[signatureKeyFor(eventType)] }
 }
+
+/**
+ * The house look to fall back to for an event that has no saved `guestDesign`, or null when
+ * the event already has a look of its own. A poker table has its felt, and an event on a
+ * chosen design variant (romantic, night, dawn) has that variant; a guest design merged over
+ * either would bury it (see buildGuestPageTheme). Everything else gets the house look for
+ * its occasion.
+ */
+export function defaultGuestDesign(eventType, designVariant) {
+    if (eventType === 'poker') return null
+    if (designVariant) return null
+    return signatureDesign(eventType)
+}

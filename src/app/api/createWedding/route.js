@@ -246,6 +246,11 @@ export async function POST(req) {
                     // owner's first look is a finished design rather than the plain default.
                     // Written only here, when the event is created: the owner's own pick replaces it.
                     ...(details.fields.eventType ? { bookDesign: autoBookDesign(details.fields.eventType) } : {}),
+                    // New events keep every photo whole, in its own shape (lib/fullPhoto.js): the guest
+                    // page skips the 4:3 cropper and the book shows the whole picture. A portrait used
+                    // to lose its face to a centre crop, and a crop made at upload cannot be undone.
+                    // The owner can switch it off; existing events are untouched.
+                    ...(details.fields.eventType ? { noPhotoCrop: true } : {}),
                     ...details.fields,
                 },
                 { merge: true },

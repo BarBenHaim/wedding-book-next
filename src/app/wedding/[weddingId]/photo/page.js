@@ -7,7 +7,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '../../../../lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { buildGuestPageTheme } from '@/lib/guestPageTheme'
-import { signatureDesign } from '@/lib/guestSignature'
+import { defaultGuestDesign } from '@/lib/guestSignature'
 import Cropper from 'react-easy-crop'
 import { keepsWholePhoto, photoDrawPlan } from '@/lib/fullPhoto'
 import imageCompression from 'browser-image-compression'
@@ -266,7 +266,7 @@ export default function TextPage() {
                     // An event nobody has styled gets the house look for its occasion (guestSignature.js),
                     // not the old garden: a bar mitzvah used to open on roses and an arch. A design the
                     // owner or the studio saved is untouched, and nothing is written to the event.
-                    setGuestDesign(previewGd || data.guestDesign || signatureDesign(data.eventType))
+                    setGuestDesign(previewGd || data.guestDesign || defaultGuestDesign(data.eventType, data.designVariant))
                     setBookDoc({ bookDesign: data.bookDesign, coverDesign: data.coverDesign, book: data.book, noPhotoCrop: data.noPhotoCrop })
                     if (previewCopy) setFormCopy(prev => ({ ...prev, ...previewCopy }))
                 }
@@ -695,7 +695,13 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
 
         let cropW
         let cropH
-        if (sw / sh > TARGET_RATIO) {
+        if (wholePhoto) {
+            // An event that keeps photos whole (fullPhoto.js) keeps the camera's whole frame
+            // too. The gallery path already skipped the cropper; the camera was still cutting
+            // every capture down to 4:3, so the book had nothing whole to show.
+            cropW = sw
+            cropH = sh
+        } else if (sw / sh > TARGET_RATIO) {
             // Source is wider than 4:3 — crop the sides off.
             cropH = sh
             cropW = sh * TARGET_RATIO
@@ -1629,7 +1635,10 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                         <div
                             className='relative w-full rounded-[18px] overflow-hidden'
                             style={{
-                                aspectRatio: '4 / 3',
+                                // Empty, the well is a short invitation rather than a tall blank box: it
+                                // was ~230px of nothing on a phone and pushed the send button below the fold.
+                                // The moment a photo (or the camera) is in it, it is the locked 4:3 again.
+                                aspectRatio: photoUrl || cameraOpen ? '4 / 3' : '16 / 8',
                                 // Full card width, locked 4:3. Generous height
                                 // cap so a full-width 4:3 well isn't clamped
                                 // narrow; the page scrolls on a short device.
@@ -1721,7 +1730,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                         autoPlay
                                         playsInline
                                         muted
-                                        className={`w-full h-full object-cover ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
+                                        className={`w-full h-full ${wholePhoto ? 'object-contain' : 'object-cover'} ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
                                     />
                                     <div className='absolute bottom-4 left-0 w-full flex justify-center items-center gap-8'>
                                         <button
@@ -2890,7 +2899,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
                                             autoPlay
                                             playsInline
                                             muted
-                                            className={`w-full h-full object-cover ${
+                                            className={`w-full h-full ${wholePhoto ? 'object-contain' : 'object-cover'} ${
                                                 cameraFacing === 'user' ? 'scale-x-[-1]' : ''
                                             }`}
                                         />

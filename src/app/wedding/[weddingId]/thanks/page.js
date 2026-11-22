@@ -15,7 +15,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../../../../lib/firebaseClient'
-import { signatureDesign } from '@/lib/guestSignature'
+import { defaultGuestDesign } from '@/lib/guestSignature'
 import { listUnsent } from '../../../../lib/offlineQueue'
 import { flushQueue } from '../../../../lib/uploadEntry'
 import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
@@ -42,7 +42,7 @@ export default function ThanksPage() {
                     setLocale(normalizeLocale(snap.data().locale))
                     // The house (Signature) look carries over from the blessing page to this one.
                     // Same default as the blessing page: an unstyled event shows the house look for its occasion.
-                    const gd = snap.data().guestDesign || signatureDesign(snap.data().eventType)
+                    const gd = snap.data().guestDesign || defaultGuestDesign(snap.data().eventType, snap.data().designVariant)
                     if (gd && typeof gd.pageBgImage === 'string' && gd.pageBgImage.includes('/backgrounds/signature-')) setSignature(gd)
                 }
             } catch {

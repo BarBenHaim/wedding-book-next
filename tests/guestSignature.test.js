@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, statSync, existsSync } from 'fs'
-import { SIGNATURE, signatureDesign, signatureKeyFor } from '@/lib/guestSignature'
+import { SIGNATURE, signatureDesign, signatureKeyFor, defaultGuestDesign } from '@/lib/guestSignature'
 
 describe('the Signature guest designs', () => {
     it('a wedding gets the paper, everything else the night', () => {
@@ -65,5 +65,25 @@ describe('the thanks page', () => {
         const src = readFileSync('src/app/wedding/[weddingId]/thanks/page.js', 'utf8')
         expect(src).toContain("includes('/backgrounds/signature-')")
         expect(src).toContain('signature.pageBgImage')
+    })
+})
+
+describe('the fallback for an event with no saved guest design', () => {
+    it('is the house look for the occasion', () => {
+        expect(defaultGuestDesign('bar_mitzvah', '').pageBgImage).toContain('signature-night')
+        expect(defaultGuestDesign('wedding', undefined).pageBgImage).toContain('signature-paper')
+    })
+
+    it('leaves a poker table and a chosen variant alone, because a merged design would bury them', () => {
+        expect(defaultGuestDesign('poker', '')).toBe(null)
+        for (const v of ['romantic', 'night', 'dawn']) expect(defaultGuestDesign('wedding', v)).toBe(null)
+    })
+
+    it('both guest pages use it, never the bare signatureDesign', () => {
+        for (const f of ['src/app/wedding/[weddingId]/photo/page.js', 'src/app/wedding/[weddingId]/thanks/page.js']) {
+            const src = readFileSync(f, 'utf8')
+            expect(src).toContain('defaultGuestDesign(')
+            expect(src).not.toMatch(/\|\| signatureDesign\(/)
+        }
     })
 })
