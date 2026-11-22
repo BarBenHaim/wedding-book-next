@@ -5,6 +5,7 @@ import {
     renderLifecycleEmail,
     messageCopy,
     digestLines,
+    dailySummary,
     bookTitleOf,
     daysBetween,
     israelDate,
@@ -162,5 +163,32 @@ describe('the balance-paid e-mail', () => {
     it('createWedding sends it when a balance order is paid', () => {
         const src = readFileSync('src/app/api/createWedding/route.js', 'utf8')
         expect(src).toContain('renderBalancePaidEmail(')
+    })
+})
+
+describe('the daily summary to the owner of the business', () => {
+    it('says nothing on a quiet day, whatever the greetings', () => {
+        expect(dailySummary({})).toBe(null)
+        expect(dailySummary({ greetings: 40 })).toBe(null)
+    })
+
+    it('lists new orders, balances paid and what needs attention', () => {
+        const m = dailySummary({
+            newOrders: [{ title: 'נועם', amount: '190.00' }],
+            balancesPaid: [{ title: 'אריאל' }],
+            greetings: 7,
+            failedLocks: [{ orderId: '7001', error: 'x' }],
+            exceptionLines: ['אירוע דנה: בעוד 3 ימים ועדיין אין ברכות.'],
+        })
+        expect(m.subject).toContain('סיכום יומי')
+        expect(m.text).toContain('נועם')
+        expect(m.text).toContain('אריאל')
+        expect(m.text).toContain('ברכות שנכתבו ביממה האחרונה: 7')
+        expect(m.text).toContain('7001')
+        expect(m.text).toContain('אין ברכות')
+    })
+
+    it('one alert alone is enough to send', () => {
+        expect(dailySummary({ failedLocks: [{ orderId: '1' }] })).not.toBe(null)
     })
 })

@@ -18,7 +18,7 @@ import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import { adminDb as db } from '@/lib/firebaseAdmin'
 import { Timestamp } from 'firebase-admin/firestore'
-import { nextMessage, renderLifecycleEmail, bookTitleOf, digestLines, israelDate, daysBetween, LIFECYCLE_START_MS } from '@/lib/lifecycle'
+import { nextMessage, renderLifecycleEmail, bookTitleOf, digestLines, dailySummary, israelDate, daysBetween, LIFECYCLE_START_MS } from '@/lib/lifecycle'
 import { enterSecret, signEnterToken, enterUrl } from '@/lib/enterLink'
 import { eventSignUrl } from '@/lib/eventLinks'
 
@@ -50,7 +50,10 @@ export async function GET(req) {
     const dry = new URL(req.url).searchParams.get('dry') === '1'
     const now = Date.now()
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://app.weddingtales.co.il'
-    const out = { ok: true, dry, checked: 0, due: [], sent: 0, failed: 0, digest: 0 }
+    const out = { ok: true, dry, checked: 0, due: [], sent: 0, failed: 0, digest: 0, summary: false }
+    const dayAgo = now - 24 * 60 * 60 * 1000
+    const newOrders = []
+    const balancesPaid = []
 
     try {
         const snap = await db.collection('weddings').where('createdAt', '>=', Timestamp.fromMillis(LIFECYCLE_START_MS)).get()
@@ -63,6 +66,10 @@ export async function GET(req) {
             const w = doc.data()
             if (w.createdVia !== 'order') continue
             out.checked++
+            const createdMs = w.createdAt?.toMillis ? w.createdAt.toMillis() : 0
+            if (createdMs >= dayAgo) newOrders.push({ title: bookTitleOf(w), eventType: w.eventType, amount: w.amountPaid })
+            const paidMs = w.balancePaidAt?.toMillis ? w.balancePaidAt.toMillis() : 0
+            if (paidMs >= dayAgo) balancesPaid.push({ title: bookTitleOf(w) })
             const entries = (await doc.ref.collection('entries').count().get()).data().count
             const sent = w.lifecycleSent || {}
 
@@ -100,15 +107,34 @@ export async function GET(req) {
         }
 
         const lines = digestLines({ quietEvents: quiet, overdueBalances: overdue })
-        if (lines.length) {
-            out.digest = lines.length
+        out.digest = lines.length
+
+        // How many blessings were written in the last day, across every event (best effort).
+        let greetings = 0
+        try {
+            const all = await db.collection('weddings').select().get()
+            for (let i = 0; i < all.docs.length; i += 15) {
+                const counts = await Promise.all(
+                    all.docs.slice(i, i + 15).map(d => d.ref.collection('entries').where('timestamp', '>=', Timestamp.fromMillis(dayAgo)).count().get().then(r => r.data().count).catch(() => 0)),
+                )
+                greetings += counts.reduce((a, c) => a + c, 0)
+            }
+        } catch { /* the number is a nicety, never a reason to fail the run */ }
+
+        // Paid orders that did not open an event in the last three days.
+        let failedLocks = []
+        try {
+            const f = await db.collection('ordersLocks').where('status', '==', 'failed').get()
+            failedLocks = f.docs
+                .map(d => ({ orderId: d.id, error: d.data().error, at: Number(d.data().failedAtMs) || 0 }))
+                .filter(x => x.at >= now - 3 * 24 * 60 * 60 * 1000)
+        } catch { /* ignore */ }
+
+        const summary = dailySummary({ newOrders, balancesPaid, greetings, failedLocks, exceptionLines: lines })
+        if (summary) {
+            out.summary = true
             if (!dry) {
-                await transporter.sendMail({
-                    from: `"Wedding Tales" <${process.env.MAIL_USER}>`,
-                    to: process.env.MAIL_USER,
-                    subject: `מה דורש תשומת לב היום (${lines.length})`,
-                    text: lines.join('\n') + '\n\nניהול: https://app.weddingtales.co.il/admin',
-                })
+                await transporter.sendMail({ from: `"Wedding Tales" <${process.env.MAIL_USER}>`, to: process.env.MAIL_USER, subject: summary.subject, text: summary.text })
                 for (const q of quiet) await q.ref.set({ lifecycleSent: { digest_quiet: now } }, { merge: true })
                 for (const o of overdue) await o.ref.set({ lifecycleSent: { digest_balance: now } }, { merge: true })
             }

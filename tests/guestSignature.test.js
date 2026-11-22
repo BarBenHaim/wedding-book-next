@@ -59,3 +59,11 @@ describe('where it is used', () => {
         expect(btn).not.toContain('BookPageTemplate')
     })
 })
+
+describe('the thanks page', () => {
+    it('carries the Signature look over from the blessing page, and only that look', () => {
+        const src = readFileSync('src/app/wedding/[weddingId]/thanks/page.js', 'utf8')
+        expect(src).toContain("includes('/backgrounds/signature-')")
+        expect(src).toContain('signature.pageBgImage')
+    })
+})

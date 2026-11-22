@@ -255,3 +255,37 @@ export function digestLines({ failedLocks = [], quietEvents = [], overdueBalance
     for (const b of overdueBalances) lines.push(`אירוע ${b.title || b.id}: היתרה (${b.balanceDue || 800} ₪) לא שולמה ${b.days} ימים אחרי האירוע. ${b.email || ''}`.trim())
     return lines
 }
+
+/**
+ * The one e-mail the owner of the business gets a day. { subject, text } or null when
+ * there is nothing worth his attention (greetings alone never are: they are the point).
+ *   newOrders      [{ title, eventType, amount }]  events opened by a paid order in the last day
+ *   balancesPaid   [{ title }]                      balances paid in the last day
+ *   greetings      number of blessings written in the last day, across all events
+ *   failedLocks    [{ orderId, error }]             paid orders that did not open an event
+ *   exceptionLines the lines from digestLines()
+ */
+export function dailySummary({ newOrders = [], balancesPaid = [], greetings = 0, failedLocks = [], exceptionLines = [] } = {}) {
+    const alerts = failedLocks.length + exceptionLines.length
+    if (!newOrders.length && !balancesPaid.length && !alerts) return null
+    const out = []
+    if (newOrders.length) {
+        out.push(`הזמנות חדשות: ${newOrders.length}`)
+        for (const o of newOrders) out.push(`  • ${o.title || 'ספר חדש'}${o.amount ? ` (${o.amount} ₪)` : ''}`)
+    }
+    if (balancesPaid.length) {
+        out.push(`יתרות ששולמו, ספרים להדפסה: ${balancesPaid.length}`)
+        for (const b of balancesPaid) out.push(`  • ${b.title || 'ספר'}`)
+    }
+    out.push(`ברכות שנכתבו ביממה האחרונה: ${greetings}`)
+    if (alerts) {
+        out.push('', 'דורש תשומת לב:')
+        for (const l of failedLocks) out.push(`  • הזמנה ${l.orderId}: שולמה והאירוע לא נפתח (${l.error || 'שגיאה'}). WooCommerce ינסה שוב.`)
+        for (const l of exceptionLines) out.push(`  • ${l}`)
+    }
+    const bits = []
+    if (newOrders.length) bits.push(`${newOrders.length} הזמנות`)
+    if (balancesPaid.length) bits.push(`${balancesPaid.length} להדפסה`)
+    if (alerts) bits.push(`${alerts} לבדוק`)
+    return { subject: `Wedding Tales, סיכום יומי: ${bits.join(', ')}`, text: out.join('\n') + '\n\nניהול: https://app.weddingtales.co.il/admin' }
+}

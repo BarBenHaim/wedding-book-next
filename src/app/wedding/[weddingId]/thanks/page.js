@@ -28,6 +28,7 @@ import BookPagePreview from '@/components/BookPagePreview/BookPagePreview'
 export default function ThanksPage() {
     const { weddingId } = useParams()
     const [locale, setLocale] = useState('he')
+    const [signature, setSignature] = useState(null)
 
     useEffect(() => {
         if (!weddingId) return
@@ -38,6 +39,9 @@ export default function ThanksPage() {
                 if (cancelled) return
                 if (snap.exists()) {
                     setLocale(normalizeLocale(snap.data().locale))
+                    // The house (Signature) look carries over from the blessing page to this one.
+                    const gd = snap.data().guestDesign
+                    if (gd && typeof gd.pageBgImage === 'string' && gd.pageBgImage.includes('/backgrounds/signature-')) setSignature(gd)
                 }
             } catch {
                 /* keep Hebrew default */
@@ -50,12 +54,12 @@ export default function ThanksPage() {
 
     return (
         <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
-            <ThanksApp />
+            <ThanksApp signature={signature} />
         </NextIntlClientProvider>
     )
 }
 
-function ThanksApp() {
+function ThanksApp({ signature = null }) {
     const router = useRouter()
     const { weddingId } = useParams()
     const t = useTranslations('thanks')
@@ -216,15 +220,26 @@ function ThanksApp() {
     return (
         <div
             className='min-h-[calc(100vh-4rem)] flex items-start justify-center px-4 py-8 font-sans relative overflow-hidden'
-            style={{
-                // Premium ivory wash — matches the photo / blessing pages.
-                backgroundColor: '#f8f4ec',
-                backgroundImage: [
-                    'radial-gradient(ellipse 900px 480px at 50% -10%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 55%)',
-                    'radial-gradient(ellipse 520px 520px at 92% 105%, rgba(201,164,78,0.07) 0%, rgba(201,164,78,0) 60%)',
-                    'radial-gradient(ellipse 440px 440px at 8% 105%, rgba(186,156,108,0.05) 0%, rgba(186,156,108,0) 60%)',
-                ].join(', '),
-            }}
+            style={
+                signature
+                    ? {
+                          // The Signature look of the blessing page, so the guest's last screen matches.
+                          backgroundColor: signature.pageBg,
+                          backgroundImage: signature.pageBgImage,
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center top',
+                          backgroundRepeat: 'no-repeat',
+                      }
+                    : {
+                          // Premium ivory wash — matches the photo / blessing pages.
+                          backgroundColor: '#f8f4ec',
+                          backgroundImage: [
+                              'radial-gradient(ellipse 900px 480px at 50% -10%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 55%)',
+                              'radial-gradient(ellipse 520px 520px at 92% 105%, rgba(201,164,78,0.07) 0%, rgba(201,164,78,0) 60%)',
+                              'radial-gradient(ellipse 440px 440px at 8% 105%, rgba(186,156,108,0.05) 0%, rgba(186,156,108,0) 60%)',
+                          ].join(', '),
+                      }
+            }
         >
             <div className='relative z-10 w-full max-w-[26rem] animate-scaleIn'>
                 {/* ── Status pill — small chip at the very top showing
@@ -275,16 +290,16 @@ function ThanksApp() {
 
                 {/* ── Celebration block ── */}
                 <div className='text-center mb-7'>
-                    <svg viewBox='0 0 24 24' className='w-[22px] h-[22px] mx-auto mb-3.5' fill='#c9a44e'>
+                    <svg viewBox='0 0 24 24' className='w-[22px] h-[22px] mx-auto mb-3.5' fill={signature ? signature.accentColor : '#c9a44e'}>
                         <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                     </svg>
                     <h1
                         className='font-bold mb-2 leading-[1.15]'
-                        style={{ color: '#1a1410', fontSize: '28px', letterSpacing: '-0.01em' }}
+                        style={{ color: signature ? signature.titleColor : '#1a1410', fontSize: '28px', letterSpacing: '-0.01em' }}
                     >
                         {t('savedHeading')}
                     </h1>
-                    <p className='leading-relaxed' style={{ color: '#7a6a52', fontSize: '14px', maxWidth: 340, margin: '0 auto' }}>
+                    <p className='leading-relaxed' style={{ color: signature ? signature.subtitleColor : '#7a6a52', fontSize: '14px', maxWidth: 340, margin: '0 auto' }}>
                         {t(noPhoto ? 'savedBodyTextOnly' : 'savedBody')}
                     </p>
                 </div>
@@ -415,7 +430,7 @@ function ThanksApp() {
                 {/* Wedding Tales mark at the very bottom — small, gentle
                     reminder of the brand without competing with the CTA. */}
                 <div className='flex justify-center mt-2'>
-                    <img src='/logo-wt.png' alt='Wedding Tales' className='h-7 w-auto opacity-50' />
+                    <img src={signature && signature.pageBg === '#0C1030' ? '/brand/logo-on-dark.png' : '/logo-wt.png'} alt='Wedding Tales' className='h-7 w-auto opacity-60' />
                 </div>
             </div>
 
