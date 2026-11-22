@@ -30,7 +30,7 @@ import { getIdToken } from 'firebase/auth'
 import { auth } from '@/lib/firebaseClient'
 import { uploadEventImage } from '@/lib/uploadEventImage'
 import imageCompression from 'browser-image-compression'
-import { PHOTO_FRAMES } from '@/lib/photoFrames'
+import { PHOTO_FRAMES, ART_FRAMES, artFrameByUrl } from '@/lib/photoFrames'
 import { TEXTURES_REGISTRY } from '@/lib/studioPresets'
 import { buildPageIndex, pageLabel } from '@/lib/bookPageIndex'
 import { sanitizePageStyle, overriddenKeys, mergePageStyle } from '@/lib/pageStyle'
@@ -671,9 +671,19 @@ export default function PageStyleControls({
 
                 <Row label='מסגרת לתמונה' pinned={pinned.has('photoFrame')} onUnpin={() => unpin('photoFrame')}>
                     <Choice
-                        value={effective.photoFrame ?? null}
-                        onChange={v => set('photoFrame', v)}
-                        options={[{ value: null, label: 'בלי' }, ...PHOTO_FRAMES.map(f => ({ value: f.id, label: f.label }))]}
+                        value={effective.photoFrameUrl ? `art:${artFrameByUrl(effective.photoFrameUrl)?.id ?? ''}` : (effective.photoFrame ?? null)}
+                        onChange={v => {
+                            // An art frame is a picture (url + slice); a built-in is an id. Picking
+                            // one clears the other, so a page never carries both.
+                            const art = typeof v === 'string' && v.startsWith('art:') ? ART_FRAMES.find(f => `art:${f.id}` === v) : null
+                            if (art) apply({ ...draft, photoFrame: null, photoFrameUrl: art.url, photoFrameSlice: art.slicePct })
+                            else apply({ ...draft, photoFrame: v, photoFrameUrl: null, photoFrameSlice: null })
+                        }}
+                        options={[
+                            { value: null, label: 'בלי' },
+                            ...PHOTO_FRAMES.map(f => ({ value: f.id, label: f.label })),
+                            ...ART_FRAMES.map(f => ({ value: `art:${f.id}`, label: f.label })),
+                        ]}
                     />
                 </Row>
 

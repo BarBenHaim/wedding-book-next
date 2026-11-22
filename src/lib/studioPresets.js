@@ -101,15 +101,74 @@ export const TEXTURES_REGISTRY = Array.from({ length: 9 }, (_, i) => ({
 // `studio_backgrounds`) and the picker will merge both lists — that
 // wires up in commit 5.
 export const STATIC_BACKGROUNDS = [
-    // wedding-bg / wedding-bg2 stay as PNG (under-1MB, not in this
-    // pass's WebP conversion). The other three were re-encoded to
-    // WebP at q 0.85, ~93% smaller than the source PNG.
-    { id: 'wedding-bg', label: 'חתונה — לבן', src: '/backgrounds/wedding-bg.png', tags: ['wedding'] },
-    { id: 'wedding-bg2', label: 'חתונה — עדין', src: '/backgrounds/wedding-bg2.png', tags: ['wedding'] },
-    { id: 'weddingdesign1', label: 'חתונה — פרחוני', src: '/backgrounds/weddingdesign1.webp', tags: ['wedding', 'romantic'] },
+    // ── The house page backgrounds (22.11.2026) ──────────────────────
+    // Frameless on purpose: a window or border box baked into a page
+    // background fights every page that is split or has only a blessing.
+    // All decoration sits at the edges, the middle is calm. Made with
+    // Codex, 1254px webp under public/backgrounds/book/.
+    { id: 'wd-blush', label: 'ורדים ורודים', src: '/backgrounds/book/wd-blush.webp', tags: ['wedding', 'romantic'] },
+    { id: 'wd-pampas', label: 'פמפס ופרחי שדה', src: '/backgrounds/book/wd-pampas.webp', tags: ['wedding', 'romantic'] },
+    { id: 'wd-silk', label: 'משי שמפניה', src: '/backgrounds/book/wd-silk.webp', tags: ['wedding', 'romantic'] },
+    { id: 'wd-sage', label: 'ענפי זית', src: '/backgrounds/book/wd-sage.webp', tags: ['wedding', 'romantic'] },
+    { id: 'bm-jerusalem', label: 'ירושלים', src: '/backgrounds/book/bm-jerusalem.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration'] },
+    { id: 'bm-iceblue', label: 'שמיים וזהב', src: '/backgrounds/book/bm-iceblue.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration'] },
+    { id: 'bm-navy', label: 'לילה של אורות', src: '/backgrounds/book/bm-navy.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration', 'dark'] },
+    { id: 'bm-royal', label: 'כחול מלכותי', src: '/backgrounds/book/bm-royal.webp', tags: ['bar_mitzvah', 'bat_mitzvah', 'celebration', 'dark'] },
+    { id: 'bd-confetti', label: 'קונפטי', src: '/backgrounds/book/bd-confetti.webp', tags: ['birthday', 'celebration'] },
+    { id: 'bd-balloons', label: 'בלונים', src: '/backgrounds/book/bd-balloons.webp', tags: ['birthday', 'celebration'] },
+    { id: 'nt-lilac', label: 'לילך', src: '/backgrounds/book/nt-lilac.webp', tags: ['neutral'] },
+    { id: 'nt-botanical', label: 'עלים עדינים', src: '/backgrounds/book/nt-botanical.webp', tags: ['neutral'] },
+    { id: 'nt-linen', label: 'פשתן', src: '/backgrounds/book/nt-linen.webp', tags: ['neutral'] },
+    { id: 'nt-marble', label: 'שיש', src: '/backgrounds/book/nt-marble.webp', tags: ['neutral'] },
+    // Older ones that books still use. wedding-bg, wedding-bg2 and
+    // weddingdesign1 were dropped from the picker: the first two carry
+    // the "scan, shoot and bless" flyer text and the third is a tall
+    // cover-shaped scene. The files stay, other pages read them.
     { id: 'romanticgarden', label: 'גן רומנטי', src: '/backgrounds/romanticgarden.webp', tags: ['wedding', 'romantic'] },
     { id: 'pokerbg', label: 'פוקר — לבד ירוק', src: '/backgrounds/pokerbg.webp', tags: ['poker'] },
 ]
+
+// ── Retired from the picker (22.11.2026) ─────────────────────────────
+// Backgrounds that bake a photo window or a border box into the page.
+// They are wrong the moment a page is split or carries only a blessing.
+// Books that already use one keep rendering it (a book stores the image
+// URL, not the id), so this only removes them from what is offered.
+// The unused uploaded ones were deleted outright; the ids listed here
+// that are still in Firestore belong to books that use them.
+export const RETIRED_BACKGROUND_IDS = new Set([
+    'tex3', 'tex4', 'tex6', 'tex7', 'frame1', 'frame2', 'frame3', 'frame4',
+    // uploaded
+    'bg_1u52dfjwctk5',
+    'bg_4469zgr3r0og',
+    'bg_4etd1tvjlv0s',
+    'bg_5copbxzdxe9m',
+    'bg_79blj178gj2y',
+    'bg_7v3yxrrgg665',
+    'bg_av9wh8u8t41z',
+    'bg_bp9ervj5ochz',
+    'bg_dext3lgo14mw',
+    'bg_dj059v9s1hu9',
+    'bg_fw6e8108xc8a',
+    'bg_ibo2zh2etta6',
+    'bg_k6yp34qllk2e',
+    'bg_kllh8dumkjg8',
+    'bg_kyn62ndteth7',
+    'bg_m1t8fzfiqlun',
+    'bg_m6ydjpgoggbx',
+    'bg_o9z5s2yqmaxq',
+    'bg_oe70unsgecd2',
+    'bg_qb88965rdrz9',
+    'bg_qpr0b9iziwvg',
+    'bg_ryk6sv0ev9hg',
+    'bg_st34s6kdp94a',
+    'bg_thtlnz1yzr52',
+    'bg_uvx1z5toel4e',
+    'bg_w6yi41rx0gjw',
+    'bg_wll7xvas3d6p',
+    'bg_xypwrhk4gg91',
+    'bg_zcwi4m7ptal2',
+])
+const offered = b => !RETIRED_BACKGROUND_IDS.has(b.id)
 
 // ── UNIFIED BACKGROUNDS ──────────────────────────────────────────────
 // Per the spring 2026 redesign the studio collapses three distinct
@@ -130,7 +189,7 @@ export const UNIFIED_BACKGROUNDS = [
     ...STATIC_BACKGROUNDS.map(b => ({ id: b.id, src: b.src, label: b.label, kind: 'background', tags: b.tags || [] })),
     ...TEXTURES_REGISTRY.map(t => ({ id: t.id, src: t.src, label: t.label, kind: 'texture', tags: ['texture'] })),
     ...Object.values(FRAMES_REGISTRY).map(f => ({ id: f.id, src: f.src, label: f.label, kind: 'frame', tags: ['frame'] })),
-]
+].filter(offered)
 
 // ── Font registry ────────────────────────────────────────────────────
 // next/font generates a hashed className per build, so we never store
@@ -519,7 +578,7 @@ export async function listAllBackgrounds() {
         ...UNIFIED_BACKGROUNDS.map(b => ({ ...b, origin: 'static' })),
         ...uploaded.map(b => ({ ...b, kind: 'background', origin: 'studio' })),
     ]
-    return all.filter(b => !hidden.has(b.id))
+    return all.filter(b => offered(b) && !hidden.has(b.id))
 }
 
 // Inspect an image File and return its natural dimensions + aspect.

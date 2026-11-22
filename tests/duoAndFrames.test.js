@@ -114,3 +114,47 @@ describe('canonical schema — composition + photo layers', () => {
         expect(next.photoFrameInset).toBe(6)
     })
 })
+
+import { existsSync, statSync } from 'fs'
+import { ART_FRAMES, artFrameByUrl } from '@/lib/photoFrames'
+import { readFileSync } from 'fs'
+
+describe('the art frames', () => {
+    it('are real files with a usable slice, and unique ids', () => {
+        const ids = new Set()
+        for (const f of ART_FRAMES) {
+            expect(existsSync(`public${f.url}`), f.url).toBe(true)
+            expect(f.slicePct).toBeGreaterThanOrEqual(4)
+            expect(f.slicePct).toBeLessThanOrEqual(45)
+            expect(ids.has(f.id)).toBe(false)
+            ids.add(f.id)
+            expect(artFrameByUrl(f.url)).toBe(f)
+        }
+        expect(artFrameByUrl('/nope.png')).toBe(null)
+    })
+})
+
+describe('the page backgrounds on offer', () => {
+    // studioPresets.js starts Firebase on import, so the registry is read as text.
+    const src = readFileSync('src/lib/studioPresets.js', 'utf8')
+    const staticBlock = src.slice(src.indexOf('export const STATIC_BACKGROUNDS'), src.indexOf('// ── Retired from the picker'))
+
+    it('every static background is a real file', () => {
+        const files = [...staticBlock.matchAll(/src: '([^']+)'/g)].map(m => m[1])
+        expect(files.length).toBeGreaterThanOrEqual(14)
+        for (const f of files) expect(existsSync(`public${f}`), f).toBe(true)
+    })
+
+    it('the house backgrounds are small enough for a phone', () => {
+        const files = [...staticBlock.matchAll(/src: '(\/backgrounds\/book\/[^']+)'/g)].map(m => m[1])
+        expect(files.length).toBe(14)
+        for (const f of files) expect(statSync(`public${f}`).size).toBeLessThan(200 * 1024)
+    })
+
+    it('textures and borders that bake a frame into the page are retired from the picker', () => {
+        const retired = src.slice(src.indexOf('export const RETIRED_BACKGROUND_IDS'), src.indexOf('const offered'))
+        for (const gone of ['tex3', 'tex4', 'tex6', 'tex7', 'frame1', 'frame2', 'frame4']) expect(retired).toContain(`'${gone}'`)
+        expect(src).toContain('].filter(offered)')
+        expect(src).toContain('offered(b) && !hidden.has(b.id)')
+    })
+})

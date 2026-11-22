@@ -97,6 +97,52 @@ export const PHOTO_FRAMES = [
         shadow: '0 3px 12px rgba(20,14,8,0.30)',
         photoRadiusPct: 0.4,
     },
+    // ── The house frames (22.11.2026): plain, drawn in code, any aspect ──
+    {
+        id: 'polaroid',
+        label: 'פולארויד',
+        mat: { padPct: 4.4, padBottomPct: 15, color: '#ffffff', radiusPct: 0.5 },
+        shadow: '0 6px 18px rgba(20,24,58,0.22), 0 1px 3px rgba(20,24,58,0.18)',
+        photoRadiusPct: 0.2,
+    },
+    {
+        id: 'soft-card',
+        label: 'כרטיס לבן',
+        mat: { padPct: 5, color: '#ffffff', radiusPct: 2.4 },
+        shadow: '0 10px 24px -8px rgba(20,24,58,0.28)',
+        photoRadiusPct: 1.4,
+    },
+    {
+        id: 'navy-line',
+        label: 'קו כחול',
+        mat: { padPct: 2.6, color: 'transparent' },
+        outerRing: { widthPct: 0.55, color: '#14183A' },
+        innerRing: { widthPct: 0.25, color: 'rgba(37,69,224,0.8)', gapPct: 1.1 },
+        photoRadiusPct: 0.2,
+    },
+    {
+        id: 'brand-blue',
+        label: 'כחול מותג',
+        mat: { padPct: 3, gradient: 'linear-gradient(135deg, #3358F0 0%, #2545E0 55%, #1B34B8 100%)', radiusPct: 1.6 },
+        innerRing: { widthPct: 0.3, color: 'rgba(255,255,255,0.7)', gapPct: 0 },
+        shadow: '0 8px 20px -8px rgba(28,52,184,0.55)',
+        photoRadiusPct: 0.8,
+    },
+    {
+        id: 'blush-mat',
+        label: 'פספרטו ורוד',
+        mat: { padPct: 5.6, color: '#fbeee9', radiusPct: 0.8 },
+        innerRing: { widthPct: 0.3, color: 'rgba(196,129,120,0.55)', gapPct: 1.6 },
+        shadow: '0 4px 14px rgba(120,70,60,0.18)',
+        photoRadiusPct: 0.3,
+    },
+    {
+        id: 'rounded',
+        label: 'פינות עגולות',
+        mat: { padPct: 0.8, color: 'transparent' },
+        photoRadiusPct: 6,
+        shadow: '0 8px 20px -10px rgba(20,24,58,0.35)',
+    },
 ]
 
 export function resolvePhotoFrame(id) {
@@ -184,4 +230,26 @@ export function photoOverlayGeometry(slotW, insetPct = 6, aspect = 4 / 3) {
         photoH,
         slotH: photoH + 2 * inset,
     }
+}
+
+// ── Art frames (22.11.2026) ──────────────────────────────────────────
+// Frames painted with Codex, shipped with the app under public/frames/art/.
+// Each is a nine-slice picture (see nineSlice.js): real transparency in the
+// middle and outside, corners that keep their shape and sides that stretch,
+// so one file fits a square, a landscape or a portrait photo. `slicePct` is
+// how deep the artwork reaches from its edge, measured on the file, so the
+// photo sits right against the frame with no gap.
+export const ART_FRAMES = [
+    { id: 'gold-floral', label: 'זהב ופרחים', url: '/frames/art/gold-floral.png', slicePct: 9.5 },
+    { id: 'ivory-scallop', label: 'תחרה שנהב', url: '/frames/art/ivory-scallop.png', slicePct: 12 },
+    { id: 'navy-gold', label: 'כחול וזהב', url: '/frames/art/navy-gold.png', slicePct: 8 },
+    { id: 'oak', label: 'עץ אלון', url: '/frames/art/oak.png', slicePct: 7.5 },
+    { id: 'olive', label: 'ענפי זית', url: '/frames/art/olive.png', slicePct: 11.5 },
+    { id: 'watercolor', label: 'צבעי מים', url: '/frames/art/watercolor.png', slicePct: 10.5 },
+]
+
+/** The art frame a stored `photoFrameUrl` belongs to, or null. */
+export function artFrameByUrl(url) {
+    if (!url) return null
+    return ART_FRAMES.find(f => f.url === url) || null
 }

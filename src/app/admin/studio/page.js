@@ -37,7 +37,7 @@ import {
 } from '@/lib/studioPresets'
 import defaultStyle from '@/app/wedding/[weddingId]/viewer/defaultStyle'
 import { EVENT_TYPE_ORDER, getEventConfig } from '@/lib/eventTypes'
-import { PHOTO_FRAMES } from '@/lib/photoFrames'
+import { PHOTO_FRAMES, ART_FRAMES } from '@/lib/photoFrames'
 import { uploadPhotoFrameAsset, listPhotoFrameAssets, deletePhotoFrameAsset } from '@/lib/studioPresets'
 import { listDefaultCovers, uploadDefaultCover, clearDefaultCover } from '@/lib/studioPresets'
 import { PUBLIC_EVENT_TYPES, EVENT_TYPE_META } from '@/lib/onboarding'
@@ -2844,6 +2844,32 @@ function PropertyPhotoFramePicker({ label, frameId, frameUrl, frameInset, frameS
                             </span>
                             <span className='text-[9.5px] leading-tight text-center' style={{ color: active ? '#8a6d30' : '#7a6a52' }}>
                                 {f.label}
+                            </span>
+                        </button>
+                    )
+                })}
+
+                {/* art frames — painted, nine-sliced, shipped with the app */}
+                {ART_FRAMES.map(item => {
+                    const active = frameUrl === item.url
+                    return (
+                        <button
+                            key={item.id}
+                            type='button'
+                            onClick={() => !disabled && onChange({ photoFrame: null, photoFrameUrl: item.url, photoFrameSlice: item.slicePct })}
+                            disabled={disabled}
+                            title={item.label}
+                            className={chipCls(active)}
+                        >
+                            <span className='flex items-center justify-center' style={{ width: 56, height: 52 }}>
+                                <span style={{ position: 'relative', width: 46, height: 36 }}>
+                                    <span style={{ position: 'absolute', inset: 4, borderRadius: 2, background: 'linear-gradient(135deg, #d8cdbb 0%, #b9ab93 100%)' }} />
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={item.url} alt='' style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill' }} />
+                                </span>
+                            </span>
+                            <span className='text-[9.5px] leading-tight text-center' style={{ color: active ? '#8a6d30' : '#7a6a52' }}>
+                                {item.label}
                             </span>
                         </button>
                     )
