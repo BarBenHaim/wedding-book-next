@@ -207,10 +207,12 @@ export default function PortalApp() {
     const nextStep = steps.findIndex(s => !s.done && s.key !== 'poster')
     const doneCount = steps.filter(s => s.done).length
     // The hero is the event's own stage: paper for a wedding, an evening of lights for the rest
-    const dark = !!w && w.eventType !== 'wedding'
+    // Older events carry no eventType: a couple's names mean a wedding, as everywhere else in the app
+    const isWedding = w?.eventType ? w.eventType === 'wedding' : !!(w?.brideNameHe || w?.brideName || w?.groomNameHe || w?.groomName)
+    const dark = !!w && !isWedding
     const heroInk = dark ? '#FFFFFF' : INK
     const heroSoft = dark ? '#C9CDEB' : MUT
-    const eventLabel = { wedding: 'חתונה', bar_mitzvah: 'בר מצווה', bat_mitzvah: 'בת מצווה', twins_bar_mitzvah: 'בר מצווה', birthday: 'יום הולדת' }[w?.eventType] || ''
+    const eventLabel = { wedding: 'חתונה', bar_mitzvah: 'בר מצווה', bat_mitzvah: 'בת מצווה', twins_bar_mitzvah: 'בר מצווה', birthday: 'יום הולדת' }[w?.eventType || (isWedding ? 'wedding' : '')] || ''
     const recent = useMemo(() => (entries || []).slice().sort((x, y) => (y.timestamp?.seconds || 0) - (x.timestamp?.seconds || 0)).slice(0, 8), [entries])
 
     const waShare = () => {
@@ -351,11 +353,11 @@ export default function PortalApp() {
                         {[
                             { n: entries ? blessings : '…', label: 'ברכות', icon: <Ic d={<path d='M4 6h16v10H9l-4 4V6Z' />} color={GOLD} size={18} /> },
                             { n: entries ? photos : '…', label: 'תמונות', icon: <Ic d={<><rect x='3.5' y='5' width='17' height='14' rx='2.5' /><circle cx='9' cy='10' r='1.6' /><path d='m4 17 5-4.5 4 3 3-2.5 4 3.5' /></>} color={GOLD} size={18} /> },
-                            { n: stage === 'paid' ? 'שולם' : stage === 'deposit' ? 'מקדמה' : 'פתוח', label: 'הזמנה', small: true, icon: <Ic d={<path d='M5 12.5l4.5 4.5L19 7.5' />} color={GOLD} size={18} sw={2.2} /> },
+                            { n: stage === 'paid' ? 'שולם' : stage === 'deposit' ? 'מקדמה שולמה' : 'מוכן לעריכה', label: stage ? 'התשלום' : 'הספר', small: true, icon: <Ic d={<path d='M5 12.5l4.5 4.5L19 7.5' />} color={GOLD} size={18} sw={2.2} /> },
                         ].map((s, i) => (
                             <div key={s.label} style={{ flex: 1, textAlign: 'center', borderInlineStart: i ? '1px solid #EFEBE2' : 'none' }}>
                                 <span style={{ display: 'inline-flex', width: 34, height: 34, borderRadius: 17, background: '#E6EBFF', alignItems: 'center', justifyContent: 'center' }}>{s.icon}</span>
-                                <div style={{ fontSize: s.small ? 17 : 22, lineHeight: '26px', fontWeight: 900, color: INK }}>{s.n}</div>
+                                <div style={{ fontSize: s.small ? 14.5 : 22, lineHeight: '26px', fontWeight: 900, color: INK }}>{s.n}</div>
                                 <div style={{ fontSize: 11.5, color: MUT }}>{s.label}</div>
                             </div>
                         ))}
