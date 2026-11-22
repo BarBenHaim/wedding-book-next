@@ -24,8 +24,9 @@ export default function AuthShell({ children, title, subtitle }) {
             className={`${heebo.className} min-h-[100dvh] flex flex-col items-center px-4 pt-8 pb-10`}
             style={{ background: AUTH.paper, color: AUTH.ink }}
         >
-            <a href='https://weddingtales.co.il' aria-label='Wedding Tales' className='mb-7 select-none text-[22px] leading-none no-underline' style={{ color: AUTH.ink }}>
-                <b className='font-black'>Wedding</b> Tales
+            <a href='https://weddingtales.co.il' aria-label='Wedding Tales' className='mb-7 block select-none no-underline'>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src='/brand/logo.svg' alt='Wedding Tales' width='279' height='46' className='block h-[46px] w-auto' />
             </a>
             <main
                 className='w-full max-w-[420px] rounded-[26px] bg-white px-6 py-7 sm:px-8'

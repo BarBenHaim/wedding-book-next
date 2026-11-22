@@ -261,7 +261,7 @@ export default function Header() {
                         <img
                             src='/logo-wt.png'
                             alt='Wedding Tales'
-                            className='h-16 md:h-16 w-auto transition-all duration-300 group-hover:scale-105 group-hover:drop-shadow-[0_0_8px_rgba(170,136,64,0.4)]'
+                            className='h-9 md:h-10 w-auto transition-all duration-300 group-hover:scale-105 group-hover:drop-shadow-[0_0_8px_rgba(170,136,64,0.4)]'
                         />
                     </button>
                 </nav>
@@ -299,7 +299,7 @@ export default function Header() {
                                 <path strokeLinecap='round' strokeLinejoin='round' d='M6 18L18 6M6 6l12 12' />
                             </svg>
                         </button>
-                        <img src='/logo-wt.png' alt='WT' className='h-9 w-auto' />
+                        <img src='/logo-wt.png' alt='Wedding Tales' className='h-7 w-auto' />
                     </div>
 
                     {/* Gold accent line */}

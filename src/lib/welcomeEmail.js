@@ -5,6 +5,8 @@
 // short card under it. Built from tables and inline styles because mail
 // clients ignore most of modern CSS; images are plain JPGs from /email.
 
+import { emailLogoImg } from './brandAssets'
+
 const INK = '#14183A'
 const ACCENT = '#2545E0'
 const PAPER = '#F3F0EA'
@@ -97,7 +99,7 @@ export function renderWelcomeEmail({
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${PAPER}" style="background:${PAPER};"><tr><td align="center" style="padding:24px 12px 32px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;direction:rtl;text-align:right;font-family:${FONT};color:${INK};">
 
-  <tr><td align="center" style="padding:6px 0 20px;font:400 22px/1 ${FONT};color:${INK};letter-spacing:-.01em;"><b style="font-weight:900;">Wedding</b> Tales</td></tr>
+  <tr><td align="center" style="padding:6px 0 20px;">${emailLogoImg(200)}</td></tr>
 
   <tr><td style="padding:0 20px 16px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${INK}" style="background:${INK};border-radius:24px;overflow:hidden;">

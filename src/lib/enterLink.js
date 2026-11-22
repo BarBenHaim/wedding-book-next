@@ -59,6 +59,8 @@ export function enterUrl(origin, token) {
     return `${base}/enter?t=${encodeURIComponent(token)}`
 }
 
+import { emailLogoImg } from './brandAssets'
+
 const INK = '#14183A'
 const PAPER = '#F3F0EA'
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
@@ -70,7 +72,7 @@ export function enterLinkEmail({ email, url }) {
 <body style="margin:0;padding:0;background:${PAPER};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${PAPER}"><tr><td align="center" style="padding:24px 12px 32px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;direction:rtl;text-align:right;font-family:Arial,'Segoe UI',Helvetica,sans-serif;color:${INK};">
-  <tr><td align="center" style="padding:6px 0 18px;font:400 22px/1 Arial,sans-serif;color:${INK};"><b style="font-weight:900;">Wedding</b> Tales</td></tr>
+  <tr><td align="center" style="padding:6px 0 18px;">${emailLogoImg(190)}</td></tr>
   <tr><td bgcolor="#FFFFFF" style="background:#FFFFFF;border-radius:22px;border:1px solid #E4DFD3;padding:28px 24px;">
     <h1 style="margin:0 0 10px;font:800 24px/1.25 Arial,sans-serif;color:${INK};">הכניסה שלכם לספר</h1>
     <p style="margin:0 0 22px;font:400 16px/1.6 Arial,sans-serif;color:#5A5D75;">ביקשתם קישור כניסה לחשבון <span dir="ltr">${esc(email)}</span>. לוחצים, ונכנסים. בלי סיסמה.</p>

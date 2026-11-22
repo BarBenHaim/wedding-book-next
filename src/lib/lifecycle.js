@@ -98,6 +98,8 @@ export function nextMessage({ w, entries = 0, now = Date.now(), sent = {} } = {}
 
 // ── the e-mails ───────────────────────────────────────────────────────
 
+import { emailLogoImg } from './brandAssets'
+
 const INK = '#14183A'
 const ACCENT = '#2545E0'
 const PAPER = '#F3F0EA'
@@ -194,7 +196,7 @@ export function renderLifecycleEmail(kind, ctx, links) {
 <body style="margin:0;padding:0;background:${PAPER};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${PAPER}"><tr><td align="center" style="padding:24px 12px 32px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;direction:rtl;text-align:right;font-family:${FONT};color:${INK};">
-  <tr><td align="center" style="padding:6px 0 18px;font:400 22px/1 ${FONT};color:${INK};"><b style="font-weight:900;">Wedding</b> Tales</td></tr>
+  <tr><td align="center" style="padding:6px 0 18px;">${emailLogoImg(190)}</td></tr>
   <tr><td bgcolor="#FFFFFF" style="background:#FFFFFF;border-radius:22px;border:1px solid ${LINE};padding:28px 24px;">
     <h1 style="margin:0 0 12px;font:800 25px/1.25 ${FONT};color:${INK};">${esc(copy.heading)}</h1>
     ${paras}
@@ -221,7 +223,7 @@ export function renderBalancePaidEmail(ctx, links) {
 <body style="margin:0;padding:0;background:${PAPER};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${PAPER}"><tr><td align="center" style="padding:24px 12px 32px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;direction:rtl;text-align:right;font-family:${FONT};color:${INK};">
-  <tr><td align="center" style="padding:6px 0 18px;font:400 22px/1 ${FONT};color:${INK};"><b style="font-weight:900;">Wedding</b> Tales</td></tr>
+  <tr><td align="center" style="padding:6px 0 18px;">${emailLogoImg(190)}</td></tr>
   <tr><td bgcolor="#FFFFFF" style="background:#FFFFFF;border-radius:22px;border:1px solid ${LINE};padding:28px 24px;">
     <h1 style="margin:0 0 12px;font:800 25px/1.25 ${FONT};color:${INK};">${esc(heading)}</h1>
     <p style="margin:0 0 20px;font:400 16px/1.7 ${FONT};color:${MUTED};">${esc(para)}</p>

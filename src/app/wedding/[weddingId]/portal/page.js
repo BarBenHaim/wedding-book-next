@@ -211,7 +211,7 @@ export default function PortalApp() {
                             width: 40, height: 40, borderRadius: 20, background: 'rgba(255,253,246,0.85)',
                             border: '1px solid rgba(201,164,78,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none',
                         }}><Ic d={<><circle cx='12' cy='8' r='3.4' /><path d='M4.5 20c1.2-3.4 4-5 7.5-5s6.3 1.6 7.5 5' /></>} color='#8a6f45' size={20} /></a>
-                        <img src='/logo-wt.png' alt='WT' style={{ width: 58, height: 32, objectFit: 'contain' }} />
+                        <img src='/brand/mark.png' alt='Wedding Tales' style={{ width: 36, height: 36, objectFit: 'contain' }} />
                         <span style={{ width: 40 }} />
                     </div>
                     <div style={{ textAlign: 'center' }}>
@@ -400,7 +400,7 @@ export default function PortalApp() {
                         }}>
                             <div style={{ borderRadius: 21, background: '#fff', padding: 14, position: 'relative' }}>
                                 <QRCode value={guestLink} size={198} fgColor='#241a0d' />
-                                <img src='/logo-wt.png' alt='' style={{
+                                <img src='/brand/mark.png' alt='' style={{
                                     position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
                                     width: 44, background: '#fff', borderRadius: 10, padding: '4px 5px',
                                 }} />
