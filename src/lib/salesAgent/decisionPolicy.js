@@ -2,7 +2,7 @@
 // move. This policy turns the current message and durable lead facts into
 // one small, testable instruction before any provider is called.
 
-import { PACKAGES, ADDONS, UPGRADE, CONCESSION, BUSINESS, DEMO, DEPOSIT, SALES_LINKS, proofLine } from './catalog'
+import { PACKAGES, ADDONS, CONCESSION, BUSINESS, DEMO, DEPOSIT, SALES_LINKS, proofLine } from './catalog'
 import { asksPrice } from './selling'
 import { eventTypeOf, EVENT_HE } from './eventType'
 import { isCustomerDeferral, customerWillReturn, applyCustomerTiming } from './journeyMemory'
@@ -66,8 +66,13 @@ function explicitPackageChoice(text) {
     return digital !== printed ? (digital ? 'digital' : 'printed') : null
 }
 
+// The digital-only book is no longer sold (23.11). A customer's latest explicit
+// wish for it is 'no confirmed package' (the policy then explains there is one
+// book, digital included), and it also stops an older printed choice from
+// being sent as if it were the latest.
 function confirmedPackageId(lead, incomingText) {
     const current = explicitPackageChoice(incomingText)
+    if (current === 'digital') return null
     if (current) return current
     if (ambiguousOrWithdrawnPackage(incomingText)) return null
     const turns = Array.isArray(lead?.turns) ? lead.turns : []
@@ -75,6 +80,7 @@ function confirmedPackageId(lead, incomingText) {
         if (turns[i]?.role !== 'user') continue
         if (ambiguousOrWithdrawnPackage(turns[i].text)) return null
         const selected = explicitPackageChoice(turns[i].text)
+        if (selected === 'digital') return null
         if (selected) return selected
     }
     return null
@@ -259,13 +265,10 @@ function lastAssistantRequest(lead) {
 // pricing sheet excluded: that is an image the bot cannot read back).
 export function pricesStated(lead = {}) {
     if (['offer_sent', 'objection', 'commit_later', 'ready_to_pay'].includes(lead?.stage)) return true
-    // The total plus EITHER the digital price or the deposit: the new
-    // price line leads with 990 / 190 / 800 and mentions 690 as the
-    // digital-only option, but a shorter line may carry only some of them.
+    // The total plus the deposit: the price line carries 990 / 190 / 800.
     const printed = PACKAGES.find(p => p.id === 'printed')?.price
-    const digital = PACKAGES.find(p => p.id === 'digital')?.price
     return assistantTexts(lead).some(t => t.includes(String(printed))
-        && (t.includes(String(digital)) || t.includes(String(DEPOSIT.amount))))
+        && t.includes(String(DEPOSIT.amount)))
 }
 
 // The one concession goes out once per conversation, whatever the model
@@ -464,13 +467,11 @@ export function concessionLine(todayISO) {
 
 const price = id => PACKAGES.find(p => p.id === id)?.price || 0
 // The printed book leads: 990 in total, 190 today, 800 only when the book
-// is ready and approved for print. Digital-only is the last clause.
-// Kept short on purpose: the offer is this line plus an event line plus
-// the close, and all of it has to fit one 260-char bubble, or the close is
-// what gets clipped. So the offer (which already has the event line)
-// leaves the digital-only clause out; a plain price answer keeps it.
+// is ready and approved for print. Kept short on purpose: the offer is this
+// line plus an event line plus the close, and all of it has to fit one
+// 260-char bubble, or the close is what gets clipped.
 const DEPOSIT_TERMS = () => `${DEPOSIT.amount} שח היום, ו-${DEPOSIT.balance} שח רק כשהספר מוכן ומאושר להדפסה`
-const PRICE_LINE = ({ withDigital = true } = {}) => `ספר מודפס בכריכה קשה עד הבית, ${price('printed')} שח: ${DEPOSIT_TERMS()}.${withDigital ? ` דיגיטלי בלבד ${price('digital')} שח.` : ''}`
+const PRICE_LINE = () => `ספר מודפס בכריכה קשה עד הבית, ${price('printed')} שח: ${DEPOSIT_TERMS()}.`
 
 // One sentence that puts the book at THEIR event. The generic line
 // ("האורחים סורקים QR...") is what the opening already said; here the
@@ -498,7 +499,7 @@ function presentOfferMessage({ parsed, lead, incomingText }) {
     const line = EVENT_LINE[type] || EVENT_LINE.other
     // Prices already given (they asked "כמה עולה" before naming the
     // event): the event line and the close, not the prices again.
-    const prices = pricesStated(lead) ? '' : `${PRICE_LINE({ withDigital: false })} `
+    const prices = pricesStated(lead) ? '' : `${PRICE_LINE()} `
     return `${line} ${prices}${closeQuestion(lead, parsed)}`
 }
 
@@ -521,12 +522,9 @@ function objectionMessage({ decision, lead, incomingText, parsed }) {
     const today = decision.todayISO
     const offered = concessionOffered(lead)
     if (isPriceObjection(incomingText)) {
-        // First door: a real page. Second door: digital now, printed
-        // later. Third and last: the one concession, with its date.
-        // The deposit IS the first door now: nothing like the full price
-        // today, and the money back until the print approval. The digital
-        // book and its upgrade stay in the catalog the model reads, but no
-        // longer ride in this bubble.
+        // First door: the deposit, nothing like the full price today and
+        // the money back until the print approval. Last: the one
+        // concession, with its date. There is no digital-only door any more.
         if (!(lead?.objectionCount > 0) && !offered) {
             return `מבין. לא צריך לשלם הכול עכשיו: ${DEPOSIT.amount} שח היום, ואת ה-${DEPOSIT.balance} שח רק כשהספר מוכן ואישרתם אותו, ועד אז אפשר לקבל החזר מלא. הנה עמוד מספר אמיתי שהדפסנו, ${proofLine(0)}.`
         }
@@ -555,7 +553,7 @@ function deterministicMessage({ parsed, decision, lead, incomingText }) {
         ? 'כמובן, נמתין שתפנו אלינו כשתרצו להמשיך.'
         : 'אין בעיה, נתקדם בזמן שמתאים לכם. מתי נוח שנחזור לזה?'
     if (decision.nextBestAction === 'clarify_quantity') return 'מדובר בשני עותקים של אותו ספר, או בספר נפרד לכל אירוע?'
-    if (decision.nextBestAction === 'clarify_package') return `כדי לשלוח את הקישור הנכון, איזה ספר תרצו: מודפס ב-${price('printed')} שח (${DEPOSIT.amount} שח היום והשאר רק אחרי אישור) או דיגיטלי בלבד ב-${price('digital')} שח?`
+    if (decision.nextBestAction === 'clarify_package') return `יש אצלנו ספר אחד: מודפס בכריכה קשה, ${price('printed')} שח (${DEPOSIT.amount} שח היום והשאר רק אחרי אישור), והוא כולל גם את הספר הדיגיטלי וקובץ PDF. שולח את הקישור?`
     if (decision.nextBestAction === 'confirm_checkout') return 'תרצו שאשלח קישור לתשלום עבור הספר שבחרתם?'
     if (decision.nextBestAction === 'handoff_question') return 'השאלה הזו צריכה בדיקה של הצוות. אני מעביר אותה עם פרטי השיחה כדי לקבל תשובה מדויקת.'
     if (decision.nextBestAction === 'offer_call') return `בטח. ${OWNER()} יחזור אלייך בשעות הפעילות. באיזו שעה נוח לך?`
@@ -566,12 +564,8 @@ function deterministicMessage({ parsed, decision, lead, incomingText }) {
         const selected = packageFor({ parsed, lead, incomingText })
         const afterPayment = 'אחרי התשלום מגיע מייל עם קישור לאורחים, שלט QR להדפסה וקישור לאזור האישי.'
         // The printed book: the sales page, where they type the name that
-        // names the book, then pay the deposit. Digital-only keeps its own
-        // direct checkout (there is no deposit on it).
-        if (selected.id === 'printed') {
-            return `הספר המודפס, ${selected.price} שח: מקדמה של ${DEPOSIT.amount} שח היום, ו-${DEPOSIT.balance} שח רק כשהספר מוכן ומאושר להדפסה. עד האישור אפשר לקבל החזר מלא. מתחילים כאן: ${selected.checkout}\n${afterPayment}`
-        }
-        return `${selected.name}, ${selected.price} שח כולל מע״מ: ${selected.checkout}\n${afterPayment}`
+        // names the book, then pay the deposit.
+        return `הספר המודפס, ${selected.price} שח: מקדמה של ${DEPOSIT.amount} שח היום, ו-${DEPOSIT.balance} שח רק כשהספר מוכן ומאושר להדפסה. עד האישור אפשר לקבל החזר מלא. מתחילים כאן: ${selected.checkout}\n${afterPayment}`
     }
     if (decision.nextBestAction === 'present_offer') return presentOfferMessage({ parsed, lead, incomingText })
     if (decision.nextBestAction === 'quote_price') return quotePriceMessage({ parsed, lead, incomingText })
@@ -708,8 +702,6 @@ function allowedPrices() {
         for (const a of ADDONS) for (let n = 1; n <= 3; n += 1) out.add(p.price + n * a.price)
     }
     for (const a of ADDONS) out.add(a.price)
-    out.add(UPGRADE.price)
-    for (const p of PACKAGES) out.add(p.price + UPGRADE.price)
     // The deposit funnel: 190 today, 800 at print approval (990 in total).
     out.add(DEPOSIT.amount)
     out.add(DEPOSIT.balance)

@@ -75,22 +75,6 @@ export const DEMO = {
 // not sell is a price the bot must not say.
 export const PACKAGES = [
     {
-        id: 'digital',
-        name: 'ספר דיגיטלי',
-        price: 690,
-        wasPrice: 890,
-        checkout: 'https://weddingtales.co.il/checkout/?add-to-cart=6258',
-        pitch: 'מושלם לשיתוף מיידי במשפחה',
-        includes: [
-            'שלט QR להדפסה',
-            'עמוד אורחים — ללא הגבלת ברכות ותמונות',
-            'ספר דיגיטלי מעוצב',
-            'קובץ PDF להורדה ולהדפסה',
-            'פאנל ניהול ואישור ברכות',
-            'פעיל שנה שלמה',
-        ],
-    },
-    {
         id: 'printed',
         name: 'ספר מודפס',
         price: 990,
@@ -108,7 +92,9 @@ export const PACKAGES = [
         // pitch is about.
         recommended: true,
         includes: [
-            'כל מה שבדיגיטלי',
+            'שלט QR להדפסה',
+            'עמוד אורחים, ללא הגבלת ברכות ותמונות',
+            'ספר דיגיטלי וקובץ PDF להורדה',
             'ספר מודפס בכריכה קשה 22x22',
             'עיצוב כל עמוד על ידי מעצב',
             'נייר פרימיום בגימור משי',
@@ -117,20 +103,6 @@ export const PACKAGES = [
         ],
     },
 ]
-
-// Digital first, printed later. Approved by Lord on 22.9: the same
-// designed book, printed and shipped, for the full price difference, up
-// to 30 days after the event. It exists for the customer who says
-// "יקר" - a third door instead of a no. The bot may offer it only as an
-// answer to price hesitation; the printed package stays the lead. The
-// checkout URL is filled once the shop has the product.
-export const UPGRADE = {
-    id: 'digital_to_printed',
-    name: 'שדרוג מדיגיטלי למודפס',
-    price: 300,
-    windowDays: 30,
-    checkout: process.env.SALES_UPGRADE_CHECKOUT_URL || null,
-}
 
 export const ADDONS = [
     { name: 'עותק מודפס נוסף', price: 290 },
@@ -153,8 +125,7 @@ export const FACTS = [
     'הקישור נשאר פתוח גם אחרי האירוע — מי שפספס משלים מהבית, ואפשר גם להתחיל אחרי שהאירוע כבר עבר.',
     'מתאים לבר מצווה, בת מצווה, חתונה, ברית ויום הולדת — אותה מערכת, עיצוב מותאם לאירוע.',
     'המחירים כוללים מע״מ.',
-    'אפשר להתחיל בספר הדיגיטלי ולשדרג למודפס עד 30 ימים אחרי האירוע בהפרש של 300 ₪ — אותו ספר בדיוק, אותם עמודים, רק בכריכה קשה ומשלוח עד הבית.',
-    'ספר דיגיטלי בלבד, בלי ספר מודפס, עולה 690 ₪.',
+    'אין היום ספר דיגיטלי בלבד: הספר הדיגיטלי וקובץ ה-PDF כלולים בספר המודפס, בלי תוספת.',
 ]
 
 // ── Images the agent is allowed to send ─────────────────────────────
@@ -203,7 +174,7 @@ export const MEDIA = {
     book_open_spread: {
         url: `${ORIGIN}/imgs/portfolio/shared/book-open-spread.jpg`,
         caption: 'ספר פתוח: כל ברכה עם התמונה של מי שכתב אותה',
-        when: 'כששואלים איך נראה הספר המוכן מבפנים, או מתלבטים אם המודפס שווה את ההפרש מהדיגיטלי',
+        when: 'כששואלים איך נראה הספר המוכן מבפנים, או מתלבטים אם הספר המודפס שווה את זה',
     },
 
     book_bar_mitzvah: {
@@ -288,6 +259,6 @@ export function findPackage(id) {
     return PACKAGES.find(p => p.id === id) || null
 }
 
-export const CATALOG = { BUSINESS, SALES_LINKS, DEPOSIT, DEMO, PACKAGES, ADDONS, UPGRADE, FACTS, CONCESSION, PROOF, STAGES, MEDIA }
+export const CATALOG = { BUSINESS, SALES_LINKS, DEPOSIT, DEMO, PACKAGES, ADDONS, FACTS, CONCESSION, PROOF, STAGES, MEDIA }
 
 export default CATALOG

@@ -19,7 +19,7 @@ const candidates = [
     { id: 'gemini', provider: 'gemini', model: 'gemini-3.6-flash' },
     { id: 'claude', provider: 'anthropic', model: 'claude-sonnet-4-5' },
 ]
-const validCandidate = JSON.stringify({ messages: ['הספר הדיגיטלי עולה 690 ₪. לאיזה אירוע ומתי?'], stage: 'qualified', handoff: false })
+const validCandidate = JSON.stringify({ messages: ['הספר המודפס עולה 990 ₪: 190 ₪ היום. לאיזה אירוע ומתי?'], stage: 'qualified', handoff: false })
 
 describe('redacted offline model benchmark', () => {
     it('removes direct identifiers and bounds the retained conversation', () => {
@@ -95,7 +95,7 @@ describe('redacted offline model benchmark', () => {
             raw: JSON.stringify({ messages: [text], stage: 'engaged', handoff: false }),
             benchmarkCase: privateCase,
         })
-        expect(score('הספר המודפס עולה 990 ₪: 190 ₪ היום ו-800 ₪ כשהספר מוכן. דיגיטלי בלבד 690 ₪. לאיזה אירוע?').catalogCompliant).toBe(true)
+        expect(score('הספר המודפס עולה 990 ₪: 190 ₪ היום ו-800 ₪ כשהספר מוכן. לאיזה אירוע?').catalogCompliant).toBe(true)
         expect(score('הספר המודפס עולה 450 ₪, ו-190 ₪ היום. לאיזה אירוע?').catalogCompliant).toBe(false)
     })
 

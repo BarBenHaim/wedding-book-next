@@ -17,7 +17,7 @@
 //    Splitting those into a second model call would double the cost and
 //    let the two answers disagree.
 
-import { BUSINESS, DEMO, DEPOSIT, SALES_LINKS, PACKAGES, ADDONS, UPGRADE, FACTS, CONCESSION, MEDIA } from './catalog'
+import { BUSINESS, DEMO, DEPOSIT, SALES_LINKS, PACKAGES, ADDONS, FACTS, CONCESSION, MEDIA } from './catalog'
 import { findActiveVariant, shouldApplyOpening } from './experiments'
 import { journeyBlock, pickValueTip, LANGUAGE_RULES } from './journey'
 import { CONVERSATION_CRAFT, readStyle, styleNote } from './conversation'
@@ -130,12 +130,11 @@ export function buildSystemPrompt(lead = {}, todayISO, { media = null, performan
 תכתוב כמו בן אדם שיושב במשרד וכותב מהר בין שיחה לשיחה.
 
 ## החבילות (המחירים כוללים מע״מ)
-המוצר המרכזי הוא הספר המודפס, ומשלמים עליו מקדמה של ${ils(DEPOSIT.amount)} היום ואת היתרה, ${ils(DEPOSIT.balance)}, רק כשהספר מוכן והלקוח אישר אותו להדפסה. בהצעה, במחיר ובהתנגדות פותחים במקדמה ולא במחיר המלא. הספר הדיגיטלי בלבד הוא אפשרות נוספת, לא הפתיחה.
+המוצר המרכזי הוא הספר המודפס, ומשלמים עליו מקדמה של ${ils(DEPOSIT.amount)} היום ואת היתרה, ${ils(DEPOSIT.balance)}, רק כשהספר מוכן והלקוח אישר אותו להדפסה. בהצעה, במחיר ובהתנגדות פותחים במקדמה ולא במחיר המלא. אין היום ספר דיגיטלי בלבד: הספר הדיגיטלי וקובץ ה-PDF כלולים במודפס.
 ${renderPackages()}
 
 תוספות: ${ADDONS.map(a => `${a.name} ${ils(a.price)}`).join(' · ')}
-שדרוג מדיגיטלי למודפס: ${ils(UPGRADE.price)}, עד ${UPGRADE.windowDays} ימים אחרי האירוע.${UPGRADE.checkout ? ` קישור: ${UPGRADE.checkout}` : ' אין עדיין קישור תשלום לשדרוג, מי שרוצה לשדרג עובר למישהו מהצוות (handoff=true).'}
-זו תשובה למי שמהסס על המחיר, לא הצעה יזומה. בפתיחה ובהצגת החבילות המודפס הוא ההמלצה.
+מי שמבקש ספר דיגיטלי בלבד: מסבירים במשפט אחד שהדיגיטלי כלול במודפס ואין מוצר נפרד.
 
 ## עובדות שמותר לך למסור
 ${FACTS.map(f => `- ${f}`).join('\n')}
@@ -251,7 +250,7 @@ ${lead.isNew === false
   "event_date": "YYYY-MM-DD או null",
   "celebrant_name": "שם החוגג/ת או null",
   "customer_name": "שם הלקוח או null",
-  "package_interest": "digital|printed|null",
+  "package_interest": "printed|null",
   "callback_promised": "YYYY-MM-DD או null",
   "follow_up_at": "YYYY-MM-DD או null",
   "handoff": false,
@@ -297,7 +296,7 @@ const MOVE_HE = {
     answer: 'ענה לשאלה עצמה. אם חסר פרט הכרחי לתשובה, שאל אותו. אל תוסיף קישור או בקשת הזמנה לפני שהשאלה נפתרה.',
     show_proof: 'הצג דוגמה רלוונטית ומאושרת עם הסבר קצר. אל תטען שהיא צילום אמיתי בלי אישור, ואל תוסיף קישור תשלום.',
     show_workflow: 'המערכת מציגה את עמוד הדוגמה של חוויית האורח. אל תוסיף מחירון או בקשת הזמנה. מלא רק פרטי אירוע מפורשים שנמסרו.',
-    clarify_package: 'המערכת שואלת איזו חבילה הלקוח בוחר לפני קישור. אל תניח שהמודפס נבחר.',
+    clarify_package: 'המערכת מבהירה שיש ספר אחד (המודפס, כולל דיגיטלי) ושואלת אם לשלוח קישור.',
     clarify_quantity: 'המערכת מבררת עותקים של אותו ספר לעומת ספרים לאירועים שונים. לא להחליף את הבירור במחירון.',
     confirm_checkout: 'המערכת מאשרת אם הלקוח רוצה קישור לתשלום, אחרי בחירת החבילה.',
     handoff_question: 'השאלה נשארת פתוחה ומועברת לצוות לתשובה מאומתת. לא להמציא תשובה, תאריך חזרה או הסכמה לרכישה.',

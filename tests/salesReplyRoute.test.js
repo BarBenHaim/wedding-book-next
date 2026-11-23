@@ -1954,8 +1954,9 @@ describe('real opening runtime reaches the contextual reply policy', () => {
         expect(mocks.buildSystemPrompt).toHaveBeenCalledWith(expect.objectContaining({
             openingNote: expect.stringContaining('תסריט הפתיחה לא נשלח'),
         }), expect.any(String), expect.any(Object))
-        expect(result.body.sendText).toMatch(/690/)
+        expect(result.body.sendText).toMatch(/190/)
         expect(result.body.sendText).toMatch(/990/)
+        expect(result.body.sendText).not.toMatch(/690/)
         expect(JSON.stringify(result.body)).not.toMatch(/שלחי תמונה|תמונה של הבן|שם הילד|אכין.*דוגמה|checkout/)
         expect(result.body.openingExperiment).toBeUndefined()
         expect(mocks.completeSuccessfulExchange.mock.calls[0][0].exchange.openingRuntime).toBeUndefined()

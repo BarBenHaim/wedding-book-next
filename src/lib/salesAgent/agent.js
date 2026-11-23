@@ -47,7 +47,7 @@ export const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5'
 export const FALLBACK_MODEL = 'claude-haiku-4-5'
 
 const EVENT_TYPES = ['bar_mitzvah', 'bat_mitzvah', 'wedding', 'birthday', 'brit', 'other']
-const PACKAGE_IDS = ['digital', 'printed']
+const PACKAGE_IDS = ['printed']
 
 const MAX_MESSAGES = 3
 const MAX_MESSAGE_CHARS = 900

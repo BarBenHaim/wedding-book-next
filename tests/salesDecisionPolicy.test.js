@@ -361,7 +361,7 @@ describe('deterministic WhatsApp reply contract', () => {
 describe('price mentions after the prices were just given', () => {
     const priced = { turns: [
         { role: 'user', text: 'מה המחיר?' },
-        { role: 'assistant', text: 'המחירים: ספר דיגיטלי ₪690 · ספר מודפס ₪990. הכל כולל מע״מ.' },
+        { role: 'assistant', text: 'ספר מודפס בכריכה קשה עד הבית, 990 שח: 190 שח היום, ו-800 שח רק כשהספר מוכן ומאושר להדפסה. הכל כולל מע״מ.' },
     ] }
 
     it('does not treat a passing mention as a price question when prices were just stated', () => {
@@ -394,15 +394,14 @@ describe('what the 21-22.9 transcripts taught the enforcer', () => {
 
     it('never turns the question mark inside a URL into a full stop', () => {
         // 21.9: "checkout/?add-to-cart=6271" went out as "checkout/.add-to-cart=6271".
-        // The digital checkout is the one direct link with a "?" left.
-        const incomingText = 'אני רוצה להזמין ספר דיגיטלי'
+        // The direct deposit checkout is the one link with a "?" left.
+        const incomingText = 'אני רוצה להזמין ספר מודפס'
         const result = enforceSalesReply({
-            parsed: { messages: ['מוכן להתחיל? הקישור כאן: https://weddingtales.co.il/checkout/?add-to-cart=6258 ומה התאריך?'], stage: 'engaged', handoff: false },
+            parsed: { messages: ['מוכן להתחיל? הקישור כאן: https://weddingtales.co.il/checkout/?add-to-cart=6271&wt_dep=1 ומה התאריך?'], stage: 'engaged', handoff: false },
             decision: decisionFor(incomingText),
             lead: {},
             incomingText,
         })
-        expect(result.messages[0]).toContain('https://weddingtales.co.il/checkout/?add-to-cart=6258')
         expect(result.messages[0]).not.toContain('checkout/.add-to-cart')
     })
 
@@ -441,13 +440,14 @@ describe('what the 21-22.9 transcripts taught the enforcer', () => {
         expect(invented.messages[0]).not.toContain('1400')
     })
 
-    it('lets the model quote the upgrade price and the digital-plus-upgrade total', () => {
+    it('no longer lets the model quote a 690 digital book or a 300 upgrade (dropped 23.11)', () => {
         const incomingText = 'כמה עולה השדרוג למודפס?'
         const result = enforceSalesReply({
             parsed: { messages: ['דיגיטלי 690 שח, ואחרי האירוע שדרוג למודפס ב-300 שח, סך הכל 990 שח. לאיזה אירוע?'], stage: 'offer_sent', handoff: false },
             decision: decisionFor(incomingText), lead: {}, incomingText,
         })
-        expect(result.messages[0]).toContain('300')
+        expect(result.messages[0]).not.toMatch(/690|300/)
+        expect(result.messages[0]).toContain('990')
     })
 
     it('answers a second ad click with one question, not the opening again', () => {
@@ -556,18 +556,18 @@ describe('the funnel mechanism', () => {
     it('answers a plain price question from the catalog and closes when the event is known', () => {
         const known = turn('כמה זה עולה?', { isNew: false, eventType: 'wedding' })
         expect(known.decision.nextBestAction).toBe('quote_price')
-        expect(known.result.messages[0]).toMatch(/990.*190.*800.*690.*רוצה שאפתח/)
+        expect(known.result.messages[0]).toMatch(/990.*190.*800.*רוצה שאפתח/)
         expect(known.result.image).toBe('book_wedding')
         const unknown = turn('מה המחיר?', { isNew: false })
-        expect(unknown.result.messages[0]).toMatch(/990.*190.*800.*690.*לאיזה אירוע/)
+        expect(unknown.result.messages[0]).toMatch(/990.*190.*800.*לאיזה אירוע/)
     })
 
     it('confirms the format after agreeing to open a book, without assuming printed', () => {
-        const lead = { isNew: false, eventType: 'bar_mitzvah', stage: 'offer_sent', turns: [{ role: 'assistant', text: 'בר מצווה זה בדיוק האירוע לזה. דיגיטלי 690 שח, מודפס 990 שח. רוצה שאפתח לכם את הספר? שולח קישור.' }] }
+        const lead = { isNew: false, eventType: 'bar_mitzvah', stage: 'offer_sent', turns: [{ role: 'assistant', text: 'בר מצווה זה בדיוק האירוע לזה. מודפס 990 שח, 190 שח היום. רוצה שאפתח לכם את הספר? שולח קישור.' }] }
         const { decision, result } = turn('כן', lead)
         expect(decision).toMatchObject({ intent: 'affirmative', nextBestAction: 'clarify_package' })
         expect(result.messages.at(-1)).not.toContain('add-to-cart')
-        expect(result.messages.at(-1)).toContain('איזה ספר תרצו')
+        expect(result.messages.at(-1)).toContain('יש אצלנו ספר אחד')
         expect(result.stage).toBe('offer_sent')
         expect(result.packageInterest).toBeNull()
     })
@@ -740,7 +740,7 @@ describe('the deposit funnel', () => {
             turn('כמה זה עולה עם משלוח אקספרס?', lead, { messages })
 
         it('lets the deposit and the balance through next to the totals', () => {
-            const { decision, result } = priceTurn([`הספר המודפס ${price('printed')} בסך הכול: ${DEPOSIT.amount} שח היום ו-${DEPOSIT.balance} שח בהמשך. דיגיטלי ${price('digital')} שח.`])
+            const { decision, result } = priceTurn([`הספר המודפס ${price('printed')} בסך הכול: ${DEPOSIT.amount} שח היום ו-${DEPOSIT.balance} שח בהמשך.`])
             expect(decision.intent).toBe('price')
             expect(result.messages[0]).toContain(`${DEPOSIT.amount} שח היום`)
             expect(result.messages[0]).toContain(`${DEPOSIT.balance} שח בהמשך`)
@@ -790,11 +790,12 @@ describe('the deposit funnel', () => {
             }
         })
 
-        it('keeps digital-only on its own checkout, without a deposit', () => {
-            const payment = link('אני רוצה להזמין ספר דיגיטלי').result.messages.at(-1)
-            expect(payment).toContain(PACKAGES.find(p => p.id === 'digital').checkout)
-            expect(payment).not.toContain(`${DEPOSIT.amount} שח`)
-            expect(payment).not.toContain(SALES_LINKS.page + '\n')
+        it('has no digital-only checkout any more: the wish gets the one-book answer', () => {
+            const { decision, result } = link('אני רוצה להזמין ספר דיגיטלי')
+            expect(decision.nextBestAction).toBe('clarify_package')
+            const message = result.messages.at(-1)
+            expect(message).toMatch(/כולל גם את הספר הדיגיטלי/)
+            expect(message).not.toMatch(/add-to-cart|690/)
         })
     })
 
@@ -857,5 +858,30 @@ describe('the deposit funnel', () => {
             ]
             for (const { result } of all) for (const m of result.messages) expect(m.length, m).toBeLessThanOrEqual(TURN_LIMITS.maxChars)
         })
+    })
+})
+
+describe('no digital-only book (23.11)', () => {
+    const reply = (incomingText, lead) => {
+        const decision = decideSalesTurn({ lead, incomingText, todayISO: '2026-11-23' })
+        const result = enforceSalesReply({ parsed: { messages: ['טיוטה של המודל'], stage: lead.stage || 'engaged', handoff: false }, decision, lead, incomingText })
+        return { decision, text: result.messages.join(' ') }
+    }
+
+    it('never offers or prices a 690 digital-only book in any line the policy writes', () => {
+        const lead = { isNew: false, stage: 'offer_sent', eventType: 'bar_mitzvah', turns: [{ role: 'assistant', text: 'ספר מודפס, 990 שח: 190 שח היום' }] }
+        for (const text of ['כמה עולה?', 'יקר לי', 'רוצה את הספר הדיגיטלי', 'ספר דיגיטלי בלבד', 'כן תשלח קישור']) {
+            const { text: out } = reply(text, lead)
+            expect(out.length, text).toBeGreaterThan(0)
+            expect(out, text).not.toMatch(/690|דיגיטלי בלבד/)
+        }
+    })
+
+    it('answers a wish for digital only by saying there is one book, digital included', () => {
+        const lead = { isNew: false, stage: 'offer_sent', eventType: 'bar_mitzvah', turns: [] }
+        const { decision, text } = reply('אני רוצה להזמין ספר דיגיטלי', lead)
+        expect(decision.nextBestAction).toBe('clarify_package')
+        expect(text).toMatch(/כולל גם את הספר הדיגיטלי/)
+        expect(text).not.toMatch(/690|add-to-cart/)
     })
 })

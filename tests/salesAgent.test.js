@@ -294,12 +294,12 @@ describe('sales model provider fallback', () => {
 
 describe('catalog — the only facts the agent may state', () => {
     it('carries the live prices and checkout links', () => {
-        // Two packages, as on the live site. "פרימיום מלכותי" (1,490) was
-        // removed on 19.9 - the shop never sold it and the bot quoted it.
-        expect(PACKAGES.map(p => p.price)).toEqual([690, 990])
+        // One package since 23.11 (Bar dropped the 690 digital-only book).
+        // "פרימיום מלכותי" (1,490) was removed on 19.9 - the shop never sold it.
+        expect(PACKAGES.map(p => p.price)).toEqual([990])
         expect(findPackage('premium')).toBeFalsy()
         expect(findPackage('printed').includes).toEqual(expect.arrayContaining([
-            'כל מה שבדיגיטלי',
+            'ספר דיגיטלי וקובץ PDF להורדה',
             'ספר מודפס בכריכה קשה 22x22',
         ]))
         // 22.11: the printed book is paid as a deposit, and what the bot
@@ -307,14 +307,13 @@ describe('catalog — the only facts the agent may state', () => {
         expect(findPackage('printed').checkout).toBe(SALES_LINKS.page)
         expect(findPackage('printed').depositCheckout).toContain('add-to-cart=6271')
         expect(findPackage('printed').depositCheckout).toContain('wt_dep=1')
-        expect(findPackage('digital').checkout).toContain('add-to-cart=6258')
+        expect(findPackage('digital')).toBeFalsy()
     })
 
     it('carries the deposit funnel as facts, and nothing that promises manual work', () => {
         // The total stays 990; 190 today and 800 at print approval add up to it.
         expect(DEPOSIT.amount + DEPOSIT.balance).toBe(findPackage('printed').price)
         expect(findPackage('printed')).toMatchObject({ deposit: 190, balance: 800 })
-        expect(findPackage('digital').deposit).toBeUndefined()
         const facts = FACTS.join(' ')
         expect(facts).toContain('190')
         expect(facts).toContain('800')
@@ -412,7 +411,7 @@ describe('system prompt — what actually reaches the model', () => {
         const prompt = buildSystemPrompt({}, '2026-08-16')
         expect(prompt).toContain('## ככה זה נשמע כשזה טוב')
         expect(prompt).toContain('הלקוח: "מבררת עבור בר מצווה של אחיין"')
-        expect(prompt).toContain('ספר מודפס בכריכה קשה עד הבית, 990 שח: 190 שח היום והשאר רק כשהוא מוכן ומאושר להדפסה. דיגיטלי בלבד 690 שח')
+        expect(prompt).toContain('ספר מודפס בכריכה קשה עד הבית, 990 שח: 190 שח היום והשאר רק כשהוא מוכן ומאושר להדפסה.')
         expect(prompt).toContain(SALES_LINKS.page)
         expect(prompt).not.toContain('1,490')
         expect(prompt).not.toContain('1490')
@@ -1096,19 +1095,14 @@ describe('parseOwnerCommand', () => {
 })
 
 
-describe('digital first, printed later (22.9)', () => {
-    it('states the upgrade as a fact the bot may give, with price and window', () => {
-        const p = buildSystemPrompt({}, '2026-09-22')
-        expect(p).toContain('שדרוג מדיגיטלי למודפס: ₪300, עד 30 ימים אחרי האירוע')
-        expect(p).toContain('זו תשובה למי שמהסס על המחיר, לא הצעה יזומה')
-        expect(p).toMatch(/לשדרג למודפס עד 30 ימים אחרי האירוע בהפרש של 300/)
-    })
-
-    it('shows the upgrade in the "יקר" example and never prices the digital below catalog', () => {
-        const p = buildSystemPrompt({}, '2026-09-22')
-        expect(p).toContain('להתחיל בדיגיטלי ב-690')
-        expect(p).toContain('לשדרג למודפס ב-300 שח')
-        expect(p).not.toMatch(/\b590\b/)
+describe('one product, no digital-only book (23.11)', () => {
+    it('never tells the model about a 690 book or an upgrade door', () => {
+        const p = buildSystemPrompt({}, '2026-11-23')
+        expect(p).not.toMatch(/690/)
+        expect(p).not.toContain('שדרוג מדיגיטלי')
+        expect(p).not.toMatch(/דיגיטלי בלבד ב-/)
+        expect(p).toContain('אין היום ספר דיגיטלי בלבד')
+        expect(FACTS.join(' ')).not.toMatch(/690|שדרג/)
     })
 })
 

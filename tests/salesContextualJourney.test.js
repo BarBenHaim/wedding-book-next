@@ -22,7 +22,7 @@ describe('contextual customer journey, without live services', () => {
         const { decision, result } = turn('כן בבקשה', lead, { packageInterest: 'printed', stage: 'ready_to_pay' })
         expect(decision.nextBestAction).toBe('clarify_package')
         expect(result.packageInterest).toBeNull()
-        expect(result.messages[0]).toContain('איזה ספר תרצו')
+        expect(result.messages[0]).toContain('יש אצלנו ספר אחד')
         noCheckout(result)
     })
     it.each(['👍', 'כן', 'סבבה', 'נשמע טוב'])('keeps %s scoped to the preceding later agreement', text => {
@@ -35,22 +35,28 @@ describe('contextual customer journey, without live services', () => {
         expect(decision.nextBestAction).toBe('clarify_package')
         noCheckout(result)
     })
-    it.each([
-        ['אני רוצה להזמין ספר מודפס', 'printed', SALES_LINKS.page],
-        ['אני רוצה להזמין ספר דיגיטלי', 'digital', 'checkout/?add-to-cart=6258'],
-        ['אפשר קישור לתשלום של הספר הדיגיטלי?', 'digital', 'checkout/?add-to-cart=6258'],
-    ])('still supports an explicit checkout and format: %s', (text, id, link) => {
-        const { decision, result } = turn(text)
+    it('still supports an explicit checkout for the printed book', () => {
+        const { decision, result } = turn('אני רוצה להזמין ספר מודפס')
         expect(decision.nextBestAction).toBe('send_payment_link')
-        expect(result.packageInterest).toBe(id)
-        expect(result.messages.at(-1)).toContain(link)
+        expect(result.packageInterest).toBe('printed')
+        expect(result.messages.at(-1)).toContain(SALES_LINKS.page)
         expect(result.stage).toBe('ready_to_pay')
+    })
+    it.each(['אני רוצה להזמין ספר דיגיטלי', 'אפשר קישור לתשלום של הספר הדיגיטלי?'])('a digital-only wish gets the one-book answer, never a digital checkout: %s', text => {
+        const { decision, result } = turn(text)
+        expect(decision.nextBestAction).toBe('clarify_package')
+        expect(result.messages.at(-1)).toContain('כולל גם את הספר הדיגיטלי')
+        expect(result.messages.at(-1)).not.toMatch(/690|add-to-cart=6258/)
+        noCheckout(result)
     })
     it('a scoped yes to payment uses the customer-selected format, not a model override', () => {
         const lead = { ...known, turns: [{ role: 'user', text: 'אני רוצה את הספר הדיגיטלי' }, { role: 'assistant', text: 'רוצה שאשלח קישור לתשלום?' }] }
         const { result } = turn('כן', lead, { packageInterest: 'printed' })
-        expect(result.packageInterest).toBe('digital')
-        expect(result.messages.at(-1)).toContain('add-to-cart=6258')
+        // Digital-only is not sold any more: no digital checkout, and the model's
+        // "printed" is not a customer choice either.
+        expect(result.packageInterest).toBeNull()
+        expect(result.messages.at(-1)).not.toContain('add-to-cart=6258')
+        noCheckout(result)
     })
     it('completes the format clarification without restarting the journey', () => {
         const lead = { ...known, turns: [{ role: 'user', text: 'איך משלמים?' }, { role: 'assistant', text: 'כדי לשלוח את הקישור הנכון, איזה ספר תרצו: דיגיטלי או מודפס?' }] }
@@ -65,7 +71,10 @@ describe('contextual customer journey, without live services', () => {
     it('a newer explicit choice wins over an older package and a model suggestion', () => {
         const context = { ...known, turns: [{ role: 'user', text: 'אני רוצה ספר מודפס' }, { role: 'user', text: 'בעצם דיגיטלי' }] }
         const { result } = turn('אפשר קישור לתשלום?', context, { packageInterest: 'printed' })
-        expect(result.packageInterest).toBe('digital')
+        // The newest explicit wish is for digital only, which is not sold: the
+        // older printed choice must not be sent as if it were the latest.
+        expect(result.packageInterest).toBeNull()
+        noCheckout(result)
     })
     it('does not use an old printed choice when the current request withdraws it', () => {
         const context = { ...known, turns: [{ role: 'user', text: 'אני רוצה ספר מודפס' }] }
@@ -210,7 +219,8 @@ describe('customer timing survives later turns and automatic recovery', () => {
     })
     it('answers a direct price question alongside a deferral without trying to close', () => {
         const { result } = turn('לא עכשיו, אבל כמה זה עולה?')
-        expect(result.messages[0]).toMatch(/990.*190.*800.*690/)
+        expect(result.messages[0]).toMatch(/990.*190.*800/)
+        expect(result.messages[0]).not.toMatch(/690/)
         expect(result.messages[0]).not.toMatch(/שאפתח|במתנה|checkout/)
         expect(result.customerDeferred).toBe(true)
     })
