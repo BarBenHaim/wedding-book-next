@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
-import { doc, getDoc } from 'firebase/firestore'
+import { collection, doc, getCountFromServer, getDoc } from 'firebase/firestore'
 import { db } from '../../../../lib/firebaseClient'
 import { defaultGuestDesign } from '@/lib/guestSignature'
 import { listUnsent } from '../../../../lib/offlineQueue'
@@ -67,6 +67,10 @@ export default function ThanksPage() {
 // change on the sales page. (The parents at a bar mitzvah are the likeliest to have the next one.)
 const NEXT_BOOK = { bar_mitzvah: 'bar', twins_bar_mitzvah: 'bar', bat_mitzvah: 'bat', wedding: 'wedding', birthday: 'birthday' }
 
+// "N guests already wrote" is shown only with a real number that is big enough to read as a crowd.
+// One or two writers is not proof of anything, so below this the line is simply not shown.
+const MIN_COUNT_TO_SHOW = 5
+
 function ThanksApp({ signature = null, eventType = '' }) {
     const router = useRouter()
     const { weddingId } = useParams()
@@ -94,6 +98,58 @@ function ThanksApp({ signature = null, eventType = '' }) {
     // ("verified") because it confirms the write reached the server,
     // not just that our local queue thinks it shipped.
     const [verified, setVerified] = useState(false)
+    // How many blessings the book has now, read once the guest's own one is confirmed (so it
+    // includes theirs). Null until known; a failed read just means the line is not shown.
+    const [guestCount, setGuestCount] = useState(null)
+    const [linkCopied, setLinkCopied] = useState(false)
+
+    useEffect(() => {
+        if (!weddingId || !verified) return
+        let cancelled = false
+        getCountFromServer(collection(db, 'weddings', weddingId, 'entries'))
+            .then(snap => {
+                if (!cancelled) setGuestCount(snap.data().count)
+            })
+            .catch(() => {})
+        return () => {
+            cancelled = true
+        }
+    }, [weddingId, verified])
+
+    // The server has no window, so the first paint uses the production address and the browser's
+    // own origin replaces it after mount (reading window during render made the hrefs differ and
+    // React logged a hydration mismatch).
+    const [origin, setOrigin] = useState('https://app.weddingtales.co.il')
+    useEffect(() => {
+        setOrigin(window.location.origin)
+    }, [])
+    const guestLink = `${origin}/wedding/${weddingId}/photo`
+    async function copyGuestLink() {
+        let copied = false
+        try {
+            await navigator.clipboard.writeText(guestLink)
+            copied = true
+        } catch {
+            // Some in-app browsers have no clipboard API: fall back to the old select-and-copy.
+            try {
+                const field = document.createElement('textarea')
+                field.value = guestLink
+                field.setAttribute('readonly', '')
+                field.style.position = 'fixed'
+                field.style.opacity = '0'
+                document.body.appendChild(field)
+                field.select()
+                copied = document.execCommand('copy')
+                document.body.removeChild(field)
+            } catch {
+                /* the WhatsApp button above still works */
+            }
+        }
+        if (copied) {
+            setLinkCopied(true)
+            setTimeout(() => setLinkCopied(false), 2500)
+        }
+    }
 
     // ─── Flush helper ────────────────────────────────────────────────────────
     async function tryFlush() {
@@ -332,14 +388,10 @@ function ThanksApp({ signature = null, eventType = '' }) {
                         {t('shareHeading')}
                     </h2>
                     <p className='leading-relaxed mb-4' style={{ color: '#7a6a52', fontSize: '13.5px' }}>
-                        {t('shareBody')}
+                        {guestCount !== null && guestCount >= MIN_COUNT_TO_SHOW ? t('shareBodyCount', { count: guestCount }) : t('shareBody')}
                     </p>
                     <a
-                        href={`https://wa.me/?text=${encodeURIComponent(
-                            t('shareMessage', {
-                                link: `${typeof window !== 'undefined' ? window.location.origin : 'https://app.weddingtales.co.il'}/wedding/${weddingId}/photo`,
-                            }),
-                        )}`}
+                        href={`https://wa.me/?text=${encodeURIComponent(t('shareMessage', { link: guestLink }))}`}
                         target='_blank'
                         rel='noopener noreferrer'
                         className='w-full rounded-2xl text-white font-bold flex items-center justify-center gap-2.5 active:scale-[0.99]'
@@ -356,6 +408,14 @@ function ThanksApp({ signature = null, eventType = '' }) {
                         </svg>
                         <span>{t('shareCta')}</span>
                     </a>
+                    <button
+                        type='button'
+                        onClick={copyGuestLink}
+                        className='w-full mt-2.5 rounded-2xl font-semibold active:scale-[0.99]'
+                        style={{ padding: '11px 18px', fontSize: '13.5px', color: '#7a6a52', background: 'transparent', border: '1px solid rgba(212,184,103,0.45)' }}
+                    >
+                        {linkCopied ? t('linkCopied') : t('copyLink')}
+                    </button>
                     <a
                         href={`/wedding/${weddingId}/photo`}
                         className='block mt-3 font-semibold underline underline-offset-4'
@@ -384,33 +444,27 @@ function ThanksApp({ signature = null, eventType = '' }) {
                         {t('pitchHeading')}
                     </h2>
                     <p
-                        className='leading-relaxed mb-5'
+                        className='leading-relaxed mb-4'
                         style={{ color: '#7a6a52', fontSize: '13.5px' }}
                     >
                         {t('pitchBody')}
                     </p>
 
-                    {/* tiny gold heart divider — same ornament as the
-                        create-blessing card, ties the pages together. */}
-                    <div className='flex items-center justify-center gap-2.5 mb-5'>
-                        <span
-                            className='block h-px flex-1'
-                            style={{ background: 'linear-gradient(to left, transparent, #e1d4b4, transparent)' }}
-                        />
-                        <svg viewBox='0 0 24 24' className='w-[11px] h-[11px] shrink-0' fill='#c9a44e'>
-                            <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
-                        </svg>
-                        <span
-                            className='block h-px flex-1'
-                            style={{ background: 'linear-gradient(to right, transparent, #e1d4b4, transparent)' }}
-                        />
-                    </div>
+                    {/* A real printed book, so the offer is something you can see. */}
+                    <img
+                        src='/imgs/portfolio/shared/book-open-spread.jpg'
+                        alt={t('pitchImgAlt')}
+                        loading='lazy'
+                        className='w-full rounded-2xl mb-4'
+                        style={{ aspectRatio: '3 / 2', objectFit: 'cover' }}
+                    />
 
+                    {/* What it costs to start and the way out, in one line: the two things a guest wonders about. */}
                     <p
-                        className='font-bold mb-4'
-                        style={{ color: '#1a1410', fontSize: '14.5px' }}
+                        className='font-semibold mb-5'
+                        style={{ color: '#1a1410', fontSize: '13.5px', lineHeight: 1.6 }}
                     >
-                        {t('pitchQuestion')}
+                        {t('pitchPrice')}
                     </p>
 
                     {/* WhatsApp CTA — opens the brand's wa.link short URL
