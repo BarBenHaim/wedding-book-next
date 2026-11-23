@@ -437,13 +437,18 @@ const COLLECTION = 'studio_presets'
 // `eventType` — when set (e.g. 'bar_mitzvah'), only presets tagged
 // with that event type OR untagged (generic) presets are returned.
 // See presetMatchesEventType above. Omit for admin surfaces.
-export async function listPresets({ includePrivate = false, eventType = null } = {}) {
+// Presets taken out of every picker. Bar retired the "פולאריד" collage design on 23.11.2026. Books that
+// were dressed with it keep it (a book stores the design's values, not its id), and the studio can still
+// list it with `includeRetired`; it just no longer shows up for owners, guests or the sales site.
+export const RETIRED_PRESET_IDS = new Set(['studio_k26zgie9hknu'])
+
+export async function listPresets({ includePrivate = false, eventType = null, includeRetired = false } = {}) {
     try {
         const [snap, vis] = await Promise.all([
             getDocs(query(collection(db, COLLECTION), orderBy('createdAt', 'asc'))),
             readVisibility(),
         ])
-        const hidden = new Set(vis.hiddenPresetIds)
+        const hidden = new Set([...vis.hiddenPresetIds, ...(includeRetired ? [] : RETIRED_PRESET_IDS)])
         const filterPrivate = preset => includePrivate || !preset.isPrivate
         const filterEvent = preset => presetMatchesEventType(preset, eventType)
         if (snap.empty) {

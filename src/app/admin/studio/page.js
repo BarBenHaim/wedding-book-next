@@ -228,7 +228,7 @@ function StudioContent() {
             const result = await seedBuiltinPresetsIfMissing()
             if (cancelled) return
             setSeedStatus({ state: 'done', ...result })
-            const list = await listPresets()
+            const list = await listPresets({ includeRetired: true })
             if (cancelled) return
             setPresets(list)
             if (list.length > 0 && !activeId) setActiveId(list[0].id)
