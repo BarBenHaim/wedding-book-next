@@ -23,6 +23,7 @@ import { gveretLevin } from '@/app/fonts'
 import { pageScale } from '@/lib/pageGeometry'
 import EntryPhoto from '../EntryPhoto/EntryPhoto'
 import useNoCropSlot from '@/lib/photoSlot'
+import useShrinkToFit from '@/lib/useShrinkToFit'
 
 const GOLD = '#aa8840'
 const GOLD_LIGHT = '#d4b867'
@@ -71,6 +72,14 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
     const hasImage = Boolean(entry.imageUrl)
 
     const { w, h } = pageScale(scaledWidth, scaledHeight)
+
+    // The blessing sits at a fixed spot in the lower part of the page. A long one used to run off the page,
+    // so its font shrinks until the block fits the 25% of the page height that is left under the photo.
+    const [textRef, textFactor] = useShrinkToFit({
+        maxHeight: h(25),
+        sig: `${(cleanText || '').length}|${scaledWidth}|${scaledHeight}|${styleSettings.fontSizePercent}`,
+        min: 0.55,
+    })
 
     // Photo positioned absolutely so we can tilt it freely + overlap with
     // the surrounding ephemera. 4:3 always preserved.
@@ -186,6 +195,7 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
                 English/Spanish/Italian (left-anchored). */}
             {hasText && (
                 <div
+                    ref={textRef}
                     style={{
                         position: 'absolute',
                         top: h(72),
@@ -198,7 +208,7 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
                     <p
                         className={fontClass}
                         style={{
-                            fontSize: h(styleSettings.fontSizePercent ?? 2.6),
+                            fontSize: h((styleSettings.fontSizePercent ?? 2.6) * textFactor),
                         // Layout honors fontWeight from the preset;
                         // falls back to the font file natural weight.
                         fontWeight: styleSettings.fontWeight,
@@ -240,19 +250,21 @@ export default function CollagePageLayout({ entry, styleSettings, scaledWidth, s
                         position: 'absolute',
                         bottom: h(styleSettings.nameOffsetY ?? 12),
                         left: w(styleSettings.nameOffsetX ?? 15),
-                        fontSize: h(styleSettings.nameFontSizePercent ?? 2.8),
+                        fontSize: h((styleSettings.nameFontSizePercent ?? 2.8) * Math.max(0.55, Math.min(1, 24 / Math.max(1, String(entry.name).length)))), // a long name gets a smaller font, so it stays on one or two lines
                         fontWeight: styleSettings.nameFontWeight ?? styleSettings.fontWeight,
                         color: styleSettings.nameColor ?? styleSettings.fontColor ?? GOLD,
                         display: 'flex',
                         alignItems: 'center',
                         gap: '0.3em',
+                        // a long name wraps inside the page instead of running off its edge
+                        maxWidth: w(Math.max(30, Math.min(55, 100 - (styleSettings.nameOffsetX ?? 15) - 12))), // narrow, because the name is tilted: a wide tilted box drops its far end below the page
                         transform: `rotate(${styleSettings.nameRotation ?? 6}deg)`,
                         transformOrigin: 'left center',
                         zIndex: 6,
                     }}
                 >
                     <Heart filled />
-                    <span>{entry.name}</span>
+                    <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{entry.name}</span>
                 </div>
             )}
         </div>

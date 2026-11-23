@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useStorageBlocked, useViaOurDomain } from '@/lib/storageReach'
 import { getBlessingText } from '@/lib/normalizeText'
 import { resolveActiveTemplate } from '@/lib/presetFilters'
@@ -19,6 +20,10 @@ import DuoPageLayout from '../DuoPageLayout/DuoPageLayout'
 import ComposedPageLayout from '../ComposedPageLayout/ComposedPageLayout'
 import StickerLayer from '../StickerLayer/StickerLayer'
 import { stickerShownOn } from '@/lib/stickers'
+import { artSafeBottomPct, artSafeTopPct, SQUEEZE_STEPS, MAX_SQUEEZED_TEXT_WIDTH_PCT, contentFits } from '@/lib/artSafeArea'
+
+// Beyond this many characters a collage page falls back to the classic layout (see the dispatcher below).
+const COLLAGE_MAX_CHARS = 600
 
 function BookPageBody({ entry: savedEntry, styleSettings: savedStyle, scaledWidth, scaledHeight }) {
     // On a network that blocks Google's storage host, show the photo and
@@ -48,6 +53,63 @@ function BookPageBody({ entry: savedEntry, styleSettings: savedStyle, scaledWidt
     // resolution, which is what lets a single page crop inside an
     // album-mode book: the more specific instruction wins.
     const styleSettings = resolvePhotoStyle(mergePageStyle(incomingStyle, pageStyleOf(entry)))
+
+    // ── Fit between the art ─────────────────────────────────────────────
+    // A long blessing next to a photo used to run past the page: cut off at the bottom edge, or down
+    // over the skyline / stripes / arches of the background. After layout the classic page measures its
+    // content against the band the art leaves free (and the page padding). If it does not fit, the photo
+    // shrinks first, then the font a little further than the length-based fit already did. A page that
+    // fits is never touched: step 0 is exactly the design.
+    const rootRef = useRef(null)
+    const [squeeze, setSqueeze] = useState(0)
+    const [fontsTick, setFontsTick] = useState(0)
+    const fitSig = [
+        entry?.name, (getBlessingText(entry) || '').length, entry?.imageUrl, entry?.imgAspect, entry?._split, entry?._photo,
+        styleSettings.backgroundUrl, styleSettings.fontSizePercent, styleSettings.imageStyle?.width, styleSettings.pagePadding,
+        styleSettings.photoFrameInset, styleSettings.textMaxWidth, scaledWidth, scaledHeight, fontsTick,
+    ].join('|')
+    const lastSig = useRef(fitSig)
+    useEffect(() => {
+        // Web fonts swap in after the first layout and change the line breaks: measure again once they are in.
+        let alive = true
+        if (typeof document !== 'undefined' && document.fonts?.ready) document.fonts.ready.then(() => alive && setFontsTick(1))
+        return () => {
+            alive = false
+        }
+    }, [])
+    useLayoutEffect(() => {
+        if (lastSig.current !== fitSig) {
+            lastSig.current = fitSig
+            if (squeeze !== 0) {
+                setSqueeze(0)
+                return
+            }
+        }
+        const el = rootRef.current
+        if (!el || el.clientHeight < 40 || squeeze >= SQUEEZE_STEPS.length - 1) return
+        let top = Infinity
+        let bottom = 0
+        for (const child of el.children) {
+            const cs = getComputedStyle(child)
+            if (cs.position === 'absolute') continue
+            top = Math.min(top, child.offsetTop - (parseFloat(cs.marginTop) || 0))
+            bottom = Math.max(bottom, child.offsetTop + child.offsetHeight + (parseFloat(cs.marginBottom) || 0))
+        }
+        if (!Number.isFinite(top)) return
+        const H = el.clientHeight
+        const fits = contentFits({
+            top,
+            bottom,
+            pageHeight: H,
+            padTop: ((styleSettings.pagePadding ?? 4) / 100) * H,
+            padBottom: ((styleSettings.pagePadding ?? 4) / 100) * H,
+            artTop: (artSafeTopPct(styleSettings.backgroundUrl) / 100) * H,
+            artBottom: (artSafeBottomPct(styleSettings.backgroundUrl) / 100) * H,
+            centered: !entry?.imageUrl,
+        })
+        if (!fits) setSqueeze(squeeze + 1)
+    })
+    const squeezeStep = SQUEEZE_STEPS[Math.min(squeeze, SQUEEZE_STEPS.length - 1)]
 
     // ── Layout dispatcher ────────────────────────────────────────────────
     // Branch on `styleSettings.template` BEFORE any classic-template logic.
@@ -181,7 +243,10 @@ function BookPageBody({ entry: savedEntry, styleSettings: savedStyle, scaledWidt
     if (activeTemplate === 'polaroid') return <PolaroidPageLayout {...passThrough} />
     if (activeTemplate === 'scrapbook') return <ScrapbookPageLayout {...passThrough} />
     if (activeTemplate === 'notebook') return <NotebookPageLayout {...passThrough} />
-    if (activeTemplate === 'collage') return <CollagePageLayout {...passThrough} />
+    // The collage page keeps its blessing in a small fixed box under the photo. A very long blessing cannot be
+    // read there however small the font gets, so that one page is laid out like a classic page instead
+    // (the rest of the book keeps its collage look).
+    if (activeTemplate === 'collage' && (getBlessingText(entry) || '').length <= COLLAGE_MAX_CHARS) return <CollagePageLayout {...passThrough} />
     if (activeTemplate === 'window') return <WindowPageLayout {...passThrough} />
 
     // ── Classic layout (default) ─────────────────────────────────────────
@@ -317,6 +382,7 @@ function BookPageBody({ entry: savedEntry, styleSettings: savedStyle, scaledWidt
 
     return (
         <div
+            ref={rootRef}
             className={`relative flex flex-col items-center text-center box-border overflow-hidden ${
                 centerBlock ? 'justify-center' : ''
             }`}
@@ -399,7 +465,7 @@ function BookPageBody({ entry: savedEntry, styleSettings: savedStyle, scaledWidt
                 // slot follows the photo EXACTLY (no crop, no letterbox).
                 // Wide pages start bigger; too-tall slots shrink to fit.
                 const photoFit = styleSettings.photoFit ?? 'cover'
-                const slotW = w(isSplitPhoto || entry?._photo === 'wide' ? Math.max(90, baseW) : baseW)
+                const slotW = w(isSplitPhoto || entry?._photo === 'wide' ? Math.max(90, baseW) : baseW) * squeezeStep.photo
                 // How tall a no-crop photo may grow. A portrait photo is
                 // ~1.33× its width, which on this near-square page would
                 // swallow the whole leaf — so the cap tightens as the page
@@ -410,7 +476,8 @@ function BookPageBody({ entry: savedEntry, styleSettings: savedStyle, scaledWidt
                 // aspect — stored, or measured for legacy entries.)
                 const maxSlotH =
                     scaledHeight *
-                    (hasText ? 0.52 : hasName ? 0.72 : entry?._photo === 'tall' ? 0.86 : 0.8)
+                    (hasText ? 0.52 : hasName ? 0.72 : entry?._photo === 'tall' ? 0.86 : 0.8) *
+                    squeezeStep.photo
                 return (
                     <FramedPhoto
                         src={entry.imageUrl}
@@ -445,7 +512,7 @@ function BookPageBody({ entry: savedEntry, styleSettings: savedStyle, scaledWidt
             {hasText && (
                 <div
                     style={{
-                        maxWidth: w(styleSettings.textMaxWidth ?? 85),
+                        maxWidth: w(squeezeStep.wide > 1 ? Math.max(styleSettings.textMaxWidth ?? 85, Math.min(MAX_SQUEEZED_TEXT_WIDTH_PCT, (styleSettings.textMaxWidth ?? 85) * squeezeStep.wide)) : (styleSettings.textMaxWidth ?? 85)),
                         marginTop: soloLayout ? 0 : h(styleSettings.textMarginTop ?? 0),
                         direction: blessingDir,
                         textAlign: resolvedTextAlign,
@@ -456,7 +523,7 @@ function BookPageBody({ entry: savedEntry, styleSettings: savedStyle, scaledWidt
                     <p
                         className={blessingDir === 'ltr' && styleSettings.fontClassLatin ? styleSettings.fontClassLatin : styleSettings.fontClass}
                         style={{
-                            fontSize: h((styleSettings.fontSizePercent ?? 3) * fontFitFactor),
+                            fontSize: h((styleSettings.fontSizePercent ?? 3) * fontFitFactor * squeezeStep.text),
                             // See fontWeight comment on the name block above —
                             // same fallback chain. The body text uses fontWeight
                             // directly (no body-specific override field).
