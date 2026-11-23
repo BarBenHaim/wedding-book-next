@@ -92,7 +92,7 @@ export function buildLookPrompt({ option, eventType, names = '', people = 'one' 
         lines.push('Keep all text and all important art inside the central 86% of the image (the edges are trimmed in print).')
     } else {
         lines.push(`Hebrew text, spelled exactly, right to left, every letter correct, and nothing else written anywhere: the large headline ברכו את${name ? ` ${name}` : ''}${label ? `, and a small line ${label}` : ''}.`)
-        lines.push('Design ONLY the upper 58% of the sign. The lower 42% must be a calm, plain, empty area in exactly the same background colour or paper texture, with no text, no shapes and no QR code (we place the real QR code there ourselves).')
+        lines.push('Design ONLY the upper 50% of the sign: the name line must end above the halfway line of the page. The lower 50% must be a calm, plain, empty area in exactly the same background colour or paper texture, with no text, no shapes and no QR code (we place the real QR code there ourselves).')
         lines.push('Keep important content inside the central 88% of the width.')
     }
     lines.push('No flags, no logos, no watermark, no extra captions.')

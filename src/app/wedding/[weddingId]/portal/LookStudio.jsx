@@ -233,6 +233,13 @@ export default function LookStudio({ weddingId, w, onBack, onChanged }) {
                     {msg && <p role='status' style={{ margin: 0, fontSize: 14, fontWeight: 700, color: /לא |אין /.test(msg) ? '#8A1F1F' : '#1F6B3A' }}>{msg}</p>}
                 </div>
 
+                {!started && hasAuto && (
+                    <div style={{ ...card, padding: 18 }}>
+                        <p style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700 }}>הכריכה של הספר נוצרה מהתמונה שלכם. אפשר לחזור לכריכה שהייתה קודם.</p>
+                        <button type='button' disabled={Boolean(busy)} onClick={undoCover} style={pill(false, Boolean(busy))}>חזרה לכריכה הקודמת</button>
+                    </div>
+                )}
+
                 {started && (
                     <>
                         <div style={{ ...card, padding: 18 }}>

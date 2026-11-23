@@ -55,7 +55,7 @@ describe('the prompt', () => {
         expect(buildLookPrompt({ option: 'cover1', eventType: 'bar_mitzvah', names: 'יואב' })).toContain('ספר הברכות')
         const sign = buildLookPrompt({ option: 'sign1', eventType: 'bar_mitzvah', names: 'יואב' })
         expect(sign).toContain('ברכו את יואב')
-        expect(sign).toMatch(/lower 42%/)
+        expect(sign).toMatch(/lower 50%/)
         expect(sign).toMatch(/no QR code/)
     })
 

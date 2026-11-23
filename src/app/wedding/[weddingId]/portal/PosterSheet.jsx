@@ -54,8 +54,8 @@ export function PosterArt({ w, look = 'light', artUrl = '', guestLink, shortLink
                     {/* the artwork covers the sheet; its lower part is empty paper by design */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={art} alt='' style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 0%' }} />
-                    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '48cqw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', textAlign: 'center', padding: '0 10cqw 5cqw' }}>
-                        <Qr value={ready ? guestLink : ''} size={24} L={L} />
+                    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2cqw', textAlign: 'center', padding: '0 10cqw 3.5cqw' }}>
+                        <Qr value={ready ? guestLink : ''} size={18} L={L} />
                         <div>
                             <p style={{ margin: 0, fontSize: '4.2cqw', fontWeight: 900, textWrap: 'balance' }}>סורקים, כותבים ברכה ומוסיפים תמונה</p>
                             <p style={{ margin: '0.8cqw 0 0', fontSize: '3.2cqw', fontWeight: 600, color: L.soft }}>שתי דקות מהטלפון. בלי אפליקציה ובלי הרשמה.</p>
