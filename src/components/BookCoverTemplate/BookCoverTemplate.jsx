@@ -4,6 +4,7 @@ import { useStorageBlocked, useViaOurDomain } from '@/lib/storageReach'
 import { resolveTextureUrl } from '@/lib/resolveAsset'
 import { buildTitle, normalizeEventType } from '@/lib/eventTypes'
 import { normalizeLocale } from '@/i18n/locales'
+import { fallbackCoverTexture } from '@/lib/defaultCovers'
 
 // Default cover content when the user hasn't uploaded an image and
 // hasn't typed coverTitle/coverSubtitle. Prevents the "blank cream
@@ -138,8 +139,13 @@ export default function BookCoverTemplate({ wedding, styleSettings: savedStyle, 
     // still render.
     const resolvedCoverTexture = resolveTextureUrl(styleSettings.coverTexture)
     const resolvedTexture = resolveTextureUrl(styleSettings.texture)
-    const backgroundImage =
-        resolvedCoverTexture === 'none'
+    // A book never comes out with a blank cover: when nothing has dressed it (no photo, no cover
+    // background, no texture, no typed text) the finished cover of its event type is painted
+    // (src/lib/defaultCovers.js). Anything the owner or a preset set is left exactly as it was.
+    const defaultTexture = fallbackCoverTexture(styleSettings, wedding?.eventType)
+    const backgroundImage = defaultTexture
+        ? `url(${defaultTexture})`
+        : resolvedCoverTexture === 'none'
             ? 'none'
             : resolvedCoverTexture === null || resolvedCoverTexture === undefined
             ? resolvedTexture
@@ -152,8 +158,9 @@ export default function BookCoverTemplate({ wedding, styleSettings: savedStyle, 
             : 'none'
 
     // 🧩 מסגרת
-    const frameSrc =
-        styleSettings.coverFrame === 'none'
+    const frameSrc = defaultTexture
+        ? null // the default cover has its own border; a book-wide frame would be drawn over it
+        : styleSettings.coverFrame === 'none'
             ? null
             : styleSettings.coverFrame === null
             ? styleSettings.frame

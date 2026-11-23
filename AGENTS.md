@@ -1159,6 +1159,27 @@ but minting meant leaving the event and typing its id into a form.
 
 ---
 
+### 23.11 — sales agent: one product, and the printed book is 22x22
+
+Bar's calls, made in chat on 23.11: the printed book is 22x22 cm (the catalog said 21x21), and the
+690 digital-only book and the 300 upgrade are dropped. `catalog.js` has one package, the printed
+book (990 in total, 190 deposit, 800 at print approval); the digital book and PDF are stated as
+included. `explicitPackageChoice` still returns 'digital' for a digital-only wish, but
+`confirmedPackageId` turns that into "no confirmed package", so the policy answers with the
+one-book line (`clarify_package`) and never sends a digital checkout, and an older printed choice
+is not resent as if it were the latest wish. The model may no longer quote 690 or 300
+(`allowedPrices`). Commits 04d45d8 and 92f8c4f. Not touched: the opening's price image lives in the
+opening template, outside this repo, and may still show 690/990.
+
+### 23.11 — guest thank-you screen, and covers that are never blank
+
+`/wedding/[id]/thanks` shows how many blessings the book has (from 5 up, real count), a
+copy-link button and an offer with a real book and the deposit terms (d22efd2). Every event type now
+has a finished cover in `public/covers/<key>.webp` (`src/lib/defaultCovers.js`); `BookCoverTemplate`
+and the portal thumbnail paint it when nothing dressed the cover (no photo, no cover background, no
+texture, no typed text; an explicit `coverTexture: 'none'` stays plain). Nothing is written to the
+events: it is a render-time fallback, so existing cover-less books get a cover on deploy.
+
 ## The WhatsApp sales agent — shipped and live
 
 A Claude-powered salesperson that answers WhatsApp on the business

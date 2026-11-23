@@ -11,6 +11,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from '../../../../lib/firebaseClient'
 import QRCode from 'react-qr-code'
 import PosterSheet from './PosterSheet'
+import { fallbackCoverTexture } from '@/lib/defaultCovers'
 import { Heebo } from 'next/font/google'
 
 const heebo = Heebo({ subsets: ['latin'], weight: ['400', '600', '700', '900'] })
@@ -53,7 +54,9 @@ function titleOf(w) {
 function coverFace(w) {
     const cd = { ...(w?.book?.designSettings || {}), ...(w?.coverDesign || {}) }
     const token = w?.digitalTokens?.[0] || ''
+    // A cover nobody dressed shows the finished cover of its event type, the same one the book paints.
     const raw = [cd.coverImage, cd.coverTexture, cd.texture].find(v => typeof v === 'string' && v.trim())
+        || fallbackCoverTexture(cd, w?.eventType)
     if (!raw) return null
     const abs = raw.startsWith('/') ? `${SITE}${raw}` : raw
     if (!/^https?:\/\//i.test(abs)) return null
