@@ -155,6 +155,7 @@ export async function GET(req) {
                     balanceClickAt: tsToIso(data.balanceClickAt),
                     linkSharedAt: tsToIso(data.linkSharedAt),
                     printOrderedAt: tsToIso(data.printOrderedAt),
+                    shippedAt: tsToIso(data.shippedAt),
                     deliveredAt: tsToIso(data.deliveredAt),
                     closedAt: tsToIso(data.closedAt),
                     closedReason: data.closedReason ?? null,
@@ -264,9 +265,9 @@ export async function PATCH(req) {
             // mobile (also the /portal phone-login credential) and email.
             'ownerName', 'ownerPhone', 'ownerEmail',
             // Journey milestones only a person can know: the print was ordered, the book
-            // arrived, the order was refunded or cancelled. true stamps the server time,
-            // false clears it (a misclick must be undoable).
-            'printOrderedAt', 'deliveredAt', 'closedAt', 'closedReason',
+            // was shipped to the customer, it arrived, the order was refunded or cancelled.
+            // true stamps the server time, false clears it (a misclick must be undoable).
+            'printOrderedAt', 'shippedAt', 'deliveredAt', 'closedAt', 'closedReason',
         ]
         const clean = {}
 
@@ -279,7 +280,7 @@ export async function PATCH(req) {
                 continue
             }
 
-            if (key === 'printOrderedAt' || key === 'deliveredAt' || key === 'closedAt') {
+            if (key === 'printOrderedAt' || key === 'shippedAt' || key === 'deliveredAt' || key === 'closedAt') {
                 clean[key] = v === true ? FieldValue.serverTimestamp() : FieldValue.delete()
                 continue
             }

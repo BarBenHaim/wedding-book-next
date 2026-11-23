@@ -16,6 +16,8 @@
 
 import nodemailer from 'nodemailer'
 import { buildShareCopy } from '@/lib/shareCopy'
+import { lookNames } from '@/lib/ownerLook'
+import { greetingHi, blessingsLine } from '@/lib/customerMessages'
 import { randomUUID } from 'node:crypto'
 import { adminDb } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
@@ -80,7 +82,8 @@ function coupleName(w) {
     const g = (w.groomName || '').trim()
     const c = (w.celebrantName || '').trim()
     if (b && g) return `${b} ו${g}`
-    return b || g || c || 'זוג יקר'
+    // events made from an order keep the names in the Hebrew fields, and twins have two: lookNames reads them all
+    return b || g || c || lookNames(w) || 'זוג יקר'
 }
 
 function emailOf(w) {
@@ -100,7 +103,8 @@ async function ensureToken(weddingId, w) {
 }
 
 // ─── Variable map for a wedding ──────────────────────────────────────
-async function varsFor(w) {
+// `extra` overrides or adds variables for one send (the free note of a quick message, for instance).
+async function varsFor(w, extra = {}) {
     const slug = w.slug
     const guestLink = slug ? `${BASE_URL}/w/${slug}` : `${BASE_URL}/wedding/${w.id}`
     const token = await ensureToken(w.id, w)
@@ -122,6 +126,10 @@ async function varsFor(w) {
         brideName: w.brideName || '',
         groomName: w.groomName || '',
         celebrantName: w.celebrantName || '',
+        hi: greetingHi(w.ownerName),
+        blessingsCount: String(Number(w.greetingsCount) || 0),
+        blessingsLine: blessingsLine(w.greetingsCount),
+        noteLine: '',
         weddingDate: formatDateHe(wd),
         daysUntilWedding: daysUntil === '' ? '' : String(daysUntil),
         guestLink,
@@ -131,10 +139,12 @@ async function varsFor(w) {
         whatsappShareLink: waLink,
         // Ready-made styled buttons
         bookButton: btn(bookLink, 'צפו בספר ובחרו עיצוב ←', false),
+        viewButton: btn(bookLink, 'לצפייה בספר ←', false),
         guestButton: btn(guestLink, 'לעמוד הברכות ←'),
         loginButton: btn(loginLink, 'כניסה למערכת ←'),
         portalButton: btn(portalLink, 'לעמוד הניהול שלכם ←', false),
         whatsappButton: `<a href="${waLink}" style="display:inline-block;background:#25D366;color:#fff;text-decoration:none;padding:13px 26px;border-radius:14px;font-weight:700;font-size:15px;margin:6px 0;">שיתוף בוואטסאפ ←</a>`,
+        ...extra,
     }
 }
 
@@ -199,8 +209,8 @@ export async function resolveWeddings(segment) {
     return list
 }
 
-export async function renderForWedding(template, w) {
-    const vars = await varsFor(w)
+export async function renderForWedding(template, w, extra) {
+    const vars = await varsFor(w, extra)
     return {
         to: emailOf(w),
         subject: applyVars(template.subject, vars),
@@ -210,14 +220,14 @@ export async function renderForWedding(template, w) {
 
 // Send to one wedding. `dedupKey` (optional) makes the send idempotent
 // (used by automations so a daily cron never double-sends).
-export async function sendToWedding({ template, wedding, source, dedupKey, attachments }) {
+export async function sendToWedding({ template, wedding, source, dedupKey, attachments, extra }) {
     const to = emailOf(wedding)
     if (!to) return { skipped: 'no-email' }
     if (dedupKey) {
         const existing = await adminDb.collection(COL.log).doc(dedupKey).get()
         if (existing.exists) return { skipped: 'already-sent' }
     }
-    const { subject, html } = await renderForWedding(template, wedding)
+    const { subject, html } = await renderForWedding(template, wedding, extra)
     await transporter().sendMail({
         from: `"Wedding Tales" <${process.env.MAIL_USER}>`,
         to,
@@ -334,6 +344,9 @@ export async function runAutomations() {
 
 // Variables surfaced to the admin UI (for the "insert variable" buttons).
 export const TEMPLATE_VARIABLES = [
+    { key: 'hi', label: 'פתיחה: היי + שם הלקוח' },
+    { key: 'blessingsLine', label: 'כמה ברכות יש בספר (משפט)' },
+    { key: 'blessingsCount', label: 'מספר הברכות' },
     { key: 'coupleName', label: 'שם הזוג' },
     { key: 'weddingDate', label: 'תאריך האירוע' },
     { key: 'daysUntilWedding', label: 'ימים עד האירוע' },
@@ -342,7 +355,8 @@ export const TEMPLATE_VARIABLES = [
     { key: 'loginLink', label: 'קישור כניסה (URL)' },
     { key: 'portalLink', label: 'קישור פורטל (URL)' },
     { key: 'whatsappShareLink', label: 'קישור שיתוף וואטסאפ (URL)' },
-    { key: 'bookButton', label: 'כפתור: צפייה בספר' },
+    { key: 'bookButton', label: 'כפתור: צפייה בספר ובחירת עיצוב' },
+    { key: 'viewButton', label: 'כפתור: לצפייה בספר' },
     { key: 'guestButton', label: 'כפתור: עמוד ברכות' },
     { key: 'loginButton', label: 'כפתור: כניסה' },
     { key: 'portalButton', label: 'כפתור: פורטל' },
@@ -486,8 +500,8 @@ function htmlToPlain(html) {
 
 // Plain-text render for WhatsApp (no email shell). Subject becomes the
 // first line; styled buttons collapse to "label (url)".
-export async function renderPlainForWedding(template, w) {
-    const vars = await varsFor(w)
+export async function renderPlainForWedding(template, w, extra) {
+    const vars = await varsFor(w, extra)
     const subject = applyVars(template.subject, vars)
     const bodyHtml = applyVars(template.body, vars)
     const text = (subject ? subject + '\n\n' : '') + htmlToPlain(bodyHtml)

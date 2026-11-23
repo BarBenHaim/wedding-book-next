@@ -72,6 +72,23 @@ describe('journeyOf', () => {
         expect(journeyOf({ createdAt: iso('2026-02-01'), deliveredAt: iso('2026-12-01') }, NOW).stage).toBe('delivered')
     })
 
+    it('shipped sits between in print and arrived, and each step offers the next one', () => {
+        const printed = dep({ paymentStage: 'paid', printOrderedAt: iso('2026-12-09') })
+        expect(journeyOf(printed, NOW).action).toBe('ship')
+        const shipped = journeyOf({ ...printed, shippedAt: iso('2026-12-10') }, NOW)
+        expect(shipped.stage).toBe('shipped')
+        expect(shipped.label).toBe('נשלח ללקוח')
+        expect(shipped.action).toBe('deliver')
+        const arrived = journeyOf({ ...printed, shippedAt: iso('2026-12-10'), deliveredAt: iso('2026-12-10') }, NOW)
+        expect(arrived.stage).toBe('delivered')
+        expect(arrived.label).toBe('הגיע בהצלחה')
+        // marked as arrived without a shipped mark (handed over by hand) is still arrived; closed still wins
+        expect(journeyOf({ ...printed, deliveredAt: iso('2026-12-10') }, NOW).stage).toBe('delivered')
+        expect(journeyOf({ ...printed, shippedAt: iso('2026-12-10'), closedAt: iso('2026-12-11') }, NOW).stage).toBe('closed')
+        // a shipped mark alone (the print mark forgotten) still counts as shipped
+        expect(journeyOf(dep({ paymentStage: 'paid', shippedAt: iso('2026-12-10') }), NOW).stage).toBe('shipped')
+    })
+
     it('a deposit with no date is flagged and never passes collecting', () => {
         const j = journeyOf(dep({ weddingDate: null, greetingsCount: 4 }), NOW)
         expect(j.stage).toBe('collecting')
@@ -97,6 +114,7 @@ describe('summarize and urgency', () => {
         expect(s.counts.awaiting_review).toBe(2)
         expect(s.counts.print_now).toBe(1)
         expect(s.counts.legacy).toBe(1)
+        expect(s.counts.shipped).toBe(0)
         expect(s.owed).toBe(1600)
     })
 

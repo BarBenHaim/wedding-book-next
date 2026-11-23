@@ -6,7 +6,8 @@ import { NextResponse } from 'next/server'
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { isSuperAdmin } from '@/lib/superAdmin'
-import { COL, resolveWeddings, renderForWedding, sendCampaign, sendTest, DEFAULT_TEMPLATES, DEFAULT_AUTOMATIONS, waRecipients as buildWaRecipients } from '@/lib/emailEngine'
+import { COL, resolveWeddings, renderForWedding, renderPlainForWedding, sendToWedding, sendCampaign, sendTest, waLinkFor, normalizePhone, DEFAULT_TEMPLATES, DEFAULT_AUTOMATIONS, waRecipients as buildWaRecipients } from '@/lib/emailEngine'
+import { quickTemplate, noteLine } from '@/lib/customerMessages'
 
 // Consolidated super-admin endpoint for the email system. Mirrors the
 // /api/studio op-based pattern. Auth: Firebase ID token that resolves to
@@ -252,6 +253,39 @@ export async function POST(req) {
                 const segment = body.segment || { type: 'all' }
                 const items = await buildWaRecipients({ subject: body.subject || '', body: body.body || '' }, segment)
                 return NextResponse.json({ items })
+            }
+            // The three hand-sent messages of the admin (lib/customerMessages.js). The wording is fixed on the
+            // server: the browser names a kind and an optional note, never a body, so this route cannot be used
+            // to send arbitrary mail from the company address.
+            case 'quickPreview':
+            case 'quickSend': {
+                const tpl = quickTemplate(body.kind)
+                if (!tpl) return NextResponse.json({ error: 'Unknown message kind' }, { status: 400 })
+                if (!body.weddingId || typeof body.weddingId !== 'string') return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })
+                const snap = await adminDb.collection('weddings').doc(body.weddingId).get()
+                if (!snap.exists) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+                const wedding = { id: snap.id, ...snap.data() }
+                const extra = { noteLine: noteLine(body.note) }
+                const to = (wedding.ownerEmail || wedding.email || '').trim()
+                if (op === 'quickSend') {
+                    if (!to) return NextResponse.json({ error: 'לאירוע אין כתובת מייל' }, { status: 400 })
+                    const r = await sendToWedding({ template: tpl, wedding, source: { kind: 'quick', message: body.kind, by: auth.email }, extra })
+                    return NextResponse.json({ ok: Boolean(r.sent), ...r })
+                }
+                const mail = await renderForWedding(tpl, wedding, extra)
+                const plain = await renderPlainForWedding(tpl, wedding, extra)
+                const phone = (wedding.ownerPhone || wedding.phone || '').toString().trim()
+                const hasPhone = Boolean(normalizePhone(phone))
+                return NextResponse.json({
+                    subject: mail.subject,
+                    html: mail.html,
+                    text: plain.text,
+                    to,
+                    hasEmail: Boolean(to),
+                    phone,
+                    hasPhone,
+                    waLink: hasPhone ? waLinkFor(phone, plain.text) : '',
+                })
             }
             case 'setPhone': {
                 if (!body.weddingId) return NextResponse.json({ error: 'Missing weddingId' }, { status: 400 })

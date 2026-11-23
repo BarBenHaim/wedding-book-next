@@ -154,7 +154,9 @@ function formatDate(isoString) {
 import { eventTypeOf, eventTypeLabel, matchesSearch, amountOf, compareByAmount, countByEventType, EVENT_TYPES, rowUrgency, countdownLabel, SOON_WINDOW_DAYS, originOf, originLabel, appPresence, countByOrigin, createdAtMs, ORIGIN_LABEL } from '@/lib/adminEventsView'
 
 import { JourneyCell, JourneyPanelBlock, JourneyStrip, stagePredicate } from './JourneyUI'
+import CustomerMessageModal, { CustomerMessageButtons } from './CustomerMessage'
 import { journeyOf, urgencyOf } from '@/lib/journeyStage'
+import { suggestedKind } from '@/lib/customerMessages'
 
 // The message Bar sends himself from the row. Only for the two stages where the customer
 // has to act; the wording matches the e-mails the lifecycle engine would send.
@@ -2360,7 +2362,7 @@ function OwnerTransferPanel({ wedding, onOwnerChanged }) {
     )
 }
 
-function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onCheckLuluStatus, onSaveEdit, onOwnerChanged, onMark }) {
+function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onCheckLuluStatus, onSaveEdit, onOwnerChanged, onMark, onMessage }) {
     // ── Analytics state — funnel + recent scans pulled from
     //    /api/admin/wedding-stats. Loads fresh whenever the panel
     //    swaps to a different wedding. Hooks must be declared BEFORE
@@ -2467,7 +2469,9 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
             </div>
 
             {/* Status */}
-            <JourneyPanelBlock j={journeyOf(wedding, Date.now())} w={wedding} waHref={journeyWaLink(wedding, journeyOf(wedding, Date.now()))} onMark={onMark} />
+            <JourneyPanelBlock j={journeyOf(wedding, Date.now())} w={wedding} waHref={journeyWaLink(wedding, journeyOf(wedding, Date.now()))} onMark={onMark}>
+                {onMessage && <CustomerMessageButtons wedding={wedding} onOpen={onMessage} suggested={suggestedKind(journeyOf(wedding, Date.now()).stage)} />}
+            </JourneyPanelBlock>
 
             {/* ── Quick Links ──
                 Direct shortcuts to every guest- and couple-facing page
@@ -2862,6 +2866,8 @@ function AdminDashboardContent() {
     const [selectedWedding, setSelectedWedding] = useState(null)
     const [modal, setModal] = useState(null)
     const [toast, setToast] = useState(null)
+    // { wedding, kind }: the quick-message window (shipped / arrived / details)
+    const [msgFor, setMsgFor] = useState(null)
     const [actionLoading, setActionLoading] = useState(false)
     const [showCreateUser, setShowCreateUser] = useState(false)
 
@@ -2953,6 +2959,10 @@ function AdminDashboardContent() {
                     setWeddings(prev => prev.map(x => (x.id === w.id ? { ...x, ...patch } : x)))
                     setSelectedWedding(prev => (prev && prev.id === w.id ? { ...prev, ...patch } : prev))
                     setToast({ message: 'עודכן', type: 'success' })
+                    // right after "shipped" or "arrived" the message to the customer is one tap away
+                    if (on && (field === 'shippedAt' || field === 'deliveredAt')) {
+                        setMsgFor({ wedding: { ...w, ...patch }, kind: field === 'shippedAt' ? 'shipped' : 'arrived' })
+                    }
                 } catch (err) {
                     setToast({ message: `שגיאה: ${err.message}`, type: 'error' })
                 } finally {
@@ -3117,6 +3127,9 @@ function AdminDashboardContent() {
             {/* Confirm Modal */}
             {modal && <ConfirmModal {...modal} onCancel={() => setModal(null)} />}
 
+            {/* Quick message to the customer (shipped / arrived / all the details) */}
+            {msgFor && <CustomerMessageModal key={`${msgFor.wedding.id}-${msgFor.kind}`} wedding={msgFor.wedding} kind={msgFor.kind} getToken={getToken} onClose={() => setMsgFor(null)} onToast={setToast} />}
+
             {/* Create User Modal */}
             <AnimatePresence>
                 {showCreateUser && <CreateUserModal onClose={() => setShowCreateUser(false)} onSubmit={handleCreateUser} />}
@@ -3135,6 +3148,7 @@ function AdminDashboardContent() {
                             onResetPassword={handleResetPassword}
                             onCheckLuluStatus={handleCheckLuluStatus}
                             onMark={handleMark}
+                            onMessage={(w, kind) => setMsgFor({ wedding: w, kind })}
                             onSaveEdit={handleSaveEdit}
                             onOwnerChanged={(id, fields) => {
                                 setWeddings(prev => prev.map(w => (w.id === id ? { ...w, ...fields } : w)))

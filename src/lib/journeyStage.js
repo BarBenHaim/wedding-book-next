@@ -5,8 +5,9 @@
 // sit on the event, and a separate list of reasons the event needs a human.
 //
 // Rules of the design:
-//  - The stage is the furthest milestone reached. Nothing here is ever hand-set except the two
-//    things a machine cannot know: the book was ordered from the printer, and it was delivered.
+//  - The stage is the furthest milestone reached. Nothing here is ever hand-set except the three
+//    things a machine cannot know: the book was ordered from the printer, it was shipped to the
+//    customer, and it arrived.
 //  - "Needs attention" is NOT a stage. It sits on top of the stage, otherwise events would flap
 //    between stages and the funnel counts would mean nothing.
 //  - Events from before the funnel went live are read, never guessed: 'legacy' never lands in the
@@ -19,7 +20,7 @@ import { israelDate, daysBetween } from './lifecycle'
 // is a customer of the old way of working.
 export const FUNNEL_START_MS = Date.parse('2026-11-22T00:00:00+02:00')
 
-export const STAGES = ['free', 'deposit_quiet', 'collecting', 'awaiting_review', 'balance_started', 'print_now', 'in_print', 'delivered', 'closed', 'legacy']
+export const STAGES = ['free', 'deposit_quiet', 'collecting', 'awaiting_review', 'balance_started', 'print_now', 'in_print', 'shipped', 'delivered', 'closed', 'legacy']
 
 export const STAGE_LABEL = {
     free: 'אירוע חינמי',
@@ -29,7 +30,8 @@ export const STAGE_LABEL = {
     balance_started: 'התחיל לשלם יתרה',
     print_now: 'שולם: להדפיס עכשיו',
     in_print: 'בהדפסה',
-    delivered: 'נמסר',
+    shipped: 'נשלח ללקוח',
+    delivered: 'הגיע בהצלחה',
     closed: 'נסגר',
     legacy: 'לפני המשפך',
 }
@@ -37,7 +39,7 @@ export const STAGE_LABEL = {
 // red = Bar has to act, amber = waiting on the customer, green = fine, grey = not in the funnel.
 export const STAGE_TONE = {
     free: 'grey', deposit_quiet: 'amber', collecting: 'green', awaiting_review: 'amber', balance_started: 'amber',
-    print_now: 'red', in_print: 'green', delivered: 'green', closed: 'grey', legacy: 'grey',
+    print_now: 'red', in_print: 'green', shipped: 'green', delivered: 'green', closed: 'grey', legacy: 'grey',
 }
 
 const ms = v => {
@@ -63,7 +65,7 @@ const n = v => Number(v) || 0
 /**
  * { stage, label, tone, attention, action, days }
  *   attention: [{ key, label, days }]   reasons this event needs Bar, most urgent first
- *   action:    'print' | 'deliver' | 'link' | 'balance' | null   the one thing Bar can do from the row
+ *   action:    'print' | 'ship' | 'deliver' | 'link' | 'balance' | null   the one thing Bar can do from the row
  *   days:      whole days Bar's side has been waiting (print_now), else days to the event (negative once past)
  */
 export function journeyOf(w, now = Date.now()) {
@@ -83,8 +85,10 @@ export function journeyOf(w, now = Date.now()) {
     // What a human recorded beats anything derived.
     if (has(w?.closedAt)) return out('closed')
     if (has(w?.deliveredAt)) return out('delivered')
+    // shipped to the customer: the book left us, the next thing to record is that it arrived
+    if (has(w?.shippedAt)) return out('shipped', { action: 'deliver' })
     const printed = has(w?.printOrderedAt) || Boolean(w?.printOrder)
-    if (printed) return out('in_print', { action: 'deliver' })
+    if (printed) return out('in_print', { action: 'ship' })
 
     if (!stage0 && !paidFull) {
         return createdMs && createdMs >= FUNNEL_START_MS && n(w?.amountPaid) <= 0 ? out('free') : out('legacy')
