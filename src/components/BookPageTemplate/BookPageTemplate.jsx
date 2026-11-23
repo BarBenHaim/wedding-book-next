@@ -106,6 +106,8 @@ function BookPageBody({ entry: savedEntry, styleSettings: savedStyle, scaledWidt
             artTop: (artSafeTopPct(styleSettings.backgroundUrl) / 100) * H,
             artBottom: (artSafeBottomPct(styleSettings.backgroundUrl) / 100) * H,
             centered: !entry?.imageUrl,
+            // the art fades out at its inner edge: letting the text's last line touch the last 2% of the band keeps an ordinary page as designed
+            slack: H * 0.02,
         })
         if (!fits) setSqueeze(squeeze + 1)
     })
@@ -383,6 +385,7 @@ function BookPageBody({ entry: savedEntry, styleSettings: savedStyle, scaledWidt
     return (
         <div
             ref={rootRef}
+            data-fit-step={squeeze}
             className={`relative flex flex-col items-center text-center box-border overflow-hidden ${
                 centerBlock ? 'justify-center' : ''
             }`}

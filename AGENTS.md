@@ -2252,3 +2252,16 @@ amount, `adminNotes` and the book `digitalTokens` can still be read by anyone wh
 id. Closing it means serving the guest pages from a whitelist API instead of reading the document
 from the browser (the guest page, thanks, gallery, slug links, the token book). Storage overwrites
 of an existing object under `weddings/` are still allowed (observed).
+
+## One photo -> covers and signs (2026-11-23)
+
+The owner's personal area has a step "look" (`portal?view=look`, `LookStudio.jsx`): the owner uploads one
+photo, ticks an explicit consent (the photo goes to OpenAI), and `api/owner/event-look/render` draws ONE
+design per call with the OpenAI Images edits API (three covers, two signs; model `OPENAI_IMAGE_MODEL` or
+`gpt-image-2`, needs `OPENAI_API_KEY`). Results are stored under `weddings/{id}/look-*.jpg`. Nothing changes
+in the book until the owner picks: a cover writes `coverDesign.*` (+ `coverDesignBefore` for undo, `coverAuto`),
+a sign writes `posterArt` + `posterLook: 'art'`. Ceiling: `LOOK_LIMIT_PER_EVENT` (12) images per event,
+counted in `lookRenders`, given back on failure. The QR on a sign is never drawn by the model; it is a live
+overlay in `PosterSheet.jsx` below the artwork (the lower 42% of a sign is empty by design).
+Pure logic: `lib/ownerLook.js`, `lib/ownerLookAi.js`; tests `tests/ownerLook*.test.js`.
+Not verified end to end at the time of writing: a real render on a test event with an owner login.

@@ -11,6 +11,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from '../../../../lib/firebaseClient'
 import QRCode from 'react-qr-code'
 import PosterSheet from './PosterSheet'
+import LookStudio from './LookStudio'
 import { fallbackCoverTexture } from '@/lib/defaultCovers'
 import { Heebo } from 'next/font/google'
 
@@ -197,6 +198,7 @@ export default function PortalApp() {
     const balanceDue = Number(w?.balanceDue) || 0
     const steps = [
         { key: 'share', cta: 'לשליחת הקישור', title: 'שולחים את הקישור לאורחים', note: blessings ? `כבר נכנסו ${blessings} ברכות. אפשר לשלוח שוב גם אחרי האירוע.` : 'בוואטסאפ, בהודעה מוכנה. אפשר כבר עכשיו.', done: blessings > 0, go: () => setTab('share') },
+        { key: 'look', cta: 'לבחירת עיצוב', title: 'מעלים תמונה אחת ומקבלים כריכה ושלט', note: 'מכמה עיצובים בוחרים כריכה לספר ושלט "ברכו את", מהתמונה שלכם.', done: Boolean(w?.coverDesign?.coverAuto), href: `/wedding/${weddingId}/portal?view=look` },
         { key: 'poster', cta: 'להדפסת השלט', title: 'מדפיסים את השלט לאירוע', note: 'שלט "ברכו את" עם ה־QR שלכם, מוכן להדפסה.', done: false, href: `/wedding/${weddingId}/portal?view=poster` },
         { key: 'design', cta: 'לעיצוב הספר', title: 'בוחרים עיצוב וכריכה', note: face ? 'יש כריכה. אפשר לשנות בכל רגע.' : 'בוחרים סגנון ומעלים תמונה לכריכה.', done: !!face, go: () => setTab('book') },
         { key: 'review', cta: 'לעבור על הברכות', title: 'עוברים על הברכות', note: 'אחרי האירוע: מתקנים, מחליפים תמונה, מסדרים.', done: stage === 'paid', go: () => setTab('blessings') },
@@ -265,6 +267,7 @@ export default function PortalApp() {
 
     // ── הספר — immersive: fixed iframe, dock hidden, back arrow ──
     if (view === 'poster') return <PosterSheet />
+    if (view === 'look') return <LookStudio weddingId={weddingId} w={w || {}} onBack={() => { window.location.assign(`/wedding/${weddingId}/portal`) }} onChanged={() => { try { window.dispatchEvent(new Event('focus')) } catch { /* ignore */ } }} />
 
     if (tab === 'book') {
         return (
