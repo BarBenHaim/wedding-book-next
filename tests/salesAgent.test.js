@@ -300,7 +300,7 @@ describe('catalog — the only facts the agent may state', () => {
         expect(findPackage('premium')).toBeFalsy()
         expect(findPackage('printed').includes).toEqual(expect.arrayContaining([
             'כל מה שבדיגיטלי',
-            'ספר מודפס בכריכה קשה 21x21',
+            'ספר מודפס בכריכה קשה 22x22',
         ]))
         // 22.11: the printed book is paid as a deposit, and what the bot
         // sends a lead is the sales page, not a bare checkout.
