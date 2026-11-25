@@ -4,7 +4,7 @@ import { MORE, NAV, activeNav, adminShell } from '@/lib/adminShell'
 
 describe('which admin screens get the menu', () => {
     it('gives the work screens the full menu and the admin font', () => {
-        for (const path of ['/admin', '/admin/today', '/admin/customers', '/admin/sales-leads', '/admin/']) {
+        for (const path of ['/admin', '/admin/today', '/admin/customers', '/admin/customers/board', '/admin/sales-leads', '/admin/']) {
             expect(adminShell(path)).toEqual({ rail: 'full', serif: true, themed: true })
         }
     })
@@ -39,15 +39,20 @@ describe('which admin screens get the menu', () => {
 })
 
 describe('which menu entry is lit', () => {
-    it('matches the screen, and the events entry only on the events screen', () => {
-        expect(activeNav('/admin')).toBe('/admin')
+    it('lights the screen itself for the entries of the menu', () => {
         expect(activeNav('/admin/today')).toBe('/admin/today')
         expect(activeNav('/admin/customers/')).toBe('/admin/customers')
         expect(activeNav('/admin/studio')).toBe('/admin/studio')
     })
 
     it('lights the "more" entry for a screen that sits inside it', () => {
-        expect(activeNav('/admin/qrcodes')).toBe('more')
-        expect(activeNav('/admin/emails')).toBe('more')
+        for (const path of ['/admin', '/admin/sales-leads', '/admin/customers/board', '/admin/qrcodes', '/admin/emails']) {
+            expect(activeNav(path)).toBe('more')
+        }
+    })
+
+    it('keeps the daily screens in the menu and the older ones under "more"', () => {
+        expect(NAV.map(item => item.href || item.open)).toEqual(['/admin/today', '/admin/customers', 'bot', 'spend', '/admin/studio'])
+        expect(MORE.map(item => item.href)).toEqual(expect.arrayContaining(['/admin', '/admin/sales-leads', '/admin/customers/board']))
     })
 })

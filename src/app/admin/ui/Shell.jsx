@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import {
-    BookImage, Calendar, CalendarDays, Coins, GraduationCap, Instagram, LogOut, Mail, Menu, MessageCircle,
+    BellRing, BookImage, Calendar, CalendarDays, Coins, GraduationCap, Instagram, LogOut, Mail, Menu, MessageCircle,
     MessagesSquare, Palette, QrCode, Sparkles, Users,
 } from 'lucide-react'
 import { auth } from '@/lib/firebaseClient'
@@ -24,11 +24,11 @@ import './theme.css'
 const ICONS = {
     '/admin/today': Calendar, '/admin/customers': Users, '/admin': CalendarDays, '/admin/sales-leads': MessagesSquare,
     bot: MessageCircle, spend: Coins, '/admin/studio': Palette,
-    '/admin/qrcodes': QrCode, '/admin/emails': Mail, '/admin/social-preview': Instagram,
+    '/admin/customers/board': BellRing, '/admin/qrcodes': QrCode, '/admin/emails': Mail, '/admin/social-preview': Instagram,
     '/admin/guest-design': Sparkles, '/admin/album-studio': BookImage, '/admin/project': GraduationCap,
 }
 // On a phone the bottom bar holds only these; the rest sit under "more".
-const ON_PHONE = ['/admin/today', '/admin/customers', '/admin', 'bot']
+const ON_PHONE = ['/admin/today', '/admin/customers', 'bot']
 const keyOf = item => item.href || item.open
 
 const AdminContext = createContext({ openBot: () => {}, openSpend: () => {}, onRefresh: () => () => {} })

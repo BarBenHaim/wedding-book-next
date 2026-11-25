@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { getIdToken } from 'firebase/auth'
 import { auth } from '@/lib/firebaseClient'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
@@ -2829,6 +2829,16 @@ function AdminDashboardContent() {
     }, [])
 
     useEffect(() => { loadWeddings() }, [loadWeddings])
+
+    // ?id= opens one event's panel, for links from the customers screen.
+    const linked = useRef(false)
+    useEffect(() => {
+        if (status !== 'ok' || linked.current) return
+        linked.current = true
+        const id = new URLSearchParams(window.location.search).get('id')
+        const found = id && weddings.find(w => w.id === id)
+        if (found) setSelectedWedding(found)
+    }, [status, weddings])
 
     // Stats
     const totalGreetings = weddings.reduce((sum, w) => sum + (w.greetingsCount ?? 0), 0)

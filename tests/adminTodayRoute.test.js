@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
     email: 'barbenbh@gmail.com',
-    books: vi.fn(), followups: vi.fn(), drafts: vi.fn(), samples: vi.fn(), requests: vi.fn(), sampleSwitch: vi.fn(),
+    people: vi.fn(), followups: vi.fn(), drafts: vi.fn(), samples: vi.fn(), requests: vi.fn(), sampleSwitch: vi.fn(),
     claude: vi.fn(), settings: vi.fn(), media: vi.fn(), getAll: vi.fn(),
 }))
 vi.mock('@/lib/superAdmin', () => ({ isSuperAdmin: email => email === 'barbenbh@gmail.com' }))
@@ -10,7 +10,8 @@ vi.mock('@/lib/firebaseAdmin', () => ({
     adminAuth: { verifyIdToken: async token => { if (token !== 'good') throw new Error('bad'); return { email: mocks.email } } },
     adminDb: { collection: name => ({ doc: id => ({ path: `${name}/${id}` }) }), getAll: mocks.getAll },
 }))
-vi.mock('@/lib/customerData', () => ({ loadCustomerBooks: mocks.books, readFollowupSettings: mocks.followups }))
+vi.mock('@/lib/customerData', () => ({ readFollowupSettings: mocks.followups }))
+vi.mock('@/lib/peopleData', () => ({ loadPeople: mocks.people }))
 vi.mock('@/lib/salesAgent/customerAgent', () => ({ listDrafts: mocks.drafts, readAgentSettings: mocks.requests }))
 vi.mock('@/lib/salesAgent/designSamples', () => ({ listSamples: mocks.samples, readDesignSettings: mocks.sampleSwitch }))
 vi.mock('@/lib/salesAgent/claudeHealth', () => ({ readClaudeHealth: mocks.claude }))
@@ -25,7 +26,7 @@ beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-11-25T10:00:00Z'))
     mocks.email = 'barbenbh@gmail.com'
-    mocks.books.mockReset().mockResolvedValue([])
+    mocks.people.mockReset().mockResolvedValue({ rows: [], counts: { today: 0, talk: 0, collect: 0, print: 0, way: 0 }, drafts: [], samples: [], unread: [] })
     mocks.followups.mockReset().mockResolvedValue({ enabled: false, enabledDay: null })
     mocks.drafts.mockReset().mockResolvedValue([])
     mocks.samples.mockReset().mockResolvedValue([])
@@ -44,7 +45,7 @@ describe('the today screen data', () => {
         mocks.email = 'someone@example.com'
         expect((await GET(request())).status).toBe(403)
         expect((await GET(request('bad'))).status).toBe(403)
-        expect(mocks.books).not.toHaveBeenCalled()
+        expect(mocks.people).not.toHaveBeenCalled()
     })
 
     it('reads this month day by day and shows who answers, without any phone list', async () => {
@@ -73,7 +74,7 @@ describe('the today screen data', () => {
 
     it('still answers when parts cannot be read, and names them', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {})
-        mocks.drafts.mockRejectedValue(new Error('x'))
+        mocks.people.mockResolvedValue({ rows: [], counts: { today: 0, talk: 0, collect: 0, print: 0, way: 0 }, drafts: null, samples: [], unread: ['בקשות לקוחות'] })
         mocks.settings.mockRejectedValue(new Error('x'))
         mocks.getAll.mockRejectedValue(new Error('x'))
 

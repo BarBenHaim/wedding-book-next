@@ -2,17 +2,17 @@
 // has. Pure: the route reads, this decides. A part that could not be read is
 // passed as null and reported, never shown as zero.
 
-const EVENT = {
-    wedding: 'חתונה', bar_mitzvah: 'בר מצווה', twins_bar_mitzvah: 'בר מצווה', bat_mitzvah: 'בת מצווה',
-    birthday: 'יום הולדת', poker: 'ערב פוקר', travel: 'מסע',
-}
+import { stageLabel } from './peopleStages'
+
 const TASKS_SHOWN = 4
 const CUSTOMERS_SHOWN = 5
 const WAITING_DRAFT = new Set(['pending', 'needs_owner'])
 const round = value => Math.round(value * 100) / 100
 const who = (name, phone) => name || `מספר שמסתיים ב-${String(phone || '').slice(-4)}`
-// The customer board, narrowed to that book: the buttons that finish a step are there.
-const bookHref = id => `/admin/customers?id=${encodeURIComponent(id)}`
+// The list of people, opened on that person.
+const personHref = key => `/admin/customers?key=${encodeURIComponent(key)}`
+// The switches, the test message and the approvals of samples.
+const BOARD = '/admin/customers/board'
 
 function draftTask(draft) {
     const sent = draft.status === 'sent'
@@ -36,39 +36,40 @@ function sampleTask(sample) {
         detail: sample.windowOpen ? `לליד ${who(sample.name, sample.phone)}` : 'עברו 24 שעות, צריך לשלוח ידנית',
         image: sample.previewUrl || null,
         canApprove: sample.windowOpen === true,
-        href: '/admin/customers',
+        href: BOARD,
     }
 }
 
-export function buildToday({ today, rows = [], drafts = [], samples = [], claude, usageDays = [], bot, switches }) {
-    const unread = [
-        ...(rows === null ? ['לקוחות'] : []),
+// `people` is the list of lib/people.js, so both screens say the same.
+export function buildToday({ today, people, drafts = [], samples = [], claude, usageDays = [], bot, switches }) {
+    const unread = [...new Set([
+        ...(people === null ? ['לקוחות'] : people.unread || []),
         ...(drafts === null ? ['בקשות לקוחות'] : []),
         ...(samples === null ? ['דוגמאות שלט'] : []),
-    ]
-    const books = rows || []
+    ])]
+    // A list built without the books or the leads counts nothing.
+    const whole = Boolean(people) && !unread.some(name => name === 'ספרים' || name === 'לידים')
+    const rows = people?.rows || []
     const requests = drafts || []
     const signs = samples || []
 
-    const withDraft = new Set(requests.map(draft => draft.weddingId).filter(Boolean))
     const toDraw = signs.filter(sample => ['receiving', 'pending', 'failed'].includes(sample.status)).length
-    const todayBooks = books
-        .filter(row => row.group === 'today' && !(row.next.key === 'request' && withDraft.has(row.id)))
-        .sort((a, b) => Number(b.overdue) - Number(a.overdue) || Math.abs(a.toEvent ?? 999) - Math.abs(b.toEvent ?? 999))
+    // Requests and samples have lines of their own above.
+    const waitingPeople = rows.filter(row => row.inToday && row.draft == null && row.sample == null)
     const tasks = [
-        ...(claude?.alert ? [{ kind: 'claude', id: 'claude', title: 'Claude לא ענה', detail: claude.alert, href: '/admin/customers' }] : []),
+        ...(claude?.alert ? [{ kind: 'claude', id: 'claude', title: 'Claude לא ענה', detail: claude.alert, href: BOARD }] : []),
         ...requests.filter(draft => WAITING_DRAFT.has(draft.status)).map(draftTask),
         ...signs.filter(sample => sample.status === 'ready').map(sampleTask),
-        ...(toDraw ? [{ kind: 'draw', id: 'draw', title: `${toDraw} דוגמאות שלט מחכות לציור`, detail: 'במחשב: כתוב ל-Claude "יש דוגמאות?"', href: '/admin/customers' }] : []),
+        ...(toDraw ? [{ kind: 'draw', id: 'draw', title: `${toDraw} דוגמאות שלט מחכות לציור`, detail: 'במחשב: כתוב ל-Claude "יש דוגמאות?"', href: BOARD }] : []),
         ...requests.filter(draft => draft.status === 'sent').map(draftTask),
-        ...todayBooks.map(row => ({
-            kind: 'book', id: row.id, title: row.title,
+        ...waitingPeople.map(row => ({
+            kind: 'person', id: row.key, title: row.name,
             detail: [row.next.label, row.overdue ? 'באיחור' : null].filter(Boolean).join(' · '),
-            href: bookHref(row.id),
+            row, href: personHref(row.key),
         })),
     ]
 
-    const active = books.filter(row => !['done', 'triage'].includes(row.group))
+    const active = rows.filter(row => !row.resting && row.stage !== 'done')
     // Events still ahead come first, nearest first; then the most recent past.
     const order = row => (row.toEvent == null ? 20_000 : row.toEvent >= 0 ? row.toEvent : 10_000 - row.toEvent)
 
@@ -85,16 +86,15 @@ export function buildToday({ today, rows = [], drafts = [], samples = [], claude
     return {
         date: today,
         counts: {
-            tasks: !tasks.length && unread.length ? null : tasks.length,
-            active: rows === null ? null : active.length,
-            week: rows === null ? null : active.filter(row => row.toEvent != null && row.toEvent >= 0 && row.toEvent <= 7).length,
+            today: whole ? people.counts.today : null,
+            active: whole ? active.length : null,
+            week: whole ? active.filter(row => row.toEvent != null && row.toEvent >= 0 && row.toEvent <= 7).length : null,
         },
         tasks: tasks.slice(0, TASKS_SHOWN),
         moreTasks: Math.max(0, tasks.length - TASKS_SHOWN),
-        oldEvents: books.filter(row => row.group === 'triage').length,
         customers: [...active].sort((a, b) => order(a) - order(b)).slice(0, CUSTOMERS_SHOWN).map(row => ({
-            id: row.id, title: row.title, event: EVENT[row.eventType] || 'אירוע', day: row.day, toEvent: row.toEvent,
-            step: row.next.label, overdue: row.overdue === true, href: bookHref(row.id),
+            id: row.key, title: row.name, event: row.what || 'אירוע', day: row.day, toEvent: row.toEvent,
+            step: row.next?.label || stageLabel(row.stage), overdue: row.overdue === true, row, href: personHref(row.key),
         })),
         moreCustomers: Math.max(0, active.length - CUSTOMERS_SHOWN),
         bot: bot ? {

@@ -6,7 +6,7 @@ import { useState } from 'react'
 import Button from './BoardButton'
 import c from './customers.module.css'
 
-function Request({ item, busy, onAct }) {
+export function Request({ item, busy, onAct }) {
     const [edited, setEdited] = useState(null)
     const text = edited ?? item.text
     const sent = item.status === 'sent'

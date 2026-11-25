@@ -81,7 +81,7 @@
     .taskText b { font-size: 18px; }
     .taskText small { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
     .thumb { width: 56px; height: 56px; }
-    :global(.wt-admin) .task > button + button { width: 100%; }
+    :global(.wt-admin) .task > button + * { width: 100%; }
     :global(.wt-admin) .taskOpen { flex-basis: 100%; }
     .customers, .customers tbody { display: block; }
     .customers thead { display: none; }

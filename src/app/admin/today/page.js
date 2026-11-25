@@ -65,7 +65,25 @@ function Screen() {
         }
     }
 
-    return <TodayView data={data} busy={busy} error={error} onApprove={approve} onRefresh={load} api={call} />
+    // One action of the person window, asked first when it has a question.
+    const act = async (body, question, url = '/api/admin/customers', method = 'POST') => {
+        if (question && !window.confirm(question)) return false
+        setBusy(true)
+        try {
+            await call(url, body, method)
+            await load()
+            return true
+        } catch (err) {
+            // Loading clears the message, so the state is refreshed first.
+            await load()
+            setError(REFUSALS[err.message] || `הפעולה לא נשמרה: ${err.message}`)
+            return false
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    return <TodayView data={data} busy={busy} error={error} onApprove={approve} onRefresh={load} onAct={act} api={call} />
 }
 
 function SuperAdminGate({ children }) {

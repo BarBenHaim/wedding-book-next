@@ -1,0 +1,37 @@
+/* What only the list of people and the person window have. */
+:global(.wt-admin) .name { display: block; padding: 0; border: 0; background: none; color: var(--ink); font-size: 17px; font-weight: 900; text-align: right; cursor: pointer; }
+:global(.wt-admin) .name:hover { color: var(--purple); }
+.where { display: inline-flex; flex-direction: column; gap: 4px; }
+.where b { font-size: 14.5px; font-weight: 800; white-space: nowrap; }
+.where span { display: flex; gap: 5px; }
+.where i { width: 20px; height: 7px; border-radius: 9px; background: #e4d8c4; box-shadow: inset 0 1px 2px rgba(80, 55, 25, .25); }
+.where i[data-on='true'] { background: linear-gradient(180deg, #8a5ac8, #4b1f86); box-shadow: none; }
+.step { font-weight: 800; }
+.step[data-overdue='true'] { color: #96193f; }
+.step small { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+:global(.wt-admin) .main { width: 150px; }
+.moreRow { display: flex; justify-content: center; margin-top: 10px; }
+
+/* No `display` on the list itself: a utility hides it on wide screens. */
+.cards li + li { margin-top: 9px; }
+.cards li { display: flex; flex-direction: column; gap: 8px; padding: 12px; cursor: pointer; border: 1px solid var(--line); border-radius: 13px; background: rgba(255, 251, 242, .6); }
+.cards li[data-overdue='true'] { background: rgba(212, 98, 112, .16); }
+.cardTop { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.cardTop small { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+:global(.wt-admin) .cards .main { width: 100%; }
+
+/* the person window */
+.progress { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; list-style: none; margin: 0; padding: 0; }
+.progress li { padding: 8px 2px; text-align: center; font-size: 13.5px; font-weight: 800; line-height: 1.25; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 251, 242, .6); }
+.progress li[data-state='passed'] { background: #e7dcf3; }
+.progress li[data-state='here'] { color: #fff3d8; border: 2px solid #d9b265; background: linear-gradient(180deg, #2c2473, #171049); }
+.draft { list-style: none; margin: 8px 0 0; padding: 0; }
+.talk { display: flex; flex-direction: column; gap: 7px; max-height: 38dvh; overflow-y: auto; margin-top: 8px; }
+.talk p { max-width: 85%; padding: 7px 12px; border-radius: 13px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14.5px; font-weight: 600; color: var(--ink); background: #fffdf8; border: 1px solid var(--line); align-self: flex-start; }
+.talk p[data-from='user'] { align-self: flex-end; background: #e2f4d0; }
+:global(.wt-admin) .select { min-height: 40px; padding: 0 10px; cursor: pointer; color: var(--ink); font-size: 15px; font-weight: 800; border: 2px solid #c9a460; border-radius: 12px; background: #fff9ec; }
+
+@media (max-width: 640px) {
+    .progress { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
+    .progress li { font-size: 11px; padding: 6px 1px; }
+}

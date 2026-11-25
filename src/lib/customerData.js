@@ -89,14 +89,15 @@ async function readSends() {
     return sends
 }
 
-export async function loadCustomerBooks({ withEntries = true } = {}) {
+// `leads` may be passed by a caller that has read them already.
+export async function loadCustomerBooks({ withEntries = true, leads: preloaded } = {}) {
     const [books, leadDocs, inbox, sends] = await Promise.all([
         adminDb.collection('weddings').get(),
-        adminDb.collection('sales_leads').select('weddingId', 'human', 'humanSince', 'turns').get(),
+        preloaded ? null : adminDb.collection('sales_leads').select('weddingId', 'human', 'humanSince', 'turns').get(),
         adminDb.collection('customer_inbox').where('status', '==', 'new').get(),
         readSends(),
     ])
-    const leads = leadDocs.docs.map(doc => ({ phone: doc.id, ...doc.data() }))
+    const leads = preloaded || leadDocs.docs.map(doc => ({ phone: doc.id, ...doc.data() }))
     const leadByPhone = new Map(leads.map(lead => [lead.phone, lead]))
     const leadByBook = new Map(leads.filter(lead => lead.weddingId).map(lead => [String(lead.weddingId), lead]))
     const open = inbox.docs.map(doc => doc.data())
@@ -106,6 +107,7 @@ export async function loadCustomerBooks({ withEntries = true } = {}) {
         const lead = leadByPhone.get(mobileOf(w.ownerPhone)) || leadByBook.get(doc.id)
         const phone = mobileOf(w.ownerPhone) || mobileOf(lead?.phone)
         const message = (lead?.turns || []).filter(turn => turn.role === 'user' && turn.text).at(-1)
+        const waiting = open.filter(item => isOpenItemFor(item, doc.id, phone))
         const entries = withEntries
             ? (await doc.ref.collection('entries').count().get()).data().count
             : 0
@@ -115,7 +117,10 @@ export async function loadCustomerBooks({ withEntries = true } = {}) {
                 entries,
                 phone: phone || null,
                 paused: lead ? isPausedForHuman(lead) : false,
-                openRequests: open.filter(item => isOpenItemFor(item, doc.id, phone)).length,
+                openRequests: waiting.length,
+                // What the customer wrote and nobody answered yet, newest last.
+                openMessages: waiting.sort((a, b) => millis(a.receivedAt) - millis(b.receivedAt)).slice(-3)
+                    .map(item => ({ type: item.messageType || 'text', text: String(item.text || '').slice(0, 300), at: millis(item.receivedAt) || null })),
                 lastCustomerMessage: message
                     ? { text: String(message.text).slice(0, 200), at: Number(message.at) || null }
                     : null,

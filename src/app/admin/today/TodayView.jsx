@@ -11,12 +11,13 @@ import {
 import { Hero, Page, Panel, Plaque } from '../ui/kit'
 import k from '../ui/kit.module.css'
 import { useAdmin } from '../ui/Shell'
-import CustomerWindow from './CustomerWindow'
+import PersonWindow from '../customers/PersonWindow'
+import { MainButton, markQuestion } from '../customers/personParts'
 import { dollars } from './SpendWindow'
 import TaskWindow from './TaskWindow'
 import s from './today.module.css'
 
-const TASK_ICON = { claude: AlertTriangle, draft: FileText, sample: ImageIcon, draw: ImageIcon, book: CalendarDays }
+const TASK_ICON = { claude: AlertTriangle, draft: FileText, sample: ImageIcon, draw: ImageIcon, person: Users }
 const MODE = { full_sales: 'מכירה מלאה', opening_only: 'פתיחה בלבד' }
 
 const dateWords = iso => (iso
@@ -45,7 +46,7 @@ const only = action => event => {
     action()
 }
 
-function Task({ task, busy, onApprove, onOpen }) {
+function Task({ task, busy, onApprove, onOpen, onMark }) {
     const Icon = TASK_ICON[task.kind] || FileText
     return (
         <li className={s.task}>
@@ -60,9 +61,11 @@ function Task({ task, busy, onApprove, onOpen }) {
                     <img src={task.image} alt='הדוגמה' className={s.thumb} />
                 )}
             </button>
-            {task.canApprove
-                ? <button type='button' className={k.button} disabled={busy} onClick={() => onApprove(task)}><Send size={21} aria-hidden='true' />אשר ושלח</button>
-                : <button type='button' className={k.button} onClick={() => onOpen(task)}><ExternalLink size={21} aria-hidden='true' />פתח</button>}
+            {task.kind === 'person'
+                ? <MainButton row={task.row} busy={busy} onMark={onMark} onOpen={() => onOpen(task)} />
+                : task.canApprove
+                    ? <button type='button' className={k.button} disabled={busy} onClick={() => onApprove(task)}><Send size={21} aria-hidden='true' />אשר ושלח</button>
+                    : <button type='button' className={k.button} onClick={() => onOpen(task)}><ExternalLink size={21} aria-hidden='true' />פתח</button>}
         </li>
     )
 }
@@ -127,17 +130,24 @@ function Spend({ spend, waiting, onOpen }) {
     )
 }
 
-export default function TodayView({ data, busy, error, onApprove, onRefresh, api }) {
+export default function TodayView({ data, busy, error, onApprove, onRefresh, onAct, api }) {
     const { openBot, openSpend } = useAdmin()
-    // The task or customer window that is open over the screen, if any.
+    // The task or person window that is open over the screen, if any.
     const [view, setView] = useState(null)
     const close = () => setView(null)
-    const openCustomer = (id, title) => setView({ type: 'customer', id, title })
+    const openPerson = key => setView({ type: 'person', key })
     const openTask = task => {
-        if (task.kind === 'book') openCustomer(task.id, task.title)
+        if (task.kind === 'person') openPerson(task.id)
         else if (task.kind === 'claude') openBot('state')
         else setView({ type: 'task', task })
     }
+    // A step finished from the task itself, asked first like everywhere else.
+    const mark = (row, field) => onAct({ op: 'mark', weddingId: row.weddingId, field, on: true }, markQuestion(row, field))
+    // Read from the latest data, so the window follows each change. A person who
+    // leaves both lists after one closes the window.
+    const person = view?.type === 'person'
+        ? [...(data?.tasks || []), ...(data?.customers || [])].map(item => item.row).find(row => row?.key === view.key)
+        : null
     // What to say where there is no data yet.
     const waiting = data ? '' : busy || !error ? 'טוען…' : 'לא נטען.'
     const partial = data?.unread?.length > 0
@@ -154,7 +164,7 @@ export default function TodayView({ data, busy, error, onApprove, onRefresh, api
                             <button type='button' className={k.glass} onClick={onRefresh} disabled={busy}>{busy ? 'טוען…' : 'רענן'}</button>
                         </>}
                         figures={<>
-                            <Plaque value={figure('tasks')} label='משימות לטיפול' Icon={ClipboardCheck} />
+                            <Plaque value={figure('today')} label='לטיפול היום' Icon={ClipboardCheck} />
                             <Plaque value={figure('active')} label='לקוחות פעילים' Icon={Users} solid />
                             <Plaque value={figure('week')} label='אירועים השבוע' Icon={CalendarDays} />
                         </>}
@@ -166,12 +176,8 @@ export default function TodayView({ data, busy, error, onApprove, onRefresh, api
                     <Panel title='משימות לטיפול היום' Icon={ClipboardCheck}>
                         {waiting ? <p className={k.unread}>{waiting}</p>
                             : data.tasks.length === 0 ? <p className={k.unread}>{partial ? 'לא כל המקורות נקראו, אז ייתכן שיש מה לטפל.' : 'אין מה לטפל כרגע.'}</p>
-                                : <ul className={s.tasks}>{data.tasks.map(task => <Task key={`${task.kind}-${task.id}`} task={task} busy={busy} onApprove={onApprove} onOpen={openTask} />)}</ul>}
-                        {(data?.moreTasks > 0 || data?.oldEvents > 0) && (
-                            <Link href='/admin/customers' className={k.more}>
-                                {[data.moreTasks > 0 ? `ועוד ${data.moreTasks} משימות` : null, data.oldEvents > 0 ? `${data.oldEvents} אירועים ישנים למיון` : null].filter(Boolean).join(' · ')}
-                            </Link>
-                        )}
+                                : <ul className={s.tasks}>{data.tasks.map(task => <Task key={`${task.kind}-${task.id}`} task={task} busy={busy} onApprove={onApprove} onOpen={openTask} onMark={mark} />)}</ul>}
+                        {data?.moreTasks > 0 && <Link href='/admin/customers' className={k.more}>ועוד {data.moreTasks} משימות</Link>}
                     </Panel>
 
                     <Panel title='לקוחות פעילים' Icon={Users}>
@@ -180,8 +186,8 @@ export default function TodayView({ data, busy, error, onApprove, onRefresh, api
                                 <thead><tr><th>לקוח</th><th>אירוע</th><th>הצעד הבא</th></tr></thead>
                                 <tbody>
                                     {data.customers.map(c => (
-                                        <tr key={c.id} data-opens onClick={() => openCustomer(c.id, c.title)}>
-                                            <td><button type='button' onClick={only(() => openCustomer(c.id, c.title))}><Users size={22} strokeWidth={2.2} fill='currentColor' aria-hidden='true' />{c.title}</button></td>
+                                        <tr key={c.id} data-opens onClick={() => openPerson(c.id)}>
+                                            <td><button type='button' onClick={only(() => openPerson(c.id))}><Users size={22} strokeWidth={2.2} fill='currentColor' aria-hidden='true' />{c.title}</button></td>
                                             <td>{c.event} – {when(c.day, c.toEvent)}</td>
                                             <td data-overdue={c.overdue}>
                                                 <span className={s.step}>{c.step}<ChevronLeft size={20} strokeWidth={2.6} aria-hidden='true' /></span>
@@ -202,7 +208,12 @@ export default function TodayView({ data, busy, error, onApprove, onRefresh, api
             </div>
 
             {view?.type === 'task' && <TaskWindow task={view.task} api={api} onChanged={onRefresh} onClose={close} />}
-            {view?.type === 'customer' && <CustomerWindow id={view.id} title={view.title} api={api} onChanged={onRefresh} onClose={close} />}
+            {person && (
+                <PersonWindow
+                    key={person.key} row={person} drafts={data.drafts} samples={data.samples} busy={busy} error={error}
+                    act={onAct} api={api} onClose={close}
+                />
+            )}
         </Page>
     )
 }

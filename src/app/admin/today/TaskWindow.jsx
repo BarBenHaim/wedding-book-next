@@ -71,7 +71,7 @@ export default function TaskWindow({ task, api, onChanged, onClose }) {
                             <Check size={20} aria-hidden='true' />בוצע
                         </button>
                     )}
-                    <Link href='/admin/customers' className={w.quiet}>ללוח הטיפול</Link>
+                    <Link href='/admin/customers/board' className={w.quiet}>להודעות ואוטומציות</Link>
                 </div>
             </div>
         </Window>

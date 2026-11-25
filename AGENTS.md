@@ -11,6 +11,22 @@ the ones that touch what you are about to change.
 
 ---
 
+## 25.11 — one list of people (`/admin/customers`)
+
+- Rules in `src/lib/people.js` (pure, tested), loaded by
+  `src/lib/peopleData.js`: every `sales_leads` doc joined to books by the
+  lead's `weddingId`, then by phone. One row per book, else per lead.
+- Silent leads (14 days) and unsorted old events are "resting": a view rule,
+  nothing is written for it. Do not bulk-close them.
+- It writes nothing new: marks go through `/api/admin/customers`, lead
+  actions through `/api/sales-agent/{leads,control}`.
+- The old board with the message switches is `/admin/customers/board`.
+- Next (spec stage 2): note, reminder, add phone, on private records only.
+  `boardNote` on wedding docs is publicly readable, so do not add inputs
+  that write it.
+
+---
+
 ## 25.11 — the whole super admin has one frame, and spend counts more calls
 
 - Every `/admin` screen is drawn inside `src/app/admin/layout.js` →

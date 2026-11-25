@@ -10,11 +10,11 @@ import { NextResponse } from 'next/server'
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { israelDate } from '@/lib/lifecycle'
-import { buildCustomerBoard } from '@/lib/customerBoard'
-import { loadCustomerBooks, readFollowupSettings } from '@/lib/customerData'
+import { readFollowupSettings } from '@/lib/customerData'
+import { loadPeople } from '@/lib/peopleData'
 import { buildToday } from '@/lib/adminToday'
-import { listDrafts, readAgentSettings } from '@/lib/salesAgent/customerAgent'
-import { listSamples, readDesignSettings } from '@/lib/salesAgent/designSamples'
+import { readAgentSettings } from '@/lib/salesAgent/customerAgent'
+import { readDesignSettings } from '@/lib/salesAgent/designSamples'
 import { readClaudeHealth } from '@/lib/salesAgent/claudeHealth'
 import { readSalesSettings } from '@/lib/salesAgent/settingsStore'
 import { listMedia } from '@/lib/salesAgent/leads'
@@ -67,13 +67,9 @@ export async function GET(req) {
     if (!await superAdmin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const today = israelDate(Date.now())
 
-    const [rows, drafts, samples, claude, bot, usageDays, followups, requests, sampleSwitch] = await Promise.all([
-        part('customers', async () => {
-            const [list, settings] = await Promise.all([loadCustomerBooks(), readFollowupSettings()])
-            return buildCustomerBoard(list, today, settings.enabled ? settings.enabledDay : null).rows
-        }),
-        part('requests', () => listDrafts()),
-        part('samples', () => listSamples()),
+    const [people, claude, bot, usageDays, followups, requests, sampleSwitch] = await Promise.all([
+        // The same list the customers screen shows, with its requests and samples.
+        part('customers', () => loadPeople({ today })),
         part('claude', () => readClaudeHealth()),
         part('bot', botState),
         part('spend', () => monthUsage(today)),
@@ -82,9 +78,15 @@ export async function GET(req) {
         part('samples switch', () => readDesignSettings()),
     ])
 
-    return NextResponse.json(buildToday({
-        today, rows, drafts, samples, claude, usageDays, bot,
-        // Only the on/off of each, never the test phone lists.
-        switches: { requests: onOff(requests), samples: onOff(sampleSwitch), followups: onOff(followups) },
-    }))
+    const drafts = people ? people.drafts : null
+    const samples = people ? people.samples : null
+    return NextResponse.json({
+        ...buildToday({
+            today, people, drafts, samples, claude, usageDays, bot,
+            // Only the on/off of each, never the test phone lists.
+            switches: { requests: onOff(requests), samples: onOff(sampleSwitch), followups: onOff(followups) },
+        }),
+        // The person window shows the request or the sample of that person.
+        drafts, samples,
+    })
 }

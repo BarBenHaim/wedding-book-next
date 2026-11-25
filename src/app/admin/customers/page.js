@@ -1,142 +1,46 @@
 'use client'
 
-// /admin/customers: where every customer stands and what to do next.
-// Refreshes on its own every few minutes and when the tab is opened again.
+// /admin/customers: one list of people, leads and books together. Rules:
+// lib/people.js. The message switches live on /admin/customers/board.
 
-import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { getIdToken, onAuthStateChanged } from 'firebase/auth'
-import { auth } from '@/lib/firebaseClient'
-import { isSuperAdmin } from '@/lib/superAdmin'
-import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
+import { useEffect, useState } from 'react'
+import SuperAdminOnly from '../ui/SuperAdminGate'
 import { adminApi } from '../ui/api'
-import { useAdmin } from '../ui/Shell'
-import CustomerWindow from '../today/CustomerWindow'
-import CustomerBoardView from './CustomerBoardView'
+import PeopleView from './PeopleView'
+import PersonWindow from './PersonWindow'
+import { markQuestion } from './personParts'
+import usePeople from './usePeople'
 
-const REFRESH_MS = 3 * 60 * 1000
-
-async function api(method, body) {
-    const token = await getIdToken(auth.currentUser)
-    const res = await fetch('/api/admin/customers', {
-        method,
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        ...(body ? { body: JSON.stringify(body) } : {}),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw Object.assign(new Error(data.error || `HTTP ${res.status}`), { providerCode: data.providerCode })
-    return data
-}
-
-const SAMPLE_ERRORS = {
-    WINDOW_CLOSED: 'עברו 24 שעות מההודעה של הליד. צריך לשלוח לו ידנית.',
-    LEAD_CLOSED: 'השיחה עם הליד סגורה, ולכן לא נשלח.',
-    SAMPLE_NOT_READY: 'הדוגמה כבר נשלחה או עוד לא מוכנה. רענן.',
-    SAMPLE_NOT_FOUND: 'הדוגמה לא נמצאה. רענן.',
-    SEND_FAILED: 'וואטסאפ לא קיבלה את השליחה. אפשר לנסות שוב.',
-}
-
-const DRAFT_ERRORS = {
-    DRAFT_NOT_FOUND: 'הבקשה לא נמצאה. רענן.',
-    DRAFT_NOT_PENDING: 'הבקשה כבר טופלה או הוחלפה בחדשה.',
-    WINDOW_CLOSED: 'עברו 24 שעות מההודעה של הלקוח. ענה לו ידנית.',
-    NEWER_MESSAGE: 'הלקוח כתב שוב אחרי הטיוטה. חכה לטיוטה החדשה או ענה ידנית.',
-    NOTHING_TO_SEND: 'אין מה לשלוח. כתוב תשובה בתיבה.',
-    SEND_FAILED: 'וואטסאפ לא קיבלה את השליחה. אפשר לנסות שוב.',
-}
-
-// Meta's answers to a test send, in words.
-function testError(error) {
-    if (error.providerCode === 132001) return 'התבנית עוד לא קיימת או לא אושרה ב-Meta.'
-    if (error.providerCode === 131042) return 'בעיה באמצעי התשלום בחשבון הוואטסאפ ב-Meta.'
-    if (error.message === 'PHONE_MISSING') return 'לא מוגדר מספר טלפון שלך במערכת.'
-    return `ההודעה לא נשלחה (${error.providerCode || error.message}).`
-}
-
-function Board() {
-    const [data, setData] = useState(null)
-    const [busy, setBusy] = useState(false)
-    const [error, setError] = useState('')
-    const [updatedAt, setUpdatedAt] = useState('')
-    // The customer whose window is open.
-    const [opened, setOpened] = useState(null)
-
-    const load = useCallback(async () => {
-        setBusy(true)
-        try {
-            setData(await api('GET'))
-            setUpdatedAt(new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }))
-            setError('')
-        } catch (err) {
-            setError(`לא הצלחנו לטעון את הלקוחות: ${err.message}. נסה לרענן.`)
-        } finally {
-            setBusy(false)
-        }
-    }, [])
-
+function Customers() {
+    const { data, busy, error, updatedAt, load, act } = usePeople()
+    // The key of the person whose window is open.
+    const [opened, setOpened] = useState('')
+    // ?key= or ?id= (a book) opens a person, for links from other screens.
     useEffect(() => {
-        load()
-        const timer = setInterval(load, REFRESH_MS)
-        const onShow = () => { if (document.visibilityState === 'visible') load() }
-        document.addEventListener('visibilitychange', onShow)
-        return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onShow) }
-    }, [load])
-
-    // A change made in the bot window shows here at once.
-    const { onRefresh } = useAdmin()
-    useEffect(() => onRefresh(load), [onRefresh, load])
-
-    const act = async body => {
-        setBusy(true)
-        setError('')
-        try {
-            const result = await api('POST', body)
-            if (body.op === 'test') window.alert('הודעת הבדיקה נשלחה לטלפון שלך. ודא שהיא הגיעה.')
-            if (body.op === 'claudeCheck') window.alert(result.check.message)
-            await load()
-        } catch (err) {
-            // Loading clears the message, so the state is refreshed first.
-            if (body.op === 'sample' || body.op === 'draft') await load()
-            const words = body.op === 'draft' ? DRAFT_ERRORS[err.message] : SAMPLE_ERRORS[err.message]
-            setError(body.op === 'test' ? testError(err) : words || `הפעולה לא נשמרה: ${err.message}`)
-        } finally {
-            setBusy(false)
-        }
-    }
+        const query = new URLSearchParams(window.location.search)
+        const id = query.get('id')
+        setOpened(query.get('key') || (id ? `b:${id}` : ''))
+    }, [])
+    const row = data?.rows?.find(item => item.key === opened)
+    const mark = (item, field) => act({ op: 'mark', weddingId: item.weddingId, field, on: true }, markQuestion(item, field))
 
     return (
         <>
-            <CustomerBoardView data={data} busy={busy} error={error} updatedAt={updatedAt} onAct={act} onRefresh={load} onOpen={setOpened} />
-            {opened && <CustomerWindow id={opened.id} title={opened.title} api={adminApi} onChanged={load} onClose={() => setOpened(null)} />}
+            <PeopleView data={data} busy={busy} error={error} updatedAt={updatedAt} onRefresh={load} onOpen={item => setOpened(item.key)} onMark={mark} />
+            {row && (
+                <PersonWindow
+                    key={row.key} row={row} drafts={data.drafts} samples={data.samples} busy={busy} error={error}
+                    act={act} api={adminApi} onClose={() => setOpened('')}
+                />
+            )}
         </>
-    )
-}
-
-function SuperAdminGate({ children }) {
-    const router = useRouter()
-    const [state, setState] = useState('checking')
-    useEffect(() => onAuthStateChanged(auth, user => {
-        if (!user) {
-            router.replace('/login')
-            return
-        }
-        setState(isSuperAdmin(user.email) ? 'allowed' : 'denied')
-    }), [router])
-
-    if (state === 'allowed') return children
-    return (
-        <div dir='rtl' className='min-h-screen flex items-center justify-center text-sm text-[#7a6a52]'>
-            {state === 'denied' ? 'אין לחשבון הזה גישה לעמוד.' : 'בודק הרשאה…'}
-        </div>
     )
 }
 
 export default function CustomersPage() {
     return (
-        <AdminPageWrapper>
-            <SuperAdminGate>
-                <Board />
-            </SuperAdminGate>
-        </AdminPageWrapper>
+        <SuperAdminOnly>
+            <Customers />
+        </SuperAdminOnly>
     )
 }

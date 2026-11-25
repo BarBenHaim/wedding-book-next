@@ -1,13 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { buildToday } from '@/lib/adminToday'
 
-const row = (id, extra = {}) => ({
-    id, title: id, eventType: 'bar_mitzvah', day: '2026-12-10', toEvent: 15, entries: 3, group: 'upcoming',
-    next: { key: 'wait_event', label: 'להמתין לאירוע' }, overdue: false, ...extra,
+// A row of the list of people, as lib/people.js builds it.
+const row = (key, extra = {}) => ({
+    key, name: key, what: 'בר מצווה', day: '2026-12-10', toEvent: 15, stage: 'collect', resting: false,
+    next: { key: 'wait_event', label: 'להמתין לאירוע', action: null }, inToday: false, overdue: false, draft: null, sample: null, ...extra,
+})
+const due = (key, extra = {}) => row(key, { inToday: true, next: { key: 'approve_print', label: 'לטפל', action: 'mark' }, ...extra })
+const people = (rows, extra = {}) => ({
+    rows, unread: [],
+    counts: {
+        today: rows.filter(item => item.inToday).length,
+        ...Object.fromEntries(['talk', 'collect', 'print', 'way'].map(stage => [stage, rows.filter(item => !item.resting && item.stage === stage).length])),
+    },
+    ...extra,
 })
 const base = extra => ({
     today: '2026-11-25',
-    rows: [],
+    people: people([]),
     drafts: [],
     samples: [],
     claude: { alert: null },
@@ -18,20 +28,19 @@ const base = extra => ({
 })
 
 describe('what waits today', () => {
-    it('puts a Claude failure first, then replies to approve, samples, then the books', () => {
+    it('puts a Claude failure first, then replies to approve, samples, then the people', () => {
         const view = buildToday(base({
             claude: { alert: 'alert-words' },
             drafts: [{ number: 3, status: 'pending', customerName: 'כהן', summary: 'לתקן שם', text: 'קיבלנו', windowOpen: true, tasks: [] }],
             samples: [{ id: 's1', status: 'ready', name: 'דנה', phone: '972500001234', previewUrl: 'u', windowOpen: true }],
-            rows: [row('איתמר', { group: 'today', toEvent: 1, next: { key: 'remind', label: 'לשלוח תזכורת' } })],
+            people: people([due('b:w1', { name: 'איתמר', overdue: true })]),
         }))
 
-        expect(view.tasks.map(task => task.kind)).toEqual(['claude', 'draft', 'sample', 'book'])
+        expect(view.tasks.map(task => task.kind)).toEqual(['claude', 'draft', 'sample', 'person'])
         expect(view.tasks[1]).toMatchObject({ id: 3, canApprove: true, detail: expect.stringContaining('קיבלנו') })
         expect(view.tasks[2]).toMatchObject({ id: 's1', canApprove: true, image: 'u' })
-        // The customer board is where that step can be finished.
-        expect(view.tasks[3]).toMatchObject({ href: '/admin/customers?id=%D7%90%D7%99%D7%AA%D7%9E%D7%A8' })
-        expect(view.counts.tasks).toBe(4)
+        // The person's own window is where that step is finished.
+        expect(view.tasks[3]).toMatchObject({ id: 'b:w1', title: 'איתמר', detail: 'לטפל · באיחור', row: { key: 'b:w1' } })
     })
 
     it('cannot approve a reply whose window closed, or one with nothing to send', () => {
@@ -52,13 +61,14 @@ describe('what waits today', () => {
         expect(view.tasks.map(task => task.waiting)).toEqual([true, false])
     })
 
-    it('does not list the same customer request twice', () => {
+    it('does not list the same request or sample twice', () => {
         const view = buildToday(base({
             drafts: [{ number: 1, status: 'pending', text: 'x', weddingId: 'w1', windowOpen: true, tasks: [] }],
-            rows: [row('w1', { group: 'today', next: { key: 'request', label: 'הלקוח כתב' } })],
+            samples: [{ id: 's1', status: 'ready', phone: '972500001234', windowOpen: true }],
+            people: people([due('b:w1', { draft: 1 }), due('l:972500001234', { sample: 's1' })]),
         }))
 
-        expect(view.tasks.map(task => task.kind)).toEqual(['draft'])
+        expect(view.tasks.map(task => task.kind)).toEqual(['draft', 'sample'])
     })
 
     it('gathers samples still to draw into one line', () => {
@@ -67,34 +77,33 @@ describe('what waits today', () => {
         expect(view.tasks).toEqual([expect.objectContaining({ kind: 'draw', title: expect.stringContaining('2') })])
     })
 
-    it('shows a few and says how many more, and mentions old events apart', () => {
-        const view = buildToday(base({
-            rows: [
-                ...Array.from({ length: 9 }, (_, i) => row(`b${i}`, { group: 'today', next: { key: 'x', label: 'לטפל' } })),
-                ...Array.from({ length: 50 }, (_, i) => row(`old${i}`, { group: 'triage' })),
-            ],
-        }))
+    it('shows a few and says how many more, with the same count as the list', () => {
+        const view = buildToday(base({ people: people([
+            ...Array.from({ length: 9 }, (_, i) => due(`b:${i}`)),
+            ...Array.from({ length: 50 }, (_, i) => row(`l:${i}`, { resting: true })),
+        ]) }))
 
         expect(view.tasks).toHaveLength(4)
         expect(view.moreTasks).toBe(5)
-        expect(view.counts.tasks).toBe(9)
-        expect(view.oldEvents).toBe(50)
+        expect(view.counts.today).toBe(9)
     })
 })
 
 describe('customers, the bot and money', () => {
     it('counts the active customers and the week, nearest event first', () => {
-        const view = buildToday(base({ rows: [
+        const view = buildToday(base({ people: people([
             row('later', { toEvent: 40 }),
-            row('tomorrow', { toEvent: 1, group: 'today' }),
+            row('tomorrow', { toEvent: 1 }),
             row('past', { toEvent: -3 }),
-            row('done', { group: 'done', toEvent: 2 }),
-            row('old', { group: 'triage', toEvent: -200 }),
-        ] }))
+            row('undated', { toEvent: null, stage: 'talk', what: '', next: null }),
+            row('done', { stage: 'done', toEvent: 2 }),
+            row('asleep', { resting: true, toEvent: 3 }),
+        ]) }))
 
-        expect(view.counts).toMatchObject({ active: 3, week: 1 })
-        expect(view.customers.map(c => c.id)).toEqual(['tomorrow', 'later', 'past'])
+        expect(view.counts).toMatchObject({ active: 4, week: 1 })
+        expect(view.customers.map(c => c.id)).toEqual(['tomorrow', 'later', 'past', 'undated'])
         expect(view.customers[0]).toMatchObject({ event: 'בר מצווה', step: 'להמתין לאירוע' })
+        expect(view.customers[3]).toMatchObject({ event: 'אירוע', step: 'בשיחה' })
     })
 
     it('adds the month by provider and today\'s model calls', () => {
@@ -116,13 +125,15 @@ describe('customers, the bot and money', () => {
         expect(view.unread).toEqual(['בקשות לקוחות'])
     })
 
-    it('has no customer counts at all when the customers could not be read', () => {
-        const view = buildToday(base({ rows: null }))
-
-        expect(view.counts.active).toBeNull()
-        expect(view.counts.week).toBeNull()
+    it('has no customer counts at all when the books or the leads could not be read', () => {
+        for (const unread of [['ספרים'], ['לידים']]) {
+            const view = buildToday(base({ people: people([row('a')], { unread }) }))
+            expect(view.counts).toEqual({ today: null, active: null, week: null })
+            expect(view.unread).toEqual(unread)
+        }
+        const view = buildToday(base({ people: null }))
         // Nothing found in the sources that did answer is not "nothing to do".
-        expect(view.counts.tasks).toBeNull()
+        expect(view.counts).toEqual({ today: null, active: null, week: null })
         expect(view.unread).toEqual(['לקוחות'])
     })
 })
