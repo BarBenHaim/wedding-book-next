@@ -575,12 +575,14 @@ export async function POST(req) {
     //
     // Two ways to be a customer: the bot closed them (stage), or they
     // bought before the bot existed (a wedding with their phone on it).
-    // The second is checked only on a first message, so it costs one
-    // query per new conversation rather than one per message.
+    // The second is checked on every message. Checking only the first one
+    // missed everybody after their first mute: muting creates the lead
+    // document, so 48 hours later they looked like an ordinary lead and
+    // were sold to.
     let customer = null
     if (lead.stage === 'closed_won') {
         customer = { weddingId: lead.weddingId || null, ownerName: lead.name || null }
-    } else if (lead.isNew) {
+    } else {
         customer = await findCustomerByPhone(phone)
     }
     if (customer) {

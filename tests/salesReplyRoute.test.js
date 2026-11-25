@@ -997,6 +997,21 @@ describe('conversation-learned decision contract', () => {
         expect(mocks.callClaude).not.toHaveBeenCalled()
     })
 
+    // A customer from before the bot has a lead document only because the
+    // bot muted them once. After the mute they are neither new nor
+    // closed_won, and were sold to.
+    it('does not sell to a returning customer once the pause has expired', async () => {
+        prepareDecisionPath()
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: false, stage: undefined })
+        mocks.findCustomerByPhone.mockResolvedValue({ weddingId: 'test-wedding', ownerName: 'לקוח בדיקה' })
+
+        const result = await post(inbound({ text: 'אפשר לשנות את התאריך?' }))
+
+        expect(result.body).toMatchObject({ customer: true, handoff: true })
+        expect(mocks.decideSalesTurn).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+    })
+
     it('keeps an existing customer outside the decision model', async () => {
         mocks.getLead.mockResolvedValue({ ...lead, isNew: true })
         mocks.findCustomerByPhone.mockResolvedValue({ weddingId: 'test-wedding', ownerName: 'לקוח בדיקה' })
