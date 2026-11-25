@@ -7,6 +7,7 @@
 import { after } from 'next/server'
 import { adminDb } from '@/lib/firebaseAdmin'
 import { CLAUDE_AGENT_MODEL, callAnthropic } from './agent'
+import { meterAnswer } from './meter'
 
 const COLLECTION = 'sales_runtime'
 const DOC_ID = 'claude_health'
@@ -100,7 +101,7 @@ export async function readClaudeHealth({ db, nowMs = Date.now() } = {}) {
 
 // One small real call to Claude and nothing else: no fallback that could hide a
 // failure, and no message to anyone.
-export async function checkClaude({ ask = callAnthropic, db = adminDb, nowMs = Date.now() } = {}) {
+export async function checkClaude({ ask = callAnthropic, db = adminDb, nowMs = Date.now(), meter = meterAnswer } = {}) {
     // The status number is what tells a refused request from an outage.
     const failed = (errorCode, status = null) => ({
         ok: false, model: CLAUDE_AGENT_MODEL, errorCode, status,
@@ -131,6 +132,7 @@ export async function checkClaude({ ask = callAnthropic, db = adminDb, nowMs = D
     }
 
     const seconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+    await meter(answer)
     try {
         await healthRef(db).set({ lastCheckAt: nowMs, lastCheckOk: true, lastOkAt: nowMs }, { merge: true })
     } catch (writeError) {

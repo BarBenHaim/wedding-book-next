@@ -439,10 +439,10 @@ function Spend({ data }) {
             )}
 
             <div className='flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#7a6a52]'>
-                <span>שיחות: <b dir='ltr'>{formatUsd(data.anthropicTotal)}</b></span>
-                <span>תמונות: <b dir='ltr'>{formatUsd(data.openaiTotal)}</b></span>
-                <span>לליד: <b dir='ltr'>{data.perLead == null ? '—' : formatUsd(data.perLead)}</b></span>
-                <span>לסגירה: <b dir='ltr'>{data.perWon == null ? '—' : formatUsd(data.perWon)}</b></span>
+                {/* By provider. Cost per lead is not shown: the total also holds
+                    calls that have nothing to do with leads. */}
+                <span>Claude: <b dir='ltr'>{formatUsd(data.anthropicTotal)}</b></span>
+                <span>OpenAI: <b dir='ltr'>{formatUsd(data.openaiTotal)}</b></span>
             </div>
 
             <p className='text-[10px] text-[#b3a68d] mt-2 leading-relaxed'>

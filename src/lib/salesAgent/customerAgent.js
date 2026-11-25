@@ -5,6 +5,7 @@
 
 import { adminDb } from '@/lib/firebaseAdmin'
 import { CLAUDE_AGENT_MODEL, callAnthropic } from './agent'
+import { meterAnswer } from './meter'
 import { noteClaudeOutcome } from './claudeHealth'
 import { sendWhatsAppText } from './whatsapp'
 import { buildDraftRequest, ownerDraftMessage, parseDraft } from './customerAgentCore'
@@ -123,7 +124,7 @@ const askClaude = ({ system, messages }) => callAnthropic({
 })
 
 export async function draftForCustomer({ eventId, phone }, {
-    db, nowMs = Date.now(), ask = askClaude, tell, wait = ms => new Promise(resolve => setTimeout(resolve, ms)),
+    db, nowMs = Date.now(), ask = askClaude, meter = meterAnswer, tell, wait = ms => new Promise(resolve => setTimeout(resolve, ms)),
 } = {}) {
     const settings = await readAgentSettings({ db })
     if (!settings.enabled && !settings.testPhones.includes(phone)) return { action: 'off' }
@@ -157,6 +158,7 @@ export async function draftForCustomer({ eventId, phone }, {
                 messages: recent.map(item => ({ type: item.messageType || 'text', text: item.text || '' })),
             }))
             noteClaudeOutcome(answer)
+            await meter(answer)
             const parsed = parseDraft(answer.text)
             if (parsed) {
                 const link = parsed.link === 'guest' ? book?.guestLink : parsed.link === 'login' ? `${APP}/login` : ''

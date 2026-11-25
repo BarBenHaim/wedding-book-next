@@ -50,8 +50,8 @@ export default function SpendWindow({ month, api, onClose }) {
                         </ul>
                     </div>
                     <p className={w.fine}>
-                        זו לא כל ההוצאה: חלק מהשימושים (למשל בדיקת Claude, טיוטות ללקוחות ותמונות לכריכה) עוד לא נספרים, והמחירים מוקלדים בקוד
-                        {spend.ratesCheckedOn ? ` (נבדקו ב-${spend.ratesCheckedOn})` : ''}. החיוב המדויק מופיע אצל Anthropic ו-OpenAI.
+                        נספרות קריאות המודלים של האתר: תשובות הבוט, הודעות מעקב, בדיקת Claude, טיוטות ללקוחות, עזרה בכתיבת ברכות ותמונות. חלק מהן נספרות רק מאז העדכון האחרון.
+                        לא נספרים: Make, וואטסאפ, כלי בדיקה פנימיים וכל מה שמחוץ לאתר. המחירים מוקלדים בקוד{spend.ratesCheckedOn ? ` (נבדקו ב-${spend.ratesCheckedOn})` : ''}. החיוב המדויק מופיע אצל Anthropic ו-OpenAI.
                     </p>
                     <div className={w.actions}><Link href='/admin/sales-leads#spend' className={k.button}>לעמוד הלידים</Link></div>
                 </div>

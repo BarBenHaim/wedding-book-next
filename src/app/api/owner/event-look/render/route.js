@@ -29,6 +29,7 @@ import { authorizeWeddingAccess } from '@/app/api/guests/_auth'
 import { lookNames } from '@/lib/ownerLook'
 import { defaultCoverKey } from '@/lib/defaultCovers'
 import { downloadUrl } from '@/lib/eventImageRules'
+import { meterImage } from '@/lib/salesAgent/meter'
 import { lookOption, buildLookPrompt, styleRefs, validPhotoUrl, renderAllowed, API_SIZE, OUTPUT_EDGE } from '@/lib/ownerLookAi'
 
 const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2'
@@ -120,6 +121,8 @@ export async function POST(req) {
             console.error('[owner/event-look] openai failed', out?.error?.message || res.status)
             return fail('openai-failed', out?.error?.message || `HTTP ${res.status}`)
         }
+        // billed from here on, whatever happens to the picture next
+        await meterImage({ usage: out?.usage, model: IMAGE_MODEL })
         const b64 = out?.data?.[0]?.b64_json
         if (!b64) {
             await giveBack()

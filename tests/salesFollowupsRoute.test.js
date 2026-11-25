@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
     buildFollowUpPrompt: vi.fn(),
     addDaysISO: vi.fn(),
     callClaude: vi.fn(),
+    meterAnswer: vi.fn(),
     parseAgentJson: vi.fn(),
     resolveFollowUp: vi.fn(),
     dueFollowUps: vi.fn(),
@@ -38,6 +39,7 @@ vi.mock('@/lib/firebaseAdmin', () => ({ adminAuth: { verifyIdToken: mocks.verify
 vi.mock('@/lib/superAdmin', () => ({ isSuperAdmin: mocks.isSuperAdmin }))
 vi.mock('@/lib/salesAgent/prompt', () => ({ buildFollowUpPrompt: mocks.buildFollowUpPrompt, addDaysISO: mocks.addDaysISO }))
 vi.mock('@/lib/salesAgent/agent', () => ({ callClaude: mocks.callClaude, parseAgentJson: mocks.parseAgentJson, resolveFollowUp: mocks.resolveFollowUp }))
+vi.mock('@/lib/salesAgent/meter', () => ({ meterAnswer: mocks.meterAnswer }))
 vi.mock('@/lib/salesAgent/leads', () => ({
     dueFollowUps: mocks.dueFollowUps,
     prepareFollowUpDelivery: mocks.prepareFollowUpDelivery,
@@ -462,6 +464,20 @@ describe('truthful follow-up transport', () => {
             image: 'outbound-fixture:image',
         })
         expect(mocks.recordMediaSent).not.toHaveBeenCalled()
+    })
+
+    it('books what composing an in-window follow-up cost', async () => {
+        const answer = { text: 'valid', model: 'claude-opus-5-5', usage: { input_tokens: 10, output_tokens: 5 } }
+        mocks.callClaude.mockResolvedValue(answer)
+        mocks.dueFollowUps.mockResolvedValue([{ ...lead, lastInboundAt: Date.now() }])
+        mocks.parseAgentJson.mockReturnValue({
+            malformed: false, handoff: false, messages: ['follow-up'], stage: 'engaged',
+            callbackPromised: null, followUpAt: null,
+        })
+
+        await runCron()
+
+        expect(mocks.meterAnswer).toHaveBeenCalledWith(answer)
     })
 
     it('uses one unsent product video on the first in-window follow-up and keeps it secondary', async () => {

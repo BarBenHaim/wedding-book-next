@@ -145,6 +145,15 @@ describe('the check button', () => {
         expect((await readClaudeHealth({ db, nowMs: NOW })).alert).toBeNull()
     })
 
+    it('books what the check cost', async () => {
+        const answer = { text: 'תקין', model: 'claude-opus-5-5', provider: 'anthropic', usage: { input_tokens: 10, output_tokens: 5 } }
+        const meter = vi.fn(async () => {})
+
+        await checkClaude({ ask: async () => answer, db: fakeDb(), nowMs: NOW, meter })
+
+        expect(meter).toHaveBeenCalledWith(answer)
+    })
+
     it('reports why it failed and records it', async () => {
         const db = fakeDb()
         const ask = vi.fn(async () => { throw providerError({ errorCode: 'low_credit', status: 400 }) })

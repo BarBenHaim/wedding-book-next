@@ -20,6 +20,7 @@ export const maxDuration = 30
 import { NextResponse } from 'next/server'
 import { adminDb } from '@/lib/firebaseAdmin'
 import { normalizeEventType } from '@/lib/eventTypes'
+import { meterAnswer } from '@/lib/salesAgent/meter'
 
 const MODEL = 'claude-sonnet-4-6' // higher quality for genuinely good, natural blessings
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
@@ -137,6 +138,7 @@ async function callClaude({ system, user, maxTokens }) {
     }
     const json = await res.json()
     const text = (json?.content || []).map(b => (b.type === 'text' ? b.text : '')).join('').trim()
+    await meterAnswer({ usage: json?.usage, model: MODEL, provider: 'anthropic' })
     return { text }
 }
 

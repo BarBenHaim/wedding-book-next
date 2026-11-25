@@ -11,6 +11,23 @@ the ones that touch what you are about to change.
 
 ---
 
+## 25.11 — the whole super admin has one frame, and spend counts more calls
+
+- Every `/admin` screen is drawn inside `src/app/admin/layout.js` →
+  `ui/Shell.jsx` (menu, bot and spend windows). Shared pieces:
+  `ui/kit.jsx` + `ui/kit.module.css`; rules for which screen gets what:
+  `src/lib/adminShell.js`. Print outputs get nothing around them.
+- Model calls outside the reply route now book their cost through
+  `src/lib/salesAgent/meter.js` (`meterAnswer`, `meterImage`): follow-ups,
+  the Claude check, customer drafts, blessing help, cover images. A new
+  model call should do the same. Totals jump from this date because of
+  coverage, not usage. Cost per lead is no longer shown, since the total
+  holds calls that have nothing to do with leads.
+- Not counted: benchmark and history extraction tools, the Python blessing
+  service when `BLESSING_ASSIST_URL` is set, failed calls, Make, Meta.
+
+---
+
 ## 25.11 — the super admin now writes bot settings too (note for Codex / BusinessOS)
 
 Lord asked to manage the bot from this app. The bot window on

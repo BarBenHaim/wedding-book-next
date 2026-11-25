@@ -130,6 +130,15 @@ describe('preparing a draft', () => {
         expect(d.tell).toHaveBeenCalledWith(expect.stringContaining('בקשה 1'))
     })
 
+    it('books what the draft cost, even when the answer is unusable', async () => {
+        const bad = { text: 'סליחה', model: 'claude-opus-5-5', usage: { input_tokens: 10, output_tokens: 5 } }
+        const meter = vi.fn(async () => {})
+
+        await draftForCustomer({ eventId: 'e1', phone: PHONE }, deps(world(), { ask: async () => bad, meter }))
+
+        expect(meter).toHaveBeenCalledWith(bad)
+    })
+
     it('adds our own link when Claude asked for it', async () => {
         const db = world()
 

@@ -60,6 +60,13 @@ export const PRICES = {
         cacheWrite: 1.25,
         cacheRead: 0.1,
     },
+    'claude-sonnet-4-6': {
+        provider: 'anthropic',
+        input: 3.0,
+        output: 15.0,
+        cacheWrite: 3.75,
+        cacheRead: 0.3,
+    },
     'claude-sonnet-4-5': {
         provider: 'anthropic',
         input: 3.0,

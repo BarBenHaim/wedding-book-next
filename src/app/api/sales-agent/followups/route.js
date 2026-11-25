@@ -50,6 +50,7 @@ import { adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { buildFollowUpPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, resolveFollowUp } from '@/lib/salesAgent/agent'
+import { meterAnswer } from '@/lib/salesAgent/meter'
 import { noteClaudeOutcome } from '@/lib/salesAgent/claudeHealth'
 import { dueFollowUps, prepareFollowUpDelivery, recordDeliveryEvent, listLeads, reviveOrphans, settleStaleDeliveries, listMedia, recordFollowUpRun } from '@/lib/salesAgent/leads'
 import { sendableNow, MAX_PER_RUN, isFinalAttempt, isInsideWhatsAppWindow, pendingFollowUpStatus } from '@/lib/salesAgent/followupPolicy'
@@ -302,6 +303,7 @@ export async function GET(req) {
                     throw error
                 })
                 noteClaudeOutcome(answer)
+                await meterAnswer(answer)
                 const raw = answer.text
                 parsed = parseAgentJson(raw, { mediaKeys: Object.keys(library) })
                 if (parsed.handoff || parsed.messages.length === 0) return

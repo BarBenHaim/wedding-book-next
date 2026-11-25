@@ -120,7 +120,7 @@ function Spend({ spend, waiting, onOpen }) {
                         </li>
                     ))}
                 </ul>
-                <p className={s.fine}>נספר: תשובות הבוט ותמונות לרשתות. לא הכול.</p>
+                <p className={s.fine}>נספרות קריאות המודלים של האתר. לא החשבונית המלאה.</p>
             </>}
             <div className={s.casket} aria-hidden='true' />
         </Panel>
