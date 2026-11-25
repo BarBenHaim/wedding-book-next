@@ -45,7 +45,7 @@ export default function CustomerWindow({ id, title, api, onChanged, onClose }) {
                         <div className={w.card}>
                             <h3>הצעד הבא</h3>
                             <p className={w.next} data-overdue={row.overdue}>{row.next.label}{row.overdue ? ' (באיחור)' : ''}</p>
-                            <div className={`${w.actions} ${w.board}`}>
+                            <div className={w.actions}>
                                 <StepActions row={row} act={act} busy={busy} />
                                 <MoreActions row={row} act={act} busy={busy} />
                             </div>

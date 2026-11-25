@@ -28,14 +28,17 @@ export function Hero({ title, under, figures }) {
     )
 }
 
-// `long` is for values such as sums, which need a smaller size.
-export function Plaque({ value, label, Icon, solid = false, long = false }) {
-    return (
-        <div className={`${k.plaque} ${long ? k.long : ''}`}>
-            <b>{Icon && <Icon size={34} strokeWidth={2} fill={solid ? 'currentColor' : 'none'} aria-hidden='true' />}{value}</b>
-            <span>{label}</span>
-        </div>
-    )
+// `long` is for values such as sums, which need a smaller size. With `onClick`
+// the plaque is a filter, and `pressed` marks the chosen one.
+export function Plaque({ value, label, Icon, solid = false, long = false, onClick, pressed }) {
+    const inside = <>
+        <b>{Icon && <Icon size={34} strokeWidth={2} fill={solid ? 'currentColor' : 'none'} aria-hidden='true' />}{value}</b>
+        <span>{label}</span>
+    </>
+    const className = `${k.plaque} ${long ? k.long : ''}`
+    return onClick
+        ? <button type='button' className={className} aria-pressed={pressed === true} onClick={onClick}>{inside}</button>
+        : <div className={className}>{inside}</div>
 }
 
 export function Panel({ title, Icon, aside, children, className = '', onOpen, centered = false }) {

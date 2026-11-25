@@ -41,6 +41,10 @@
 .plaque b { display: flex; align-items: center; justify-content: center; gap: 18px; font-size: 52px; font-weight: 700; line-height: 1.08; font-variant-numeric: tabular-nums; }
 .plaque span { font-size: 18.5px; font-weight: 800; line-height: 1.2; }
 .long b { font-size: 36px; line-height: 1.55; }
+:global(.wt-admin) button.plaque { border: 0; background: none; color: inherit; cursor: pointer; transition: transform .16s ease; }
+button.plaque:hover { transform: translateY(-3px); }
+:global(.wt-admin) button.plaque[aria-pressed='true'] { color: #fff3d8; transform: translateY(-3px); }
+button.plaque[aria-pressed='true']::after { content: ''; position: absolute; inset: 9px 11px; z-index: -1; border-radius: 12px; border: 1px solid #e9c97f; background: linear-gradient(180deg, #2c2473, #171049); }
 
 /* framed panels */
 .panel { position: relative; isolation: isolate; padding: 16px 22px 20px; }
@@ -71,6 +75,7 @@
 }
 :global(.wt-admin) .quiet:hover { filter: brightness(1.05); }
 :global(.wt-admin) .quiet:disabled { opacity: .5; cursor: default; }
+:global(.wt-admin) .small { min-width: 0; height: auto; min-height: 36px; gap: 7px; padding: 0 13px; font-size: 14px; border-radius: 10px; white-space: nowrap; }
 :global(.wt-admin) .more { display: block; text-align: center; margin-top: 8px; font-size: 14.5px; font-weight: 700; color: var(--purple); }
 
 /* filters and search */

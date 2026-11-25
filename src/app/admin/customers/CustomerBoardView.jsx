@@ -4,16 +4,16 @@
 // src/lib/customerBoard.js.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
+import { CalendarDays, ClipboardCheck, RefreshCw, Search, Users, Zap } from 'lucide-react'
+import { Hero, Page, Panel, Plaque, Sheet } from '../ui/kit'
+import k from '../ui/kit.module.css'
+import Button from './BoardButton'
 import SignSamples from './SignSamples'
 import CustomerRequests from './CustomerRequests'
-
-const INK = '#3d2e1a'
-const SOFT = '#7a6a52'
-const LINE = '#ead9b3'
+import c from './customers.module.css'
 const SEND_LABEL = { share_14: 'שבועיים לפני', eve: 'לפני האירוע', post_1: 'מזל טוב', post_3: 'אישור הספר' }
 const STATUS = {
-    accepted: { label: 'יצא', color: '#8a5a00' },
+    accepted: { label: 'יצא', color: '#7a4c00' },
     delivered: { label: 'נמסר', color: '#1f7a3e' },
     read: { label: 'נקרא', color: '#1f7a3e' },
     failed: { label: 'נכשל', color: '#b42318' },
@@ -34,16 +34,6 @@ const dueLabel = (row, today) => {
     return row.due === today ? 'היום' : shortDate(row.due)
 }
 const waLink = (phone, text) => `https://wa.me/${phone}${text ? `?text=${encodeURIComponent(text)}` : ''}`
-
-function Button({ children, onClick, href, primary = false, disabled = false }) {
-    const style = primary
-        ? { background: INK, color: '#fff', borderColor: INK }
-        : { background: '#fff', color: INK, borderColor: '#d9c58f' }
-    const className = 'inline-block text-[12px] font-bold px-3 py-1.5 rounded-lg border whitespace-nowrap active:scale-95 disabled:opacity-40'
-    return href
-        ? <a href={href} target='_blank' rel='noopener noreferrer' className={className} style={style}>{children}</a>
-        : <button type='button' onClick={onClick} disabled={disabled} className={className} style={style}>{children}</button>
-}
 
 // The buttons that finish the next step of one row.
 export function StepActions({ row, act, busy }) {
@@ -123,7 +113,7 @@ export function MoreActions({ row, act, busy }) {
     return (
         <select
             value='' disabled={busy} onChange={e => choose(e.target.value)} aria-label={`פעולות נוספות: ${row.title}`}
-            className='text-[12px] rounded-lg border px-2 py-1.5 bg-white' style={{ borderColor: LINE, color: SOFT }}
+            className={c.select}
         >
             <option value=''>{open ? 'עוד…' : 'שינוי…'}</option>
             {marks.map(mark => <option key={mark} value={mark}>{UNDO[mark]}</option>)}
@@ -141,9 +131,9 @@ export function MoreActions({ row, act, busy }) {
 
 export function Sends({ row }) {
     const sent = Object.entries(row.sends || {})
-    if (!sent.length) return <span style={{ color: '#b9ad98' }}>עוד לא</span>
+    if (!sent.length) return <span className={c.none}>עוד לא</span>
     return (
-        <span className='flex flex-col gap-0.5'>
+        <span className={c.sends}>
             {sent.map(([key, send]) => {
                 const status = STATUS[send.status] || STATUS.accepted
                 return <span key={key}>{SEND_LABEL[key] || key}: <b style={{ color: status.color }}>{status.label}</b></span>
@@ -152,14 +142,16 @@ export function Sends({ row }) {
     )
 }
 
-function Who({ row }) {
+function Who({ row, onOpen }) {
     return (
         <>
-            <div className='font-bold text-[15px]' style={{ color: '#1a1410' }}>{row.title}</div>
-            <div className='text-[12px]' style={{ color: SOFT }}>
+            {onOpen
+                ? <button type='button' className={c.name} onClick={() => onOpen(row)}>{row.title}</button>
+                : <b className={c.name}>{row.title}</b>}
+            <small className={c.small}>
                 {[row.ownerName, `${row.entries} ברכות`, row.amount ? `₪${row.amount}` : 'ללא תשלום רשום'].filter(Boolean).join(' · ')}
-            </div>
-            {row.note && <div className='text-[12px] mt-0.5' style={{ color: '#8a5a00' }}>הערה: {row.note}</div>}
+            </small>
+            {row.note && <small className={c.note}>הערה: {row.note}</small>}
         </>
     )
 }
@@ -167,10 +159,10 @@ function Who({ row }) {
 function Step({ row, today }) {
     return (
         <>
-            <div className='font-bold text-[13px]' style={{ color: '#1a1410' }}>{row.next.label}</div>
-            {row.due && <div className='text-[12px] font-semibold' style={{ color: row.overdue ? '#b42318' : SOFT }}>{dueLabel(row, today)}</div>}
+            <b className={c.step} data-overdue={row.overdue}>{row.next.label}</b>
+            {row.due && <small className={row.overdue ? c.late : c.small}>{dueLabel(row, today)}</small>}
             {row.lastCustomerMessage && row.next.key !== 'wait_event' && (
-                <div className='text-[11.5px] mt-0.5 line-clamp-2' style={{ color: SOFT }}>כתב לאחרונה: {row.lastCustomerMessage.text}</div>
+                <small className={c.last}>כתב לאחרונה: {row.lastCustomerMessage.text}</small>
             )}
         </>
     )
@@ -182,23 +174,22 @@ function ClaudeStatus({ claude, busy, onCheck }) {
     const checkedAt = claude?.lastCheckAt
         ? new Date(claude.lastCheckAt).toLocaleString('he-IL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })
         : ''
-    const color = alert || claude?.lastCheckOk === false ? '#b42318' : claude?.lastCheckOk ? '#1f7a3e' : '#b9ad98'
+    const state = alert || claude?.lastCheckOk === false ? 'bad' : claude?.lastCheckOk ? 'on' : 'off'
     const words = alert
         || (!checkedAt ? 'עוד לא נבדק.' : claude.lastCheckOk ? `עבד בבדיקה מ-${checkedAt}.` : `לא ענה בבדיקה מ-${checkedAt}.`)
     return (
-        <section
-            className='rounded-2xl bg-white border p-4 flex flex-wrap items-center gap-3' role={alert ? 'alert' : undefined}
-            style={{ borderColor: alert ? '#f5b5b0' : LINE }}
-        >
-            <span className='w-2.5 h-2.5 rounded-full' style={{ background: color }} />
-            <b className='text-sm'>Claude</b>
-            <span className='text-[12px] flex-1 min-w-[200px]' style={{ color: alert ? '#b42318' : SOFT }}>{words}</span>
-            <Button disabled={busy} onClick={onCheck}>בדוק את Claude</Button>
+        <section className={c.card} data-alert={Boolean(alert)} role={alert ? 'alert' : undefined}>
+            <div className={c.head}>
+                <i className={c.dot} data-state={state} />
+                <b>Claude</b>
+                <span>{words}</span>
+                <Button disabled={busy} onClick={onCheck}>בדוק את Claude</Button>
+            </div>
         </section>
     )
 }
 
-export default function CustomerBoardView({ data, busy, error, updatedAt, onAct, onRefresh }) {
+export default function CustomerBoardView({ data, busy, error, updatedAt, onAct, onRefresh, onOpen }) {
     const [tab, setTab] = useState('today')
     const [query, setQuery] = useState('')
     const [testKey, setTestKey] = useState('post_1')
@@ -222,134 +213,148 @@ export default function CustomerBoardView({ data, busy, error, updatedAt, onAct,
         onAct(body)
     }
     const on = data?.settings?.enabled === true
+    const chosen = !query && !focused ? tab : ''
+    // A list with something waiting comes first; an empty one sits with the switches.
+    const requestsWait = Boolean(data?.requests?.items?.length)
+    const samplesWait = Boolean(data?.samples?.items?.length)
+    const requests = data && <CustomerRequests requests={data.requests} busy={busy} onAct={act} />
+    const samples = data && <SignSamples samples={data.samples} busy={busy} onAct={act} />
 
     return (
-        <main dir='rtl' className='min-h-screen px-3 sm:px-6 py-5' style={{ background: '#f8f4ec', color: INK }}>
-            <div className='max-w-6xl mx-auto space-y-4'>
-                <header className='flex flex-wrap items-center gap-3'>
-                    <h1 className='text-2xl font-black flex-1' style={{ color: '#1a1410' }}>טיפול בלקוחות</h1>
-                    {updatedAt && <span className='text-[12px]' style={{ color: SOFT }}>עודכן {updatedAt}</span>}
-                    <Button onClick={onRefresh} disabled={busy}>{busy ? 'טוען…' : 'רענן'}</Button>
-                    <Link href='/admin/today' className='text-[12px] font-bold underline'>למסך היום</Link>
-                    <Link href='/admin' className='text-[12px] font-bold underline'>לסופר אדמין</Link>
-                </header>
+        <Page>
+            <Sheet>
+                <Hero
+                    title='טיפול בלקוחות'
+                    under={<>
+                        {updatedAt && <span>עודכן {updatedAt}</span>}
+                        <button type='button' className={k.glass} onClick={onRefresh} disabled={busy}><RefreshCw size={15} />{busy ? 'טוען…' : 'רענן'}</button>
+                    </>}
+                    figures={data && data.groups.map(group => (
+                        <Plaque
+                            key={group.key} value={data.counts[group.key] || 0} label={group.label}
+                            pressed={chosen === group.key}
+                            onClick={() => { setTab(group.key); setQuery(''); setOnly('') }}
+                        />
+                    ))}
+                />
 
-                {error && <p role='alert' className='rounded-xl px-4 py-3 text-sm font-semibold' style={{ background: '#fdecea', color: '#b42318' }}>{error}</p>}
-                {!data && !error && <p className='text-sm' style={{ color: SOFT }}>טוען את הלקוחות…</p>}
+                {error && <p role='alert' className={k.error}>{error}</p>}
+                {!data && !error && <p className={k.unread}>טוען את הלקוחות…</p>}
 
                 {data && <>
-                    <section className='rounded-2xl bg-white border p-4 space-y-3' style={{ borderColor: LINE }}>
-                        <div className='flex flex-wrap items-center gap-3'>
-                            <span className='w-2.5 h-2.5 rounded-full' style={{ background: on ? '#1f7a3e' : '#b9ad98' }} />
-                            <b className='text-sm'>שליחה אוטומטית: {on ? 'פעילה' : 'כבויה'}</b>
-                            <span className='text-[12px] flex-1' style={{ color: SOFT }}>
-                                {on ? 'ההודעות יוצאות בבוקר, לא בשבת ובחג.' : 'כשהיא כבויה, כל הודעה מופיעה כמשימה לשליחה בלחיצה.'}
-                            </span>
-                            <Button
-                                primary={!on} disabled={busy}
-                                onClick={() => act({ op: 'settings', enabled: !on }, on
-                                    ? 'לכבות את השליחה האוטומטית?'
-                                    : 'להפעיל שליחה אוטומטית? הודעות יישלחו ללקוחות בלי אישור נוסף. הפעל רק אחרי שהודעת בדיקה הגיעה אליך.')}
-                            >{on ? 'כבה' : 'הפעל'}</Button>
-                        </div>
-                        <div className='flex flex-wrap items-center gap-2 text-[12px]'>
-                            <span style={{ color: SOFT }}>בדיקה לטלפון שלך:</span>
-                            <select value={testKey} onChange={e => setTestKey(e.target.value)} className='rounded-lg border px-2 py-1.5 bg-white' style={{ borderColor: LINE }}>
-                                {Object.entries(SEND_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                            </select>
-                            <Button disabled={busy} onClick={() => act({ op: 'test', key: testKey })}>שלח בדיקה</Button>
-                        </div>
-                        <details>
-                            <summary className='cursor-pointer text-[13px] font-bold'>הודעות בשבוע הקרוב ({data.sends.length})</summary>
-                            {data.sends.length === 0
-                                ? <p className='text-[12px] mt-2' style={{ color: SOFT }}>אין הודעות מתוכננות.</p>
-                                : <ul className='mt-2 text-[12.5px] space-y-1'>
-                                    {data.sends.map(send => <li key={`${send.id}-${send.key}`}><b>{shortDate(send.day)}</b> {send.title}: {SEND_LABEL[send.key]}</li>)}
-                                </ul>}
-                        </details>
-                    </section>
-
-                    <ClaudeStatus claude={data.claude} busy={busy} onCheck={() => act({ op: 'claudeCheck' })} />
-
-                    <CustomerRequests requests={data.requests} busy={busy} onAct={act} />
-
-                    <SignSamples samples={data.samples} busy={busy} onAct={act} />
-
-                    <nav className='flex flex-wrap gap-2'>
-                        {data.groups.map(group => (
-                            <button
-                                key={group.key} type='button' onClick={() => { setTab(group.key); setQuery(''); setOnly('') }}
-                                aria-pressed={tab === group.key && !query && !focused}
-                                className='rounded-xl border px-3.5 py-2 text-[13px] font-bold bg-white'
-                                style={tab === group.key && !query && !focused ? { background: INK, color: '#fff', borderColor: INK } : { borderColor: LINE }}
-                            >
-                                <span className='text-lg tabular-nums ml-1.5'>{data.counts[group.key] || 0}</span>{group.label}
-                            </button>
-                        ))}
-                        <input
-                            type='search' value={query} onChange={e => setQuery(e.target.value)} placeholder='חיפוש לפי שם או טלפון'
-                            className='flex-1 min-w-[180px] rounded-xl border px-3.5 py-2 text-sm bg-white outline-none' style={{ borderColor: LINE }}
-                        />
-                    </nav>
-
-                    {focused && (
-                        <div ref={list} className='flex flex-wrap items-center gap-2 text-[13px] font-bold scroll-mt-24'>
-                            <span>מוצג לקוח אחד: {focused.title}</span>
-                            <Button onClick={() => setOnly('')}>הצג את כולם</Button>
-                        </div>
+                    {(requestsWait || samplesWait) && (
+                        <Panel title='מחכה לאישור שלך' Icon={ClipboardCheck}>
+                            <div className={c.stack}>
+                                {requestsWait && requests}
+                                {samplesWait && samples}
+                            </div>
+                        </Panel>
                     )}
 
-                    {rows.length === 0 ? (
-                        <p className='rounded-2xl bg-white border p-6 text-center text-sm' style={{ borderColor: LINE, color: SOFT }}>
-                            {query ? 'לא נמצא לקוח כזה.' : tab === 'today' ? 'אין מה לטפל היום.' : 'אין כאן לקוחות.'}
-                        </p>
-                    ) : <>
-                        <div className='hidden md:block rounded-2xl bg-white border overflow-x-auto' style={{ borderColor: LINE }}>
-                            <table className='w-full text-right text-sm'>
-                                <thead>
-                                    <tr className='text-[12px]' style={{ color: SOFT, background: '#fdfaf3' }}>
-                                        {['לקוח', 'אירוע', 'הצעד הבא', 'הודעות', 'פעולה'].map(title => <th key={title} scope='col' className='px-4 py-3 font-bold'>{title}</th>)}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {rows.map(row => (
-                                        <tr key={row.id} className='border-t align-top' style={{ borderColor: '#f0e8d4', background: row.overdue ? '#fffaf9' : undefined }}>
-                                            <td className='px-4 py-3'><Who row={row} /></td>
-                                            <td className='px-4 py-3 whitespace-nowrap'>
-                                                <div className='font-semibold tabular-nums'>{shortDate(row.day)}</div>
-                                                <div className='text-[12px]' style={{ color: SOFT }}>{countdown(row.toEvent)}</div>
-                                                <div className='text-[11.5px]' style={{ color: SOFT }}>{row.stage}</div>
-                                            </td>
-                                            <td className='px-4 py-3 max-w-[280px]'><Step row={row} today={data.today} /></td>
-                                            <td className='px-4 py-3 text-[11.5px] whitespace-nowrap'><Sends row={row} /></td>
-                                            <td className='px-4 py-3'>
-                                                <div className='flex flex-wrap gap-1.5 items-center max-w-[300px]'>
-                                                    <StepActions row={row} act={act} busy={busy} />
-                                                    <MoreActions row={row} act={act} busy={busy} />
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                    <Panel
+                        title={focused ? 'לקוח אחד' : query ? 'תוצאות החיפוש' : data.groups.find(group => group.key === tab)?.label || 'לקוחות'}
+                        Icon={Users}
+                        aside={(
+                            <div className={k.search}>
+                                <Search size={17} aria-hidden='true' />
+                                <input type='search' value={query} onChange={e => setQuery(e.target.value)} placeholder='חיפוש לפי שם או טלפון' aria-label='חיפוש לקוח' />
+                            </div>
+                        )}
+                    >
+                        {focused && (
+                            <div ref={list} className={c.focused}>
+                                <span>מוצג לקוח אחד: {focused.title}</span>
+                                <Button onClick={() => setOnly('')}>הצג את כולם</Button>
+                            </div>
+                        )}
+
+                        {rows.length === 0 ? (
+                            <p className={k.unread}>{query ? 'לא נמצא לקוח כזה.' : tab === 'today' ? 'אין מה לטפל היום.' : 'אין כאן לקוחות.'}</p>
+                        ) : <>
+                            <div className={`hidden md:block ${k.tableBox}`}>
+                                <div className={k.scroll}>
+                                    <table className={`${k.table} ${k.dense}`}>
+                                        <thead>
+                                            <tr>{['לקוח', 'אירוע', 'הצעד הבא', 'הודעות', 'פעולה'].map(title => <th key={title} scope='col'>{title}</th>)}</tr>
+                                        </thead>
+                                        <tbody>
+                                            {rows.map(row => (
+                                                <tr key={row.id} data-tone={row.overdue ? 'bad' : undefined}>
+                                                    <td><Who row={row} onOpen={onOpen} /></td>
+                                                    <td className='whitespace-nowrap'>
+                                                        <b className='tabular-nums'>{shortDate(row.day)}</b>
+                                                        <small className={c.small}>{countdown(row.toEvent)}</small>
+                                                        <small className={c.small}>{row.stage}</small>
+                                                    </td>
+                                                    <td className={c.next}><Step row={row} today={data.today} /></td>
+                                                    <td className='whitespace-nowrap'><Sends row={row} /></td>
+                                                    <td>
+                                                        <div className={c.actions}>
+                                                            <StepActions row={row} act={act} busy={busy} />
+                                                            <MoreActions row={row} act={act} busy={busy} />
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <ul className={`md:hidden ${c.cards}`}>
+                                {rows.map(row => (
+                                    <li key={row.id} data-overdue={row.overdue}>
+                                        <div><Who row={row} onOpen={onOpen} /></div>
+                                        <small className={c.small}>{[shortDate(row.day), countdown(row.toEvent), row.stage].filter(Boolean).join(' · ')}</small>
+                                        <div><Step row={row} today={data.today} /></div>
+                                        {Object.keys(row.sends || {}).length > 0 && <Sends row={row} />}
+                                        <div className={c.actions}>
+                                            <StepActions row={row} act={act} busy={busy} />
+                                            <MoreActions row={row} act={act} busy={busy} />
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </>}
+                    </Panel>
+
+                    <Panel title='אוטומציות והודעות' Icon={Zap}>
+                        <div className={c.stack}>
+                            <section className={c.card}>
+                                <div className={c.head}>
+                                    <i className={c.dot} data-state={on ? 'on' : 'off'} />
+                                    <b>שליחה אוטומטית: {on ? 'פעילה' : 'כבויה'}</b>
+                                    <span>{on ? 'ההודעות יוצאות בבוקר, לא בשבת ובחג.' : 'כשהיא כבויה, כל הודעה מופיעה כמשימה לשליחה בלחיצה.'}</span>
+                                    <Button
+                                        primary={!on} disabled={busy}
+                                        onClick={() => act({ op: 'settings', enabled: !on }, on
+                                            ? 'לכבות את השליחה האוטומטית?'
+                                            : 'להפעיל שליחה אוטומטית? הודעות יישלחו ללקוחות בלי אישור נוסף. הפעל רק אחרי שהודעת בדיקה הגיעה אליך.')}
+                                    >{on ? 'כבה' : 'הפעל'}</Button>
+                                </div>
+                                <div className={c.actions}>
+                                    <span className={c.small}>בדיקה לטלפון שלך:</span>
+                                    <select value={testKey} onChange={e => setTestKey(e.target.value)} className={c.select} aria-label='איזו הודעה לבדוק'>
+                                        {Object.entries(SEND_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                                    </select>
+                                    <Button disabled={busy} onClick={() => act({ op: 'test', key: testKey })}>שלח בדיקה</Button>
+                                </div>
+                                <details className={c.upcoming}>
+                                    <summary><CalendarDays size={16} aria-hidden='true' />הודעות בשבוע הקרוב ({data.sends.length})</summary>
+                                    {data.sends.length === 0
+                                        ? <p className={c.small}>אין הודעות מתוכננות.</p>
+                                        : <ul>
+                                            {data.sends.map(send => <li key={`${send.id}-${send.key}`}><b>{shortDate(send.day)}</b> {send.title}: {SEND_LABEL[send.key]}</li>)}
+                                        </ul>}
+                                </details>
+                            </section>
+
+                            <ClaudeStatus claude={data.claude} busy={busy} onCheck={() => act({ op: 'claudeCheck' })} />
+                            {!requestsWait && requests}
+                            {!samplesWait && samples}
                         </div>
-                        <ul className='md:hidden space-y-2.5'>
-                            {rows.map(row => (
-                                <li key={row.id} className='rounded-2xl bg-white border p-3.5 space-y-2' style={{ borderColor: row.overdue ? '#f5b5b0' : LINE }}>
-                                    <Who row={row} />
-                                    <div className='text-[12px]' style={{ color: SOFT }}>{[shortDate(row.day), countdown(row.toEvent), row.stage].filter(Boolean).join(' · ')}</div>
-                                    <div><Step row={row} today={data.today} /></div>
-                                    {Object.keys(row.sends || {}).length > 0 && <div className='text-[11.5px]'><Sends row={row} /></div>}
-                                    <div className='flex flex-wrap gap-1.5 items-center'>
-                                        <StepActions row={row} act={act} busy={busy} />
-                                        <MoreActions row={row} act={act} busy={busy} />
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    </>}
+                    </Panel>
                 </>}
-            </div>
-        </main>
+            </Sheet>
+        </Page>
     )
 }

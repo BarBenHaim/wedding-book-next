@@ -9,6 +9,9 @@ import { getIdToken, onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
+import { adminApi } from '../ui/api'
+import { useAdmin } from '../ui/Shell'
+import CustomerWindow from '../today/CustomerWindow'
 import CustomerBoardView from './CustomerBoardView'
 
 const REFRESH_MS = 3 * 60 * 1000
@@ -55,6 +58,8 @@ function Board() {
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState('')
     const [updatedAt, setUpdatedAt] = useState('')
+    // The customer whose window is open.
+    const [opened, setOpened] = useState(null)
 
     const load = useCallback(async () => {
         setBusy(true)
@@ -77,6 +82,10 @@ function Board() {
         return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onShow) }
     }, [load])
 
+    // A change made in the bot window shows here at once.
+    const { onRefresh } = useAdmin()
+    useEffect(() => onRefresh(load), [onRefresh, load])
+
     const act = async body => {
         setBusy(true)
         setError('')
@@ -95,7 +104,12 @@ function Board() {
         }
     }
 
-    return <CustomerBoardView data={data} busy={busy} error={error} updatedAt={updatedAt} onAct={act} onRefresh={load} />
+    return (
+        <>
+            <CustomerBoardView data={data} busy={busy} error={error} updatedAt={updatedAt} onAct={act} onRefresh={load} onOpen={setOpened} />
+            {opened && <CustomerWindow id={opened.id} title={opened.title} api={adminApi} onChanged={load} onClose={() => setOpened(null)} />}
+        </>
+    )
 }
 
 function SuperAdminGate({ children }) {

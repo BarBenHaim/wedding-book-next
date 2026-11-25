@@ -1,0 +1,50 @@
+/* What only the customer board has. The shared pieces are in ui/kit.module.css.
+   The same classes dress these parts inside the customer window. */
+:global(.wt-admin) .name { display: block; padding: 0; border: 0; background: none; color: var(--ink); font-size: 16.5px; font-weight: 900; text-align: right; }
+:global(.wt-admin) button.name { cursor: pointer; }
+:global(.wt-admin) button.name:hover { color: var(--purple); }
+.small { display: block; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.note { display: block; font-size: 13px; font-weight: 700; color: #7a4c00; }
+.late { display: block; font-size: 13px; font-weight: 800; color: #96193f; }
+.good { display: block; font-size: 13.5px; font-weight: 800; color: #1f6b34; }
+.last { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+.step { display: block; font-size: 15px; font-weight: 800; }
+.step[data-overdue='true'] { color: #96193f; }
+.next { max-width: 280px; }
+.sends { display: flex; flex-direction: column; font-size: 12.5px; font-weight: 600; }
+.none { font-size: 13px; font-weight: 600; color: #8d84a0; }
+.link { margin-right: 10px; font-size: 13px; font-weight: 700; text-decoration: underline; color: var(--purple); }
+
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: 390px; }
+:global(.wt-admin) .select { width: 92px; min-height: 36px; padding: 0 9px; cursor: pointer; color: var(--ink); font-size: 14px; font-weight: 700; border: 2px solid #c9a460; border-radius: 10px; background: #fff9ec; }
+
+.stack { display: flex; flex-direction: column; gap: 10px; }
+.card {
+    display: flex; flex-direction: column; gap: 9px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px;
+    background: linear-gradient(180deg, rgba(255, 252, 244, .72), rgba(255, 246, 230, .35));
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .6), 0 1px 3px rgba(120, 82, 38, .16);
+}
+.card[data-alert='true'] { border-color: #da9b90; background: #fbe5e0; }
+.head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.head > b { font-size: 16.5px; font-weight: 900; }
+.head > span { flex: 1; min-width: 200px; font-size: 13.5px; font-weight: 600; color: var(--ink-soft); }
+.card[data-alert='true'] .head > span { color: #82211a; }
+.dot { width: 13px; height: 13px; flex: none; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #d8d0c0, #988d78 70%); }
+.dot[data-state='on'] { background: radial-gradient(circle at 35% 30%, #9be25a, #3f9a22 70%); }
+.dot[data-state='bad'] { background: radial-gradient(circle at 35% 30%, #f08a7a, #ac2314 70%); }
+.upcoming summary { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 14.5px; font-weight: 800; }
+.upcoming ul { margin-top: 7px; display: flex; flex-direction: column; gap: 3px; font-size: 14px; font-weight: 600; }
+.focused { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 9px; font-size: 14.5px; font-weight: 800; scroll-margin-top: 24px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.item { display: flex; flex-direction: column; gap: 7px; padding: 11px 13px; border: 2px solid #d3ab5e; border-radius: 13px; background: linear-gradient(180deg, #fff9ec, #f7e9ca); }
+.item p { font-size: 14px; font-weight: 600; }
+.todo { list-style: disc; padding-right: 18px; font-size: 13.5px; font-weight: 700; color: #7a4c00; }
+:global(.wt-admin) .reply { width: 100%; padding: 8px 11px; resize: vertical; color: var(--ink); font-size: 15px; font-weight: 600; line-height: 1.6; border: 1px solid #b89a6a; border-radius: 10px; background: #fffdf8; }
+.picture { display: block; width: 100%; max-height: 288px; object-fit: contain; border: 2px solid var(--gold-light); border-radius: 10px; background: #f6e8c9; }
+
+/* No `display` here: the list is hidden on wide screens by a utility. */
+.cards li + li { margin-top: 9px; }
+.cards li { display: flex; flex-direction: column; gap: 7px; padding: 12px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255, 251, 242, .6); }
+.cards li[data-overdue='true'] { background: rgba(212, 98, 112, .16); }
+.cards .actions { max-width: none; }
