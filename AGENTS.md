@@ -2391,6 +2391,10 @@ or designs will wait for his approval (phase 2, not built).
   green check, one live sales reply seen on a non-owner phone, then settings
   provider `anthropic` + model `claude-opus-5-5` **and disable the model
   experiment** (an experiment arm overrides the settings).
+- **Switched 25.11 17:41 on Lord's word:** settings revision 34, provider
+  `anthropic`, model `claude-opus-5-5`, model experiment off (saved through
+  `saveSalesSettings`). Rollback: restore revision 33. API credit is the Max
+  plan's monthly grant, linked that day; it expires each billing cycle.
 - Not measured yet: latency of the current models against the 20s provider
   deadline (cap 12s, then OpenAI gets what is left). **No real API call has been
   made with this code**; the check button is the first.
