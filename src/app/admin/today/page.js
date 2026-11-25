@@ -11,21 +11,14 @@ import { auth } from '@/lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
 import TodayView from './TodayView'
+import { REFUSALS } from './TaskWindow'
 
 const REFRESH_MS = 3 * 60 * 1000
-const REFUSALS = {
-    WINDOW_CLOSED: 'עברו 24 שעות מההודעה. צריך לענות ידנית.',
-    NEWER_MESSAGE: 'נכתבה הודעה חדשה אחרי הטיוטה. חכה לטיוטה החדשה.',
-    DRAFT_NOT_PENDING: 'הבקשה כבר טופלה.',
-    SAMPLE_NOT_READY: 'הדוגמה כבר נשלחה או עוד לא מוכנה.',
-    LEAD_CLOSED: 'השיחה סגורה, ולכן לא נשלח.',
-    SEND_FAILED: 'וואטסאפ לא קיבלה את השליחה. אפשר לנסות שוב.',
-}
 
-async function call(url, body) {
+async function call(url, body, method) {
     const token = await getIdToken(auth.currentUser)
     const res = await fetch(url, {
-        method: body ? 'POST' : 'GET',
+        method: method || (body ? 'POST' : 'GET'),
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         ...(body ? { body: JSON.stringify(body) } : {}),
     })
@@ -78,7 +71,7 @@ function Screen() {
         }
     }
 
-    return <TodayView data={data} busy={busy} error={error} onApprove={approve} onRefresh={load} />
+    return <TodayView data={data} busy={busy} error={error} onApprove={approve} onRefresh={load} api={call} />
 }
 
 function SuperAdminGate({ children }) {

@@ -2,20 +2,25 @@
 // The "today" screen, Golden Jerusalem. Draws what /api/admin/today returns;
 // the art is images under /public/admin-theme, every word and number is text.
 
+import { useState } from 'react'
 import Link from 'next/link'
 import {
-    AlertTriangle, Calendar, CalendarDays, ChevronLeft, ClipboardCheck, Coins, ExternalLink, FileText,
+    AlertTriangle, Calendar, CalendarDays, ChevronDown, ChevronLeft, ClipboardCheck, Coins, ExternalLink, FileText,
     Image as ImageIcon, MessageCircle, MessageSquareText, Palette, Phone, Send, Users,
 } from 'lucide-react'
 import { jerusalemSerif } from './font'
+import BotWindow from './BotWindow'
+import CustomerWindow from './CustomerWindow'
+import SpendWindow, { dollars } from './SpendWindow'
+import TaskWindow from './TaskWindow'
 import s from './today.module.css'
 
 const NAV = [
     { href: '/admin/today', label: 'היום', Icon: Calendar },
     { href: '/admin/customers', label: 'לקוחות', Icon: Users },
     { href: '/admin', label: 'אירועים', Icon: CalendarDays },
-    { href: '/admin/sales-leads', label: 'בוט וואטסאפ', Icon: MessageCircle },
-    { href: '/admin/sales-leads#spend', label: 'הוצאות', Icon: Coins },
+    { open: 'bot', label: 'בוט וואטסאפ', Icon: MessageCircle },
+    { open: 'spend', label: 'הוצאות', Icon: Coins },
     { href: '/admin/studio', label: 'עיצוב', Icon: Palette },
 ]
 const TASK_ICON = { claude: AlertTriangle, draft: FileText, sample: ImageIcon, draw: ImageIcon, book: CalendarDays }
@@ -32,7 +37,6 @@ const when = (day, toEvent) => {
     if (toEvent === 1) return 'מחר'
     return monthDay(day) || 'בלי תאריך'
 }
-const dollars = value => `$${(Number(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 // A speech bubble with a handset, the mark of the WhatsApp card.
 const WhatsMark = ({ size = 28 }) => (
@@ -42,9 +46,15 @@ const WhatsMark = ({ size = 28 }) => (
     </span>
 )
 
-function Panel({ title, Icon, children, className = '' }) {
+// A click on an inner button must not also open what its panel opens.
+const only = action => event => {
+    event.stopPropagation()
+    action()
+}
+
+function Panel({ title, Icon, children, className = '', onOpen }) {
     return (
-        <section className={`${s.panel} ${className}`}>
+        <section className={`${s.panel} ${className} ${onOpen ? s.opens : ''}`} onClick={onOpen}>
             <header className={s.panelHead}>
                 <h2><Icon size={28} strokeWidth={2.1} aria-hidden='true' />{title}</h2>
             </header>
@@ -53,22 +63,24 @@ function Panel({ title, Icon, children, className = '' }) {
     )
 }
 
-function Task({ task, busy, onApprove }) {
+function Task({ task, busy, onApprove, onOpen }) {
     const Icon = TASK_ICON[task.kind] || FileText
     return (
         <li className={s.task}>
-            <span className={s.taskIcon}><Icon size={30} strokeWidth={1.9} aria-hidden='true' /></span>
-            <span className={s.taskText}>
-                <b>{task.title}</b>
-                {task.detail && <small>{task.detail}</small>}
-            </span>
-            {task.image && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={task.image} alt='הדוגמה' className={s.thumb} />
-            )}
+            <button type='button' className={s.taskOpen} onClick={() => onOpen(task)}>
+                <span className={s.taskIcon}><Icon size={30} strokeWidth={1.9} aria-hidden='true' /></span>
+                <span className={s.taskText}>
+                    <b>{task.title}</b>
+                    {task.detail && <small>{task.detail}</small>}
+                </span>
+                {task.image && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={task.image} alt='הדוגמה' className={s.thumb} />
+                )}
+            </button>
             {task.canApprove
                 ? <button type='button' className={s.button} disabled={busy} onClick={() => onApprove(task)}><Send size={21} aria-hidden='true' />אשר ושלח</button>
-                : <Link href={task.href} className={s.button}><ExternalLink size={21} aria-hidden='true' />פתח</Link>}
+                : <button type='button' className={s.button} onClick={() => onOpen(task)}><ExternalLink size={21} aria-hidden='true' />פתח</button>}
         </li>
     )
 }
@@ -85,23 +97,25 @@ function Figure({ value, label, Icon }) {
 const SWITCH_NAMES = { requests: 'טיוטות ללקוחות', samples: 'דוגמאות שלט', followups: 'הודעות מעקב' }
 
 // In words, so "off" is not read as a greyed-out button.
-function Switches({ switches, mode }) {
-    const names = on => Object.keys(SWITCH_NAMES).filter(key => (switches[key] === true) === on).map(key => SWITCH_NAMES[key]).join(', ')
+function Switches({ switches, mode, onOpen }) {
+    const names = on => Object.keys(SWITCH_NAMES).filter(key => switches[key] === on).map(key => SWITCH_NAMES[key]).join(', ')
     return (
-        <Link href='/admin/customers' className={s.switches}>
+        <button type='button' className={s.switches} onClick={only(() => onOpen('auto'))}>
             <span data-on='true'>מצב: {MODE[mode] || mode}</span>
             {names(true) && <span data-on='true'>פעיל: {names(true)}</span>}
             {names(false) && <span>כבוי: {names(false)}</span>}
-        </Link>
+        </button>
     )
 }
 
-function Bot({ bot, waiting }) {
+function Bot({ bot, waiting, onOpen }) {
     return (
-        <Panel title='בוט וואטסאפ' Icon={WhatsMark} className={s.botPanel}>
+        <Panel title='בוט וואטסאפ' Icon={WhatsMark} className={s.botPanel} onOpen={() => onOpen('state')}>
             {!bot ? <p className={s.unread}>{waiting || 'לא הצלחתי לקרוא את מצב הבוט.'}</p> : <>
                 <div className={`${s.chip} ${bot.enabled ? s.on : s.off}`}><i />{bot.enabled ? 'הבוט פעיל' : 'הבוט כבוי'}</div>
-                <div className={s.field}><span dir='ltr'>{bot.modelLabel}</span></div>
+                <button type='button' className={s.field} onClick={only(() => onOpen('state'))} aria-label={`ניהול הבוט, מודל ${bot.modelLabel}`}>
+                    <span dir='ltr'>{bot.modelLabel}</span><ChevronDown size={20} strokeWidth={2.4} aria-hidden='true' />
+                </button>
                 <div className={s.count}>
                     <MessageSquareText size={32} strokeWidth={1.9} aria-hidden='true' />
                     <div>
@@ -109,7 +123,7 @@ function Bot({ bot, waiting }) {
                         <span>פניות למודל היום</span>
                     </div>
                 </div>
-                {bot.switches && <Switches switches={bot.switches} mode={bot.mode} />}
+                {bot.switches && <Switches switches={bot.switches} mode={bot.mode} onOpen={onOpen} />}
             </>}
             <div className={s.dove} aria-hidden='true' />
             <i className={`${s.leaf} ${s.leafLeft}`} aria-hidden='true' />
@@ -118,12 +132,12 @@ function Bot({ bot, waiting }) {
     )
 }
 
-function Spend({ spend, waiting }) {
+function Spend({ spend, waiting, onOpen }) {
     const parts = spend ? [['Claude', spend.anthropic], ['OpenAI', spend.openai], ...(spend.other > 0 ? [['אחר', spend.other]] : [])] : []
     return (
-        <Panel title='הוצאות החודש' Icon={Coins} className={s.spendPanel}>
+        <Panel title='הוצאות החודש' Icon={Coins} className={s.spendPanel} onOpen={onOpen}>
             {!spend ? <p className={s.unread}>{waiting || 'לא הצלחתי לקרוא את ההוצאות.'}</p> : <>
-                <div className={s.money}>{dollars(spend.month)}</div>
+                <button type='button' className={s.money} onClick={only(onOpen)} aria-label={`פירוט ההוצאות, ${dollars(spend.month)} החודש`}>{dollars(spend.month)}</button>
                 <ul className={s.bars}>
                     {parts.map(([name, value]) => (
                         <li key={name}>
@@ -133,14 +147,25 @@ function Spend({ spend, waiting }) {
                         </li>
                     ))}
                 </ul>
-                <p className={s.fine}>מה שהמערכת סופרת: תשובות הבוט. לא כל ההוצאות.</p>
+                <p className={s.fine}>נספר: תשובות הבוט ותמונות לרשתות. לא הכול.</p>
             </>}
             <div className={s.casket} aria-hidden='true' />
         </Panel>
     )
 }
 
-export default function TodayView({ data, busy, error, onApprove, onRefresh }) {
+export default function TodayView({ data, busy, error, onApprove, onRefresh, api }) {
+    // The window that is open over the screen, if any.
+    const [view, setView] = useState(null)
+    const close = () => setView(null)
+    const openBot = (tab = 'state') => setView({ type: 'bot', tab })
+    const openSpend = () => setView({ type: 'spend' })
+    const openCustomer = (id, title) => setView({ type: 'customer', id, title })
+    const openTask = task => {
+        if (task.kind === 'book') openCustomer(task.id, task.title)
+        else if (task.kind === 'claude') openBot('state')
+        else setView({ type: 'task', task })
+    }
     // What to say where there is no data yet.
     const waiting = data ? '' : busy || !error ? 'טוען…' : 'לא נטען.'
     const partial = data?.unread?.length > 0
@@ -155,11 +180,12 @@ export default function TodayView({ data, busy, error, onApprove, onRefresh }) {
                 </Link>
                 <div className={s.rule} aria-hidden='true' />
                 <nav aria-label='ניווט ראשי'>
-                    {NAV.map(({ href, label, Icon }) => (
-                        <Link key={label} href={href} className={s.item} aria-current={href === '/admin/today' ? 'page' : undefined}>
-                            <span>{label}</span><Icon size={26} strokeWidth={2} aria-hidden='true' />
-                        </Link>
-                    ))}
+                    {NAV.map(({ href, open, label, Icon }) => {
+                        const inside = <><span>{label}</span><Icon size={26} strokeWidth={2} aria-hidden='true' /></>
+                        return open
+                            ? <button key={label} type='button' className={s.item} onClick={() => (open === 'bot' ? openBot() : openSpend())}>{inside}</button>
+                            : <Link key={label} href={href} className={s.item} aria-current={href === '/admin/today' ? 'page' : undefined}>{inside}</Link>
+                    })}
                 </nav>
                 <div className={s.rule} aria-hidden='true' />
                 <div className={s.alley} aria-hidden='true' />
@@ -191,7 +217,7 @@ export default function TodayView({ data, busy, error, onApprove, onRefresh }) {
                         <Panel title='משימות לטיפול היום' Icon={ClipboardCheck}>
                             {waiting ? <p className={s.unread}>{waiting}</p>
                                 : data.tasks.length === 0 ? <p className={s.unread}>{partial ? 'לא כל המקורות נקראו, אז ייתכן שיש מה לטפל.' : 'אין מה לטפל כרגע.'}</p>
-                                    : <ul className={s.tasks}>{data.tasks.map(task => <Task key={`${task.kind}-${task.id}`} task={task} busy={busy} onApprove={onApprove} />)}</ul>}
+                                    : <ul className={s.tasks}>{data.tasks.map(task => <Task key={`${task.kind}-${task.id}`} task={task} busy={busy} onApprove={onApprove} onOpen={openTask} />)}</ul>}
                             {(data?.moreTasks > 0 || data?.oldEvents > 0) && (
                                 <Link href='/admin/customers' className={s.more}>
                                     {[data.moreTasks > 0 ? `ועוד ${data.moreTasks} משימות` : null, data.oldEvents > 0 ? `${data.oldEvents} אירועים ישנים למיון` : null].filter(Boolean).join(' · ')}
@@ -205,11 +231,11 @@ export default function TodayView({ data, busy, error, onApprove, onRefresh }) {
                                     <thead><tr><th>לקוח</th><th>אירוע</th><th>הצעד הבא</th></tr></thead>
                                     <tbody>
                                         {data.customers.map(c => (
-                                            <tr key={c.id}>
-                                                <td><Link href={c.href}><Users size={22} strokeWidth={2.2} fill='currentColor' aria-hidden='true' />{c.title}</Link></td>
+                                            <tr key={c.id} onClick={() => openCustomer(c.id, c.title)}>
+                                                <td><button type='button' onClick={only(() => openCustomer(c.id, c.title))}><Users size={22} strokeWidth={2.2} fill='currentColor' aria-hidden='true' />{c.title}</button></td>
                                                 <td>{c.event} – {when(c.day, c.toEvent)}</td>
                                                 <td data-overdue={c.overdue}>
-                                                    <Link href={c.href} className={s.step} tabIndex={-1}>{c.step}<ChevronLeft size={20} strokeWidth={2.6} aria-hidden='true' /></Link>
+                                                    <span className={s.step}>{c.step}<ChevronLeft size={20} strokeWidth={2.6} aria-hidden='true' /></span>
                                                 </td>
                                             </tr>
                                         ))}
@@ -221,11 +247,16 @@ export default function TodayView({ data, busy, error, onApprove, onRefresh }) {
                     </div>
 
                     <div className={s.side}>
-                        <Bot bot={data ? data.bot : null} waiting={waiting} />
-                        <Spend spend={data ? data.spend : null} waiting={waiting} />
+                        <Bot bot={data ? data.bot : null} waiting={waiting} onOpen={openBot} />
+                        <Spend spend={data ? data.spend : null} waiting={waiting} onOpen={openSpend} />
                     </div>
                 </div>
             </main>
+
+            {view?.type === 'bot' && <BotWindow bot={data?.bot} firstTab={view.tab} api={api} onChanged={onRefresh} onClose={close} />}
+            {view?.type === 'spend' && <SpendWindow month={data?.spend} api={api} onClose={close} />}
+            {view?.type === 'task' && <TaskWindow task={view.task} api={api} onChanged={onRefresh} onClose={close} />}
+            {view?.type === 'customer' && <CustomerWindow id={view.id} title={view.title} api={api} onChanged={onRefresh} onClose={close} />}
         </div>
     )
 }

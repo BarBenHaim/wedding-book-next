@@ -62,6 +62,15 @@ describe('the today screen data', () => {
         expect((await (await GET(request())).json()).bot.modelLabel).toBe('לפי ניסוי מודלים')
     })
 
+    it('does not call a switch off when it could not be read', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        mocks.followups.mockRejectedValue(new Error('x'))
+
+        const body = await (await GET(request())).json()
+
+        expect(body.bot.switches).toEqual({ requests: true, samples: false, followups: null })
+    })
+
     it('still answers when parts cannot be read, and names them', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {})
         mocks.drafts.mockRejectedValue(new Error('x'))

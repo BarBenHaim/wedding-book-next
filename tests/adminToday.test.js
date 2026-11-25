@@ -43,6 +43,15 @@ describe('what waits today', () => {
         expect(view.tasks.map(task => task.canApprove)).toEqual([false, false])
     })
 
+    it('knows whether a reply still waits or only its tasks are open', () => {
+        const view = buildToday(base({ drafts: [
+            { number: 1, status: 'pending', text: 'x', windowOpen: true, tasks: [] },
+            { number: 2, status: 'sent', text: 'x', windowOpen: true, tasks: ['לתקן שם'] },
+        ] }))
+
+        expect(view.tasks.map(task => task.waiting)).toEqual([true, false])
+    })
+
     it('does not list the same customer request twice', () => {
         const view = buildToday(base({
             drafts: [{ number: 1, status: 'pending', text: 'x', weddingId: 'w1', windowOpen: true, tasks: [] }],

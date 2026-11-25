@@ -21,7 +21,7 @@ const STATUS = {
 }
 
 const shortDate = iso => (iso ? `${Number(iso.slice(8, 10))}.${Number(iso.slice(5, 7))}.${iso.slice(2, 4)}` : '')
-const countdown = days => {
+export const countdown = days => {
     if (days == null) return 'בלי תאריך'
     if (days === 0) return 'היום'
     if (days === 1) return 'מחר'
@@ -46,7 +46,7 @@ function Button({ children, onClick, href, primary = false, disabled = false }) 
 }
 
 // The buttons that finish the next step of one row.
-function StepActions({ row, act, busy }) {
+export function StepActions({ row, act, busy }) {
     const id = row.id
     const mark = (field, label) => () => act({ op: 'mark', weddingId: id, field, on: true }, `לסמן "${label}" ל${row.title}?`)
     const whatsapp = (text, label = 'וואטסאפ') => row.phone && <Button href={waLink(row.phone, text)} primary>{label}</Button>
@@ -103,7 +103,7 @@ const UNDO = {
     triagedAt: 'החזר לרשימת הישנים',
 }
 
-function MoreActions({ row, act, busy }) {
+export function MoreActions({ row, act, busy }) {
     const id = row.id
     const open = row.group !== 'done'
     const choose = value => {
@@ -139,7 +139,7 @@ function MoreActions({ row, act, busy }) {
     )
 }
 
-function Sends({ row }) {
+export function Sends({ row }) {
     const sent = Object.entries(row.sends || {})
     if (!sent.length) return <span style={{ color: '#b9ad98' }}>עוד לא</span>
     return (

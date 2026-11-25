@@ -23,6 +23,8 @@ function draftTask(draft) {
             : draft.status === 'needs_owner' ? draft.summary || 'צריך לענות ידנית'
                 : `טיוטה: ${draft.text}`,
         canApprove: draft.status === 'pending' && !!draft.text && draft.windowOpen === true,
+        // Still unanswered: it can be dropped. Sent: only its tasks are open.
+        waiting: !sent,
         href: '/admin/customers',
     }
 }

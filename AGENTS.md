@@ -11,6 +11,26 @@ the ones that touch what you are about to change.
 
 ---
 
+## 25.11 — the super admin now writes bot settings too (note for Codex / BusinessOS)
+
+Lord asked to manage the bot from this app. The bot window on
+`/admin/today` (`src/app/admin/today/BotWindow.jsx`, rules in
+`src/lib/botSettings.js`) saves through the existing
+`PUT /api/sales-agent/settings`. No route or contract changed.
+
+- It changes only `enabled`, `mode`, `model` (+`provider`) and
+  `businessInstructions`, sending the revision it read and the changed
+  fields only. `changeNote` is `שונה ממסך היום`.
+- BusinessOS and this screen now both write `sales_agent_settings/active`.
+  The revision check refuses the stale writer (409 `STALE_REVISION`), so
+  re-read before saving.
+- Opening messages, prices, media and experiments stay BusinessOS-only;
+  this screen shows the active openings read-only.
+- Its model list is just Claude Opus 5.5 and Sonnet 5.5 (seen answering
+  live). A running model experiment makes the model read-only here.
+
+---
+
 ## ⚠️ 18.9 — Claude joined this repo. Read this section first.
 
 Lord brought a second agent (Claude, via Cowork) into the sales system on

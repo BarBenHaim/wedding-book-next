@@ -42,6 +42,9 @@ async function part(name, read) {
     }
 }
 
+// null means the switch was not read, which is not the same as off.
+const onOff = settings => (settings ? settings.enabled === true : null)
+
 async function monthUsage(today) {
     const days = Array.from({ length: Number(today.slice(8, 10)) }, (_, i) => `${today.slice(0, 8)}${String(i + 1).padStart(2, '0')}`)
     const snaps = await adminDb.getAll(...days.map(day => adminDb.collection('sales_usage').doc(day)))
@@ -82,6 +85,6 @@ export async function GET(req) {
     return NextResponse.json(buildToday({
         today, rows, drafts, samples, claude, usageDays, bot,
         // Only the on/off of each, never the test phone lists.
-        switches: { requests: requests?.enabled === true, samples: sampleSwitch?.enabled === true, followups: followups?.enabled === true },
+        switches: { requests: onOff(requests), samples: onOff(sampleSwitch), followups: onOff(followups) },
     }))
 }
