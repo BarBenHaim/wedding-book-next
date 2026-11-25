@@ -164,3 +164,24 @@ describe('scheduleCustomerCapture', () => {
         expect(JSON.stringify(warn.mock.calls)).not.toContain(PHONE)
     })
 })
+
+describe('what follows a stored message', () => {
+    it.each([['stored', 1], ['skipped-unknown', 0], ['duplicate', 0]])('runs the follow-on only when the message was %s', async (action, times) => {
+        mocks.after.mockImplementationOnce(run => run())
+        const onStored = vi.fn()
+
+        scheduleCustomerCapture({ eventId: 'e' }, { capture: async () => ({ action }), onStored })
+        await new Promise(resolve => setTimeout(resolve, 0))
+
+        expect(onStored).toHaveBeenCalledTimes(times)
+    })
+
+    it('swallows a failing follow-on', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {})
+        mocks.after.mockImplementationOnce(run => run())
+
+        scheduleCustomerCapture({ eventId: 'e' }, { capture: async () => ({ action: 'stored' }), onStored: async () => { throw new Error('x') } })
+
+        await vi.waitFor(() => expect(console.warn).toHaveBeenCalled())
+    })
+})

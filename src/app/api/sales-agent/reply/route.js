@@ -25,12 +25,10 @@
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const fetchCache = 'force-no-store'
-// 30s, not 60. The model call aborts itself at 20s (see agent.js), so
-// anything still running at 30 is stuck — and a stuck invocation holds a
-// concurrency slot that every other route on the deployment is queueing
-// for. Failing fast here is what keeps one bad conversation from taking
-// the site down with it.
-export const maxDuration = 30
+// The reply itself is bounded at 26s (INBOUND_ROUTE_DEADLINE_MS) and its model
+// call at 20s. The rest of this is for the work done after the response has
+// left: saving a customer's file and preparing the draft Lord approves.
+export const maxDuration = 60
 
 import { NextResponse } from 'next/server'
 import { scheduleCustomerCapture } from '@/lib/salesAgent/customerInbox'
@@ -65,6 +63,8 @@ import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
 import { noteClaudeOutcome, readClaudeHealth } from '@/lib/salesAgent/claudeHealth'
 import { acceptsSamplePhoto, offerText, samplePhotoAck, shouldOfferSample } from '@/lib/salesAgent/designSamplesCore'
+import { parseOwnerDraftCommand } from '@/lib/salesAgent/customerAgentCore'
+import { cancelDraftsFor, decideDraft, draftAlerts, draftForCustomer, noteOwnerWrote } from '@/lib/salesAgent/customerAgent'
 import { markSampleOffered, notifyOwnerOfPhoto, readDesignSettings, receiveSamplePhoto, sampleAlerts, scheduleSamplePhoto } from '@/lib/salesAgent/designSamples'
 import { normalizeProviderError, INBOUND_ROUTE_DEADLINE_MS, INBOUND_HEARTBEAT_BUDGET_MS, FALLBACK_COMMIT_RESERVE_MS } from '@/lib/salesAgent/circuitBreaker'
 import { decideInboundAge } from '@/lib/salesAgent/transportPolicy'
@@ -317,7 +317,7 @@ export async function POST(req) {
     // runs after the response, so it cannot delay or change the reply.
     // Lord's own phone and the echoes of outgoing messages are not customers.
     if (!outgoing && !(OWNER_PHONE && phone === OWNER_PHONE)) {
-        scheduleCustomerCapture({ eventId, phone, body })
+        scheduleCustomerCapture({ eventId, phone, body }, { onStored: () => draftForCustomer({ eventId, phone }) })
     }
     const providerDeadlineAtMs = routeDeadlineAtMs - FALLBACK_COMMIT_RESERVE_MS
 
@@ -480,6 +480,8 @@ export async function POST(req) {
         if (isOwnEcho(lead, text)) {
             return complete({ ok: true, send: [], sendText: '', handoff: false, noReply: true, skipped: 'own-echo' })
         }
+        // He answered himself: a waiting draft must not follow him.
+        await cancelDraftsFor(phone).catch(() => console.error('[sales-agent] draft cancel failed'))
         try {
             await setHuman(phone, true, 'ענית בעצמך בשיחה')
         } catch {
@@ -499,6 +501,13 @@ export async function POST(req) {
     // He is never a lead, so this branch also stops the bot from trying
     // to sell a wedding book to its owner.
     if (OWNER_PHONE && phone === OWNER_PHONE) {
+        // His message opens the window in which drafts can reach his phone.
+        await noteOwnerWrote().catch(() => console.error('[sales-agent] owner window not recorded'))
+        const draftCommand = parseOwnerDraftCommand(text)
+        if (draftCommand) {
+            const answer = await runDraftCommand(draftCommand)
+            return complete({ ok: true, send: [answer], sendText: answer, skipped: 'owner-command' })
+        }
         const cmd = parseOwnerCommand(text)
         if (!cmd) {
             return complete({ ok: true, send: [], sendText: '', handoff: false, noReply: true, skipped: 'owner-message' })
@@ -1602,6 +1611,28 @@ export async function POST(req) {
     }
 }
 
+const DRAFT_REFUSALS = {
+    DRAFT_NOT_FOUND: 'לא נמצאה בקשה כזאת.',
+    DRAFT_NOT_PENDING: 'הבקשה הזאת כבר טופלה או הוחלפה בחדשה.',
+    WINDOW_CLOSED: 'עברו 24 שעות מההודעה של הלקוח. ענה לו ידנית.',
+    NEWER_MESSAGE: 'הלקוח כתב שוב אחרי הטיוטה. חכה לטיוטה החדשה או ענה ידנית.',
+    NOTHING_TO_SEND: 'אין טיוטה לשליחה בבקשה הזאת. ענה ידנית.',
+    SEND_FAILED: 'ההודעה לא נשלחה. אפשר לנסות שוב.',
+}
+
+// Lord's "שלח 3" / "בטל 3", answered in words.
+async function runDraftCommand({ decision, number }) {
+    try {
+        const result = await decideDraft(number, decision)
+        if (result.status !== 'sent') return `בקשה ${number} בוטלה. כלום לא נשלח ללקוח.`
+        const left = result.tasks?.length ? `\nנשאר לך לטפל: ${result.tasks.join(' · ')}` : ''
+        return `בקשה ${number} נשלחה ללקוח.${left}`
+    } catch (error) {
+        if (!DRAFT_REFUSALS[error?.code]) console.error('[sales-agent] draft command failed')
+        return DRAFT_REFUSALS[error?.code] || 'הפעולה נכשלה. נסה שוב.'
+    }
+}
+
 // A lead sent the picture for a sample. It is drawn on Lord's computer.
 function samplePing(phone, name) {
     return [
@@ -1686,13 +1717,13 @@ async function buildOwnerDigest() {
             return d
         }),
     )
-    const [{ alert }, samples] = await Promise.all([readClaudeHealth(), sampleAlerts()])
+    const [{ alert }, requests, samples] = await Promise.all([readClaudeHealth(), draftAlerts(), sampleAlerts()])
     const d = buildDigest(items, {
         todayISO: today,
         nowMs: now,
         experiments: summarizeExperiments(items),
         gaps: summarizeGaps(items),
-        alerts: [...(alert ? [alert] : []), ...(samples || [])],
+        alerts: [...(alert ? [alert] : []), ...(requests || []), ...(samples || [])],
     })
     return d.hasNews ? d.text : 'הכל שקט. אין ממתינים, אין פולו-אפים להיום, ולא היו שיחות אתמול.'
 }

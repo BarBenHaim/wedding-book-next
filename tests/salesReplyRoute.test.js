@@ -11,6 +11,11 @@ const mocks = vi.hoisted(() => ({
     scheduleSamplePhoto: vi.fn(),
     notifyOwnerOfPhoto: vi.fn(),
     sampleAlerts: vi.fn(),
+    draftForCustomer: vi.fn(),
+    decideDraft: vi.fn(),
+    cancelDraftsFor: vi.fn(),
+    noteOwnerWrote: vi.fn(),
+    draftAlerts: vi.fn(),
     noteClaudeOutcome: vi.fn(),
     readClaudeHealth: vi.fn(async () => ({ alert: null })),
     parseAgentJson: vi.fn(),
@@ -82,6 +87,10 @@ vi.mock('@/lib/salesAgent/designSamples', () => ({
     readDesignSettings: mocks.readDesignSettings, markSampleOffered: mocks.markSampleOffered,
     receiveSamplePhoto: mocks.receiveSamplePhoto, scheduleSamplePhoto: mocks.scheduleSamplePhoto, sampleAlerts: mocks.sampleAlerts,
     notifyOwnerOfPhoto: mocks.notifyOwnerOfPhoto,
+}))
+vi.mock('@/lib/salesAgent/customerAgent', () => ({
+    draftForCustomer: mocks.draftForCustomer, decideDraft: mocks.decideDraft, cancelDraftsFor: mocks.cancelDraftsFor,
+    noteOwnerWrote: mocks.noteOwnerWrote, draftAlerts: mocks.draftAlerts,
 }))
 vi.mock('@/lib/salesAgent/prompt', () => ({ buildSystemPrompt: mocks.buildSystemPrompt, addDaysISO: mocks.addDaysISO }))
 vi.mock('@/lib/salesAgent/agent', () => ({
@@ -281,6 +290,9 @@ beforeEach(async () => {
     mocks.readDesignSettings.mockResolvedValue({ enabled: false, testPhones: [] })
     mocks.markSampleOffered.mockResolvedValue(undefined)
     mocks.sampleAlerts.mockResolvedValue([])
+    mocks.draftAlerts.mockResolvedValue([])
+    mocks.noteOwnerWrote.mockResolvedValue(undefined)
+    mocks.cancelDraftsFor.mockResolvedValue(0)
     mocks.findCustomerByPhone.mockResolvedValue(null)
     mocks.isPausedForHuman.mockReturnValue(false)
     mocks.isOwnEcho.mockReturnValue(false)
@@ -2027,6 +2039,63 @@ describe('free sign sample', () => {
     })
 })
 
+describe('customer requests', () => {
+    const owner = text => inbound({ phone: 'owner-token', text })
+
+    it('prepares a draft after a customer message is stored', async () => {
+        prepareDecisionPath()
+
+        await post(inbound({ text: 'אפשר לשנות תאריך?' }))
+
+        const [args, options] = mocks.scheduleCustomerCapture.mock.calls.at(-1)
+        await options.onStored()
+        expect(mocks.draftForCustomer).toHaveBeenCalledWith({ eventId: args.eventId, phone: 'test-phone-token' })
+    })
+
+    it('sends a draft on Lord\'s word and says what is left for him', async () => {
+        mocks.decideDraft.mockResolvedValue({ number: 3, status: 'sent', tasks: ['לשנות תאריך'] })
+
+        const result = await post(owner('שלח 3'))
+
+        expect(mocks.decideDraft).toHaveBeenCalledWith(3, 'send')
+        expect(result.body.sendText).toContain('בקשה 3 נשלחה')
+        expect(result.body.sendText).toContain('לשנות תאריך')
+    })
+
+    it('cancels on his word', async () => {
+        mocks.decideDraft.mockResolvedValue({ number: 3, status: 'rejected' })
+
+        expect((await post(owner('בטל 3'))).body.sendText).toContain('בוטלה')
+    })
+
+    it.each([
+        ['WINDOW_CLOSED', '24 שעות'],
+        ['NEWER_MESSAGE', 'כתב שוב'],
+        ['DRAFT_NOT_PENDING', 'כבר'],
+        ['DRAFT_NOT_FOUND', 'לא נמצאה'],
+        ['NOTHING_TO_SEND', 'אין טיוטה'],
+        ['SEND_FAILED', 'לא נשלחה'],
+    ])('explains %s', async (code, words) => {
+        mocks.decideDraft.mockRejectedValue(Object.assign(new Error('x'), { code }))
+
+        expect((await post(owner('שלח 3'))).body.sendText).toContain(words)
+    })
+
+    it('remembers that Lord wrote, so he can be reached', async () => {
+        await post(owner('סתם'))
+
+        expect(mocks.noteOwnerWrote).toHaveBeenCalled()
+    })
+
+    it('drops the waiting draft when Lord answers the chat himself', async () => {
+        prepareDecisionPath()
+
+        await post(inbound({ phone: 'owner-business', from: 'business-token', businessPhone: 'business-token', to: 'test-phone-token', text: 'עניתי' }))
+
+        expect(mocks.cancelDraftsFor).toHaveBeenCalledWith('test-phone-token')
+    })
+})
+
 describe('the owner report', () => {
     it('carries the Claude alert', async () => {
         mocks.parseOwnerCommand.mockReturnValue({ action: 'digest' })
@@ -2035,12 +2104,13 @@ describe('the owner report', () => {
         mocks.isoInIsrael.mockReturnValue('2026-12-09')
         mocks.readClaudeHealth.mockResolvedValueOnce({ alert: 'alert-words' })
         mocks.sampleAlerts.mockResolvedValueOnce(['sample-words'])
+        mocks.draftAlerts.mockResolvedValueOnce(['request-words'])
         mocks.buildDigest.mockReturnValue({ hasNews: true, text: 'report-words' })
 
         const result = await post(inbound({ phone: 'owner-token', text: 'דוח' }))
 
         expect(result.body.sendText).toBe('report-words')
-        expect(mocks.buildDigest).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ alerts: ['alert-words', 'sample-words'] }))
+        expect(mocks.buildDigest).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ alerts: ['alert-words', 'request-words', 'sample-words'] }))
     })
 })
 

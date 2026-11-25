@@ -6,6 +6,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import SignSamples from './SignSamples'
+import CustomerRequests from './CustomerRequests'
 
 const INK = '#3d2e1a'
 const SOFT = '#7a6a52'
@@ -260,6 +261,8 @@ export default function CustomerBoardView({ data, busy, error, updatedAt, onAct,
                     </section>
 
                     <ClaudeStatus claude={data.claude} busy={busy} onCheck={() => act({ op: 'claudeCheck' })} />
+
+                    <CustomerRequests requests={data.requests} busy={busy} onAct={act} />
 
                     <SignSamples samples={data.samples} busy={busy} onAct={act} />
 

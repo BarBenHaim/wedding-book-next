@@ -33,6 +33,15 @@ const SAMPLE_ERRORS = {
     SEND_FAILED: 'וואטסאפ לא קיבלה את השליחה. אפשר לנסות שוב.',
 }
 
+const DRAFT_ERRORS = {
+    DRAFT_NOT_FOUND: 'הבקשה לא נמצאה. רענן.',
+    DRAFT_NOT_PENDING: 'הבקשה כבר טופלה או הוחלפה בחדשה.',
+    WINDOW_CLOSED: 'עברו 24 שעות מההודעה של הלקוח. ענה לו ידנית.',
+    NEWER_MESSAGE: 'הלקוח כתב שוב אחרי הטיוטה. חכה לטיוטה החדשה או ענה ידנית.',
+    NOTHING_TO_SEND: 'אין מה לשלוח. כתוב תשובה בתיבה.',
+    SEND_FAILED: 'וואטסאפ לא קיבלה את השליחה. אפשר לנסות שוב.',
+}
+
 // Meta's answers to a test send, in words.
 function testError(error) {
     if (error.providerCode === 132001) return 'התבנית עוד לא קיימת או לא אושרה ב-Meta.'
@@ -78,8 +87,9 @@ function Board() {
             await load()
         } catch (err) {
             // Loading clears the message, so the state is refreshed first.
-            if (body.op === 'sample') await load()
-            setError(body.op === 'test' ? testError(err) : SAMPLE_ERRORS[err.message] || `הפעולה לא נשמרה: ${err.message}`)
+            if (body.op === 'sample' || body.op === 'draft') await load()
+            const words = body.op === 'draft' ? DRAFT_ERRORS[err.message] : SAMPLE_ERRORS[err.message]
+            setError(body.op === 'test' ? testError(err) : words || `הפעולה לא נשמרה: ${err.message}`)
         } finally {
             setBusy(false)
         }

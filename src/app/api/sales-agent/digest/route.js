@@ -32,6 +32,7 @@ import { DAILY_DIGEST_TEMPLATE, sendWhatsAppTemplate } from '@/lib/salesAgent/wh
 import { createOutboundId } from '@/lib/salesAgent/delivery'
 import { readClaudeHealth } from '@/lib/salesAgent/claudeHealth'
 import { sampleAlerts } from '@/lib/salesAgent/designSamples'
+import { draftAlerts } from '@/lib/salesAgent/customerAgent'
 
 // Three doors, same as the rest of the agent: the cron secret for
 // Vercel's scheduler, the shared secret for Make, a super-admin token
@@ -89,13 +90,13 @@ export async function GET(req) {
         }),
     )
 
-    const [{ alert }, samples] = await Promise.all([readClaudeHealth(), sampleAlerts()])
+    const [{ alert }, requests, samples] = await Promise.all([readClaudeHealth(), draftAlerts(), sampleAlerts()])
     const digest = buildDigest(items, {
         todayISO: today,
         nowMs: now,
         experiments: summarizeExperiments(items),
         gaps: summarizeGaps(items),
-        alerts: [...(alert ? [alert] : []), ...(samples || [])],
+        alerts: [...(alert ? [alert] : []), ...(requests || []), ...(samples || [])],
     })
 
     const authHeader = req.headers.get('authorization') || ''

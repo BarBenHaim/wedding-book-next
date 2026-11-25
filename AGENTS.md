@@ -2429,6 +2429,25 @@ The app offers, collects and sends; Lord's PC draws (Claude + Codex CLI).
 - Not proven live yet: a real invited photo, the send, and the echo of the sent
   picture. Prove with a test phone before switching on. No scheduled task exists.
 
+## 25.11 — Claude: customer requests become drafts Lord approves
+
+Spec: `docs/superpowers/specs/2026-11-25-customer-requests-agent-design.md`.
+
+- After a customer message is stored (`customerInbox` → `onStored`, so it also
+  runs while the chat is paused), `salesAgent/customerAgent.js` waits 6s for
+  the end of a burst, asks `claude-opus-5-5` (book facts without money or
+  contacts, messages as data, text only) and saves `customer_drafts/{n}`.
+- Lord gets it on WhatsApp inside his own 24h window (`sales_runtime/owner_window`),
+  else by e-mail. `שלח N` / `בטל N` (whole message) or the board. A send needs:
+  still waiting, 24h from the customer's message, nothing newer. His own reply
+  in the chat cancels the draft. The sent text is written to the lead's turns
+  first, so its echo is ours.
+- **Changes no book.** Tasks stay open until "טופל" on the board row.
+- Switch `admin_settings/customerAgent` `{enabled, testPhones}`, off by
+  default. The reply route's `maxDuration` is now 60 for the after-response
+  work. Not proven live: needs a test phone that is on a book (not Lord's, and
+  not the sample test phone).
+
 ## ⚠️ 25.11 — Claude: one disabled image put the whole bot on its defaults
 
 At 14:43 I disabled `sales_media/pricing_packages_2026` (old 690 price image,

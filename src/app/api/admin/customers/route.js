@@ -17,6 +17,7 @@ import { FOLLOWUPS_COLLECTION, closeOpenRequests, loadCustomerBooks, readFollowu
 import { sendTestFollowup } from '@/lib/customerFollowupsRunner'
 import { checkClaude, readClaudeHealth } from '@/lib/salesAgent/claudeHealth'
 import { decideSample, listSamples, readDesignSettings, writeDesignSettings } from '@/lib/salesAgent/designSamples'
+import { decideDraft, listDrafts, readAgentSettings, writeAgentSettings } from '@/lib/salesAgent/customerAgent'
 
 const MILESTONES = new Set(['printOrderedAt', 'shippedAt', 'deliveredAt', 'closedAt', 'triagedAt'])
 const KEYS = new Set(FOLLOWUPS.map(item => item.key))
@@ -39,6 +40,19 @@ const bad = () => NextResponse.json({ error: 'Bad request' }, { status: 400 })
 // Refusals of a sample decision that the screen explains in words.
 const SAMPLE_REFUSALS = new Set(['SAMPLE_NOT_FOUND', 'SAMPLE_NOT_READY', 'WINDOW_CLOSED', 'LEAD_CLOSED', 'SEND_FAILED', 'INVALID_DECISION'])
 
+const DRAFT_REFUSALS = new Set(['DRAFT_NOT_FOUND', 'DRAFT_NOT_PENDING', 'WINDOW_CLOSED', 'NEWER_MESSAGE', 'NOTHING_TO_SEND', 'SEND_FAILED', 'INVALID_DECISION'])
+
+// Customer requests waiting for Lord. A failure here must not hide the board.
+async function requestBoard() {
+    const settings = await readAgentSettings()
+    try {
+        return { enabled: settings.enabled, items: await listDrafts() }
+    } catch (error) {
+        console.error('[admin/customers] requests not read:', error?.code || 'UNKNOWN')
+        return { enabled: settings.enabled, items: null }
+    }
+}
+
 // The sign samples of leads. A failure here must not hide the customers.
 async function sampleBoard() {
     const settings = await readDesignSettings()
@@ -54,7 +68,7 @@ export async function GET(req) {
     if (!await superAdmin(req)) return forbidden()
     try {
         const today = israelDate(Date.now())
-        const [list, settings, claude, samples] = await Promise.all([loadCustomerBooks(), readFollowupSettings(), readClaudeHealth(), sampleBoard()])
+        const [list, settings, claude, samples, requests] = await Promise.all([loadCustomerBooks(), readFollowupSettings(), readClaudeHealth(), sampleBoard(), requestBoard()])
         const board = buildCustomerBoard(list, today, settings.enabled ? settings.enabledDay : null)
         const week = addDays(today, 7)
         const sends = board.rows
@@ -67,7 +81,7 @@ export async function GET(req) {
         const rows = board.rows.map(row => row.next.message && !row.auto
             ? { ...row, text: renderFollowup(row.next.message, books.get(row.id), baseUrl) }
             : row)
-        return NextResponse.json({ today, settings, claude, samples, groups: BOARD_GROUPS, counts: board.counts, rows, sends })
+        return NextResponse.json({ today, settings, claude, samples, requests, groups: BOARD_GROUPS, counts: board.counts, rows, sends })
     } catch (error) {
         console.error('[admin/customers] read failed:', error?.message || error)
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
@@ -137,6 +151,22 @@ export async function POST(req) {
         if (body.op === 'sampleSwitch') {
             const saved = await writeDesignSettings({ enabled: body.enabled === true, by: admin.email })
             return NextResponse.json({ ok: true, enabled: saved.enabled })
+        }
+        if (body.op === 'draftSwitch') {
+            const saved = await writeAgentSettings({ enabled: body.enabled === true, by: admin.email })
+            return NextResponse.json({ ok: true, enabled: saved.enabled })
+        }
+        // Lord's approval of one customer reply: this is what sends it.
+        if (body.op === 'draft') {
+            const number = Number(body.number)
+            if (!Number.isInteger(number) || number < 1) return bad()
+            try {
+                const result = await decideDraft(number, String(body.decision || ''), { text: typeof body.text === 'string' ? body.text : undefined })
+                return NextResponse.json({ ok: true, status: result.status })
+            } catch (error) {
+                if (DRAFT_REFUSALS.has(error?.code)) return NextResponse.json({ error: error.code }, { status: 409 })
+                throw error
+            }
         }
         // Lord's approval of one sample: this is what sends it.
         if (body.op === 'sample') {

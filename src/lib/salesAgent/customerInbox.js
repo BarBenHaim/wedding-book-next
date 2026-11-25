@@ -121,9 +121,11 @@ export async function captureCustomerMessage({ eventId, phone, body }, deps = fi
 
 // Runs after the response has left, so a slow download or a failed write
 // can neither delay nor change what Make receives.
-export function scheduleCustomerCapture(args, { capture = captureCustomerMessage } = {}) {
+export function scheduleCustomerCapture(args, { capture = captureCustomerMessage, onStored = null } = {}) {
     const run = () => Promise.resolve()
         .then(() => capture(args))
+        // Only a new message of a customer has a follow-on.
+        .then(result => (result?.action === 'stored' ? onStored?.() : null))
         .catch(error => console.warn('[customer-inbox] capture failed', error?.code || 'UNKNOWN'))
     try {
         after(run)

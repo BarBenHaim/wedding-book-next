@@ -15,6 +15,14 @@ const mocks = vi.hoisted(() => ({
     sampleSettings: vi.fn(),
     writeSampleSettings: vi.fn(),
     decide: vi.fn(),
+    drafts: vi.fn(),
+    draftSettings: vi.fn(),
+    writeDraftSettings: vi.fn(),
+    decideDraft: vi.fn(),
+}))
+vi.mock('@/lib/salesAgent/customerAgent', () => ({
+    listDrafts: mocks.drafts, readAgentSettings: mocks.draftSettings,
+    writeAgentSettings: mocks.writeDraftSettings, decideDraft: mocks.decideDraft,
 }))
 vi.mock('@/lib/salesAgent/designSamples', () => ({
     listSamples: mocks.samples, readDesignSettings: mocks.sampleSettings,
@@ -66,6 +74,10 @@ beforeEach(() => {
     mocks.sampleSettings.mockReset().mockResolvedValue({ enabled: false, testPhones: ['972500000009'] })
     mocks.writeSampleSettings.mockReset().mockResolvedValue({ enabled: true, testPhones: [] })
     mocks.decide.mockReset().mockResolvedValue({ id: 's1', status: 'sent' })
+    mocks.drafts.mockReset().mockResolvedValue([])
+    mocks.draftSettings.mockReset().mockResolvedValue({ enabled: false, testPhones: [] })
+    mocks.writeDraftSettings.mockReset().mockResolvedValue({ enabled: true, testPhones: [] })
+    mocks.decideDraft.mockReset().mockResolvedValue({ number: 2, status: 'sent' })
 })
 afterEach(() => vi.useRealTimers())
 
@@ -254,5 +266,37 @@ describe('sign samples', () => {
 
         expect((await post({ op: 'sample', id: 's1', decision: 'send' })).status).toBe(403)
         expect(mocks.decide).not.toHaveBeenCalled()
+    })
+})
+
+describe('customer requests', () => {
+    it('shows the waiting requests and the switch', async () => {
+        mocks.drafts.mockResolvedValue([{ number: 2 }])
+
+        expect((await (await GET(request('GET'))).json()).requests).toEqual({ enabled: false, items: [{ number: 2 }] })
+    })
+
+    it('sends one with the words on the screen', async () => {
+        expect(await post({ op: 'draft', number: 2, decision: 'send', text: 'מילים' })).toEqual({ status: 200, body: { ok: true, status: 'sent' } })
+        expect(mocks.decideDraft).toHaveBeenCalledWith(2, 'send', { text: 'מילים' })
+    })
+
+    it.each(['WINDOW_CLOSED', 'NEWER_MESSAGE', 'DRAFT_NOT_PENDING', 'SEND_FAILED', 'NOTHING_TO_SEND'])('says why not (%s)', async code => {
+        mocks.decideDraft.mockRejectedValue(Object.assign(new Error('x'), { code }))
+
+        expect(await post({ op: 'draft', number: 2, decision: 'send' })).toEqual({ status: 409, body: { error: code } })
+    })
+
+    it('refuses a number that is not one, and anyone else', async () => {
+        expect((await post({ op: 'draft', number: 'x', decision: 'send' })).status).toBe(400)
+        mocks.email = 'someone@example.com'
+        expect((await post({ op: 'draft', number: 2, decision: 'send' })).status).toBe(403)
+        expect(mocks.decideDraft).not.toHaveBeenCalled()
+    })
+
+    it('turns the agent on and off', async () => {
+        await post({ op: 'draftSwitch', enabled: true })
+
+        expect(mocks.writeDraftSettings).toHaveBeenCalledWith({ enabled: true, by: 'barbenbh@gmail.com' })
     })
 })
