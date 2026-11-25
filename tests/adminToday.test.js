@@ -65,10 +65,22 @@ describe('what waits today', () => {
         const view = buildToday(base({
             drafts: [{ number: 1, status: 'pending', text: 'x', weddingId: 'w1', windowOpen: true, tasks: [] }],
             samples: [{ id: 's1', status: 'ready', phone: '972500001234', windowOpen: true }],
-            people: people([due('b:w1', { draft: 1 }), due('l:972500001234', { sample: 's1' })]),
+            people: people([
+                due('b:w1', { draft: 1, next: { key: 'request', label: 'הלקוח כתב', action: 'open' } }),
+                due('l:972500001234', { sample: 's1', next: { key: 'sample', label: 'לאשר', action: 'open' } }),
+            ]),
         }))
 
         expect(view.tasks.map(task => task.kind)).toEqual(['draft', 'sample'])
+    })
+
+    it('keeps a person whose message waits beside a sample', () => {
+        const view = buildToday(base({
+            samples: [{ id: 's1', status: 'ready', phone: '972500001234', windowOpen: true }],
+            people: people([due('b:w1', { sample: 's1', next: { key: 'request', label: 'הלקוח כתב', action: 'open' } })]),
+        }))
+
+        expect(view.tasks.map(task => task.kind)).toEqual(['sample', 'person'])
     })
 
     it('gathers samples still to draw into one line', () => {
@@ -123,6 +135,8 @@ describe('customers, the bot and money', () => {
         expect(view.spend).toBeNull()
         expect(view.bot).toBeNull()
         expect(view.unread).toEqual(['בקשות לקוחות'])
+        // The number for today would be too low, so it is not given.
+        expect(view.counts.today).toBeNull()
     })
 
     it('has no customer counts at all when the books or the leads could not be read', () => {

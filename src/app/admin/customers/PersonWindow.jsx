@@ -89,13 +89,13 @@ function NextStep({ row, busy, act }) {
     )
 }
 
-function Waiting({ row, draft, busy, act }) {
-    if (!draft && !row.requests) return null
+function Waiting({ row, drafts, busy, act }) {
+    if (!drafts.length && !row.requests) return null
     return (
         <div className={w.card}>
             <h3>מה הלקוח כתב</h3>
             {row.messages.map((message, i) => <blockquote key={i}>{message.text || 'שלחו קובץ'}</blockquote>)}
-            {draft && <ul className={p.draft}><Request item={draft} busy={busy} onAct={act} /></ul>}
+            {drafts.length > 0 && <ul className={p.draft}>{drafts.map(draft => <Request key={draft.number} item={draft} busy={busy} onAct={act} />)}</ul>}
             {row.requests > 0 && row.weddingId && (
                 <div className={w.actions}>
                     <button type='button' className={k.quiet} disabled={busy} onClick={() => act({ op: 'handled', weddingId: row.weddingId }, `לסגור את ההודעות של ${row.name} כטופלו?`)}>טופל</button>
@@ -193,8 +193,8 @@ function Conversation({ row, busy, act, api }) {
 }
 
 export default function PersonWindow({ row, drafts, samples, busy, error, act, api, onClose }) {
-    const draft = (drafts || []).find(item => item.number === row.draft)
-    const sample = (samples || []).find(item => item.id === row.sample)
+    const mine = (row.drafts || []).map(number => (drafts || []).find(item => item.number === number)).filter(Boolean)
+    const signs = (samples || []).filter(item => (row.samples || []).includes(item.id))
     const when = [row.what, row.day ? `${shortDate(row.day)}, ${countdown(row.toEvent)}` : ''].filter(Boolean).join(' · ')
     // The window asks the server only through `api`.
     const read = useCallback(url => api(url), [api])
@@ -203,8 +203,8 @@ export default function PersonWindow({ row, drafts, samples, busy, error, act, a
             <div className={w.stack}>
                 <Notice tone='bad'>{error}</Notice>
                 <div className={w.card}><Progress row={row} /></div>
-                {sample && <Sample sample={sample} busy={busy} act={act} />}
-                <Waiting row={row} draft={draft} busy={busy} act={act} />
+                {signs.map(sample => <Sample key={sample.id} sample={sample} busy={busy} act={act} />)}
+                <Waiting row={row} drafts={mine} busy={busy} act={act} />
                 <NextStep row={row} busy={busy} act={act} />
                 {row.weddingId && <Book row={row} busy={busy} act={act} />}
                 {row.leadPhone && <Conversation key={row.leadPhone} row={row} busy={busy} act={act} api={read} />}

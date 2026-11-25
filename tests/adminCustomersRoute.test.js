@@ -131,7 +131,8 @@ describe('POST', () => {
     it('defers by whole days from today in Israel', async () => {
         await post({ op: 'defer', weddingId: 'w1', days: 3 })
 
-        expect(mocks.writes[0][1]).toMatchObject({ boardDeferUntil: '2026-12-12' })
+        // When it was set tells a later message apart from an earlier one.
+        expect(mocks.writes[0][1]).toMatchObject({ boardDeferUntil: '2026-12-12', boardDeferAt: 'now' })
     })
 
     it('records a message Lord sent himself so it is never sent again', async () => {

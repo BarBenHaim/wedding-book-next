@@ -61,7 +61,7 @@ describe('GET /api/admin/people', () => {
     })
 
     it.each([
-        ['leads', 'לידים'], ['books', 'ספרים'], ['drafts', 'בקשות לקוחות'], ['samples', 'דוגמאות שלט'],
+        ['leads', 'לידים'], ['books', 'ספרים'], ['drafts', 'בקשות לקוחות'], ['samples', 'דוגמאות שלט'], ['settings', 'הגדרות הודעות'],
     ])('says which part it could not read: %s', async (part, name) => {
         vi.spyOn(console, 'error').mockImplementation(() => {})
         mocks[part].mockRejectedValue(new Error('down'))

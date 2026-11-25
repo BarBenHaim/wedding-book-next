@@ -122,8 +122,9 @@ describe('the next step', () => {
             samples: [{ id: 's9', status: 'ready', phone: '972528888888', name: 'טל' }],
         })
         expect(rows).toMatchObject([
-            { key: 'l:972527777777', name: 'רון', next: { key: 'request' }, inToday: true, draft: 5 },
-            { key: 'l:972528888888', name: 'טל', next: { key: 'sample' }, inToday: true, sample: 's9' },
+            // No conversation is known for them, so no lead buttons are offered.
+            { key: 'u:972527777777', kind: 'unknown', name: 'רון', next: { key: 'request' }, inToday: true, draft: 5, lead: null, leadPhone: null },
+            { key: 'u:972528888888', kind: 'unknown', name: 'טל', next: { key: 'sample' }, inToday: true, sample: 's9', lead: null, leadPhone: null },
         ])
     })
 
@@ -158,10 +159,65 @@ describe('the next step', () => {
 
     it('keeps a deferred book quiet until its day', () => {
         const row = only({
-            books: [book('2026-11-25', { boardDeferUntil: '2026-12-20' })],
-            leads: [lead({ phone: '972501234567', stage: 'handoff' })],
+            books: [book('2026-11-25', { boardDeferUntil: '2026-12-20', boardDeferAt: ago(3) })],
+            leads: [lead({ phone: '972501234567', stage: 'handoff', lastInboundAt: ago(5) })],
         })
         expect(row).toMatchObject({ inToday: false, due: '2026-12-20' })
+    })
+
+    it('lets a message written after the deferral end it', () => {
+        for (const boardDeferAt of [ago(3), undefined]) {
+            const row = only({
+                books: [book('2026-11-25', { boardDeferUntil: '2026-12-20', boardDeferAt })],
+                leads: [lead({ phone: '972501234567', stage: 'handoff', lastInboundAt: ago(1) })],
+            })
+            expect(row).toMatchObject({ inToday: true, next: { key: 'handoff' } })
+        }
+    })
+})
+
+describe('nobody who waits disappears', () => {
+    const owner = extra => lead({ phone: '972501234567', ...extra })
+
+    it('shows a returning customer whose only book is finished', () => {
+        const row = only({ books: [book('2026-11-01', { deliveredAt: iso('2026-11-20') })], leads: [owner({ stage: 'handoff' })] })
+        expect(row).toMatchObject({ stage: 'done', next: { key: 'handoff' }, inToday: true })
+    })
+
+    it('wakes an old untracked book when its owner writes', () => {
+        const old = book('2026-10-01', { createdAt: iso('2026-09-01'), createdVia: undefined })
+        expect(only({ books: [old], leads: [owner({ stage: 'ready_to_pay' })] })).toMatchObject({ resting: false, inToday: true })
+        expect(only({ books: [old], leads: [owner()] })).toMatchObject({ resting: false, inToday: false })
+        expect(only({ books: [old], leads: [owner({ lastInboundAt: ago(30) })] })).toMatchObject({ resting: true })
+    })
+
+    it('keeps both people of one book, and shows on it the one who waits', () => {
+        const { rows } = build({
+            books: [book('2027-01-20')],
+            leads: [
+                lead({ phone: '972526666666', stage: 'handoff', weddingId: 'w1', lastInboundAt: ago(3) }),
+                owner({ stage: 'closed_won', closedAt: ago(2), lastInboundAt: ago(1) }),
+            ],
+        })
+        expect(rows).toHaveLength(2)
+        expect(rows.find(row => row.kind === 'book')).toMatchObject({ leadPhone: '972526666666', next: { key: 'handoff' } })
+        // The other has a book already, so nobody is asked to open one.
+        expect(rows.find(row => row.kind === 'lead')).toMatchObject({ leadPhone: '972501234567', next: null })
+    })
+
+    it('gathers every request of one customer on one row, the unanswered first', () => {
+        const row = only({
+            books: [book('2027-01-20')],
+            drafts: [
+                { number: 5, status: 'sent', weddingId: 'w1', phone: '972501234567' },
+                { number: 8, status: 'pending', weddingId: 'w1', phone: '972501234567' },
+            ],
+        })
+        expect(row).toMatchObject({ draft: 8, drafts: [8, 5], next: { key: 'request', label: 'הלקוח כתב: לענות' } })
+    })
+
+    it('does not make an automatic message his task when the settings were not read', () => {
+        expect(only({ books: [book('2026-12-10')], sendsUnknown: true })).toMatchObject({ next: { key: 'message', action: null }, inToday: false })
     })
 })
 

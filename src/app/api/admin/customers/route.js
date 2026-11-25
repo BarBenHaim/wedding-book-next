@@ -110,7 +110,10 @@ function bookPatch(body, today) {
     if (body.op === 'defer') {
         const days = Number(body.days)
         if (!Number.isInteger(days) || days < 0 || days > 90) return null
-        return { boardDeferUntil: days ? addDays(today, days) : FieldValue.delete() }
+        // When it was set lets a message written afterwards end the deferral.
+        return days
+            ? { boardDeferUntil: addDays(today, days), boardDeferAt: now }
+            : { boardDeferUntil: FieldValue.delete(), boardDeferAt: FieldValue.delete() }
     }
     if (body.op === 'note') {
         return { boardNote: String(body.text || '').trim().slice(0, 500) || FieldValue.delete() }

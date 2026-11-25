@@ -2,7 +2,7 @@
 // The list of people and the actions on it. Reads /api/admin/people again every
 // few minutes, when the tab is opened and after every action.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { adminApi } from '../ui/api'
 import { useAdmin } from '../ui/Shell'
 import { REFUSALS } from '../today/TaskWindow'
@@ -11,12 +11,16 @@ const REFRESH_MS = 3 * 60 * 1000
 
 export default function usePeople() {
     const [data, setData] = useState(null)
-    const [busy, setBusy] = useState(false)
+    const [loading, setLoading] = useState(false)
+    // Kept apart from loading: a refresh in the middle of an action must not
+    // turn the buttons back on.
+    const [acting, setActing] = useState(false)
+    const running = useRef(false)
     const [error, setError] = useState('')
     const [updatedAt, setUpdatedAt] = useState('')
 
     const load = useCallback(async () => {
-        setBusy(true)
+        setLoading(true)
         try {
             setData(await adminApi('/api/admin/people'))
             setUpdatedAt(new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }))
@@ -24,7 +28,7 @@ export default function usePeople() {
         } catch (err) {
             setError(`לא הצלחנו לטעון את הלקוחות: ${err.message}. נסה לרענן.`)
         } finally {
-            setBusy(false)
+            setLoading(false)
         }
     }, [])
 
@@ -43,8 +47,9 @@ export default function usePeople() {
     // One action, asked first when it has a question. Marks and approvals go to
     // the customer board's route; lead actions pass their own.
     const act = useCallback(async (body, question, url = '/api/admin/customers', method = 'POST') => {
-        if (question && !window.confirm(question)) return false
-        setBusy(true)
+        if (running.current || (question && !window.confirm(question))) return false
+        running.current = true
+        setActing(true)
         setError('')
         try {
             await adminApi(url, body, method)
@@ -56,9 +61,10 @@ export default function usePeople() {
             setError(REFUSALS[err.message] || `הפעולה לא נשמרה: ${err.message}`)
             return false
         } finally {
-            setBusy(false)
+            running.current = false
+            setActing(false)
         }
     }, [load])
 
-    return { data, busy, error, updatedAt, load, act }
+    return { data, busy: loading || acting, error, updatedAt, load, act }
 }

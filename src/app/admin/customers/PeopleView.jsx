@@ -45,8 +45,9 @@ export default function PeopleView({ data, busy, error, updatedAt, onRefresh, on
     const unread = data?.unread || []
     // A list built without the books or the leads counts nothing.
     const whole = data && !unread.some(name => name === 'ספרים' || name === 'לידים')
-    const count = key => (!data ? '…' : whole ? data.counts[key] : '—')
-    const empty = search ? 'לא נמצא אף אחד.' : !whole ? 'חלק מהנתונים לא נקראו, ולכן הרשימה חלקית.' : EMPTY[filter] || 'אין כאן אף אחד.'
+    // With any part unread the number for today could be too low.
+    const count = key => (!data ? '…' : whole && !(key === 'today' && unread.length) ? data.counts[key] : '—')
+    const empty = unread.length ? 'חלק מהנתונים לא נקראו, ולכן ייתכן שחסרים כאן אנשים.' : search ? 'לא נמצא אף אחד.' : EMPTY[filter] || 'אין כאן אף אחד.'
 
     return (
         <Page>

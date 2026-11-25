@@ -25,7 +25,7 @@
 .progress li { padding: 8px 2px; text-align: center; font-size: 13.5px; font-weight: 800; line-height: 1.25; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 251, 242, .6); }
 .progress li[data-state='passed'] { background: #e7dcf3; }
 .progress li[data-state='here'] { color: #fff3d8; border: 2px solid #d9b265; background: linear-gradient(180deg, #2c2473, #171049); }
-.draft { list-style: none; margin: 8px 0 0; padding: 0; }
+.draft { list-style: none; display: flex; flex-direction: column; gap: 8px; margin: 8px 0 0; padding: 0; }
 .talk { display: flex; flex-direction: column; gap: 7px; max-height: 38dvh; overflow-y: auto; margin-top: 8px; }
 .talk p { max-width: 85%; padding: 7px 12px; border-radius: 13px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14.5px; font-weight: 600; color: var(--ink); background: #fffdf8; border: 1px solid var(--line); align-self: flex-start; }
 .talk p[data-from='user'] { align-self: flex-end; background: #e2f4d0; }

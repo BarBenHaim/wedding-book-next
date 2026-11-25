@@ -4,7 +4,7 @@
 // /api/admin/today; approvals go through /api/admin/customers, which owns the
 // send rules.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebaseClient'
@@ -19,18 +19,22 @@ const REFRESH_MS = 3 * 60 * 1000
 
 function Screen() {
     const [data, setData] = useState(null)
-    const [busy, setBusy] = useState(false)
+    const [loading, setLoading] = useState(false)
+    // Kept apart from loading: a refresh in the middle of an action must not
+    // turn the buttons back on.
+    const [acting, setActing] = useState(false)
+    const running = useRef(false)
     const [error, setError] = useState('')
 
     const load = useCallback(async () => {
-        setBusy(true)
+        setLoading(true)
         try {
             setData(await call('/api/admin/today'))
             setError('')
         } catch (err) {
             setError(`לא הצלחנו לטעון: ${err.message}. נסה לרענן.`)
         } finally {
-            setBusy(false)
+            setLoading(false)
         }
     }, [])
 
@@ -46,29 +50,11 @@ function Screen() {
     const { onRefresh } = useAdmin()
     useEffect(() => onRefresh(load), [onRefresh, load])
 
-    const approve = async task => {
-        const sample = task.kind === 'sample'
-        const question = sample ? 'לשלוח את הדוגמה הזאת לליד?' : `לשלוח את התשובה?\n\n${task.detail}`
-        if (!window.confirm(question)) return
-        setBusy(true)
-        try {
-            await call('/api/admin/customers', sample
-                ? { op: 'sample', id: task.id, decision: 'send' }
-                : { op: 'draft', number: task.id, decision: 'send' })
-            await load()
-        } catch (err) {
-            // Loading clears the message, so the state is refreshed first.
-            await load()
-            setError(REFUSALS[err.message] || `לא נשלח: ${err.message}`)
-        } finally {
-            setBusy(false)
-        }
-    }
-
-    // One action of the person window, asked first when it has a question.
-    const act = async (body, question, url = '/api/admin/customers', method = 'POST') => {
-        if (question && !window.confirm(question)) return false
-        setBusy(true)
+    // One action at a time, asked first when it has a question.
+    const act = async (body, question, url = '/api/admin/customers', method = 'POST', failed = 'הפעולה לא נשמרה') => {
+        if (running.current || (question && !window.confirm(question))) return false
+        running.current = true
+        setActing(true)
         try {
             await call(url, body, method)
             await load()
@@ -76,12 +62,23 @@ function Screen() {
         } catch (err) {
             // Loading clears the message, so the state is refreshed first.
             await load()
-            setError(REFUSALS[err.message] || `הפעולה לא נשמרה: ${err.message}`)
+            setError(REFUSALS[err.message] || `${failed}: ${err.message}`)
             return false
         } finally {
-            setBusy(false)
+            running.current = false
+            setActing(false)
         }
     }
+
+    const approve = task => {
+        const sample = task.kind === 'sample'
+        return act(
+            sample ? { op: 'sample', id: task.id, decision: 'send' } : { op: 'draft', number: task.id, decision: 'send' },
+            sample ? 'לשלוח את הדוגמה הזאת לליד?' : `לשלוח את התשובה?\n\n${task.detail}`,
+            '/api/admin/customers', 'POST', 'לא נשלח',
+        )
+    }
+    const busy = loading || acting
 
     return <TodayView data={data} busy={busy} error={error} onApprove={approve} onRefresh={load} onAct={act} api={call} />
 }

@@ -54,8 +54,10 @@ export function buildToday({ today, people, drafts = [], samples = [], claude, u
     const signs = samples || []
 
     const toDraw = signs.filter(sample => ['receiving', 'pending', 'failed'].includes(sample.status)).length
-    // Requests and samples have lines of their own above.
-    const waitingPeople = rows.filter(row => row.inToday && row.draft == null && row.sample == null)
+    // A request with a draft, and a sample, have lines of their own above. A
+    // message without a draft stays a person's line.
+    const listedAbove = row => (row.next?.key === 'request' && row.draft != null) || row.next?.key === 'sample'
+    const waitingPeople = rows.filter(row => row.inToday && !listedAbove(row))
     const tasks = [
         ...(claude?.alert ? [{ kind: 'claude', id: 'claude', title: 'Claude לא ענה', detail: claude.alert, href: BOARD }] : []),
         ...requests.filter(draft => WAITING_DRAFT.has(draft.status)).map(draftTask),
@@ -86,7 +88,8 @@ export function buildToday({ today, people, drafts = [], samples = [], claude, u
     return {
         date: today,
         counts: {
-            today: whole ? people.counts.today : null,
+            // With any part unread the number for today could be too low.
+            today: whole && !unread.length ? people.counts.today : null,
             active: whole ? active.length : null,
             week: whole ? active.filter(row => row.toEvent != null && row.toEvent >= 0 && row.toEvent <= 7).length : null,
         },

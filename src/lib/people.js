@@ -61,6 +61,13 @@ function readLead(raw, { today, nowMs }) {
     }
 }
 
+// Unanswered requests before sent ones, the newest first.
+const unansweredFirst = (a, b) => Number(a.status === 'sent') - Number(b.status === 'sent') || b.number - a.number
+const waitingIds = extra => ({
+    draft: extra.drafts[0]?.number ?? null, drafts: extra.drafts.map(draft => draft.number),
+    sample: extra.samples[0]?.id ?? null, samples: extra.samples.map(sample => sample.id),
+})
+
 const requestStep = draft => ({
     key: 'request', action: 'open',
     label: draft?.status === 'sent' ? 'נשארו משימות מהבקשה' : 'הלקוח כתב: לענות',
@@ -82,28 +89,34 @@ function finish(row, { step, due }, today) {
 }
 
 function bookPerson({ w, facts }, board, entry, extra, context) {
-    const { today, baseUrl } = context
+    const { today, baseUrl, sendsUnknown } = context
     const phone = board.phone || null
     const done = Boolean(w.closedAt || w.deliveredAt) || board.group === 'done'
     const stage = done ? 'done'
         : w.shippedAt || w.printOrderedAt || w.printOrder ? 'way'
             : board.amount > 0 && board.toEvent != null && board.toEvent < -6 ? 'print' : 'collect'
-    const waiting = facts.openRequests > 0 || extra.draft
-    const resting = board.group === 'triage' && !waiting && !extra.sample
+    const draft = extra.drafts[0]
+    const waiting = facts.openRequests > 0 || Boolean(draft)
     const deferred = String(w.boardDeferUntil || '') > today
+    // A deferral quiets what was known when it was set, never what came after it.
+    const heardSince = !w.boardDeferAt || (entry?.lastInboundMs || 0) > millis(w.boardDeferAt)
+    // A finished or an old book does not silence a person who is waiting now.
+    const fromLead = entry && (!entry.silent || entry.promised) && (!deferred || heardSince) ? leadStep(entry, phone) : null
+    const resting = board.group === 'triage' && !waiting && !extra.samples.length && !fromLead && !(entry && !entry.silent)
 
     let step = null
     let due = today
-    const fromLead = entry && !done && !deferred && (!entry.silent || entry.promised) ? leadStep(entry, phone) : null
-    if (waiting) step = requestStep(extra.draft)
-    else if (extra.sample) step = sampleStep
+    if (waiting) step = requestStep(draft)
+    else if (extra.samples.length) step = sampleStep
     else if (fromLead) {
         step = fromLead.step
         due = fromLead.due || today
     } else if (!resting && !['none', 'triage', 'request'].includes(board.next.key)) {
         const key = board.next.key
-        // An automatic message is shown, but it is not his to do.
-        let action = board.auto ? null : BOOK_ACTION[key] || null
+        // An automatic message is shown, but it is not his to do. Neither is one
+        // that may be automatic because the settings were not read.
+        const mayGoAlone = board.auto || (sendsUnknown && ['message', 'send_failed'].includes(key))
+        let action = mayGoAlone ? null : BOOK_ACTION[key] || null
         if (key === 'reach' && board.blocked === 'no_phone') action = 'phone'
         if (action === 'whatsapp' && !phone) action = 'phone'
         step = {
@@ -119,25 +132,26 @@ function bookPerson({ w, facts }, board, entry, extra, context) {
         day: board.day, toEvent: board.toEvent, stage, resting, phone, weddingId: w.id, leadPhone: entry?.phone || null,
         entries: board.entries, amount: board.amount, note: board.note, marks: board.marks, muted: board.muted,
         deferredUntil: deferred ? w.boardDeferUntil : null, lead: entry?.info || null,
-        draft: extra.draft?.number ?? null, sample: extra.sample?.id ?? null, lastAt: entry?.info.lastInboundMs || null,
+        ...waitingIds(extra), lastAt: entry?.info.lastInboundMs || null,
         requests: facts.openRequests || 0, messages: facts.openMessages || [],
     }, { step, due }, today)
 }
 
-function leadPerson(entry, extra, context) {
+// `linked`: this conversation belongs to a book that shows another one.
+function leadPerson(entry, extra, context, { linked = false } = {}) {
     const { today, nowMs } = context
     const { raw, phone, info } = entry
     const day = eventDay(raw.eventDate) || null
     const paidAt = millis(raw.closedAt) || millis(raw.paymentVerifiedAt)
-    const unopened = info.stage === 'closed_won' && paidAt > 0 && nowMs - paidAt < REST_AFTER_DAYS * DAY_MS
+    const unopened = !linked && info.stage === 'closed_won' && paidAt > 0 && nowMs - paidAt < REST_AFTER_DAYS * DAY_MS
     const open = !['closed_won', 'closed_lost'].includes(info.stage)
-    const waiting = extra.draft || extra.sample
+    const waiting = extra.drafts.length > 0 || extra.samples.length > 0
     const resting = open && !waiting && entry.silent && !entry.promised && !(day && day >= today)
 
     let step = null
     let due = today
-    if (extra.draft) step = requestStep(extra.draft)
-    else if (extra.sample) step = sampleStep
+    if (extra.drafts.length) step = requestStep(extra.drafts[0])
+    else if (extra.samples.length) step = sampleStep
     else if (unopened) step = { key: 'no_book', action: 'open', label: 'נרשם תשלום ואין ספר: לוודא שנפתח' }
     else if (open && !resting) {
         const found = leadStep(entry, mobileOf(phone) || phone)
@@ -153,15 +167,30 @@ function leadPerson(entry, extra, context) {
         toEvent: day ? daysBetween(today, day) : null, stage: unopened ? 'collect' : open ? 'talk' : 'done', resting,
         phone: phone || null, weddingId: null, leadPhone: phone, entries: null, amount: Number(raw.amount) || 0,
         note: null, marks: [], muted: false, deferredUntil: null, lead: info,
-        draft: extra.draft?.number ?? null, sample: extra.sample?.id ?? null, lastAt: info.lastInboundMs,
+        ...waitingIds(extra), lastAt: info.lastInboundMs,
         requests: 0, messages: [],
     }, { step, due }, today)
+}
+
+// A number that wrote or asked and has neither a book nor a conversation here.
+// Nothing is known about it, so no lead action is offered on its row.
+function unknownPerson(phone, extra, context) {
+    const name = extra.drafts[0]?.customerName || extra.samples[0]?.name || `מספר שמסתיים ב-${phone.slice(-4)}`
+    return finish({
+        key: `u:${phone}`, kind: 'unknown', name, ownerName: null, what: '', day: null, toEvent: null, stage: 'talk', resting: false,
+        phone, weddingId: null, leadPhone: null, entries: null, amount: 0, note: null, marks: [], muted: false, deferredUntil: null,
+        lead: null, ...waitingIds(extra), lastAt: null, requests: 0, messages: [],
+    }, { step: extra.drafts.length ? requestStep(extra.drafts[0]) : sampleStep, due: context.today }, context.today)
 }
 
 // The book a phone's conversation belongs to: the nearest event ahead, else the
 // latest one behind.
 const nearness = board => (board.group === 'done' ? 2_000_000 : 0)
     + (board.toEvent == null ? 500_000 : board.toEvent >= 0 ? board.toEvent : 100_000 - board.toEvent)
+
+// Of two conversations on one book: the one waiting for him, then the latest.
+const wanting = entry => ((!entry.silent || entry.promised) && LEAD_STEP[entry.info.attention] ? URGENCY[entry.info.attention] : 99)
+const firstToShow = (a, b) => wanting(a) - wanting(b) || b.lastInboundMs - a.lastInboundMs
 
 const rank = row => (row.inToday ? (row.overdue ? 0 : 1) : row.resting ? 3 : row.stage === 'done' ? 4 : 2)
 const farthest = value => (value == null ? 1_000_000 : Math.abs(value))
@@ -176,10 +205,10 @@ function inOrder(a, b) {
 }
 
 export function buildPeople({
-    today, nowMs, books = [], leads = [], drafts = [], samples = [], ownerPhone = '', enabledDay = null,
+    today, nowMs, books = [], leads = [], drafts = [], samples = [], ownerPhone = '', enabledDay = null, sendsUnknown = false,
     baseUrl = 'https://app.weddingtales.co.il',
 }) {
-    const context = { today, nowMs, baseUrl }
+    const context = { today, nowMs, baseUrl, sendsUnknown }
     const owner = mobileOf(ownerPhone)
     const shelf = books
         .map(source => ({ source, board: boardRow({ w: source.w, facts: source.facts, today, enabledDay }) }))
@@ -196,42 +225,49 @@ export function buildPeople({
         const same = mobileOf(phone)
         const target = linked || (same && shelf.filter(item => item.board.phone === same).sort((a, b) => nearness(a.board) - nearness(b.board))[0])
         if (!target) {
-            alone.push(entry)
+            alone.push({ entry, linked: false })
             continue
         }
         const id = target.source.w.id
-        if (!byBook.has(id) || entry.lastInboundMs > byBook.get(id).lastInboundMs) byBook.set(id, entry)
+        byBook.set(id, [...(byBook.get(id) || []), entry])
+    }
+    // A book shows one conversation; any other keeps a row of its own.
+    for (const [id, entries] of byBook) {
+        const [shown, ...others] = entries.sort(firstToShow)
+        byBook.set(id, shown)
+        alone.push(...others.map(entry => ({ entry, linked: true })))
     }
 
-    // A draft or a ready sample sits on one row: its book, else its phone.
-    const waitingDrafts = drafts.filter(draft => WAITING_DRAFT.has(draft.status))
+    // Everything that waits sits on one row: its book, else its phone.
+    const waitingDrafts = drafts.filter(draft => WAITING_DRAFT.has(draft.status)).sort(unansweredFirst)
     const readySamples = samples.filter(sample => sample.status === 'ready')
     const taken = new Set()
     const claim = (list, matches) => {
-        const found = list.find(item => !taken.has(item) && matches(item))
-        if (found) taken.add(found)
-        return found || null
+        const found = list.filter(item => !taken.has(item) && matches(item))
+        for (const item of found) taken.add(item)
+        return found
     }
+    const byPhone = phone => ({
+        drafts: claim(waitingDrafts, draft => draft.phone === phone),
+        samples: claim(readySamples, sample => sample.phone === phone),
+    })
 
     const ordered = [...shelf].sort((a, b) => nearness(a.board) - nearness(b.board))
     const bookRows = ordered.map(({ source, board }) => {
         const entry = byBook.get(source.w.id) || null
         const phones = new Set([board.phone, entry?.phone].filter(Boolean))
-        return bookPerson(source, board, entry, {
-            draft: claim(waitingDrafts, draft => draft.weddingId === source.w.id) || claim(waitingDrafts, draft => !draft.weddingId && phones.has(draft.phone)),
-            sample: claim(readySamples, sample => phones.has(sample.phone)),
-        }, context)
+        const mine = [
+            ...claim(waitingDrafts, draft => draft.weddingId === source.w.id),
+            ...claim(waitingDrafts, draft => !draft.weddingId && phones.has(draft.phone)),
+        ].sort(unansweredFirst)
+        return bookPerson(source, board, entry, { drafts: mine, samples: claim(readySamples, sample => phones.has(sample.phone)) }, context)
     })
-    const own = entry => leadPerson(entry, {
-        draft: claim(waitingDrafts, draft => draft.phone === entry.phone),
-        sample: claim(readySamples, sample => sample.phone === entry.phone),
-    }, context)
-    const leadRows = alone.map(own)
+    const leadRows = alone.map(({ entry, linked }) => leadPerson(entry, byPhone(entry.phone), context, { linked }))
     // Nothing that waits may disappear because its number belongs to nobody yet.
     for (const item of [...waitingDrafts, ...readySamples]) {
         const phone = String(item.phone || '')
         if (!phone || taken.has(item)) continue
-        leadRows.push(own(readLead({ phone, profileName: item.customerName || item.name || '', stage: 'new', lastInboundAt: nowMs }, context)))
+        leadRows.push(unknownPerson(phone, byPhone(phone), context))
     }
 
     const rows = [...bookRows, ...leadRows].sort(inOrder)

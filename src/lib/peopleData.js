@@ -40,6 +40,8 @@ export async function loadPeople({ today, nowMs = Date.now() }) {
         today, nowMs, books: books || [], leads: leads || [], drafts: drafts || [], samples: samples || [],
         ownerPhone: process.env.SALES_AGENT_OWNER_PHONE || '',
         enabledDay: settings?.enabled ? settings.enabledDay : null,
+        // Without the settings a message may be one that goes by itself.
+        sendsUnknown: !settings,
         baseUrl: process.env.NEXT_PUBLIC_BASE_URL || 'https://app.weddingtales.co.il',
     })
     return { rows, counts, drafts, samples, unread }
