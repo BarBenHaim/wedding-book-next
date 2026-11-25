@@ -25,6 +25,14 @@ async function api(method, body) {
     return data
 }
 
+const SAMPLE_ERRORS = {
+    WINDOW_CLOSED: 'עברו 24 שעות מההודעה של הליד. צריך לשלוח לו ידנית.',
+    LEAD_CLOSED: 'השיחה עם הליד סגורה, ולכן לא נשלח.',
+    SAMPLE_NOT_READY: 'הדוגמה כבר נשלחה או עוד לא מוכנה. רענן.',
+    SAMPLE_NOT_FOUND: 'הדוגמה לא נמצאה. רענן.',
+    SEND_FAILED: 'וואטסאפ לא קיבלה את השליחה. אפשר לנסות שוב.',
+}
+
 // Meta's answers to a test send, in words.
 function testError(error) {
     if (error.providerCode === 132001) return 'התבנית עוד לא קיימת או לא אושרה ב-Meta.'
@@ -69,7 +77,9 @@ function Board() {
             if (body.op === 'claudeCheck') window.alert(result.check.message)
             await load()
         } catch (err) {
-            setError(body.op === 'test' ? testError(err) : `הפעולה לא נשמרה: ${err.message}`)
+            // Loading clears the message, so the state is refreshed first.
+            if (body.op === 'sample') await load()
+            setError(body.op === 'test' ? testError(err) : SAMPLE_ERRORS[err.message] || `הפעולה לא נשמרה: ${err.message}`)
         } finally {
             setBusy(false)
         }

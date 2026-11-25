@@ -74,6 +74,13 @@ export function buildSystemPrompt(lead = {}, todayISO, { media = null, performan
     if (Number.isFinite(lead.daysSinceLastMessage)) {
         known.push(`עברו ${lead.daysSinceLastMessage} ימים מאז ההודעה האחרונה שלו`)
     }
+    // The free sign sample: the offer itself is fixed text the code appends.
+    const sample = {
+        offered: 'כבר הוצעה לו דוגמת שלט "ברכו את" בחינם. אל תציע שוב ואל תבקש תמונה בעצמך.',
+        received: 'הוא שלח תמונה לדוגמת שלט והיא בהכנה. אל תבטיח מתי תהיה מוכנה ואל תבקש תמונה נוספת.',
+        sent: 'דוגמת השלט שלו כבר נשלחה אליו. אפשר לשאול מה דעתו, בלי להבטיח שינויים.',
+    }[lead.designSample?.status]
+    if (sample) known.push(sample)
     // Set by the route when the scripted opening yielded this turn.
     if (lead.openingNote) known.push(lead.openingNote)
     // A person from the team already wrote in this chat. The bot must not

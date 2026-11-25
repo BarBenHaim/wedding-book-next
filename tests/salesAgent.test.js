@@ -1196,3 +1196,17 @@ describe('customer timing overrides the generic ladder', () => {
         expect(resolveFollowUp({ parsed: { ...parsed, stage: 'closed_lost' }, todayISO: '2026-10-04' })).toBeNull()
     })
 })
+
+describe('what the model knows about a sign sample', () => {
+    it.each([
+        ['offered', 'אל תציע שוב'],
+        ['received', 'אל תבטיח מתי'],
+        ['sent', 'כבר נשלחה'],
+    ])('says it when the sample is %s', (status, words) => {
+        expect(buildSystemPrompt({ designSample: { status } }, '2026-12-01')).toContain(words)
+    })
+
+    it('says nothing without an offer', () => {
+        expect(buildSystemPrompt({}, '2026-12-01')).not.toContain('דוגמת שלט')
+    })
+})

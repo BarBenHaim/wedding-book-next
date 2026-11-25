@@ -5,6 +5,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import SignSamples from './SignSamples'
 
 const INK = '#3d2e1a'
 const SOFT = '#7a6a52'
@@ -259,6 +260,8 @@ export default function CustomerBoardView({ data, busy, error, updatedAt, onAct,
                     </section>
 
                     <ClaudeStatus claude={data.claude} busy={busy} onCheck={() => act({ op: 'claudeCheck' })} />
+
+                    <SignSamples samples={data.samples} busy={busy} onAct={act} />
 
                     <nav className='flex flex-wrap gap-2'>
                         {data.groups.map(group => (

@@ -2404,6 +2404,26 @@ or designs will wait for his approval (phase 2, not built).
   stored (seen in a dry run, 25.11). Before the switch, confirm the birthday
   publish treats that revision-1 default like none.
 
+## 25.11 — Claude: free "ברכו את" sign samples for leads
+
+Spec: `docs/superpowers/specs/2026-11-25-lead-design-samples-design.md`.
+The app offers, collects and sends; Lord's PC draws (Claude + Codex CLI).
+
+- `salesAgent/designSamplesCore.js` (whom, fixed words) and `designSamples.js`
+  (queue `sales_design_samples`, photos under storage `design-samples/`, send,
+  30-day delete in the lifecycle cron).
+- Switch `admin_settings/designSamples` `{enabled, testPhones}`, **off by
+  default**, on `/admin/customers`. Offered once, only when the lead's own words
+  say bar/bat mitzvah, in full sales, not on price/payment/handoff turns.
+- An invited photo does not pause the bot; the response sets `handoff` only so
+  Make pings Lord.
+- Sending needs Lord's tap on the board, inside the 24h window.
+- PC: `scripts/designs.mjs` + `docs/design-samples-playbook.md`. It never sends.
+  Codex runs `--ephemeral`; photos live under `C:\Users\DELL\dev\wt-designs`
+  and are deleted on `ready`.
+- Not proven live yet: a real invited photo, the send, and the echo of the sent
+  picture. Prove with a test phone before switching on. No scheduled task exists.
+
 ## ⚠️ 25.11 — Claude: one disabled image put the whole bot on its defaults
 
 At 14:43 I disabled `sales_media/pricing_packages_2026` (old 690 price image,

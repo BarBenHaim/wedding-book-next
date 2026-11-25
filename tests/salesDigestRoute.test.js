@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
     readClaudeHealth: vi.fn(),
 }))
 vi.mock('@/lib/salesAgent/claudeHealth', () => ({ readClaudeHealth: mocks.readClaudeHealth }))
+vi.mock('@/lib/salesAgent/designSamples', () => ({ sampleAlerts: async () => ['sample-words'] }))
 
 vi.mock('@/lib/firebaseAdmin', () => ({ adminAuth: { verifyIdToken: mocks.verifyIdToken } }))
 vi.mock('@/lib/superAdmin', () => ({ isSuperAdmin: mocks.isSuperAdmin }))
@@ -82,7 +83,7 @@ describe('scheduled owner digest delivery', () => {
 
         await runCron()
 
-        expect(mocks.buildDigest).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ alerts: ['alert-words'] }))
+        expect(mocks.buildDigest).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ alerts: ['alert-words', 'sample-words'] }))
     })
 
     it('uses only wt_daily_digest and reports provider acceptance, never delivery', async () => {

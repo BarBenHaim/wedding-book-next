@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ run: vi.fn(), sendMail: vi.fn() }))
+const mocks = vi.hoisted(() => ({ run: vi.fn(), sendMail: vi.fn(), purge: vi.fn() }))
+vi.mock('@/lib/salesAgent/designSamples', () => ({ purgeOldSamples: mocks.purge }))
 vi.mock('@/lib/customerFollowupsRunner', () => ({ runCustomerFollowups: mocks.run }))
 vi.mock('nodemailer', () => ({ default: { createTransport: () => ({ sendMail: mocks.sendMail }) } }))
 vi.mock('@/lib/firebaseAdmin', () => {
@@ -22,6 +23,7 @@ beforeEach(() => {
     process.env.CRON_SECRET = 'cron-test'
     mocks.run.mockReset().mockResolvedValue({ enabled: true, due: [], sent: 0, failed: 0 })
     mocks.sendMail.mockReset().mockResolvedValue(undefined)
+    mocks.purge.mockReset().mockResolvedValue(0)
 })
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
 
@@ -57,5 +59,25 @@ describe('the daily run and the WhatsApp follow-ups', () => {
         await call()
 
         expect(mocks.sendMail).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('2 הודעות וואטסאפ') }))
+    })
+})
+
+describe('the daily deletion of old sign samples', () => {
+    it('runs with the daily job but not on a dry run', async () => {
+        mocks.purge.mockResolvedValue(2)
+
+        expect((await (await call('?dry=1')).json()).samplesDeleted).toBeUndefined()
+        expect(mocks.purge).not.toHaveBeenCalled()
+        expect((await (await call()).json()).samplesDeleted).toBe(2)
+    })
+
+    it('says so in the daily summary when it fails, and finishes the run', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        mocks.purge.mockRejectedValue(new Error('storage'))
+
+        const response = await call()
+
+        expect(response.status).toBe(200)
+        expect(mocks.sendMail).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('מחיקת תמונות') }))
     })
 })

@@ -64,6 +64,8 @@ import { assignVariant, summarizeExperiments, summarizeGaps } from '@/lib/salesA
 import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
 import { noteClaudeOutcome, readClaudeHealth } from '@/lib/salesAgent/claudeHealth'
+import { acceptsSamplePhoto, offerText, samplePhotoAck, shouldOfferSample } from '@/lib/salesAgent/designSamplesCore'
+import { markSampleOffered, readDesignSettings, receiveSamplePhoto, sampleAlerts, scheduleSamplePhoto } from '@/lib/salesAgent/designSamples'
 import { normalizeProviderError, INBOUND_ROUTE_DEADLINE_MS, INBOUND_HEARTBEAT_BUDGET_MS, FALLBACK_COMMIT_RESERVE_MS } from '@/lib/salesAgent/circuitBreaker'
 import { decideInboundAge } from '@/lib/salesAgent/transportPolicy'
 import { buildDeterministicSalesReply, decideSalesTurn, enforceSalesReply, liftInlineImageMarkers } from '@/lib/salesAgent/decisionPolicy'
@@ -650,6 +652,38 @@ export async function POST(req) {
                 lastText: text,
             }),
         })
+    }
+
+    // A picture that answers the free-sample offer: queued for drawing, and
+    // the chat stays with the bot. If it cannot be queued, it falls through to
+    // the usual attachment handling and goes to Lord.
+    if (body.mediaId && acceptsSamplePhoto({ lead, messageType }) && !isOwnMediaEcho(lead, messageType, Date.now())) {
+        const ack = samplePhotoAck(lead.designSample.kind)
+        let received = null
+        try {
+            received = await receiveSamplePhoto({ phone, mediaId: body.mediaId, profileName: body.profileName, ack })
+        } catch {
+            console.error('[sales-agent] sample photo not queued')
+        }
+        if (received) {
+            scheduleSamplePhoto(received.id, body.mediaId)
+            if (received.repeat) {
+                return complete({ ok: true, send: [], sendText: '', handoff: false, noReply: true, skipped: 'sample-extra-photo' })
+            }
+            // `handoff` here only makes Make send Lord the ping below; the
+            // lead is not paused.
+            return complete({
+                ok: true,
+                send: [ack],
+                sendText: ack,
+                hasImage: false,
+                hasVideo: false,
+                stage: lead.stage || 'engaged',
+                handoff: true,
+                noReply: false,
+                notifyOwner: samplePing(phone, body.profileName),
+            })
+        }
     }
 
     // The birthday journey is independent from the A/B/C opening
@@ -1444,6 +1478,13 @@ export async function POST(req) {
             }]
             : []
 
+    // The free sign sample: fixed words, once per lead, only on a turn where
+    // they do not get in the way. The switch is read only when it could matter.
+    const sampleTurn = { phone, mode: settings.mode, lead, incomingText: text, reply: parsed, decision: turnDecision }
+    let sampleKind = shouldOfferSample({ ...sampleTurn, settings: { enabled: true } })
+    if (sampleKind) sampleKind = shouldOfferSample({ ...sampleTurn, settings: await readDesignSettings() })
+    if (sampleKind) parsed.messages = [...parsed.messages, offerText(sampleKind)]
+
     const directAnswer = parsed.messages.join('\n\n')
     const openingSequenceParts = openingPlan.eligible && directAnswer
         ? [
@@ -1546,6 +1587,10 @@ export async function POST(req) {
             ...(modelAssignment ? { modelAssignment, modelExecution } : {}),
         })
         if (durable.action === 'completed') {
+            // Marked only once the reply that carries the offer is saved.
+            if (sampleKind) {
+                await markSampleOffered(phone, sampleKind).catch(() => console.error('[sales-agent] sample offer not marked'))
+            }
             compactLeadBestEffort(phone)
             Promise.allSettled(spends).catch(() => {})
             return NextResponse.json(responsePayload)
@@ -1556,6 +1601,18 @@ export async function POST(req) {
         console.error('[sales-agent] success commit failed')
         return NextResponse.json({ error: 'success-commit-failed' }, { status: 503 })
     }
+}
+
+// A lead sent the picture for a sample. It is drawn on Lord's computer.
+function samplePing(phone, name) {
+    return [
+        '🎨 תמונה לדוגמת שלט',
+        `טלפון: ${phone}`,
+        name ? `שם: ${name}` : null,
+        'כדי לצייר: במחשב, כתוב ל-Claude "יש דוגמאות?"',
+        `פתח שיחה: https://wa.me/${phone}`,
+        'הבוט ממשיך.',
+    ].filter(Boolean).join('\n')
 }
 
 // The message Lord gets on his own WhatsApp. It has to be readable on a
@@ -1630,13 +1687,13 @@ async function buildOwnerDigest() {
             return d
         }),
     )
-    const { alert } = await readClaudeHealth()
+    const [{ alert }, samples] = await Promise.all([readClaudeHealth(), sampleAlerts()])
     const d = buildDigest(items, {
         todayISO: today,
         nowMs: now,
         experiments: summarizeExperiments(items),
         gaps: summarizeGaps(items),
-        alerts: alert ? [alert] : [],
+        alerts: [...(alert ? [alert] : []), ...(samples || [])],
     })
     return d.hasNews ? d.text : 'הכל שקט. אין ממתינים, אין פולו-אפים להיום, ולא היו שיחות אתמול.'
 }

@@ -23,6 +23,7 @@ import { nextMessage, renderLifecycleEmail, bookTitleOf, digestLines, dailySumma
 import { enterSecret, signEnterToken, enterUrl } from '@/lib/enterLink'
 import { eventSignUrl } from '@/lib/eventLinks'
 import { runCustomerFollowups } from '@/lib/customerFollowupsRunner'
+import { purgeOldSamples } from '@/lib/salesAgent/designSamples'
 
 const MAX_SENDS_PER_RUN = 40
 const BALANCE_CHECKOUT = id => `https://weddingtales.co.il/checkout/?add-to-cart=6271&wt_bal=${encodeURIComponent(id)}`
@@ -75,6 +76,16 @@ export async function GET(req) {
         } catch (err) {
             out.followups = { error: true }
             console.error('[cron/lifecycle] whatsapp follow-ups failed:', err?.message || err)
+        }
+
+        // Leads' sample photos are deleted after 30 days, as the offer promises.
+        if (!dry) {
+            try {
+                out.samplesDeleted = await purgeOldSamples({})
+            } catch (err) {
+                queueLines.push('מחיקת תמונות ישנות של דוגמאות שלט נכשלה: לבדוק')
+                console.error('[cron/lifecycle] sample cleanup failed:', err?.message || err)
+            }
         }
 
         const snap = await db.collection('weddings').where('createdAt', '>=', Timestamp.fromMillis(LIFECYCLE_START_MS)).get()

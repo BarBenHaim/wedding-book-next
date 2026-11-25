@@ -1,6 +1,17 @@
 # Free "ברכו את" samples for leads, drawn with Codex on Lord's PC (2026-11-25)
 
-Status: approach chosen by Lord 25.11; this design waits for his approval.
+Status: approved by Lord 25.11 with one change, "no fixed design, something from
+scratch and tailored". Built the same day. Where the build differs from the text
+below:
+
+- Each sample is a new art direction written in the session
+  (`docs/design-samples-playbook.md`), not `buildLookPrompt` / `sign1` and its
+  style references. Fixed only: the face, the exact Hebrew, no logos, the real
+  QR added by code.
+- The queue is its own collection `sales_design_samples`
+  (`salesAgent/designSamples.js`), not `sales_opening_approvals`.
+- The offer also asks what the child likes, and is a statement (no question).
+- A switch on the board, off by default, plus test phones.
 
 ## Intent
 

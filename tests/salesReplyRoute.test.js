@@ -5,6 +5,11 @@ const mocks = vi.hoisted(() => ({
     buildSystemPrompt: vi.fn(),
     addDaysISO: vi.fn(() => '2026-08-17'),
     callClaude: vi.fn(),
+    readDesignSettings: vi.fn(),
+    markSampleOffered: vi.fn(),
+    receiveSamplePhoto: vi.fn(),
+    scheduleSamplePhoto: vi.fn(),
+    sampleAlerts: vi.fn(),
     noteClaudeOutcome: vi.fn(),
     readClaudeHealth: vi.fn(async () => ({ alert: null })),
     parseAgentJson: vi.fn(),
@@ -72,6 +77,10 @@ vi.mock('@/lib/customerData', () => ({ optOutCustomer: mocks.optOutCustomer }))
 vi.mock('@/lib/salesAgent/customerInbox', () => ({ scheduleCustomerCapture: mocks.scheduleCustomerCapture }))
 
 vi.mock('@/lib/salesAgent/claudeHealth', () => ({ noteClaudeOutcome: mocks.noteClaudeOutcome, readClaudeHealth: mocks.readClaudeHealth }))
+vi.mock('@/lib/salesAgent/designSamples', () => ({
+    readDesignSettings: mocks.readDesignSettings, markSampleOffered: mocks.markSampleOffered,
+    receiveSamplePhoto: mocks.receiveSamplePhoto, scheduleSamplePhoto: mocks.scheduleSamplePhoto, sampleAlerts: mocks.sampleAlerts,
+}))
 vi.mock('@/lib/salesAgent/prompt', () => ({ buildSystemPrompt: mocks.buildSystemPrompt, addDaysISO: mocks.addDaysISO }))
 vi.mock('@/lib/salesAgent/agent', () => ({
     callClaude: mocks.callClaude,
@@ -267,6 +276,9 @@ beforeEach(async () => {
         activeOpeningIds: ['question_first'], openingMediaSequence: [],
     })
     mocks.setHuman.mockResolvedValue(undefined)
+    mocks.readDesignSettings.mockResolvedValue({ enabled: false, testPhones: [] })
+    mocks.markSampleOffered.mockResolvedValue(undefined)
+    mocks.sampleAlerts.mockResolvedValue([])
     mocks.findCustomerByPhone.mockResolvedValue(null)
     mocks.isPausedForHuman.mockReturnValue(false)
     mocks.isOwnEcho.mockReturnValue(false)
@@ -1922,6 +1934,84 @@ describe('Anthropic outage handling', () => {
     })
 })
 
+describe('free sign sample', () => {
+    const talking = extra => ({ ...lead, turns: [{ role: 'user', text: 'זה לבר מצווה' }, { role: 'assistant', text: 'מעולה' }], ...extra })
+    async function modelTurn(held) {
+        prepareDecisionPath()
+        mocks.getLead.mockResolvedValue(held)
+        mocks.decideSalesTurn.mockReturnValue({ intent: 'general', nextBestAction: 'answer_then_qualify' })
+        mocks.enforceSalesReply.mockImplementation(({ parsed }) => parsed)
+        mocks.readDesignSettings.mockResolvedValue({ enabled: true, testPhones: [] })
+        mocks.markSampleOffered.mockResolvedValue(undefined)
+    }
+    const invited = () => talking({ designSample: { status: 'offered', kind: 'bar', offeredAt: Date.now() - 1000 } })
+    const photo = () => inbound({ messageType: 'image', mediaId: 'meta-media-1', profileName: 'דנה' })
+
+    it('adds the fixed offer to the reply once and marks the lead after it is saved', async () => {
+        await modelTurn(talking())
+
+        const result = await post(inbound({ text: 'איך זה עובד' }))
+
+        expect(result.body.sendText).toContain('model draft')
+        expect(result.body.sendText).toContain('ללא עלות')
+        expect(result.body.sendText).toContain('הבן שלכם')
+        expect(mocks.markSampleOffered).toHaveBeenCalledWith('test-phone-token', 'bar')
+    })
+
+    it('says nothing about a sample while the switch is off', async () => {
+        await modelTurn(talking())
+        mocks.readDesignSettings.mockResolvedValue({ enabled: false, testPhones: [] })
+
+        const result = await post(inbound({ text: 'איך זה עובד' }))
+
+        expect(result.body.sendText).not.toContain('ללא עלות')
+        expect(mocks.markSampleOffered).not.toHaveBeenCalled()
+    })
+
+    it('queues the invited photo, answers without a promise, and keeps the chat with the bot', async () => {
+        prepareDecisionPath()
+        mocks.getLead.mockResolvedValue(invited())
+        mocks.receiveSamplePhoto.mockResolvedValue({ id: 'sample-1', repeat: false })
+
+        const result = await post(photo())
+
+        expect(result.body).toMatchObject({ shouldSend: true, handoff: true })
+        expect(result.body.sendText).toContain('קיבלתי את התמונה')
+        expect(result.body.notifyOwner).toContain('דוגמת שלט')
+        expect(mocks.receiveSamplePhoto).toHaveBeenCalledWith(expect.objectContaining({ phone: 'test-phone-token', mediaId: 'meta-media-1' }))
+        expect(mocks.scheduleSamplePhoto).toHaveBeenCalledWith('sample-1', 'meta-media-1')
+        expect(mocks.setHuman).not.toHaveBeenCalled()
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+    })
+
+    it('takes a second picture quietly', async () => {
+        prepareDecisionPath()
+        mocks.getLead.mockResolvedValue(invited())
+        mocks.receiveSamplePhoto.mockResolvedValue({ id: 'sample-1', repeat: true })
+
+        const result = await post(photo())
+
+        expect(result.body).toMatchObject({ shouldSend: false, handoff: false })
+        expect(mocks.scheduleSamplePhoto).toHaveBeenCalled()
+        expect(mocks.setHuman).not.toHaveBeenCalled()
+    })
+
+    it.each([
+        ['the request cannot be saved', () => mocks.receiveSamplePhoto.mockRejectedValue(new Error('down')), invited],
+        ['nobody was offered a sample', () => {}, () => talking()],
+    ])('hands the picture to Lord when %s', async (_, arrange, who) => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        prepareDecisionPath()
+        mocks.getLead.mockResolvedValue(who())
+        arrange()
+
+        const result = await post(photo())
+
+        expect(mocks.setHuman).toHaveBeenCalledWith('test-phone-token', true, expect.any(String))
+        expect(result.body.handoff).toBe(true)
+    })
+})
+
 describe('the owner report', () => {
     it('carries the Claude alert', async () => {
         mocks.parseOwnerCommand.mockReturnValue({ action: 'digest' })
@@ -1929,12 +2019,13 @@ describe('the owner report', () => {
         mocks.sortLeads.mockImplementation(items => items)
         mocks.isoInIsrael.mockReturnValue('2026-12-09')
         mocks.readClaudeHealth.mockResolvedValueOnce({ alert: 'alert-words' })
+        mocks.sampleAlerts.mockResolvedValueOnce(['sample-words'])
         mocks.buildDigest.mockReturnValue({ hasNews: true, text: 'report-words' })
 
         const result = await post(inbound({ phone: 'owner-token', text: 'דוח' }))
 
         expect(result.body.sendText).toBe('report-words')
-        expect(mocks.buildDigest).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ alerts: ['alert-words'] }))
+        expect(mocks.buildDigest).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ alerts: ['alert-words', 'sample-words'] }))
     })
 })
 

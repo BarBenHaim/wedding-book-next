@@ -11,6 +11,14 @@ const mocks = vi.hoisted(() => ({
     close: vi.fn(),
     health: vi.fn(),
     check: vi.fn(),
+    samples: vi.fn(),
+    sampleSettings: vi.fn(),
+    writeSampleSettings: vi.fn(),
+    decide: vi.fn(),
+}))
+vi.mock('@/lib/salesAgent/designSamples', () => ({
+    listSamples: mocks.samples, readDesignSettings: mocks.sampleSettings,
+    writeDesignSettings: mocks.writeSampleSettings, decideSample: mocks.decide,
 }))
 vi.mock('@/lib/salesAgent/claudeHealth', () => ({ readClaudeHealth: mocks.health, checkClaude: mocks.check }))
 vi.mock('firebase-admin/firestore', () => ({ FieldValue: { serverTimestamp: () => 'now', delete: () => 'deleted' } }))
@@ -54,6 +62,10 @@ beforeEach(() => {
     process.env.SALES_AGENT_OWNER_PHONE = '972500000001'
     mocks.health.mockReset().mockResolvedValue({ alert: null, lastCheckAt: null, lastCheckOk: null })
     mocks.check.mockReset().mockResolvedValue({ ok: true, model: 'claude-opus-5-5', message: 'ok' })
+    mocks.samples.mockReset().mockResolvedValue([])
+    mocks.sampleSettings.mockReset().mockResolvedValue({ enabled: false, testPhones: ['972500000009'] })
+    mocks.writeSampleSettings.mockReset().mockResolvedValue({ enabled: true, testPhones: [] })
+    mocks.decide.mockReset().mockResolvedValue({ id: 's1', status: 'sent' })
 })
 afterEach(() => vi.useRealTimers())
 
@@ -193,5 +205,54 @@ describe('Claude health', () => {
 
         expect((await post({ op: 'claudeCheck' })).status).toBe(403)
         expect(mocks.check).not.toHaveBeenCalled()
+    })
+})
+
+describe('sign samples', () => {
+    it('shows the waiting samples and the switch, without the test phones', async () => {
+        mocks.samples.mockResolvedValue([{ id: 's1', status: 'ready' }])
+
+        const body = await (await GET(request('GET'))).json()
+
+        expect(body.samples).toEqual({ enabled: false, items: [{ id: 's1', status: 'ready' }] })
+    })
+
+    it('still shows the board when the samples cannot be read', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        mocks.samples.mockRejectedValue(new Error('down'))
+
+        const response = await GET(request('GET'))
+
+        expect(response.status).toBe(200)
+        expect((await response.json()).samples).toEqual({ enabled: false, items: null })
+    })
+
+    it('sends or rejects one sample', async () => {
+        expect(await post({ op: 'sample', id: 's1', decision: 'send' })).toEqual({ status: 200, body: { ok: true, status: 'sent' } })
+        expect(mocks.decide).toHaveBeenCalledWith('s1', 'send')
+    })
+
+    it.each(['WINDOW_CLOSED', 'LEAD_CLOSED', 'SAMPLE_NOT_READY', 'SEND_FAILED'])('says why it was not sent (%s)', async code => {
+        mocks.decide.mockRejectedValue(Object.assign(new Error('x'), { code }))
+
+        expect(await post({ op: 'sample', id: 's1', decision: 'send' })).toEqual({ status: 409, body: { error: code } })
+    })
+
+    it('refuses an id that is not one', async () => {
+        expect((await post({ op: 'sample', id: 'a/b', decision: 'send' })).status).toBe(400)
+        expect(mocks.decide).not.toHaveBeenCalled()
+    })
+
+    it('turns the offer on and off', async () => {
+        await post({ op: 'sampleSwitch', enabled: true })
+
+        expect(mocks.writeSampleSettings).toHaveBeenCalledWith({ enabled: true, by: 'barbenbh@gmail.com' })
+    })
+
+    it('lets only the super admin approve', async () => {
+        mocks.email = 'someone@example.com'
+
+        expect((await post({ op: 'sample', id: 's1', decision: 'send' })).status).toBe(403)
+        expect(mocks.decide).not.toHaveBeenCalled()
     })
 })
