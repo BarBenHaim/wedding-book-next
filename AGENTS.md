@@ -2397,6 +2397,23 @@ or designs will wait for his approval (phase 2, not built).
 - Follow-ups and history extraction already try Claude (no settings, legacy
   model) before OpenAI, so the alert can appear before any switch.
 
+## ⚠️ 25.11 — Claude: one disabled image put the whole bot on its defaults
+
+At 14:43 I disabled `sales_media/pricing_packages_2026` (old 690 price image,
+approved by Lord) with a script. The switched-off opening journey
+`v_93340cb744fa` still named it, so `readSalesSettings` threw
+`INVALID_OPENING_MEDIA`. The reply route then ran on `DEFAULT_SALES_SETTINGS`
+(opening only, no model, a default opening that promises an attachment it does
+not carry), every settings save failed, and the follow-ups failed closed.
+`[sales-agent] settings read failed; using safe defaults` in the logs is that
+state.
+
+- Fixed: a switched-off journey may name a missing image; its blocks are kept.
+- **Still true:** disabling or deleting an image that a **switched-on** journey
+  (or a media list that must resolve) names would do the same. A guard in the
+  media library, and an alert on the fallback, are not built.
+- After any change to `sales_media`, check that the settings still read.
+
 **Known, left as is:**
 - Make's owner ping (#7) also requires `handoff = true`, so `hotLeadPing`
   (handoff false) never reaches Lord. Needs a filter change in Make.

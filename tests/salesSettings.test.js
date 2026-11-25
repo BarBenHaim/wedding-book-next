@@ -183,3 +183,37 @@ describe('sales agent settings', () => {
         expect(resolved.activeOpeningIds).toEqual(['answer_first', 'value_question'])
     })
 })
+
+// 25.11.2026: an old price image was switched off in the media library. A
+// switched-off journey still named it, the whole settings read threw, and the
+// bot answered on the built-in defaults for hours.
+describe('a switched-off journey that names a switched-off image', () => {
+    const variant = (id, enabled, mediaKey) => ({
+        id, label: id, enabled, weight: enabled ? 100 : 0, revision: 4,
+        blocks: [{ id: `${id}-media`, type: 'media', mediaKey }, { id: `${id}-stop`, type: 'stop' }],
+    })
+    const stored = variants => ({
+        revision: 33, mode: 'full_sales', provider: 'openai', model: 'gpt-4.1-mini',
+        openingText: 'הפתיחה שלנו', openingExperiment: { enabled: true, minSamplePerVariant: 30, variants },
+    })
+    const options = { registeredMediaKeys: ['live_image'] }
+
+    it('does not break reading the settings, and keeps the journey as it is', () => {
+        const off = variant('v_93340cb744fa', false, 'retired_image')
+
+        const settings = resolveSalesSettings(stored([variant('A', true, 'live_image'), off]), options)
+
+        expect(settings).toMatchObject({ revision: 33, mode: 'full_sales', provider: 'openai', openingText: 'הפתיחה שלנו' })
+        expect(settings.openingExperiment.variants[1]).toEqual(off)
+    })
+
+    it('still refuses a running journey that names it', () => {
+        expect(() => resolveSalesSettings(stored([variant('A', true, 'retired_image')]), options))
+            .toThrow('INVALID_OPENING_MEDIA')
+    })
+
+    it('still refuses a media block that names nothing', () => {
+        expect(() => resolveSalesSettings(stored([variant('A', true, 'live_image'), variant('B', false, '')]), options))
+            .toThrow('INVALID_OPENING_MEDIA')
+    })
+})

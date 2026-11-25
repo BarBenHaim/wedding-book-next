@@ -103,7 +103,8 @@ function variableVersionReference(raw) {
     return value
 }
 
-function normalizeBlock(raw, mediaKeys, variableKeys) {
+// `running`: the block belongs to a journey that is switched on.
+function normalizeBlock(raw, mediaKeys, variableKeys, running) {
     const id = String(raw?.id || '').trim().slice(0, 80)
     const type = String(raw?.type || '')
     if (!id || !BLOCK_TYPES.has(type)) throw new Error('INVALID_OPENING_BLOCK')
@@ -128,7 +129,10 @@ function normalizeBlock(raw, mediaKeys, variableKeys) {
             return { id, type, variableKey, ...(variableVersionId ? { variableVersionId } : {}) }
         }
         const mediaKey = String(raw?.mediaKey || '').trim()
-        if (!mediaKey || !mediaKeys.has(mediaKey)) throw new Error('INVALID_OPENING_MEDIA')
+        // A switched-off journey may name an image that has since been
+        // switched off too. It sends nothing, and refusing it would fail the
+        // read of all the settings (25.11: the bot fell back to its defaults).
+        if (!mediaKey || (running && !mediaKeys.has(mediaKey))) throw new Error('INVALID_OPENING_MEDIA')
         return { id, type, mediaKey }
     }
     if (type === 'generate_design') {
@@ -163,7 +167,7 @@ function normalizeVariant(raw, mediaKeys, variableKeys) {
     if (!Number.isInteger(revision) || revision < 1) throw new Error('INVALID_OPENING_REVISION')
     if (!Array.isArray(raw?.blocks) || raw.blocks.length < 1) throw new Error('INVALID_OPENING_BLOCK')
     if (raw.blocks.length > MAX_BLOCKS) throw new Error('TOO_MANY_OPENING_BLOCKS')
-    const blocks = raw.blocks.map(block => normalizeBlock(block, mediaKeys, variableKeys))
+    const blocks = raw.blocks.map(block => normalizeBlock(block, mediaKeys, variableKeys, enabled))
     const ids = new Set()
     for (const block of blocks) {
         if (ids.has(block.id)) throw new Error('DUPLICATE_OPENING_BLOCK')
