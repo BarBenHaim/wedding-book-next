@@ -18,6 +18,10 @@ const WINDOW_MS = 24 * 3_600_000 - 5 * 60_000
 const BURST_WAIT_MS = 6_000
 const HISTORY = 12
 const WAITING = new Set(['pending', 'needs_owner'])
+// The follow-up opt-out word is handled by the reply route itself.
+const OPT_OUT = /^["'״]?הסר["'״]?[.!]?$/
+// A sent reply whose tasks Lord has not closed yet.
+const openTasks = row => row.status === 'sent' && (row.tasks || []).length > 0
 
 const store = db => db || adminDb
 const draftError = code => Object.assign(new Error('customer draft unavailable'), { code })
@@ -127,8 +131,17 @@ export async function draftForCustomer({ eventId, phone }, {
     const items = await itemsOf(db, phone)
     const latest = items.at(-1)
     if (!latest || latest.id !== eventId) return { action: 'superseded' }
+    if (OPT_OUT.test(String(latest.text || '').trim())) return { action: 'opt-out' }
+    // A message replayed after an outage can no longer be answered here.
+    if (nowMs - itemTime(latest) >= WINDOW_MS) return { action: 'stale' }
 
-    const ids = latest.weddingIds || []
+    let ids = latest.weddingIds || []
+    // Customers from before the bot are linked on the private lead record, not
+    // by a phone on the book.
+    if (!ids.length) {
+        const linked = (await store(db).collection('sales_leads').doc(phone).get()).data()?.weddingId
+        if (linked) ids = [String(linked)]
+    }
     let draft = {
         phone, weddingId: ids.length === 1 ? ids[0] : null, customerName: latest.customerName || '',
         basisId: latest.id, basisAt: itemTime(latest), status: 'needs_owner', summary: '', text: '', tasks: [],
@@ -147,7 +160,9 @@ export async function draftForCustomer({ eventId, phone }, {
             const parsed = parseDraft(answer.text)
             if (parsed) {
                 const link = parsed.link === 'guest' ? book?.guestLink : parsed.link === 'login' ? `${APP}/login` : ''
-                const text = parsed.reply && link ? `${parsed.reply}\n${link}` : parsed.reply
+                // A reply that counts on a link we do not have is not sent.
+                const missing = parsed.link && !link
+                const text = missing ? '' : parsed.reply && link ? `${parsed.reply}\n${link}` : parsed.reply
                 draft = { ...draft, summary: parsed.summary, text, tasks: parsed.tasks, status: text ? 'pending' : 'needs_owner' }
             } else {
                 console.warn('[customer-agent] unusable answer')
@@ -167,10 +182,15 @@ export async function draftForCustomer({ eventId, phone }, {
 // Lord's decision. A send goes only to the phone on the draft, and only while
 // the draft still answers the customer's last message.
 export async function decideDraft(number, decision, { db, text, send = sendWhatsAppText, nowMs = Date.now() } = {}) {
-    if (!['send', 'reject'].includes(decision)) throw draftError('INVALID_DECISION')
+    if (!['send', 'reject', 'done'].includes(decision)) throw draftError('INVALID_DECISION')
     const ref = draftRef(db, number)
     const before = await ref.get()
     if (!before.exists) throw draftError('DRAFT_NOT_FOUND')
+    if (decision === 'done') {
+        if (!openTasks(before.data())) throw draftError('DRAFT_NOT_PENDING')
+        await ref.set({ status: 'done', updatedAt: nowMs }, { merge: true })
+        return { number: Number(number), status: 'done' }
+    }
     const items = decision === 'send' ? await itemsOf(db, before.data().phone) : []
 
     const claimed = await store(db).runTransaction(async tx => {
@@ -213,13 +233,13 @@ export async function cancelDraftsFor(phone, { db, nowMs = Date.now() } = {}) {
     return open.length
 }
 
-async function waiting(db) {
+async function unfinished(db) {
     const snap = await store(db).collection(DRAFTS_COLLECTION).get()
-    return snap.docs.map(doc => doc.data()).filter(row => WAITING.has(row.status)).sort((a, b) => a.number - b.number)
+    return snap.docs.map(doc => doc.data()).filter(row => WAITING.has(row.status) || openTasks(row)).sort((a, b) => a.number - b.number)
 }
 
 export async function listDrafts({ db, nowMs = Date.now() } = {}) {
-    return (await waiting(db)).map(row => ({
+    return (await unfinished(db)).map(row => ({
         number: row.number, status: row.status, phone: row.phone, customerName: row.customerName, weddingId: row.weddingId,
         summary: row.summary, text: row.text, tasks: row.tasks || [], errorCode: row.errorCode || null,
         createdAt: row.createdAt, windowOpen: nowMs - row.basisAt < WINDOW_MS,
@@ -228,8 +248,13 @@ export async function listDrafts({ db, nowMs = Date.now() } = {}) {
 
 export async function draftAlerts({ db } = {}) {
     try {
-        const count = (await waiting(db)).length
-        return count ? [`📩 בקשות לקוחות מחכות לך: ${count}`] : []
+        const rows = await unfinished(db)
+        const waiting = rows.filter(row => WAITING.has(row.status)).length
+        const tasks = rows.filter(openTasks).length
+        return [
+            ...(waiting ? [`📩 בקשות לקוחות מחכות לך: ${waiting}`] : []),
+            ...(tasks ? [`📩 משימות מלקוחות שעוד פתוחות: ${tasks}`] : []),
+        ]
     } catch (error) {
         console.warn('[customer-agent] drafts not counted', error?.code || 'UNKNOWN')
         return []

@@ -291,3 +291,56 @@ describe('reaching Lord, the board and the report', () => {
         expect(await draftAlerts({ db: { collection: () => { vi.spyOn(console, 'warn').mockImplementation(() => {}); throw new Error('down') } } })).toEqual([])
     })
 })
+
+describe('gaps found in review', () => {
+    it('finds the book of a customer known only through the private list', async () => {
+        const db = world({
+            'customer_inbox/e1': item({ weddingIds: [], weddingId: null }),
+            [`sales_leads/${PHONE}`]: { stage: 'closed_won', weddingId: 'w1' },
+        })
+        const d = deps(db)
+
+        await draftForCustomer({ eventId: 'e1', phone: PHONE }, d)
+
+        expect(drafts(db)[0]).toMatchObject({ weddingId: 'w1', status: 'pending' })
+        expect(d.ask.mock.calls[0][0].messages[0].content).toContain('אורי')
+    })
+
+    it('does not send a reply that promises a link it cannot attach', async () => {
+        const db = world({ 'weddings/w1': { celebrantName: 'אורי' } })
+
+        await draftForCustomer({ eventId: 'e1', phone: PHONE }, deps(db, { ask: async () => answer({ link: 'guest' }) }))
+
+        expect(drafts(db)[0]).toMatchObject({ status: 'needs_owner', text: '' })
+    })
+
+    it.each([
+        ['a stop request', item({ text: 'הסר' }), 'opt-out'],
+        ['a message replayed days later', item({ occurredAt: new Date(NOW - 26 * HOUR).toISOString() }), 'stale'],
+    ])('stays quiet about %s', async (_, seed, action) => {
+        const db = world({ 'customer_inbox/e1': seed })
+        const d = deps(db)
+
+        expect(await draftForCustomer({ eventId: 'e1', phone: PHONE }, d)).toEqual({ action })
+        expect(d.tell).not.toHaveBeenCalled()
+    })
+
+    it('keeps the tasks on the board after the reply was sent, until Lord closes them', async () => {
+        const db = world()
+        await draftForCustomer({ eventId: 'e1', phone: PHONE }, deps(db))
+        await decideDraft(1, 'send', { db, nowMs: NOW, send: async () => ({}) })
+
+        expect(await listDrafts({ db, nowMs: NOW })).toEqual([expect.objectContaining({ number: 1, status: 'sent', tasks: ['לשנות תאריך ל-20.12'] })])
+        expect(await draftAlerts({ db })).toEqual(['📩 משימות מלקוחות שעוד פתוחות: 1'])
+
+        expect(await decideDraft(1, 'done', { db, nowMs: NOW })).toMatchObject({ status: 'done' })
+        expect(await listDrafts({ db, nowMs: NOW })).toEqual([])
+    })
+
+    it('closes only what was sent', async () => {
+        const db = world()
+        await draftForCustomer({ eventId: 'e1', phone: PHONE }, deps(db))
+
+        await expect(decideDraft(1, 'done', { db, nowMs: NOW })).rejects.toMatchObject({ code: 'DRAFT_NOT_PENDING' })
+    })
+})

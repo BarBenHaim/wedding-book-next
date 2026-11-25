@@ -21,6 +21,7 @@ function Action({ children, onClick, disabled, primary = false }) {
 function Request({ item, busy, onAct }) {
     const [edited, setEdited] = useState(null)
     const text = edited ?? item.text
+    const sent = item.status === 'sent'
     return (
         <li className='rounded-xl border p-3 space-y-2' style={{ borderColor: LINE }}>
             <div className='text-[13px] font-bold'>
@@ -29,18 +30,21 @@ function Request({ item, busy, onAct }) {
             </div>
             <p className='text-[12.5px]'>{item.summary}</p>
             {item.tasks.length > 0 && <ul className='text-[12px] list-disc pr-4' style={{ color: '#8a5a00' }}>{item.tasks.map(task => <li key={task}>{task}</li>)}</ul>}
-            <textarea
-                value={text} onChange={e => setEdited(e.target.value)} rows={3} aria-label={`תשובה לבקשה ${item.number}`}
-                placeholder='כתוב כאן תשובה' className='w-full rounded-lg border px-2.5 py-2 text-[13px] bg-white' style={{ borderColor: LINE }}
-            />
-            {!item.windowOpen && <div className='text-[12px]' style={{ color: '#b42318' }}>עברו 24 שעות מההודעה של הלקוח. צריך לענות ידנית.</div>}
+            {sent
+                ? <div className='text-[12px] font-bold' style={{ color: '#1f7a3e' }}>התשובה נשלחה. נשארו המשימות.</div>
+                : <textarea
+                    value={text} onChange={e => setEdited(e.target.value)} rows={3} aria-label={`תשובה לבקשה ${item.number}`}
+                    placeholder='כתוב כאן תשובה' className='w-full rounded-lg border px-2.5 py-2 text-[13px] bg-white' style={{ borderColor: LINE }}
+                />}
+            {!sent && !item.windowOpen && <div className='text-[12px]' style={{ color: '#b42318' }}>עברו 24 שעות מההודעה של הלקוח. צריך לענות ידנית.</div>}
             {item.errorCode === 'SEND_FAILED' && <div className='text-[12px]' style={{ color: '#b42318' }}>השליחה נכשלה. אפשר לנסות שוב.</div>}
             <div className='flex flex-wrap gap-1.5'>
-                {item.windowOpen && (
+                {sent && <Action primary disabled={busy} onClick={() => onAct({ op: 'draft', number: item.number, decision: 'done' }, 'לסמן שהמשימות טופלו?')}>טופל</Action>}
+                {!sent && item.windowOpen && (
                     <Action primary disabled={busy || !text.trim()} onClick={() => onAct({ op: 'draft', number: item.number, decision: 'send', text }, 'לשלוח את התשובה ללקוח?')}>אשר ושלח</Action>
                 )}
                 <a href={`https://wa.me/${item.phone}`} target='_blank' rel='noopener noreferrer' className='text-[12px] font-bold px-3 py-1.5 rounded-lg border' style={{ borderColor: '#d9c58f' }}>וואטסאפ</a>
-                <Action disabled={busy} onClick={() => onAct({ op: 'draft', number: item.number, decision: 'reject' }, 'להסיר את הבקשה? כלום לא יישלח.')}>הסר</Action>
+                {!sent && <Action disabled={busy} onClick={() => onAct({ op: 'draft', number: item.number, decision: 'reject' }, 'להסיר את הבקשה? כלום לא יישלח.')}>הסר</Action>}
             </div>
         </li>
     )
