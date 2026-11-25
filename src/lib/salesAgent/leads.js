@@ -22,6 +22,7 @@ import crypto from 'node:crypto'
 import { normalizePhone } from './agent'
 import { isPausedForHuman, trimTurns, toApiMessages, isOwnEcho, isOwnMediaEcho, parseOwnerCommand, isTestPhone, MAX_TURNS, HUMAN_PAUSE_HOURS } from './leadsCore'
 import { isoInIsrael } from './leadsView'
+import { phoneVariants } from './customerInboxCore'
 import { FOLLOWUP_STRATEGY_IDS, FOLLOWUP_CTAS } from './followupStrategy'
 import { assertCompletableInboundOutcome, assertInboundClaimToken, decideInboundCompletion, INBOUND_LEASE_MS, sanitizeInboundOutcome, startInboundClaim } from './inboundEventsCore'
 import { reserveHalfOpenProbe, resolveProviderFailure, resolveProviderSuccess, sanitizeBreakerRuntimeState } from './circuitBreaker'
@@ -1415,14 +1416,7 @@ export async function readDueFollowUpHealth(todayISO) {
 export async function findCustomerByPhone(rawPhone) {
     const intl = normalizePhone(rawPhone) // 972501234567
     if (!intl || intl.length < 11) return null
-    const local = `0${intl.slice(3)}` // 0501234567
-    const variants = [
-        intl,
-        `+${intl}`,
-        local,
-        `${local.slice(0, 3)}-${local.slice(3)}`, // 050-1234567
-        `${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6)}`, // 050-123-4567
-    ]
+    const variants = phoneVariants(intl)
     try {
         const snap = await adminDb.collection('weddings').where('ownerPhone', 'in', variants).limit(1).get()
         if (snap.empty) return null

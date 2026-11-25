@@ -33,6 +33,7 @@ export const fetchCache = 'force-no-store'
 export const maxDuration = 30
 
 import { NextResponse } from 'next/server'
+import { scheduleCustomerCapture } from '@/lib/salesAgent/customerInbox'
 import { createHash } from 'crypto'
 import { createOutboundId } from '@/lib/salesAgent/delivery'
 import { buildSystemPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
@@ -303,6 +304,13 @@ export async function POST(req) {
     }
     if (claim.action === 'busy') {
         return NextResponse.json(noDeliveryEnvelope({ ok: true, duplicate: true, processing: true }), { status: 202 })
+    }
+    // Keep what an identified customer sent, before any exit below (stale,
+    // paused, existing customer) can end the request without saving it. It
+    // runs after the response, so it cannot delay or change the reply.
+    // Lord's own phone and the echoes of outgoing messages are not customers.
+    if (!outgoing && !(OWNER_PHONE && phone === OWNER_PHONE)) {
+        scheduleCustomerCapture({ eventId, phone, body })
     }
     const providerDeadlineAtMs = routeDeadlineAtMs - FALLBACK_COMMIT_RESERVE_MS
 

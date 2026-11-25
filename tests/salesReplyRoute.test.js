@@ -61,7 +61,10 @@ const mocks = vi.hoisted(() => ({
     readPriorConversationContext: vi.fn(),
     canSendWhatsApp: vi.fn(),
     sendInboundSequenceDirect: vi.fn(),
+    scheduleCustomerCapture: vi.fn(),
 }))
+
+vi.mock('@/lib/salesAgent/customerInbox', () => ({ scheduleCustomerCapture: mocks.scheduleCustomerCapture }))
 
 vi.mock('@/lib/salesAgent/prompt', () => ({ buildSystemPrompt: mocks.buildSystemPrompt, addDaysISO: mocks.addDaysISO }))
 vi.mock('@/lib/salesAgent/agent', () => ({
@@ -1109,6 +1112,56 @@ describe('Make send gate', () => {
 
         expect(makeSendsText(result.body)).toBe(true)
         expect(makePingsOwner(result.body)).toBe(true)
+    })
+})
+
+describe('customer inbox hook', () => {
+    const handed = () => mocks.scheduleCustomerCapture.mock.calls.map(call => call[0])
+
+    it('hands a claimed message to the inbox under its claim id', async () => {
+        prepareDecisionPath()
+
+        await post(inbound({ text: 'אפשר לשנות תאריך?' }))
+
+        expect(handed()).toEqual([expect.objectContaining({
+            eventId: expect.stringMatching(/^meta-inbound-[a-f0-9]{64}$/),
+            phone: 'test-phone-token',
+            body: expect.objectContaining({ text: 'אפשר לשנות תאריך?', messageType: 'text' }),
+        })])
+    })
+
+    it('hands it over while the conversation is paused for Lord', async () => {
+        mocks.isPausedForHuman.mockReturnValue(true)
+
+        await post(inbound({ text: 'עוד משהו' }))
+
+        expect(handed()).toHaveLength(1)
+    })
+
+    it('hands over a message that is too old to be answered', async () => {
+        await post(inbound({ text: 'הודעה ישנה', occurredAt: '2026-10-17T20:10:00.000Z' }))
+
+        expect(handed()).toHaveLength(1)
+    })
+
+    it('keeps the owner phone out', async () => {
+        await post(inbound({ phone: 'owner-token', text: 'דוח' }))
+
+        expect(handed()).toEqual([])
+    })
+
+    it('keeps the echo of an outgoing message out', async () => {
+        await post(inbound({ text: 'תשובה שלי', from: 'business-token', businessPhone: 'business-token', to: 'test-phone-token' }))
+
+        expect(handed()).toEqual([])
+    })
+
+    it('keeps a repeated delivery out', async () => {
+        mocks.claimInboundEvent.mockResolvedValue({ action: 'cached' })
+
+        await post(inbound({ text: 'שוב' }))
+
+        expect(handed()).toEqual([])
     })
 })
 
