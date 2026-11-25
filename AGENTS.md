@@ -2415,8 +2415,13 @@ The app offers, collects and sends; Lord's PC draws (Claude + Codex CLI).
 - Switch `admin_settings/designSamples` `{enabled, testPhones}`, **off by
   default**, on `/admin/customers`. Offered once, only when the lead's own words
   say bar/bat mitzvah, in full sales, not on price/payment/handoff turns.
-- An invited photo does not pause the bot; the response sets `handoff` only so
-  Make pings Lord.
+- An invited photo does not pause the bot and sets no `handoff` (Make forwards
+  it as a human takeover); the app tells Lord directly, which WhatsApp allows
+  only inside his own 24h window.
+- Offered only on ordinary answer turns: not on the demo link, price,
+  objection, payment or picture-bundle turns.
+- The Sonnet 4.5 defaults (retiring 30.11) moved to Sonnet 5.5; the disabled
+  experiment arm and the benchmark still name 4.5.
 - Sending needs Lord's tap on the board, inside the 24h window.
 - PC: `scripts/designs.mjs` + `docs/design-samples-playbook.md`. It never sends.
   Codex runs `--ephemeral`; photos live under `C:\Users\DELL\dev\wt-designs`

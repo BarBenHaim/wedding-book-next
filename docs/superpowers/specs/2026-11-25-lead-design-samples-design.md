@@ -12,6 +12,9 @@ below:
   (`salesAgent/designSamples.js`), not `sales_opening_approvals`.
 - The offer also asks what the child likes, and is a statement (no question).
 - A switch on the board, off by default, plus test phones.
+- Review: no `handoff` on the photo turn (direct ping instead); no offer on the
+  demo link turn; the wording promises deletion from our storage only; a
+  "sent by hand" button.
 
 ## Intent
 
