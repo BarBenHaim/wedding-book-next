@@ -34,7 +34,7 @@ import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebas
 import { Loader2, Upload, Trash2, Film, ImageIcon, RefreshCw, AlertTriangle, Info } from 'lucide-react'
 import { validateUpload, KIND_HE } from '@/lib/salesAgent/mediaLibrary'
 
-const CARD = { background: '#fff', border: '1px solid rgba(212,184,103,0.30)', boxShadow: '0 8px 20px -16px rgba(170,136,64,0.18)' }
+const CARD = { background: 'rgba(255,251,242,0.55)', border: '1px solid rgba(164,128,84,0.42)', boxShadow: 'inset 0 0 0 2px rgba(255,255,255,0.6)' }
 const GOLD = 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)'
 
 const kindOf = type => (String(type || '').startsWith('video/') ? 'video' : 'image')
