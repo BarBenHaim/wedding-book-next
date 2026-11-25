@@ -64,8 +64,9 @@ function Board() {
         setBusy(true)
         setError('')
         try {
-            await api('POST', body)
+            const result = await api('POST', body)
             if (body.op === 'test') window.alert('הודעת הבדיקה נשלחה לטלפון שלך. ודא שהיא הגיעה.')
+            if (body.op === 'claudeCheck') window.alert(result.check.message)
             await load()
         } catch (err) {
             setError(body.op === 'test' ? testError(err) : `הפעולה לא נשמרה: ${err.message}`)

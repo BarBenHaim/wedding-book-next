@@ -12,6 +12,20 @@ import { toApiMessages, trimTurns, isPausedForHuman, isOwnEcho, isOwnMediaEcho, 
 // a wrong price in the prompt, a lead that silently stops being chased,
 // a malformed model answer reaching a customer as-is.
 
+// What the Anthropic SDK reads: a real Response.
+const reply = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+const claudeAnswer = (text, extra = {}) => ({
+    id: 'msg_test', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: 'end_turn',
+    content: [{ type: 'thinking', thinking: '', signature: 's' }, { type: 'text', text }],
+    usage: { input_tokens: 10, output_tokens: 5 }, ...extra,
+})
+// A body that never finishes, and fails the way fetch does when the request is aborted.
+const stalled = (status, signal) => new Response(new ReadableStream({
+    start(controller) {
+        signal.addEventListener('abort', () => controller.error(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true })
+    },
+}), { status, headers: { 'content-type': 'application/json' } })
+
 afterEach(() => {
     vi.unstubAllGlobals()
     delete process.env.ANTHROPIC_API_KEY
@@ -32,11 +46,7 @@ describe('provider body deadline', () => {
 
     it('never includes a non-OK provider body, prompt, or secret in the thrown error', async () => {
         process.env.ANTHROPIC_API_KEY = 'api-key-secret-sentinel'
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-            ok: false,
-            status: 500,
-            text: vi.fn().mockResolvedValue('provider-body-sentinel customer-text-sentinel'),
-        }))
+        vi.stubGlobal('fetch', vi.fn(async () => reply({ error: { message: 'provider-body-sentinel customer-text-sentinel' } }, 500)))
 
         const error = await callClaude({
             system: 'prompt-secret-sentinel', messages: [], deadlineAtMs: Date.now() + 1_000,
@@ -63,10 +73,7 @@ describe('provider body deadline', () => {
 
     it('aborts a stalled JSON body after headers arrive before the absolute deadline', async () => {
         process.env.ANTHROPIC_API_KEY = 'test-secret'
-        const fetch = vi.fn((_, { signal }) => Promise.resolve({
-            ok: true,
-            json: () => new Promise((_, reject) => signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true })),
-        }))
+        const fetch = vi.fn(async (_, { signal }) => stalled(200, signal))
         vi.stubGlobal('fetch', fetch)
 
         await expect(callClaude({ system: 'system', messages: [], deadlineAtMs: Date.now() + 12 })).rejects.toThrow('anthropic timeout')
@@ -75,11 +82,7 @@ describe('provider body deadline', () => {
 
     it('rethrows an aborted non-OK body as a timeout rather than a provider error', async () => {
         process.env.ANTHROPIC_API_KEY = 'test-secret'
-        vi.stubGlobal('fetch', vi.fn((_, { signal }) => Promise.resolve({
-            ok: false,
-            status: 500,
-            text: () => new Promise((_, reject) => signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true })),
-        })))
+        vi.stubGlobal('fetch', vi.fn(async (_, { signal }) => stalled(500, signal)))
 
         await expect(callClaude({ system: 'system', messages: [], deadlineAtMs: Date.now() + 12 })).rejects.toThrow('anthropic timeout')
     })
@@ -89,11 +92,7 @@ describe('provider body deadline', () => {
         vi.spyOn(console, 'error').mockImplementation(() => {})
         const now = vi.spyOn(Date, 'now')
         now.mockReturnValueOnce(0).mockReturnValue(100)
-        const fetch = vi.fn().mockResolvedValue({
-            ok: false,
-            status: 404,
-            text: vi.fn().mockResolvedValue('unknown model'),
-        })
+        const fetch = vi.fn(async () => reply({ error: { type: 'not_found_error', message: 'unknown model' } }, 404))
         vi.stubGlobal('fetch', fetch)
 
         await expect(callClaude({
@@ -220,11 +219,7 @@ describe('sales model provider fallback', () => {
         process.env.ANTHROPIC_API_KEY = 'anthropic-secret-sentinel'
         process.env.OPENAI_API_KEY = 'openai-secret-sentinel'
         const fetch = vi.fn()
-            .mockResolvedValueOnce({
-                ok: false,
-                status: 400,
-                text: vi.fn().mockResolvedValue('credit balance is too low provider-body-sentinel'),
-            })
+            .mockResolvedValueOnce(reply({ error: { type: 'invalid_request_error', message: 'Your credit balance is too low provider-body-sentinel' } }, 400))
             .mockResolvedValueOnce({
                 ok: true,
                 status: 200,
@@ -245,7 +240,7 @@ describe('sales model provider fallback', () => {
             usage: { input_tokens: 100, output_tokens: 30, cache_read_input_tokens: 20 },
         })
         expect(fetch).toHaveBeenCalledTimes(2)
-        expect(fetch.mock.calls[0][0]).toBe('https://api.anthropic.com/v1/messages')
+        expect(String(fetch.mock.calls[0][0])).toBe('https://api.anthropic.com/v1/messages')
         expect(fetch.mock.calls[1][0]).toBe('https://api.openai.com/v1/chat/completions')
         const openAiRequest = JSON.parse(fetch.mock.calls[1][1].body)
         expect(openAiRequest).toMatchObject({
@@ -279,7 +274,7 @@ describe('sales model provider fallback', () => {
         process.env.ANTHROPIC_API_KEY = 'anthropic-secret-sentinel'
         process.env.OPENAI_API_KEY = 'openai-secret-sentinel'
         vi.stubGlobal('fetch', vi.fn()
-            .mockResolvedValueOnce({ ok: false, status: 500, text: vi.fn().mockResolvedValue('anthropic-body-sentinel') })
+            .mockResolvedValueOnce(reply({ error: { message: 'anthropic-body-sentinel' } }, 500))
             .mockResolvedValueOnce({ ok: false, status: 500, text: vi.fn().mockResolvedValue('openai-body-sentinel') }))
 
         const error = await callClaude({ system: 'prompt-sentinel', messages: [], deadlineAtMs: Date.now() + 5_000 }).catch(err => err)
@@ -289,6 +284,90 @@ describe('sales model provider fallback', () => {
         for (const secret of ['anthropic-body-sentinel', 'openai-body-sentinel', 'prompt-sentinel', 'anthropic-secret-sentinel', 'openai-secret-sentinel']) {
             expect(error.message).not.toContain(secret)
         }
+    })
+})
+
+describe('current Claude models', () => {
+    const ask = extra => callClaude({
+        system: 'system', messages: [{ role: 'user', content: 'hello' }], provider: 'anthropic',
+        model: 'claude-opus-5-5', deadlineAtMs: Date.now() + 5_000, ...extra,
+    })
+    const sent = fetch => JSON.parse(fetch.mock.calls[0][1].body)
+
+    it('asks the way the current API accepts: low effort, room to think, a refusal fallback, no sampling', async () => {
+        process.env.ANTHROPIC_API_KEY = 'anthropic-secret-sentinel'
+        const fetch = vi.fn(async () => reply(claudeAnswer('{"messages":["ok"]}')))
+        vi.stubGlobal('fetch', fetch)
+
+        const result = await ask({ temperature: 0.3 })
+
+        expect(result).toMatchObject({ provider: 'anthropic', model: 'claude-opus-5-5', text: '{"messages":["ok"]}', stopReason: 'end_turn' })
+        expect(sent(fetch)).toMatchObject({ model: 'claude-opus-5-5', output_config: { effort: 'low' }, fallbacks: 'default' })
+        expect(sent(fetch).max_tokens).toBeGreaterThanOrEqual(4096)
+        expect(sent(fetch)).not.toHaveProperty('temperature')
+        expect(sent(fetch)).not.toHaveProperty('thinking')
+        expect(new Headers(fetch.mock.calls[0][1].headers).get('anthropic-beta')).toContain('server-side-fallback-2026-07-01')
+    })
+
+    it('sends no sampling parameter to an older model either', async () => {
+        process.env.ANTHROPIC_API_KEY = 'anthropic-secret-sentinel'
+        const fetch = vi.fn(async () => reply(claudeAnswer('ok', { model: 'claude-haiku-4-5' })))
+        vi.stubGlobal('fetch', fetch)
+
+        await ask({ model: 'claude-haiku-4-5' })
+
+        expect(sent(fetch)).not.toHaveProperty('temperature')
+        expect(sent(fetch)).not.toHaveProperty('output_config')
+        expect(sent(fetch)).not.toHaveProperty('fallbacks')
+    })
+
+    it.each([
+        ['a refusal', { stop_reason: 'refusal', content: [] }],
+        ['an answer with no words', { stop_reason: 'max_tokens', content: [{ type: 'thinking', thinking: '', signature: 's' }] }],
+    ])('treats %s as a failed call', async (_, extra) => {
+        process.env.ANTHROPIC_API_KEY = 'anthropic-secret-sentinel'
+        vi.stubGlobal('fetch', vi.fn(async () => reply(claudeAnswer('', extra))))
+
+        await expect(ask()).rejects.toMatchObject({ provider: 'anthropic', errorCode: 'provider_error', providerStarted: true })
+    })
+
+    it('does not quietly answer with another Claude model when its id is refused', async () => {
+        process.env.ANTHROPIC_API_KEY = 'anthropic-secret-sentinel'
+        const fetch = vi.fn(async () => reply({ error: { type: 'not_found_error', message: 'model: claude-opus-5-5' } }, 404))
+        vi.stubGlobal('fetch', fetch)
+
+        await expect(ask()).rejects.toMatchObject({ errorCode: 'provider_error', status: 404 })
+        expect(fetch).toHaveBeenCalledTimes(1)
+    })
+
+    it('falls back to the OpenAI model, never sending it a Claude id, and says why', async () => {
+        process.env.ANTHROPIC_API_KEY = 'anthropic-secret-sentinel'
+        process.env.OPENAI_API_KEY = 'openai-secret-sentinel'
+        const fetch = vi.fn()
+            .mockResolvedValueOnce(reply({ error: { message: 'Your credit balance is too low' } }, 400))
+            .mockResolvedValueOnce({
+                ok: true, status: 200,
+                json: async () => ({ model: 'gpt-4.1-mini', choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1 } }),
+            })
+        vi.stubGlobal('fetch', fetch)
+
+        const result = await ask()
+
+        expect(JSON.parse(fetch.mock.calls[1][1].body).model).toBe('gpt-4.1-mini')
+        expect(result).toMatchObject({ provider: 'openai', fallbackFrom: 'anthropic', fallbackError: 'low_credit' })
+    })
+})
+
+describe('a fallback that fails too', () => {
+    it('still says Claude failed first', async () => {
+        process.env.ANTHROPIC_API_KEY = 'anthropic-secret-sentinel'
+        process.env.OPENAI_API_KEY = 'openai-secret-sentinel'
+        vi.stubGlobal('fetch', vi.fn()
+            .mockResolvedValueOnce(reply({ error: { message: 'slow down' } }, 429))
+            .mockResolvedValueOnce({ ok: false, status: 500, text: async () => 'x', json: async () => ({}) }))
+
+        await expect(callClaude({ system: 's', messages: [], deadlineAtMs: Date.now() + 5_000 }))
+            .rejects.toMatchObject({ provider: 'openai', fallbackFrom: 'anthropic', fallbackError: 'rate_limit', fallbackStatus: 429 })
     })
 })
 

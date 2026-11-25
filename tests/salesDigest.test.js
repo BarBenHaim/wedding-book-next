@@ -178,3 +178,12 @@ describe('the on-demand command', () => {
         expect(parseOwnerCommand('תשלח לו דוח')).toBeNull()
     })
 })
+
+describe('alerts', () => {
+    it('puts an alert right after the greeting and sends even on a quiet day', () => {
+        const d = buildDigest([], { todayISO: TODAY, nowMs: NOW, alerts: ['⚠️ Claude לא ענה'] })
+
+        expect(d.hasNews).toBe(true)
+        expect(d.text.split('\n\n')[1]).toBe('⚠️ Claude לא ענה')
+    })
+})

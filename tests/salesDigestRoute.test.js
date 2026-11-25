@@ -15,7 +15,9 @@ const mocks = vi.hoisted(() => ({
     buildDigest: vi.fn(),
     sendWhatsAppTemplate: vi.fn(),
     createOutboundId: vi.fn(() => 'digest-hash-fixture:template'),
+    readClaudeHealth: vi.fn(),
 }))
+vi.mock('@/lib/salesAgent/claudeHealth', () => ({ readClaudeHealth: mocks.readClaudeHealth }))
 
 vi.mock('@/lib/firebaseAdmin', () => ({ adminAuth: { verifyIdToken: mocks.verifyIdToken } }))
 vi.mock('@/lib/superAdmin', () => ({ isSuperAdmin: mocks.isSuperAdmin }))
@@ -65,6 +67,7 @@ beforeEach(async () => {
     process.env.SALES_AGENT_SECRET = 'digest-shared-secret-fixture'
     process.env.SALES_AGENT_OWNER_PHONE = 'non-dialable-owner-fixture'
     mocks.listLeads.mockResolvedValue([])
+    mocks.readClaudeHealth.mockResolvedValue({ alert: null })
     mocks.buildDigest.mockReturnValue(digest)
     mocks.sendWhatsAppTemplate.mockResolvedValue({ accepted: true, providerMessageId: 'wamid-digest-fixture' })
     mocks.recordDeliveryEvent.mockResolvedValue({ action: 'applied', status: 'accepted', advanced: false })
@@ -74,6 +77,14 @@ beforeEach(async () => {
 })
 
 describe('scheduled owner digest delivery', () => {
+    it('carries the Claude alert into the report', async () => {
+        mocks.readClaudeHealth.mockResolvedValue({ alert: 'alert-words' })
+
+        await runCron()
+
+        expect(mocks.buildDigest).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ alerts: ['alert-words'] }))
+    })
+
     it('uses only wt_daily_digest and reports provider acceptance, never delivery', async () => {
         const result = await runCron()
 

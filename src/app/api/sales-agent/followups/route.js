@@ -50,6 +50,7 @@ import { adminAuth } from '@/lib/firebaseAdmin'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { buildFollowUpPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
 import { callClaude, parseAgentJson, resolveFollowUp } from '@/lib/salesAgent/agent'
+import { noteClaudeOutcome } from '@/lib/salesAgent/claudeHealth'
 import { dueFollowUps, prepareFollowUpDelivery, recordDeliveryEvent, listLeads, reviveOrphans, settleStaleDeliveries, listMedia, recordFollowUpRun } from '@/lib/salesAgent/leads'
 import { sendableNow, MAX_PER_RUN, isFinalAttempt, isInsideWhatsAppWindow, pendingFollowUpStatus } from '@/lib/salesAgent/followupPolicy'
 import { MEDIA } from '@/lib/salesAgent/catalog'
@@ -292,11 +293,16 @@ export async function GET(req) {
                 })
                 // The model needs a user turn to answer; this one is an
                 // instruction to the agent, never shown to the customer.
-                const { text: raw } = await callClaude({
+                const answer = await callClaude({
                     system,
                     messages: buildFollowUpMessages(lead.turns),
                     maxTokens: 500,
+                }).catch(error => {
+                    noteClaudeOutcome(error)
+                    throw error
                 })
+                noteClaudeOutcome(answer)
+                const raw = answer.text
                 parsed = parseAgentJson(raw, { mediaKeys: Object.keys(library) })
                 if (parsed.handoff || parsed.messages.length === 0) return
                 text = parsed.messages[0]

@@ -15,6 +15,7 @@ import { buildCustomerBoard, BOARD_GROUPS } from '@/lib/customerBoard'
 import { FOLLOWUPS, renderFollowup } from '@/lib/customerFollowups'
 import { FOLLOWUPS_COLLECTION, closeOpenRequests, loadCustomerBooks, readFollowupSettings, writeFollowupSettings } from '@/lib/customerData'
 import { sendTestFollowup } from '@/lib/customerFollowupsRunner'
+import { checkClaude, readClaudeHealth } from '@/lib/salesAgent/claudeHealth'
 
 const MILESTONES = new Set(['printOrderedAt', 'shippedAt', 'deliveredAt', 'closedAt', 'triagedAt'])
 const KEYS = new Set(FOLLOWUPS.map(item => item.key))
@@ -39,7 +40,7 @@ export async function GET(req) {
     if (!await superAdmin(req)) return forbidden()
     try {
         const today = israelDate(Date.now())
-        const [list, settings] = await Promise.all([loadCustomerBooks(), readFollowupSettings()])
+        const [list, settings, claude] = await Promise.all([loadCustomerBooks(), readFollowupSettings(), readClaudeHealth()])
         const board = buildCustomerBoard(list, today, settings.enabled ? settings.enabledDay : null)
         const week = addDays(today, 7)
         const sends = board.rows
@@ -52,7 +53,7 @@ export async function GET(req) {
         const rows = board.rows.map(row => row.next.message && !row.auto
             ? { ...row, text: renderFollowup(row.next.message, books.get(row.id), baseUrl) }
             : row)
-        return NextResponse.json({ today, settings, groups: BOARD_GROUPS, counts: board.counts, rows, sends })
+        return NextResponse.json({ today, settings, claude, groups: BOARD_GROUPS, counts: board.counts, rows, sends })
     } catch (error) {
         console.error('[admin/customers] read failed:', error?.message || error)
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
@@ -113,6 +114,11 @@ export async function POST(req) {
                     ...(error?.providerCode ? { providerCode: error.providerCode } : {}),
                 }, { status: 502 })
             }
+        }
+
+        // One small call to Claude. It messages nobody.
+        if (body.op === 'claudeCheck') {
+            return NextResponse.json({ ok: true, check: await checkClaude() })
         }
 
         const id = String(body.weddingId || '')

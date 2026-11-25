@@ -15,12 +15,18 @@
 // The rule behind all of it: when the agent is unsure, the system must
 // fail toward a human, never toward a confident wrong answer.
 
+import Anthropic from '@anthropic-ai/sdk'
 import { STAGES, MEDIA_KEYS } from './catalog'
 import { nextFollowUpDate } from './followupPolicy'
 import { PROVIDER_PATH_DEADLINE_MS } from './circuitBreaker'
 
-const API_URL = 'https://api.anthropic.com/v1/messages'
-const API_VERSION = '2023-06-01'
+// The current generation: thinking always on, depth set by effort.
+const CURRENT_CLAUDE_MODELS = new Set(['claude-opus-5-5', 'claude-sonnet-5-5'])
+export const isCurrentClaudeModel = model => CURRENT_CLAUDE_MODELS.has(model)
+export const CLAUDE_AGENT_MODEL = 'claude-opus-5-5'
+// Thinking is counted inside max_tokens, so these models need more room.
+const CURRENT_MIN_TOKENS = 4096
+
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
 export const DEFAULT_OPENAI_MODEL = process.env.OPENAI_SALES_MODEL || 'gpt-4.1-mini'
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
@@ -359,7 +365,9 @@ function providerCallError(errorCode, options) {
     return new ProviderCallError(errorCode, options)
 }
 
-async function callAnthropic({ system, messages, model = DEFAULT_MODEL, maxTokens = MAX_TOKENS, temperature = 0.6, deadlineAtMs = providerDeadlineAt(), attemptCapMs = DEFAULT_TIMEOUT_MS }) {
+// No sampling parameter is sent: the API version the SDK speaks rejects it.
+// Claude only, with no fallback provider: callClaude is the path with one.
+export async function callAnthropic({ system, messages, model = DEFAULT_MODEL, maxTokens = MAX_TOKENS, deadlineAtMs = providerDeadlineAt(), attemptCapMs = DEFAULT_TIMEOUT_MS }) {
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) throw providerCallError('provider_error', { providerStarted: false })
 
@@ -369,71 +377,66 @@ async function callAnthropic({ system, messages, model = DEFAULT_MODEL, maxToken
         throw providerCallError('timeout', { providerStarted: false })
     }
     const timer = setTimeout(() => controller.abort(), timeoutMs)
-    let res
+    // One attempt: the route owns the deadline and the fallback provider.
+    const client = new Anthropic({ apiKey, maxRetries: 0, fetch: (...args) => globalThis.fetch(...args) })
+    const current = isCurrentClaudeModel(model)
+    const request = { model, max_tokens: current ? Math.max(maxTokens, CURRENT_MIN_TOKENS) : maxTokens, system, messages }
     let providerStarted = false
     try {
         // This marker distinguishes an actual upstream attempt from a local
         // deadline that expired in the small window after breaker acquire.
         providerStarted = true
-        res = await fetch(API_URL, {
-            method: 'POST',
-            signal: controller.signal,
-            headers: {
-                'content-type': 'application/json',
-                'x-api-key': apiKey,
-                'anthropic-version': API_VERSION,
-            },
-            body: JSON.stringify({
-                model,
-                max_tokens: maxTokens,
-                temperature,
-                system,
-                messages,
-            }),
-        })
-        if (!res.ok) {
-            const body = await res.text().catch(err => {
-                if (err?.name === 'AbortError') throw err
-                return ''
-            })
-            // A model id the API does not know. Retry once on the fallback
-            // rather than dropping the customer: a configuration mistake
-            // should cost a slightly less capable answer, not the answer.
-            if (res.status === 404 && model !== FALLBACK_MODEL && /model/i.test(body)) {
-                const next = model !== DEFAULT_MODEL ? DEFAULT_MODEL : FALLBACK_MODEL
-                console.error(`[sales-agent] unknown model ${model}, falling back to ${next}`)
-                return await callAnthropic({ system, messages, model: next, maxTokens, temperature, deadlineAtMs, attemptCapMs })
-            }
-            const errorCode = res.status === 429
-                ? 'rate_limit'
-                : /low.?credit|credit.?balance|insufficient.?credit|insufficient.?balance/i.test(body)
-                    ? 'low_credit'
-                    : 'provider_error'
-            throw providerCallError(errorCode, { providerStarted: true, status: res.status })
-        }
-        let data
-        try {
-            data = await res.json()
-        } catch (err) {
-            if (err?.name === 'AbortError') throw err
-            throw providerCallError('invalid_json', { providerStarted: true, status: res.status })
-        }
+        const options = { signal: controller.signal }
+        const data = current
+            ? await client.beta.messages.create({
+                ...request,
+                // Chat replies: shallow thinking, and a declined request is
+                // re-run by the API on a fallback model inside the same call.
+                output_config: { effort: 'low' },
+                betas: ['server-side-fallback-2026-07-01'],
+                fallbacks: 'default',
+            }, options)
+            : await client.messages.create(request, options)
+        if (controller.signal.aborted) throw providerCallError('timeout', { providerStarted: true })
         const text = (data?.content || [])
             .filter(b => b?.type === 'text')
             .map(b => b.text)
             .join('')
+        if (data?.stop_reason === 'refusal' || (current && !text.trim())) {
+            throw providerCallError('provider_error', { providerStarted: true })
+        }
         return { text, usage: data?.usage || null, model: data?.model || model, stopReason: data?.stop_reason || null, provider: 'anthropic' }
     } catch (err) {
-        // An abort surfaces as a generic AbortError; name it so the
-        // handoff message to the owner says something useful.
-        if (err?.name === 'AbortError') {
-            throw providerCallError('timeout', { providerStarted: true })
-        }
+        // Our own deadline fired, whatever shape the error took on the way out.
+        if (controller.signal.aborted) throw providerCallError('timeout', { providerStarted: true })
         if (err instanceof ProviderCallError) {
             err.providerStarted = providerStarted || err.providerStarted
             throw err
         }
-        throw providerCallError('provider_error', { providerStarted })
+        if (err instanceof SyntaxError) throw providerCallError('invalid_json', { providerStarted })
+        const status = err instanceof Anthropic.APIError ? err.status : null
+        // An older id the API does not know. Retry once on the fallback rather
+        // than dropping the customer. A current model is never swapped quietly:
+        // Lord chose it, and the route has its own fallback provider.
+        if (status === 404 && !current && model !== FALLBACK_MODEL && /model/i.test(err.message)) {
+            const next = model !== DEFAULT_MODEL ? DEFAULT_MODEL : FALLBACK_MODEL
+            console.error(`[sales-agent] unknown model ${model}, falling back to ${next}`)
+            return await callAnthropic({ system, messages, model: next, maxTokens, deadlineAtMs, attemptCapMs })
+                .catch(retryError => {
+                    // The first request did reach the provider, even when the
+                    // retry never got to send one.
+                    retryError.providerStarted = true
+                    throw retryError
+                })
+        }
+        // Only the classification leaves this function: provider bodies can
+        // carry prompt or customer text.
+        const errorCode = status === 429
+            ? 'rate_limit'
+            : status && /low.?credit|credit.?balance|insufficient.?credit|insufficient.?balance/i.test(err.message)
+                ? 'low_credit'
+                : 'provider_error'
+        throw providerCallError(errorCode, { providerStarted, status })
     } finally {
         // Keep the controller alive through headers *and* body decoding.
         clearTimeout(timer)
@@ -628,18 +631,28 @@ export async function callClaude(input) {
                 deadlineAtMs,
                 // Leave a useful slice of the shared 20s route budget for
                 // the alternate provider instead of timing both out in turn.
-                attemptCapMs: process.env.OPENAI_API_KEY ? 9_000 : DEFAULT_TIMEOUT_MS,
+                // The current models think before answering and get more of it.
+                attemptCapMs: process.env.OPENAI_API_KEY
+                    ? (isCurrentClaudeModel(input?.model) ? 12_000 : 9_000)
+                    : DEFAULT_TIMEOUT_MS,
             })
         } catch (err) {
             primaryError = err
         }
     }
+    // Says who should have answered and why not, on the answer or on the
+    // error, so a dead Claude account is not quietly covered by the fallback.
+    const covered = outcome => primaryError
+        ? Object.assign(outcome, { fallbackFrom: 'anthropic', fallbackError: primaryError.errorCode, fallbackStatus: primaryError.status ?? null })
+        : outcome
+    const fallback = call => call.then(covered, error => { throw covered(error) })
 
     if (process.env.OPENAI_API_KEY && Date.now() < Number(deadlineAtMs)) {
-        return callOpenAI({ ...input, deadlineAtMs, attemptCapMs: 10_000 })
+        const model = String(input?.model || '').startsWith('gpt-') ? input.model : DEFAULT_OPENAI_MODEL
+        return fallback(callOpenAI({ ...input, model, deadlineAtMs, attemptCapMs: 10_000 }))
     }
     if (process.env.GEMINI_API_KEY && Date.now() < Number(deadlineAtMs)) {
-        return callGemini({ ...input, model: DEFAULT_GEMINI_MODEL, deadlineAtMs, attemptCapMs: 10_000 })
+        return fallback(callGemini({ ...input, model: DEFAULT_GEMINI_MODEL, deadlineAtMs, attemptCapMs: 10_000 }))
     }
     if (primaryError) throw primaryError
     throw providerCallError('provider_error', { provider: 'anthropic', providerStarted: false })

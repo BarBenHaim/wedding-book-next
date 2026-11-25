@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
     buildSystemPrompt: vi.fn(),
     addDaysISO: vi.fn(() => '2026-08-17'),
     callClaude: vi.fn(),
+    noteClaudeOutcome: vi.fn(),
+    readClaudeHealth: vi.fn(async () => ({ alert: null })),
     parseAgentJson: vi.fn(),
     normalizePhone: vi.fn(value => String(value || '')),
     resolveFollowUp: vi.fn(),
@@ -69,6 +71,7 @@ vi.mock('@/lib/customerData', () => ({ optOutCustomer: mocks.optOutCustomer }))
 
 vi.mock('@/lib/salesAgent/customerInbox', () => ({ scheduleCustomerCapture: mocks.scheduleCustomerCapture }))
 
+vi.mock('@/lib/salesAgent/claudeHealth', () => ({ noteClaudeOutcome: mocks.noteClaudeOutcome, readClaudeHealth: mocks.readClaudeHealth }))
 vi.mock('@/lib/salesAgent/prompt', () => ({ buildSystemPrompt: mocks.buildSystemPrompt, addDaysISO: mocks.addDaysISO }))
 vi.mock('@/lib/salesAgent/agent', () => ({
     callClaude: mocks.callClaude,
@@ -1462,6 +1465,21 @@ describe('Anthropic outage handling', () => {
         mocks.saveExchange.mockResolvedValue(undefined)
     }
 
+    it('records what the model call says about Claude, whether it answered or not', async () => {
+        prepareDecisionPath()
+        const covered = { text: 'valid', usage: null, model: 'gpt-4.1-mini', provider: 'openai', fallbackFrom: 'anthropic', fallbackError: 'low_credit' }
+        mocks.callClaude.mockResolvedValueOnce(covered)
+
+        await post(inbound({ text: 'צריך מחיר' }))
+        expect(mocks.noteClaudeOutcome).toHaveBeenCalledWith(covered)
+
+        const failure = Object.assign(new Error('anthropic timeout'), { provider: 'anthropic', errorCode: 'timeout', providerStarted: true })
+        mocks.callClaude.mockRejectedValueOnce(failure)
+
+        await post(inbound({ text: 'ומה עוד', providerMessageId: 'wamid.second', eventId: 'second-event' }))
+        expect(mocks.noteClaudeOutcome).toHaveBeenCalledWith(failure)
+    })
+
     it('completes an open-breaker claim with a deterministic catalog reply and makes no model call', async () => {
         prepareModelPath()
         mocks.acquireProviderCircuit.mockResolvedValue({ allow: false, mode: 'open' })
@@ -1901,6 +1919,22 @@ describe('Anthropic outage handling', () => {
 
         expect(result).toEqual({ status: 503, body: { error: 'success-commit-stale' } })
         expect(mocks.callClaude).not.toHaveBeenCalled()
+    })
+})
+
+describe('the owner report', () => {
+    it('carries the Claude alert', async () => {
+        mocks.parseOwnerCommand.mockReturnValue({ action: 'digest' })
+        mocks.listLeads.mockResolvedValue([])
+        mocks.sortLeads.mockImplementation(items => items)
+        mocks.isoInIsrael.mockReturnValue('2026-12-09')
+        mocks.readClaudeHealth.mockResolvedValueOnce({ alert: 'alert-words' })
+        mocks.buildDigest.mockReturnValue({ hasNews: true, text: 'report-words' })
+
+        const result = await post(inbound({ phone: 'owner-token', text: 'דוח' }))
+
+        expect(result.body.sendText).toBe('report-words')
+        expect(mocks.buildDigest).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ alerts: ['alert-words'] }))
     })
 })
 

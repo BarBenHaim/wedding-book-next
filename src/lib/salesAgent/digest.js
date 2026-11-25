@@ -66,8 +66,9 @@ function waitingLines(leads, limit = 4) {
  * @param {string} todayISO  'YYYY-MM-DD' in Israel
  * @param {object} experiments  summarizeExperiments() output
  * @param {Array}  gaps         summarizeGaps() output
+ * @param {Array}  alerts       something broken that Lord has to know today
  */
-export function buildDigest(items = [], { todayISO, nowMs = Date.now(), experiments, gaps = [] } = {}) {
+export function buildDigest(items = [], { todayISO, nowMs = Date.now(), experiments, gaps = [], alerts = [] } = {}) {
     const yISO = yesterdayISO(todayISO)
     const { start, end } = israelDayBounds(yISO)
     const inYesterday = ms => ms != null && ms >= start && ms < end
@@ -84,10 +85,11 @@ export function buildDigest(items = [], { todayISO, nowMs = Date.now(), experime
     // test is "is there anything to do, or anything that happened" — not
     // "does the CRM contain rows".
     const hasNews =
-        waiting.length > 0 || readyToPay.length > 0 || dueToday.length > 0 || activeYesterday.length > 0
+        alerts.length > 0 || waiting.length > 0 || readyToPay.length > 0 || dueToday.length > 0 || activeYesterday.length > 0
 
     const blocks = []
     blocks.push(`בוקר טוב. סיכום ל-${heDate(yISO)}.`)
+    blocks.push(...alerts)
 
     if (waiting.length > 0) {
         blocks.push([`צריכים אותך עכשיו: ${waiting.length}`, ...waitingLines(waiting)].join('\n'))

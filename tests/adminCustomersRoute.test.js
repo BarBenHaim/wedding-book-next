@@ -9,7 +9,10 @@ const mocks = vi.hoisted(() => ({
     test: vi.fn(),
     exists: true,
     close: vi.fn(),
+    health: vi.fn(),
+    check: vi.fn(),
 }))
+vi.mock('@/lib/salesAgent/claudeHealth', () => ({ readClaudeHealth: mocks.health, checkClaude: mocks.check }))
 vi.mock('firebase-admin/firestore', () => ({ FieldValue: { serverTimestamp: () => 'now', delete: () => 'deleted' } }))
 vi.mock('@/lib/superAdmin', () => ({ isSuperAdmin: email => email === 'barbenbh@gmail.com' }))
 vi.mock('@/lib/firebaseAdmin', () => ({
@@ -49,6 +52,8 @@ beforeEach(() => {
     mocks.writeSettings.mockReset().mockResolvedValue({ enabled: true, enabledDay: '2026-12-09' })
     mocks.test.mockReset().mockResolvedValue({ providerMessageId: 'wamid.t' })
     process.env.SALES_AGENT_OWNER_PHONE = '972500000001'
+    mocks.health.mockReset().mockResolvedValue({ alert: null, lastCheckAt: null, lastCheckOk: null })
+    mocks.check.mockReset().mockResolvedValue({ ok: true, model: 'claude-opus-5-5', message: 'ok' })
 })
 afterEach(() => vi.useRealTimers())
 
@@ -163,5 +168,30 @@ describe('POST', () => {
 
         mocks.test.mockRejectedValue(Object.assign(new Error('x'), { errorCode: 'GRAPH_REJECTED', providerCode: 132001 }))
         expect(await post({ op: 'test', key: 'eve' })).toEqual({ status: 502, body: { error: 'GRAPH_REJECTED', providerCode: 132001 } })
+    })
+})
+
+describe('Claude health', () => {
+    it('shows the state of Claude on the board', async () => {
+        mocks.health.mockResolvedValue({ alert: 'alert-words', lastCheckAt: 5, lastCheckOk: false })
+
+        const body = await (await GET(request('GET'))).json()
+
+        expect(body.claude).toEqual({ alert: 'alert-words', lastCheckAt: 5, lastCheckOk: false })
+    })
+
+    it('checks Claude on demand without messaging anyone', async () => {
+        const result = await post({ op: 'claudeCheck' })
+
+        expect(result).toEqual({ status: 200, body: { ok: true, check: { ok: true, model: 'claude-opus-5-5', message: 'ok' } } })
+        expect(mocks.test).not.toHaveBeenCalled()
+        expect(mocks.writes).toEqual([])
+    })
+
+    it('lets only the super admin run the check', async () => {
+        mocks.email = 'someone@example.com'
+
+        expect((await post({ op: 'claudeCheck' })).status).toBe(403)
+        expect(mocks.check).not.toHaveBeenCalled()
     })
 })

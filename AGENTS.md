@@ -2371,6 +2371,29 @@ approval-only.
   `/login`, then their management page, not the exact view.
 - `wt_daily_digest` does not exist, so `/api/cron/sales-model-status` returns 503.
 
+## 25.11 — Claude: phase 1 of the cloud agent (Claude can write lead replies)
+
+Spec and plan: `docs/superpowers/{specs,plans}/2026-11-25-claude-whatsapp-agent*`.
+Lord's call: replies to leads stay automatic; everything else Claude composes
+or designs will wait for his approval (phase 2, not built).
+
+- `salesAgent/agent.js` calls Anthropic through `@anthropic-ai/sdk`. No
+  `temperature` on any Anthropic call. `claude-opus-5-5` / `claude-sonnet-5-5`:
+  effort `low`, `max_tokens` at least 4096, server-side refusal fallback; a
+  refusal or an answer with no text is a failure; an unknown id is not swapped
+  for another Claude model. A failed Claude call goes to the OpenAI default
+  model and the result carries `fallbackFrom` / `fallbackError`.
+- `salesAgent/claudeHealth.js`: failures from the reply and follow-up routes are
+  recorded in `sales_runtime/claude_health`; an alert from the last 24h shows on
+  `/admin/customers` and in the "דוח" reply. "בדוק את Claude" makes one small
+  call and messages nobody. Nothing pushes the alert by itself.
+- **Deploying does not switch the model.** To switch: Anthropic API credit, a
+  green check, one live sales reply seen on a non-owner phone, then settings
+  provider `anthropic` + model `claude-opus-5-5` **and disable the model
+  experiment** (an experiment arm overrides the settings).
+- Not measured yet: latency of the current models against the 20s provider
+  deadline (cap 12s, then OpenAI gets what is left).
+
 **Known, left as is:**
 - Make's owner ping (#7) also requires `handoff = true`, so `hotLeadPing`
   (handoff false) never reaches Lord. Needs a filter change in Make.

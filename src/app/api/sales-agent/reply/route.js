@@ -63,6 +63,7 @@ import { readSalesSettings } from '@/lib/salesAgent/settingsStore'
 import { assignVariant, summarizeExperiments, summarizeGaps } from '@/lib/salesAgent/experiments'
 import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
+import { noteClaudeOutcome, readClaudeHealth } from '@/lib/salesAgent/claudeHealth'
 import { normalizeProviderError, INBOUND_ROUTE_DEADLINE_MS, INBOUND_HEARTBEAT_BUDGET_MS, FALLBACK_COMMIT_RESERVE_MS } from '@/lib/salesAgent/circuitBreaker'
 import { decideInboundAge } from '@/lib/salesAgent/transportPolicy'
 import { buildDeterministicSalesReply, decideSalesTurn, enforceSalesReply, liftInlineImageMarkers } from '@/lib/salesAgent/decisionPolicy'
@@ -1213,10 +1214,12 @@ export async function POST(req) {
             let providerStarted = false
             try {
                 if (modelExecution) modelExecution.attempts += 1
-                const { text: raw, usage, model, stopReason, provider } = await callClaude({
+                const answer = await callClaude({
                     system, messages, deadlineAtMs: providerDeadlineAtMs,
                     provider: selectedProvider, model: selectedModel,
                 })
+                noteClaudeOutcome(answer)
+                const { text: raw, usage, model, stopReason, provider } = answer
                 providerStarted = true
                 if (modelExecution) {
                     modelExecution.actualProvider = provider || selectedProvider
@@ -1241,8 +1244,10 @@ export async function POST(req) {
                             provider: selectedProvider,
                             model: selectedModel,
                         })
+                        noteClaudeOutcome(retry)
                         providerStarted = true
                     } catch (err) {
+                        noteClaudeOutcome(err)
                         providerStarted = providerStarted || err?.providerStarted !== false
                         providerFailureCode = err?.providerStarted === false ? 'invalid_json' : normalizeProviderError(err)
                     }
@@ -1260,6 +1265,7 @@ export async function POST(req) {
                 }
                 if (parsed.malformed && !providerFailureCode) providerFailureCode = 'invalid_json'
             } catch (err) {
+                noteClaudeOutcome(err)
                 providerStarted = providerStarted || err?.providerStarted !== false
                 providerFailureCode = providerFailureCode || normalizeProviderError(err)
             }
@@ -1624,11 +1630,13 @@ async function buildOwnerDigest() {
             return d
         }),
     )
+    const { alert } = await readClaudeHealth()
     const d = buildDigest(items, {
         todayISO: today,
         nowMs: now,
         experiments: summarizeExperiments(items),
         gaps: summarizeGaps(items),
+        alerts: alert ? [alert] : [],
     })
     return d.hasNews ? d.text : 'הכל שקט. אין ממתינים, אין פולו-אפים להיום, ולא היו שיחות אתמול.'
 }

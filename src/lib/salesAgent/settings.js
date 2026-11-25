@@ -4,6 +4,8 @@ import { normalizeModelExperiment } from './modelExperiment'
 import { DEFAULT_BIRTHDAY_EXPERIMENT, normalizeBirthdayExperiment } from './birthdayExperiment'
 
 export const MODEL_REGISTRY = Object.freeze([
+    { id: 'claude-opus-5-5', provider: 'anthropic', label: 'Claude Opus 5.5', role: 'primary' },
+    { id: 'claude-sonnet-5-5', provider: 'anthropic', label: 'Claude Sonnet 5.5', role: 'primary' },
     { id: 'claude-sonnet-4-5', provider: 'anthropic', label: 'Claude Sonnet 4.5', role: 'primary' },
     { id: 'claude-haiku-4-5', provider: 'anthropic', label: 'Claude Haiku 4.5', role: 'economy' },
     { id: 'gpt-4.1-mini', provider: 'openai', label: 'GPT-4.1 mini', role: 'fallback' },

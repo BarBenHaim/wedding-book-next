@@ -38,6 +38,21 @@ export const RATES_CHECKED_ON = '2026-08-08'
 // billing them as ordinary input would overstate the cost roughly
 // tenfold on the read side.
 export const PRICES = {
+    // Checked 25.11.2026. Thinking is billed as output.
+    'claude-opus-5-5': {
+        provider: 'anthropic',
+        input: 4.0,
+        output: 20.0,
+        cacheWrite: 5.0,
+        cacheRead: 0.2,
+    },
+    'claude-sonnet-5-5': {
+        provider: 'anthropic',
+        input: 2.0,
+        output: 10.0,
+        cacheWrite: 2.5,
+        cacheRead: 0.1,
+    },
     'claude-haiku-4-5': {
         provider: 'anthropic',
         input: 1.0,

@@ -174,6 +174,28 @@ function Step({ row, today }) {
     )
 }
 
+// Whether Claude answers: the failure of the last day, or the last check.
+function ClaudeStatus({ claude, busy, onCheck }) {
+    const alert = claude?.alert
+    const checkedAt = claude?.lastCheckAt
+        ? new Date(claude.lastCheckAt).toLocaleString('he-IL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : ''
+    const color = alert || claude?.lastCheckOk === false ? '#b42318' : claude?.lastCheckOk ? '#1f7a3e' : '#b9ad98'
+    const words = alert
+        || (!checkedAt ? 'עוד לא נבדק.' : claude.lastCheckOk ? `עבד בבדיקה מ-${checkedAt}.` : `לא ענה בבדיקה מ-${checkedAt}.`)
+    return (
+        <section
+            className='rounded-2xl bg-white border p-4 flex flex-wrap items-center gap-3' role={alert ? 'alert' : undefined}
+            style={{ borderColor: alert ? '#f5b5b0' : LINE }}
+        >
+            <span className='w-2.5 h-2.5 rounded-full' style={{ background: color }} />
+            <b className='text-sm'>Claude</b>
+            <span className='text-[12px] flex-1 min-w-[200px]' style={{ color: alert ? '#b42318' : SOFT }}>{words}</span>
+            <Button disabled={busy} onClick={onCheck}>בדוק את Claude</Button>
+        </section>
+    )
+}
+
 export default function CustomerBoardView({ data, busy, error, updatedAt, onAct, onRefresh }) {
     const [tab, setTab] = useState('today')
     const [query, setQuery] = useState('')
@@ -235,6 +257,8 @@ export default function CustomerBoardView({ data, busy, error, updatedAt, onAct,
                                 </ul>}
                         </details>
                     </section>
+
+                    <ClaudeStatus claude={data.claude} busy={busy} onCheck={() => act({ op: 'claudeCheck' })} />
 
                     <nav className='flex flex-wrap gap-2'>
                         {data.groups.map(group => (
