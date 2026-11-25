@@ -88,7 +88,7 @@ function Task({ task, busy, onApprove, onOpen }) {
 function Figure({ value, label, Icon }) {
     return (
         <div className={s.plaque}>
-            <b><Icon size={34} strokeWidth={2} aria-hidden='true' />{value}</b>
+            <b><Icon size={34} strokeWidth={2} fill={Icon === Users ? 'currentColor' : 'none'} aria-hidden='true' />{value}</b>
             <span>{label}</span>
         </div>
     )
@@ -181,7 +181,7 @@ export default function TodayView({ data, busy, error, onApprove, onRefresh, api
                 <div className={s.rule} aria-hidden='true' />
                 <nav aria-label='ניווט ראשי'>
                     {NAV.map(({ href, open, label, Icon }) => {
-                        const inside = <><span>{label}</span><Icon size={26} strokeWidth={2} aria-hidden='true' /></>
+                        const inside = <><span>{label}</span><Icon size={26} strokeWidth={2.2} fill={Icon === Users ? 'currentColor' : 'none'} aria-hidden='true' /></>
                         return open
                             ? <button key={label} type='button' className={s.item} onClick={() => (open === 'bot' ? openBot() : openSpend())}>{inside}</button>
                             : <Link key={label} href={href} className={s.item} aria-current={href === '/admin/today' ? 'page' : undefined}>{inside}</Link>

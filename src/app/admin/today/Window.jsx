@@ -11,6 +11,8 @@ const CLOSE_MS = 200
 export default function Window({ title, subtitle, onClose, children }) {
     const dialog = useRef(null)
     const [closing, setClosing] = useState(false)
+    // A text selection dragged out of the window must not close it.
+    const fromBackdrop = useRef(false)
 
     useEffect(() => {
         const node = dialog.current
@@ -34,7 +36,8 @@ export default function Window({ title, subtitle, onClose, children }) {
         <dialog
             ref={dialog} tabIndex={-1} className={w.dialog} data-closing={closing || undefined} aria-label={title}
             onCancel={event => { event.preventDefault(); close() }}
-            onClick={event => { if (event.target === dialog.current) close() }}
+            onPointerDown={event => { fromBackdrop.current = event.target === dialog.current }}
+            onClick={event => { if (fromBackdrop.current && event.target === dialog.current) close() }}
         >
             <div className={w.sheet}>
                 <header className={w.banner}>

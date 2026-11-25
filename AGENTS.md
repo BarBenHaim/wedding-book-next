@@ -26,8 +26,9 @@ Lord asked to manage the bot from this app. The bot window on
   re-read before saving.
 - Opening messages, prices, media and experiments stay BusinessOS-only;
   this screen shows the active openings read-only.
-- Its model list is just Claude Opus 5.5 and Sonnet 5.5 (seen answering
-  live). A running model experiment makes the model read-only here.
+- Its model list is just Claude Opus 5.5 (answering leads) and Sonnet 5.5
+  (priced, no lead answer on record yet). A running model experiment makes
+  the model read-only here.
 
 ---
 

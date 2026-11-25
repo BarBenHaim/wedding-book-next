@@ -75,7 +75,7 @@ function StateTab({ settings, busy, save, checkClaude, check }) {
             </div>
 
             <div className={w.card}>
-                <h3>מודל</h3>
+                <h3>מי עונה ללידים</h3>
                 {experiment ? <p>ניסוי מודלים פעיל, והוא קובע מי עונה. משנים אותו ב-BusinessOS.</p> : <>
                     {!known && <p>כרגע: <span dir='ltr'>{settings.model}</span></p>}
                     <div className={w.segments} role='radiogroup' aria-label='מודל'>
@@ -91,6 +91,7 @@ function StateTab({ settings, busy, save, checkClaude, check }) {
                     <button type='button' className={s.button} disabled={busy} onClick={checkClaude}>בדוק את Claude</button>
                     {check && <span data-ok={check.ok}>{check.message}</span>}
                 </div>
+                <p>הבדיקה והטיוטות ללקוחות רצות תמיד על Claude Opus 5.5, בלי קשר לבחירה כאן.</p>
             </div>
 
             <p className={w.fine}>גרסת הגדרות {settings.revision}{stamp(settings.updatedAt) && ` · עודכנה ${stamp(settings.updatedAt)}`}</p>

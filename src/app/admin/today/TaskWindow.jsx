@@ -62,8 +62,8 @@ export default function TaskWindow({ task, api, onChanged, onClose }) {
                         </button>
                     )}
                     {draft && task.waiting && (
-                        <button type='button' className={w.quiet} disabled={busy} onClick={() => decide('reject', 'לבטל את הטיוטה? שום דבר לא יישלח.')}>
-                            <X size={18} aria-hidden='true' />בטל טיוטה
+                        <button type='button' className={w.quiet} disabled={busy} onClick={() => decide('reject', 'להסיר את הבקשה? כלום לא יישלח.')}>
+                            <X size={18} aria-hidden='true' />הסר
                         </button>
                     )}
                     {draft && !task.waiting && (

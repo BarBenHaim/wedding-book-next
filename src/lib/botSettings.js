@@ -2,10 +2,11 @@
 // PUT /api/sales-agent/settings, and what Lord is asked before it is saved.
 // Pure and safe for the browser; the server validates everything again.
 
-// Only models that were seen answering live (25.11).
+// Opus 5.5 answers leads since 25.11. Sonnet 5.5 is the code's default and is
+// priced, but no lead answer from it is on record.
 export const BOT_MODELS = [
     { id: 'claude-opus-5-5', provider: 'anthropic', label: 'Claude Opus 5.5', hint: 'החזק יותר. נמדד: בערך 7.5 סנט לתשובה.' },
-    { id: 'claude-sonnet-5-5', provider: 'anthropic', label: 'Claude Sonnet 5.5', hint: 'מהיר וזול יותר: בערך חצי מהמחיר לתשובה.' },
+    { id: 'claude-sonnet-5-5', provider: 'anthropic', label: 'Claude Sonnet 5.5', hint: 'זול יותר, בערך חצי. עוד לא ענה ללידים אצלנו, אז כדאי לבדוק את התשובות הראשונות.' },
 ]
 export const MODE_NAMES = { full_sales: 'מכירה מלאה', opening_only: 'פתיחה בלבד' }
 export const MAX_INSTRUCTIONS = 4000

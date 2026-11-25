@@ -54,8 +54,8 @@
 /* page */
 .main { flex: 1; min-width: 0; position: relative; padding: 0 20px 28px; isolation: isolate; overflow: clip; }
 .sky {
-    position: absolute; inset: 0 0 auto 0; height: 350px; z-index: -1;
-    background: url('/admin-theme/hero.webp') center -26px / cover no-repeat;
+    position: absolute; inset: 0 0 auto 0; height: clamp(300px, calc((100vw - 250px) * .28), 480px); z-index: -1;
+    background: url('/admin-theme/hero.webp') center bottom / cover no-repeat;
     -webkit-mask-image: linear-gradient(180deg, #000 80%, transparent);
     mask-image: linear-gradient(180deg, #000 80%, transparent);
 }
