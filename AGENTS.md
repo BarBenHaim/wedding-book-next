@@ -2265,3 +2265,58 @@ counted in `lookRenders`, given back on failure. The QR on a sign is never drawn
 overlay in `PosterSheet.jsx` below the artwork (the lower 42% of a sign is empty by design).
 Pure logic: `lib/ownerLook.js`, `lib/ownerLookAi.js`; tests `tests/ownerLook*.test.js`.
 Not verified end to end at the time of writing: a real render on a test event with an owner login.
+
+---
+
+## 25.11 — Claude: the WhatsApp bot was off; reconnected and switched on
+
+**Found:** all Make WhatsApp scenarios inactive. The live one, 9630287, failed on
+25.10 with "Failed to verify connection [400]" (it was already off when it was
+started; when it first stopped is unknown). Both Make WhatsApp connections failed
+verification. The webhook queue of hook 4303675 was full (667/667, 25.10 to 1.11).
+
+**Changed, with Lord's approval:**
+- He reauthorized connection 14497055; it lists +972 51-535-0253
+  (phone id 1158941773964795), the id all 12 send modules use.
+- `sales_media/pricing_packages_2026` set `disabled: true`: it still offered the
+  690 digital book. To restore, set it back to false.
+- The 667 queued items were deleted (permanent, not read).
+- Scenario 9630287 activated at 12:43 UTC.
+
+**Not changed:** code, env, prompts, openings. Proactive follow-ups stay off.
+Connection 14249151 and scenarios 9282383 / 9370425 stay as they were (they have
+their own send modules and fit the duplicate-bubble hypothesis; keep them off).
+
+**Open:** no live inbound verified yet (waiting for a test from a non-owner phone);
+all three scenarios still carried `isinvalid` at activation time.
+
+### 25.11, later — inbound arrives, replies were not leaving
+
+**Found:** all 12 WhatsApp send modules of 9630287 require `data.shouldSend = true`
+(scenario last edited 17.10). The route set it only on the opening and birthday
+journeys. The model reply, owner commands, the existing-customer line, the
+attachment ack and the database fallback left it out, so Make received the text
+and sent nothing. First seen on an owner "דוח": command handled, 2 operations,
+no send.
+
+**Fix (`reply/route.js`):** `withSendGate()` sets `shouldSend` when there is
+something to deliver, on `complete()` responses and on the model reply. An explicit
+`shouldSend` is kept. The model reply now also carries `noReply` on a deliberate
+silence (read from the code, not seen live: the commit rejects an empty outcome,
+which would 503 and count toward the scenario's three-error auto-disable).
+Tests: `Make send gate` in `salesReplyRoute.test.js`; any new reply path needs a
+case there. No live send has been proven yet.
+
+**Known, left as is:**
+- Make's owner ping (#7) also requires `handoff = true`, so `hotLeadPing`
+  (handoff false) never reaches Lord. Needs a filter change in Make.
+- Make's text callbacks use `inbound-sha256(raw Meta id)`, the route's ledger
+  hashes the `meta-inbound-…` claim id, so text delivery rows never leave
+  `requested`; the callbacks land on separate rows (202, no error).
+- The inner `completeProviderFallback` in the route is never called.
+- Replies built while nothing was leaving are stored in lead `turns` (and media
+  as requested) as if sent.
+- Each answered message now runs more Make operations; the plan allowance was
+  not checked.
+- Watch the first real leads for the duplicate bubble in the root handoff: this
+  fix also releases reply media and the closing text.

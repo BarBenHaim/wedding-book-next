@@ -1014,6 +1014,89 @@ afterEach(() => {
     vi.restoreAllMocks()
 })
 
+// Every WhatsApp send module in the live Make scenario is filtered on
+// `shouldSend` being literally true. A reply without the field is built,
+// stored as answered, and never leaves. That was the state on 25.11:
+// only the opening journeys set it.
+describe('Make send gate', () => {
+    const makeSendsText = body => body.shouldSend === true && String(body.sendText || '').trim().length > 0
+    const makePingsOwner = body => body.shouldSend === true && body.handoff === true && !!body.notifyOwner
+
+    it('opens for an ordinary model reply', async () => {
+        prepareDecisionPath()
+
+        const result = await post(inbound({ text: 'כמה עולה?' }))
+
+        expect(result.body.sendText).toBe('model draft')
+        expect(makeSendsText(result.body)).toBe(true)
+    })
+
+    it('opens for the reply and the owner ping when the model hands the conversation over', async () => {
+        prepareDecisionPath()
+        mocks.parseAgentJson.mockReturnValue({
+            malformed: false, messages: ['בודק וחוזר אליך'], stage: 'handoff', handoff: true,
+            handoffReason: 'שאלה', image: null, eventType: null, callbackPromised: null, followUpAt: null,
+        })
+
+        const result = await post(inbound({ text: 'אפשר חשבונית?' }))
+
+        expect(makeSendsText(result.body)).toBe(true)
+        expect(makePingsOwner(result.body)).toBe(true)
+    })
+
+    it('stays shut and records noReply when the policy decides on silence', async () => {
+        prepareDecisionPath()
+        mocks.enforceSalesReply.mockImplementation(({ parsed }) => ({
+            ...parsed, messages: [], handoff: false, noReply: true,
+        }))
+
+        const result = await post(inbound({ text: 'תודה' }))
+
+        expect(result.body).toMatchObject({ shouldSend: false, sendText: '', noReply: true })
+        // Without noReply the real commit rejects an empty outcome with a
+        // 503, and three of those in a row switch the Make scenario off.
+        expect(mocks.completeSuccessfulExchange).toHaveBeenCalledWith(expect.objectContaining({
+            outcome: expect.objectContaining({ noReply: true, shouldSend: false }),
+        }))
+    })
+
+    it('opens for the answer to an owner command', async () => {
+        mocks.parseOwnerCommand.mockReturnValue({ action: 'pause', phone: '' })
+
+        const result = await post(inbound({ phone: 'owner-token', text: 'שקט' }))
+
+        expect(result.body.skipped).toBe('owner-command')
+        expect(makeSendsText(result.body)).toBe(true)
+    })
+
+    it('opens for the line to an existing customer and the owner ping', async () => {
+        mocks.getLead.mockResolvedValue({ ...lead, isNew: true })
+        mocks.findCustomerByPhone.mockResolvedValue({ weddingId: 'test-wedding', ownerName: 'לקוח בדיקה' })
+
+        const result = await post(inbound({ text: 'צריך עזרה בספר שכבר קניתי' }))
+
+        expect(makeSendsText(result.body)).toBe(true)
+        expect(makePingsOwner(result.body)).toBe(true)
+    })
+
+    it('opens for the acknowledgement of an attachment and the owner ping', async () => {
+        const result = await post(inbound({ messageType: 'image' }))
+
+        expect(makeSendsText(result.body)).toBe(true)
+        expect(makePingsOwner(result.body)).toBe(true)
+    })
+
+    it('opens for the fallback line and the owner ping when the lead cannot be read', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        mocks.getLead.mockRejectedValue(new Error('database unavailable'))
+
+        const result = await post(inbound({ text: 'כמה עולה?' }))
+
+        expect(makeSendsText(result.body)).toBe(true)
+        expect(makePingsOwner(result.body)).toBe(true)
+    })
+})
+
 describe('inbound event duplicate fencing', () => {
     it('uses the original Meta message identity for both Make wrapper retries', async () => {
         prepareDecisionPath()

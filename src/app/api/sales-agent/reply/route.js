@@ -181,8 +181,17 @@ function hasDeliveryInstruction(payload) {
     ].some(value => typeof value === 'string' && value.trim())
 }
 
+// Every WhatsApp module in the live Make scenario is filtered on
+// `shouldSend` being literally true, so a reply without the field never
+// leaves. A path that already decided (opening, birthday, takeover,
+// opening-only) keeps its own answer.
+function withSendGate(payload) {
+    if (typeof payload.shouldSend === 'boolean') return payload
+    return { ...payload, shouldSend: payload.noReply !== true && hasDeliveryInstruction(payload) }
+}
+
 function transportEnvelope(payload) {
-    return hasDeliveryInstruction(payload) ? payload : noDeliveryEnvelope(payload)
+    return hasDeliveryInstruction(payload) ? withSendGate(payload) : noDeliveryEnvelope(payload)
 }
 
 function todayISO() {
@@ -1420,8 +1429,11 @@ export async function POST(req) {
             }] : []),
         ]
         : []
-    const responsePayload = {
+    const responsePayload = withSendGate({
         ok: true,
+        // A deliberate silence has to say so: the commit rejects an empty
+        // outcome that is neither noReply nor a handoff.
+        ...(parsed.noReply === true ? { noReply: true } : {}),
         send: parsed.messages,
         // `sendText` is the same reply as ONE string, and it is what the
         // Make scenario should map to.
@@ -1480,7 +1492,7 @@ export async function POST(req) {
         notifyOwner: parsed.handoff
             ? ownerPing(phone, parsed.handoffReason, { name: parsed.customerName || lead.name, stage: parsed.stage, lastText: text })
             : hotLeadPing(phone, parsed, lead, { name: parsed.customerName || lead.name || body?.profileName, lastText: text }),
-    }
+    })
     const exchange = {
         phone, incomingText: text, parsed, followUpAt, profileName: body?.profileName,
         source: resolveSource({ isNew: !!lead.isNew, text, existing: lead.source, fallback: body?.source }),
