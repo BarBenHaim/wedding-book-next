@@ -156,6 +156,18 @@ describe('the check button', () => {
         expect(db.store.data).toMatchObject({ lastCheckAt: NOW, lastCheckOk: false, failures: 1, lastErrorCode: 'low_credit' })
     })
 
+    it('shows and logs the status code of a refused request, and nothing of the provider body', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        const ask = vi.fn(async () => { throw providerError({ status: 400, message: 'provider-body-sentinel' }) })
+
+        const result = await checkClaude({ ask, db: fakeDb(), nowMs: NOW })
+
+        expect(result).toMatchObject({ ok: false, status: 400 })
+        expect(result.message).toContain('400')
+        expect(warn).toHaveBeenCalledWith('[claude-health] check failed', 'provider_error', 400)
+        expect(JSON.stringify([warn.mock.calls, result])).not.toContain('provider-body-sentinel')
+    })
+
     it('says so when there is no key', async () => {
         delete process.env.ANTHROPIC_API_KEY
         const ask = vi.fn()

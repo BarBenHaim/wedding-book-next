@@ -2392,7 +2392,10 @@ or designs will wait for his approval (phase 2, not built).
   provider `anthropic` + model `claude-opus-5-5` **and disable the model
   experiment** (an experiment arm overrides the settings).
 - Not measured yet: latency of the current models against the 20s provider
-  deadline (cap 12s, then OpenAI gets what is left).
+  deadline (cap 12s, then OpenAI gets what is left). **No real API call has been
+  made with this code**; the check button is the first.
+- Follow-ups and history extraction already try Claude (no settings, legacy
+  model) before OpenAI, so the alert can appear before any switch.
 
 **Known, left as is:**
 - Make's owner ping (#7) also requires `handoff = true`, so `hotLeadPing`

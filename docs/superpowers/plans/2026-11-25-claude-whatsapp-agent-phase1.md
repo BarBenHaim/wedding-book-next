@@ -36,3 +36,11 @@ reversibly. Deploying changes nothing until the settings are switched.
 - [ ] 5. After deploy (needs Lord): API credit, check button green, one live
       sales reply with the current model, then switch settings to Claude and end
       the model experiment.
+      - No real call to the API has been made yet; the check button is the first.
+        A status code in its message (400 = the request was refused) says where
+        to look.
+      - Compare the model id the green check reports with the `PRICES` key: a
+        different id means an unknown cost, and the route counts the reply as a
+        fallback.
+      - Follow-ups and history extraction call Claude without settings (legacy
+        Sonnet 4.5, no temperature). Watch the first follow-up run after credit.

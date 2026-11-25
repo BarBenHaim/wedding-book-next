@@ -101,9 +101,10 @@ export async function readClaudeHealth({ db, nowMs = Date.now() } = {}) {
 // One small real call to Claude and nothing else: no fallback that could hide a
 // failure, and no message to anyone.
 export async function checkClaude({ ask = callAnthropic, db = adminDb, nowMs = Date.now() } = {}) {
+    // The status number is what tells a refused request from an outage.
     const failed = (errorCode, status = null) => ({
-        ok: false, model: CLAUDE_AGENT_MODEL, errorCode,
-        message: `Claude לא ענה: ${reasonWords(errorCode, status)}.`,
+        ok: false, model: CLAUDE_AGENT_MODEL, errorCode, status,
+        message: `Claude לא ענה: ${reasonWords(errorCode, status)}.${status ? ` (קוד ${status})` : ''}`,
     })
     if (!String(process.env.ANTHROPIC_API_KEY || '').trim()) return failed('no_key')
 
@@ -119,6 +120,7 @@ export async function checkClaude({ ask = callAnthropic, db = adminDb, nowMs = D
         })
     } catch (error) {
         const result = failed(error?.errorCode || 'provider_error', error?.status ?? null)
+        console.warn('[claude-health] check failed', result.errorCode, result.status)
         try {
             await recordClaudeFailure({ errorCode: result.errorCode, status: error?.status ?? null }, { db, nowMs })
             await healthRef(db).set({ lastCheckAt: nowMs, lastCheckOk: false }, { merge: true })
