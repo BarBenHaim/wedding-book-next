@@ -2394,8 +2394,11 @@ or designs will wait for his approval (phase 2, not built).
 - Not measured yet: latency of the current models against the 20s provider
   deadline (cap 12s, then OpenAI gets what is left). **No real API call has been
   made with this code**; the check button is the first.
-- Follow-ups and history extraction already try Claude (no settings, legacy
-  model) before OpenAI, so the alert can appear before any switch.
+- History extraction (and follow-ups, if ever approved; they are off in
+  production) try Claude without settings, legacy model, before OpenAI.
+- A settings save writes a default, disabled `birthdayExperiment` when none is
+  stored (seen in a dry run, 25.11). Before the switch, confirm the birthday
+  publish treats that revision-1 default like none.
 
 ## ⚠️ 25.11 — Claude: one disabled image put the whole bot on its defaults
 
@@ -2404,7 +2407,9 @@ approved by Lord) with a script. The switched-off opening journey
 `v_93340cb744fa` still named it, so `readSalesSettings` threw
 `INVALID_OPENING_MEDIA`. The reply route then ran on `DEFAULT_SALES_SETTINGS`
 (opening only, no model, a default opening that promises an attachment it does
-not carry), every settings save failed, and the follow-ups failed closed.
+not carry) and every settings save failed. Proactive follow-ups were not
+affected: `SALES_PROACTIVE_FOLLOWUPS_APPROVED` is not set in production, so
+that route returns before reading settings (last recorded run 16.10).
 `[sales-agent] settings read failed; using safe defaults` in the logs is that
 state.
 
