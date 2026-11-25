@@ -4,7 +4,7 @@
 // Print outputs: anything drawn around them would end up in the exported file.
 const OUTPUT = /^\/admin\/wedding\/[^/]+\/(cover-print|picabook-export)$/
 // Design editors need the width, and their previews must not inherit our font.
-const EDITORS = ['/admin/studio', '/admin/album-studio', '/admin/guest-design']
+const EDITORS = ['/admin/studio', '/admin/guest-design']
 // Screens that are only admin interface, so the admin font applies to all of it.
 const SERIF = ['/admin', '/admin/today', '/admin/customers', '/admin/customers/board', '/admin/sales-leads']
 
@@ -22,10 +22,7 @@ export const MORE = [
     { href: '/admin/customers/board', label: 'הודעות ואוטומציות' },
     { href: '/admin/qrcodes', label: 'ברקודים' },
     { href: '/admin/emails', label: 'מיילים' },
-    { href: '/admin/social-preview', label: 'תוכן לרשתות' },
     { href: '/admin/guest-design', label: 'עיצוב דף ברכה' },
-    { href: '/admin/album-studio', label: 'סטודיו אלבומים' },
-    { href: '/admin/project', label: 'הצגת הפרויקט' },
 ]
 
 const trim = pathname => (pathname || '').replace(/\/+$/, '')

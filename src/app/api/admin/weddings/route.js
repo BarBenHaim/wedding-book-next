@@ -241,7 +241,7 @@ export async function PATCH(req) {
             // Guest /photo page design preset (managed from /admin/guest-design).
             'guestDesign',
             // Photo album: preset, page shape and the ordered photo list
-            // (managed from /admin/album-studio). The layout itself is
+            // (its editor screen was removed 26.11, no event ever used it). The layout is
             // never stored — albumLayout.js is deterministic, so the
             // pages are recomputed identically from this list every
             // time, and a stored layout could only go stale.

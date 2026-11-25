@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "prebuild": "node scripts/sync-project-code.mjs",
     "dev": "next dev --turbopack",
     "build": "node scripts/next-build.mjs",
     "start": "next start",

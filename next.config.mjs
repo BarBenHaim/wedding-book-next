@@ -22,6 +22,8 @@ const nextConfig = {
         return [
             ...gone.map(source => ({ source, destination: SALES, permanent: false })),
             { source: '/portal', destination: '/login', permanent: false },
+            // The old sign-up page only forwarded to the wizard.
+            { source: '/register', destination: '/start', permanent: false },
         ]
     },
     async rewrites() {

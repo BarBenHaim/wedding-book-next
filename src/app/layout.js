@@ -17,7 +17,6 @@ import {
     cormorant,
     playfairSC,
 } from './fonts'
-import Footer from '@/components/Footer/Footer'
 
 // Next.js 15 viewport export — viewport-fit=cover lets the page
 // extend under the iOS notch / home indicator, which is REQUIRED
@@ -59,7 +58,6 @@ export default function RootLayout({ children }) {
                 </Script>
                 <Header />
                 {children}
-                <Footer />
             </body>
         </html>
     )

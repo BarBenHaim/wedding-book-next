@@ -11,6 +11,25 @@ the ones that touch what you are about to change.
 
 ---
 
+## 26.11 — screens removed because nobody used them
+
+Bar asked to throw out what does not matter. Checked against production
+counts and inbound links first; no data was deleted, git keeps the files.
+
+- `/admin/project` (course presentation) with `api/admin/project-health`,
+  `scripts/sync-project-code.mjs` and the `prebuild` step.
+- `/admin/social-preview` with `api/social/preview`. `src/lib/social` stays,
+  so the section about it below still holds, except that the test screen
+  it tells you to open no longer exists.
+- `/admin/album-studio` (no event had an album design). The album libraries
+  stay.
+- `/wedding/[id]/guests` (no event had a guest list, nothing linked to it)
+  with the owner guest APIs. `api/guests/_auth.js`, the public guest route
+  and `/g/` stay.
+- `/register` is now a redirect to `/start`; the site footer is gone.
+
+---
+
 ## 25.11 — one list of people (`/admin/customers`)
 
 - Rules in `src/lib/people.js` (pure, tested), loaded by

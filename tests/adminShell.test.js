@@ -10,13 +10,13 @@ describe('which admin screens get the menu', () => {
     })
 
     it('narrows the menu for the design editors and leaves their look alone', () => {
-        for (const path of ['/admin/studio', '/admin/album-studio', '/admin/guest-design']) {
+        for (const path of ['/admin/studio', '/admin/guest-design']) {
             expect(adminShell(path)).toEqual({ rail: 'slim', serif: false, themed: false })
         }
     })
 
     it('frames the other tools without changing the font their previews inherit', () => {
-        for (const path of ['/admin/emails', '/admin/qrcodes', '/admin/social-preview', '/admin/project']) {
+        for (const path of ['/admin/emails', '/admin/qrcodes']) {
             expect(adminShell(path)).toEqual({ rail: 'full', serif: false, themed: true })
         }
     })
