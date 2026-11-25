@@ -1,5 +1,5 @@
 'use client'
-// The framed window that opens over the today screen. A native <dialog>, so
+// The framed window that opens over an admin screen. A native <dialog>, so
 // focus, Escape and the backdrop behave without extra code.
 
 import { useCallback, useEffect, useRef, useState } from 'react'

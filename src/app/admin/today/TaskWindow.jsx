@@ -5,9 +5,9 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Check, Send, X } from 'lucide-react'
-import Window, { Notice } from './Window'
-import s from './today.module.css'
-import w from './windows.module.css'
+import Window, { Notice } from '../ui/Window'
+import k from '../ui/kit.module.css'
+import w from '../ui/windows.module.css'
 
 export const REFUSALS = {
     WINDOW_CLOSED: 'עברו 24 שעות מההודעה. צריך לענות ידנית.',
@@ -52,7 +52,7 @@ export default function TaskWindow({ task, api, onChanged, onClose }) {
                 {task.detail && <div className={w.card}><p className={w.long}>{task.detail}</p></div>}
                 <div className={w.actions}>
                     {task.canApprove && (
-                        <button type='button' className={s.button} disabled={busy} onClick={() => decide('send', sample ? 'לשלוח את הדוגמה הזאת לליד?' : `לשלוח את התשובה?\n\n${task.detail}`)}>
+                        <button type='button' className={k.button} disabled={busy} onClick={() => decide('send', sample ? 'לשלוח את הדוגמה הזאת לליד?' : `לשלוח את התשובה?\n\n${task.detail}`)}>
                             <Send size={20} aria-hidden='true' />אשר ושלח
                         </button>
                     )}
@@ -67,7 +67,7 @@ export default function TaskWindow({ task, api, onChanged, onClose }) {
                         </button>
                     )}
                     {draft && !task.waiting && (
-                        <button type='button' className={s.button} disabled={busy} onClick={() => decide('done', 'לסמן שהמשימות בוצעו?')}>
+                        <button type='button' className={k.button} disabled={busy} onClick={() => decide('done', 'לסמן שהמשימות בוצעו?')}>
                             <Check size={20} aria-hidden='true' />בוצע
                         </button>
                     )}

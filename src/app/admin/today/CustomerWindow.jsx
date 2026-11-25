@@ -5,9 +5,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { MoreActions, Sends, StepActions, countdown } from '../customers/CustomerBoardView'
-import Window, { Notice } from './Window'
-import s from './today.module.css'
-import w from './windows.module.css'
+import Window, { Notice } from '../ui/Window'
+import k from '../ui/kit.module.css'
+import w from '../ui/windows.module.css'
 
 const dayWords = iso => (iso
     ? new Intl.DateTimeFormat('he-IL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`))
@@ -65,7 +65,7 @@ export default function CustomerWindow({ id, title, api, onChanged, onClose }) {
                             {row.lastCustomerMessage && <blockquote>{row.lastCustomerMessage.text}</blockquote>}
                         </div>
                         <div className={w.actions}>
-                            <Link href={`/wedding/${encodeURIComponent(id)}/admin`} className={s.button}>לספר ולברכות</Link>
+                            <Link href={`/wedding/${encodeURIComponent(id)}/admin`} className={k.button}>לספר ולברכות</Link>
                             <Link href={`/admin/customers?id=${encodeURIComponent(id)}`} className={w.quiet}>ללוח הטיפול</Link>
                         </div>
                     </div>

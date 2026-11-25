@@ -1,0 +1,27 @@
+/* Dresses the parts of the admin that are still written with utility classes
+   (panels, drawers, tool pages) in the Jerusalem palette. Scoped to .wt-theme,
+   so nothing outside the admin changes. These rules are unlayered, so they win
+   over the utilities. Design editors do not get the class. */
+
+/* ink */
+.wt-theme .text-\[\#1a1410\], .wt-theme .text-\[\#3d2e1a\], .wt-theme .text-\[\#3d3225\], .wt-theme .text-\[\#2e2419\] { color: #1d1648; }
+.wt-theme .text-\[\#7a6a52\], .wt-theme .text-\[\#5a4d3a\], .wt-theme .text-\[\#5a4b35\], .wt-theme .text-\[\#5a4a32\], .wt-theme .text-\[\#5e513f\], .wt-theme .text-\[\#5c4a2f\], .wt-theme .text-\[\#7a6548\] { color: #4f4668; }
+.wt-theme .text-\[\#a89378\], .wt-theme .text-\[\#8c7b65\], .wt-theme .text-\[\#9d8b72\] { color: #6d6385; }
+.wt-theme .text-\[\#c4b9a4\], .wt-theme .text-\[\#c0ad8e\], .wt-theme .text-\[\#b9ad98\], .wt-theme .text-\[\#b3a68d\], .wt-theme .text-\[\#b8a37e\] { color: #8d84a0; }
+/* gold accents become the navy and purple of the reference */
+.wt-theme .text-\[\#AA8840\], .wt-theme .text-\[\#aa8840\], .wt-theme .text-\[\#a8843a\], .wt-theme .text-\[\#c9a44e\], .wt-theme .text-\[\#8a6d40\] { color: #52247f; }
+
+/* parchment instead of white */
+.wt-theme .bg-white { background-color: #fdf6e7; }
+.wt-theme .bg-white\/95 { background-color: rgba(253, 246, 231, .97); }
+.wt-theme .bg-\[\#fbf6ec\], .wt-theme .bg-\[\#fdfaf3\], .wt-theme .bg-\[\#f8f4ec\], .wt-theme .bg-\[\#faf6ee\], .wt-theme .bg-\[\#f6efe0\] { background-color: #f6e8c9; }
+.wt-theme .bg-\[\#f4ecd9\] { background-color: #eedcb2; }
+.wt-theme .bg-\[\#AA8840\] { background-color: #2c2473; }
+
+/* silver-gold edges */
+.wt-theme .border-\[\#ead9b3\], .wt-theme .border-\[\#e7dcc6\], .wt-theme .border-\[\#f0e8d4\], .wt-theme .border-\[\#eee3cc\], .wt-theme .border-\[\#f0e3c8\], .wt-theme .border-\[\#f1e8d8\] { border-color: rgba(164, 128, 84, .45); }
+.wt-theme .border-\[\#AA8840\] { border-color: #c9a460; }
+.wt-theme .divide-\[\#f0e8d4\] > :not(:last-child) { border-color: rgba(164, 128, 84, .35); }
+
+/* page roots that painted their own ivory let the parchment through */
+.wt-theme .bg-\[\#faf6ee\].min-h-screen { background-color: transparent; }

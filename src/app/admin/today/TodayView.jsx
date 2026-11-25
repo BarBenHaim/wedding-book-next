@@ -5,24 +5,17 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import {
-    AlertTriangle, Calendar, CalendarDays, ChevronDown, ChevronLeft, ClipboardCheck, Coins, ExternalLink, FileText,
-    Image as ImageIcon, MessageCircle, MessageSquareText, Palette, Phone, Send, Users,
+    AlertTriangle, CalendarDays, ChevronDown, ChevronLeft, ClipboardCheck, Coins, ExternalLink, FileText,
+    Image as ImageIcon, MessageCircle, MessageSquareText, Phone, Send, Users,
 } from 'lucide-react'
-import { jerusalemSerif } from './font'
-import BotWindow from './BotWindow'
+import { Hero, Page, Panel, Plaque } from '../ui/kit'
+import k from '../ui/kit.module.css'
+import { useAdmin } from '../ui/Shell'
 import CustomerWindow from './CustomerWindow'
-import SpendWindow, { dollars } from './SpendWindow'
+import { dollars } from './SpendWindow'
 import TaskWindow from './TaskWindow'
 import s from './today.module.css'
 
-const NAV = [
-    { href: '/admin/today', label: 'היום', Icon: Calendar },
-    { href: '/admin/customers', label: 'לקוחות', Icon: Users },
-    { href: '/admin', label: 'אירועים', Icon: CalendarDays },
-    { open: 'bot', label: 'בוט וואטסאפ', Icon: MessageCircle },
-    { open: 'spend', label: 'הוצאות', Icon: Coins },
-    { href: '/admin/studio', label: 'עיצוב', Icon: Palette },
-]
 const TASK_ICON = { claude: AlertTriangle, draft: FileText, sample: ImageIcon, draw: ImageIcon, book: CalendarDays }
 const MODE = { full_sales: 'מכירה מלאה', opening_only: 'פתיחה בלבד' }
 
@@ -52,17 +45,6 @@ const only = action => event => {
     action()
 }
 
-function Panel({ title, Icon, children, className = '', onOpen }) {
-    return (
-        <section className={`${s.panel} ${className} ${onOpen ? s.opens : ''}`} onClick={onOpen}>
-            <header className={s.panelHead}>
-                <h2><Icon size={28} strokeWidth={2.1} aria-hidden='true' />{title}</h2>
-            </header>
-            {children}
-        </section>
-    )
-}
-
 function Task({ task, busy, onApprove, onOpen }) {
     const Icon = TASK_ICON[task.kind] || FileText
     return (
@@ -79,18 +61,9 @@ function Task({ task, busy, onApprove, onOpen }) {
                 )}
             </button>
             {task.canApprove
-                ? <button type='button' className={s.button} disabled={busy} onClick={() => onApprove(task)}><Send size={21} aria-hidden='true' />אשר ושלח</button>
-                : <button type='button' className={s.button} onClick={() => onOpen(task)}><ExternalLink size={21} aria-hidden='true' />פתח</button>}
+                ? <button type='button' className={k.button} disabled={busy} onClick={() => onApprove(task)}><Send size={21} aria-hidden='true' />אשר ושלח</button>
+                : <button type='button' className={k.button} onClick={() => onOpen(task)}><ExternalLink size={21} aria-hidden='true' />פתח</button>}
         </li>
-    )
-}
-
-function Figure({ value, label, Icon }) {
-    return (
-        <div className={s.plaque}>
-            <b><Icon size={34} strokeWidth={2} fill={Icon === Users ? 'currentColor' : 'none'} aria-hidden='true' />{value}</b>
-            <span>{label}</span>
-        </div>
     )
 }
 
@@ -110,8 +83,8 @@ function Switches({ switches, mode, onOpen }) {
 
 function Bot({ bot, waiting, onOpen }) {
     return (
-        <Panel title='בוט וואטסאפ' Icon={WhatsMark} className={s.botPanel} onOpen={() => onOpen('state')}>
-            {!bot ? <p className={s.unread}>{waiting || 'לא הצלחתי לקרוא את מצב הבוט.'}</p> : <>
+        <Panel title='בוט וואטסאפ' Icon={WhatsMark} className={`${s.botPanel} ${s.opens}`} onOpen={() => onOpen('state')} centered>
+            {!bot ? <p className={k.unread}>{waiting || 'לא הצלחתי לקרוא את מצב הבוט.'}</p> : <>
                 <div className={`${s.chip} ${bot.enabled ? s.on : s.off}`}><i />{bot.enabled ? 'הבוט פעיל' : 'הבוט כבוי'}</div>
                 <button type='button' className={s.field} onClick={only(() => onOpen('state'))} aria-label={`ניהול הבוט, מודל ${bot.modelLabel}`}>
                     <span dir='ltr'>{bot.modelLabel}</span><ChevronDown size={20} strokeWidth={2.4} aria-hidden='true' />
@@ -135,8 +108,8 @@ function Bot({ bot, waiting, onOpen }) {
 function Spend({ spend, waiting, onOpen }) {
     const parts = spend ? [['Claude', spend.anthropic], ['OpenAI', spend.openai], ...(spend.other > 0 ? [['אחר', spend.other]] : [])] : []
     return (
-        <Panel title='הוצאות החודש' Icon={Coins} className={s.spendPanel} onOpen={onOpen}>
-            {!spend ? <p className={s.unread}>{waiting || 'לא הצלחתי לקרוא את ההוצאות.'}</p> : <>
+        <Panel title='הוצאות החודש' Icon={Coins} className={`${s.spendPanel} ${s.opens}`} onOpen={onOpen} centered>
+            {!spend ? <p className={k.unread}>{waiting || 'לא הצלחתי לקרוא את ההוצאות.'}</p> : <>
                 <button type='button' className={s.money} onClick={only(onOpen)} aria-label={`פירוט ההוצאות, ${dollars(spend.month)} החודש`}>{dollars(spend.month)}</button>
                 <ul className={s.bars}>
                     {parts.map(([name, value]) => (
@@ -155,11 +128,10 @@ function Spend({ spend, waiting, onOpen }) {
 }
 
 export default function TodayView({ data, busy, error, onApprove, onRefresh, api }) {
-    // The window that is open over the screen, if any.
+    const { openBot, openSpend } = useAdmin()
+    // The task or customer window that is open over the screen, if any.
     const [view, setView] = useState(null)
     const close = () => setView(null)
-    const openBot = (tab = 'state') => setView({ type: 'bot', tab })
-    const openSpend = () => setView({ type: 'spend' })
     const openCustomer = (id, title) => setView({ type: 'customer', id, title })
     const openTask = task => {
         if (task.kind === 'book') openCustomer(task.id, task.title)
@@ -172,91 +144,65 @@ export default function TodayView({ data, busy, error, onApprove, onRefresh, api
     const figure = key => (data ? data.counts[key] ?? '—' : '…')
     const noCustomers = waiting || (data.customers.length ? '' : data.unread.includes('לקוחות') ? 'רשימת הלקוחות לא נקראה.' : 'אין לקוחות פעילים.')
     return (
-        <div dir='rtl' className={s.root} style={{ '--serif': jerusalemSerif.style.fontFamily }}>
-            <aside className={s.rail}>
-                <Link href='/admin/today' className={s.brand}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src='/brand/logo-on-dark.png' alt='Wedding Tales' />
-                </Link>
-                <div className={s.rule} aria-hidden='true' />
-                <nav aria-label='ניווט ראשי'>
-                    {NAV.map(({ href, open, label, Icon }) => {
-                        const inside = <><span>{label}</span><Icon size={26} strokeWidth={2.2} fill={Icon === Users ? 'currentColor' : 'none'} aria-hidden='true' /></>
-                        return open
-                            ? <button key={label} type='button' className={s.item} onClick={() => (open === 'bot' ? openBot() : openSpend())}>{inside}</button>
-                            : <Link key={label} href={href} className={s.item} aria-current={href === '/admin/today' ? 'page' : undefined}>{inside}</Link>
-                    })}
-                </nav>
-                <div className={s.rule} aria-hidden='true' />
-                <div className={s.alley} aria-hidden='true' />
-            </aside>
+        <Page>
+            <div className={s.columns}>
+                <div className={s.center}>
+                    <Hero
+                        title='מה מחכה לך היום'
+                        under={<>
+                            {dateWords(data?.date)}
+                            <button type='button' className={k.glass} onClick={onRefresh} disabled={busy}>{busy ? 'טוען…' : 'רענן'}</button>
+                        </>}
+                        figures={<>
+                            <Plaque value={figure('tasks')} label='משימות לטיפול' Icon={ClipboardCheck} />
+                            <Plaque value={figure('active')} label='לקוחות פעילים' Icon={Users} solid />
+                            <Plaque value={figure('week')} label='אירועים השבוע' Icon={CalendarDays} />
+                        </>}
+                    />
 
-            <main className={s.main}>
-                <div className={s.sky} aria-hidden='true' />
-                <div className={`${s.olive} ${s.oliveSide}`} aria-hidden='true' />
-                <div className={`${s.olive} ${s.oliveFoot}`} aria-hidden='true' />
-                <div className={s.columns}>
-                    <div className={s.center}>
-                        <div className={s.hero}>
-                            <h1>מה מחכה לך היום</h1>
-                            <div className={s.flourish} aria-hidden='true' />
-                            <p className={s.date}>
-                                {dateWords(data?.date)}
-                                <button type='button' onClick={onRefresh} disabled={busy}>{busy ? 'טוען…' : 'רענן'}</button>
-                            </p>
-                            <div className={s.figures}>
-                                <Figure value={figure('tasks')} label='משימות לטיפול' Icon={ClipboardCheck} />
-                                <Figure value={figure('active')} label='לקוחות פעילים' Icon={Users} />
-                                <Figure value={figure('week')} label='אירועים השבוע' Icon={CalendarDays} />
-                            </div>
-                        </div>
+                    {error && <p role='alert' className={k.error}>{error}</p>}
+                    {data?.unread?.length > 0 && <p role='alert' className={k.error}>לא נקראו: {data.unread.join(', ')}. המספרים חלקיים.</p>}
 
-                        {error && <p role='alert' className={s.error}>{error}</p>}
-                        {data?.unread?.length > 0 && <p role='alert' className={s.error}>לא נקראו: {data.unread.join(', ')}. המספרים חלקיים.</p>}
+                    <Panel title='משימות לטיפול היום' Icon={ClipboardCheck}>
+                        {waiting ? <p className={k.unread}>{waiting}</p>
+                            : data.tasks.length === 0 ? <p className={k.unread}>{partial ? 'לא כל המקורות נקראו, אז ייתכן שיש מה לטפל.' : 'אין מה לטפל כרגע.'}</p>
+                                : <ul className={s.tasks}>{data.tasks.map(task => <Task key={`${task.kind}-${task.id}`} task={task} busy={busy} onApprove={onApprove} onOpen={openTask} />)}</ul>}
+                        {(data?.moreTasks > 0 || data?.oldEvents > 0) && (
+                            <Link href='/admin/customers' className={k.more}>
+                                {[data.moreTasks > 0 ? `ועוד ${data.moreTasks} משימות` : null, data.oldEvents > 0 ? `${data.oldEvents} אירועים ישנים למיון` : null].filter(Boolean).join(' · ')}
+                            </Link>
+                        )}
+                    </Panel>
 
-                        <Panel title='משימות לטיפול היום' Icon={ClipboardCheck}>
-                            {waiting ? <p className={s.unread}>{waiting}</p>
-                                : data.tasks.length === 0 ? <p className={s.unread}>{partial ? 'לא כל המקורות נקראו, אז ייתכן שיש מה לטפל.' : 'אין מה לטפל כרגע.'}</p>
-                                    : <ul className={s.tasks}>{data.tasks.map(task => <Task key={`${task.kind}-${task.id}`} task={task} busy={busy} onApprove={onApprove} onOpen={openTask} />)}</ul>}
-                            {(data?.moreTasks > 0 || data?.oldEvents > 0) && (
-                                <Link href='/admin/customers' className={s.more}>
-                                    {[data.moreTasks > 0 ? `ועוד ${data.moreTasks} משימות` : null, data.oldEvents > 0 ? `${data.oldEvents} אירועים ישנים למיון` : null].filter(Boolean).join(' · ')}
-                                </Link>
-                            )}
-                        </Panel>
-
-                        <Panel title='לקוחות פעילים' Icon={Users}>
-                            {noCustomers ? <p className={s.unread}>{noCustomers}</p> : (
-                                <div className={s.tableBox}><table className={s.table}>
-                                    <thead><tr><th>לקוח</th><th>אירוע</th><th>הצעד הבא</th></tr></thead>
-                                    <tbody>
-                                        {data.customers.map(c => (
-                                            <tr key={c.id} onClick={() => openCustomer(c.id, c.title)}>
-                                                <td><button type='button' onClick={only(() => openCustomer(c.id, c.title))}><Users size={22} strokeWidth={2.2} fill='currentColor' aria-hidden='true' />{c.title}</button></td>
-                                                <td>{c.event} – {when(c.day, c.toEvent)}</td>
-                                                <td data-overdue={c.overdue}>
-                                                    <span className={s.step}>{c.step}<ChevronLeft size={20} strokeWidth={2.6} aria-hidden='true' /></span>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table></div>
-                            )}
-                            {data?.moreCustomers > 0 && <Link href='/admin/customers' className={s.more}>ועוד {data.moreCustomers} לקוחות</Link>}
-                        </Panel>
-                    </div>
-
-                    <div className={s.side}>
-                        <Bot bot={data ? data.bot : null} waiting={waiting} onOpen={openBot} />
-                        <Spend spend={data ? data.spend : null} waiting={waiting} onOpen={openSpend} />
-                    </div>
+                    <Panel title='לקוחות פעילים' Icon={Users}>
+                        {noCustomers ? <p className={k.unread}>{noCustomers}</p> : (
+                            <div className={k.tableBox}><table className={`${k.table} ${s.customers}`}>
+                                <thead><tr><th>לקוח</th><th>אירוע</th><th>הצעד הבא</th></tr></thead>
+                                <tbody>
+                                    {data.customers.map(c => (
+                                        <tr key={c.id} data-opens onClick={() => openCustomer(c.id, c.title)}>
+                                            <td><button type='button' onClick={only(() => openCustomer(c.id, c.title))}><Users size={22} strokeWidth={2.2} fill='currentColor' aria-hidden='true' />{c.title}</button></td>
+                                            <td>{c.event} – {when(c.day, c.toEvent)}</td>
+                                            <td data-overdue={c.overdue}>
+                                                <span className={s.step}>{c.step}<ChevronLeft size={20} strokeWidth={2.6} aria-hidden='true' /></span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table></div>
+                        )}
+                        {data?.moreCustomers > 0 && <Link href='/admin/customers' className={k.more}>ועוד {data.moreCustomers} לקוחות</Link>}
+                    </Panel>
                 </div>
-            </main>
 
-            {view?.type === 'bot' && <BotWindow bot={data?.bot} firstTab={view.tab} api={api} onChanged={onRefresh} onClose={close} />}
-            {view?.type === 'spend' && <SpendWindow month={data?.spend} api={api} onClose={close} />}
+                <div className={s.side}>
+                    <Bot bot={data ? data.bot : null} waiting={waiting} onOpen={openBot} />
+                    <Spend spend={data ? data.spend : null} waiting={waiting} onOpen={openSpend} />
+                </div>
+            </div>
+
             {view?.type === 'task' && <TaskWindow task={view.task} api={api} onChanged={onRefresh} onClose={close} />}
             {view?.type === 'customer' && <CustomerWindow id={view.id} title={view.title} api={api} onChanged={onRefresh} onClose={close} />}
-        </div>
+        </Page>
     )
 }

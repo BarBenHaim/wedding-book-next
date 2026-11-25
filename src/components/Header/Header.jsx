@@ -9,6 +9,7 @@ import { db } from '../../lib/firebaseClient'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
 import { isSuperAdmin } from '@/lib/superAdmin'
+import { adminShell } from '@/lib/adminShell'
 
 // Drawer menu item icons
 const ViewerIcon = () => (
@@ -65,6 +66,8 @@ const SuperAdminIcon = () => (
 
 export default function Header() {
     const [user, setUser] = useState(null)
+    // False until the sign-in has been checked once.
+    const [authChecked, setAuthChecked] = useState(false)
     const [menuOpen, setMenuOpen] = useState(false)
     const router = useRouter()
     const pathname = usePathname()
@@ -89,6 +92,7 @@ export default function Header() {
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, async currentUser => {
             setUser(currentUser)
+            setAuthChecked(true)
             if (currentUser) {
                 let id = localStorage.getItem('weddingId')
                 if (!id) {
@@ -173,8 +177,8 @@ export default function Header() {
     // contact sheet and a full-screen viewer, where a sticky site bar
     // would take a sixth of a phone screen away from the pictures.
     // /login and /enter are the same kind of page: one goal, their own frame.
-    // The "today" screen draws its own menu.
-    if (pathname === '/admin/today') return null
+    // The super admin screens draw their own menu (app/admin/ui/Shell).
+    if (adminShell(pathname) && (!authChecked || userIsSuperAdmin)) return null
     if (pathname === '/start' || pathname === '/my' || pathname === '/app' || pathname === '/login' || pathname === '/enter' || pathname?.startsWith('/arrange/')) return null
     if (/^\/manage\/[^/]+\/photos\/?$/.test(pathname || '')) return null
 

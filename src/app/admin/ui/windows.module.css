@@ -1,4 +1,5 @@
-/* The windows over the today screen: the same frame, parchment and navy. */
+/* The windows over an admin screen: the same frame, parchment and navy. */
+.dialog, .dialog * { font-family: var(--serif), 'Noto Serif Hebrew', 'Frank Ruhl Libre', serif; }
 .dialog {
     width: min(780px, 94vw); max-width: 94vw; max-height: 92dvh; margin: auto; padding: 0;
     border: 0; background: transparent; color: var(--ink); overflow: visible; outline: none;

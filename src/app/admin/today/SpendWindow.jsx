@@ -4,9 +4,9 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import Window, { Notice } from './Window'
-import s from './today.module.css'
-import w from './windows.module.css'
+import Window, { Notice } from '../ui/Window'
+import k from '../ui/kit.module.css'
+import w from '../ui/windows.module.css'
 
 export const dollars = value => `$${(Number(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const dayMonth = iso => `${Number(iso.slice(8, 10))}.${Number(iso.slice(5, 7))}`
@@ -53,7 +53,7 @@ export default function SpendWindow({ month, api, onClose }) {
                         זו לא כל ההוצאה: חלק מהשימושים (למשל בדיקת Claude, טיוטות ללקוחות ותמונות לכריכה) עוד לא נספרים, והמחירים מוקלדים בקוד
                         {spend.ratesCheckedOn ? ` (נבדקו ב-${spend.ratesCheckedOn})` : ''}. החיוב המדויק מופיע אצל Anthropic ו-OpenAI.
                     </p>
-                    <div className={w.actions}><Link href='/admin/sales-leads#spend' className={s.button}>לעמוד הלידים</Link></div>
+                    <div className={w.actions}><Link href='/admin/sales-leads#spend' className={k.button}>לעמוד הלידים</Link></div>
                 </div>
             )}
         </Window>

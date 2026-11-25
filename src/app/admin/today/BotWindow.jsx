@@ -8,9 +8,9 @@ import Link from 'next/link'
 import { Activity, BookOpen, Check, SlidersHorizontal, Zap } from 'lucide-react'
 import { BOT_MODELS, MAX_INSTRUCTIONS, MODE_NAMES, changeWarning, settingsChange } from '@/lib/botSettings'
 import { ATTENTION_BUCKETS, STAGE_META } from '@/lib/salesAgent/leadsView'
-import Window, { Notice, Switch } from './Window'
-import s from './today.module.css'
-import w from './windows.module.css'
+import Window, { Notice, Switch } from '../ui/Window'
+import k from '../ui/kit.module.css'
+import w from '../ui/windows.module.css'
 
 const TABS = [
     { key: 'state', label: 'מצב ומודל', Icon: SlidersHorizontal },
@@ -88,7 +88,7 @@ function StateTab({ settings, busy, save, checkClaude, check }) {
                     </div>
                 </>}
                 <div className={w.actions}>
-                    <button type='button' className={s.button} disabled={busy} onClick={checkClaude}>בדוק את Claude</button>
+                    <button type='button' className={k.button} disabled={busy} onClick={checkClaude}>בדוק את Claude</button>
                     {check && <span data-ok={check.ok}>{check.message}</span>}
                 </div>
                 <p>הבדיקה והטיוטות ללקוחות רצות תמיד על Claude Opus 5.5, בלי קשר לבחירה כאן.</p>
@@ -126,7 +126,7 @@ function WordsTab({ settings, busy, save }) {
                 <p>טקסט שהבוט מקבל בכל תשובה. מחירים, חבילות וקישורי תשלום מגיעים מהקטלוג ואי אפשר לשנות אותם כאן. ירידות שורה נשמרות כרווח.</p>
                 <textarea id='bot-instructions' value={text} maxLength={MAX_INSTRUCTIONS} rows={7} onChange={event => setText(event.target.value)} />
                 <div className={w.actions}>
-                    <button type='button' className={s.button} disabled={busy || unchanged} onClick={() => save({ businessInstructions: text })}>שמור הנחיות</button>
+                    <button type='button' className={k.button} disabled={busy || unchanged} onClick={() => save({ businessInstructions: text })}>שמור הנחיות</button>
                     <span dir='ltr'>{text.length} / {MAX_INSTRUCTIONS}</span>
                 </div>
             </div>
@@ -174,7 +174,7 @@ function ResultsTab({ leads }) {
                         {waiting.slice(0, 6).map(lead => <li key={lead.phone}><b>{leadName(lead)}</b><span>{bucket(lead.attention)}</span></li>)}
                     </ul>
                 )}
-                <div className={w.actions}><Link href='/admin/sales-leads' className={s.button}>לכל הלידים והשיחות</Link></div>
+                <div className={w.actions}><Link href='/admin/sales-leads' className={k.button}>לכל הלידים והשיחות</Link></div>
             </div>
             {stages.length > 0 && (
                 <div className={w.card}>

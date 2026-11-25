@@ -6,26 +6,16 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getIdToken, onAuthStateChanged } from 'firebase/auth'
+import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
+import { adminApi as call } from '../ui/api'
+import { useAdmin } from '../ui/Shell'
 import TodayView from './TodayView'
 import { REFUSALS } from './TaskWindow'
 
 const REFRESH_MS = 3 * 60 * 1000
-
-async function call(url, body, method) {
-    const token = await getIdToken(auth.currentUser)
-    const res = await fetch(url, {
-        method: method || (body ? 'POST' : 'GET'),
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        ...(body ? { body: JSON.stringify(body) } : {}),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-    return data
-}
 
 function Screen() {
     const [data, setData] = useState(null)
@@ -51,6 +41,10 @@ function Screen() {
         document.addEventListener('visibilitychange', onShow)
         return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onShow) }
     }, [load])
+
+    // A change made in the bot window shows here at once.
+    const { onRefresh } = useAdmin()
+    useEffect(() => onRefresh(load), [onRefresh, load])
 
     const approve = async task => {
         const sample = task.kind === 'sample'
