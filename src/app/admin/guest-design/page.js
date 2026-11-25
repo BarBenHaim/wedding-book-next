@@ -6,6 +6,8 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { auth, storage } from '@/lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
+import { Band } from '../ui/kit'
+import k from '../ui/kit.module.css'
 import { listGuestPresets, saveGuestPreset, deleteGuestPreset } from '@/lib/guestDesignPresets'
 import { Lock, Palette, Save, RefreshCw, Eye, Check, Upload, Smartphone, Tablet, Monitor, Type, Plus, Trash2 } from 'lucide-react'
 
@@ -161,7 +163,7 @@ function SuperAdminGate({ children }) {
     if (state === 'denied') {
         return (
             <div className='flex h-screen flex-col items-center justify-center text-center px-6' style={{ background: '#f8f4ec' }}>
-                <div className='w-12 h-12 rounded-2xl flex items-center justify-center mb-4' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}><Lock size={20} className='text-white' /></div>
+                <div className='w-12 h-12 rounded-2xl flex items-center justify-center mb-4' style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}><Lock size={20} className='text-white' /></div>
                 <h2 className='text-[18px] font-bold text-[#1a1410] mb-1'>הגישה מוגבלת</h2>
                 <p className='text-[13px] text-[#a89378]'>עיצוב דף הברכה זמין רק למנהל הראשי.</p>
             </div>
@@ -394,16 +396,9 @@ function Editor() {
     return (
         <div dir='rtl' className='min-h-screen' style={{ background: '#f8f4ec' }}>
             <div className='max-w-[1500px] mx-auto px-4 py-8'>
-                <div className='flex items-center justify-between gap-3 mb-6 flex-wrap'>
-                    <div className='flex items-center gap-3'>
-                        <div className='w-11 h-11 rounded-2xl flex items-center justify-center' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}><Palette size={20} className='text-white' /></div>
-                        <div>
-                            <h1 className='text-xl font-bold text-[#1a1410]'>עיצוב דף הברכה לאורחים</h1>
-                            <p className='text-xs text-[#a89378]'>פריסטים, צבעים, רקע, וטקסטים — עם תצוגה חיה.</p>
-                        </div>
-                    </div>
-                    <a href='/admin/studio' className='text-sm font-bold text-[#7a6a52] bg-white border border-[#e7dcc6] rounded-xl px-3 py-2'>← לסטודיו</a>
-                </div>
+                <Band title='עיצוב דף הברכה לאורחים' subtitle='פריסטים, צבעים, רקע, וטקסטים, עם תצוגה חיה'>
+                    <a href='/admin/studio' className={k.glass}>← לסטודיו</a>
+                </Band>
 
                 <div className='grid lg:grid-cols-2 gap-6 items-start'>
                     {/* Controls */}
@@ -554,7 +549,7 @@ function Editor() {
                         </div>
 
                         <div className='flex gap-2 sticky bottom-3 z-10'>
-                            <button onClick={apply} disabled={busy} className='flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white shadow-lg disabled:opacity-50' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}>
+                            <button onClick={apply} disabled={busy} className='flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white shadow-lg disabled:opacity-50' style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}>
                                 {saved ? <Check size={15} /> : <Save size={15} />} {saved ? 'הוחל!' : 'החל על האירוע'}
                             </button>
                             <button onClick={() => { setDesign({}); setCopy({}); setBgImage(''); setBtnImg('') }} className='flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold bg-white border border-[#e7dcc6] text-[#7a6a52] shadow'>
@@ -572,7 +567,7 @@ function Editor() {
                                     const active = previewWidth === w.id
                                     const Icon = w.icon
                                     return (
-                                        <button key={w.id} onClick={() => setPreviewWidth(w.id)} className='flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors' style={{ background: active ? 'linear-gradient(180deg,#d3b46a,#b8893d)' : 'transparent', color: active ? '#fff' : '#7a6a52' }}>
+                                        <button key={w.id} onClick={() => setPreviewWidth(w.id)} className='flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors' style={{ background: active ? 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' : 'transparent', color: active ? '#fff' : '#7a6a52' }}>
                                             <Icon size={12} /> {w.label}
                                         </button>
                                     )
@@ -593,7 +588,7 @@ function Editor() {
             </div>
 
             {toast && (
-                <div className='fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl text-sm font-bold text-white shadow-lg z-50' style={{ background: toast.type === 'error' ? '#c0392b' : 'linear-gradient(180deg,#d3b46a,#b8893d)' }}>{toast.m}</div>
+                <div className='fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl text-sm font-bold text-white shadow-lg z-50' style={{ background: toast.type === 'error' ? '#c0392b' : 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}>{toast.m}</div>
             )}
         </div>
     )

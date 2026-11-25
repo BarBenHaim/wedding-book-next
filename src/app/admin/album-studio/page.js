@@ -25,6 +25,8 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { auth, db, storage } from '@/lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
+import { Band } from '../ui/kit'
+import k from '../ui/kit.module.css'
 import AlbumPage from '@/components/AlbumPage/AlbumPage'
 import AlbumScene from '@/components/AlbumScene/AlbumScene'
 import { planAlbum, toSpreads } from '@/lib/albumLayout'
@@ -66,7 +68,7 @@ function Gate({ children }) {
     if (state === 'no') {
         return (
             <div className='flex h-screen flex-col items-center justify-center text-center px-6' style={{ background: '#f8f4ec' }}>
-                <div className='w-12 h-12 rounded-2xl flex items-center justify-center mb-4' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}>
+                <div className='w-12 h-12 rounded-2xl flex items-center justify-center mb-4' style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}>
                     <Lock size={20} className='text-white' />
                 </div>
                 <h2 className='text-[18px] font-bold text-[#1a1410] mb-1'>הגישה מוגבלת</h2>
@@ -296,28 +298,12 @@ function Studio() {
     return (
         <div dir='rtl' className='min-h-screen' style={{ background: '#f8f4ec' }}>
             <div className='max-w-[1500px] mx-auto px-4 py-8'>
-                <div className='flex items-center justify-between gap-3 mb-6 flex-wrap'>
-                    <div className='flex items-center gap-3'>
-                        <div className='w-11 h-11 rounded-2xl flex items-center justify-center' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}>
-                            <Images size={20} className='text-white' />
-                        </div>
-                        <div>
-                            <h1 className='text-xl font-bold text-[#1a1410]'>סטודיו אלבומים</h1>
-                            <p className='text-xs text-[#a89378]'>ספר תמונות מעוצב — כל תמונה בצורה שלה, בלי חיתוך ובלי מתיחה.</p>
-                        </div>
-                    </div>
-                    <div className='flex items-center gap-2'>
-                        <a href='/admin/studio' className='text-sm font-bold text-[#7a6a52] bg-white border border-[#e7dcc6] rounded-xl px-3 py-2'>סטודיו הספר</a>
-                        <button
-                            onClick={save}
-                            disabled={busy || !photos.length}
-                            className='inline-flex items-center gap-1.5 text-sm font-bold text-white rounded-xl px-4 py-2 disabled:opacity-50'
-                            style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}
-                        >
-                            {busy ? <Loader2 size={15} className='animate-spin' /> : <Save size={15} />} שמירה
-                        </button>
-                    </div>
-                </div>
+                <Band title='סטודיו אלבומים' subtitle='ספר תמונות מעוצב: כל תמונה בצורה שלה, בלי חיתוך ובלי מתיחה'>
+                    <a href='/admin/studio' className={k.glass}>סטודיו הספר</a>
+                    <button type='button' onClick={save} disabled={busy || !photos.length} className={k.glass}>
+                        {busy ? <Loader2 size={15} className='animate-spin' /> : <Save size={15} />} שמירה
+                    </button>
+                </Band>
 
                 <div className='grid lg:grid-cols-[380px_1fr] gap-6 items-start'>
                     {/* ── Controls ─────────────────────────────────── */}
@@ -366,7 +352,7 @@ function Studio() {
                                         key={id}
                                         onClick={() => setMode(id)}
                                         className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-bold transition-all ${mode === id ? 'text-white shadow-sm' : 'text-[#7a6a52] hover:bg-white'}`}
-                                        style={mode === id ? { background: 'linear-gradient(180deg,#d3b46a,#b8893d)' } : undefined}
+                                        style={mode === id ? { background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' } : undefined}
                                     >
                                         <Icon size={12} /> {label}
                                     </button>
@@ -451,7 +437,7 @@ function Studio() {
                                         key={s.id}
                                         onClick={() => setShape(s.id)}
                                         className={`flex-1 px-2 py-1.5 rounded-md text-[11px] font-bold transition-all ${shape === s.id ? 'text-white shadow-sm' : 'text-[#7a6a52] hover:bg-white'}`}
-                                        style={shape === s.id ? { background: 'linear-gradient(180deg,#d3b46a,#b8893d)' } : undefined}
+                                        style={shape === s.id ? { background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' } : undefined}
                                     >
                                         {s.label}
                                     </button>
@@ -534,7 +520,7 @@ function Studio() {
                 <div
                     className='fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-xl text-[13px] font-bold shadow-lg z-50'
                     style={{
-                        background: toast.type === 'err' ? '#b3402e' : 'linear-gradient(180deg,#d3b46a,#b8893d)',
+                        background: toast.type === 'err' ? '#b3402e' : 'linear-gradient(180deg, #2c2473 0%, #171049 100%)',
                         color: '#fff',
                     }}
                 >

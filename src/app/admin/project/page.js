@@ -15,6 +15,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
+import { Band } from '../ui/kit'
+import k from '../ui/kit.module.css'
 import { auth } from '@/lib/firebaseClient'
 import {
     Boxes, GitBranch, Play, FileCode2, FlaskConical, ListChecks,
@@ -109,26 +111,14 @@ export default function ProjectPage() {
             <div dir='rtl' className='min-h-screen bg-[#faf6ee] pb-20'>
                 <div className='mx-auto max-w-6xl px-4 pt-8 sm:px-6'>
 
-                    <header className='mb-6'>
-                        <div className='flex flex-wrap items-center justify-between gap-3'>
-                            <div>
-                                <h1 className='text-2xl font-extrabold text-[#3d2e1a]'>Wedding Tales — פרויקט גמר</h1>
-                                <p className='mt-1 text-sm text-[#7a6a52]'>
-                                    תכנות עם LLMs · אפליקציית web חיה עם דאטאבייס, שירות Python ושימוש ב-Gemini API
-                                </p>
-                            </div>
-                            <div className='flex flex-wrap gap-2'>
-                                <a href='https://app.weddingtales.co.il' target='_blank' rel='noreferrer'
-                                    className='inline-flex items-center gap-1.5 rounded-xl border border-[#ead9b3] bg-white px-3 py-2 text-xs font-bold text-[#7a6a52]'>
-                                    <ExternalLink size={13} /> האתר החי
-                                </a>
-                                <a href='https://github.com/BarBenHaim/wedding-book-next' target='_blank' rel='noreferrer'
-                                    className='inline-flex items-center gap-1.5 rounded-xl border border-[#ead9b3] bg-white px-3 py-2 text-xs font-bold text-[#7a6a52]'>
-                                    <GitBranch size={13} /> GitHub
-                                </a>
-                            </div>
-                        </div>
-                    </header>
+                    <Band title='Wedding Tales — פרויקט גמר' subtitle='תכנות עם LLMs · אפליקציית web חיה עם דאטאבייס, שירות Python ושימוש ב-Gemini API'>
+                        <a href='https://app.weddingtales.co.il' target='_blank' rel='noreferrer' className={k.glass}>
+                            <ExternalLink size={13} /> האתר החי
+                        </a>
+                        <a href='https://github.com/BarBenHaim/wedding-book-next' target='_blank' rel='noreferrer' className={k.glass}>
+                            <GitBranch size={13} /> GitHub
+                        </a>
+                    </Band>
 
                     {/* Flask health — the one thing that can be down while presenting. */}
                     <div className={`${CARD} mb-6 flex flex-wrap items-center justify-between gap-3`}>

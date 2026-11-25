@@ -23,6 +23,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { auth, db } from '@/lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
+import { Band } from '../ui/kit'
 import {
     QrCode, RefreshCcw, Plus, Trash2, Download, Pencil, Save, X,
     Copy, ExternalLink, Lock, Eye, EyeOff, Power, PowerOff,
@@ -44,7 +45,7 @@ function SuperAdminGate({ children }) {
     if (state === 'denied') {
         return (
             <div className='flex h-screen flex-col items-center justify-center text-center px-6' style={{ background: '#f8f4ec' }}>
-                <div className='w-12 h-12 rounded-2xl flex items-center justify-center mb-4' style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}>
+                <div className='w-12 h-12 rounded-2xl flex items-center justify-center mb-4' style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}>
                     <Lock size={20} className='text-white' />
                 </div>
                 <h2 className='text-[18px] font-bold text-[#1a1410] mb-1'>הגישה מוגבלת</h2>
@@ -331,26 +332,10 @@ function QrCodesContent() {
     const siteOrigin = typeof window !== 'undefined' ? window.location.origin : ''
 
     return (
-        <div className='min-h-screen px-4 sm:px-6 lg:px-10 py-8' dir='rtl' style={{ backgroundColor: '#f8f4ec' }}>
+        <div className='min-h-screen px-4 sm:px-6 lg:px-10 py-8' dir='rtl'>
             <div className='max-w-[1400px] mx-auto'>
 
-                {/* Header */}
-                <div className='flex items-center justify-between flex-wrap gap-4 mb-6'>
-                    <div className='flex items-center gap-3'>
-                        <div className='w-12 h-12 rounded-2xl flex items-center justify-center' style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', boxShadow: '0 12px 24px -10px rgba(170,136,64,0.45)' }}>
-                            <QrCode size={20} className='text-white' />
-                        </div>
-                        <div>
-                            <h1 className='font-bold text-[#1a1410] text-[22px] leading-tight'>ניהול ברקודים וקישורים</h1>
-                            <p className='text-[12px] text-[#a89378] mt-0.5'>ברקודים דינמיים (אפשר לשנות יעד אחרי הדפסה) + קישורי סטטיסטיקה לזוג</p>
-                        </div>
-                    </div>
-                    <div className='flex items-center gap-2 flex-wrap'>
-                        <a href='/admin' className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52]' style={{ background: '#fff', border: '1px solid #ead9b3' }}>
-                            ← חזרה לאדמין
-                        </a>
-                    </div>
-                </div>
+                <Band title='ברקודים וקישורים' subtitle='ברקודים דינמיים (אפשר לשנות יעד אחרי הדפסה) וקישורי סטטיסטיקה לזוג' />
 
                 {error && (
                     <div className='mb-4 px-4 py-3 rounded-lg text-[13px]' style={{ background: '#fff5f5', border: '1px solid #ffcdcd', color: '#b32424' }}>
@@ -359,8 +344,8 @@ function QrCodesContent() {
                 )}
 
                 {/* ── Stats tokens section ───────────────────────────────── */}
-                <div className='rounded-2xl overflow-hidden mb-6' style={{ background: '#fff', border: '1px solid rgba(212,184,103,0.30)', boxShadow: '0 8px 20px -16px rgba(170,136,64,0.18)' }}>
-                    <div className='px-5 py-4 border-b flex items-center justify-between flex-wrap gap-3' style={{ borderColor: '#f0e8d4', background: 'linear-gradient(180deg, #fdfaf3 0%, #ffffff 100%)' }}>
+                <div className='rounded-2xl overflow-hidden mb-6' style={{ background: '#fdf6e7', border: '1px solid rgba(212,184,103,0.30)', boxShadow: '0 8px 20px -16px rgba(170,136,64,0.18)' }}>
+                    <div className='px-5 py-4 border-b flex items-center justify-between flex-wrap gap-3' style={{ borderColor: '#f0e8d4', background: '#f6e8c9' }}>
                         <div className='flex items-center gap-2'>
                             <BarChart3 size={16} style={{ color: '#aa8840' }} />
                             <p className='text-[13px] font-bold text-[#3d2e1a]'>קישור סטטיסטיקה לזוג</p>
@@ -375,7 +360,7 @@ function QrCodesContent() {
                                 value={statsTokenWeddingId}
                                 onChange={e => setStatsTokenWeddingId(e.target.value)}
                                 className='px-3 py-2 rounded-lg text-[13px] font-semibold text-[#3d2e1a] outline-none'
-                                style={{ background: '#fff', border: '1px solid #ead9b3', minWidth: 240 }}
+                                style={{ background: '#fdf6e7', border: '1px solid #ead9b3', minWidth: 240 }}
                             >
                                 {weddings.map(w => (<option key={w.id} value={w.id}>{w.label}</option>))}
                             </select>
@@ -383,7 +368,7 @@ function QrCodesContent() {
                                 onClick={handleMintStatsToken}
                                 disabled={!statsTokenWeddingId || statsBusy}
                                 className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-white'
-                                style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', opacity: statsBusy ? 0.6 : 1 }}
+                                style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)', opacity: statsBusy ? 0.6 : 1 }}
                             >
                                 <Plus size={13} /> צור קישור חדש
                             </button>
@@ -403,11 +388,11 @@ function QrCodesContent() {
                                                     <p className='text-[10.5px] text-[#a89378] mt-0.5'>נוצר ב-{t.at.toLocaleString('he-IL')}</p>
                                                 )}
                                             </div>
-                                            <button onClick={() => copyToClipboard(link, t.token)} title='העתק' className='inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold text-[#7a6a52]' style={{ background: '#fff', border: '1px solid #ead9b3' }}>
+                                            <button onClick={() => copyToClipboard(link, t.token)} title='העתק' className='inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold text-[#7a6a52]' style={{ background: '#fdf6e7', border: '1px solid #ead9b3' }}>
                                                 {statsCopied === t.token ? <CheckCircle2 size={12} style={{ color: '#4f7a3e' }} /> : <Copy size={12} />}
                                                 {statsCopied === t.token ? 'הועתק!' : 'העתק'}
                                             </button>
-                                            <a href={link} target='_blank' rel='noreferrer' title='פתח' className='inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold text-[#7a6a52]' style={{ background: '#fff', border: '1px solid #ead9b3' }}>
+                                            <a href={link} target='_blank' rel='noreferrer' title='פתח' className='inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold text-[#7a6a52]' style={{ background: '#fdf6e7', border: '1px solid #ead9b3' }}>
                                                 <ExternalLink size={12} /> פתח
                                             </a>
                                             <button onClick={() => handleRevokeStatsToken(t.token)} disabled={statsBusy} title='בטל' className='inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold' style={{ background: '#fff5f5', border: '1px solid #ffcdcd', color: '#b32424' }}>
@@ -422,8 +407,8 @@ function QrCodesContent() {
                 </div>
 
                 {/* ── QR codes section ──────────────────────────────────── */}
-                <div className='rounded-2xl overflow-hidden' style={{ background: '#fff', border: '1px solid rgba(212,184,103,0.22)', boxShadow: '0 8px 20px -16px rgba(170,136,64,0.18)' }}>
-                    <div className='px-5 py-4 border-b flex items-center justify-between flex-wrap gap-3' style={{ borderColor: '#f0e8d4', background: 'linear-gradient(180deg, #fdfaf3 0%, #ffffff 100%)' }}>
+                <div className='rounded-2xl overflow-hidden' style={{ background: '#fdf6e7', border: '1px solid rgba(212,184,103,0.22)', boxShadow: '0 8px 20px -16px rgba(170,136,64,0.18)' }}>
+                    <div className='px-5 py-4 border-b flex items-center justify-between flex-wrap gap-3' style={{ borderColor: '#f0e8d4', background: '#f6e8c9' }}>
                         <div className='flex items-center gap-2'>
                             <QrCode size={16} style={{ color: '#aa8840' }} />
                             <p className='text-[13px] font-bold text-[#3d2e1a]'>ברקודים דינמיים</p>
@@ -433,7 +418,7 @@ function QrCodesContent() {
                                 value={weddingFilter}
                                 onChange={e => setWeddingFilter(e.target.value)}
                                 className='px-3 py-2 rounded-lg text-[12px] font-semibold text-[#3d2e1a] outline-none'
-                                style={{ background: '#fff', border: '1px solid #ead9b3' }}
+                                style={{ background: '#fdf6e7', border: '1px solid #ead9b3' }}
                             >
                                 <option value=''>כל החתונות</option>
                                 {weddings.map(w => (<option key={w.id} value={w.id}>{w.label}</option>))}
@@ -442,7 +427,7 @@ function QrCodesContent() {
                                 onClick={fetchQrList}
                                 disabled={loading}
                                 className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52]'
-                                style={{ background: '#fff', border: '1px solid #ead9b3' }}
+                                style={{ background: '#fdf6e7', border: '1px solid #ead9b3' }}
                             >
                                 <RefreshCcw size={12} className={loading ? 'animate-spin' : ''} /> רענן
                             </button>
@@ -450,7 +435,7 @@ function QrCodesContent() {
                                 onClick={handleCreate}
                                 disabled={busy._create}
                                 className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-white'
-                                style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', opacity: busy._create ? 0.6 : 1 }}
+                                style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)', opacity: busy._create ? 0.6 : 1 }}
                             >
                                 <Plus size={12} /> ברקוד חדש
                             </button>
@@ -469,7 +454,7 @@ function QrCodesContent() {
                                     const shortUrl = `${siteOrigin}/q/${qr.code}`
                                     const isEditing = editing?.code === qr.code
                                     return (
-                                        <div key={qr.code} className='rounded-xl p-4' style={{ background: '#fff', border: '1px solid rgba(212,184,103,0.25)', boxShadow: '0 4px 10px -8px rgba(170,136,64,0.18)' }}>
+                                        <div key={qr.code} className='rounded-xl p-4' style={{ background: '#fdf6e7', border: '1px solid rgba(212,184,103,0.25)', boxShadow: '0 4px 10px -8px rgba(170,136,64,0.18)' }}>
                                             {/* Top row: code + status */}
                                             <div className='flex items-start justify-between gap-2 mb-3'>
                                                 <div className='flex-1 min-w-0'>
@@ -494,7 +479,7 @@ function QrCodesContent() {
                                                     onClick={() => handleDownloadPng(qr.code)}
                                                     title='הורד PNG (1200×1200)'
                                                     className='inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold text-white'
-                                                    style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}
+                                                    style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}
                                                 >
                                                     <Download size={12} /> PNG
                                                 </button>
@@ -504,7 +489,7 @@ function QrCodesContent() {
                                             <div className='flex items-center gap-2 mb-2 p-2 rounded-lg' style={{ background: '#fdfaf3', border: '1px solid #f0e8d4' }}>
                                                 <span className='text-[10px] text-[#a89378] font-semibold'>URL מודפס</span>
                                                 <code className='flex-1 min-w-0 truncate text-[11px] text-[#3d2e1a] font-mono'>{shortUrl}</code>
-                                                <button onClick={() => copyToClipboard(shortUrl, `s-${qr.code}`)} title='העתק' className='inline-flex items-center px-1.5 py-1 rounded text-[#7a6a52]' style={{ background: '#fff', border: '1px solid #ead9b3' }}>
+                                                <button onClick={() => copyToClipboard(shortUrl, `s-${qr.code}`)} title='העתק' className='inline-flex items-center px-1.5 py-1 rounded text-[#7a6a52]' style={{ background: '#fdf6e7', border: '1px solid #ead9b3' }}>
                                                     {statsCopied === `s-${qr.code}` ? <CheckCircle2 size={11} style={{ color: '#4f7a3e' }} /> : <Copy size={11} />}
                                                 </button>
                                             </div>
@@ -518,7 +503,7 @@ function QrCodesContent() {
                                                             value={editing.weddingId || ''}
                                                             onChange={e => setEditing(prev => ({ ...prev, weddingId: e.target.value }))}
                                                             className='w-full px-2.5 py-1.5 rounded-md text-[12px] text-[#3d2e1a] outline-none'
-                                                            style={{ background: '#fff', border: '1px solid #ead9b3' }}
+                                                            style={{ background: '#fdf6e7', border: '1px solid #ead9b3' }}
                                                         >
                                                             <option value=''>— ללא שיוך —</option>
                                                             {weddings.map(w => (<option key={w.id} value={w.id}>{w.label}</option>))}
@@ -532,7 +517,7 @@ function QrCodesContent() {
                                                             onChange={e => setEditing(prev => ({ ...prev, targetUrl: e.target.value }))}
                                                             placeholder='/wedding/abc/photo'
                                                             className='w-full px-2.5 py-1.5 rounded-md text-[12px] text-[#3d2e1a] outline-none font-mono'
-                                                            style={{ background: '#fff', border: '1px solid #ead9b3' }}
+                                                            style={{ background: '#fdf6e7', border: '1px solid #ead9b3' }}
                                                         />
                                                     </div>
                                                     <div>
@@ -543,7 +528,7 @@ function QrCodesContent() {
                                                             onChange={e => setEditing(prev => ({ ...prev, label: e.target.value }))}
                                                             placeholder='למשל: סטיקרים על השולחנות'
                                                             className='w-full px-2.5 py-1.5 rounded-md text-[12px] text-[#3d2e1a] outline-none'
-                                                            style={{ background: '#fff', border: '1px solid #ead9b3' }}
+                                                            style={{ background: '#fdf6e7', border: '1px solid #ead9b3' }}
                                                         />
                                                     </div>
                                                     <div className='flex items-center gap-2 pt-1'>
@@ -551,14 +536,14 @@ function QrCodesContent() {
                                                             onClick={handleSaveEdit}
                                                             disabled={busy[qr.code]}
                                                             className='inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-[11px] font-bold text-white'
-                                                            style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', opacity: busy[qr.code] ? 0.6 : 1 }}
+                                                            style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)', opacity: busy[qr.code] ? 0.6 : 1 }}
                                                         >
                                                             <Save size={11} /> שמור
                                                         </button>
                                                         <button
                                                             onClick={() => setEditing(null)}
                                                             className='inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-[11px] font-bold text-[#7a6a52]'
-                                                            style={{ background: '#fff', border: '1px solid #ead9b3' }}
+                                                            style={{ background: '#fdf6e7', border: '1px solid #ead9b3' }}
                                                         >
                                                             <X size={11} /> בטל
                                                         </button>
@@ -589,7 +574,7 @@ function QrCodesContent() {
                                                                 weddingId: qr.weddingId || '',
                                                             })}
                                                             className='inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold text-[#7a6a52]'
-                                                            style={{ background: '#fff', border: '1px solid #ead9b3' }}
+                                                            style={{ background: '#fdf6e7', border: '1px solid #ead9b3' }}
                                                         >
                                                             <Pencil size={11} /> ערוך יעד
                                                         </button>
@@ -597,7 +582,7 @@ function QrCodesContent() {
                                                             onClick={() => handleToggleActive(qr)}
                                                             disabled={busy[qr.code]}
                                                             className='inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold text-[#7a6a52]'
-                                                            style={{ background: '#fff', border: '1px solid #ead9b3' }}
+                                                            style={{ background: '#fdf6e7', border: '1px solid #ead9b3' }}
                                                         >
                                                             {qr.active === false ? (<><Power size={11} /> הפעל</>) : (<><PowerOff size={11} /> השבת</>)}
                                                         </button>
@@ -606,7 +591,7 @@ function QrCodesContent() {
                                                             target='_blank'
                                                             rel='noreferrer'
                                                             className='inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold text-[#7a6a52]'
-                                                            style={{ background: '#fff', border: '1px solid #ead9b3' }}
+                                                            style={{ background: '#fdf6e7', border: '1px solid #ead9b3' }}
                                                         >
                                                             <ExternalLink size={11} /> בדוק יעד
                                                         </a>

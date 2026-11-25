@@ -27,6 +27,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { useRouter } from 'next/navigation'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
+import { Band } from '../ui/kit'
 import BookPageTemplate from '@/components/BookPageTemplate/BookPageTemplate'
 import {
     listPresets, seedBuiltinPresetsIfMissing, savePreset, deletePreset,
@@ -88,6 +89,10 @@ const MOCK_PHOTO = `data:image/svg+xml;utf8,${encodeURIComponent(
 const PREVIEW_SIZE_DESKTOP = 800
 const PREVIEW_PADDING_MOBILE = 48 // page px-4 (16) + canvas p-4 (16) on each side, roughly
 const PREVIEW_BREAKPOINT = 1024 // matches Tailwind's `lg:` cutoff used in the column grid
+// Wide screens: what stands beside the canvas (admin menu, both side panels,
+// gaps and paddings), so the page never scrolls sideways.
+const PREVIEW_AROUND_DESKTOP = 835
+const PREVIEW_SIZE_MIN = 360
 
 // Hook — returns the live preview-canvas size. Tracks viewport width
 // so the 1:1 page renders crisply on both desktop and a 375-wide
@@ -100,7 +105,7 @@ function usePreviewSize() {
         const update = () => {
             const w = window.innerWidth
             if (w >= PREVIEW_BREAKPOINT) {
-                setSize(PREVIEW_SIZE_DESKTOP)
+                setSize(Math.max(PREVIEW_SIZE_MIN, Math.min(PREVIEW_SIZE_DESKTOP, w - PREVIEW_AROUND_DESKTOP)))
             } else {
                 // On mobile / tablet the canvas owns the full main
                 // column. Cap at desktop size so big tablets don't
@@ -496,48 +501,16 @@ function StudioContent() {
             }}
         >
             <div className='max-w-[1400px] mx-auto'>
-                {/* Breadcrumb */}
-                <div className='flex items-center gap-1.5 text-[12px] text-[#a89378] mb-4'>
-                    <Link href='/admin' className='hover:text-[#7a6a52] transition-colors'>
-                        מרכז הניהול
-                    </Link>
-                    <ChevronRight size={12} className='rotate-180' />
-                    <span className='text-[#5a4d3a] font-semibold'>סטודיו עיצוב</span>
-                </div>
-
                 {/* Header */}
-                <div className='flex items-start sm:items-center justify-between gap-3 mb-6 flex-wrap'>
-                    <div className='flex items-center gap-4'>
-                        <div
-                            className='w-12 h-12 rounded-2xl flex items-center justify-center shrink-0'
-                            style={{
-                                background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
-                                boxShadow:
-                                    '0 12px 24px -10px rgba(170,136,64,0.45), inset 0 1px 0 rgba(255,255,255,0.30)',
-                            }}
-                        >
-                            <Wand2 size={20} className='text-white' />
-                        </div>
-                        <div>
-                            <h1
-                                className='leading-tight tracking-tight font-bold'
-                                style={{ color: '#1a1410', fontSize: '22px', letterSpacing: '-0.015em' }}
-                            >
-                                סטודיו עיצוב
-                            </h1>
-                            <p className='mt-1' style={{ color: '#a89378', fontSize: '12px' }}>
-                                בחירת תבנית קיימת ותצוגת חיה. עריכה ויצירת תבניות חדשות —
-                                בעדכון הבא.
-                            </p>
-                        </div>
-                    </div>
+                <Band title='סטודיו עיצוב' subtitle='בחירת תבנית ותצוגה חיה' />
+                <div className='flex items-center justify-end gap-3 mb-6 flex-wrap empty:hidden'>
 
                     <div className='flex items-center gap-2'>
                         <button
                             onClick={() => setWizardOpen(true)}
                             className='flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-bold text-white transition-all hover:brightness-105 active:scale-[0.98]'
                             style={{
-                                background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)',
                                 boxShadow: '0 6px 16px -6px rgba(170,136,64,0.55)',
                             }}
                         >
@@ -603,7 +576,7 @@ function StudioContent() {
                                     mobileTab === tab.id
                                         ? {
                                               background:
-                                                  'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                                  'linear-gradient(180deg, #2c2473 0%, #171049 100%)',
                                           }
                                         : { background: 'transparent' }
                                 }
@@ -619,7 +592,7 @@ function StudioContent() {
                     the active panel. tabClass() encodes that — the
                     panel either renders normally on mobile (active
                     tab) or hides; on lg it always renders. */}
-                <div className='grid grid-cols-1 lg:grid-cols-[260px_1fr_320px] gap-5'>
+                <div className='grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_320px] gap-5'>
                     <div className={tabClass(mobileTab === 'presets')}>
                         <PresetListPanel
                             presets={presets}
@@ -834,7 +807,7 @@ function ActionBar({
                 disabled={!dirty || saving}
                 className='inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed'
                 style={{
-                    background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                    background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)',
                     boxShadow: '0 6px 14px -8px rgba(170,136,64,0.50)',
                 }}
             >
@@ -1141,7 +1114,7 @@ function PreviewPanel({
                 <div className='flex items-center gap-2.5 min-w-0'>
                     <div
                         className='w-1.5 h-5 rounded-full shrink-0'
-                        style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}
+                        style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}
                     />
                     <h2 className='text-[14px] font-bold text-[#1a1410] truncate'>
                         {preset?.name || 'תצוגה חיה'}
@@ -1186,7 +1159,7 @@ function PreviewPanel({
                     className='inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-[11.5px] font-bold transition-all shrink-0'
                     style={{
                         background: blessingOnly
-                            ? 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)'
+                            ? 'linear-gradient(180deg, #2c2473 0%, #171049 100%)'
                             : '#ffffff',
                         border: `1px solid ${blessingOnly ? '#b8893d' : '#ead9b3'}`,
                         color: blessingOnly ? '#ffffff' : '#7a6a52',
@@ -1204,7 +1177,7 @@ function PreviewPanel({
                     className='inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-[11.5px] font-bold transition-all shrink-0'
                     style={{
                         background: albumOnly
-                            ? 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)'
+                            ? 'linear-gradient(180deg, #2c2473 0%, #171049 100%)'
                             : '#ffffff',
                         border: `1px solid ${albumOnly ? '#b8893d' : '#ead9b3'}`,
                         color: albumOnly ? '#ffffff' : '#7a6a52',
@@ -1233,7 +1206,7 @@ function PreviewPanel({
                                 blessingLength === len
                                     ? {
                                           background:
-                                              'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                              'linear-gradient(180deg, #2c2473 0%, #171049 100%)',
                                       }
                                     : { background: '#ffffff' }
                             }
@@ -1758,7 +1731,7 @@ function PropertiesPanel({
                                         onClick={() => onValuesChange({ photoFit: o.v })}
                                         className={`flex-1 px-2 py-1.5 text-[11.5px] font-bold transition-all ${i > 0 ? 'border-r border-[#ead9b3]' : ''}`}
                                         style={(v.photoFit ?? 'cover') === o.v
-                                            ? { background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', color: '#fff' }
+                                            ? { background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)', color: '#fff' }
                                             : { background: '#fff', color: '#7a6a52' }}
                                     >
                                         {o.label}
@@ -1828,7 +1801,7 @@ function PropertiesPanel({
                                         onClick={() => onValuesChange({ photoLayout: o.v })}
                                         className={`flex-1 px-2 py-1.5 text-[11.5px] font-bold transition-all ${i > 0 ? 'border-r border-[#ead9b3]' : ''}`}
                                         style={(v.photoLayout ?? 'uniform') === o.v
-                                            ? { background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', color: '#fff' }
+                                            ? { background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)', color: '#fff' }
                                             : { background: '#fff', color: '#7a6a52' }}
                                     >
                                         {o.label}
@@ -2642,7 +2615,7 @@ function PresetWizard({ backgrounds, onClose, onCreate }) {
                         <button
                             onClick={() => setStep(s => s + 1)}
                             className='px-6 py-2.5 rounded-xl text-[13px] font-bold text-white transition-all hover:brightness-105 active:scale-[0.98]'
-                            style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', boxShadow: '0 6px 16px -6px rgba(170,136,64,0.55)' }}
+                            style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)', boxShadow: '0 6px 16px -6px rgba(170,136,64,0.55)' }}
                         >
                             ממשיכים ←
                         </button>
@@ -2650,7 +2623,7 @@ function PresetWizard({ backgrounds, onClose, onCreate }) {
                         <button
                             onClick={() => onCreate({ name: name.trim(), values })}
                             className='px-6 py-2.5 rounded-xl text-[13px] font-bold text-white transition-all hover:brightness-105 active:scale-[0.98]'
-                            style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', boxShadow: '0 6px 16px -6px rgba(170,136,64,0.55)' }}
+                            style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)', boxShadow: '0 6px 16px -6px rgba(170,136,64,0.55)' }}
                         >
                             יצירת הפריסט ✨
                         </button>
@@ -3074,7 +3047,7 @@ function PropertyWeightPicker({ label, value, disabled, onChange }) {
                             style={{
                                 ...(active && {
                                     background:
-                                        'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                        'linear-gradient(180deg, #2c2473 0%, #171049 100%)',
                                 }),
                                 fontWeight: opt.value || 400,
                             }}
@@ -3117,7 +3090,7 @@ function PropertyAlignPicker({ label, value, disabled, onChange }) {
                             className={`px-2.5 py-1 rounded-md text-[11px] transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                                 active ? 'text-white shadow-sm' : 'text-[#7a6a52] hover:bg-white'
                             }`}
-                            style={{ ...(active && { background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }) }}
+                            style={{ ...(active && { background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }) }}
                         >
                             {opt.label}
                         </button>
@@ -3145,7 +3118,7 @@ function PropertyToggle({ label, value, disabled, onChange, onLabel = 'דלוק'
                             className={`flex-1 px-2.5 py-1 rounded-md text-[11px] transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                                 active ? 'text-white shadow-sm' : 'text-[#7a6a52] hover:bg-white'
                             }`}
-                            style={{ ...(active && { background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }) }}
+                            style={{ ...(active && { background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }) }}
                         >
                             {lbl}
                         </button>
@@ -3187,7 +3160,7 @@ function PropertyTemplatePicker({ label, value, disabled, onChange, hint }) {
                             className={`px-2.5 py-1 rounded-md text-[11px] transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                                 active ? 'text-white shadow-sm font-bold' : 'text-[#7a6a52] hover:bg-white'
                             }`}
-                            style={{ ...(active && { background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }) }}
+                            style={{ ...(active && { background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }) }}
                         >
                             {opt.label}
                         </button>
@@ -3218,7 +3191,7 @@ function PropertyEventTypesEdit({ selected, disabled, onToggle, onClear }) {
                     className={`px-2.5 py-1 rounded-md text-[11px] transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                         isGeneric ? 'text-white shadow-sm font-bold' : 'text-[#7a6a52] hover:bg-white'
                     }`}
-                    style={{ ...(isGeneric && { background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }) }}
+                    style={{ ...(isGeneric && { background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }) }}
                 >
                     כל האירועים
                 </button>
@@ -3233,7 +3206,7 @@ function PropertyEventTypesEdit({ selected, disabled, onToggle, onClear }) {
                             className={`px-2.5 py-1 rounded-md text-[11px] transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                                 active ? 'text-white shadow-sm font-bold' : 'text-[#7a6a52] hover:bg-white'
                             }`}
-                            style={{ ...(active && { background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }) }}
+                            style={{ ...(active && { background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }) }}
                         >
                             {getEventConfig(typeId).label}
                         </button>
@@ -3278,7 +3251,7 @@ function SuperAdminGate({ children }) {
                 <div
                     className='w-12 h-12 rounded-2xl flex items-center justify-center mb-4'
                     style={{
-                        background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                        background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)',
                         boxShadow: '0 12px 24px -10px rgba(170,136,64,0.45)',
                     }}
                 >

@@ -17,6 +17,18 @@ export function Page({ children, className = '' }) {
 
 export const Sheet = ({ children }) => <div className={k.sheetPage}>{children}</div>
 
+// The shorter sky header of the tool screens.
+export function Band({ title, subtitle, children }) {
+    return (
+        <header className={k.band}>
+            <h1>{title}</h1>
+            <i aria-hidden='true' />
+            {subtitle && <p>{subtitle}</p>}
+            {children && <div>{children}</div>}
+        </header>
+    )
+}
+
 export function Hero({ title, under, figures }) {
     return (
         <div className={k.hero}>

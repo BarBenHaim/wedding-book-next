@@ -46,6 +46,19 @@ button.plaque:hover { transform: translateY(-3px); }
 :global(.wt-admin) button.plaque[aria-pressed='true'] { color: #fff3d8; transform: translateY(-3px); }
 button.plaque[aria-pressed='true']::after { content: ''; position: absolute; inset: 9px 11px; z-index: -1; border-radius: 12px; border: 1px solid #e9c97f; background: linear-gradient(180deg, #2c2473, #171049); }
 
+/* the shorter header of the tool screens */
+.band, .band * { font-family: var(--serif), 'Noto Serif Hebrew', 'Frank Ruhl Libre', serif; }
+.band {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+    min-height: 158px; margin-bottom: 18px; padding: 16px 18px 14px; border: 3px solid var(--gold); border-radius: 18px;
+    background: linear-gradient(180deg, rgba(24, 14, 70, .22), rgba(24, 14, 70, .55)), url('/admin-theme/hero.webp') center 60% / cover;
+    box-shadow: inset 0 0 0 2px rgba(255, 238, 200, .4), 0 8px 18px -8px rgba(24, 10, 45, .5);
+}
+.band h1 { font-size: clamp(26px, 3.4vw, 40px); font-weight: 900; line-height: 1.25; color: #fff3d4; text-shadow: 0 1px 0 #8a6530, 0 2px 0 #5c421b, 0 5px 12px rgba(8, 3, 35, .95); }
+.band > i { width: 220px; height: 30px; background: url('/admin-theme/divider.webp') center / contain no-repeat; }
+.band p { max-width: 640px; color: #fbeed0; font-size: 14.5px; font-weight: 700; line-height: 1.6; text-shadow: 0 1px 6px rgba(8, 3, 35, .95); }
+.band > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; margin-top: 9px; }
+
 /* framed panels */
 .panel { position: relative; isolation: isolate; padding: 16px 22px 20px; }
 .panel::before {

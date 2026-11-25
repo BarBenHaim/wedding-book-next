@@ -22,13 +22,15 @@ import { onAuthStateChanged, getIdToken } from 'firebase/auth'
 import { auth } from '@/lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
+import { Band } from '../ui/kit'
+import k from '../ui/kit.module.css'
 import { Lock, Loader2, AlertTriangle, RefreshCw, ImageIcon, KeyRound } from 'lucide-react'
 import { testBatch } from '@/lib/social/imagePrompt'
 import { isoInIsrael } from '@/lib/salesAgent/leadsView'
 
-const PAGE_BG = '#f8f4ec'
-const CARD = { background: '#fff', border: '1px solid rgba(212,184,103,0.30)', boxShadow: '0 8px 20px -16px rgba(170,136,64,0.18)' }
-const GOLD = 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)'
+const PAGE_BG = 'transparent'
+const CARD = { background: '#fdf6e7', border: '1px solid rgba(164,128,84,0.42)', boxShadow: '0 8px 20px -16px rgba(170,136,64,0.18)' }
+const GOLD = 'linear-gradient(180deg, #2c2473 0%, #171049 100%)'
 
 const MODE_HE = { edit: 'תמונה אמיתית + טקסט', generate: 'תמונה שנוצרה במלואה' }
 const SIZE_HE = { post: 'פוסט', story: 'סטורי' }
@@ -142,24 +144,15 @@ function Content() {
     return (
         <div className='min-h-screen' style={{ background: PAGE_BG }} dir='rtl'>
             <div className='max-w-5xl mx-auto px-4 py-6'>
-                <div className='flex items-start justify-between gap-4 mb-5'>
-                    <div>
-                        <h1 className='text-[20px] font-bold text-[#1a1410]'>בדיקת עברית בתמונות</h1>
-                        <p className='text-[12.5px] text-[#a89378] mt-1 max-w-lg leading-relaxed'>
-                            ארבעה רינדורים שנבחרו כדי לא להסכים זה עם זה: אחד על תמונה אמיתית של ספר שהודפס, אחד שנוצר מאפס, פוסט וסטורי, ואחד בלי טקסט בכלל.
-                            תשווה כל תמונה לשורה שמתחתיה. אות אחת שגויה זה פוסל.
-                        </p>
-                    </div>
-                    <button
-                        onClick={runAll}
-                        disabled={busy}
-                        className='shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-bold text-white disabled:opacity-50'
-                        style={{ background: GOLD }}
-                    >
+                <Band
+                    title='בדיקת עברית בתמונות'
+                    subtitle='ארבעה רינדורים שנבחרו כדי לא להסכים זה עם זה: אחד על תמונה אמיתית של ספר שהודפס, אחד שנוצר מאפס, פוסט וסטורי, ואחד בלי טקסט בכלל. תשווה כל תמונה לשורה שמתחתיה. אות אחת שגויה זה פוסל.'
+                >
+                    <button type='button' onClick={runAll} disabled={busy} className={k.glass}>
                         {busy ? <Loader2 size={15} className='animate-spin' /> : <RefreshCw size={15} />}
                         צור את כל הארבעה
                     </button>
-                </div>
+                </Band>
 
                 {missingKey && (
                     <div className='mb-5 rounded-xl px-4 py-3 flex items-start gap-2.5 bg-amber-50 border border-amber-200'>

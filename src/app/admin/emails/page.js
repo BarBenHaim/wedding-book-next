@@ -5,7 +5,8 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import AdminPageWrapper from '@/components/AdminPageWrapper/AdminPageWrapper'
-import { Mail, Send, Clock3, FileText, Zap, Lock, Plus, Trash2, Eye, Save, Users, MessageCircle } from 'lucide-react'
+import { Band } from '../ui/kit'
+import { Send, Clock3, FileText, Zap, Lock, Plus, Trash2, Eye, Save, Users, MessageCircle } from 'lucide-react'
 
 // Variables surfaced as insert buttons. Kept in sync with
 // TEMPLATE_VARIABLES in src/lib/emailEngine.js (server-only — can't be
@@ -110,7 +111,7 @@ function SuperAdminGate({ children }) {
     if (state === 'denied') {
         return (
             <div className='flex h-screen flex-col items-center justify-center text-center px-6' style={{ background: '#f8f4ec' }}>
-                <div className='w-12 h-12 rounded-2xl flex items-center justify-center mb-4' style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}>
+                <div className='w-12 h-12 rounded-2xl flex items-center justify-center mb-4' style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}>
                     <Lock size={20} className='text-white' />
                 </div>
                 <h2 className='text-[18px] font-bold text-[#1a1410] mb-1'>הגישה מוגבלת</h2>
@@ -130,17 +131,9 @@ function EmailManager() {
     }
 
     return (
-        <div dir='rtl' className='min-h-screen' style={{ background: '#f8f4ec' }}>
+        <div dir='rtl' className='min-h-screen'>
             <div className='max-w-4xl mx-auto px-4 py-8'>
-                <div className='flex items-center gap-3 mb-6'>
-                    <div className='w-11 h-11 rounded-2xl flex items-center justify-center' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}>
-                        <Mail size={20} className='text-white' />
-                    </div>
-                    <div>
-                        <h1 className='text-xl font-bold text-[#1a1410]'>מיילים ומסע לקוח</h1>
-                        <p className='text-xs text-[#a89378]'>שליחה, טמפלייטים, ותזמון אוטומטי לזוגות</p>
-                    </div>
-                </div>
+                <Band title='מיילים ומסע לקוח' subtitle='שליחה, טמפלייטים, ותזמון אוטומטי לזוגות' />
 
                 <div className='flex gap-2 mb-6 flex-wrap'>
                     <TabBtn id='compose' tab={tab} setTab={setTab} icon={Send} label='חיבור ושליחה' />
@@ -158,7 +151,7 @@ function EmailManager() {
             {toast && (
                 <div
                     className='fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl text-sm font-bold text-white shadow-lg z-50'
-                    style={{ background: toast.type === 'error' ? '#c0392b' : 'linear-gradient(180deg,#d3b46a,#b8893d)' }}
+                    style={{ background: toast.type === 'error' ? '#c0392b' : 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}
                 >
                     {toast.message}
                 </div>
@@ -174,7 +167,7 @@ function TabBtn({ id, tab, setTab, icon: Icon, label }) {
             onClick={() => setTab(id)}
             className='flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all'
             style={{
-                background: active ? 'linear-gradient(180deg,#d3b46a,#b8893d)' : '#fff',
+                background: active ? 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' : '#fdf6e7',
                 color: active ? '#fff' : '#7a6a52',
                 border: active ? 'none' : '1px solid rgba(212,184,103,0.3)',
             }}
@@ -478,7 +471,7 @@ function Compose({ flash }) {
                 <button onClick={doPreview} disabled={busy} className='flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold bg-white border border-[#e7dcc6] text-[#7a6a52] disabled:opacity-50'>
                     <Eye size={15} /> תצוגה מקדימה
                 </button>
-                <button onClick={doSend} disabled={busy} className='flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white disabled:opacity-50' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}>
+                <button onClick={doSend} disabled={busy} className='flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white disabled:opacity-50' style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}>
                     <Send size={15} /> {scheduleFor ? 'תזמן שליחה' : 'שלח עכשיו'}
                 </button>
                 <button onClick={doWhatsapp} disabled={busy} className='flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-50' style={{ background: '#25D366' }}>
@@ -566,7 +559,7 @@ function Templates({ flash }) {
     return (
         <div className='space-y-4'>
             <div className='flex gap-2'>
-                <button onClick={() => setEditing({ name: '', subject: '', body: '' })} className='flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}><Plus size={14} /> טמפלייט חדש</button>
+                <button onClick={() => setEditing({ name: '', subject: '', body: '' })} className='flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white' style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}><Plus size={14} /> טמפלייט חדש</button>
                 <button onClick={seed} className='flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold bg-white border border-[#e7dcc6] text-[#7a6a52]'>טען מסע מלא (טמפלייטים + אוטומציות)</button>
             </div>
 
@@ -576,7 +569,7 @@ function Templates({ flash }) {
                     <input className={`${inputCls} mb-2`} placeholder='נושא' value={editing.subject} onChange={e => setEditing({ ...editing, subject: e.target.value })} />
                     <textarea className={`${inputCls} min-h-[140px]`} placeholder='גוף ההודעה — אפשר {{coupleName}}, {{bookButton}} וכו׳' value={editing.body} onChange={e => setEditing({ ...editing, body: e.target.value })} />
                     <div className='flex gap-2 mt-3'>
-                        <button onClick={save} className='flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}><Save size={14} /> שמור</button>
+                        <button onClick={save} className='flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white' style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}><Save size={14} /> שמור</button>
                         <button onClick={() => setEditing(null)} className='rounded-xl px-4 py-2.5 text-sm font-bold bg-white border border-[#e7dcc6] text-[#7a6a52]'>ביטול</button>
                     </div>
                 </Card>
@@ -626,7 +619,7 @@ function Automations({ flash }) {
 
     return (
         <div className='space-y-4'>
-            <button onClick={() => setEditing({ name: '', templateId: '', trigger: { type: 'beforeWedding', offsetDays: 14 }, active: true })} className='flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}><Plus size={14} /> כלל אוטומטי חדש</button>
+            <button onClick={() => setEditing({ name: '', templateId: '', trigger: { type: 'beforeWedding', offsetDays: 14 }, active: true })} className='flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white' style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}><Plus size={14} /> כלל אוטומטי חדש</button>
 
             <p className='text-xs text-[#a89378]'>כלל אוטומטי רץ פעם ביום ושולח את הטמפלייט לכל זוג שמתאים לתנאי (למשל 14 ימים לפני האירוע). כל זוג מקבל כל כלל פעם אחת בלבד.</p>
 
@@ -646,7 +639,7 @@ function Automations({ flash }) {
                         </select>
                     </div>
                     <div className='flex gap-2 mt-3'>
-                        <button onClick={save} className='flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white' style={{ background: 'linear-gradient(180deg,#d3b46a,#b8893d)' }}><Save size={14} /> שמור</button>
+                        <button onClick={save} className='flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white' style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}><Save size={14} /> שמור</button>
                         <button onClick={() => setEditing(null)} className='rounded-xl px-4 py-2.5 text-sm font-bold bg-white border border-[#e7dcc6] text-[#7a6a52]'>ביטול</button>
                     </div>
                 </Card>
