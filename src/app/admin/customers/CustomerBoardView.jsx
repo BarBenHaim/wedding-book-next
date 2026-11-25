@@ -222,6 +222,7 @@ export default function CustomerBoardView({ data, busy, error, updatedAt, onAct,
                     <h1 className='text-2xl font-black flex-1' style={{ color: '#1a1410' }}>טיפול בלקוחות</h1>
                     {updatedAt && <span className='text-[12px]' style={{ color: SOFT }}>עודכן {updatedAt}</span>}
                     <Button onClick={onRefresh} disabled={busy}>{busy ? 'טוען…' : 'רענן'}</Button>
+                    <Link href='/admin/today' className='text-[12px] font-bold underline'>למסך היום</Link>
                     <Link href='/admin' className='text-[12px] font-bold underline'>לסופר אדמין</Link>
                 </header>
 

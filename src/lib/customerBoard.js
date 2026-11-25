@@ -122,6 +122,7 @@ export function boardRow({ w, facts = {}, today, enabledDay = null }) {
         id: w.id,
         title: eventNameOf(w) || w.ownerName || w.id,
         ownerName: w.ownerName || null,
+        eventType: w.eventType || null,
         phone: mobileOf(w.ownerPhone) || mobileOf(facts.phone) || null,
         day,
         toEvent,

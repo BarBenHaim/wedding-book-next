@@ -173,6 +173,8 @@ export default function Header() {
     // contact sheet and a full-screen viewer, where a sticky site bar
     // would take a sixth of a phone screen away from the pictures.
     // /login and /enter are the same kind of page: one goal, their own frame.
+    // The "today" screen draws its own menu.
+    if (pathname === '/admin/today') return null
     if (pathname === '/start' || pathname === '/my' || pathname === '/app' || pathname === '/login' || pathname === '/enter' || pathname?.startsWith('/arrange/')) return null
     if (/^\/manage\/[^/]+\/photos\/?$/.test(pathname || '')) return null
 

@@ -423,6 +423,11 @@ function SalesLeadsContent() {
 // hides either of those is worse than no cost panel, because a number
 // with a currency symbol on it gets believed.
 function Spend({ data }) {
+    const card = useRef(null)
+    const loaded = !!data
+    useEffect(() => {
+        if (loaded && window.location.hash === '#spend') card.current?.scrollIntoView()
+    }, [loaded])
     if (!data) return null
 
     const cells = [
@@ -434,7 +439,7 @@ function Spend({ data }) {
     const peak = Math.max(...(data.byDay || []).map(d => d.usd), 0)
 
     return (
-        <div className='rounded-2xl px-4 py-3.5 mb-4' style={CARD}>
+        <div ref={card} id='spend' className='rounded-2xl px-4 py-3.5 mb-4 scroll-mt-24' style={CARD}>
             <div className='flex items-center justify-between gap-3 mb-3'>
                 <div className='flex items-center gap-1.5'>
                     <Wallet size={13} style={{ color: '#c9a44e' }} />

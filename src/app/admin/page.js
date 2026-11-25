@@ -3235,6 +3235,14 @@ function AdminDashboardContent() {
                             <Wand2 size={14} /> סטודיו עיצוב
                         </a>
                         <a
+                            href='/admin/today'
+                            title='מה מחכה לך היום'
+                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold text-white'
+                            style={{ background: '#2b2266', border: '1px solid #b8935a' }}
+                        >
+                            <CalendarDays size={14} /> היום
+                        </a>
+                        <a
                             href='/admin/customers'
                             title='לכל לקוח: איפה הוא עומד ומה הצעד הבא'
                             className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
@@ -3878,6 +3886,7 @@ function AdminDashboardContent() {
 // Tool links shown on phones (the desktop header renders its own
 // copies, hidden below sm). Keep in the same order as the header.
 const MOBILE_TOOLS = [
+    { href: '/admin/today', label: 'היום', icon: CalendarDays, primary: true },
     { href: '/admin/customers', label: 'טיפול בלקוחות', icon: ListChecks, primary: true },
     { href: '/admin/qrcodes', label: 'ברקודים', icon: QrCode, primary: true },
     { href: '/admin/project', label: 'הצגת הפרויקט', icon: GraduationCap },
