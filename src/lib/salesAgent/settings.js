@@ -55,7 +55,7 @@ export const DEFAULT_SALES_SETTINGS = Object.freeze({
     mode: 'opening_only',
     openingText: DEFAULT_OPENING_TEXT,
     provider: 'auto',
-    model: 'claude-sonnet-4-5',
+    model: 'claude-sonnet-5-5',
     fallbackModel: FALLBACK_MODEL,
     businessInstructions: '',
     activeOpeningIds: [...ACTIVE_VARIANT_IDS],

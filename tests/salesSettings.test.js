@@ -14,7 +14,7 @@ describe('sales agent settings', () => {
             mode: 'opening_only',
             openingText: expect.stringContaining('לאיזה אירוע'),
             provider: 'auto',
-            model: 'claude-sonnet-4-5',
+            model: 'claude-sonnet-5-5',
             fallbackModel: 'claude-haiku-4-5',
             activeOpeningIds: ['answer_first', 'value_question'],
             openingMediaSequence: [],

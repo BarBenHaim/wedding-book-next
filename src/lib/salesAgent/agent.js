@@ -43,7 +43,7 @@ export const DEFAULT_GEMINI_MODEL = process.env.GEMINI_SALES_MODEL || 'gemini-3.
 //
 // Override with ANTHROPIC_MODEL. Ids are pinned snapshots and do not
 // auto-update, so a newer Sonnet has to be set deliberately.
-export const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5'
+export const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5'
 
 // If the configured id is not one the API recognises, fall back to this
 // and keep going. A mistyped or retired model id would otherwise turn
@@ -633,7 +633,7 @@ export async function callClaude(input) {
                 // the alternate provider instead of timing both out in turn.
                 // The current models think before answering and get more of it.
                 attemptCapMs: process.env.OPENAI_API_KEY
-                    ? (isCurrentClaudeModel(input?.model) ? 12_000 : 9_000)
+                    ? (isCurrentClaudeModel(input?.model || DEFAULT_MODEL) ? 12_000 : 9_000)
                     : DEFAULT_TIMEOUT_MS,
             })
         } catch (err) {
