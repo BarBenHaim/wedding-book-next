@@ -8,7 +8,6 @@ import Link from 'next/link'
 import { Activity, BookOpen, Check, SlidersHorizontal, Zap } from 'lucide-react'
 import { BOT_MODELS, MAX_INSTRUCTIONS, MODE_NAMES, changeWarning, settingsChange } from '@/lib/botSettings'
 import { ATTENTION_BUCKETS, STAGE_META } from '@/lib/salesAgent/leadsView'
-import { salesHealthStageView } from '@/lib/salesAgent/leadsCore'
 import Window, { Notice, Switch } from './Window'
 import s from './today.module.css'
 import w from './windows.module.css'
@@ -50,7 +49,7 @@ const stamp = value => {
     return ms ? new Date(ms).toLocaleString('he-IL', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }) : ''
 }
 
-function StateTab({ settings, health, busy, save, checkClaude, check }) {
+function StateTab({ settings, busy, save, checkClaude, check }) {
     const experiment = settings.modelExperiment?.enabled === true
     const known = BOT_MODELS.some(model => model.id === settings.model)
     return (
@@ -94,19 +93,6 @@ function StateTab({ settings, health, busy, save, checkClaude, check }) {
                 </div>
             </div>
 
-            {health && (
-                <div className={w.card}>
-                    <h3>דופק המערכת</h3>
-                    <ul className={w.health}>
-                        {salesHealthStageView(health).map(stage => (
-                            <li key={stage.key} data-status={stage.status}>
-                                <i /><b>{stage.label}</b><span>{stage.statusLabel} · {stage.metric}</span>
-                                {stage.action && <small>{stage.action}</small>}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            )}
             <p className={w.fine}>גרסת הגדרות {settings.revision}{stamp(settings.updatedAt) && ` · עודכנה ${stamp(settings.updatedAt)}`}</p>
         </div>
     )
@@ -179,6 +165,9 @@ function ResultsTab({ leads }) {
             </div>
             <div className={w.card}>
                 <h3>מי מחכה ({waiting.length})</h3>
+                {waiting.length > 0 && (
+                    <p>{ATTENTION_BUCKETS.map(row => [row.label, leads.summary?.buckets?.[row.key] || 0]).filter(([, count]) => count).map(([label, count]) => `${label}: ${count}`).join(' · ')}</p>
+                )}
                 {waiting.length === 0 ? <p>אף אחד לא מחכה כרגע.</p> : (
                     <ul className={w.list}>
                         {waiting.slice(0, 6).map(lead => <li key={lead.phone}><b>{leadName(lead)}</b><span>{bucket(lead.attention)}</span></li>)}
@@ -281,7 +270,7 @@ export default function BotWindow({ bot, firstTab = 'state', api, onChanged, onC
                 {tab === 'auto' && <AutoTab switches={bot?.switches} busy={busy} flip={flip} />}
                 {tab === 'results' && (leads === undefined ? <Notice>טוען…</Notice> : <ResultsTab leads={leads} />)}
                 {(tab === 'state' || tab === 'words') && (!settings ? <Notice>{note.tone === 'bad' ? '' : 'טוען…'}</Notice>
-                    : tab === 'state' ? <StateTab settings={settings} health={leads?.health} busy={busy} save={save} checkClaude={checkClaude} check={check} />
+                    : tab === 'state' ? <StateTab settings={settings} busy={busy} save={save} checkClaude={checkClaude} check={check} />
                         : <WordsTab settings={settings} busy={busy} save={save} />)}
             </div>
         </Window>

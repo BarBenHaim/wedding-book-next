@@ -45,8 +45,6 @@ export default function SpendWindow({ month, api, onClose }) {
                         <ul className={w.list}>
                             <li><b dir='ltr'>Claude</b><span dir='ltr'>{dollars(spend.anthropicTotal)}</span></li>
                             <li><b dir='ltr'>OpenAI</b><span dir='ltr'>{dollars(spend.openaiTotal)}</span></li>
-                            <li><b>עלות ממוצעת לליד</b><span dir='ltr'>{spend.perLead == null ? '—' : dollars(spend.perLead)}</span></li>
-                            <li><b>עלות לכל מכירה</b><span dir='ltr'>{spend.perWon == null ? '—' : dollars(spend.perWon)}</span></li>
                             <li><b>קריאות למודלים</b><span>{(spend.totalCalls || 0).toLocaleString('he-IL')}</span></li>
                             <li><b>תמונות</b><span>{(spend.totalImages || 0).toLocaleString('he-IL')}</span></li>
                         </ul>
