@@ -34,6 +34,10 @@ export const maxDuration = 30
 
 import { NextResponse } from 'next/server'
 import { scheduleCustomerCapture } from '@/lib/salesAgent/customerInbox'
+import { optOutCustomer } from '@/lib/customerData'
+
+const OPT_OUT = /^["'״]?הסר["'״]?[.!]?$/
+const OPT_OUT_REPLY = 'בסדר, לא נשלח עוד עדכונים. אם צריך משהו, כתבו לנו כאן.'
 import { createHash } from 'crypto'
 import { createOutboundId } from '@/lib/salesAgent/delivery'
 import { buildSystemPrompt, addDaysISO } from '@/lib/salesAgent/prompt'
@@ -533,6 +537,23 @@ export async function POST(req) {
             reply = 'הפעולה נכשלה. נסה שוב.'
         }
         return complete({ ok: true, send: [reply], sendText: reply, skipped: 'owner-command' })
+    }
+
+    // A customer who answers "הסר" to a follow-up is never sent another one.
+    // Before the pause and customer branches, which would swallow it.
+    if (messageType === 'text' && OPT_OUT.test(text)) {
+        let stopped = 0
+        try {
+            stopped = await optOutCustomer(phone)
+        } catch {
+            console.error('[sales-agent] follow-up opt-out failed')
+        }
+        if (stopped) {
+            return complete({
+                ok: true, send: [OPT_OUT_REPLY], sendText: OPT_OUT_REPLY, handoff: false, noReply: false,
+                skipped: 'customer-opt-out',
+            })
+        }
     }
 
     if (!settings.enabled) {

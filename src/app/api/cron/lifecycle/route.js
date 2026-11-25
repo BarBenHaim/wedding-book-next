@@ -22,6 +22,7 @@ import { journeyOf } from '@/lib/journeyStage'
 import { nextMessage, renderLifecycleEmail, bookTitleOf, digestLines, dailySummary, israelDate, daysBetween, LIFECYCLE_START_MS } from '@/lib/lifecycle'
 import { enterSecret, signEnterToken, enterUrl } from '@/lib/enterLink'
 import { eventSignUrl } from '@/lib/eventLinks'
+import { runCustomerFollowups } from '@/lib/customerFollowupsRunner'
 
 const MAX_SENDS_PER_RUN = 40
 const BALANCE_CHECKOUT = id => `https://weddingtales.co.il/checkout/?add-to-cart=6271&wt_bal=${encodeURIComponent(id)}`
@@ -64,6 +65,18 @@ export async function GET(req) {
     const queueLines = []
 
     try {
+        // The WhatsApp follow-ups (switched on in the admin, off by default). First, so a
+        // moment they take is already marked when the e-mail part below reads the events.
+        // A failure there never stops the rest of the run.
+        try {
+            out.followups = await runCustomerFollowups({ today: israelDate(now), baseUrl, dry })
+            if (out.followups.failed) queueLines.push(`${out.followups.failed} הודעות וואטסאפ ללקוחות נכשלו: לבדוק בטבלת הטיפול`)
+            if (out.followups.stopped) queueLines.push(`שליחת הוואטסאפ ללקוחות נעצרה (קוד ${out.followups.stopped}): לבדוק תבניות ואמצעי תשלום ב-Meta`)
+        } catch (err) {
+            out.followups = { error: true }
+            console.error('[cron/lifecycle] whatsapp follow-ups failed:', err?.message || err)
+        }
+
         const snap = await db.collection('weddings').where('createdAt', '>=', Timestamp.fromMillis(LIFECYCLE_START_MS)).get()
         const transporter = dry ? null : nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS } })
         const quiet = []

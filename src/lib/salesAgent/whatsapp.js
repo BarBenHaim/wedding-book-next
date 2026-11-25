@@ -46,6 +46,12 @@ const TEMPLATE_PARAMETERS = new Map([
     [FOLLOWUP_TEMPLATE, 1],
     [APPROVED_NAME_TEMPLATE, 1],
     [DAILY_DIGEST_TEMPLATE, 4],
+    // The four customer follow-ups (lib/customerFollowups.js). Their texts are
+    // approved by Lord and must exist in WhatsApp Manager under these names.
+    ['wt_share_14', 3],
+    ['wt_eve', 3],
+    ['wt_after', 4],
+    ['wt_review', 3],
 ])
 
 export function canSendWhatsApp() {

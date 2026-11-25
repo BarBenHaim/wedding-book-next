@@ -62,7 +62,10 @@ const mocks = vi.hoisted(() => ({
     canSendWhatsApp: vi.fn(),
     sendInboundSequenceDirect: vi.fn(),
     scheduleCustomerCapture: vi.fn(),
+    optOutCustomer: vi.fn(),
 }))
+
+vi.mock('@/lib/customerData', () => ({ optOutCustomer: mocks.optOutCustomer }))
 
 vi.mock('@/lib/salesAgent/customerInbox', () => ({ scheduleCustomerCapture: mocks.scheduleCustomerCapture }))
 
@@ -1162,6 +1165,48 @@ describe('customer inbox hook', () => {
         await post(inbound({ text: 'שוב' }))
 
         expect(handed()).toEqual([])
+    })
+})
+
+describe('stopping the customer follow-ups', () => {
+    it('confirms and stops when a customer answers הסר, even while the chat is Lord\'s', async () => {
+        mocks.optOutCustomer.mockResolvedValue(1)
+        mocks.isPausedForHuman.mockReturnValue(true)
+
+        const result = await post(inbound({ text: 'הסר' }))
+
+        expect(mocks.optOutCustomer).toHaveBeenCalledWith('test-phone-token')
+        expect(result.body).toMatchObject({ shouldSend: true, skipped: 'customer-opt-out' })
+        expect(result.body.sendText).toContain('לא נשלח')
+        expect(mocks.callClaude).not.toHaveBeenCalled()
+    })
+
+    it('treats the word from somebody who is not a customer as an ordinary message', async () => {
+        prepareDecisionPath()
+        mocks.optOutCustomer.mockResolvedValue(0)
+
+        await post(inbound({ text: 'הסר' }))
+
+        expect(mocks.decideSalesTurn).toHaveBeenCalled()
+    })
+
+    it('does not react to the word inside a sentence', async () => {
+        prepareDecisionPath()
+
+        await post(inbound({ text: 'איך אני מסיר תמונה? הסר לי אותה' }))
+
+        expect(mocks.optOutCustomer).not.toHaveBeenCalled()
+    })
+
+    it('carries on with the reply when the stop cannot be saved', async () => {
+        prepareDecisionPath()
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        mocks.optOutCustomer.mockRejectedValue(new Error('database unavailable'))
+
+        const result = await post(inbound({ text: 'הסר' }))
+
+        expect(result.status).toBe(200)
+        expect(mocks.decideSalesTurn).toHaveBeenCalled()
     })
 })
 

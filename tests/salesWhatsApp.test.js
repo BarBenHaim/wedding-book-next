@@ -160,6 +160,23 @@ describe('allowlisted WhatsApp templates', () => {
         expect(payload.template.components[0].parameters.map(parameter => parameter.text)).toEqual(lines)
     })
 
+    it.each([
+        ['wt_share_14', 3], ['wt_eve', 3], ['wt_after', 4], ['wt_review', 3],
+    ])('sends the customer follow-up template %s with exactly %i parameters', async (name, count) => {
+        process.env.WHATSAPP_TOKEN = 'test-token'
+        process.env.WHATSAPP_PHONE_ID = 'phone-id'
+        const fetchFn = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ messages: [{ id: 'wamid.x' }] }) })
+        vi.stubGlobal('fetch', fetchFn)
+        const params = Array.from({ length: count }, (_, i) => `p${i}`)
+
+        await expect(sendWhatsAppTemplate('972500000001', name, params)).resolves.toMatchObject({ accepted: true })
+        await expect(sendWhatsAppTemplate('972500000001', name, params.slice(1))).rejects.toMatchObject({ errorCode: 'TEMPLATE_NOT_CONFIGURED' })
+
+        expect(JSON.parse(fetchFn.mock.calls[0][1].body).template).toMatchObject({ name, language: { code: 'he' } })
+        expect(fetchFn).toHaveBeenCalledTimes(1)
+        vi.unstubAllGlobals()
+    })
+
     it('rejects missing or unapproved template configuration without a free-form fallback', async () => {
         await expect(sendWhatsAppTemplate('non-dialable-recipient-fixture', '', ['fixture']))
             .rejects.toMatchObject({ errorCode: 'TEMPLATE_NOT_CONFIGURED' })
