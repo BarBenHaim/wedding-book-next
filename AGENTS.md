@@ -2339,6 +2339,37 @@ Approved by Lord; **everything done for a customer waits for his approval**.
   carry an order or an amount; 4 carry neither (1 lead is `closed_won`, 1 is
   `offer_sent` with 19 blessings, 2 have no blessings and no chat). All 4 count
   as customers; Lord was told.
+- After deploy, with Lord's yes: 7 paid buyers whose book has no phone were added
+  as `sales_leads/{phone}` (`stage: closed_won`, `weddingId`,
+  `customerSource: 'order-backfill'`, no `paymentVerified`). Their phones were
+  **not** written to `weddings`, because those documents are listable
+  anonymously with phone and e-mail (verified 25.11; still open). Undo: delete
+  the leads with that `customerSource`. `inbox.mjs list` links their items
+  through the lead's `weddingId`.
+
+## 25.11 — Claude: customer board and automatic follow-ups
+
+Spec and plan: `docs/superpowers/{specs,plans}/2026-11-25-customer-board-and-followups*`.
+Approved by Lord, texts included. Automatic sending covers **only** the four
+fixed templates; balance reminders stay paused and customer requests stay
+approval-only.
+
+- `/admin/customers` + `api/admin/customers`; rules in `lib/customerBoard.js`
+  (one next step per book). Past events opened before 22.11 sit in "triage"
+  until sorted once (50 on 25.11).
+- `lib/customerFollowups.js` (when and what), `lib/customerFollowupsRunner.js`
+  (send once; account-level refusals give the moment back and stop the run),
+  run by `/api/cron/lifecycle` at 07:00 UTC. Switch:
+  `admin_settings/customerFollowups`, **off by default**; records in
+  `customer_followups`. Anonymous read and write on both returned 403 (25.11).
+- A customer replying "הסר" gets `lifecycleOff` on their books.
+- **Before the switch goes on:** create `wt_share_14`, `wt_eve`, `wt_after`,
+  `wt_review` (Hebrew, body as in `FOLLOWUP_TEXTS`, footer "להפסקת העדכונים
+  השיבו: הסר") in WhatsApp Manager, confirm a payment method, and prove each
+  with the board's test send. Template delivery is unproven today.
+- Known: a signed-out owner opening the sign or review link lands on
+  `/login`, then their management page, not the exact view.
+- `wt_daily_digest` does not exist, so `/api/cron/sales-model-status` returns 503.
 
 **Known, left as is:**
 - Make's owner ping (#7) also requires `handoff = true`, so `hotLeadPing`

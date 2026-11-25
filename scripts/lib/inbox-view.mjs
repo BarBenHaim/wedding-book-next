@@ -16,6 +16,16 @@ export function bookLabel(id, wedding) {
     return wedding?.celebrantName || couple || wedding?.ownerName || id
 }
 
+// A customer can be known from the bot's own list while no book carries the
+// phone; the book recorded there links their items when they are read.
+export function withLeadBooks(items, leadWeddingIds) {
+    return items.map(item => {
+        const id = leadWeddingIds.get(item.phone)
+        if ((item.weddingIds || []).length || !id) return item
+        return { ...item, weddingId: id, weddingIds: [id] }
+    })
+}
+
 export function groupOpenItems(items, weddings) {
     const open = items.filter(item => item.status === 'new')
         .sort((a, b) => (a.receivedAtMs || 0) - (b.receivedAtMs || 0))

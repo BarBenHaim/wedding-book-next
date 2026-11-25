@@ -13,7 +13,7 @@ import {
     ChevronRight, Eye, Link2, Mail, Shield, HardDrive, RefreshCw,
     AlertTriangle, Copy, Clock, Printer, Package, Truck, UserPlus,
     Pencil, Save, PartyPopper, Wand2, QrCode, Phone, Wallet, Instagram,
-    Images, Smartphone, GraduationCap,
+    Images, Smartphone, GraduationCap, ListChecks,
 } from 'lucide-react'
 import {
     EVENT_TYPE_ORDER,
@@ -3235,6 +3235,19 @@ function AdminDashboardContent() {
                             <Wand2 size={14} /> סטודיו עיצוב
                         </a>
                         <a
+                            href='/admin/customers'
+                            title='לכל לקוח: איפה הוא עומד ומה הצעד הבא'
+                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
+                            style={{
+                                background: '#3d2e1a',
+                                border: '1px solid #3d2e1a',
+                                color: '#fff',
+                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
+                            }}
+                        >
+                            <ListChecks size={14} /> טיפול בלקוחות
+                        </a>
+                        <a
                             href='/admin/qrcodes'
                             title='ניהול ברקודים וקישורי סטטיסטיקה'
                             className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
@@ -3865,6 +3878,7 @@ function AdminDashboardContent() {
 // Tool links shown on phones (the desktop header renders its own
 // copies, hidden below sm). Keep in the same order as the header.
 const MOBILE_TOOLS = [
+    { href: '/admin/customers', label: 'טיפול בלקוחות', icon: ListChecks, primary: true },
     { href: '/admin/qrcodes', label: 'ברקודים', icon: QrCode, primary: true },
     { href: '/admin/project', label: 'הצגת הפרויקט', icon: GraduationCap },
     { href: '/admin/studio', label: 'סטודיו עיצוב', icon: Wand2 },

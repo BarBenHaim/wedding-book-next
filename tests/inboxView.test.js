@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bookLabel, expiredItems, groupOpenItems, itemsForPhone } from '../scripts/lib/inbox-view.mjs'
+import { bookLabel, expiredItems, groupOpenItems, itemsForPhone, withLeadBooks } from '../scripts/lib/inbox-view.mjs'
 
 const DAY = 86_400_000
 const item = overrides => ({
@@ -26,6 +26,20 @@ describe('groupOpenItems', () => {
         const [group] = groupOpenItems([item({ weddingId: null, weddingIds: ['w1', 'w2'] })], weddings)
 
         expect(group.books.map(book => book.id)).toEqual(['w1', 'w2'])
+    })
+})
+
+describe('withLeadBooks', () => {
+    it('links an item with no book to the book recorded on the customer, and leaves linked ones alone', () => {
+        const [unlinked, linked, unknown] = withLeadBooks([
+            item({ id: 'unlinked', weddingId: null, weddingIds: [] }),
+            item({ id: 'linked' }),
+            item({ id: 'unknown', phone: '972529999999', weddingId: null, weddingIds: [] }),
+        ], new Map([['972501234567', 'w2']]))
+
+        expect(unlinked).toMatchObject({ weddingId: 'w2', weddingIds: ['w2'] })
+        expect(linked).toMatchObject({ weddingId: 'w1', weddingIds: ['w1'] })
+        expect(unknown).toMatchObject({ weddingId: null, weddingIds: [] })
     })
 })
 

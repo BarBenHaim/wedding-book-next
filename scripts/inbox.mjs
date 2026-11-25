@@ -16,7 +16,7 @@ import path from 'node:path'
 import { initializeApp, cert } from 'firebase-admin/app'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 import { getStorage } from 'firebase-admin/storage'
-import { expiredItems, groupOpenItems, itemsForPhone } from './lib/inbox-view.mjs'
+import { expiredItems, groupOpenItems, itemsForPhone, withLeadBooks } from './lib/inbox-view.mjs'
 
 const app = initializeApp({
     credential: cert({
@@ -48,8 +48,14 @@ async function find(prefix) {
 const shortId = id => id.replace('meta-inbound-', '').slice(0, 10)
 
 async function list() {
-    const items = await read(inbox.where('status', '==', 'new'))
-    const ids = [...new Set(items.flatMap(item => item.weddingIds || []))]
+    const open = await read(inbox.where('status', '==', 'new'))
+    const leadWeddingIds = new Map()
+    for (const phone of new Set(open.filter(item => !(item.weddingIds || []).length).map(item => item.phone))) {
+        const id = (await db.collection('sales_leads').doc(phone).get()).data()?.weddingId
+        if (id) leadWeddingIds.set(phone, String(id))
+    }
+    const items = withLeadBooks(open, leadWeddingIds)
+    const ids =[...new Set(items.flatMap(item => item.weddingIds || []))]
     const weddings = new Map()
     for (const id of ids) weddings.set(id, (await db.collection('weddings').doc(id).get()).data())
     const groups = groupOpenItems(items, weddings)
