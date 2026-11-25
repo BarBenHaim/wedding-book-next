@@ -1200,6 +1200,7 @@ describe('customer timing overrides the generic ladder', () => {
 describe('what the model knows about a sign sample', () => {
     it.each([
         ['offered', 'אל תציע שוב'],
+        ['offered', 'לשלוח כאן בצ'],
         ['received', 'אל תבטיח מתי'],
         ['sent', 'כבר נשלחה'],
     ])('says it when the sample is %s', (status, words) => {

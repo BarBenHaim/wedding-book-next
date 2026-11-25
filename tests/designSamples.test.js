@@ -7,7 +7,7 @@ vi.mock('firebase-admin/firestore', () => ({ FieldValue: { serverTimestamp: () =
 
 import {
     decideSample, listSamples, markSampleOffered, purgeOldSamples, readDesignSettings, receiveSamplePhoto,
-    sampleAlerts, sampleId, storeSamplePhoto, writeDesignSettings,
+    notifyOwnerOfPhoto, sampleAlerts, sampleId, storeSamplePhoto, writeDesignSettings,
 } from '@/lib/salesAgent/designSamples'
 import { isOwnMediaEcho } from '@/lib/salesAgent/leadsCore'
 
@@ -103,7 +103,28 @@ describe('offer and photo', () => {
 
         expect(result).toEqual({ id: ID, repeat: true })
         expect(db.rows.get(`sales_design_samples/${ID}`)).toMatchObject({ status: 'pending', createdAt: NOW - HOUR })
-        expect(db.rows.get(`sales_leads/${PHONE}`).turns.at(-1).role).toBe('assistant')
+        // Nothing we did not send is written as ours.
+        expect(db.rows.get(`sales_leads/${PHONE}`).turns.at(-1)).toEqual({ role: 'user', text: '[תמונה לדוגמת שלט]', at: NOW })
+    })
+
+    it('treats the same picture arriving again as the same event', async () => {
+        const db = fakeDb({ [`sales_leads/${PHONE}`]: leadRow() })
+        const first = await receiveSamplePhoto({ phone: PHONE, mediaId: 'm1', ack: 'קיבלתי' }, { db, nowMs: NOW })
+        const turns = db.rows.get(`sales_leads/${PHONE}`).turns.length
+
+        const again = await receiveSamplePhoto({ phone: PHONE, mediaId: 'm1', ack: 'קיבלתי' }, { db, nowMs: NOW + 1000 })
+
+        expect(again).toEqual(first)
+        expect(db.rows.get(`sales_leads/${PHONE}`).turns).toHaveLength(turns)
+    })
+
+    it('does not save the same picture twice', async () => {
+        const db = fakeDb({ [`sales_design_samples/${ID}`]: sampleRow({ status: 'pending', photos: [{ path: 'p', mediaId: 'm1' }], samplePath: null }) })
+        const save = vi.fn()
+        const download = vi.fn()
+
+        expect(await storeSamplePhoto(ID, 'm1', { db, save, download, nowMs: NOW })).toEqual({ action: 'already-stored' })
+        expect(download).not.toHaveBeenCalled()
     })
 
     it('saves the picture privately and marks it ready to draw', async () => {
@@ -187,6 +208,15 @@ describe('approval', () => {
         expect(send).not.toHaveBeenCalled()
     })
 
+    it('closes a sample Lord sent by hand, without sending', async () => {
+        const db = world(leadRow({ lastInboundAt: NOW - 30 * HOUR }))
+        const send = vi.fn()
+
+        expect((await decideSample(ID, 'manual', { db, send, sign, nowMs: NOW })).status).toBe('sent')
+        expect(send).not.toHaveBeenCalled()
+        expect(db.rows.get(`sales_leads/${PHONE}`).designSample.status).toBe('sent')
+    })
+
     it('refuses an unknown decision or id', async () => {
         await expect(decideSample(ID, 'maybe', { db: world(), nowMs: NOW })).rejects.toMatchObject({ code: 'INVALID_DECISION' })
         await expect(decideSample('nope', 'send', { db: world(), nowMs: NOW })).rejects.toMatchObject({ code: 'SAMPLE_NOT_FOUND' })
@@ -194,6 +224,18 @@ describe('approval', () => {
 })
 
 describe('the board, the report and the cleanup', () => {
+    it('tells Lord on his own phone, and stays quiet when that cannot be sent', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {})
+        const send = vi.fn(async () => { throw Object.assign(new Error('closed window'), { errorCode: 'GRAPH_REJECTED' }) })
+        mocks.after.mockImplementationOnce(run => run())
+
+        notifyOwnerOfPhoto('words', { send, ownerPhone: '972500000007' })
+        await vi.waitFor(() => expect(console.warn).toHaveBeenCalled())
+
+        expect(send).toHaveBeenCalledWith('972500000007', 'words')
+        expect(JSON.stringify(console.warn.mock.calls)).not.toContain('972500000007')
+    })
+
     it('lists what is still open, with a preview and whether it can still be sent', async () => {
         const db = fakeDb({
             [`sales_leads/${PHONE}`]: leadRow({ lastInboundAt: NOW - 25 * HOUR }),

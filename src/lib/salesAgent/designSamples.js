@@ -10,7 +10,7 @@ import { after } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb, adminStorage } from '@/lib/firebaseAdmin'
 import { downloadInboundMedia } from './customerInbox'
-import { sendWhatsAppImage } from './whatsapp'
+import { sendWhatsAppImage, sendWhatsAppText } from './whatsapp'
 import { SAMPLE_CAPTION } from './designSamplesCore'
 
 export const SAMPLES_COLLECTION = 'sales_design_samples'
@@ -66,12 +66,17 @@ export async function receiveSamplePhoto({ phone, mediaId, profileName = '', ack
         const [sampleSnap, leadSnap] = [await tx.get(sample), await tx.get(lead)]
         const current = sampleSnap.exists ? sampleSnap.data() : null
         const held = (leadSnap.exists && leadSnap.data()) || {}
+        // A retry of the same picture: answer as the first time, write nothing.
+        const seen = Array.isArray(current?.mediaIds) ? current.mediaIds : []
+        const picture = String(mediaId).slice(0, 500)
+        if (seen.includes(picture)) return { id, repeat: seen.indexOf(picture) > 0 }
         const repeat = !!current && current.status !== 'rejected'
         tx.set(sample, {
             leadId: String(phone),
             kind: held.designSample?.kind || 'both',
             profileName: String(profileName || held.profileName || '').slice(0, 120),
             status: repeat ? current.status : 'receiving',
+            mediaIds: [...seen, picture],
             createdAt: current?.createdAt || nowMs,
             updatedAt: nowMs,
         }, { merge: true })
@@ -83,8 +88,8 @@ export async function receiveSamplePhoto({ phone, mediaId, profileName = '', ack
             turns: [
                 ...turns,
                 { role: 'user', text: PHOTO_TURN, at: nowMs },
-                // A second picture is taken quietly.
-                ...(repeat ? [{ role: 'assistant', text: '[התמונה נוספה לבקשת הדוגמה]', at: nowMs }] : [{ role: 'assistant', text: String(ack), at: nowMs }]),
+                // A second picture is taken quietly: nothing was sent for it.
+                ...(repeat ? [] : [{ role: 'assistant', text: String(ack), at: nowMs }]),
             ],
         }, { merge: true })
         return { id, repeat }
@@ -94,6 +99,8 @@ export async function receiveSamplePhoto({ phone, mediaId, profileName = '', ack
 export async function storeSamplePhoto(id, mediaId, { db, download = downloadInboundMedia, save = saveFile, nowMs = Date.now() } = {}) {
     const ref = sampleRef(db, id)
     try {
+        const stored = (await ref.get()).data()?.photos || []
+        if (stored.some(photo => photo.mediaId === String(mediaId).slice(0, 500))) return { action: 'already-stored' }
         const file = await download(mediaId)
         const extension = PHOTO_TYPES[String(file.mimeType).split(';')[0].trim().toLowerCase()]
         if (!extension) throw sampleError('UNSUPPORTED_MEDIA_TYPE')
@@ -132,6 +139,21 @@ export function scheduleSamplePhoto(id, mediaId, deps) {
     }
 }
 
+// A line to Lord's own phone. It is not a handoff, so the lead's chat stays as
+// it is. WhatsApp refuses it outside his 24 hour window; the board and the
+// report show the sample either way.
+export function notifyOwnerOfPhoto(text, { send = sendWhatsAppText, ownerPhone = process.env.SALES_AGENT_OWNER_PHONE } = {}) {
+    if (!ownerPhone) return
+    const run = () => Promise.resolve()
+        .then(() => send(ownerPhone, text))
+        .catch(error => console.warn('[design-samples] owner not told', error?.errorCode || error?.code || 'UNKNOWN'))
+    try {
+        after(run)
+    } catch {
+        run()
+    }
+}
+
 async function allSamples(db) {
     const snap = await store(db).collection(SAMPLES_COLLECTION).get()
     return snap.docs.map(doc => ({ ...doc.data(), id: doc.id }))
@@ -157,7 +179,7 @@ export async function listSamples({ db, sign = signFile, nowMs = Date.now() } = 
 
 // Lord's approval or refusal. The send goes only to the phone on the record.
 export async function decideSample(id, decision, { db, send = sendWhatsAppImage, sign = signFile, nowMs = Date.now() } = {}) {
-    if (!['send', 'reject'].includes(decision)) throw sampleError('INVALID_DECISION')
+    if (!['send', 'reject', 'manual'].includes(decision)) throw sampleError('INVALID_DECISION')
     const ref = sampleRef(db, id)
 
     // Claim first, so two taps cannot send two pictures.
@@ -172,6 +194,12 @@ export async function decideSample(id, decision, { db, send = sendWhatsAppImage,
         }
         if (row.status !== 'ready' || !row.samplePath) throw sampleError('SAMPLE_NOT_READY')
         const lead = leadRef(db, row.leadId)
+        // Lord sent it from his own phone: only close it.
+        if (decision === 'manual') {
+            tx.set(ref, { status: 'sent', sentAt: nowMs, updatedAt: nowMs }, { merge: true })
+            tx.set(lead, { designSample: { status: 'sent' } }, { merge: true })
+            return { ...row, status: 'sent' }
+        }
         const held = (await tx.get(lead)).data() || {}
         if (['closed_won', 'closed_lost'].includes(held.stage)) throw sampleError('LEAD_CLOSED')
         if (nowMs - millis(held.lastInboundAt) >= WINDOW_MS) throw sampleError('WINDOW_CLOSED')
@@ -187,6 +215,7 @@ export async function decideSample(id, decision, { db, send = sendWhatsAppImage,
         return row
     })
     if (decision === 'reject') return { id, status: 'rejected' }
+    if (decision === 'manual') return { id, status: 'sent' }
 
     try {
         await send(claimed.leadId, await sign(claimed.samplePath), SAMPLE_CAPTION)

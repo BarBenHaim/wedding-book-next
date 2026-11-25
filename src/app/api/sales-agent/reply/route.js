@@ -65,7 +65,7 @@ import { deriveLead, sortLeads, isoInIsrael } from '@/lib/salesAgent/leadsView'
 import { buildDigest } from '@/lib/salesAgent/digest'
 import { noteClaudeOutcome, readClaudeHealth } from '@/lib/salesAgent/claudeHealth'
 import { acceptsSamplePhoto, offerText, samplePhotoAck, shouldOfferSample } from '@/lib/salesAgent/designSamplesCore'
-import { markSampleOffered, readDesignSettings, receiveSamplePhoto, sampleAlerts, scheduleSamplePhoto } from '@/lib/salesAgent/designSamples'
+import { markSampleOffered, notifyOwnerOfPhoto, readDesignSettings, receiveSamplePhoto, sampleAlerts, scheduleSamplePhoto } from '@/lib/salesAgent/designSamples'
 import { normalizeProviderError, INBOUND_ROUTE_DEADLINE_MS, INBOUND_HEARTBEAT_BUDGET_MS, FALLBACK_COMMIT_RESERVE_MS } from '@/lib/salesAgent/circuitBreaker'
 import { decideInboundAge } from '@/lib/salesAgent/transportPolicy'
 import { buildDeterministicSalesReply, decideSalesTurn, enforceSalesReply, liftInlineImageMarkers } from '@/lib/salesAgent/decisionPolicy'
@@ -670,8 +670,8 @@ export async function POST(req) {
             if (received.repeat) {
                 return complete({ ok: true, send: [], sendText: '', handoff: false, noReply: true, skipped: 'sample-extra-photo' })
             }
-            // `handoff` here only makes Make send Lord the ping below; the
-            // lead is not paused.
+            // Not a handoff: Make would report one onward as a human takeover.
+            notifyOwnerOfPhoto(samplePing(phone, body.profileName))
             return complete({
                 ok: true,
                 send: [ack],
@@ -679,9 +679,8 @@ export async function POST(req) {
                 hasImage: false,
                 hasVideo: false,
                 stage: lead.stage || 'engaged',
-                handoff: true,
+                handoff: false,
                 noReply: false,
-                notifyOwner: samplePing(phone, body.profileName),
             })
         }
     }
@@ -1480,7 +1479,7 @@ export async function POST(req) {
 
     // The free sign sample: fixed words, once per lead, only on a turn where
     // they do not get in the way. The switch is read only when it could matter.
-    const sampleTurn = { phone, mode: settings.mode, lead, incomingText: text, reply: parsed, decision: turnDecision }
+    const sampleTurn = { phone, mode: settings.mode, lead, incomingText: text, reply: parsed, decision: turnDecision, openingBundle: openingPlan.eligible }
     let sampleKind = shouldOfferSample({ ...sampleTurn, settings: { enabled: true } })
     if (sampleKind) sampleKind = shouldOfferSample({ ...sampleTurn, settings: await readDesignSettings() })
     if (sampleKind) parsed.messages = [...parsed.messages, offerText(sampleKind)]

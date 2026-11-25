@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
     markSampleOffered: vi.fn(),
     receiveSamplePhoto: vi.fn(),
     scheduleSamplePhoto: vi.fn(),
+    notifyOwnerOfPhoto: vi.fn(),
     sampleAlerts: vi.fn(),
     noteClaudeOutcome: vi.fn(),
     readClaudeHealth: vi.fn(async () => ({ alert: null })),
@@ -80,6 +81,7 @@ vi.mock('@/lib/salesAgent/claudeHealth', () => ({ noteClaudeOutcome: mocks.noteC
 vi.mock('@/lib/salesAgent/designSamples', () => ({
     readDesignSettings: mocks.readDesignSettings, markSampleOffered: mocks.markSampleOffered,
     receiveSamplePhoto: mocks.receiveSamplePhoto, scheduleSamplePhoto: mocks.scheduleSamplePhoto, sampleAlerts: mocks.sampleAlerts,
+    notifyOwnerOfPhoto: mocks.notifyOwnerOfPhoto,
 }))
 vi.mock('@/lib/salesAgent/prompt', () => ({ buildSystemPrompt: mocks.buildSystemPrompt, addDaysISO: mocks.addDaysISO }))
 vi.mock('@/lib/salesAgent/agent', () => ({
@@ -1968,6 +1970,15 @@ describe('free sign sample', () => {
         expect(mocks.markSampleOffered).not.toHaveBeenCalled()
     })
 
+    // What the real event ledger accepts and keeps.
+    async function accepted() {
+        const core = await vi.importActual('@/lib/salesAgent/inboundEventsCore')
+        const { outcome } = mocks.completeInboundEvent.mock.calls.at(-1)[0]
+        const kept = core.sanitizeInboundOutcome(outcome)
+        core.assertCompletableInboundOutcome(kept)
+        return kept
+    }
+
     it('queues the invited photo, answers without a promise, and keeps the chat with the bot', async () => {
         prepareDecisionPath()
         mocks.getLead.mockResolvedValue(invited())
@@ -1975,9 +1986,11 @@ describe('free sign sample', () => {
 
         const result = await post(photo())
 
-        expect(result.body).toMatchObject({ shouldSend: true, handoff: true })
+        // No handoff: Make reports that onward as a human takeover.
+        expect(result.body).toMatchObject({ shouldSend: true, handoff: false })
         expect(result.body.sendText).toContain('קיבלתי את התמונה')
-        expect(result.body.notifyOwner).toContain('דוגמת שלט')
+        expect(mocks.notifyOwnerOfPhoto).toHaveBeenCalledWith(expect.stringContaining('דוגמת שלט'))
+        expect(await accepted()).toMatchObject({ handoff: false, noReply: false })
         expect(mocks.receiveSamplePhoto).toHaveBeenCalledWith(expect.objectContaining({ phone: 'test-phone-token', mediaId: 'meta-media-1' }))
         expect(mocks.scheduleSamplePhoto).toHaveBeenCalledWith('sample-1', 'meta-media-1')
         expect(mocks.setHuman).not.toHaveBeenCalled()
@@ -1992,6 +2005,8 @@ describe('free sign sample', () => {
         const result = await post(photo())
 
         expect(result.body).toMatchObject({ shouldSend: false, handoff: false })
+        expect(await accepted()).toMatchObject({ noReply: true, skipped: 'sample-extra-photo' })
+        expect(mocks.notifyOwnerOfPhoto).not.toHaveBeenCalled()
         expect(mocks.scheduleSamplePhoto).toHaveBeenCalled()
         expect(mocks.setHuman).not.toHaveBeenCalled()
     })

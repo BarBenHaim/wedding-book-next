@@ -32,7 +32,8 @@ const child = kind => CHILD[kind] || CHILD.both
 export function offerText(kind) {
     const c = child(kind)
     return `אפשר גם לראות איך שלט "ברכו את" ייראה עם ${c.who}: שלחו כאן תמונה ${c.of}, את השם ומה ${c.likes}, `
-        + `ונעצב דוגמה ${c.forThem}, ללא עלות. התמונה תשמש רק לדוגמה, תעובד בשירות עיצוב חיצוני ותימחק אחרי 30 יום.`
+        // Promise only what is true of our own storage.
+        + `ונעצב דוגמה ${c.forThem}, ללא עלות. אנחנו משתמשים בתמונה רק להכנת הדוגמה, בעזרת כלי עיצוב חיצוני, ומוחקים אותה אצלנו אחרי 30 יום.`
 }
 
 export function samplePhotoAck(kind) {
@@ -42,15 +43,17 @@ export function samplePhotoAck(kind) {
 
 export const SAMPLE_CAPTION = 'הנה הדוגמה שעיצבנו במיוחד ✨ זו דוגמה להמחשה.'
 
-// Turns where a sample offer does not get in the way of the sale.
-const OFFER_ACTIONS = new Set(['answer_then_qualify', 'answer', 'show_workflow', 'show_proof'])
+// Turns where a sample offer does not get in the way of the sale. Not the
+// demo link turn: that one already asks the lead to try something.
+const OFFER_ACTIONS = new Set(['answer_then_qualify', 'answer', 'show_proof'])
 const NO_OFFER_STAGES = new Set(['handoff', 'closed_won', 'closed_lost', 'ready_to_pay', 'commit_later'])
 const NO_OFFER_INTENTS = new Set(['price', 'objection'])
 
 // The kind of child to offer a sample for, or null.
-export function shouldOfferSample({ settings, phone, mode, lead = {}, incomingText = '', reply = {}, decision = {} }) {
+export function shouldOfferSample({ settings, phone, mode, lead = {}, incomingText = '', reply = {}, decision = {}, openingBundle = false }) {
     const allowed = settings?.enabled === true || (settings?.testPhones || []).includes(phone)
-    if (!allowed || mode !== 'full_sales' || lead.designSample) return null
+    // With pictures and a closing line after the answer, the offer would be buried.
+    if (!allowed || mode !== 'full_sales' || lead.designSample || openingBundle) return null
     const turns = Array.isArray(lead.turns) ? lead.turns : []
     if (lead.isNew === true || !turns.some(turn => turn.role === 'assistant')) return null
     if (!reply.messages?.length || reply.handoff || reply.noReply || reply.customerDeferred) return null

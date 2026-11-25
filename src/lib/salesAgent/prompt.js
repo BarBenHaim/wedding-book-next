@@ -76,7 +76,7 @@ export function buildSystemPrompt(lead = {}, todayISO, { media = null, performan
     }
     // The free sign sample: the offer itself is fixed text the code appends.
     const sample = {
-        offered: 'כבר הוצעה לו דוגמת שלט "ברכו את" בחינם. אל תציע שוב ואל תבקש תמונה בעצמך.',
+        offered: 'כבר הוצעה לו דוגמת שלט "ברכו את" בחינם. אל תציע שוב ואל תבקש תמונה בעצמך. אם הוא שואל לאן לשלוח: אפשר לשלוח כאן בצ׳אט.',
         received: 'הוא שלח תמונה לדוגמת שלט והיא בהכנה. אל תבטיח מתי תהיה מוכנה ואל תבקש תמונה נוספת.',
         sent: 'דוגמת השלט שלו כבר נשלחה אליו. אפשר לשאול מה דעתו, בלי להבטיח שינויים.',
     }[lead.designSample?.status]

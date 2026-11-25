@@ -31,8 +31,9 @@ describe('the fixed offer', () => {
         expect(text).toContain(child)
         expect(text).toContain(tail)
         expect(text).toContain('ללא עלות')
-        expect(text).toContain('תעובד בשירות עיצוב חיצוני')
-        expect(text).toContain('30 יום')
+        expect(text).toContain('בעזרת כלי עיצוב חיצוני')
+        // Only what is true of our own storage is promised.
+        expect(text).toContain('ומוחקים אותה אצלנו אחרי 30 יום')
         expect(text).not.toContain('?')
     })
 
@@ -87,6 +88,8 @@ describe('when to offer', () => {
         ['they asked the price', i => { i.decision = { intent: 'price', nextBestAction: 'quote_price' } }],
         ['it is an objection', i => { i.decision = { intent: 'objection', nextBestAction: 'handle_objection' } }],
         ['a payment link goes out', i => { i.decision = { intent: 'general', nextBestAction: 'send_payment_link' } }],
+        ['the demo link goes out', i => { i.decision = { intent: 'event_answer', nextBestAction: 'show_workflow' } }],
+        ['pictures go out with the answer', i => { i.openingBundle = true }],
     ])('does not offer when %s', (_, change) => {
         expect(offered(change)).toBeNull()
     })

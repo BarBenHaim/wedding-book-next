@@ -60,6 +60,9 @@ export default function SignSamples({ samples, busy, onAct }) {
                                 {item.status === 'ready' && item.windowOpen && (
                                     <Action primary disabled={busy} onClick={() => onAct({ op: 'sample', id: item.id, decision: 'send' }, 'לשלוח את הדוגמה הזאת לליד?')}>אשר ושלח</Action>
                                 )}
+                                {item.status === 'ready' && (
+                                    <Action disabled={busy} onClick={() => onAct({ op: 'sample', id: item.id, decision: 'manual' }, 'שלחת את הדוגמה בעצמך? היא תוסר מהרשימה ולא תישלח שוב.')}>שלחתי ידנית</Action>
+                                )}
                                 <a href={`https://wa.me/${item.phone}`} target='_blank' rel='noopener noreferrer' className='text-[12px] font-bold px-3 py-1.5 rounded-lg border' style={{ borderColor: '#d9c58f' }}>וואטסאפ</a>
                                 {item.status !== 'sending' && (
                                     <Action disabled={busy} onClick={() => onAct({ op: 'sample', id: item.id, decision: 'reject' }, 'לבטל את הדוגמה הזאת? היא לא תישלח.')}>בטל</Action>
