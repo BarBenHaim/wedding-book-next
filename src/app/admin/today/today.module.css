@@ -53,7 +53,7 @@
 .main { flex: 1; min-width: 0; position: relative; padding: 0 22px 28px; isolation: isolate; overflow: clip; }
 .sky {
     position: absolute; inset: 0 0 auto 0; height: 340px; z-index: -1;
-    background: url('/admin-theme/hero.webp') center top / cover no-repeat;
+    background: url('/admin-theme/hero.webp') center -26px / cover no-repeat;
     -webkit-mask-image: linear-gradient(180deg, #000 80%, transparent);
     mask-image: linear-gradient(180deg, #000 80%, transparent);
 }
@@ -66,7 +66,7 @@
 
 .hero { text-align: center; padding-top: 24px; min-height: 282px; display: flex; flex-direction: column; align-items: center; }
 .hero h1 {
-    font-size: clamp(34px, 4.3vw, 62px); font-weight: 700; line-height: 1.1; color: #fdf3da; letter-spacing: .005em;
+    font-size: clamp(34px, 5.4vw, 78px); font-weight: 700; line-height: 1.1; color: #fdf3da; letter-spacing: .005em;
     text-shadow: 0 2px 0 #7a5a2a, 0 4px 18px rgba(10, 5, 40, .75);
 }
 .flourish {
@@ -79,12 +79,12 @@
 .date button { background: rgba(20, 14, 60, .55); color: #f4e7cc; border: 1px solid rgba(230, 207, 159, .6); border-radius: 999px; padding: 1px 12px; font-size: 12.5px; }
 .figures { display: grid; grid-template-columns: repeat(3, minmax(0, 210px)); gap: 18px; margin-top: auto; justify-content: center; width: 100%; padding-bottom: 6px; }
 .plaque {
-    position: relative; padding: 14px 10px 12px; text-align: center;
+    position: relative; padding: 9px 10px 11px; text-align: center;
     background: linear-gradient(180deg, rgba(255, 249, 236, .97), rgba(244, 229, 200, .97));
     border: 2px solid var(--gold); border-radius: 18px;
     box-shadow: inset 0 0 0 3px #fff8e8, inset 0 0 0 4px var(--silver), 0 10px 24px rgba(22, 10, 50, .38);
 }
-.plaque b { display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 40px; font-weight: 700; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.plaque b { display: flex; align-items: center; justify-content: center; gap: 14px; font-size: 50px; font-weight: 700; line-height: 1.05; font-variant-numeric: tabular-nums; }
 .plaque b svg { color: var(--ink); opacity: .82; }
 .plaque span { font-size: 15.5px; font-weight: 700; }
 .plaque .corner { width: 30px; height: 26px; }
@@ -185,6 +185,7 @@
     .rail nav a[aria-current='page'] { border: 1px solid var(--gold); box-shadow: none; }
     .main { padding: 0 10px 14px; }
     .sky { height: 250px; background-position: 18% top; }
+    .hero h1 { font-size: 36px; }
     .hero { min-height: 220px; padding-top: 18px; }
     .figures { gap: 8px; }
     .plaque { padding: 8px 4px; border-radius: 14px; }

@@ -29,7 +29,8 @@ describe('what waits today', () => {
         expect(view.tasks.map(task => task.kind)).toEqual(['claude', 'draft', 'sample', 'book'])
         expect(view.tasks[1]).toMatchObject({ id: 3, canApprove: true, detail: expect.stringContaining('קיבלנו') })
         expect(view.tasks[2]).toMatchObject({ id: 's1', canApprove: true, image: 'u' })
-        expect(view.tasks[3]).toMatchObject({ href: '/wedding/%D7%90%D7%99%D7%AA%D7%9E%D7%A8/admin' })
+        // The customer board is where that step can be finished.
+        expect(view.tasks[3]).toMatchObject({ href: '/admin/customers?id=%D7%90%D7%99%D7%AA%D7%9E%D7%A8' })
         expect(view.counts.tasks).toBe(4)
     })
 

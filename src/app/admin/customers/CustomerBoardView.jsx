@@ -3,7 +3,7 @@
 // that closes it. Draws what /api/admin/customers returns; all rules are in
 // src/lib/customerBoard.js.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import SignSamples from './SignSamples'
 import CustomerRequests from './CustomerRequests'
@@ -202,12 +202,20 @@ export default function CustomerBoardView({ data, busy, error, updatedAt, onAct,
     const [tab, setTab] = useState('today')
     const [query, setQuery] = useState('')
     const [testKey, setTestKey] = useState('post_1')
+    // ?id= narrows the board to one customer, for links from the "today" screen.
+    const [only, setOnly] = useState('')
+    useEffect(() => setOnly(new URLSearchParams(window.location.search).get('id') || ''), [])
+    const focused = only && !query ? (data?.rows || []).find(row => row.id === only) : null
+    const focusedId = focused?.id
+    const list = useRef(null)
+    useEffect(() => { if (focusedId) list.current?.scrollIntoView() }, [focusedId])
 
     const rows = useMemo(() => {
+        if (focused) return [focused]
         const q = query.trim().toLowerCase()
         if (!q) return (data?.rows || []).filter(row => row.group === tab)
         return (data?.rows || []).filter(row => `${row.title} ${row.ownerName || ''} ${row.phone || ''}`.toLowerCase().includes(q))
-    }, [data, tab, query])
+    }, [data, tab, query, focused])
 
     const act = (body, question) => {
         if (question && !window.confirm(question)) return
@@ -270,10 +278,10 @@ export default function CustomerBoardView({ data, busy, error, updatedAt, onAct,
                     <nav className='flex flex-wrap gap-2'>
                         {data.groups.map(group => (
                             <button
-                                key={group.key} type='button' onClick={() => { setTab(group.key); setQuery('') }}
-                                aria-pressed={tab === group.key && !query}
+                                key={group.key} type='button' onClick={() => { setTab(group.key); setQuery(''); setOnly('') }}
+                                aria-pressed={tab === group.key && !query && !focused}
                                 className='rounded-xl border px-3.5 py-2 text-[13px] font-bold bg-white'
-                                style={tab === group.key && !query ? { background: INK, color: '#fff', borderColor: INK } : { borderColor: LINE }}
+                                style={tab === group.key && !query && !focused ? { background: INK, color: '#fff', borderColor: INK } : { borderColor: LINE }}
                             >
                                 <span className='text-lg tabular-nums ml-1.5'>{data.counts[group.key] || 0}</span>{group.label}
                             </button>
@@ -283,6 +291,13 @@ export default function CustomerBoardView({ data, busy, error, updatedAt, onAct,
                             className='flex-1 min-w-[180px] rounded-xl border px-3.5 py-2 text-sm bg-white outline-none' style={{ borderColor: LINE }}
                         />
                     </nav>
+
+                    {focused && (
+                        <div ref={list} className='flex flex-wrap items-center gap-2 text-[13px] font-bold scroll-mt-24'>
+                            <span>מוצג לקוח אחד: {focused.title}</span>
+                            <Button onClick={() => setOnly('')}>הצג את כולם</Button>
+                        </div>
+                    )}
 
                     {rows.length === 0 ? (
                         <p className='rounded-2xl bg-white border p-6 text-center text-sm' style={{ borderColor: LINE, color: SOFT }}>

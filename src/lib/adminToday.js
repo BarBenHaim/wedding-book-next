@@ -11,7 +11,8 @@ const CUSTOMERS_SHOWN = 5
 const WAITING_DRAFT = new Set(['pending', 'needs_owner'])
 const round = value => Math.round(value * 100) / 100
 const who = (name, phone) => name || `מספר שמסתיים ב-${String(phone || '').slice(-4)}`
-const bookHref = id => `/wedding/${encodeURIComponent(id)}/admin`
+// The customer board, narrowed to that book: the buttons that finish a step are there.
+const bookHref = id => `/admin/customers?id=${encodeURIComponent(id)}`
 
 function draftTask(draft) {
     const sent = draft.status === 'sent'
