@@ -3,6 +3,9 @@
    so nothing outside the admin changes. These rules are unlayered, so they win
    over the utilities. Design editors do not get the class. */
 
+/* a visible ring for keyboard users, on every admin screen */
+.wt-admin a:focus-visible, .wt-admin button:focus-visible, .wt-admin select:focus-visible, .wt-admin input:focus-visible { outline: 3px solid #ffb938; outline-offset: 2px; }
+
 /* ink */
 .wt-theme .text-\[\#1a1410\], .wt-theme .text-\[\#3d2e1a\], .wt-theme .text-\[\#3d3225\], .wt-theme .text-\[\#2e2419\] { color: #1d1648; }
 .wt-theme .text-\[\#7a6a52\], .wt-theme .text-\[\#5a4d3a\], .wt-theme .text-\[\#5a4b35\], .wt-theme .text-\[\#5a4a32\], .wt-theme .text-\[\#5e513f\], .wt-theme .text-\[\#5c4a2f\], .wt-theme .text-\[\#7a6548\] { color: #4f4668; }
@@ -14,9 +17,11 @@
 /* parchment instead of white */
 .wt-theme .bg-white { background-color: #fdf6e7; }
 .wt-theme .bg-white\/95 { background-color: rgba(253, 246, 231, .97); }
-.wt-theme .bg-\[\#fbf6ec\], .wt-theme .bg-\[\#fdfaf3\], .wt-theme .bg-\[\#f8f4ec\], .wt-theme .bg-\[\#faf6ee\], .wt-theme .bg-\[\#f6efe0\] { background-color: #f6e8c9; }
+.wt-theme .bg-\[\#fbf6ec\] { background-color: #fcf3df; }
+.wt-theme .bg-\[\#fdfaf3\], .wt-theme .bg-\[\#f8f4ec\], .wt-theme .bg-\[\#faf6ee\], .wt-theme .bg-\[\#f6efe0\] { background-color: #f6e8c9; }
 .wt-theme .bg-\[\#f4ecd9\] { background-color: #eedcb2; }
 .wt-theme .bg-\[\#AA8840\] { background-color: #2c2473; }
+.wt-theme .from-\[\#AA8840\] { background-image: linear-gradient(180deg, #2c2473, #171049); }
 
 /* silver-gold edges */
 .wt-theme .border-\[\#ead9b3\], .wt-theme .border-\[\#e7dcc6\], .wt-theme .border-\[\#f0e8d4\], .wt-theme .border-\[\#eee3cc\], .wt-theme .border-\[\#f0e3c8\], .wt-theme .border-\[\#f1e8d8\] { border-color: rgba(164, 128, 84, .45); }

@@ -27,6 +27,9 @@ import {
 import { LOCALE_ORDER, LOCALES } from '@/i18n/locales'
 import { create as createQrMatrix } from 'qrcode'
 import { QR_PRESETS, DENSITY_OPTIONS, SHAPE_OPTIONS, DEFAULT_QR_STYLE, normalizeQrStyle, qrStyleProblem, qrPngPath, presetFor, normalizeHex, qrSvg } from '@/lib/qrStyle'
+import { Hero, Page, Panel, Plaque, Sheet } from './ui/kit'
+import k from './ui/kit.module.css'
+import v from './events.module.css'
 
 // ─── Data Fetching ────────────────────────────────────────────────────────────
 async function getToken() {
@@ -182,16 +185,12 @@ function journeyWaLink(w, j) {
 // beats every hover rule in the sheet, so a tinted row would have gone
 // dead under the cursor — the one row you are reaching for would be the
 // one that stopped responding.
-const URGENCY_ROW = {
-    soon: 'bg-amber-100/70 hover:bg-amber-100',
-    nodate: 'bg-rose-50 hover:bg-rose-100',
-    default: 'hover:bg-[#AA8840]/[0.07]',
-}
 const URGENCY_CARD = {
-    soon: 'bg-amber-100/70 active:bg-amber-100',
-    nodate: 'bg-rose-50 active:bg-rose-100',
-    default: 'active:bg-[#AA8840]/[0.06]',
+    soon: v.soon,
+    nodate: v.nodate,
+    default: '',
 }
+const ROW_TONE = { soon: 'soon', nodate: 'bad' }
 const urgencyClass = (map, w, nowMs) => map[rowUrgency(w, nowMs)] || map.default
 
 function coupleLabel(w) {
@@ -396,48 +395,6 @@ function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCance
     )
 }
 
-// ─── Stat Card ───────────────────────────────────────────────────────────────
-function StatCard({ icon: Icon, label, value, iconBg, iconColor, pulse = false }) {
-    return (
-        <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            whileHover={{ y: -3, transition: { duration: 0.2 } }}
-            className='relative overflow-hidden rounded-2xl p-5'
-            style={{
-                background: '#ffffff',
-                border: '1px solid rgba(212,184,103,0.22)',
-                boxShadow:
-                    '0 16px 32px -20px rgba(170,136,64,0.22), 0 2px 6px -2px rgba(170,136,64,0.08)',
-            }}
-        >
-            {/* Soft gold accent line at the top edge — gives the card a
-                subtle "premium card" stripe without dominating it. */}
-            <div
-                className='absolute top-0 left-0 right-0 h-[2px]'
-                style={{ background: 'linear-gradient(90deg, transparent, rgba(201,164,78,0.45), transparent)' }}
-            />
-            <div className='flex items-start justify-between'>
-                <div>
-                    <p
-                        className='mb-2'
-                        style={{ color: '#a89378', fontSize: '10.5px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase' }}
-                    >
-                        {label}
-                    </p>
-                    <p className='leading-none' style={{ color: '#1a1410', fontSize: '30px', fontWeight: 800, letterSpacing: '-0.02em' }}>
-                        {value}
-                    </p>
-                </div>
-                <div className={`relative w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
-                    {pulse && <div className={`absolute inset-0 rounded-xl animate-ping opacity-30 ${iconBg}`} />}
-                    <Icon size={20} className={`${iconColor} relative z-10`} />
-                </div>
-            </div>
-        </motion.div>
-    )
-}
-
 // ─── Status Badge ────────────────────────────────────────────────────────────
 /**
  * How this customer actually uses the product, in one cell.
@@ -520,7 +477,7 @@ function PrintBadge({ printOrder }) {
 }
 
 // ─── Sortable Header ─────────────────────────────────────────────────────────
-function SortableHeader({ children, sortKey, currentSort, onSort, justify = 'end' }) {
+function SortableHeader({ children, sortKey, currentSort, onSort }) {
     const isActive = currentSort.key === sortKey
     const handleClick = () => {
         if (!isActive) onSort({ key: sortKey, dir: 'asc' })
@@ -528,14 +485,13 @@ function SortableHeader({ children, sortKey, currentSort, onSort, justify = 'end
         else onSort({ key: null, dir: null })
     }
     return (
-        <th onClick={handleClick}
-            className={`px-6 py-4 font-semibold cursor-pointer select-none transition-colors hover:text-[#3d3225] ${isActive ? 'text-[#AA8840]' : 'text-[#a89378]'}`}>
-            <span className={`flex items-center gap-1.5 ${justify === 'center' ? 'justify-center' : justify === 'start' ? 'justify-start' : 'justify-end'}`}>
+        <th aria-sort={isActive ? (currentSort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+            <button type='button' className={v.sort} onClick={handleClick}>
                 {children}
-                {isActive && currentSort.dir === 'asc' && <ChevronUp size={13} className='text-[#AA8840]' />}
-                {isActive && currentSort.dir === 'desc' && <ChevronDown size={13} className='text-[#AA8840]' />}
-                {!isActive && <ChevronsUpDown size={12} className='text-[#c4b9a4]' />}
-            </span>
+                {isActive && currentSort.dir === 'asc' && <ChevronUp size={15} />}
+                {isActive && currentSort.dir === 'desc' && <ChevronDown size={15} />}
+                {!isActive && <ChevronsUpDown size={13} className={v.idle} />}
+            </button>
         </th>
     )
 }
@@ -1422,7 +1378,7 @@ function PublicLinkPanel({ wedding }) {
                             onClick={copyLink}
                             className='shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white whitespace-nowrap'
                             style={{
-                                background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                                background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)',
                                 boxShadow:
                                     '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
                             }}
@@ -1451,7 +1407,7 @@ function PublicLinkPanel({ wedding }) {
                         disabled={generating}
                         className='inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50'
                         style={{
-                            background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                            background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)',
                             boxShadow:
                                 '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
                         }}
@@ -1530,7 +1486,7 @@ function DigitalEditionPanel({ wedding }) {
                     onClick={() => generate(false)}
                     disabled={busy}
                     className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white disabled:opacity-50'
-                    style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}
+                    style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}
                 >
                     {busy ? <Loader2 size={12} className='animate-spin' /> : <Link2 size={12} />}
                     צור קישור חדש
@@ -1835,7 +1791,7 @@ function ArrangeLinkPanel({ wedding, scope = 'arrange' }) {
                     onClick={mint}
                     disabled={busy}
                     className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white disabled:opacity-50'
-                    style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}
+                    style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}
                 >
                     {busy ? <Loader2 size={12} className='animate-spin' /> : isManage ? <Settings2 size={12} /> : <ArrowUpDown size={12} />}
                     {isManage ? 'צור קישור ניהול' : 'צור קישור סידור'}
@@ -2117,7 +2073,7 @@ function QrCodePanel({ wedding }) {
                     onClick={mint}
                     disabled={busy}
                     className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white disabled:opacity-50'
-                    style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}
+                    style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}
                 >
                     {busy && !openCode ? <Loader2 size={12} className='animate-spin' /> : <QrCode size={12} />}
                     צור ברקוד
@@ -2231,7 +2187,7 @@ function QrCodePanel({ wedding }) {
                                         onClick={() => saveStyle(qr.code)}
                                         disabled={busy || !!problem}
                                         className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white disabled:opacity-50'
-                                        style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}
+                                        style={{ background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)' }}
                                     >
                                         {saved ? <CheckCircle2 size={12} /> : <Save size={12} />}
                                         {saved ? 'נשמר' : 'שמור עיצוב'}
@@ -2449,24 +2405,18 @@ function WeddingDetailPanel({ wedding, onClose, onDelete, onResetPassword, onChe
     return (
         <motion.div
             initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 30 }}
-            className='fixed top-0 left-0 h-full w-full sm:w-[420px] bg-white shadow-2xl z-[80] overflow-y-auto border-r border-[#AA8840]/15'
+            className={`fixed top-0 left-0 h-full w-full sm:w-[460px] shadow-2xl z-[80] overflow-y-auto ${v.drawer}`}
             dir='rtl'
         >
             {/* Header */}
-            <div className='sticky top-0 bg-white/95 backdrop-blur-sm border-b border-[#AA8840]/15 px-6 py-4 flex items-center justify-between z-10'>
-                <div className='flex items-center gap-3'>
-                    <div className='w-9 h-9 rounded-xl bg-gradient-to-br from-[#AA8840] to-[#c9a44e] flex items-center justify-center'>
-                        <Database size={16} className='text-white' />
-                    </div>
-                    <div>
-                        <h3 className='font-bold text-[#1a1410] text-sm'>פרטי חתונה</h3>
-                        <p className='text-xs text-[#a89378]'>{coupleLabel(wedding)}</p>
-                    </div>
-                </div>
-                <button onClick={onClose} className='w-9 h-9 rounded-xl bg-[#fbf6ec] hover:bg-[#f4ecd9] flex items-center justify-center transition-colors'>
-                    <X size={16} className='text-[#7a6a52]' />
+            <header className={v.drawerHead}>
+                <button type='button' onClick={onClose} className={v.drawerClose} aria-label='סגירה'>
+                    <X size={20} aria-hidden='true' />
                 </button>
-            </div>
+                <h3>{coupleLabel(wedding)}</h3>
+                <i aria-hidden='true' />
+                <p>פרטי האירוע</p>
+            </header>
 
             {/* Status */}
             <JourneyPanelBlock j={journeyOf(wedding, Date.now())} w={wedding} waHref={journeyWaLink(wedding, journeyOf(wedding, Date.now()))} onMark={onMark}>
@@ -3094,33 +3044,8 @@ function AdminDashboardContent() {
         }
     }
 
-    const stats = [
-        { icon: Heart, label: 'סך חתונות', value: weddings.length, iconBg: 'bg-[#AA8840]/10', iconColor: 'text-[#AA8840]' },
-        { icon: MessageCircle, label: 'סך ברכות', value: totalGreetings, iconBg: 'bg-[#AA8840]/10', iconColor: 'text-[#AA8840]' },
-        { icon: Wallet, label: 'סה"כ הכנסות', value: '₪' + totalRevenue.toLocaleString('he-IL'), iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600' },
-        // Today's events break the warm-gold rhythm with a small emerald
-        // burst — kept different on purpose so the eye flicks straight to
-        // "anything happening right now?". The pulse ring makes it
-        // unambiguous when the count is non-zero.
-        { icon: Zap, label: 'חתונות היום', value: todayCount, iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600', pulse: todayCount > 0 },
-        { icon: CalendarDays, label: 'חתונות קרובות', value: upcomingCount, iconBg: 'bg-[#AA8840]/10', iconColor: 'text-[#AA8840]' },
-    ]
-
     return (
-        <div
-            className='min-h-screen py-10 px-4 sm:px-10 relative'
-            dir='rtl'
-            style={{
-                // Ivory premium wash — same palette as the public-facing
-                // pages so the admin doesn't feel like a different app.
-                backgroundColor: '#f8f4ec',
-                backgroundImage: [
-                    'radial-gradient(ellipse 1100px 560px at 50% -10%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 55%)',
-                    'radial-gradient(ellipse 600px 600px at 92% 105%, rgba(201,164,78,0.07) 0%, rgba(201,164,78,0) 60%)',
-                    'radial-gradient(ellipse 520px 520px at 8% 105%, rgba(186,156,108,0.05) 0%, rgba(186,156,108,0) 60%)',
-                ].join(', '),
-            }}
-        >
+        <Page>
             {/* Toast */}
             <AnimatePresence>{toast && <Toast {...toast} onClose={() => setToast(null)} />}</AnimatePresence>
 
@@ -3166,559 +3091,123 @@ function AdminDashboardContent() {
                 </div>
             )}
 
-            {/* Ambient orbs — quieter than before, just enough to give
-                depth without competing with the content. */}
-            <div className='fixed -top-32 -left-20 h-[28rem] w-[28rem] rounded-full pointer-events-none' style={{ background: 'rgba(211,182,103,0.08)', filter: 'blur(80px)' }} />
-            <div className='fixed -bottom-24 -right-20 h-[26rem] w-[26rem] rounded-full pointer-events-none' style={{ background: 'rgba(170,136,64,0.06)', filter: 'blur(80px)' }} />
+            <Sheet>
+                <Hero
+                    title='אירועים'
+                    under={<>
+                        <button type='button' className={k.glass} onClick={() => setShowCreateUser(true)}><UserPlus size={15} />משתמש חדש</button>
+                        <button type='button' className={k.glass} onClick={handleBackup} title='הורדת גיבוי JSON'><HardDrive size={15} />גיבוי</button>
+                        <button type='button' className={k.glass} onClick={loadWeddings} disabled={status === 'loading'}><RefreshCw size={15} />{status === 'loading' ? 'טוען…' : 'רענן'}</button>
+                    </>}
+                    figures={<>
+                        <Plaque value={status === 'ok' ? weddings.length : '…'} label='אירועים' Icon={Heart} />
+                        <Plaque value={status === 'ok' ? upcomingCount + todayCount : '…'} label={todayCount > 0 ? `קרובים · ${todayCount} היום` : 'אירועים קרובים'} Icon={CalendarDays} />
+                        <Plaque value={status === 'ok' ? totalGreetings.toLocaleString('he-IL') : '…'} label='ברכות' Icon={MessageCircle} />
+                        <Plaque value={status === 'ok' ? '₪' + totalRevenue.toLocaleString('he-IL') : '…'} label='הכנסות רשומות' long />
+                    </>}
+                />
 
-            <div className='max-w-7xl mx-auto relative'>
-
-                {/* Page Header */}
-                <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className='flex items-center justify-between mb-9'>
-                    <div className='flex items-center gap-4'>
-                        <div className='relative'>
-                            <div
-                                className='w-12 h-12 rounded-2xl flex items-center justify-center shrink-0'
-                                style={{
-                                    background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
-                                    boxShadow:
-                                        '0 12px 24px -10px rgba(170,136,64,0.45), inset 0 1px 0 rgba(255,255,255,0.30)',
-                                }}
-                            >
-                                <Crown size={20} className='text-white' />
-                            </div>
-                            <div className='absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white animate-pulse' />
-                        </div>
-                        <div>
-                            <h1 className='leading-tight tracking-tight font-bold' style={{ color: '#1a1410', fontSize: '22px', letterSpacing: '-0.015em' }}>
-                                מרכז הניהול
-                            </h1>
-                            <p className='mt-1 flex items-center gap-1.5' style={{ color: '#a89378', fontSize: '12px' }}>
-                                <Sparkles size={11} style={{ color: '#c9a44e' }} /> Wedding Tales · אדמין־על
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Top Actions */}
-                    <div className='flex items-center gap-2'>
-                        <button
-                            onClick={() => setShowCreateUser(true)}
-                            title='יצירת משתמש חדש'
-                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold text-white active:scale-[0.98]'
-                            style={{
-                                background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
-                                boxShadow: '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
-                            }}
-                        >
-                            <UserPlus size={14} /> משתמש חדש
-                        </button>
-                        <a
-                            href='/admin/project'
-                            title='הצגת הפרויקט — דיאגרמות, הפרומפט, ניסויים ומפת ציון'
-                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold text-white active:scale-[0.98]'
-                            style={{
-                                background: 'linear-gradient(180deg, #5d8052 0%, #3d6133 100%)',
-                                boxShadow: '0 10px 22px -10px rgba(61,97,51,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
-                            }}
-                        >
-                            <GraduationCap size={14} /> הצגת הפרויקט
-                        </a>
-                        <a
-                            href='/admin/studio'
-                            title='סטודיו עיצוב לתבניות ספר'
-                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold text-white active:scale-[0.98]'
-                            style={{
-                                background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
-                                boxShadow: '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
-                            }}
-                        >
-                            <Wand2 size={14} /> סטודיו עיצוב
-                        </a>
-                        <a
-                            href='/admin/today'
-                            title='מה מחכה לך היום'
-                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold text-white'
-                            style={{ background: '#2b2266', border: '1px solid #b8935a' }}
-                        >
-                            <CalendarDays size={14} /> היום
-                        </a>
-                        <a
-                            href='/admin/customers'
-                            title='לכל לקוח: איפה הוא עומד ומה הצעד הבא'
-                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
-                            style={{
-                                background: '#3d2e1a',
-                                border: '1px solid #3d2e1a',
-                                color: '#fff',
-                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
-                            }}
-                        >
-                            <ListChecks size={14} /> טיפול בלקוחות
-                        </a>
-                        <a
-                            href='/admin/qrcodes'
-                            title='ניהול ברקודים וקישורי סטטיסטיקה'
-                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
-                            style={{
-                                background: '#ffffff',
-                                border: '1px solid rgba(212,184,103,0.30)',
-                                color: '#7a6a52',
-                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
-                            }}
-                        >
-                            <QrCode size={14} style={{ color: '#c9a44e' }} /> ברקודים
-                        </a>
-                        <a
-                            href='/admin/emails'
-                            title='מיילים, טמפלייטים ותזמון אוטומטי'
-                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
-                            style={{
-                                background: '#ffffff',
-                                border: '1px solid rgba(212,184,103,0.30)',
-                                color: '#7a6a52',
-                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
-                            }}
-                        >
-                            <Mail size={14} style={{ color: '#c9a44e' }} /> מיילים
-                        </a>
-                        <a
-                            href='/admin/sales-leads'
-                            title='לידים מהווטסאפ — מי צריך אותך עכשיו, כל השיחות והסטטוסים'
-                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
-                            style={{
-                                background: '#ffffff',
-                                border: '1px solid rgba(212,184,103,0.30)',
-                                color: '#7a6a52',
-                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
-                            }}
-                        >
-                            <MessageCircle size={14} style={{ color: '#c9a44e' }} /> לידים ווטסאפ
-                        </a>
-                        <a
-                            href='/admin/social-preview'
-                            title='תוכן לרשתות — המודל מייצר את הפוסטים, ואתה בוחר מה עולה'
-                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
-                            style={{
-                                background: '#ffffff',
-                                border: '1px solid rgba(212,184,103,0.30)',
-                                color: '#7a6a52',
-                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
-                            }}
-                        >
-                            <Instagram size={14} style={{ color: '#c9a44e' }} /> תוכן לרשתות
-                        </a>
-                        <a
-                            href='/admin/album-studio'
-                            title='ספר תמונות מעוצב — כל תמונה בצורה שלה'
-                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
-                            style={{
-                                background: '#ffffff',
-                                border: '1px solid rgba(212,184,103,0.30)',
-                                color: '#7a6a52',
-                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
-                            }}
-                        >
-                            <Images size={14} style={{ color: '#c9a44e' }} /> סטודיו אלבומים
-                        </a>
-                        <a
-                            href='/admin/guest-design'
-                            title='עיצוב דף הברכה לאורחים'
-                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
-                            style={{
-                                background: '#ffffff',
-                                border: '1px solid rgba(212,184,103,0.30)',
-                                color: '#7a6a52',
-                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
-                            }}
-                        >
-                            <Sparkles size={14} style={{ color: '#c9a44e' }} /> עיצוב דף ברכה
-                        </a>
-                        <button
-                            onClick={handleBackup}
-                            title='הורד גיבוי JSON'
-                            className='hidden sm:flex items-center gap-2 rounded-xl px-4 py-2.5 transition-all text-sm font-bold'
-                            style={{
-                                background: '#ffffff',
-                                border: '1px solid rgba(212,184,103,0.30)',
-                                color: '#7a6a52',
-                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
-                            }}
-                        >
-                            <HardDrive size={14} style={{ color: '#c9a44e' }} /> גיבוי
-                        </button>
-                        <button
-                            onClick={loadWeddings}
-                            title='רענן נתונים'
-                            className='w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:rotate-180'
-                            style={{
-                                background: '#ffffff',
-                                border: '1px solid rgba(212,184,103,0.30)',
-                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
-                                transitionDuration: '500ms',
-                            }}
-                        >
-                            <RefreshCw size={15} style={{ color: '#7a6a52' }} />
-                        </button>
-                        <div
-                            className='hidden sm:flex items-center gap-2 rounded-full px-4 py-2'
-                            style={{
-                                background: '#ffffff',
-                                border: '1px solid rgba(212,184,103,0.25)',
-                                boxShadow: '0 2px 6px -2px rgba(170,136,64,0.08)',
-                            }}
-                        >
-                            <span className='w-2 h-2 rounded-full bg-emerald-400 animate-pulse' />
-                            <span style={{ color: '#7a6a52', fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em' }}>מחובר</span>
-                        </div>
-                    </div>
-                </motion.div>
-
-                {/* Stat Cards */}
                 {status === 'ok' && (
-                    <div className='grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6'>
-                        {stats.map((s, i) => <motion.div key={s.label} transition={{ delay: 0.05 * i }}><StatCard {...s} /></motion.div>)}
-                    </div>
+                    <Panel title='מסלול הלקוחות' Icon={Truck}>
+                        {/* Where every customer is on the road, and what needs Bar today. */}
+                        <JourneyStrip weddings={weddings} now={nowMs} active={stageFilter} onPick={setStageFilter} />
+                    </Panel>
                 )}
 
-                {/* Mobile action buttons — same gold-gradient + outlined
-                    pair as the desktop header so the brand language stays
-                    consistent across breakpoints. */}
-                <div className='sm:hidden mb-4 flex gap-2'>
-                    <button
-                        onClick={() => setShowCreateUser(true)}
-                        className='flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white active:scale-[0.98] transition-all'
-                        style={{
-                            background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
-                            boxShadow: '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
-                        }}
-                    >
-                        <UserPlus size={14} /> משתמש חדש
-                    </button>
-                    <button
-                        onClick={handleBackup}
-                        className='flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-all'
-                        style={{
-                            background: '#ffffff',
-                            border: '1px solid rgba(212,184,103,0.30)',
-                            color: '#7a6a52',
-                            boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
-                        }}
-                    >
-                        <HardDrive size={14} style={{ color: '#c9a44e' }} /> גיבוי
-                    </button>
-                </div>
-
-                {/* Mobile tools strip. The desktop header hides its tool links
-                    below sm, which left the phone with no way into ברקודים,
-                    the studios or the project page. One scrollable row, same
-                    order as the desktop header, ברקודים first because that is
-                    the one reached for on the go. */}
-                <div className='sm:hidden -mx-4 mb-5 overflow-x-auto px-4' style={{ scrollbarWidth: 'none' }}>
-                    <div className='flex w-max gap-2 pb-1'>
-                        {MOBILE_TOOLS.map(tool => {
-                            const Icon = tool.icon
-                            return (
-                                <a
-                                    key={tool.href}
-                                    href={tool.href}
-                                    className='flex items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2.5 text-[13px] font-bold active:scale-[0.98] transition-all'
-                                    style={tool.primary
-                                        ? {
-                                            background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
-                                            color: '#fff',
-                                            boxShadow: '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
-                                        }
-                                        : {
-                                            background: '#ffffff',
-                                            border: '1px solid rgba(212,184,103,0.30)',
-                                            color: '#7a6a52',
-                                            boxShadow: '0 2px 6px -2px rgba(170,136,64,0.10)',
-                                        }}
-                                >
-                                    <Icon size={14} style={{ color: tool.primary ? '#fff' : '#c9a44e' }} /> {tool.label}
-                                </a>
-                            )
-                        })}
-                    </div>
-                </div>
-
-                {/* Main Table Card */}
-                <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.15 }}
-                    className='rounded-3xl overflow-hidden'
-                    style={{
-                        background: '#ffffff',
-                        border: '1px solid rgba(212,184,103,0.22)',
-                        boxShadow:
-                            '0 24px 50px -28px rgba(170,136,64,0.28), 0 4px 12px -4px rgba(170,136,64,0.10)',
-                    }}
-                >
-
-                    {/* Card header */}
-                    <div
-                        className='px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-3'
-                        style={{
-                            borderBottom: '1px solid rgba(212,184,103,0.15)',
-                            background: 'linear-gradient(180deg, #fdfaf3 0%, #ffffff 100%)',
-                        }}
-                    >
-                        <div className='flex items-center gap-3 flex-1'>
-                            <div
-                                className='w-1.5 h-6 rounded-full'
-                                style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}
+                <Panel
+                    title={status === 'ok' ? `כל האירועים (${sorted.length})` : 'כל האירועים'}
+                    Icon={Users}
+                    aside={status === 'ok' && (
+                        <div className={k.search}>
+                            <Search size={17} aria-hidden='true' />
+                            <input
+                                type='search'
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                aria-label='חיפוש אירועים'
+                                placeholder='חיפוש: שם, טלפון, אימייל, מזהה…'
                             />
-                            <h2 style={{ color: '#1a1410', fontSize: '15px', fontWeight: 700, letterSpacing: '-0.005em' }}>כל החתונות</h2>
-                            {status === 'ok' && (
-                                <span
-                                    className='rounded-full px-3 py-0.5'
-                                    style={{
-                                        background: 'rgba(201,164,78,0.10)',
-                                        color: '#a8843a',
-                                        border: '1px solid rgba(212,184,103,0.30)',
-                                        fontSize: '11px',
-                                        fontWeight: 600,
-                                    }}
-                                >
-                                    {sorted.length} רשומות
-                                </span>
+                        </div>
+                    )}
+                >
+                    {status === 'ok' && (
+                        <div className={v.filters}>
+                            {/* Quick status filters, also the "needs attention" shortcut. */}
+                            <div className={k.chips} role='group' aria-label='סינון לפי מצב'>
+                                {[
+                                    { key: 'all', label: 'הכל' },
+                                    { key: 'upcoming', label: 'קרובים' },
+                                    { key: 'unpaid', label: 'לא שולם' },
+                                    { key: 'unprinted', label: 'לא הודפס' },
+                                    { key: 'noblessings', label: '0 ברכות' },
+                                ].map(f => (
+                                    <button key={f.key} type='button' aria-pressed={statusFilter === f.key} onClick={() => setStatusFilter(f.key)}>{f.label}</button>
+                                ))}
+                            </div>
+                            {/* Event type. 'לא הוגדר' is a to-do list. */}
+                            <div className={k.chips} role='group' aria-label='סינון לפי סוג אירוע'>
+                                {[
+                                    { key: 'all', label: 'כל הסוגים' },
+                                    ...EVENT_TYPES.filter(t => typeCounts[t] > 0).map(t => ({ key: t, label: EVENT_TYPE_META[t]?.label || t })),
+                                    ...(typeCounts.unset > 0 ? [{ key: 'unset', label: 'לא הוגדר' }] : []),
+                                ].map(f => (
+                                    <button key={f.key} type='button' aria-pressed={typeFilter === f.key} onClick={() => setTypeFilter(f.key)}>
+                                        {f.label}<i>{typeCounts[f.key] ?? 0}</i>
+                                    </button>
+                                ))}
+                            </div>
+                            {/* Where the business came from. Empty channels are left out. */}
+                            <div className={k.chips} role='group' aria-label='סינון לפי מקור'>
+                                {[
+                                    { key: 'all', label: 'כל המקורות' },
+                                    ...['self_serve', 'app', 'order', 'unknown']
+                                        .filter(key => originCounts[key] > 0)
+                                        .map(key => ({ key, label: key === 'unknown' ? 'מקור לא ידוע' : ORIGIN_LABEL[key] })),
+                                ].map(f => (
+                                    <button key={f.key} type='button' aria-pressed={originFilter === f.key} onClick={() => setOriginFilter(f.key)}>
+                                        {f.label}<i>{originCounts[f.key] ?? 0}</i>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {status === 'ok' && sorted.length > 0 && (
+                        <div className={v.legend}>
+                            <span><i className={v.soon} />אירוע בתוך {SOON_WINDOW_DAYS} ימים</span>
+                            <span><i className={v.nodate} />בלי תאריך אירוע</span>
+                            {sort.key && (
+                                <button type='button' onClick={() => setSort({ key: null, dir: null })}>
+                                    מיון לפי {sort.key === 'date' ? 'תאריך' : sort.key === 'couple' ? 'שם' : sort.key === 'created' ? 'תאריך פתיחה' : sort.key === 'amount' ? 'תשלום' : 'ברכות'}
+                                    {' '}({sort.dir === 'asc' ? 'עולה' : 'יורד'}) ✕
+                                </button>
                             )}
                         </div>
-                        {status === 'ok' && (
-                            <div className='w-full sm:w-80 relative' dir='rtl'>
-                                <Search size={15} className='absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none' style={{ color: '#b9a684' }} />
-                                <input
-                                    type='text'
-                                    value={searchQuery}
-                                    onChange={e => setSearchQuery(e.target.value)}
-                                    placeholder='חיפוש: שם החוגג, זוג, טלפון, אימייל, מזהה...'
-                                    className='w-full pr-10 pl-4 py-2.5 rounded-xl outline-none transition-all'
-                                    style={{
-                                        background: '#fdfaf3',
-                                        border: '1px solid #ead9b3',
-                                        color: '#1a1410',
-                                        fontSize: '13.5px',
-                                    }}
-                                    onFocus={e => (e.currentTarget.style.borderColor = '#c9a44e')}
-                                    onBlur={e => (e.currentTarget.style.borderColor = '#ead9b3')}
-                                />
-                                {searchQuery && (
-                                    <button
-                                        onClick={() => setSearchQuery('')}
-                                        className='absolute left-3 top-1/2 -translate-y-1/2 text-xs'
-                                        style={{ color: '#b9a684' }}
-                                    >
-                                        ✕
-                                    </button>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Where every customer is on the road, and what needs Bar today. */}
-                    {status === 'ok' && <JourneyStrip weddings={weddings} now={nowMs} active={stageFilter} onPick={setStageFilter} />}
-
-                    {/* Event-type filter. Counts live in the chip so the
-                        row doubles as a breakdown of the whole book of
-                        business, and 'לא הוגדר' is a to-do list. */}
-                    {status === 'ok' && (
-                        <div className='px-4 sm:px-6 pt-1 pb-2 flex items-center gap-2 overflow-x-auto' dir='rtl'>
-                            {[
-                                { key: 'all', label: 'כל הסוגים' },
-                                ...EVENT_TYPES.filter(t => typeCounts[t] > 0).map(t => ({ key: t, label: EVENT_TYPE_META[t]?.label || t })),
-                                ...(typeCounts.unset > 0 ? [{ key: 'unset', label: 'לא הוגדר' }] : []),
-                            ].map(f => (
-                                <button
-                                    key={f.key}
-                                    onClick={() => setTypeFilter(f.key)}
-                                    className='shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors active:scale-95'
-                                    style={
-                                        typeFilter === f.key
-                                            ? { background: '#3d2e1a', color: '#fff', borderColor: '#3d2e1a' }
-                                            : { background: '#fff', color: '#7a6a52', borderColor: '#ead9b3' }
-                                    }
-                                >
-                                    {f.label}
-                                    <span className='opacity-60 mr-1'>{typeCounts[f.key] ?? 0}</span>
-                                </button>
-                            ))}
-                        </div>
                     )}
 
-                    {/* Where the business came from. The per-row badge already
-                        says this one event at a time; the question this row
-                        answers is the one a badge cannot - "show me everyone
-                        who opened a book themselves through /start, and when".
-                        Channels with no events are left out rather than shown
-                        as a zero, so the row stays short on a small account. */}
-                    {status === 'ok' && (
-                        <div className='px-4 sm:px-6 pb-2 flex items-center gap-2 overflow-x-auto' dir='rtl'>
-                            {[
-                                { key: 'all', label: 'כל המקורות' },
-                                ...['self_serve', 'app', 'order', 'unknown']
-                                    .filter(k => originCounts[k] > 0)
-                                    .map(k => ({ key: k, label: k === 'unknown' ? 'מקור לא ידוע' : ORIGIN_LABEL[k] })),
-                            ].map(f => (
-                                <button
-                                    key={f.key}
-                                    onClick={() => setOriginFilter(f.key)}
-                                    className='shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors active:scale-95'
-                                    style={
-                                        originFilter === f.key
-                                            ? { background: '#AA8840', color: '#fff', borderColor: '#AA8840' }
-                                            : { background: '#fff', color: '#7a6a52', borderColor: '#ead9b3' }
-                                    }
-                                >
-                                    {f.label}
-                                    <span className='opacity-60 mr-1'>{originCounts[f.key] ?? 0}</span>
-                                </button>
-                            ))}
-                        </div>
-                    )}
-
-                    {/* What the two row colours mean. A colour with no key is
-                        a puzzle, and this one has to be readable by someone
-                        who did not ask for it — including Lord in six
-                        months. Renders the real classes, so it can never
-                        drift from the rows above it. */}
-                    {status === 'ok' && sorted.length > 0 && (
-                        <div className='px-4 sm:px-6 pb-2 flex items-center gap-4 text-[10.5px] text-[#a89378]' dir='rtl'>
-                            <span className='inline-flex items-center gap-1.5'>
-                                <span className='w-3.5 h-3.5 rounded bg-amber-100/70 border border-amber-300' />
-                                אירוע בתוך {SOON_WINDOW_DAYS} ימים
-                            </span>
-                            <span className='inline-flex items-center gap-1.5'>
-                                <span className='w-3.5 h-3.5 rounded bg-rose-50 border border-rose-200' />
-                                בלי תאריך אירוע
-                            </span>
-                        </div>
-                    )}
-
-                    {/* Quick status filters — also a "needs attention" shortcut
-                        (unpaid / not-printed / no-blessings). Horizontally
-                        scrollable so it stays tidy on mobile. */}
-                    {status === 'ok' && (
-                        <div className='px-4 sm:px-6 pb-3 flex items-center gap-2 overflow-x-auto' dir='rtl'>
-                            {[
-                                { key: 'all', label: 'הכל' },
-                                { key: 'upcoming', label: 'קרובים' },
-                                { key: 'unpaid', label: 'לא שולם' },
-                                { key: 'unprinted', label: 'לא הודפס' },
-                                { key: 'noblessings', label: '0 ברכות' },
-                            ].map(f => (
-                                <button
-                                    key={f.key}
-                                    onClick={() => setStatusFilter(f.key)}
-                                    className='shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors active:scale-95'
-                                    style={
-                                        statusFilter === f.key
-                                            ? { background: '#AA8840', color: '#fff', borderColor: '#AA8840' }
-                                            : { background: '#fff', color: '#7a6a52', borderColor: '#ead9b3' }
-                                    }
-                                >
-                                    {f.label}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Sort ribbon — bumped opacity + 3px gold edge marker
-                        on the right (RTL = inline-start) so the active
-                        sort reads as a real chip-state, not a faint wash. */}
-                    {sort.key && status === 'ok' && (
-                        <div
-                            className='px-6 py-2.5 border-b border-[#AA8840]/15 bg-[#AA8840]/[0.10] flex items-center gap-2 relative'
-                            style={{ boxShadow: 'inset 3px 0 0 0 #c9a44e' }}
-                        >
-                            <ArrowUpDown size={12} className='text-[#a8843a]' />
-                            <span className='text-xs font-semibold text-[#a8843a]'>
-                                מיון לפי {sort.key === 'date' ? 'תאריך' : sort.key === 'couple' ? 'שם זוג' : sort.key === 'created' ? 'תאריך פתיחה' : sort.key === 'amount' ? 'תשלום' : 'ברכות'}
-                                {' '}({sort.dir === 'asc' ? 'עולה' : 'יורד'})
-                            </span>
-                            <button
-                                onClick={() => setSort({ key: null, dir: null })}
-                                className='mr-auto text-xs font-semibold text-[#a89378] hover:text-[#a8843a] transition-colors'
-                            >
-                                נקה ✕
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Body */}
-                    {status === 'loading' && (
-                        <div className='flex flex-col items-center justify-center py-40 gap-5'>
-                            <div className='relative'>
-                                <div className='w-16 h-16 rounded-full bg-gradient-to-br from-[#AA8840] to-[#c9a44e] opacity-20 animate-ping absolute inset-0' />
-                                <div className='w-16 h-16 rounded-full bg-gradient-to-br from-[#AA8840] to-[#c9a44e] flex items-center justify-center relative'>
-                                    <Loader2 size={28} className='text-white animate-spin' />
-                                </div>
-                            </div>
-                            <div className='text-center'>
-                                <p className='text-[#5a4d3a] text-sm font-semibold'>טוען חתונות...</p>
-                                <p className='text-[#a89378] text-xs mt-1'>שולף את כל הרשומות מ-Firestore</p>
-                            </div>
-                        </div>
-                    )}
+                    {status === 'loading' && <p className={k.unread}><Loader2 size={18} className='inline animate-spin ml-2' />טוען אירועים…</p>}
                     {status === 'error' && (
-                        <div className='flex flex-col items-center justify-center py-40 gap-4'>
-                            <div className='w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center'>
-                                <AlertCircle size={28} className='text-red-500' />
-                            </div>
-                            <p className='text-[#1a1410] font-semibold'>שגיאה בטעינת הנתונים</p>
-                            <p className='text-sm text-red-600 bg-red-50 border border-red-200 px-4 py-2 rounded-xl max-w-md text-center'>{error}</p>
-                            <button
-                                onClick={loadWeddings}
-                                className='mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98]'
-                                style={{
-                                    background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
-                                    boxShadow: '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
-                                }}
-                            >
-                                <RefreshCw size={14} /> נסה שוב
-                            </button>
+                        <div className={v.empty}>
+                            <p role='alert' className={k.error}>שגיאה בטעינת הנתונים: {error}</p>
+                            <button type='button' className={k.button} onClick={loadWeddings}><RefreshCw size={17} />נסה שוב</button>
                         </div>
                     )}
                     {status === 'ok' && sorted.length === 0 && (
-                        <div className='flex flex-col items-center justify-center py-40 gap-4 px-6 text-center'>
-                            <div className='w-14 h-14 rounded-2xl bg-[#AA8840]/10 flex items-center justify-center'>
-                                <Heart size={28} className='text-[#AA8840]' />
-                            </div>
-                            <div>
-                                <p className='text-[#1a1410] font-semibold text-sm'>
-                                    {searchQuery ? 'אין תוצאות לחיפוש שלך' : 'עוד אין חתונות במערכת'}
-                                </p>
-                                <p className='text-[#a89378] text-xs mt-1.5'>
-                                    {searchQuery ? 'נסה מילות חיפוש אחרות, או נקה את החיפוש' : 'צור משתמש ראשון ובו תיווצר אוטומטית גם החתונה שלו'}
-                                </p>
-                            </div>
-                            {searchQuery ? (
-                                <button
-                                    onClick={() => setSearchQuery('')}
-                                    className='mt-1 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-[#7a6a52] bg-white border border-[#ead9b3] hover:bg-[#fbf6ec] transition-all'
-                                >
-                                    <X size={14} /> נקה חיפוש
-                                </button>
+                        <div className={v.empty}>
+                            <p className={k.unread}>{weddings.length ? 'אין אירועים שמתאימים לחיפוש ולסינון.' : 'עוד אין אירועים במערכת.'}</p>
+                            {weddings.length ? (
+                                <button type='button' className={k.quiet} onClick={() => { setSearchQuery(''); setStatusFilter('all'); setTypeFilter('all'); setOriginFilter('all'); setStageFilter('all') }}><X size={15} />נקה חיפוש וסינון</button>
                             ) : (
-                                <button
-                                    onClick={() => setShowCreateUser(true)}
-                                    className='mt-1 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98]'
-                                    style={{
-                                        background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
-                                        boxShadow: '0 10px 22px -10px rgba(170,136,64,0.40), inset 0 1px 0 rgba(255,255,255,0.20)',
-                                    }}
-                                >
-                                    <UserPlus size={14} /> צור משתמש ראשון
-                                </button>
+                                <button type='button' className={k.button} onClick={() => setShowCreateUser(true)}><UserPlus size={17} />צור משתמש ראשון</button>
                             )}
                         </div>
                     )}
                     {status === 'ok' && sorted.length > 0 && (
                         <>
                         {/* Mobile: tap-friendly cards (the wide table is desktop-only) */}
-                        <div className='md:hidden divide-y divide-[#f0e8d4]'>
+                        <div className={`md:hidden ${v.cards}`}>
                             {sorted.map((w) => (
-                                <div key={w.id} onClick={() => setSelectedWedding(w)} className={`p-4 cursor-pointer transition-colors ${urgencyClass(URGENCY_CARD, w, nowMs)}`}>
+                                <div key={w.id} onClick={() => setSelectedWedding(w)} className={`${v.card} ${urgencyClass(URGENCY_CARD, w, nowMs)}`}>
                                     <div className='flex items-start justify-between gap-2'>
                                         <div className='min-w-0'>
                                             <div className='flex items-center gap-2 flex-wrap'>
@@ -3771,40 +3260,32 @@ function AdminDashboardContent() {
                             ))}
                         </div>
                         {/* Desktop: full table */}
-                        <div className='overflow-x-auto hidden md:block'>
-                            <table className='w-full text-sm text-right' style={{ minWidth: '1320px' }}>
+                        <div className={`hidden md:block ${k.tableBox}`}>
+                            <div className={k.scroll}>
+                            <table className={`${k.table} ${k.dense}`} style={{ minWidth: 1100 }}>
                                 <thead>
-                                    <tr className='border-b border-[#AA8840]/15 text-[11px] uppercase tracking-widest bg-[#AA8840]/5'>
-                                        <th className='px-6 py-4 text-[#a89378] font-semibold w-12'>#</th>
-                                        <SortableHeader sortKey='couple' currentSort={sort} onSort={setSort}><Users size={11} /> זוג</SortableHeader>
-                                        <th className='px-6 py-4 font-semibold text-[#a89378]'><span className='flex items-center gap-1.5'><Phone size={11} /> איש קשר</span></th>
-                                        <SortableHeader sortKey='date' currentSort={sort} onSort={setSort}><CalendarDays size={11} /> תאריך</SortableHeader>
-                                        {/* This column has always rendered createdAt - when the
-                                            book was opened - while the header said 'תאריך תשלום'.
-                                            Two different facts, and the wrong one was on the tin. */}
-                                        <SortableHeader sortKey='created' currentSort={sort} onSort={setSort}><Clock size={11} /> נפתח בתאריך</SortableHeader>
-                                        <th className='px-6 py-4 font-semibold text-[#a89378] text-center'>סטטוס</th>
-                                        <SortableHeader sortKey='greetings' currentSort={sort} onSort={setSort} justify='center'><MessageCircle size={11} /> ברכות</SortableHeader>
-                                        <th className='px-6 py-4 font-semibold text-[#a89378] text-center'><span className='flex items-center gap-1.5 justify-center'><Printer size={11} /> הדפסה</span></th>
-                                        <th className='px-6 py-4 font-semibold text-[#a89378] text-center'><span className='flex items-center gap-1.5 justify-center'><Smartphone size={11} /> אפליקציה</span></th>
-                                        <SortableHeader sortKey='amount' currentSort={sort} onSort={setSort} justify='center'><Wallet size={11} /> תשלום</SortableHeader>
-                                        <th className='px-6 py-4 font-semibold text-[#a89378] text-center'>פעולות</th>
+                                    <tr>
+                                        <SortableHeader sortKey='couple' currentSort={sort} onSort={setSort}>אירוע</SortableHeader>
+                                        <th>איש קשר</th>
+                                        <SortableHeader sortKey='date' currentSort={sort} onSort={setSort}>תאריך</SortableHeader>
+                                        {/* createdAt: when the book was opened, not when it was paid. */}
+                                        <SortableHeader sortKey='created' currentSort={sort} onSort={setSort}>נפתח</SortableHeader>
+                                        <th>סטטוס</th>
+                                        <SortableHeader sortKey='greetings' currentSort={sort} onSort={setSort}>ברכות</SortableHeader>
+                                        <th>הדפסה</th>
+                                        <th>אפליקציה</th>
+                                        <SortableHeader sortKey='amount' currentSort={sort} onSort={setSort}>תשלום</SortableHeader>
+                                        <th>פעולות</th>
                                     </tr>
                                 </thead>
-                                <tbody className='divide-y divide-[#f0e8d4]'>
-                                    {sorted.map((w, i) => (
-                                        <tr key={w.id}
-                                            onClick={() => setSelectedWedding(w)}
-                                            className={`group transition-colors cursor-pointer ${urgencyClass(URGENCY_ROW, w, nowMs)}`}>
-                                            <td className='px-6 py-4'>
-                                                <div className='w-7 h-7 rounded-full bg-[#AA8840]/10 flex items-center justify-center text-[#AA8840]/60 text-xs font-bold group-hover:bg-[#AA8840]/20 transition-colors'>
-                                                    {i + 1}
-                                                </div>
-                                            </td>
-                                            <td className='px-6 py-4'>
+                                <tbody>
+                                    {sorted.map(w => (
+                                        <tr key={w.id} data-opens data-tone={ROW_TONE[rowUrgency(w, nowMs)]}
+                                            onClick={() => setSelectedWedding(w)}>
+                                            <td>
                                                 <div className='text-right'>
                                                     <div className='flex items-center gap-2 justify-end'>
-                                                        <span className='font-semibold text-[#1a1410]'>{coupleLabel(w)}</span>
+                                                        <button type='button' className={v.name} onClick={event => { event.stopPropagation(); setSelectedWedding(w) }}>{coupleLabel(w)}</button>
                                                         <EventTypeBadge wedding={w} />
                                                     </div>
                                                     {w.ownerEmail && (
@@ -3815,7 +3296,7 @@ function AdminDashboardContent() {
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className='px-6 py-4'>
+                                            <td>
                                                 <div className='text-right'>
                                                     <div className='text-sm text-[#1a1410]'>{contactName(w)}</div>
                                                     {w.ownerPhone ? (
@@ -3832,23 +3313,23 @@ function AdminDashboardContent() {
                                                     ) : <div className='text-xs text-[#c4b9a4] mt-1'>—</div>}
                                                 </div>
                                             </td>
-                                            <td className='px-6 py-4 text-[#7a6a52] whitespace-nowrap text-sm tabular-nums'>
+                                            <td className='whitespace-nowrap tabular-nums'>
                                                 {formatDate(w.weddingDate)}
                                                 {rowUrgency(w, nowMs) === 'soon' && (
                                                     <span className='block text-[10px] font-bold text-amber-800'>{countdownLabel(w, nowMs)}</span>
                                                 )}
                                             </td>
-                                            <td className='px-6 py-4 text-[#7a6a52] whitespace-nowrap text-sm tabular-nums'>{w.createdAt ? formatDate(w.createdAt) : '—'}</td>
-                                            <td className='px-4 py-4 text-center'><JourneyCell j={journeys.get(w.id)} w={w} waHref={journeyWaLink(w, journeys.get(w.id))} onMark={handleMark} /></td>
-                                            <td className='px-6 py-4 text-center'><GreetingsBadge count={w.greetingsCount} /></td>
-                                            <td className='px-6 py-4 text-center'><PrintBadge printOrder={w.printOrder} /></td>
-                                            <td className='px-6 py-4 text-center'><AppBadge wedding={w} /></td>
-                                            <td className='px-6 py-4 text-center'>
+                                            <td className='whitespace-nowrap tabular-nums'>{w.createdAt ? formatDate(w.createdAt) : '—'}</td>
+                                            <td className='text-center'><JourneyCell j={journeys.get(w.id)} w={w} waHref={journeyWaLink(w, journeys.get(w.id))} onMark={handleMark} /></td>
+                                            <td className='text-center'><GreetingsBadge count={w.greetingsCount} /></td>
+                                            <td className='text-center'><PrintBadge printOrder={w.printOrder} /></td>
+                                            <td className='text-center'><AppBadge wedding={w} /></td>
+                                            <td className='text-center'>
                                                 {formatAmount(w)
                                                     ? <span className='text-sm font-bold text-[#3d7a3e] tabular-nums whitespace-nowrap'>{formatAmount(w)}</span>
                                                     : <span className='text-[#c4b9a4] text-xs'>—</span>}
                                             </td>
-                                            <td className='px-6 py-4'>
+                                            <td>
                                                 <div className='flex items-center justify-center gap-1.5' onClick={e => e.stopPropagation()}>
                                                     <button onClick={() => setSelectedWedding(w)} title='פתח פרטים'
                                                         className='w-9 h-9 rounded-lg bg-[#AA8840]/10 border border-[#AA8840]/30 text-[#AA8840] hover:bg-[#AA8840]/20 hover:border-[#AA8840]/50 flex items-center justify-center transition-all active:scale-95'>
@@ -3870,33 +3351,15 @@ function AdminDashboardContent() {
                                     ))}
                                 </tbody>
                             </table>
+                            </div>
                         </div>
                         </>
                     )}
-                </motion.div>
-
-                <p className='text-center text-[11px] text-[#a89378] mt-8 font-medium'>
-                    גישה מוגבלת לאדמין־על בלבד · Wedding Tales
-                </p>
-            </div>
-        </div>
+                </Panel>
+            </Sheet>
+        </Page>
     )
 }
-
-// Tool links shown on phones (the desktop header renders its own
-// copies, hidden below sm). Keep in the same order as the header.
-const MOBILE_TOOLS = [
-    { href: '/admin/today', label: 'היום', icon: CalendarDays, primary: true },
-    { href: '/admin/customers', label: 'טיפול בלקוחות', icon: ListChecks, primary: true },
-    { href: '/admin/qrcodes', label: 'ברקודים', icon: QrCode, primary: true },
-    { href: '/admin/project', label: 'הצגת הפרויקט', icon: GraduationCap },
-    { href: '/admin/studio', label: 'סטודיו עיצוב', icon: Wand2 },
-    { href: '/admin/emails', label: 'מיילים', icon: Mail },
-    { href: '/admin/sales-leads', label: 'לידים ווטסאפ', icon: MessageCircle },
-    { href: '/admin/social-preview', label: 'תוכן לרשתות', icon: Instagram },
-    { href: '/admin/album-studio', label: 'סטודיו אלבומים', icon: Images },
-    { href: '/admin/guest-design', label: 'עיצוב דף ברכה', icon: Sparkles },
-]
 
 export default function AdminPage() {
     return (

@@ -23,7 +23,7 @@
     filter: drop-shadow(0 1px 0 #b58c48) drop-shadow(0 2px 0 #6c4c20) drop-shadow(0 5px 9px rgba(12, 5, 40, .9));
 }
 .flourish { width: min(310px, 74%); aspect-ratio: 720 / 120; margin-top: -12px; background: url('/admin-theme/divider.webp') center / contain no-repeat; filter: drop-shadow(0 3px 5px rgba(12, 5, 40, .7)); }
-.under { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; align-items: center; color: #fbeed0; font-size: 14px; font-weight: 600; text-shadow: 0 1px 6px rgba(10, 5, 40, .95); margin-top: -8px; }
+.under { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; align-items: center; color: #fbeed0; font-size: 14px; font-weight: 600; text-shadow: 0 1px 6px rgba(10, 5, 40, .95); margin-top: 0; }
 :global(.wt-admin) .glass {
     display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 0 13px; cursor: pointer;
     background: rgba(20, 14, 60, .66); color: #fbeed0; border: 1px solid rgba(236, 212, 156, .65); border-radius: 999px; font-size: 13px; font-weight: 700; text-decoration: none;
@@ -40,6 +40,7 @@
 }
 .plaque b { display: flex; align-items: center; justify-content: center; gap: 18px; font-size: 52px; font-weight: 700; line-height: 1.08; font-variant-numeric: tabular-nums; }
 .plaque span { font-size: 18.5px; font-weight: 800; line-height: 1.2; }
+.long b { font-size: 36px; line-height: 1.55; }
 
 /* framed panels */
 .panel { position: relative; isolation: isolate; padding: 16px 22px 20px; }
@@ -70,7 +71,6 @@
 }
 :global(.wt-admin) .quiet:hover { filter: brightness(1.05); }
 :global(.wt-admin) .quiet:disabled { opacity: .5; cursor: default; }
-:global(.wt-admin) a:focus-visible, :global(.wt-admin) button:focus-visible, :global(.wt-admin) select:focus-visible, :global(.wt-admin) input:focus-visible { outline: 3px solid #ffb938; outline-offset: 2px; }
 :global(.wt-admin) .more { display: block; text-align: center; margin-top: 8px; font-size: 14.5px; font-weight: 700; color: var(--purple); }
 
 /* filters and search */
@@ -122,12 +122,13 @@
     .sky { height: 252px; background-position: 18% top; }
     .hero { min-height: 226px; padding-top: 14px; }
     .hero h1 { font-size: 35px; }
-    .figures { gap: 8px; grid-auto-columns: minmax(0, 1fr); }
+    .figures { gap: 8px; grid-auto-flow: row; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); }
     .plaque { min-height: 82px; padding: 4px 2px 6px; }
     .plaque::before { border-width: 15px 17px; }
     .plaque b { font-size: 30px; gap: 7px; }
     .plaque b svg { width: 19px; }
     .plaque span { font-size: 12px; }
+    .long b { font-size: 21px; }
     .panel { padding: 14px 14px 18px; }
     .panel::before { border-width: 40px 50px; }
     .panelHead { padding: 0 16px 0 2px; }

@@ -28,9 +28,10 @@ export function Hero({ title, under, figures }) {
     )
 }
 
-export function Plaque({ value, label, Icon, solid = false }) {
+// `long` is for values such as sums, which need a smaller size.
+export function Plaque({ value, label, Icon, solid = false, long = false }) {
     return (
-        <div className={k.plaque}>
+        <div className={`${k.plaque} ${long ? k.long : ''}`}>
             <b>{Icon && <Icon size={34} strokeWidth={2} fill={solid ? 'currentColor' : 'none'} aria-hidden='true' />}{value}</b>
             <span>{label}</span>
         </div>

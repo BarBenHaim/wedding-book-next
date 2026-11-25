@@ -1,0 +1,62 @@
+/* What only the events screen has. The shared pieces are in ui/kit.module.css. */
+.filters { display: flex; flex-direction: column; gap: 7px; margin: 2px 0 10px; }
+
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 8px; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 15px; height: 15px; border-radius: 4px; border: 1px solid rgba(120, 82, 38, .45); }
+:global(.wt-admin) .legend button { margin-right: auto; padding: 2px 12px; cursor: pointer; font-size: 13px; font-weight: 800; color: var(--purple); border: 1px solid var(--line); border-radius: 999px; background: rgba(255, 250, 240, .7); }
+/* The same two colours mark the rows, the phone cards and the legend. */
+.soon { background: rgba(255, 214, 120, .34); }
+.nodate { background: rgba(212, 98, 112, .16); }
+
+:global(.wt-admin) .sort { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+th[aria-sort] .sort { color: var(--purple); }
+.idle { opacity: .4; }
+:global(.wt-admin) .name { padding: 0; border: 0; background: none; color: inherit; font-size: 16px; font-weight: 900; text-align: right; cursor: pointer; }
+.name:hover { color: var(--purple); }
+
+.cards { margin-top: 2px; }
+.card { cursor: pointer; padding: 13px 12px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 13px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .5); }
+.card:not(.soon):not(.nodate) { background: rgba(255, 251, 242, .55); }
+
+.empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 34px 10px; }
+
+/* the journey strip */
+.road { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; }
+:global(.wt-admin) .stop {
+    display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 10px 8px 12px; text-align: center; cursor: pointer;
+    color: var(--ink); border: 2px solid #d3ab5e; border-radius: 14px; background: linear-gradient(180deg, #fff9ec, #f3e1bd);
+    box-shadow: inset 0 0 0 2px #fff8e8; transition: transform .16s ease;
+}
+.stop:hover { transform: translateY(-2px); }
+.stop span { font-size: 14px; font-weight: 800; }
+.stop b { font-size: 34px; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.stop small { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.stop[data-tone='red'] b { color: #96193f; }
+.stop[data-empty='true'] b { color: #a89a7c; }
+:global(.wt-admin) .stop[aria-pressed='true'] { color: #fff3d8; background: linear-gradient(180deg, #2c2473, #171049); box-shadow: inset 0 0 0 2px rgba(255, 229, 170, .3), 0 4px 10px rgba(30, 16, 66, .35); }
+.stop[aria-pressed='true'] b { color: #fff3d8; }
+.stop[aria-pressed='true'] small { color: #e9dcc0; }
+.funnel { display: flex; align-items: center; gap: 9px; overflow-x: auto; margin-top: 10px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 250, 240, .5); font-size: 14px; font-weight: 700; color: var(--ink-soft); }
+.funnel > * { flex: none; }
+.funnel b { color: var(--ink); font-variant-numeric: tabular-nums; }
+:global(.wt-admin) .funnel button { margin-right: auto; padding: 3px 12px; cursor: pointer; font-size: 13px; font-weight: 800; color: var(--ink); border: 1px solid #c9ab76; border-radius: 999px; background: rgba(255, 251, 242, .8); }
+:global(.wt-admin) .funnel button[aria-pressed='true'] { color: #fff3d8; background: linear-gradient(180deg, #2c2473, #171049); border: 2px solid #d9b265; }
+
+/* the event details panel */
+.drawer { color: var(--ink); background: #f6e8c9 url('/admin-theme/parchment.webp') repeat; border-right: 3px solid var(--gold); }
+.drawerHead {
+    position: sticky; top: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; text-align: center;
+    padding: 20px 60px 12px; border-bottom: 3px solid var(--gold);
+    background: linear-gradient(180deg, rgba(24, 14, 70, .3), rgba(24, 14, 70, .55)), url('/admin-theme/hero.webp') center 62% / cover;
+}
+.drawerHead h3 { font-size: 28px; font-weight: 900; line-height: 1.25; color: #fff3d4; text-shadow: 0 1px 0 #8a6530, 0 2px 0 #5c421b, 0 5px 12px rgba(8, 3, 35, .95); }
+.drawerHead i { width: 190px; height: 26px; background: url('/admin-theme/divider.webp') center / contain no-repeat; }
+.drawerHead p { font-size: 14px; font-weight: 700; color: #fbeed0; text-shadow: 0 1px 6px rgba(8, 3, 35, .95); }
+:global(.wt-admin) .drawerClose { position: absolute; top: 12px; left: 12px; display: grid; place-items: center; width: 38px; height: 38px; cursor: pointer; color: #fbeed0; background: linear-gradient(180deg, #2c2473, #171049); border: 2px solid #d9b265; border-radius: 50%; }
+.drawer p:global(.uppercase) { font-size: 18px; font-weight: 900; letter-spacing: 0; text-transform: none; color: var(--ink); }
+
+@media (max-width: 860px) {
+    .road { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stop:first-child { grid-column: 1 / -1; }
+}

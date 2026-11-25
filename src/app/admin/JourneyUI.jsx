@@ -4,6 +4,7 @@
 // All the rules live in src/lib/journeyStage.js; this file only draws them.
 
 import { journeyOf, summarize, STAGE_LABEL, FUNNEL_START_MS } from '@/lib/journeyStage'
+import v from './events.module.css'
 
 const TONE = {
     red: { bg: '#fdecea', fg: '#b42318', bd: '#f5b5b0' },
@@ -32,7 +33,7 @@ export function JourneyCell({ j, waHref, onMark, w, compact = false }) {
                 <button
                     onClick={() => onMark(w, ACTION_FIELD[j.action], true, ACTION_LABEL[j.action])}
                     className='text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-colors active:scale-95'
-                    style={{ background: '#fff', color: '#3d2e1a', borderColor: '#d9c58f' }}
+                    style={{ background: '#fff9ec', color: '#1d1648', borderColor: '#c9a460' }}
                 >
                     סמן: {ACTION_LABEL[j.action]}
                 </button>
@@ -150,35 +151,30 @@ export function JourneyStrip({ weddings, now, active, onPick }) {
     const steps = [['שילמו', f.paid], ['כותבים ברכות', f.writing], ['האירוע עבר', f.passed], ['יתרה שולמה', f.balance], ['נשלח להדפסה', f.printed], ['נשלח ללקוח', f.shipped], ['הגיע', f.delivered]]
     const other = js.filter(j => j.stage === 'free' || j.stage === 'legacy').length
     return (
-        <div className='px-4 sm:px-6 pt-4 pb-3 space-y-3' dir='rtl'>
-            <div className='grid grid-cols-2 md:grid-cols-5 gap-2.5'>
+        <div dir='rtl'>
+            <div className={v.road}>
                 {CARDS.map(c => {
-                    const t = TONE[c.tone]
                     const n = count(c.key)
                     const on = active === c.key
                     return (
                         <button
-                            key={c.key}
+                            key={c.key} type='button' className={v.stop} aria-pressed={on}
+                            data-tone={c.tone} data-empty={!n && c.key !== 'in_print'}
                             onClick={() => onPick(on ? 'all' : c.key)}
-                            className='text-right rounded-2xl p-3.5 border transition-all active:scale-[0.98]'
-                            style={{ background: on ? t.bg : '#fff', borderColor: on ? t.fg : t.bd, boxShadow: on ? `0 0 0 1px ${t.fg}` : 'none' }}
                         >
-                            <div className='text-[11px] font-bold' style={{ color: t.fg }}>{c.title}</div>
-                            <div className='text-3xl font-black tabular-nums mt-0.5' style={{ color: n || c.key === 'in_print' ? '#1a1410' : '#c4b9a4' }}>{n}</div>
-                            <div className='text-[10.5px] text-[#8d8579] mt-0.5'>{sub[c.key]}</div>
+                            <span>{c.title}</span>
+                            <b>{n}</b>
+                            <small>{sub[c.key]}</small>
                         </button>
                     )
                 })}
             </div>
-            <div className='flex items-center gap-2 overflow-x-auto text-[11.5px] text-[#7a6a52] rounded-xl bg-[#fbf6ec] border border-[#ead9b3] px-3.5 py-2.5'>
-                <span className='font-bold text-[#3d2e1a] shrink-0'>המשפך מאז {new Date(FUNNEL_START_MS).toLocaleDateString('he-IL')}:</span>
+            <div className={v.funnel}>
+                <span><b>המשפך מאז {new Date(FUNNEL_START_MS).toLocaleDateString('he-IL')}:</b></span>
                 {steps.map(([label, n], i) => (
-                    <span key={label} className='shrink-0 inline-flex items-center gap-2'>
-                        {i > 0 && <span className='text-[#c4b9a4]'>‹</span>}
-                        <span><b className='tabular-nums text-[#1a1410]'>{n}</b> {label}</span>
-                    </span>
+                    <span key={label}>{i > 0 && '‹ '}<b>{n}</b> {label}</span>
                 ))}
-                <button onClick={() => onPick(active === 'free' ? 'all' : 'free')} className='mr-auto shrink-0 text-[11px] px-2.5 py-1 rounded-full border border-[#ead9b3] bg-white' style={{ color: active === 'free' ? '#fff' : '#7a6a52', background: active === 'free' ? '#3d2e1a' : '#fff' }}>
+                <button type='button' aria-pressed={active === 'free'} onClick={() => onPick(active === 'free' ? 'all' : 'free')}>
                     חינמיים וישנים {other}
                 </button>
             </div>

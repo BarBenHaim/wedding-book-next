@@ -87,4 +87,4 @@
     .tiles [data-phone-only] { display: flex; }
 }
 @media print { .rail { display: none; } .root { display: block; background: none; padding: 0; } }
-@media (prefers-reduced-motion: reduce) { :global(.wt-admin) * { transition: none !important; animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .root * { transition: none !important; animation: none !important; } }

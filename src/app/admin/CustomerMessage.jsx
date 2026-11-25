@@ -32,9 +32,9 @@ export function CustomerMessageButtons({ wedding, onOpen, suggested }) {
                         onClick={() => onOpen(wedding, k)}
                         className='text-[12px] font-bold px-3 py-1.5 rounded-lg border transition-colors active:scale-95'
                         style={{
-                            background: k === suggested ? '#3d2e1a' : '#fff',
-                            color: k === suggested ? '#fff' : '#3d2e1a',
-                            borderColor: k === suggested ? '#3d2e1a' : '#d9c58f',
+                            background: k === suggested ? '#1d1648' : '#fff',
+                            color: k === suggested ? '#fff' : '#1d1648',
+                            borderColor: k === suggested ? '#1d1648' : '#d9c58f',
                         }}
                     >
                         {QUICK_TEMPLATES[k].label}
@@ -122,7 +122,7 @@ export default function CustomerMessageModal({ wedding, kind: firstKind, getToke
                                 key={k}
                                 onClick={() => setKind(k)}
                                 className='text-[12px] font-bold px-3 py-1.5 rounded-lg border'
-                                style={{ background: k === kind ? '#3d2e1a' : '#fff', color: k === kind ? '#fff' : '#3d2e1a', borderColor: k === kind ? '#3d2e1a' : '#d9c58f' }}
+                                style={{ background: k === kind ? '#1d1648' : '#fff', color: k === kind ? '#fff' : '#1d1648', borderColor: k === kind ? '#1d1648' : '#d9c58f' }}
                             >
                                 {QUICK_TEMPLATES[k].label}
                             </button>
@@ -140,7 +140,7 @@ export default function CustomerMessageModal({ wedding, kind: firstKind, getToke
                                 placeholder='למשל: מספר מעקב 123456'
                                 className='flex-1 text-sm px-3 py-2 rounded-xl border border-[#ead9b3] bg-[#fdfaf3] outline-none focus:border-[#AA8840]'
                             />
-                            <button onClick={() => load(kind, note)} className='text-[12px] font-bold px-3 py-2 rounded-xl border border-[#d9c58f] bg-white text-[#3d2e1a]'>עדכן</button>
+                            <button onClick={() => load(kind, note)} className='text-[12px] font-bold px-3 py-2 rounded-xl border border-[#d9c58f] bg-white text-[#1d1648]'>עדכן</button>
                         </div>
                     </div>
 
@@ -152,7 +152,7 @@ export default function CustomerMessageModal({ wedding, kind: firstKind, getToke
                         ) : pv ? (
                             <>
                                 <p className='text-[11px] font-semibold text-[#7a6a52] mb-1.5'>הנושא: {pv.subject}</p>
-                                <pre className='whitespace-pre-wrap break-words text-[13px] leading-relaxed text-[#3d2e1a] font-sans' style={{ opacity: loading ? 0.5 : 1 }}>{pv.text}</pre>
+                                <pre className='whitespace-pre-wrap break-words text-[13px] leading-relaxed text-[#1d1648] font-sans' style={{ opacity: loading ? 0.5 : 1 }}>{pv.text}</pre>
                             </>
                         ) : null}
                     </div>
@@ -181,11 +181,11 @@ export default function CustomerMessageModal({ wedding, kind: firstKind, getToke
                             onClick={sendMail}
                             disabled={!pv?.hasEmail || sending}
                             className='text-sm font-bold px-4 py-2.5 rounded-xl text-white disabled:opacity-40'
-                            style={{ background: '#3d2e1a' }}
+                            style={{ background: '#1d1648' }}
                         >
                             {sending ? 'שולח…' : sentTo ? 'שלח שוב במייל' : 'שלח במייל'}
                         </button>
-                        <button onClick={copyText} disabled={!pv} className='text-sm font-bold px-4 py-2.5 rounded-xl border border-[#d9c58f] bg-white text-[#3d2e1a] disabled:opacity-40'>העתק טקסט</button>
+                        <button onClick={copyText} disabled={!pv} className='text-sm font-bold px-4 py-2.5 rounded-xl border border-[#d9c58f] bg-white text-[#1d1648] disabled:opacity-40'>העתק טקסט</button>
                     </div>
                     {sentTo && <p className='text-sm font-semibold text-[#1f7a3e]'>נשלח אל {sentTo}</p>}
                 </div>
