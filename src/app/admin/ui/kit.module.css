@@ -141,6 +141,7 @@ button.plaque[aria-pressed='true']::after { content: ''; position: absolute; ins
     .hero { min-height: 226px; padding-top: 14px; }
     .hero h1 { font-size: 35px; }
     .figures { gap: 8px; grid-auto-flow: row; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); }
+    .figures:has(> :nth-child(4):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .plaque { min-height: 82px; padding: 4px 2px 6px; }
     .plaque::before { border-width: 15px 17px; }
     .plaque b { font-size: 30px; gap: 7px; }
