@@ -258,7 +258,7 @@ export default function BotWindow({ bot, firstTab = 'state', api, onChanged, onC
     }
 
     return (
-        <Window title='בוט וואטסאפ' subtitle={bot?.callsToday != null ? `${bot.callsToday} פניות למודל היום` : ''} onClose={onClose}>
+        <Window title='בוט וואטסאפ' subtitle={bot?.callsToday != null ? `${bot.callsToday} קריאות למודלים היום` : ''} onClose={onClose}>
             <div className={w.tabs} role='tablist'>
                 {TABS.map(({ key, label, Icon }) => (
                     <button key={key} type='button' role='tab' aria-selected={tab === key} onClick={() => setTab(key)}>

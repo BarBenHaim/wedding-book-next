@@ -93,7 +93,7 @@ function Bot({ bot, waiting, onOpen }) {
                     <MessageSquareText size={32} strokeWidth={1.9} aria-hidden='true' />
                     <div>
                         <b>{bot.callsToday ?? '—'}</b>
-                        <span>פניות למודל היום</span>
+                        <span>קריאות למודלים היום</span>
                     </div>
                 </div>
                 {bot.switches && <Switches switches={bot.switches} mode={bot.mode} onOpen={onOpen} />}

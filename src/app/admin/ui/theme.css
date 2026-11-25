@@ -16,6 +16,8 @@
 
 /* parchment instead of white */
 .wt-theme .bg-white { background-color: #fdf6e7; }
+/* a preview of an email stays on white, as the reader will see it */
+.wt-theme iframe.bg-white { background-color: #fff; }
 .wt-theme .bg-white\/95 { background-color: rgba(253, 246, 231, .97); }
 .wt-theme .bg-\[\#fbf6ec\] { background-color: #fcf3df; }
 .wt-theme .bg-\[\#fdfaf3\], .wt-theme .bg-\[\#f8f4ec\], .wt-theme .bg-\[\#faf6ee\], .wt-theme .bg-\[\#f6efe0\] { background-color: #f6e8c9; }

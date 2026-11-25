@@ -3045,7 +3045,9 @@ function AdminDashboardContent() {
     }
 
     return (
-        <Page>
+        <>
+            {/* Outside the page on purpose: the page is its own layer, so anything
+                fixed inside it would be drawn under the menu. */}
             {/* Toast */}
             <AnimatePresence>{toast && <Toast {...toast} onClose={() => setToast(null)} />}</AnimatePresence>
 
@@ -3091,6 +3093,7 @@ function AdminDashboardContent() {
                 </div>
             )}
 
+        <Page>
             <Sheet>
                 <Hero
                     title='אירועים'
@@ -3358,6 +3361,7 @@ function AdminDashboardContent() {
                 </Panel>
             </Sheet>
         </Page>
+        </>
     )
 }
 
