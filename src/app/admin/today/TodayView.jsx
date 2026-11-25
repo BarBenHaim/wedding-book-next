@@ -5,9 +5,9 @@
 import Link from 'next/link'
 import {
     AlertTriangle, Calendar, CalendarDays, ChevronLeft, ClipboardCheck, Coins, ExternalLink, FileText,
-    Image as ImageIcon, MessageCircle, Palette, Send, Users,
+    Image as ImageIcon, MessageCircle, MessageSquareText, Palette, Phone, Send, Users,
 } from 'lucide-react'
-import { frankRuhl } from '@/app/fonts'
+import { jerusalemSerif } from './font'
 import s from './today.module.css'
 
 const NAV = [
@@ -24,22 +24,29 @@ const MODE = { full_sales: 'מכירה מלאה', opening_only: 'פתיחה בל
 const dateWords = iso => (iso
     ? new Intl.DateTimeFormat('he-IL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`))
     : '')
-const shortDate = iso => (iso ? `${Number(iso.slice(8, 10))}.${Number(iso.slice(5, 7))}` : '')
+const monthDay = iso => (iso
+    ? new Intl.DateTimeFormat('he-IL', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`))
+    : '')
 const when = (day, toEvent) => {
     if (toEvent === 0) return 'היום'
     if (toEvent === 1) return 'מחר'
-    return shortDate(day) || 'בלי תאריך'
+    return monthDay(day) || 'בלי תאריך'
 }
 const dollars = value => `$${(Number(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-const Corners = () => ['tr', 'tl', 'br', 'bl'].map(corner => <i key={corner} aria-hidden='true' className={`${s.corner} ${s[corner]}`} />)
+// A speech bubble with a handset, the mark of the WhatsApp card.
+const WhatsMark = ({ size = 28 }) => (
+    <span className={s.whats} aria-hidden='true'>
+        <MessageCircle size={size} strokeWidth={2.1} />
+        <Phone size={Math.round(size * .42)} strokeWidth={0} fill='currentColor' />
+    </span>
+)
 
 function Panel({ title, Icon, children, className = '' }) {
     return (
         <section className={`${s.panel} ${className}`}>
-            <Corners />
             <header className={s.panelHead}>
-                <h2><Icon size={22} strokeWidth={1.9} aria-hidden='true' />{title}</h2>
+                <h2><Icon size={28} strokeWidth={2.1} aria-hidden='true' />{title}</h2>
             </header>
             {children}
         </section>
@@ -50,7 +57,7 @@ function Task({ task, busy, onApprove }) {
     const Icon = TASK_ICON[task.kind] || FileText
     return (
         <li className={s.task}>
-            <span className={s.taskIcon}><Icon size={18} aria-hidden='true' /></span>
+            <span className={s.taskIcon}><Icon size={30} strokeWidth={1.9} aria-hidden='true' /></span>
             <span className={s.taskText}>
                 <b>{task.title}</b>
                 {task.detail && <small>{task.detail}</small>}
@@ -60,8 +67,8 @@ function Task({ task, busy, onApprove }) {
                 <img src={task.image} alt='הדוגמה' className={s.thumb} />
             )}
             {task.canApprove
-                ? <button type='button' className={s.button} disabled={busy} onClick={() => onApprove(task)}><Send size={15} aria-hidden='true' />אשר ושלח</button>
-                : <Link href={task.href} className={s.button}><ExternalLink size={15} aria-hidden='true' />פתח</Link>}
+                ? <button type='button' className={s.button} disabled={busy} onClick={() => onApprove(task)}><Send size={21} aria-hidden='true' />אשר ושלח</button>
+                : <Link href={task.href} className={s.button}><ExternalLink size={21} aria-hidden='true' />פתח</Link>}
         </li>
     )
 }
@@ -69,8 +76,7 @@ function Task({ task, busy, onApprove }) {
 function Figure({ value, label, Icon }) {
     return (
         <div className={s.plaque}>
-            <Corners />
-            <b><Icon size={30} strokeWidth={1.7} aria-hidden='true' />{value}</b>
+            <b><Icon size={34} strokeWidth={2} aria-hidden='true' />{value}</b>
             <span>{label}</span>
         </div>
     )
@@ -79,10 +85,11 @@ function Figure({ value, label, Icon }) {
 const SWITCH_NAMES = { requests: 'טיוטות ללקוחות', samples: 'דוגמאות שלט', followups: 'הודעות מעקב' }
 
 // In words, so "off" is not read as a greyed-out button.
-function Switches({ switches }) {
+function Switches({ switches, mode }) {
     const names = on => Object.keys(SWITCH_NAMES).filter(key => (switches[key] === true) === on).map(key => SWITCH_NAMES[key]).join(', ')
     return (
         <Link href='/admin/customers' className={s.switches}>
+            <span data-on='true'>מצב: {MODE[mode] || mode}</span>
             {names(true) && <span data-on='true'>פעיל: {names(true)}</span>}
             {names(false) && <span>כבוי: {names(false)}</span>}
         </Link>
@@ -91,17 +98,22 @@ function Switches({ switches }) {
 
 function Bot({ bot, waiting }) {
     return (
-        <Panel title='בוט וואטסאפ' Icon={MessageCircle} className={s.botPanel}>
+        <Panel title='בוט וואטסאפ' Icon={WhatsMark} className={s.botPanel}>
             {!bot ? <p className={s.unread}>{waiting || 'לא הצלחתי לקרוא את מצב הבוט.'}</p> : <>
                 <div className={`${s.chip} ${bot.enabled ? s.on : s.off}`}><i />{bot.enabled ? 'הבוט פעיל' : 'הבוט כבוי'}</div>
                 <div className={s.field}><span dir='ltr'>{bot.modelLabel}</span></div>
                 <div className={s.count}>
-                    <b>{bot.callsToday ?? '—'}</b>
-                    <span>פניות למודל היום · {MODE[bot.mode] || bot.mode}</span>
+                    <MessageSquareText size={32} strokeWidth={1.9} aria-hidden='true' />
+                    <div>
+                        <b>{bot.callsToday ?? '—'}</b>
+                        <span>פניות למודל היום</span>
+                    </div>
                 </div>
-                {bot.switches && <Switches switches={bot.switches} />}
+                {bot.switches && <Switches switches={bot.switches} mode={bot.mode} />}
             </>}
             <div className={s.dove} aria-hidden='true' />
+            <i className={`${s.leaf} ${s.leafLeft}`} aria-hidden='true' />
+            <i className={`${s.leaf} ${s.leafRight}`} aria-hidden='true' />
         </Panel>
     )
 }
@@ -135,19 +147,21 @@ export default function TodayView({ data, busy, error, onApprove, onRefresh }) {
     const figure = key => (data ? data.counts[key] ?? '—' : '…')
     const noCustomers = waiting || (data.customers.length ? '' : data.unread.includes('לקוחות') ? 'רשימת הלקוחות לא נקראה.' : 'אין לקוחות פעילים.')
     return (
-        <div dir='rtl' className={s.root} style={{ '--serif': frankRuhl.style.fontFamily }}>
+        <div dir='rtl' className={s.root} style={{ '--serif': jerusalemSerif.style.fontFamily }}>
             <aside className={s.rail}>
                 <Link href='/admin/today' className={s.brand}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src='/brand/logo-on-dark.png' alt='Wedding Tales' />
                 </Link>
+                <div className={s.rule} aria-hidden='true' />
                 <nav aria-label='ניווט ראשי'>
                     {NAV.map(({ href, label, Icon }) => (
-                        <Link key={label} href={href} aria-current={href === '/admin/today' ? 'page' : undefined}>
-                            <span>{label}</span><Icon size={20} strokeWidth={1.8} aria-hidden='true' />
+                        <Link key={label} href={href} className={s.item} aria-current={href === '/admin/today' ? 'page' : undefined}>
+                            <span>{label}</span><Icon size={26} strokeWidth={2} aria-hidden='true' />
                         </Link>
                     ))}
                 </nav>
+                <div className={s.rule} aria-hidden='true' />
                 <div className={s.alley} aria-hidden='true' />
             </aside>
 
@@ -187,20 +201,20 @@ export default function TodayView({ data, busy, error, onApprove, onRefresh }) {
 
                         <Panel title='לקוחות פעילים' Icon={Users}>
                             {noCustomers ? <p className={s.unread}>{noCustomers}</p> : (
-                                <table className={s.table}>
+                                <div className={s.tableBox}><table className={s.table}>
                                     <thead><tr><th>לקוח</th><th>אירוע</th><th>הצעד הבא</th></tr></thead>
                                     <tbody>
                                         {data.customers.map(c => (
                                             <tr key={c.id}>
-                                                <td><Link href={c.href}><Users size={17} aria-hidden='true' />{c.title}</Link></td>
-                                                <td>{c.event} <span>· {when(c.day, c.toEvent)}</span></td>
+                                                <td><Link href={c.href}><Users size={22} strokeWidth={2.2} fill='currentColor' aria-hidden='true' />{c.title}</Link></td>
+                                                <td>{c.event} – {when(c.day, c.toEvent)}</td>
                                                 <td data-overdue={c.overdue}>
-                                                    <Link href={c.href} className={s.step} tabIndex={-1}>{c.step}<ChevronLeft size={17} aria-hidden='true' /></Link>
+                                                    <Link href={c.href} className={s.step} tabIndex={-1}>{c.step}<ChevronLeft size={20} strokeWidth={2.6} aria-hidden='true' /></Link>
                                                 </td>
                                             </tr>
                                         ))}
                                     </tbody>
-                                </table>
+                                </table></div>
                             )}
                             {data?.moreCustomers > 0 && <Link href='/admin/customers' className={s.more}>ועוד {data.moreCustomers} לקוחות</Link>}
                         </Panel>
