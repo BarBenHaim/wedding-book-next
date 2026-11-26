@@ -39,7 +39,7 @@ export function isSuperAdmin(email) {
 }
 
 /** Where the super-admin works. */
-export const SUPER_ADMIN_HOME = '/admin'
+export const SUPER_ADMIN_HOME = '/admin/customers'
 
 /** Where a just-signed-in person goes if they run the system — or null
  *  for everybody else. The super-admin usually owns no event of his own,

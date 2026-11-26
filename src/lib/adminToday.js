@@ -94,6 +94,8 @@ export function buildToday({ today, people, drafts = [], samples = [], claude, u
             week: whole ? active.filter(row => row.toEvent != null && row.toEvent >= 0 && row.toEvent <= 7).length : null,
         },
         tasks: tasks.slice(0, TASKS_SHOWN),
+        // Everything that is not a person's own line: the home screen lists people itself.
+        waiting: tasks.filter(task => task.kind !== 'person'),
         moreTasks: Math.max(0, tasks.length - TASKS_SHOWN),
         customers: [...active].sort((a, b) => order(a) - order(b)).slice(0, CUSTOMERS_SHOWN).map(row => ({
             id: row.key, title: row.name, event: row.what || 'אירוע', day: row.day, toEvent: row.toEvent,

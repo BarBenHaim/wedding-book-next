@@ -6,13 +6,10 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
-import {
-    BellRing, Calendar, CalendarDays, Coins, LogOut, Mail, Menu, MessageCircle,
-    MessagesSquare, Palette, QrCode, Sparkles, Users,
-} from 'lucide-react'
+import { Calendar, CalendarDays, Coins, LogOut, Menu, MessageCircle, MessagesSquare, Palette } from 'lucide-react'
 import { auth } from '@/lib/firebaseClient'
 import { isSuperAdmin } from '@/lib/superAdmin'
-import { MORE, NAV, activeNav, adminShell } from '@/lib/adminShell'
+import { NAV, activeNav, adminShell, tabsFor } from '@/lib/adminShell'
 import BotWindow from '../today/BotWindow'
 import SpendWindow from '../today/SpendWindow'
 import Window from './Window'
@@ -22,13 +19,11 @@ import s from './shell.module.css'
 import './theme.css'
 
 const ICONS = {
-    '/admin/today': Calendar, '/admin/customers': Users, '/admin': CalendarDays, '/admin/sales-leads': MessagesSquare,
-    bot: MessageCircle, spend: Coins, '/admin/studio': Palette,
-    '/admin/customers/board': BellRing, '/admin/qrcodes': QrCode, '/admin/emails': Mail,
-    '/admin/guest-design': Sparkles,
+    '/admin/customers': Calendar, '/admin': CalendarDays, '/admin/sales-leads': MessagesSquare,
+    '/admin/studio': Palette, bot: MessageCircle, spend: Coins,
 }
 // On a phone the bottom bar holds only these; the rest sit under "more".
-const ON_PHONE = ['/admin/today', '/admin/customers', 'bot']
+const ON_PHONE = ['/admin/customers', '/admin', '/admin/sales-leads', 'bot']
 const keyOf = item => item.href || item.open
 
 const AdminContext = createContext({ openBot: () => {}, openSpend: () => {}, onRefresh: () => () => {} })
@@ -72,10 +67,11 @@ export default function Shell({ children }) {
     // Someone who is not a super admin sees the screen's own refusal, bare.
     const framed = admin !== false
     const lit = activeNav(pathname)
+    const tabs = tabsFor(pathname)
     const item = (entry, extra = {}) => {
         const key = keyOf(entry)
         const Icon = ICONS[key] || Menu
-        const inside = <><span>{entry.label}</span><Icon size={26} strokeWidth={2.2} fill={Icon === Users ? 'currentColor' : 'none'} aria-hidden='true' /></>
+        const inside = <><span>{entry.label}</span><Icon size={26} strokeWidth={2.2} aria-hidden='true' /></>
         const phone = ON_PHONE.includes(key) ? undefined : 'no'
         return entry.open
             ? <button key={key} type='button' className={s.item} data-phone={phone} title={entry.label} onClick={() => (entry.open === 'bot' ? openBot() : openSpend())} {...extra}>{inside}</button>
@@ -91,15 +87,19 @@ export default function Shell({ children }) {
             >
                 {framed && (
                     <aside className={s.rail} data-rail={shell.rail}>
-                        <Link href='/admin/today' className={s.brand}>
+                        <Link href='/admin/customers' className={s.brand}>
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src='/brand/logo-on-dark.png' alt='Wedding Tales' />
                         </Link>
                         <div className={s.rule} aria-hidden='true' />
                         <nav aria-label='ניווט ראשי'>
                             {NAV.map(entry => item(entry))}
-                            <button type='button' className={s.item} data-more title='עוד' aria-current={lit === 'more' ? 'page' : undefined} onClick={() => setView({ type: 'more' })}>
+                            {/* on a phone: what the bottom bar has no room for */}
+                            <button type='button' className={s.item} data-more title='עוד' aria-current={lit && !ON_PHONE.includes(lit) ? 'page' : undefined} onClick={() => setView({ type: 'more' })}>
                                 <span>עוד</span><Menu size={26} strokeWidth={2.2} aria-hidden='true' />
+                            </button>
+                            <button type='button' className={s.item} data-out title='יציאה' onClick={logout}>
+                                <span>יציאה</span><LogOut size={26} strokeWidth={2.2} aria-hidden='true' />
                             </button>
                         </nav>
                         <div className={s.rule} aria-hidden='true' />
@@ -107,6 +107,11 @@ export default function Shell({ children }) {
                     </aside>
                 )}
                 <div className={framed ? `${s.content} ${shell.serif ? s.serif : ''} ${shell.themed ? 'wt-theme' : ''}` : undefined}>
+                    {framed && tabs.length > 0 && (
+                        <nav className={s.tabs} aria-label='המסכים של האזור'>
+                            {tabs.map(tab => <Link key={tab.href} href={tab.href} aria-current={tab.current ? 'page' : undefined}>{tab.label}</Link>)}
+                        </nav>
+                    )}
                     {children}
                 </div>
 
@@ -115,12 +120,12 @@ export default function Shell({ children }) {
                 {view?.type === 'more' && (
                     <Window title='עוד' onClose={close}>
                         <div className={s.tiles}>
-                            {[...NAV.filter(entry => !ON_PHONE.includes(keyOf(entry))).map(entry => ({ ...entry, phoneOnly: true })), ...MORE].map(entry => {
+                            {NAV.filter(entry => !ON_PHONE.includes(keyOf(entry))).map(entry => {
                                 const Icon = ICONS[keyOf(entry)] || Menu
                                 const inside = <><Icon size={34} strokeWidth={1.9} aria-hidden='true' /><b>{entry.label}</b></>
                                 return entry.open
-                                    ? <button key={entry.label} type='button' data-phone-only={entry.phoneOnly} onClick={() => (entry.open === 'bot' ? openBot() : openSpend())}>{inside}</button>
-                                    : <Link key={entry.label} href={entry.href} data-phone-only={entry.phoneOnly} onClick={close} aria-current={pathname === entry.href ? 'page' : undefined}>{inside}</Link>
+                                    ? <button key={entry.label} type='button' onClick={() => (entry.open === 'bot' ? openBot() : openSpend())}>{inside}</button>
+                                    : <Link key={entry.label} href={entry.href} onClick={close} aria-current={lit === entry.href ? 'page' : undefined}>{inside}</Link>
                             })}
                             <button type='button' onClick={logout}><LogOut size={34} strokeWidth={1.9} aria-hidden='true' /><b>יציאה</b></button>
                         </div>

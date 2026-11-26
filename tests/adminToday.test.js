@@ -151,3 +151,21 @@ describe('customers, the bot and money', () => {
         expect(view.unread).toEqual(['לקוחות'])
     })
 })
+
+describe('what waits for an approval on the home screen', () => {
+    it('lists every request, sample and failure, uncut, and no person lines', () => {
+        const view = buildToday(base({
+            claude: { alert: 'alert-words' },
+            drafts: [1, 2, 3, 4, 5].map(number => ({ number, status: 'pending', text: 'x', windowOpen: true, tasks: [] })),
+            samples: [{ id: 's1', status: 'ready', name: 'דנה', phone: '972500001234', windowOpen: true }],
+            people: people([due('b:w1', { name: 'איתמר' })]),
+        }))
+
+        expect(view.waiting.map(task => task.kind)).toEqual(['claude', 'draft', 'draft', 'draft', 'draft', 'draft', 'sample'])
+        expect(view.tasks).toHaveLength(4)
+    })
+
+    it('is empty when only people wait', () => {
+        expect(buildToday(base({ people: people([due('b:w1')]) })).waiting).toEqual([])
+    })
+})

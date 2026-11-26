@@ -24,6 +24,8 @@ const nextConfig = {
             { source: '/portal', destination: '/login', permanent: false },
             // The old sign-up page only forwarded to the wizard.
             { source: '/register', destination: '/start', permanent: false },
+            // The "today" screen is part of the admin's home screen now.
+            { source: '/admin/today', destination: '/admin/customers', permanent: false },
         ]
     },
     async rewrites() {

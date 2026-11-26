@@ -11,6 +11,16 @@ the ones that touch what you are about to change.
 
 ---
 
+## 26.11 — one home screen and four places in the super admin
+
+- `/admin/customers` is the home: what waits for an approval (from
+  `buildToday().waiting`), then the list of people. `/admin/today` redirects
+  there; `api/admin/today` stays and feeds the home, the bot and the spend.
+- The menu (`src/lib/adminShell.js`) is four places and two windows. A place
+  with several screens shows them as tabs: events (events, QR codes),
+  messages (leads, automations, mails), design (studio, guest page).
+- The super admin lands on the home after signing in.
+
 ## 26.11 — screens removed because nobody used them
 
 Bar asked to throw out what does not matter. Checked against production

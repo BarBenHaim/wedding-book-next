@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readdirSync } from 'node:fs'
-import { MORE, NAV, activeNav, adminShell } from '@/lib/adminShell'
+import { NAV, activeNav, adminShell, tabsFor } from '@/lib/adminShell'
+import nextConfig from '../next.config.mjs'
 
 describe('which admin screens get the menu', () => {
     it('gives the work screens the full menu and the admin font', () => {
-        for (const path of ['/admin', '/admin/today', '/admin/customers', '/admin/customers/board', '/admin/sales-leads', '/admin/']) {
+        for (const path of ['/admin', '/admin/customers', '/admin/customers/board', '/admin/sales-leads', '/admin/']) {
             expect(adminShell(path)).toEqual({ rail: 'full', serif: true, themed: true })
         }
     })
@@ -28,31 +29,42 @@ describe('which admin screens get the menu', () => {
         ]) expect(adminShell(path)).toBe(null)
     })
 
-    it('has a menu entry for every admin screen', () => {
+    it('reaches every admin screen from the menu or from the tabs inside it', () => {
         const root = new URL('../src/app/admin/', import.meta.url)
         const folders = readdirSync(root, { withFileTypes: true })
             .filter(entry => entry.isDirectory() && existsSync(new URL(`${entry.name}/page.js`, root)))
             .map(entry => `/admin/${entry.name}`)
-        const linked = [...NAV, ...MORE].map(item => item.href).filter(Boolean)
-        expect(linked).toEqual(expect.arrayContaining(['/admin', ...folders]))
+        const linked = NAV.flatMap(item => [item.href, ...(item.tabs || []).map(tab => tab.href)]).filter(Boolean)
+        expect(linked).toEqual(expect.arrayContaining(['/admin', '/admin/customers/board', ...folders]))
     })
 })
 
-describe('which menu entry is lit', () => {
-    it('lights the screen itself for the entries of the menu', () => {
-        expect(activeNav('/admin/today')).toBe('/admin/today')
+describe('the menu', () => {
+    it('has four places and the two windows', () => {
+        expect(NAV.map(item => item.href || item.open)).toEqual(['/admin/customers', '/admin', '/admin/sales-leads', '/admin/studio', 'bot', 'spend'])
+    })
+
+    it('lights the place a screen belongs to', () => {
         expect(activeNav('/admin/customers/')).toBe('/admin/customers')
-        expect(activeNav('/admin/studio')).toBe('/admin/studio')
+        expect(activeNav('/admin')).toBe('/admin')
+        expect(activeNav('/admin/qrcodes')).toBe('/admin')
+        for (const path of ['/admin/sales-leads', '/admin/customers/board', '/admin/emails']) expect(activeNav(path), path).toBe('/admin/sales-leads')
+        for (const path of ['/admin/studio', '/admin/guest-design']) expect(activeNav(path), path).toBe('/admin/studio')
+        expect(activeNav('/admin/nothing-here')).toBe(null)
     })
 
-    it('lights the "more" entry for a screen that sits inside it', () => {
-        for (const path of ['/admin', '/admin/sales-leads', '/admin/customers/board', '/admin/qrcodes', '/admin/emails']) {
-            expect(activeNav(path)).toBe('more')
-        }
+    it('offers the neighbouring screens of a place as tabs', () => {
+        expect(tabsFor('/admin/emails').map(tab => tab.href)).toEqual(['/admin/sales-leads', '/admin/customers/board', '/admin/emails'])
+        expect(tabsFor('/admin').map(tab => tab.href)).toEqual(['/admin', '/admin/qrcodes'])
+        expect(tabsFor('/admin/guest-design/').map(tab => tab.href)).toEqual(['/admin/studio', '/admin/guest-design'])
     })
 
-    it('keeps the daily screens in the menu and the older ones under "more"', () => {
-        expect(NAV.map(item => item.href || item.open)).toEqual(['/admin/today', '/admin/customers', 'bot', 'spend', '/admin/studio'])
-        expect(MORE.map(item => item.href)).toEqual(expect.arrayContaining(['/admin', '/admin/sales-leads', '/admin/customers/board']))
+    it('draws no tabs where a place is a single screen, or around a print output', () => {
+        for (const path of ['/admin/customers', '/admin/wedding/abc/cover-print', '/login', undefined]) expect(tabsFor(path), String(path)).toEqual([])
+    })
+
+    it('sends the old "today" address to the home screen, so saved links keep working', async () => {
+        const redirects = await nextConfig.redirects()
+        expect(redirects).toContainEqual({ source: '/admin/today', destination: '/admin/customers', permanent: false })
     })
 })

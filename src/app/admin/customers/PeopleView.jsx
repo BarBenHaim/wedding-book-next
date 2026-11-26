@@ -32,7 +32,7 @@ const matches = (row, query) => {
 const details = row => [row.what, row.day ? shortDate(row.day) : ''].filter(Boolean).join(' · ')
 const step = row => row.next?.label || '—'
 
-export default function PeopleView({ data, busy, error, updatedAt, onRefresh, onOpen, onMark }) {
+export default function PeopleView({ data, busy, error, updatedAt, onRefresh, onOpen, onMark, chips = null, above = null }) {
     const [filter, setFilter] = useState('today')
     const [query, setQuery] = useState('')
     const [shown, setShown] = useState(PAGE)
@@ -53,8 +53,9 @@ export default function PeopleView({ data, busy, error, updatedAt, onRefresh, on
         <Page>
             <Sheet>
                 <Hero
-                    title='לקוחות'
+                    title='היום'
                     under={<>
+                        {chips}
                         {updatedAt && <span>עודכן {updatedAt}</span>}
                         <button type='button' className={k.glass} onClick={onRefresh} disabled={busy}><RefreshCw size={15} />{busy ? 'טוען…' : 'רענן'}</button>
                         <button type='button' className={k.glass} aria-pressed={filter === 'resting' && !search} onClick={() => choose('resting')}><Moon size={14} />רדומים ({count('resting')})</button>
@@ -67,6 +68,8 @@ export default function PeopleView({ data, busy, error, updatedAt, onRefresh, on
 
                 {error && <p role='alert' className={k.error}>{error}</p>}
                 {unread.length > 0 && <p role='alert' className={k.error}>לא נקראו: {unread.join(', ')}. הרשימה חלקית.</p>}
+
+                {above}
 
                 <Panel
                     title={search ? 'תוצאות החיפוש' : TITLES[filter]} Icon={Users}
