@@ -5,7 +5,7 @@
 // month's spend sit in the heading. The message switches live on
 // /admin/customers/board.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Coins, MessageCircle } from 'lucide-react'
 import SuperAdminOnly from '../ui/SuperAdminGate'
 import { adminApi } from '../ui/api'
@@ -58,12 +58,24 @@ function Home() {
         setOpened(query.get('key') || (id ? `b:${id}` : ''))
     }, [])
     const row = data?.rows?.find(item => item.key === opened)
-    // After an action both reads are taken again.
+    // After an action both reads are taken again. The buttons stay off until
+    // the second one is back too, or the row just approved could be sent twice.
+    const [working, setWorking] = useState(false)
+    const running = useRef(false)
     const doing = async (...args) => {
-        const done = await act(...args)
-        await loadDay()
-        return done
+        if (running.current) return false
+        running.current = true
+        setWorking(true)
+        try {
+            const done = await act(...args)
+            await loadDay()
+            return done
+        } finally {
+            running.current = false
+            setWorking(false)
+        }
     }
+    const off = busy || working
     const mark = (item, field) => doing({ op: 'mark', weddingId: item.weddingId, field, on: true }, markQuestion(item, field))
     const approve = item => { const { body, question } = approval(item); return doing(body, question) }
     const refresh = () => { load(); loadDay() }
@@ -72,7 +84,7 @@ function Home() {
     return (
         <>
             <PeopleView
-                data={data} busy={busy} error={error || dayError} updatedAt={updatedAt} onRefresh={refresh}
+                data={data} busy={off} error={error || dayError} updatedAt={updatedAt} onRefresh={refresh}
                 onOpen={item => setOpened(item.key)} onMark={mark}
                 chips={<>
                     {day?.bot && (
@@ -86,12 +98,12 @@ function Home() {
                         </button>
                     )}
                 </>}
-                above={<Waiting tasks={day?.waiting} busy={busy} onApprove={approve} onOpen={open} />}
+                above={<Waiting tasks={day?.waiting} busy={off} onApprove={approve} onOpen={open} />}
             />
             {task && <TaskWindow task={task} api={adminApi} onChanged={() => { load(); loadDay() }} onClose={() => setTask(null)} />}
             {row && (
                 <PersonWindow
-                    key={row.key} row={row} drafts={data.drafts} samples={data.samples} busy={busy} error={error}
+                    key={row.key} row={row} drafts={data.drafts} samples={data.samples} busy={off} error={error}
                     act={doing} api={adminApi} onClose={() => setOpened('')}
                 />
             )}
