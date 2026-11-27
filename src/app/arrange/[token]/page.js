@@ -19,8 +19,6 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import { Lock, Check, Loader2, RefreshCcw, ArrowUp, ArrowDown, ChevronsUp, Clock3, Sparkles } from 'lucide-react'
 import { Heebo } from 'next/font/google'
 import BookLoader from '@/components/BookLoader/BookLoader'
-import useWorld from '@/components/Hall/useWorld'
-import { worldOfEvent } from '@/lib/eventWorld'
 
 const heebo = Heebo({ subsets: ['hebrew'], weight: ['400', '700', '900'] })
 
@@ -57,7 +55,6 @@ export default function ArrangePage() {
     const { token } = useParams()
     const [status, setStatus] = useState('loading') // loading | invalid | error | ready
     const [wedding, setWedding] = useState(null)
-    useWorld(worldOfEvent(wedding))
     const [entries, setEntries] = useState([])
     // idle | dirty | saving | saved | failed
     const [saveState, setSaveState] = useState('idle')

@@ -14,8 +14,6 @@ import PosterSheet from './PosterSheet'
 import LookStudio from './LookStudio'
 import { fallbackCoverTexture } from '@/lib/defaultCovers'
 import { Heebo, Noto_Serif_Hebrew } from 'next/font/google'
-import useWorld from '@/components/Hall/useWorld'
-import { worldOfEvent } from '@/lib/eventWorld'
 
 const heebo = Heebo({ subsets: ['latin'], weight: ['400', '600', '700', '900'] })
 const serif = Noto_Serif_Hebrew({ subsets: ['hebrew', 'latin'], weight: ['700', '900'], display: 'swap', preload: false })
@@ -91,7 +89,6 @@ export default function PortalApp() {
     const { weddingId } = useParams()
     const [tab, setTab] = useState('home')
     const [w, setW] = useState(null)
-    useWorld(worldOfEvent(w))
     const [entries, setEntries] = useState(null)
     const [q, setQ] = useState('')
     const [selected, setSelected] = useState(null)

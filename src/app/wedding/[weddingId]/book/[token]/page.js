@@ -46,8 +46,6 @@ import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
 import BookLoader from '@/components/BookLoader/BookLoader'
-import useWorld from '@/components/Hall/useWorld'
-import { worldOfEvent } from '@/lib/eventWorld'
 import hall from './book-hall.module.css'
 
 export default function DigitalEditionPage() {
@@ -293,7 +291,6 @@ function InvalidScreen() {
 
 // ─── Main book viewer ───────────────────────────────────────────────────
 function BookViewer({ wedding, entries, weddingId, token, embed }) {
-    useWorld(worldOfEvent(wedding))
     const flipRef = useRef(null)
     // The box that moves a closed book to the middle.
     const placeRef = useRef(null)

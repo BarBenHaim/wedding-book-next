@@ -23,8 +23,6 @@ import {
 import { Heebo } from 'next/font/google'
 import { storage } from '@/lib/firebaseClient'
 import BookLoader from '@/components/BookLoader/BookLoader'
-import useWorld from '@/components/Hall/useWorld'
-import { worldOfEvent } from '@/lib/eventWorld'
 import { blessForTag } from '@/lib/twins'
 
 const heebo = Heebo({ subsets: ['hebrew'], weight: ['400', '700', '900'] })
@@ -57,7 +55,6 @@ export default function ManagePage() {
     const { token } = useParams()
     const [status, setStatus] = useState('loading') // loading | invalid | error | ready
     const [wedding, setWedding] = useState(null)
-    useWorld(worldOfEvent(wedding))
     const [entries, setEntries] = useState([])
     const [editing, setEditing] = useState(null) // { id, name, text }
     const [busyId, setBusyId] = useState(null)

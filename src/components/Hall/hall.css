@@ -3,6 +3,19 @@
    headings. Scoped to .wt-hall and the house header, so guest screens are not
    touched. These rules are unlayered, so they win over the utilities. */
 
+/* the house colours and painting: Golden Jerusalem, for every celebration */
+:root {
+    --wt-art: url('/admin-theme/hero.webp');
+    --wt-bar: linear-gradient(180deg, #271d63, #171148);
+    --wt-primary: linear-gradient(180deg, #2c2473 0%, #171049 58%, #1f1860 100%);
+    --wt-primary-solid: #2c2473;
+    --wt-ink: #1d1648;
+    --wt-accent: #52247f;
+    --wt-night: #130d42;
+    --wt-veil: rgba(19, 13, 66, .62);
+    --wt-veil-soft: rgba(19, 13, 66, .18);
+}
+
 /* ── the site bar ─────────────────────────────────────────────────────────── */
 /* The same height as the plain bar, which full-height screens count on. */
 header.wt-house-header { background: var(--wt-bar); border-bottom: 2px solid #cfa355; box-shadow: 0 6px 18px -8px rgba(20, 10, 50, .6); }

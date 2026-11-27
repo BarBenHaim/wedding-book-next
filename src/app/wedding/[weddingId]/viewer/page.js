@@ -35,8 +35,6 @@ import BookLoader from '@/components/BookLoader/BookLoader'
 import useBookPageDownload from '@/components/BookPageDownload/useBookPageDownload'
 import BookPageDownloadButton from '@/components/BookPageDownload/BookPageDownloadButton'
 import { jerusalemSerif } from '@/app/admin/ui/font'
-import useWorld from '@/components/Hall/useWorld'
-import { worldOfEvent } from '@/lib/eventWorld'
 import room from './book-room.module.css'
 import './book-room.css'
 
@@ -110,7 +108,6 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // brideName/groomName/celebrantName when no custom cover content
     // is set. Mirrors the pattern in /book/[token]/page.js.
     const [weddingDoc, setWeddingDoc] = useState(null)
-    useWorld(worldOfEvent(weddingDoc))
     // LIVE PRESET LINK — when the wedding is linked to a studio preset
     // (bookDesignPresetId), the interior follows the preset's CURRENT
     // values, so studio edits show up here immediately. A manual edit

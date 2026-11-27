@@ -30,8 +30,6 @@ import {
     CheckCircle2, BookOpen, Lock, RefreshCcw, Sparkles,
 } from 'lucide-react'
 import BookLoader from '@/components/BookLoader/BookLoader'
-import useWorld from '@/components/Hall/useWorld'
-import { worldOfEvent } from '@/lib/eventWorld'
 
 const EVENT_LABEL = {
     wedding: 'החתונה',
@@ -45,7 +43,6 @@ export default function StatsPage() {
     const { weddingId, token } = useParams()
     const [status, setStatus] = useState('loading') // loading | invalid | ready | error
     const [data, setData] = useState(null)
-    useWorld(worldOfEvent(data?.wedding))
     const [refreshing, setRefreshing] = useState(false)
 
     const fetchData = async (initial = false) => {

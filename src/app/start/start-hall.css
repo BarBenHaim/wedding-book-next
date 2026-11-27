@@ -1,6 +1,5 @@
-/* The "open a book" wizard in the house design: the chosen celebration's sky
-   over parchment, and each kind of event shown as its own world. "div.wiz.wiz"
-   outweighs the screen's own styles. */
+/* The "open a book" wizard in the house design: the Jerusalem evening over
+   parchment. "div.wiz.wiz" outweighs the screen's own styles. */
 
 div.wiz.wiz { color: var(--wt-ink); background: #f3e2bd url('/admin-theme/parchment.webp') repeat; }
 div.wiz.wiz .pageBg {
@@ -33,7 +32,7 @@ div.wiz.wiz .sub, div.wiz.wiz .sub0, div.wiz.wiz .sub0Ask, div.wiz.wiz .previewH
 div.wiz.wiz .trustItem svg { color: var(--wt-accent); }
 div.wiz.wiz .trustDivider, div.wiz.wiz .eyebrowLine { background: rgba(164, 128, 84, .5); }
 
-/* each celebration, as a small world */
+/* the kinds of celebration */
 div.wiz.wiz .typeCard { padding-top: 14px; background: #fdf6e7; border: 2px solid #cfab66; box-shadow: 0 12px 24px -16px rgba(70, 40, 10, .55); }
 div.wiz.wiz .typeCard.sel { border-color: var(--tA); background: #fff9ec; box-shadow: 0 0 0 3px #d9b265, 0 18px 34px -18px var(--tA); }
 div.wiz.wiz .typeCardBg {
@@ -41,10 +40,11 @@ div.wiz.wiz .typeCardBg {
     -webkit-mask-image: linear-gradient(180deg, #000 62%, transparent);
     mask-image: linear-gradient(180deg, #000 62%, transparent);
 }
-div.wiz.wiz .typeCard[data-world='wedding'] .typeCardBg { background: url('/worlds/wedding.webp') 62% center / cover; }
-div.wiz.wiz .typeCard[data-world='jerusalem'] .typeCardBg { background: url('/admin-theme/hero.webp') 62% center / cover; }
-div.wiz.wiz .typeCard[data-world='batmitzvah'] .typeCardBg { background: url('/worlds/batmitzvah.webp') 62% center / cover; }
-div.wiz.wiz .typeCard[data-world='birthday'] .typeCardBg { background: url('/worlds/birthday.webp') 62% center / cover; }
+div.wiz.wiz .typeCardBg { background: url('/admin-theme/hero.webp') 62% center / cover; }
+div.wiz.wiz .typeCard:nth-child(1) .typeCardBg { background-position: 8% center; }
+div.wiz.wiz .typeCard:nth-child(2) .typeCardBg { background-position: 38% center; }
+div.wiz.wiz .typeCard:nth-child(3) .typeCardBg { background-position: 68% center; }
+div.wiz.wiz .typeCard:nth-child(4) .typeCardBg { background-position: 94% center; }
 div.wiz.wiz .typeLabel { font-family: var(--serif), 'Noto Serif Hebrew', 'Frank Ruhl Libre', serif; color: var(--wt-ink); }
 div.wiz.wiz .typeBlurb { color: #4f4668; }
 

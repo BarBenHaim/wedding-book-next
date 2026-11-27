@@ -43,8 +43,6 @@ import { PUBLIC_EVENT_TYPES, EVENT_TYPE_META, validateNewEvent, eventDisplayTitl
 import { frankRuhl } from '@/app/fonts'
 import { EVENT_PNG_ICON } from './EventTypeIcons'
 import { bakeCoverPhoto } from '@/lib/coverPhotoBake'
-import useWorld from '@/components/Hall/useWorld'
-import { worldFor } from '@/lib/eventWorld'
 import { jerusalemSerif } from '@/app/admin/ui/font'
 import './start-hall.css'
 
@@ -462,7 +460,6 @@ export default function StartWizard() {
     const themeId = data.themeColor || AUTO_THEME[data.eventType] || 'gold'
     const meta = data.eventType ? EVENT_TYPE_META[data.eventType] : null
     const accent = ACCENTS[data.eventType] || ACCENTS.bar_mitzvah
-    useWorld(data.eventType ? worldFor(data.eventType) : null)
     const bothNames = data.eventType === 'wedding' && data.brideName.trim() && data.groomName.trim()
 
     function pickType(t) {
@@ -710,7 +707,6 @@ export default function StartWizard() {
                                         <button
                                             key={t}
                                             className={`typeCard ${data.eventType === t ? 'sel' : ''}`}
-                                            data-world={worldFor(t)}
                                             style={{ animationDelay: `${0.08 + i * 0.07}s`, '--tA': ACCENTS[t].a, '--tB': ACCENTS[t].b }}
                                             onClick={() => pickType(t)}
                                         >

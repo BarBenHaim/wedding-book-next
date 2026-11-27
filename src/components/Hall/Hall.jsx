@@ -6,7 +6,6 @@
 import { usePathname } from 'next/navigation'
 import { Noto_Serif_Hebrew } from 'next/font/google'
 import { hallFor } from '@/lib/hallRoutes'
-import './worlds.css'
 import './hall.css'
 
 // Not preloaded: guest screens pass through here and never use it.

@@ -21,8 +21,9 @@ it.
 - Outside the admin: `src/components/Hall/` (`Hall.jsx` in the root layout,
   `hall.css`, `worlds.css`). `lib/hallRoutes.js` says which screens are
   dressed. Guest screens are not in it and keep the owner's design.
-- `lib/eventWorld.js`: bar mitzvah and unknown kinds get Jerusalem; wedding,
-  bat mitzvah and birthday have their own painting (`public/worlds/`).
+- One painting for every kind of event: Golden Jerusalem (Lord, 27.11). The
+  per-kind paintings and `lib/eventWorld.js` were removed; do not add them
+  back. The colours are the `--wt-*` variables at the top of `hall.css`.
 - Art shared with the admin is in `public/admin-theme/`.
 - Rollback: the version before this push is `e193588`.
 - Still only in the working tree, not committed: the automatic cover and sign

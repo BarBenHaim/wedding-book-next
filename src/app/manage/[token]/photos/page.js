@@ -24,8 +24,6 @@ import { useParams } from 'next/navigation'
 import { Lock, Check, Loader2, Images, ArrowRight, ChevronRight, ChevronLeft, X, Undo2, ImageOff } from 'lucide-react'
 import { Heebo } from 'next/font/google'
 import BookLoader from '@/components/BookLoader/BookLoader'
-import useWorld from '@/components/Hall/useWorld'
-import { worldOfEvent } from '@/lib/eventWorld'
 import { thumbUrl, fallBackToOriginal } from '@/lib/imgProxy'
 
 const heebo = Heebo({ subsets: ['hebrew'], weight: ['400', '700', '900'] })
@@ -90,7 +88,6 @@ export default function ManagePhotosPage() {
     const { token } = useParams()
     const [status, setStatus] = useState('loading') // loading | invalid | error | ready
     const [wedding, setWedding] = useState(null)
-    useWorld(worldOfEvent(wedding))
     const [entries, setEntries] = useState([])
     const [removedPages, setRemovedPages] = useState([])
     const [tab, setTab] = useState('in') // in | out

@@ -21,8 +21,6 @@ import { buildPageIndex, pageLabel } from '@/lib/bookPageIndex'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
 import { Heebo } from 'next/font/google'
 import BookLoader from '@/components/BookLoader/BookLoader'
-import useWorld from '@/components/Hall/useWorld'
-import { worldOfEvent } from '@/lib/eventWorld'
 
 const heebo = Heebo({ subsets: ['hebrew'], weight: ['400', '700', '900'] })
 
@@ -272,7 +270,6 @@ export default function AdminDashboard() {
     // The same read now also feeds the page numbers below, which need the
     // interior design to know where the book breaks.
     const [weddingDoc, setWeddingDoc] = useState(null)
-    useWorld(worldOfEvent(weddingDoc))
     useEffect(() => {
         if (!weddingId) return
         let cancelled = false

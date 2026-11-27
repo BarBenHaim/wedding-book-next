@@ -23,8 +23,6 @@ import { enUS } from 'date-fns/locale/en-US'
 import { es as esLocale } from 'date-fns/locale/es'
 import { it as itLocale } from 'date-fns/locale/it'
 import BookLoader from '@/components/BookLoader/BookLoader'
-import useWorld from '@/components/Hall/useWorld'
-import { worldFor } from '@/lib/eventWorld'
 registerLocale('he', he)
 registerLocale('en', enUS)
 registerLocale('es', esLocale)
@@ -97,9 +95,6 @@ function PortalApp({ onLocaleDiscovered }) {
     //    UI swaps name fields based on it). Defaults to 'wedding' so the
     //    page is sensible even before Firestore loads.
     const [eventType, setEventType] = useState('wedding')
-    // The kind is a guess until the event is read, so no world before then.
-    const [kindRead, setKindRead] = useState(false)
-    useWorld(kindRead ? worldFor(eventType) : null)
 
     // ── Names. Wedding events use bride+groom; everything else (birthday /
     //    bar mitzvah / bat mitzvah) uses a single celebrant name.
@@ -148,7 +143,6 @@ function PortalApp({ onLocaleDiscovered }) {
                     const data = docSnap.data()
                     onLocaleDiscovered(normalizeLocale(data.locale))
                     setEventType(normalizeEventType(data.eventType))
-                    setKindRead(true)
                     if (data.brideName) setBrideName(data.brideName)
                     if (data.groomName) setGroomName(data.groomName)
                     if (data.celebrantName) setCelebrantName(data.celebrantName)
