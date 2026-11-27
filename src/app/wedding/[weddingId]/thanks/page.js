@@ -16,6 +16,8 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { collection, doc, getCountFromServer, getDoc } from 'firebase/firestore'
 import { db } from '../../../../lib/firebaseClient'
 import { defaultGuestDesign } from '@/lib/guestSignature'
+import { isBookVariant } from '@/lib/bookWrite'
+import gold from './thanks-gold.module.css'
 import { listUnsent } from '../../../../lib/offlineQueue'
 import { flushQueue } from '../../../../lib/uploadEntry'
 import { NextIntlClientProvider, useTranslations, useLocale } from 'next-intl'
@@ -31,6 +33,8 @@ export default function ThanksPage() {
     const [locale, setLocale] = useState('he')
     const [signature, setSignature] = useState(null)
     const [eventType, setEventType] = useState('')
+    // The "straight into the book" look (lib/bookWrite), saved on the event or previewed with ?dv=.
+    const [golden, setGolden] = useState(false)
 
     useEffect(() => {
         if (!weddingId) return
@@ -42,6 +46,8 @@ export default function ThanksPage() {
                 if (snap.exists()) {
                     setLocale(normalizeLocale(snap.data().locale))
                     setEventType(String(snap.data().eventType || ''))
+                    const look = new URLSearchParams(window.location.search).get('dv') || snap.data().designVariant
+                    setGolden(isBookVariant(String(snap.data().eventType || ''), look))
                     // The house (Signature) look carries over from the blessing page to this one.
                     // Same default as the blessing page: an unstyled event shows the house look for its occasion.
                     const gd = snap.data().guestDesign || defaultGuestDesign(snap.data().eventType, snap.data().designVariant)
@@ -58,7 +64,7 @@ export default function ThanksPage() {
 
     return (
         <NextIntlClientProvider locale={locale} messages={getMessages(locale)}>
-            <ThanksApp signature={signature} eventType={eventType} />
+            <ThanksApp signature={golden ? null : signature} eventType={eventType} golden={golden} />
         </NextIntlClientProvider>
     )
 }
@@ -71,7 +77,7 @@ const NEXT_BOOK = { bar_mitzvah: 'bar', twins_bar_mitzvah: 'bar', bat_mitzvah: '
 // One or two writers is not proof of anything, so below this the line is simply not shown.
 const MIN_COUNT_TO_SHOW = 5
 
-function ThanksApp({ signature = null, eventType = '' }) {
+function ThanksApp({ signature = null, eventType = '', golden = false }) {
     const router = useRouter()
     const { weddingId } = useParams()
     const t = useTranslations('thanks')
@@ -102,6 +108,18 @@ function ThanksApp({ signature = null, eventType = '' }) {
     // includes theirs). Null until known; a failed read just means the line is not shown.
     const [guestCount, setGuestCount] = useState(null)
     const [linkCopied, setLinkCopied] = useState(false)
+
+    // The "into the book" look fills the screen, without the site bar above it, as the blessing page does.
+    useEffect(() => {
+        if (!golden) return undefined
+        const header = document.querySelector('body > header')
+        if (!header) return undefined
+        const before = header.style.display
+        header.style.display = 'none'
+        return () => {
+            header.style.display = before
+        }
+    }, [golden])
 
     useEffect(() => {
         if (!weddingId || !verified) return
@@ -283,7 +301,7 @@ function ThanksApp({ signature = null, eventType = '' }) {
 
     return (
         <div
-            className='min-h-[calc(100vh-4rem)] flex items-start justify-center px-4 py-8 font-sans relative overflow-hidden'
+            className={`min-h-[calc(100vh-4rem)] flex items-start justify-center px-4 py-8 font-sans relative overflow-hidden${golden ? ` ${gold.root} ${verified || status === 'done' ? gold.arrived : ''}` : ''}`}
             style={
                 signature
                     ? {
@@ -344,7 +362,7 @@ function ThanksApp({ signature = null, eventType = '' }) {
                                     await tryFlush()
                                 }
                             }}
-                            className='text-[12px] underline'
+                            className={`text-[12px] underline${golden ? ` ${gold.again}` : ''}`}
                             style={{ color: '#9a8a72' }}
                         >
                             {t('checkAgain')}
@@ -353,10 +371,15 @@ function ThanksApp({ signature = null, eventType = '' }) {
                 )}
 
                 {/* ── Celebration block ── */}
-                <div className='text-center mb-7'>
-                    <svg viewBox='0 0 24 24' className='w-[22px] h-[22px] mx-auto mb-3.5' fill={signature ? signature.accentColor : '#c9a44e'}>
-                        <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
-                    </svg>
+                <div className={`text-center mb-7${golden ? ` ${gold.words}` : ''}`}>
+                    {golden ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src='/guest-book/seal.webp' alt='' className={gold.seal} />
+                    ) : (
+                        <svg viewBox='0 0 24 24' className='w-[22px] h-[22px] mx-auto mb-3.5' fill={signature ? signature.accentColor : '#c9a44e'}>
+                            <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
+                        </svg>
+                    )}
                     <h1
                         className='font-bold mb-2 leading-[1.15]'
                         style={{ color: signature ? signature.titleColor : '#1a1410', fontSize: '28px', letterSpacing: '-0.01em' }}
@@ -373,12 +396,16 @@ function ThanksApp({ signature = null, eventType = '' }) {
                     a real book page, and let them flip through the existing
                     designs. Read-only — never changes the actual book. Only
                     appears when we have an entry id (skips legacy bookmarks). */}
-                {entryId && verified && <BookPagePreview weddingId={weddingId} entryId={entryId} locale={locale} />}
+                {entryId && verified && (
+                    <div className={golden ? gold.fly : undefined}>
+                        <BookPagePreview weddingId={weddingId} entryId={entryId} locale={locale} />
+                    </div>
+                )}
 
                 {/* ── Pass it on: the one thing that turns one blessing into five. The link goes
                     straight to the form (no welcome page), through the guest's own WhatsApp. */}
                 <div
-                    className='bg-white rounded-[22px] p-6 mb-5 text-center'
+                    className={`bg-white rounded-[22px] p-6 mb-5 text-center${golden ? ` ${gold.card}` : ''}`}
                     style={{
                         boxShadow: '0 24px 50px -28px rgba(170,136,64,0.28), 0 4px 12px -4px rgba(170,136,64,0.10)',
                         border: '1px solid rgba(212,184,103,0.22)',
@@ -430,7 +457,7 @@ function ThanksApp({ signature = null, eventType = '' }) {
                     event. Pure white card, same shadow + border treatment
                     as the form cards on the create-blessing flow. */}
                 <div
-                    className='bg-white rounded-[22px] p-6 mb-5 text-center'
+                    className={`bg-white rounded-[22px] p-6 mb-5 text-center${golden ? ` ${gold.card}` : ''}`}
                     style={{
                         boxShadow:
                             '0 24px 50px -28px rgba(170,136,64,0.28), 0 4px 12px -4px rgba(170,136,64,0.10)',
@@ -492,7 +519,7 @@ function ThanksApp({ signature = null, eventType = '' }) {
                 {/* Wedding Tales mark at the very bottom — small, gentle
                     reminder of the brand without competing with the CTA. */}
                 <div className='flex justify-center mt-2'>
-                    <img src={signature && signature.pageBg === '#0C1030' ? '/brand/logo-on-dark.png' : '/logo-wt.png'} alt='Wedding Tales' className='h-7 w-auto opacity-60' />
+                    <img src={golden || (signature && signature.pageBg === '#0C1030') ? '/brand/logo-on-dark.png' : '/logo-wt.png'} alt='Wedding Tales' className='h-7 w-auto opacity-60' />
                 </div>
             </div>
 

@@ -20,6 +20,13 @@ import '../ui/editor.css'
 const PRESETS = [
     { id: 'classic', name: 'קלאסי (ברירת מחדל)', swatch: '#c9a44e', design: {} },
     {
+        id: 'book',
+        name: 'ישר לספר — כותבים על העמוד',
+        variant: 'book',
+        swatchImage: '/guest-book/night.webp',
+        swatch: '#150e4a',
+    },
+    {
         id: 'night',
         name: 'ערב — זכוכית ונוף לילי',
         variant: 'night',
@@ -458,7 +465,7 @@ function Editor() {
                             <p className='text-[10.5px] text-[#a89378] mt-2 leading-relaxed'>עצב אירוע כרצונך (כולל תמונות רקע/כפתור) ולחץ &quot;שמור עיצוב נוכחי כפריסט&quot; — כדי להשתמש בו שוב בכל אירוע.</p>
                             {variant && (
                                 <div className='mt-3 rounded-xl px-3 py-2.5 text-[11px] leading-relaxed' style={{ background: '#fdf6e6', border: '1px solid #e7dcc6', color: '#6b5a3c' }}>
-                                    <b>{variant === 'night' ? '״ערב״' : '״בוקר״'} פעיל.</b> זה עיצוב שלם — רקע, פריסה וטיפוגרפיה — ולכן <b>פקדי הצבע למטה לא משפיעים עליו</b>. הצבעים שלך נשמרים ויחזרו אם תבחר עיצוב צבעוני. לחץ &quot;החל על האירוע&quot; כדי לשמור.
+                                    <b>{variant === 'night' ? '״ערב״' : variant === 'book' ? '״ישר לספר״' : '״בוקר״'} פעיל.</b> זה עיצוב שלם — רקע, פריסה וטיפוגרפיה — ולכן <b>פקדי הצבע למטה לא משפיעים עליו</b>. הצבעים שלך נשמרים ויחזרו אם תבחר עיצוב צבעוני. לחץ &quot;החל על האירוע&quot; כדי לשמור.
                                 </div>
                             )}
                         </div>

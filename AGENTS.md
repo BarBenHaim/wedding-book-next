@@ -11,6 +11,24 @@ the ones that touch what you are about to change.
 
 ---
 
+## 27.11 — a new blessing page: writing straight onto the book's page
+
+Opt-in only: an event gets it with `designVariant: 'book'` (chosen in
+`/admin/guest-design`), or one page load with `?dv=book`. No event has it
+by default; who should get it is still Lord's call.
+
+- Rules in `lib/bookWrite.js`; layout in `photo/BookWrite.jsx`, which only
+  draws. Words, photo, camera, crop and sending stay in `photo/page.js`.
+- The page shown is the real `BookPageTemplate` in the event's own design
+  (`photo/BookSheet.jsx`, loaded after the controls).
+- A gallery photo is cut when its drawer closes (`applyCrop`), so the page
+  shows what the book will print.
+- Fields are rendered and focused inside the tap (`flushSync`), or a phone
+  does not open its keyboard. Check changes at about 390×420.
+- The thank-you screen matches (`thanks-gold.module.css`); `?dv=book` is
+  carried to it. Art: `public/guest-book/` (26 and 11 KB).
+- Not tried: a real phone keyboard, an English event, a twins event.
+
 ## 27.11 — the golden look is on every screen, and live (fc16fde)
 
 Lord chose the look of the admin's home (Jerusalem evening, parchment, navy

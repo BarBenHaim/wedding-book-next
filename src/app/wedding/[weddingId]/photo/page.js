@@ -25,6 +25,8 @@ import MySubmissions from '@/components/MySubmissions/MySubmissions'
 import BookLoader from '@/components/BookLoader/BookLoader'
 import LivePagePreviewButton from '@/components/LivePagePreview/LivePagePreviewButton'
 import { frankRuhl } from '@/app/fonts'
+import dynamic from 'next/dynamic'
+import { isBookVariant, thanksPreviewParam } from '@/lib/bookWrite'
 import { panelRect, fitScale } from '@/lib/framedPanel'
 import { isTwinsEvent, twinNames, normalizeBlessFor, joinTwinNames } from '@/lib/twins'
 
@@ -336,6 +338,9 @@ export default function TextPage() {
     )
 }
 
+// The "straight into the book" page, fetched only for the events that use it.
+const BookWrite = dynamic(() => import('./BookWrite'), { ssr: false, loading: () => <BookLoader label='עוד רגע…' /> })
+
 // ── Step badge ──
 // Tiny circular chip used in the stepper. For poker it's an SVG
 // "casino chip" (radial fill + dashed cream rim + bold number). For
@@ -421,6 +426,8 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     // still wins over both.
     const isPoker = eventType === 'poker'
     const isRomantic = eventType === 'wedding' && designVariant === 'romantic'
+    // The page of the book itself is the form (lib/bookWrite).
+    const isBook = isBookVariant(eventType, designVariant)
     const framedRef = useRef(null)
     const [framedBox, setFramedBox] = useState(null)
     // Page direction follows the event language: Hebrew is RTL, every
@@ -978,7 +985,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
             recordSubmission(weddingId, entry)
             logEvent(weddingId, 'blessing_sent_success')
             reportGuestWrote(entry.id)
-            router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}${thanksNoPhoto}`)
+            router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}${thanksNoPhoto}${thanksPreviewParam(window.location.search)}`)
             return
         }
 
@@ -994,7 +1001,7 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
             recordSubmission(weddingId, entry)
             logEvent(weddingId, 'blessing_sent_success')
             reportGuestWrote(entry.id)
-            router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}${thanksNoPhoto}`)
+            router.push(`/wedding/${weddingId}/thanks?eid=${entry.id}${thanksNoPhoto}${thanksPreviewParam(window.location.search)}`)
         } catch (err) {
             console.error('[photo] direct upload also failed:', err)
             const rawMsg = err?.message || err?.name || ''
@@ -1029,6 +1036,37 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
             // don't need CORS at all.
             img.src = url
         })
+    }
+
+    // The "into the book" page shows the photo on the page while the guest is
+    // still writing, so the cut chosen in the cropper is made when its drawer
+    // closes. If it fails, sending cuts it, as on every other layout.
+    async function applyCrop() {
+        if (!isUpload || wholePhoto || !photoUrl || !croppedAreaPixels) return
+        try {
+            const image = await createImage(photoUrl)
+            const plan = photoDrawPlan({
+                wholePhoto,
+                naturalWidth: image.naturalWidth || image.width,
+                naturalHeight: image.naturalHeight || image.height,
+                crop: croppedAreaPixels,
+            })
+            if (!plan) return
+            const canvas = document.createElement('canvas')
+            canvas.width = plan.width
+            canvas.height = plan.height
+            const ctx = canvas.getContext('2d')
+            if (!ctx) return
+            ctx.drawImage(image, plan.sx, plan.sy, plan.sw, plan.sh, 0, 0, plan.width, plan.height)
+            const cut = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95))
+            if (!cut) return
+            setPhotoBlob(cut)
+            setPhotoUrl(URL.createObjectURL(cut))
+            setIsUpload(false)
+            setCroppedAreaPixels(null)
+        } catch (err) {
+            console.error('[photo] early crop failed:', err)
+        }
     }
 
     const isTextDone = text.trim().length > 0
@@ -1076,13 +1114,13 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     // the moment layout builds its own `md` object inline and never
     // calls buildGuestPageTheme, so a framed design routed here would
     // (and did) come out looking like nothing had changed.
-    const isMomentLayout = !isPoker && !isRomantic && !framed
+    const isMomentLayout = !isPoker && !isRomantic && !framed && !isBook
     // Both poker AND moment layout take the full viewport (100vh).
     // The global Header + Footer are hidden via DOM toggle so the
     // backdrop reaches every edge of the screen.
     // Framed too: the site header and footer would sit above and below
     // the glass panel, which is the one thing this design cannot have.
-    const hideChrome = isPoker || isMomentLayout || framed
+    const hideChrome = isPoker || isMomentLayout || framed || isBook
     useEffect(() => {
         if (!hideChrome || typeof document === 'undefined') return
         const header = document.querySelector('body > header')
@@ -1100,6 +1138,65 @@ function PhotoApp({ eventType, designVariant, recipients, formCopy, guestDesign,
     // (Transparent-header effect removed — moment layout now hides
     // the Header entirely via the same DOM toggle poker uses, so
     // there's nothing left to make transparent.)
+
+    // ─── Straight into the book ──────────────────────────────────────────
+    if (isBook) {
+        const couple = [recipients?.bride, recipients?.groom].filter(Boolean).join(locale === 'he' ? ' ו' : ' & ')
+        const who = eventType === 'wedding' ? couple : recipients?.celebrant || ''
+        return (
+            <BookWrite
+                t={t}
+                locale={locale}
+                dir={pageDir}
+                who={who}
+                formCopy={formCopy}
+                bookDoc={bookDoc}
+                twinsPicker={renderTwinPicker({ accent: '#52247f', text: '#ffeec2' })}
+                extra={<MySubmissions weddingId={weddingId} locale={locale} />}
+                hasGreeting={Boolean(initialName)}
+                name={name}
+                setName={setName}
+                text={text}
+                setText={setText}
+                maxChars={maxChars}
+                photoUrl={photoUrl}
+                photoRequired={photoRequired}
+                photoNudge={photoNudge}
+                missingPhoto={missingPhoto}
+                onPick={file => {
+                    setPhotoBlob(file)
+                    setPhotoUrl(URL.createObjectURL(file))
+                    reportPhotoPicked()
+                    setIsUpload(true)
+                    setCrop({ x: 0, y: 0 })
+                    setZoom(1)
+                    setCroppedAreaPixels(null)
+                }}
+                onClearPhoto={() => {
+                    setPhotoUrl('')
+                    setPhotoBlob(null)
+                    setIsUpload(false)
+                    setCroppedAreaPixels(null)
+                }}
+                applyCrop={applyCrop}
+                cameraOpen={cameraOpen}
+                setCameraOpen={setCameraOpen}
+                cameraFacing={cameraFacing}
+                setCameraFacing={setCameraFacing}
+                liveVideoRef={liveVideoRef}
+                takePhoto={takePhoto}
+                isUpload={isUpload}
+                wholePhoto={wholePhoto}
+                crop={crop}
+                setCrop={setCrop}
+                zoom={zoom}
+                setZoom={setZoom}
+                setCroppedAreaPixels={setCroppedAreaPixels}
+                submitting={submitting}
+                onSubmit={onSubmit}
+            />
+        )
+    }
 
     // ─── New "Moment" layout ─────────────────────────────────────────────
     // Single-card design used when the variant isn't poker or romantic —
