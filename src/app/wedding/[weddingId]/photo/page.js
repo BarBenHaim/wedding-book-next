@@ -25,8 +25,8 @@ import MySubmissions from '@/components/MySubmissions/MySubmissions'
 import BookLoader from '@/components/BookLoader/BookLoader'
 import LivePagePreviewButton from '@/components/LivePagePreview/LivePagePreviewButton'
 import { frankRuhl } from '@/app/fonts'
-import dynamic from 'next/dynamic'
 import { isBookVariant, thanksPreviewParam } from '@/lib/bookWrite'
+import BookWrite from './BookWrite'
 import { panelRect, fitScale } from '@/lib/framedPanel'
 import { isTwinsEvent, twinNames, normalizeBlessFor, joinTwinNames } from '@/lib/twins'
 
@@ -337,9 +337,6 @@ export default function TextPage() {
         </NextIntlClientProvider>
     )
 }
-
-// The "straight into the book" page, fetched only for the events that use it.
-const BookWrite = dynamic(() => import('./BookWrite'), { ssr: false, loading: () => <BookLoader label='עוד רגע…' /> })
 
 // ── Step badge ──
 // Tiny circular chip used in the stepper. For poker it's an SVG

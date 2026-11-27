@@ -30,6 +30,11 @@
     box-shadow: 0 0 0 1px #d8c293, -4px 4px 0 #efe2c1, -4px 4px 0 1px #cdb582, -8px 8px 0 #e6d5ab, -8px 8px 0 1px #c3a96f, 0 26px 34px -12px rgba(8, 3, 35, .65);
 }
 .page:focus-visible { outline: 3px solid #ffbf3d; outline-offset: 10px; }
+/* the page without the book's renderer */
+.plain { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 100%; padding: 8%; text-align: center; overflow: hidden; font-family: var(--bw-book), serif; background: #fdf8ea; }
+.plain img { max-width: 100%; max-height: 52%; object-fit: contain; }
+.plain p { margin: 0; max-height: 34%; overflow: hidden; font-size: 14px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.plain b { font-size: 15px; color: #7a5716; }
 /* a left-to-right book is bound on the other side */
 .root[dir='ltr'] .page { margin: 0 8px 0 0; border-radius: 8px 3px 3px 8px; box-shadow: 0 0 0 1px #d8c293, 4px 4px 0 #efe2c1, 4px 4px 0 1px #cdb582, 8px 8px 0 #e6d5ab, 8px 8px 0 1px #c3a96f, 0 26px 34px -12px rgba(8, 3, 35, .65); }
 .root[dir='ltr'] .page::after { right: auto; left: 0; background: linear-gradient(90deg, rgba(60, 40, 10, .16), transparent); border-radius: 8px 0 0 8px; }

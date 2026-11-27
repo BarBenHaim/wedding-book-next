@@ -5,9 +5,8 @@
 // updates as they type. This file only draws: the words, the photo, the camera
 // and the sending all live in the blessing page (photo/page.js).
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { Component, Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import dynamic from 'next/dynamic'
 import Cropper from 'react-easy-crop'
 import { Noto_Serif_Hebrew } from 'next/font/google'
 import { frankRuhl } from '@/app/fonts'
@@ -15,7 +14,35 @@ import { charactersLeft, filledParts, nextToFill, previewEntry, sendState } from
 import css from './book-write.module.css'
 
 const serif = Noto_Serif_Hebrew({ subsets: ['hebrew', 'latin'], weight: ['700', '900'], display: 'swap', preload: false })
-const BookSheet = dynamic(() => import('./BookSheet'), { ssr: false, loading: () => null })
+// Only the book's renderer comes later. Until it does, and if a weak signal
+// never delivers it, a plain page shows the same words and photo.
+const BookSheet = lazy(() => import('./BookSheet'))
+
+function PlainPage({ entry }) {
+    return (
+        <div className={css.plain}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {entry.imageUrl && <img src={entry.imageUrl} alt='' />}
+            {entry.text && <p>{entry.text}</p>}
+            {entry.name && <b>{entry.name}</b>}
+        </div>
+    )
+}
+
+class PageBoundary extends Component {
+    constructor(props) {
+        super(props)
+        this.state = { failed: false }
+    }
+
+    static getDerivedStateFromError() {
+        return { failed: true }
+    }
+
+    render() {
+        return this.state.failed ? this.props.fallback : this.props.children
+    }
+}
 
 const PATHS = {
     text: 'M4 20c4-1 6.5-3.5 9-6l6.5-7.5a2.1 2.1 0 0 0-3-3L9 10c-2.5 2.5-4 5.5-5 10Zm9.5-13.5 4 4',
@@ -134,7 +161,15 @@ export default function BookWrite({
                     onClick={() => !drawer && open(nextToFill(filled))}
                     onKeyDown={e => { if (!drawer && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(nextToFill(filled)) } }}
                 >
-                    <div className={css.sheet}>{size > 0 && <BookSheet entry={entry} bookDoc={bookDoc} locale={locale} size={size} />}</div>
+                    <div className={css.sheet}>
+                        {size > 0 && (
+                            <PageBoundary fallback={<PlainPage entry={entry} />}>
+                                <Suspense fallback={<PlainPage entry={entry} />}>
+                                    <BookSheet entry={entry} bookDoc={bookDoc} locale={locale} size={size} />
+                                </Suspense>
+                            </PageBoundary>
+                        )}
+                    </div>
                     {!filled.text && !filled.photo && (
                         <div className={css.empty}>
                             <Icon name='photo' />
