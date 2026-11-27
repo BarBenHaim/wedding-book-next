@@ -11,6 +11,27 @@ the ones that touch what you are about to change.
 
 ---
 
+## 27.11 — the golden look is on every screen, and live (fc16fde)
+
+Lord chose the look of the admin's home (Jerusalem evening, parchment, navy
+and gold, silver frames) for all screens. Do not bring back the "morning
+light" look (branch `review/morning-light`) or the three worlds drawn after
+it.
+
+- Outside the admin: `src/components/Hall/` (`Hall.jsx` in the root layout,
+  `hall.css`, `worlds.css`). `lib/hallRoutes.js` says which screens are
+  dressed. Guest screens are not in it and keep the owner's design.
+- `lib/eventWorld.js`: bar mitzvah and unknown kinds get Jerusalem; wedding,
+  bat mitzvah and birthday have their own painting (`public/worlds/`).
+- Art shared with the admin is in `public/admin-theme/`.
+- Rollback: the version before this push is `e193588`.
+- Still only in the working tree, not committed: the automatic cover and sign
+  from one photo. `portal/page.js` and `LookStudio.jsx` there hold it on top
+  of this look.
+- Local pages answering 500 with `turbopack-next/internal/font/google` is
+  Google Fonts failing in dev; delete `.next` and restart, or build and use
+  the "(start)" preview.
+
 ## 26.11 — one home screen and four places in the super admin
 
 - `/admin/customers` is the home: what waits for an approval (from
