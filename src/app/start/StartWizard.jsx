@@ -43,6 +43,10 @@ import { PUBLIC_EVENT_TYPES, EVENT_TYPE_META, validateNewEvent, eventDisplayTitl
 import { frankRuhl } from '@/app/fonts'
 import { EVENT_PNG_ICON } from './EventTypeIcons'
 import { bakeCoverPhoto } from '@/lib/coverPhotoBake'
+import useWorld from '@/components/Hall/useWorld'
+import { worldFor } from '@/lib/eventWorld'
+import { jerusalemSerif } from '@/app/admin/ui/font'
+import './start-hall.css'
 
 const AUTO_THEME = { wedding: 'gold', birthday: 'pink', bar_mitzvah: 'blue', bat_mitzvah: 'blue' }
 const STEP_LABELS = ['סוג האירוע', 'הפרטים', 'העיצוב', 'יוצאים לדרך']
@@ -54,10 +58,10 @@ const PAY_LINK_BASIS = ''
 
 // Wizard-wide accent per event type — flows into every control.
 const ACCENTS = {
-    wedding: { a: '#b8893d', b: '#d9bc72', soft: 'rgba(201, 164, 78, 0.16)' },
-    bar_mitzvah: { a: '#3f68a6', b: '#7397cb', soft: 'rgba(63, 104, 166, 0.14)' },
-    bat_mitzvah: { a: '#b25e8c', b: '#d996ba', soft: 'rgba(178, 94, 140, 0.14)' },
-    birthday: { a: '#c26b38', b: '#e5a069', soft: 'rgba(194, 107, 56, 0.14)' },
+    wedding: { a: '#6e2d5c', b: '#9a4a82', soft: 'rgba(110, 45, 92, 0.14)' },
+    bar_mitzvah: { a: '#2c2473', b: '#4a3ea0', soft: 'rgba(44, 36, 115, 0.14)' },
+    bat_mitzvah: { a: '#7b3c99', b: '#a45cc0', soft: 'rgba(123, 60, 153, 0.14)' },
+    birthday: { a: '#17636d', b: '#2c8a96', soft: 'rgba(23, 99, 109, 0.14)' },
 }
 
 // Real books from the portfolio (same assets as the landing page).
@@ -136,7 +140,7 @@ function BookPreview({ data, presetValues, mode = 'cover' }) {
                         משפחת לוי
                     </div>
                     <img
-                        src='/imgs/img3.jpg'
+                        src='/start-assets/sample-page.webp'
                         alt=''
                         className='ppPhoto'
                         style={{
@@ -457,7 +461,8 @@ export default function StartWizard() {
 
     const themeId = data.themeColor || AUTO_THEME[data.eventType] || 'gold'
     const meta = data.eventType ? EVENT_TYPE_META[data.eventType] : null
-    const accent = ACCENTS[data.eventType] || ACCENTS.wedding
+    const accent = ACCENTS[data.eventType] || ACCENTS.bar_mitzvah
+    useWorld(data.eventType ? worldFor(data.eventType) : null)
     const bothNames = data.eventType === 'wedding' && data.brideName.trim() && data.groomName.trim()
 
     function pickType(t) {
@@ -631,7 +636,7 @@ export default function StartWizard() {
     const doneTitle = created ? eventDisplayTitle({ ...data, eventType: data.eventType }) : ''
 
     return (
-        <div className='wiz' dir='rtl' style={{ '--acc': accent.a, '--accB': accent.b, '--accSoft': accent.soft }}>
+        <div className='wiz' dir='rtl' style={{ '--acc': accent.a, '--accB': accent.b, '--accSoft': accent.soft, '--serif': jerusalemSerif.style.fontFamily }}>
             {/* The mobile bg_app.png / Container_BG.png stationery photo,
                 copied to public/start-assets/. Fixed-attachment so it stays
                 put while the wizard scrolls, low-opacity veil above to keep
@@ -705,6 +710,7 @@ export default function StartWizard() {
                                         <button
                                             key={t}
                                             className={`typeCard ${data.eventType === t ? 'sel' : ''}`}
+                                            data-world={worldFor(t)}
                                             style={{ animationDelay: `${0.08 + i * 0.07}s`, '--tA': ACCENTS[t].a, '--tB': ACCENTS[t].b }}
                                             onClick={() => pickType(t)}
                                         >

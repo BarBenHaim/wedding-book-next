@@ -30,12 +30,12 @@ export async function POST(req) {
                 
                 <p>
                     <strong>1. תוכן הספר (Content):</strong><br/>
-                    <a href="${contentUrl}" target="_blank" style="color: #6d28d9; font-weight: bold;">לחץ להורדת התוכן</a>
+                    <a href="${contentUrl}" target="_blank" style="color: #52247f; font-weight: bold;">לחץ להורדת התוכן</a>
                 </p>
                 
                 <p>
                     <strong>2. כריכות (Covers):</strong><br/>
-                    <a href="${coversUrl}" target="_blank" style="color: #db2777; font-weight: bold;">לחץ להורדת הכריכות</a>
+                    <a href="${coversUrl}" target="_blank" style="color: #2c2473; font-weight: bold;">לחץ להורדת הכריכות</a>
                 </p>
             </div>
 

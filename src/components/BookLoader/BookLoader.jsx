@@ -76,7 +76,7 @@ export default function BookLoader({ label = '', fullScreen = true, size = 300 }
                         radial-gradient(circle at 50% 38%, rgba(201, 164, 78, 0.14), transparent 30%),
                         radial-gradient(circle at 14% 16%, rgba(216, 164, 164, 0.1), transparent 32%),
                         radial-gradient(circle at 86% 84%, rgba(226, 195, 119, 0.08), transparent 34%),
-                        linear-gradient(150deg, #171017 0%, #241a14 52%, #1a130c 100%);
+                        linear-gradient(165deg, #0f0a3a 0%, #241862 52%, #130d42 100%);
                 }
                 /* slow-breathing warmth across the whole stage */
                 .bl--full::before {

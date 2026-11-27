@@ -21,6 +21,8 @@ import { buildPageIndex, pageLabel } from '@/lib/bookPageIndex'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
 import { Heebo } from 'next/font/google'
 import BookLoader from '@/components/BookLoader/BookLoader'
+import useWorld from '@/components/Hall/useWorld'
+import { worldOfEvent } from '@/lib/eventWorld'
 
 const heebo = Heebo({ subsets: ['hebrew'], weight: ['400', '700', '900'] })
 
@@ -144,7 +146,7 @@ function MoveToPlace({ index, total, onMove }) {
                 aria-label={`מקום חדש, 1 עד ${total}`}
             />
             <span className='text-[10.5px] text-gray-400'>/ {total}</span>
-            <button onClick={go} className='px-2 py-1.5 text-[11px] font-bold text-white rounded-md' style={{ background: '#AA8840' }}>העבר</button>
+            <button onClick={go} className='px-2 py-1.5 text-[11px] font-bold text-white rounded-md' style={{ background: 'var(--wt-primary-solid)' }}>העבר</button>
             <button onClick={() => setOpen(false)} className='px-1.5 py-1.5 text-[11px] text-gray-400 hover:text-gray-600'>ביטול</button>
         </span>
     )
@@ -188,7 +190,7 @@ function BlankPageCard({ entry, place, total, pageText, onMove, onDelete, deleti
                         {pageText && (
                             <span
                                 className='shrink-0 text-[10.5px] font-extrabold px-1.5 py-0.5 rounded-md tabular-nums'
-                                style={{ background: '#f5efe3', color: '#AA8840', border: '1px solid #ead9b3' }}
+                                style={{ background: '#f6e8c9', color: 'var(--wt-ink)', border: '1px solid #c9a460' }}
                                 dir='ltr'
                                 title='עמוד בספר המודפס'
                             >
@@ -270,6 +272,7 @@ export default function AdminDashboard() {
     // The same read now also feeds the page numbers below, which need the
     // interior design to know where the book breaks.
     const [weddingDoc, setWeddingDoc] = useState(null)
+    useWorld(worldOfEvent(weddingDoc))
     useEffect(() => {
         if (!weddingId) return
         let cancelled = false
@@ -693,7 +696,7 @@ export default function AdminDashboard() {
                             onClick={() => albumInputRef.current?.click()}
                             disabled={!!albumUpload}
                             className='px-6 py-3 rounded-full font-bold text-[#241a0d] shadow-lg transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-70'
-                            style={{ background: 'linear-gradient(180deg,#eed9a4,#c9a44e 55%,#a8843a)' }}
+                            style={{ background: 'var(--wt-primary)' }}
                         >
                             {albumUpload
                                 ? `מעלה תמונות… ${albumUpload.done}/${albumUpload.total}`
@@ -1020,7 +1023,7 @@ export default function AdminDashboard() {
                                                                                 {adminUser && pageLabel(pageIndex.byEntry[entry.id]) && (
                                                                                     <span
                                                                                         className='shrink-0 text-[10.5px] font-extrabold px-1.5 py-0.5 rounded-md tabular-nums'
-                                                                                        style={{ background: '#f5efe3', color: '#AA8840', border: '1px solid #ead9b3' }}
+                                                                                        style={{ background: '#f6e8c9', color: 'var(--wt-ink)', border: '1px solid #c9a460' }}
                                                                                         title={`עמוד ${pageLabel(pageIndex.byEntry[entry.id])} מתוך ${pageIndex.totalPages} בספר המודפס`}
                                                                                         dir='ltr'
                                                                                     >

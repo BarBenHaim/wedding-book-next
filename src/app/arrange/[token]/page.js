@@ -19,6 +19,8 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import { Lock, Check, Loader2, RefreshCcw, ArrowUp, ArrowDown, ChevronsUp, Clock3, Sparkles } from 'lucide-react'
 import { Heebo } from 'next/font/google'
 import BookLoader from '@/components/BookLoader/BookLoader'
+import useWorld from '@/components/Hall/useWorld'
+import { worldOfEvent } from '@/lib/eventWorld'
 
 const heebo = Heebo({ subsets: ['hebrew'], weight: ['400', '700', '900'] })
 
@@ -31,7 +33,7 @@ const EVENT_LABEL = {
     brit: 'הברית',
 }
 
-const GOLD = 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)'
+const GOLD = 'var(--wt-primary)'
 const SAVE_DELAY_MS = 900
 
 function fmtUploadedAt(ms) {
@@ -55,6 +57,7 @@ export default function ArrangePage() {
     const { token } = useParams()
     const [status, setStatus] = useState('loading') // loading | invalid | error | ready
     const [wedding, setWedding] = useState(null)
+    useWorld(worldOfEvent(wedding))
     const [entries, setEntries] = useState([])
     // idle | dirty | saving | saved | failed
     const [saveState, setSaveState] = useState('idle')
@@ -151,7 +154,7 @@ export default function ArrangePage() {
 
     if (status === 'invalid') {
         return (
-            <div className={`${heebo.className} min-h-screen flex flex-col items-center justify-center text-center px-6`} dir='rtl' style={{ background: '#f8f4ec' }}>
+            <div className={`${heebo.className} min-h-screen flex flex-col items-center justify-center text-center px-6`} dir='rtl' style={{ background: 'transparent' }}>
                 <div className='w-14 h-14 rounded-2xl flex items-center justify-center mb-4' style={{ background: GOLD }}>
                     <Lock size={22} className='text-white' />
                 </div>
@@ -165,7 +168,7 @@ export default function ArrangePage() {
 
     if (status === 'error') {
         return (
-            <div className={`${heebo.className} min-h-screen flex flex-col items-center justify-center text-center px-6`} dir='rtl' style={{ background: '#f8f4ec' }}>
+            <div className={`${heebo.className} min-h-screen flex flex-col items-center justify-center text-center px-6`} dir='rtl' style={{ background: 'transparent' }}>
                 <p className='text-[#7a6a52] text-[14px] mb-3'>לא הצלחנו לטעון את הברכות</p>
                 <button onClick={() => { setStatus('loading'); load() }} className='px-4 py-2 rounded-lg text-white text-[13px] font-bold' style={{ background: GOLD }}>
                     נסו שוב
@@ -175,12 +178,12 @@ export default function ArrangePage() {
     }
 
     return (
-        <div className={`${heebo.className} min-h-screen`} dir='rtl' style={{ background: 'linear-gradient(180deg, #f8f4ec 0%, #fdfaf3 100%)' }}>
+        <div className={`${heebo.className} min-h-screen`} dir='rtl' style={{ background: 'transparent' }}>
             <div className='max-w-[640px] mx-auto px-3 sm:px-6 pt-6 pb-32'>
 
                 {/* Header */}
                 <div className='flex items-center gap-3 mb-5'>
-                    <div className='w-12 h-12 rounded-2xl flex items-center justify-center shrink-0' style={{ background: GOLD, boxShadow: '0 14px 28px -12px rgba(170,136,64,0.50)' }}>
+                    <div className='w-12 h-12 rounded-2xl flex items-center justify-center shrink-0' style={{ background: GOLD, boxShadow: '0 14px 28px -12px rgba(30,16,66,0.45)' }}>
                         <Sparkles size={20} className='text-white' />
                     </div>
                     <div className='min-w-0'>

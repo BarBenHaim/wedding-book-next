@@ -233,32 +233,32 @@ export async function POST(req) {
                     to: email,
                     subject: `ספר הברכות של ${title} מוכן 🎉`,
                     html: `
-<div style="font-family:Arial,'Heebo',sans-serif;direction:rtl;text-align:right;max-width:600px;margin:0 auto;background:#fdf9ef;border-radius:16px;overflow:hidden;">
-  <div style="background:linear-gradient(135deg,#aa8840,#c9a44e);padding:26px 24px;color:#fff;">
+<div style="font-family:Arial,'Heebo',sans-serif;direction:rtl;text-align:right;max-width:600px;margin:0 auto;background:#fdf3dd;border-radius:16px;overflow:hidden;">
+  <div style="background:linear-gradient(135deg,#52247f,#2c2473);padding:26px 24px;color:#fff;">
     <h1 style="margin:0;font-size:21px;">מזל טוב! 🎉</h1>
     <p style="margin:8px 0 0;opacity:.92;font-size:14px;">ספר הברכות של ${title} נפתח ב-Wedding Tales</p>
   </div>
   <div style="padding:24px;">
-    <p style="font-size:14px;line-height:1.8;color:#3d2e1a;margin:0 0 16px;">
+    <p style="font-size:14px;line-height:1.8;color:#1d1648;margin:0 0 16px;">
       שמרו את המייל הזה — אלה הקישורים החשובים שלכם:
     </p>
-    <div style="background:#fff;border:1px solid rgba(170,136,64,0.2);border-radius:12px;padding:16px;margin-bottom:10px;">
-      <p style="margin:2px 0;font-size:13px;color:#3d2e1a;"><b>🔗 קישור לאורחים (לשיתוף):</b><br/><a href="${links.guest}" style="color:#aa8840;word-break:break-all;">${links.guest}</a></p>
+    <div style="background:#fff;border:1px solid rgba(82,36,127,0.2);border-radius:12px;padding:16px;margin-bottom:10px;">
+      <p style="margin:2px 0;font-size:13px;color:#1d1648;"><b>🔗 קישור לאורחים (לשיתוף):</b><br/><a href="${links.guest}" style="color:#52247f;word-break:break-all;">${links.guest}</a></p>
     </div>
-    <div style="background:#fff;border:1px solid rgba(170,136,64,0.2);border-radius:12px;padding:16px;margin-bottom:10px;">
-      <p style="margin:2px 0;font-size:13px;color:#3d2e1a;"><b>📖 הספר הדיגיטלי:</b><br/><a href="${links.book}" style="color:#aa8840;word-break:break-all;">${links.book}</a></p>
+    <div style="background:#fff;border:1px solid rgba(82,36,127,0.2);border-radius:12px;padding:16px;margin-bottom:10px;">
+      <p style="margin:2px 0;font-size:13px;color:#1d1648;"><b>📖 הספר הדיגיטלי:</b><br/><a href="${links.book}" style="color:#52247f;word-break:break-all;">${links.book}</a></p>
     </div>
     <div style="text-align:center;margin:18px 0 4px;">
-      <a href="${links.portal}" style="background:linear-gradient(180deg,#d3b46a,#b8893d);color:#fff;text-decoration:none;padding:13px 26px;border-radius:14px;font-weight:700;font-size:15px;display:inline-block;">
+      <a href="${links.portal}" style="background:linear-gradient(180deg,#2c2473,#171049);color:#fff;text-decoration:none;padding:13px 26px;border-radius:14px;font-weight:700;font-size:15px;display:inline-block;">
         לניהול האירוע →
       </a>
     </div>
-    <p style="font-size:12.5px;color:#7a6a52;text-align:center;margin:14px 0 0;">
-      📲 טיפ: את הברכות הכי כיף לראות נכנסות בזמן אמת — <a href="${base}/app" style="color:#aa8840;font-weight:700;">באפליקציה שלנו</a>.
+    <p style="font-size:12.5px;color:#4f4668;text-align:center;margin:14px 0 0;">
+      📲 טיפ: את הברכות הכי כיף לראות נכנסות בזמן אמת — <a href="${base}/app" style="color:#52247f;font-weight:700;">באפליקציה שלנו</a>.
       ויש שאלה? פשוט השיבו למייל הזה.
     </p>
   </div>
-  <div style="background:#fdf9ef;padding:14px 24px;border-top:1px solid rgba(170,136,64,0.2);text-align:center;color:#9a8665;font-size:11px;">
+  <div style="background:#fdf3dd;padding:14px 24px;border-top:1px solid rgba(82,36,127,0.2);text-align:center;color:#6d6385;font-size:11px;">
     באהבה, צוות Wedding Tales — Your moments, forever
   </div>
 </div>`,

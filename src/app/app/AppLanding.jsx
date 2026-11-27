@@ -16,6 +16,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { jerusalemSerif } from '@/app/admin/ui/font'
+import './app-hall.css'
 
 // ─── FLIP THESE WHEN THE STORES APPROVE ──────────────────────────────
 // iOS is submitted and "Waiting for Review"; this is the reserved
@@ -302,7 +304,7 @@ export default function AppLanding() {
     const active = SHOTS[shot]
 
     return (
-        <div className='wtapp' dir='rtl'>
+        <div className='wtapp' dir='rtl' style={{ '--serif': jerusalemSerif.style.fontFamily }}>
             {/* ═══ STICKY TOP BAR (desktop) ═══ */}
             <div className={`wtTopBar ${stuck ? 'on' : ''}`}>
                 <div className='wtTopIn'>

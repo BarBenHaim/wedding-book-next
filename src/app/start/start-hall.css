@@ -1,0 +1,68 @@
+/* The "open a book" wizard in the house design: the chosen celebration's sky
+   over parchment, and each kind of event shown as its own world. "div.wiz.wiz"
+   outweighs the screen's own styles. */
+
+div.wiz.wiz { color: var(--wt-ink); background: #f3e2bd url('/admin-theme/parchment.webp') repeat; }
+div.wiz.wiz .pageBg {
+    inset: 0 0 auto 0; height: clamp(168px, 24vh, 270px); opacity: 1;
+    background: var(--wt-art) center bottom / cover no-repeat;
+    -webkit-mask-image: linear-gradient(180deg, #000 58%, transparent);
+    mask-image: linear-gradient(180deg, #000 58%, transparent);
+}
+div.wiz.wiz .pageVeil, div.wiz.wiz .orb { display: none; }
+div.wiz.wiz .spark { background: #fff3d4; }
+
+/* the steps and the way back stand on the sky */
+div.wiz.wiz .logo { height: 32px; content: url('/brand/logo-on-dark.png'); filter: drop-shadow(0 3px 8px rgba(8, 3, 35, .8)); }
+div.wiz.wiz .back { color: #fff3d4; background: rgba(20, 13, 66, .5); border: 1px solid rgba(217, 178, 101, .8); }
+div.wiz.wiz .dot { color: var(--wt-ink); background: #fdf6e7; border: 2px solid #d9b265; box-shadow: 0 4px 10px -4px rgba(8, 3, 35, .7); }
+div.wiz.wiz .stepDot.cur .dot { color: #fff3d8; background: var(--wt-primary); border-color: #d9b265; box-shadow: 0 0 0 3px rgba(255, 244, 216, .65), 0 8px 18px -7px rgba(8, 3, 35, .8); }
+div.wiz.wiz .stepDot.done .dot { color: var(--wt-ink); background: linear-gradient(180deg, #fff6e0, #e6c987); }
+div.wiz.wiz .stepDot:disabled .dot { opacity: .75; }
+div.wiz.wiz .stepDot .dotLabel, div.wiz.wiz .stepDot.cur .dotLabel { color: #fff7e4; opacity: 1; text-shadow: 0 1px 6px rgba(8, 3, 35, .95), 0 0 2px rgba(8, 3, 35, .9); }
+div.wiz.wiz .stepDot + .stepDot::before { background: rgba(255, 244, 216, .4); }
+div.wiz.wiz .stepDot + .stepDot::after { background: #d9b265; }
+
+/* words */
+div.wiz.wiz .h1, div.wiz.wiz .overline + .h1, div.wiz.wiz .doneCard h2 { font-family: var(--serif), 'Noto Serif Hebrew', 'Frank Ruhl Libre', serif; color: var(--wt-ink); }
+div.wiz.wiz .eyebrowRow, div.wiz.wiz .ornament { display: none; }
+div.wiz.wiz .hero { padding-top: clamp(30px, 6vh, 74px); }
+div.wiz.wiz .heroH1 .h1LineA { color: var(--wt-ink); }
+div.wiz.wiz .heroH1 .h1LineB { background: none; -webkit-background-clip: initial; background-clip: initial; color: var(--wt-accent); }
+div.wiz.wiz .sub, div.wiz.wiz .sub0, div.wiz.wiz .sub0Ask, div.wiz.wiz .previewHint, div.wiz.wiz .trust, div.wiz.wiz .trustRow, div.wiz.wiz .loginLine, div.wiz.wiz .overline, div.wiz.wiz .opt, div.wiz.wiz .pTag { color: #4f4668; }
+div.wiz.wiz .trustItem svg { color: var(--wt-accent); }
+div.wiz.wiz .trustDivider, div.wiz.wiz .eyebrowLine { background: rgba(164, 128, 84, .5); }
+
+/* each celebration, as a small world */
+div.wiz.wiz .typeCard { padding-top: 14px; background: #fdf6e7; border: 2px solid #cfab66; box-shadow: 0 12px 24px -16px rgba(70, 40, 10, .55); }
+div.wiz.wiz .typeCard.sel { border-color: var(--tA); background: #fff9ec; box-shadow: 0 0 0 3px #d9b265, 0 18px 34px -18px var(--tA); }
+div.wiz.wiz .typeCardBg {
+    inset: 0 0 auto 0; height: 104px; opacity: 1; border-radius: 16px 16px 0 0;
+    -webkit-mask-image: linear-gradient(180deg, #000 62%, transparent);
+    mask-image: linear-gradient(180deg, #000 62%, transparent);
+}
+div.wiz.wiz .typeCard[data-world='wedding'] .typeCardBg { background: url('/worlds/wedding.webp') 62% center / cover; }
+div.wiz.wiz .typeCard[data-world='jerusalem'] .typeCardBg { background: url('/admin-theme/hero.webp') 62% center / cover; }
+div.wiz.wiz .typeCard[data-world='batmitzvah'] .typeCardBg { background: url('/worlds/batmitzvah.webp') 62% center / cover; }
+div.wiz.wiz .typeCard[data-world='birthday'] .typeCardBg { background: url('/worlds/birthday.webp') 62% center / cover; }
+div.wiz.wiz .typeLabel { font-family: var(--serif), 'Noto Serif Hebrew', 'Frank Ruhl Libre', serif; color: var(--wt-ink); }
+div.wiz.wiz .typeBlurb { color: #4f4668; }
+
+/* the form steps */
+div.wiz.wiz .card, div.wiz.wiz .doneCard { background: rgba(253, 246, 231, .97); border: 1px solid #cfab66; box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .55), 0 16px 34px -20px rgba(70, 40, 10, .55); }
+div.wiz.wiz .field > span { color: var(--wt-ink); }
+div.wiz.wiz .field input { color: var(--wt-ink); background: #fffaf0; border-color: #c9a460; }
+div.wiz.wiz .field input:focus { border-color: var(--wt-primary-solid); box-shadow: 0 0 0 3px rgba(82, 36, 127, .18); }
+div.wiz.wiz .presetCard { background: #fdf6e7; border-color: #cfab66; }
+div.wiz.wiz .presetCard.sel { border-color: var(--wt-primary-solid); box-shadow: 0 0 0 3px #d9b265; }
+div.wiz.wiz .meBox, div.wiz.wiz .mineBox { background: rgba(253, 246, 231, .97); border-color: #cfab66; }
+div.wiz.wiz .linkBtn { color: var(--wt-accent); }
+
+div.wiz.wiz .cta, div.wiz.wiz .loginPill { color: #fff3d8; background: var(--wt-primary); border: 2px solid #d9b265; box-shadow: 0 0 0 1px #86621f, 0 14px 26px -14px rgba(30, 16, 66, .65); }
+div.wiz.wiz button:focus-visible, div.wiz.wiz a:focus-visible, div.wiz.wiz input:focus-visible { outline: 3px solid #ffb938; outline-offset: 2px; }
+
+div.wiz.wiz .stepDot:disabled .dotLabel { opacity: .92; }
+/* the component styles do not reach this link, so its shape is set here */
+div.wiz.wiz .loginPill { display: inline-block; align-self: center; margin-top: 6px; padding: 12px 30px; border-radius: 999px; font-weight: 700; font-size: 15px; text-decoration: none; }
+/* on a phone the headline starts under the painting */
+@media (max-width: 640px) { div.wiz.wiz .hero { padding-top: 92px; } }

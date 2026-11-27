@@ -1,0 +1,41 @@
+/* The app download page in the house design. The screen draws itself from its
+   own variables, so most of this is a new set of them; the doubled class
+   outweighs the screen's own declarations. */
+
+.wtapp.wtapp {
+    --cream: #f3e2bd;
+    --paper: #fdf6e7;
+    --ink: #1d1648;
+    --muted: #4f4668;
+    --gold: #52247f;
+    --gold-lt: #d9b265;
+    --gold-dp: #2c2473;
+    --navy: #171049;
+    --line: rgba(164, 128, 84, .5);
+    background: #f3e2bd url('/admin-theme/parchment.webp') repeat;
+}
+.wtapp.wtapp .wtHero { position: relative; isolation: isolate; }
+.wtapp.wtapp .wtHero::before {
+    content: ''; position: absolute; inset: 0 0 auto 0; height: clamp(212px, 34vw, 430px); z-index: -1; pointer-events: none;
+    background: var(--wt-art) center bottom / cover no-repeat;
+    -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent);
+    mask-image: linear-gradient(180deg, #000 60%, transparent);
+}
+.wtapp.wtapp .wtGlowA, .wtapp.wtapp .wtGlowB { display: none; }
+.wtapp.wtapp .wtSpark { background: #fff3d4; }
+.wtapp.wtapp .wtLogo { content: url('/brand/logo-on-dark.png'); filter: drop-shadow(0 3px 10px rgba(8, 3, 35, .85)); }
+.wtapp.wtapp .wtFreePill { color: #1d1648; background: linear-gradient(180deg, #fff6e0, #efd9ac); border-color: #d9b265; }
+.wtapp.wtapp .wtFreePill b { color: #52247f; }
+.wtapp.wtapp .wtH1 { margin-top: clamp(54px, 9vh, 96px); font-family: var(--serif), 'Noto Serif Hebrew', 'Frank Ruhl Libre', serif; font-weight: 900; }
+.wtapp.wtapp .wtH1 em { background: none; -webkit-background-clip: initial; background-clip: initial; color: #52247f; }
+.wtapp.wtapp .wtH2, .wtapp.wtapp .wtRowTxt h3, .wtapp.wtapp .wtStep h3 { font-family: var(--serif), 'Noto Serif Hebrew', 'Frank Ruhl Libre', serif; color: #1d1648; }
+.wtapp.wtapp .wtMicro { color: #4f4668; }
+
+.wtapp.wtapp .wtTopBar { background: var(--wt-bar); border-bottom: 2px solid #cfa355; }
+.wtapp.wtapp .wtTopIn img { content: url('/brand/logo-on-dark.png'); }
+.wtapp.wtapp .wtTopFree { color: #fff3d4; }
+
+.wtapp.wtapp .wtStep { background: rgba(253, 246, 231, .97); box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .55), 0 20px 40px -30px rgba(70, 40, 10, .6); }
+.wtapp.wtapp .wtStepNum { background: var(--wt-primary); color: #fff3d8; border: 2px solid #d9b265; }
+.wtapp.wtapp a:focus-visible, .wtapp.wtapp button:focus-visible { outline: 3px solid #ffb938; outline-offset: 2px; }
+.wtapp.wtapp .wtBottomBar { background: rgba(251, 240, 214, .97); border-top: 2px solid #cfa355; }

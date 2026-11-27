@@ -91,21 +91,21 @@ async function sendAdminEmail({ weddingId, printJobId, shippingAddress, contentU
         subject: `🖨️ הזמנת הדפסה חדשה! Wedding #${weddingId}`,
         html: `
         <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #AA8840, #c9a44e); padding: 24px; border-radius: 16px 16px 0 0;">
+            <div style="background: linear-gradient(135deg, #52247f, #2c2473); padding: 24px; border-radius: 16px 16px 0 0;">
                 <h1 style="color: white; margin: 0; font-size: 22px;">הזמנת הדפסה חדשה!</h1>
                 <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0; font-size: 14px;">Wedding Tales Print Order</p>
             </div>
 
-            <div style="background: #ffffff; padding: 24px; border: 1px solid #e5e5e5; border-top: none;">
-                <div style="background: #f9f7f2; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+            <div style="background: #ffffff; padding: 24px; border: 1px solid #dcc28a; border-top: none;">
+                <div style="background: #fdf3dd; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
                     <p style="margin: 4px 0;"><strong>מזהה חתונה:</strong> ${weddingId}</p>
                     <p style="margin: 4px 0;"><strong>מזהה הזמנת Lulu:</strong> <span style="font-family: monospace; background: #eee; padding: 2px 6px; border-radius: 4px;">${printJobId}</span></p>
                     <p style="margin: 4px 0;"><strong>מספר עמודים:</strong> ${pageCount}</p>
                     ${costLine}
                 </div>
 
-                <h3 style="color: #AA8840; border-bottom: 2px solid #AA8840; padding-bottom: 8px;">כתובת למשלוח</h3>
-                <div style="background: #f9f7f2; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                <h3 style="color: #52247f; border-bottom: 2px solid #52247f; padding-bottom: 8px;">כתובת למשלוח</h3>
+                <div style="background: #fdf3dd; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
                     <p style="margin: 4px 0;"><strong>שם:</strong> ${shippingAddress.name}</p>
                     <p style="margin: 4px 0;"><strong>רחוב:</strong> ${shippingAddress.street1}${shippingAddress.street2 ? ', ' + shippingAddress.street2 : ''}</p>
                     <p style="margin: 4px 0;"><strong>עיר:</strong> ${shippingAddress.city}</p>
@@ -115,15 +115,15 @@ async function sendAdminEmail({ weddingId, printJobId, shippingAddress, contentU
                     ${shippingAddress.email ? `<p style="margin: 4px 0;"><strong>אימייל:</strong> ${shippingAddress.email}</p>` : ''}
                 </div>
 
-                <h3 style="color: #AA8840; border-bottom: 2px solid #AA8840; padding-bottom: 8px;">קבצים להורדה</h3>
+                <h3 style="color: #52247f; border-bottom: 2px solid #52247f; padding-bottom: 8px;">קבצים להורדה</h3>
                 <div style="margin: 16px 0;">
                     <p>
                         <strong>1. תוכן הספר (Content):</strong><br/>
-                        <a href="${contentUrl}" target="_blank" style="color: #AA8840; font-weight: bold;">לחץ להורדת התוכן</a>
+                        <a href="${contentUrl}" target="_blank" style="color: #52247f; font-weight: bold;">לחץ להורדת התוכן</a>
                     </p>
                     <p>
                         <strong>2. כריכות (Covers):</strong><br/>
-                        <a href="${coverUrl}" target="_blank" style="color: #AA8840; font-weight: bold;">לחץ להורדת הכריכות</a>
+                        <a href="${coverUrl}" target="_blank" style="color: #52247f; font-weight: bold;">לחץ להורדת הכריכות</a>
                     </p>
                 </div>
 
@@ -134,7 +134,7 @@ async function sendAdminEmail({ weddingId, printJobId, shippingAddress, contentU
                 </div>
             </div>
 
-            <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 16px 16px; border: 1px solid #e5e5e5; border-top: none;">
+            <div style="background: #f5f5f5; padding: 16px; border-radius: 0 0 16px 16px; border: 1px solid #dcc28a; border-top: none;">
                 <p style="font-size: 12px; color: gray; margin: 0; text-align: center;">נשלח אוטומטית ממערכת Wedding Tales</p>
             </div>
         </div>

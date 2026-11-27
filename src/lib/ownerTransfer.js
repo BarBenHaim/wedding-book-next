@@ -90,12 +90,12 @@ export function transferEmail({ email, eventLabel, password, loginUrl = 'https:/
         : `<li><b>אימייל:</b> <span dir="ltr">${esc(email)}</span></li>
            <li><b>סיסמה:</b> הסיסמה הקיימת שלכם (אפשר לאפס אותה במסך הכניסה)</li>`
     const html = `
-    <div style="font-family:Heebo,Arial,sans-serif;direction:rtl;text-align:right;padding:20px;color:#2b2318">
+    <div style="font-family:Heebo,Arial,sans-serif;direction:rtl;text-align:right;padding:20px;color:#1d1648">
       <h2 style="margin:0 0 12px">${what} מחכה לכם</h2>
       <p>${password ? 'פתחנו לכם חשבון ב-Wedding Tales והאירוע משויך אליו.' : 'האירוע נוסף לחשבון שלכם ב-Wedding Tales.'}</p>
       <h3 style="margin:18px 0 6px">פרטי הכניסה:</h3>
       <ul style="padding-right:18px;margin:0">${access}</ul>
-      <p style="margin-top:18px"><a href="${esc(loginUrl)}" style="color:#AA8840;font-weight:bold">לחצו כאן להתחברות</a></p>
+      <p style="margin-top:18px"><a href="${esc(loginUrl)}" style="color:#52247f;font-weight:bold">לחצו כאן להתחברות</a></p>
       <hr style="margin:25px 0;border:none;border-top:1px solid #eee"/>
       <p>באהבה,<br>צוות Wedding Tales</p>
     </div>`

@@ -1,0 +1,27 @@
+/* The control panels of the design editors, in the admin's colours. Only
+   elements marked .wt-panel: the previews beside them must look exactly as the
+   guest or the printer will see them. The colour rules mirror theme.css. */
+
+.wt-panel .text-\[\#1a1410\], .wt-panel .text-\[\#3d2e1a\], .wt-panel .text-\[\#3d3225\], .wt-panel .text-\[\#2e2419\] { color: #1d1648; }
+.wt-panel .text-\[\#7a6a52\], .wt-panel .text-\[\#5a4d3a\], .wt-panel .text-\[\#5a4b35\], .wt-panel .text-\[\#5a4a32\], .wt-panel .text-\[\#5e513f\], .wt-panel .text-\[\#5c4a2f\], .wt-panel .text-\[\#7a6548\] { color: #4f4668; }
+.wt-panel .text-\[\#a89378\], .wt-panel .text-\[\#8c7b65\], .wt-panel .text-\[\#9d8b72\] { color: #6d6385; }
+.wt-panel .text-\[\#c4b9a4\], .wt-panel .text-\[\#c0ad8e\], .wt-panel .text-\[\#b9ad98\], .wt-panel .text-\[\#b3a68d\], .wt-panel .text-\[\#b8a37e\] { color: #8d84a0; }
+.wt-panel .text-\[\#AA8840\], .wt-panel .text-\[\#aa8840\], .wt-panel .text-\[\#a8843a\], .wt-panel .text-\[\#c9a44e\], .wt-panel .text-\[\#8a6d40\] { color: #52247f; }
+.wt-panel .bg-white { background-color: #fdf6e7; }
+.wt-panel .bg-white\/95 { background-color: rgba(253, 246, 231, .97); }
+.wt-panel .bg-\[\#fbf6ec\] { background-color: #fcf3df; }
+.wt-panel .bg-\[\#fdfaf3\], .wt-panel .bg-\[\#f8f4ec\], .wt-panel .bg-\[\#faf6ee\], .wt-panel .bg-\[\#f6efe0\] { background-color: #f6e8c9; }
+.wt-panel .bg-\[\#f4ecd9\] { background-color: #eedcb2; }
+.wt-panel .bg-\[\#AA8840\] { background-color: #2c2473; }
+.wt-panel .from-\[\#AA8840\] { background-image: linear-gradient(180deg, #2c2473, #171049); }
+.wt-panel .border-\[\#ead9b3\], .wt-panel .border-\[\#e7dcc6\], .wt-panel .border-\[\#f0e8d4\], .wt-panel .border-\[\#eee3cc\], .wt-panel .border-\[\#f0e3c8\], .wt-panel .border-\[\#f1e8d8\] { border-color: rgba(164, 128, 84, .45); }
+.wt-panel .border-\[\#AA8840\] { border-color: #c9a460; }
+.wt-panel .divide-\[\#f0e8d4\] > :not(:last-child) { border-color: rgba(164, 128, 84, .35); }
+
+.wt-panel .bg-white { background-color: #fdf6e7; }
+.wt-panel .bg-\[\#AA8840\]\/10 { background-color: rgba(82, 36, 127, .1); }
+.wt-panel .bg-\[\#AA8840\]\/15, .wt-panel .bg-\[\#AA8840\]\/20, .wt-panel .hover\:bg-\[\#AA8840\]\/20:hover { background-color: rgba(82, 36, 127, .18); }
+.wt-panel .border-\[\#AA8840\], .wt-panel .focus\:border-\[\#AA8840\]:focus { border-color: #2c2473; }
+.wt-panel .accent-\[\#AA8840\] { accent-color: #2c2473; }
+.wt-panel .ring-\[\#AA8840\], .wt-panel .ring-\[\#b8893d\] { --tw-ring-color: #2c2473; }
+.wt-panel button:focus-visible, .wt-panel input:focus-visible, .wt-panel select:focus-visible { outline: 3px solid #ffb938; outline-offset: 2px; }

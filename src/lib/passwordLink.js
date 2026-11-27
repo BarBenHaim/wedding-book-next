@@ -62,13 +62,13 @@ export function setPasswordEmail({ email, url, sentByUs = false }) {
         ? `שלחנו לכם קישור לבחירת סיסמה לחשבון <span dir="ltr">${esc(email)}</span>, שבו נמצא ספר הברכות שלכם.`
         : `ביקשתם לבחור סיסמה לחשבון <span dir="ltr">${esc(email)}</span>.`
     const html = `
-    <div style="font-family:Heebo,Arial,sans-serif;direction:rtl;text-align:right;padding:20px;color:#2b2318">
+    <div style="font-family:Heebo,Arial,sans-serif;direction:rtl;text-align:right;padding:20px;color:#1d1648">
       <h2 style="margin:0 0 12px">בחירת סיסמה ל-Wedding Tales</h2>
       <p>${intro}</p>
       <p style="margin:22px 0">
-        <a href="${esc(url)}" style="display:inline-block;background:#AA8840;color:#fff;text-decoration:none;font-weight:bold;padding:12px 26px;border-radius:999px">לבחירת סיסמה</a>
+        <a href="${esc(url)}" style="display:inline-block;background:#52247f;color:#fff;text-decoration:none;font-weight:bold;padding:12px 26px;border-radius:999px">לבחירת סיסמה</a>
       </p>
-      <p style="color:#7a6a52;font-size:13px">הקישור תקף לשעה ולשימוש אחד.${sentByUs ? '' : ' לא ביקשתם? אפשר להתעלם מהמייל, הסיסמה הקיימת לא משתנה.'}</p>
+      <p style="color:#4f4668;font-size:13px">הקישור תקף לשעה ולשימוש אחד.${sentByUs ? '' : ' לא ביקשתם? אפשר להתעלם מהמייל, הסיסמה הקיימת לא משתנה.'}</p>
       <hr style="margin:25px 0;border:none;border-top:1px solid #eee"/>
       <p>באהבה,<br>צוות Wedding Tales</p>
     </div>`

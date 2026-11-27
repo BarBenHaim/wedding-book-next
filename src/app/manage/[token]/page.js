@@ -23,6 +23,8 @@ import {
 import { Heebo } from 'next/font/google'
 import { storage } from '@/lib/firebaseClient'
 import BookLoader from '@/components/BookLoader/BookLoader'
+import useWorld from '@/components/Hall/useWorld'
+import { worldOfEvent } from '@/lib/eventWorld'
 import { blessForTag } from '@/lib/twins'
 
 const heebo = Heebo({ subsets: ['hebrew'], weight: ['400', '700', '900'] })
@@ -36,7 +38,7 @@ const EVENT_LABEL = {
     brit: 'הברית',
 }
 
-const GOLD = 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)'
+const GOLD = 'var(--wt-primary)'
 const ORDER_SAVE_DELAY_MS = 900
 
 function moveItem(list, from, to) {
@@ -55,6 +57,7 @@ export default function ManagePage() {
     const { token } = useParams()
     const [status, setStatus] = useState('loading') // loading | invalid | error | ready
     const [wedding, setWedding] = useState(null)
+    useWorld(worldOfEvent(wedding))
     const [entries, setEntries] = useState([])
     const [editing, setEditing] = useState(null) // { id, name, text }
     const [busyId, setBusyId] = useState(null)
@@ -239,7 +242,7 @@ export default function ManagePage() {
 
     if (status === 'invalid') {
         return (
-            <div className={`${heebo.className} min-h-screen flex flex-col items-center justify-center text-center px-6`} dir='rtl' style={{ background: '#f8f4ec' }}>
+            <div className={`${heebo.className} min-h-screen flex flex-col items-center justify-center text-center px-6`} dir='rtl' style={{ background: 'transparent' }}>
                 <div className='w-14 h-14 rounded-2xl flex items-center justify-center mb-4' style={{ background: GOLD }}>
                     <Lock size={22} className='text-white' />
                 </div>
@@ -253,7 +256,7 @@ export default function ManagePage() {
 
     if (status === 'error') {
         return (
-            <div className={`${heebo.className} min-h-screen flex flex-col items-center justify-center text-center px-6`} dir='rtl' style={{ background: '#f8f4ec' }}>
+            <div className={`${heebo.className} min-h-screen flex flex-col items-center justify-center text-center px-6`} dir='rtl' style={{ background: 'transparent' }}>
                 <p className='text-[#7a6a52] text-[14px] mb-3'>לא הצלחנו לטעון את הברכות</p>
                 <button onClick={() => { setStatus('loading'); load() }} className='px-4 py-2 rounded-lg text-white text-[13px] font-bold' style={{ background: GOLD }}>
                     נסו שוב
@@ -263,7 +266,7 @@ export default function ManagePage() {
     }
 
     return (
-        <div className={`${heebo.className} min-h-screen`} dir='rtl' style={{ background: 'linear-gradient(180deg, #f8f4ec 0%, #fdfaf3 100%)' }}>
+        <div className={`${heebo.className} min-h-screen`} dir='rtl' style={{ background: 'transparent' }}>
             <input
                 ref={fileInput}
                 type='file'
@@ -275,7 +278,7 @@ export default function ManagePage() {
             <div className='max-w-[680px] mx-auto px-3 sm:px-6 pt-6 pb-32'>
                 {/* Header */}
                 <div className='flex items-center gap-3 mb-4'>
-                    <div className='w-12 h-12 rounded-2xl flex items-center justify-center shrink-0' style={{ background: GOLD, boxShadow: '0 14px 28px -12px rgba(170,136,64,0.50)' }}>
+                    <div className='w-12 h-12 rounded-2xl flex items-center justify-center shrink-0' style={{ background: GOLD, boxShadow: '0 14px 28px -12px rgba(30,16,66,0.45)' }}>
                         <Pencil size={20} className='text-white' />
                     </div>
                     <div className='min-w-0'>
@@ -387,7 +390,7 @@ export default function ManagePage() {
                                                 />
                                             </div>
                                         ) : (
-                                            <div className='w-[88px] h-[88px] rounded-xl shrink-0 flex flex-col items-center justify-center gap-1 border border-dashed border-[#d9c39a] text-[#b8a07a] text-[11px]' style={{ background: '#fdfaf3' }}>
+                                            <div className='w-[88px] h-[88px] rounded-xl shrink-0 flex flex-col items-center justify-center gap-1 border border-dashed border-[#d9c39a] text-[#b8a07a] text-[11px]' style={{ background: '#fcf3df' }}>
                                                 <ImagePlus size={18} />
                                                 בלי תמונה
                                             </div>

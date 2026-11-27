@@ -1,0 +1,157 @@
+/* The house design outside the super admin: parchment, a Jerusalem evening at
+   the head of the page, navy and gold controls, a heavy Hebrew serif for
+   headings. Scoped to .wt-hall and the house header, so guest screens are not
+   touched. These rules are unlayered, so they win over the utilities. */
+
+/* ── the site bar ─────────────────────────────────────────────────────────── */
+/* The same height as the plain bar, which full-height screens count on. */
+header.wt-house-header { background: var(--wt-bar); border-bottom: 2px solid #cfa355; box-shadow: 0 6px 18px -8px rgba(20, 10, 50, .6); }
+header.wt-house-header nav { padding-top: calc(0.75rem - 1px); padding-bottom: calc(0.75rem - 1px); }
+header.wt-house-header nav > div button { color: #fbf0d8; background: rgba(255, 244, 216, .08); border: 1px solid rgba(217, 178, 101, .75); box-shadow: none; }
+header.wt-house-header nav > div button:hover { background: rgba(255, 244, 216, .18); }
+header.wt-house-header nav > div button.bg-gradient-to-r { color: var(--wt-ink); background: linear-gradient(180deg, #fff6e0, #efd9ac); border-color: #d9b265; }
+header.wt-house-header nav > div > button span { background-color: #fbf0d8; }
+
+/* paper copies, the event sign above all, never carry the site bar */
+@media print { header.wt-house-header { display: none; } }
+
+/* the phone menu that opens from the bar */
+div.wt-house-drawer { background: #f6e8c9 url('/admin-theme/parchment.webp') repeat; border-left: 3px solid #cfa355; }
+.wt-house-drawer button { color: var(--wt-ink); }
+.wt-house-drawer .text-\[\#2545E0\] { color: var(--wt-accent); }
+.wt-house-drawer .text-gray-400 { color: #6d6385; }
+.wt-house-drawer .bg-\[\#2545E0\]\/10 { background-color: rgba(82, 36, 127, .12); }
+.wt-house-drawer .bg-\[\#2545E0\] { background-color: var(--wt-accent); }
+.wt-house-drawer .bg-white\/80 { background-color: #fffaf0; }
+
+/* ── the page ─────────────────────────────────────────────────────────────── */
+.wt-hall { min-height: calc(100dvh - 66px); color: var(--wt-ink); background: #f3e2bd url('/admin-theme/parchment.webp') repeat; }
+.wt-hall-band {
+    height: clamp(176px, 25vw, 350px); margin-bottom: -18px; pointer-events: none;
+    background: var(--wt-art) center bottom / cover no-repeat;
+    -webkit-mask-image: linear-gradient(180deg, #000 72%, transparent);
+    mask-image: linear-gradient(180deg, #000 72%, transparent);
+}
+.wt-hall-band ~ * { position: relative; }
+/* page roots that painted their own ivory let the parchment through */
+.wt-hall div[class*='min-h-[calc(100vh-4rem)]'], .wt-hall div[class*='min-h-screen'], .wt-hall div[class*='min-h-[100'] { background: transparent; }
+/* a single card centred in the page starts right under the sky, not half a screen down */
+.wt-hall div.relative.items-center[class*='min-h-[calc(100vh-4rem)]'] { min-height: 0; padding-top: 0; padding-bottom: 56px; }
+
+.wt-hall h1, .wt-hall h2, .wt-hall h3 { font-family: var(--serif), 'Noto Serif Hebrew', 'Frank Ruhl Libre', serif; }
+.wt-hall a:focus-visible, .wt-hall button:focus-visible, .wt-hall input:focus-visible, .wt-hall textarea:focus-visible, .wt-hall select:focus-visible { outline: 3px solid #ffb938; outline-offset: 2px; }
+
+/* ── screens written with utility classes ─────────────────────────────────── */
+/* ink */
+.wt-hall .text-\[\#1a1410\], .wt-hall .text-\[\#3d2e1a\], .wt-hall .text-\[\#241a0d\], .wt-hall .text-\[\#18140F\] { color: var(--wt-ink); }
+.wt-hall .text-\[\#7a6a52\], .wt-hall .text-\[\#5b4a30\], .wt-hall .text-\[\#5a5040\] { color: #4f4668; }
+.wt-hall .text-\[\#a89378\], .wt-hall .text-\[\#b8a07a\], .wt-hall .text-\[\#c9b48a\], .wt-hall .text-\[\#b3a48a\] { color: #6d6385; }
+/* gold accents become the purple of the reference */
+.wt-hall .text-\[\#AA8840\], .wt-hall .text-\[\#AA8840\]\/70 { color: var(--wt-accent); }
+.wt-hall .hover\:text-\[\#AA8840\]:hover, .wt-hall .hover\:text-\[\#AA8840\]\/70:hover, .wt-hall .focus\:text-\[\#AA8840\]:focus { color: var(--wt-accent); }
+
+/* parchment instead of white and cream */
+.wt-hall .bg-white { background-color: #fdf6e7; }
+.wt-hall .bg-white\/60, .wt-hall .bg-white\/70, .wt-hall .bg-white\/80 { background-color: rgba(253, 246, 231, .82); }
+.wt-hall .bg-white\/90, .wt-hall .bg-white\/95 { background-color: rgba(253, 246, 231, .96); }
+.wt-hall .bg-\[\#fbf6ec\], .wt-hall .bg-\[\#f8f4ec\], .wt-hall .bg-\[\#fff8f6\] { background-color: #fcf3df; }
+.wt-hall .bg-\[\#efe6d2\], .wt-hall .bg-\[\#f3ecdf\] { background-color: #eedcb2; }
+
+/* navy where gold was solid, a faint purple where it was a tint */
+.wt-hall .bg-\[\#AA8840\], .wt-hall .bg-\[\#AA8840\]\/70 { background-color: var(--wt-primary-solid); }
+.wt-hall .bg-\[\#AA8840\]\/5, .wt-hall .bg-\[\#AA8840\]\/8 { background-color: rgba(82, 36, 127, .06); }
+.wt-hall .bg-\[\#AA8840\]\/10 { background-color: rgba(82, 36, 127, .1); }
+.wt-hall .hover\:bg-\[\#AA8840\]\/5:hover { background-color: rgba(82, 36, 127, .07); }
+.wt-hall .hover\:bg-\[\#AA8840\]\/10:hover, .wt-hall .hover\:bg-\[\#AA8840\]\/15:hover { background-color: rgba(82, 36, 127, .13); }
+.wt-hall .from-\[\#AA8840\] { background-image: var(--wt-primary); }
+/* the shimmer is declared !important site-wide */
+.wt-hall .gold-shimmer { color: #fff3d8; border: 2px solid #d9b265; background: var(--wt-primary) !important; }
+
+/* silver-gold edges */
+.wt-hall .border-\[\#ead9b3\], .wt-hall .border-\[\#f0e8d4\], .wt-hall .border-\[\#d9c39a\], .wt-hall .border-\[\#AA8840\]\/15, .wt-hall .border-\[\#AA8840\]\/20, .wt-hall .border-\[\#AA8840\]\/25 { border-color: rgba(164, 128, 84, .5); }
+.wt-hall .border-\[\#AA8840\], .wt-hall .border-\[\#AA8840\]\/30, .wt-hall .border-\[\#AA8840\]\/40 { border-color: #c9a460; }
+.wt-hall .hover\:border-\[\#AA8840\]\/15:hover, .wt-hall .hover\:border-\[\#AA8840\]\/30:hover, .wt-hall .hover\:border-\[\#AA8840\]\/40:hover { border-color: #c9a460; }
+.wt-hall .focus\:border-\[\#AA8840\]:focus { border-color: var(--wt-primary-solid); }
+.wt-hall .accent-\[\#AA8840\] { accent-color: var(--wt-primary-solid); }
+
+/* ── the legal pages ──────────────────────────────────────────────────────── */
+.wt-hall .legal { margin: 0 12px 48px; padding: 34px 22px 44px; color: var(--wt-ink); background: rgba(253, 246, 231, .95); border: 1px solid #cfab66; border-radius: 22px; box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .55), 0 14px 30px -18px rgba(70, 40, 10, .45); }
+@media (min-width: 760px) { .wt-hall .legal { margin: 0 auto 56px; padding: 44px 48px 56px; } }
+.wt-hall .legal h1 { color: var(--wt-ink); }
+.wt-hall .legal h2 { color: var(--wt-accent); }
+.wt-hall .legal p, .wt-hall .legal li { color: #3c3358; }
+.wt-hall .legal .upd { color: #6d6385; }
+.wt-hall .legal a { color: var(--wt-accent); }
+
+/* ── the list of my events (it draws its own bar) ─────────────────────────── */
+/* "div.my" outweighs the screen's own styles. Its links get no scoped style
+   from the screen, so their shape is given here too. */
+.wt-hall div.my { min-height: 100dvh; padding-bottom: 60px; background: transparent; color: var(--wt-ink); }
+.wt-hall div.my .head { max-width: none; padding: 16px max(18px, calc(50% - 362px)) 44px; background: linear-gradient(180deg, rgba(20, 13, 66, .86), rgba(20, 13, 66, .35) 70%, rgba(20, 13, 66, 0)), var(--wt-art) center 74% / cover no-repeat; -webkit-mask-image: linear-gradient(180deg, #000 74%, transparent); mask-image: linear-gradient(180deg, #000 74%, transparent); }
+.wt-hall div.my .logo { content: url('/brand/logo-on-dark.png'); }
+.wt-hall div.my .head { flex-wrap: wrap; }
+.wt-hall div.my .head h1 { order: 3; flex: 1 0 100%; text-align: center; }
+.wt-hall div.my .head h1 { font-size: clamp(32px, 6vw, 52px); font-weight: 800; line-height: 1.2; color: transparent; -webkit-background-clip: text; background-clip: text; background-image: linear-gradient(180deg, #fffef8 26%, #fbeecb 62%, #e9cd93 86%); filter: drop-shadow(0 1px 0 #b58c48) drop-shadow(0 2px 0 #6c4c20) drop-shadow(0 5px 9px rgba(12, 5, 40, .9)); }
+.wt-hall div.my .head h1::after { display: none; }
+.wt-hall div.my .newBtn, .wt-hall div.my .outBtn { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 12px; font-size: 13.5px; font-weight: 800; text-decoration: none; }
+.wt-hall div.my .newBtn { color: var(--wt-ink); background: linear-gradient(180deg, #fff6e0, #efd9ac); border: 1.5px solid #d9b265; }
+.wt-hall div.my .outBtn { color: #fbf0d8; background: rgba(20, 13, 66, .55); border: 1.5px solid rgba(217, 178, 101, .8); }
+.wt-hall div.my .list { padding-top: 0; margin-top: -14px; position: relative; }
+.wt-hall div.my .hint, .wt-hall div.my .empty p { color: #4f4668; }
+.wt-hall div.my .empty, .wt-hall div.my .card { color: var(--wt-ink); background: rgba(253, 246, 231, .96); border: 1px solid #cfab66; box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .55), 0 14px 30px -18px rgba(70, 40, 10, .45); }
+.wt-hall div.my .title { font-family: var(--serif), 'Noto Serif Hebrew', 'Frank Ruhl Libre', serif; color: var(--wt-ink); }
+.wt-hall div.my .chip { color: var(--wt-accent); background: rgba(82, 36, 127, .09); border-color: rgba(82, 36, 127, .2); }
+.wt-hall div.my .date { color: #6d6385; }
+.wt-hall div.my .btn, .wt-hall div.my .cta { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 0 18px; border-radius: 12px; font-size: 14px; font-weight: 800; text-decoration: none; }
+.wt-hall div.my .btn { color: var(--wt-ink); background: linear-gradient(180deg, #fffaf0, #f4e4c4); border: 1.5px solid #c9a460; }
+.wt-hall div.my .btn.gold, .wt-hall div.my .cta { color: #fff3d8; background: var(--wt-primary); border: 2px solid #d9b265; box-shadow: 0 10px 20px -8px rgba(30, 16, 66, .5); }
+
+/* ── the page that was not found: the site bar joins in ───────────────────── */
+body:has(.wt-lost) > header { background: var(--wt-bar); border-bottom: 2px solid #cfa355; }
+body:has(.wt-lost) > header img { content: url('/brand/logo-on-dark.png'); }
+body:has(.wt-lost) > header nav > div button { color: var(--wt-ink); background: linear-gradient(180deg, #fff6e0, #efd9ac); border: 1px solid #d9b265; box-shadow: none; }
+
+/* ── the pieces of the admin's "today" screen ─────────────────────────────── */
+/* a flourish under every page title */
+.wt-hall h1::after { content: ''; display: block; width: min(230px, 80%); height: 22px; margin-top: 2px; background: url('/admin-theme/divider.webp') center / contain no-repeat; filter: drop-shadow(0 2px 2px rgba(110, 74, 24, .45)); }
+.wt-hall .legal h1::after { margin-bottom: 6px; }
+.wt-hall h1.text-center::after, .wt-hall .text-center h1::after { margin-inline: auto; }
+
+/* the silver frames, around the main boxes of a screen */
+.wt-hall .legal, .wt-hall div[class*='mb-'].rounded-2xl.border-\[\#ead9b3\], .wt-hall div.relative.items-center[class*='min-h-[calc(100vh-4rem)]'] > div.rounded-2xl, .wt-hall .rounded-2xl.p-5, .wt-hall div.my .card, .wt-hall div.my .empty {
+    position: relative; isolation: isolate; background: transparent !important; border-color: transparent !important; box-shadow: none !important;
+}
+.wt-hall .legal::before, .wt-hall div[class*='mb-'].rounded-2xl.border-\[\#ead9b3\]::before, .wt-hall div.relative.items-center[class*='min-h-[calc(100vh-4rem)]'] > div.rounded-2xl::before, .wt-hall .rounded-2xl.p-5::before, .wt-hall div.my .card::before, .wt-hall div.my .empty::before {
+    content: ''; position: absolute; inset: -4px; z-index: -1; pointer-events: none;
+    border: solid transparent; border-width: 30px 37px; border-image: url('/admin-theme/frame.webp') 150 185 fill stretch;
+    filter: drop-shadow(0 8px 14px rgba(75, 38, 15, .32));
+}
+.wt-hall div[class*='mb-'].rounded-2xl.border-\[\#ead9b3\] { padding: 16px 24px; }
+.wt-hall .legal::before { border-width: 46px 56px; }
+
+/* the gold plaques, for the numbers */
+.wt-hall .grid > .rounded-2xl.p-4 { position: relative; isolation: isolate; background: transparent !important; border-color: transparent !important; box-shadow: none !important; padding: 16px 22px; }
+.wt-hall .grid > .rounded-2xl.p-4::before {
+    content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    border: solid transparent; border-width: 20px 23px; border-image: url('/admin-theme/plaque.webp') 70 80 fill stretch;
+    filter: drop-shadow(0 7px 12px rgba(24, 10, 45, .35));
+}
+
+/* olive branches at the corners of a wide screen */
+@media (min-width: 1100px) {
+    .wt-hall { position: relative; }
+    .wt-hall::before, .wt-hall::after { content: ''; position: fixed; z-index: 0; width: 190px; height: 96px; background: url('/admin-theme/olive.webp') center / contain no-repeat; pointer-events: none; }
+    .wt-hall::before { left: -22px; bottom: 6px; transform: rotate(-12deg); }
+    .wt-hall::after { right: -34px; bottom: 34%; transform: scaleX(-1) rotate(46deg); }
+}
+
+/* ── design from one photo: the same sky, parchment and flourish ──────────── */
+div.wt-look { background: #f3e2bd url('/admin-theme/parchment.webp') repeat; }
+div.wt-look::before {
+    content: ''; display: block; height: clamp(150px, 22vw, 290px); margin: 0 -14px -14px; pointer-events: none;
+    background: var(--wt-art) center bottom / cover no-repeat;
+    -webkit-mask-image: linear-gradient(180deg, #000 70%, transparent);
+    mask-image: linear-gradient(180deg, #000 70%, transparent);
+}
+div.wt-look h1 { font-family: var(--serif), 'Noto Serif Hebrew', 'Frank Ruhl Libre', serif; }
+div.wt-look h1::after { content: ''; display: block; width: min(210px, 80%); height: 22px; background: url('/admin-theme/divider.webp') center / contain no-repeat; filter: drop-shadow(0 2px 2px rgba(110, 74, 24, .45)); }

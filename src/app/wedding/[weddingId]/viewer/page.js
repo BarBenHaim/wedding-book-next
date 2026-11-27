@@ -34,6 +34,11 @@ import { normalizeLocale } from '@/i18n/locales'
 import BookLoader from '@/components/BookLoader/BookLoader'
 import useBookPageDownload from '@/components/BookPageDownload/useBookPageDownload'
 import BookPageDownloadButton from '@/components/BookPageDownload/BookPageDownloadButton'
+import { jerusalemSerif } from '@/app/admin/ui/font'
+import useWorld from '@/components/Hall/useWorld'
+import { worldOfEvent } from '@/lib/eventWorld'
+import room from './book-room.module.css'
+import './book-room.css'
 
 // --- הגדרות דפוס (LULU COMPLIANT) ---
 //
@@ -105,6 +110,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // brideName/groomName/celebrantName when no custom cover content
     // is set. Mirrors the pattern in /book/[token]/page.js.
     const [weddingDoc, setWeddingDoc] = useState(null)
+    useWorld(worldOfEvent(weddingDoc))
     // LIVE PRESET LINK — when the wedding is linked to a studio preset
     // (bookDesignPresetId), the interior follows the preset's CURRENT
     // values, so studio edits show up here immediately. A manual edit
@@ -287,6 +293,45 @@ function BookViewerInner({ onLocaleDiscovered }) {
     // Ref into the book mode HTMLFlipBook so the prev/next buttons
     // below the book can call flipNext / flipPrev programmatically.
     const flipRef = useRef(null)
+    // A closed book fills one page of a two-page spread, so it is moved to the
+    // middle. Moved through the DOM, so turning a page never re-renders the book.
+    const bookBoxRef = useRef(null)
+    // The page last turned to, with the book it was turned in.
+    const turned = useRef({ book: '', page: 0 })
+    const bookKey = `${viewerSize}-${isMobile}-${displayPages.length}`
+    const placeBook = page => {
+        const box = bookBoxRef.current
+        if (!box) return
+        // The back cover is page 0. The front cover is the last page of the
+        // reversed Hebrew order, and stands alone only when the count is even.
+        const last = displayPages.length + 1
+        const spread = mode === 'book' && !isMobile
+        const shift = !spread ? 0 : page === 0 ? -viewerSize / 2 : page === last && last % 2 === 1 ? viewerSize / 2 : 0
+        box.style.transform = shift ? `translateX(${shift}px)` : ''
+    }
+    // The book that has a page in the air right now.
+    const turning = useRef('')
+    // A rebuilt book opens on its front cover.
+    const openPage = () => turned.current.book === bookKey ? turned.current.page : displayPages.length + 1
+    // A new function on every render, so React places the book after each one,
+    // including the first time the sign-in wrapper lets the screen appear.
+    const attachBook = box => {
+        bookBoxRef.current = box
+        if (mode !== 'book') { turned.current = { book: '', page: 0 }; turning.current = '' }
+        if (turning.current !== bookKey) placeBook(openPage())
+    }
+    const onBookTurned = page => {
+        turned.current = { book: bookKey, page }
+        placeBook(page)
+    }
+    // While a page is turning the book stands as a full spread, or a page turned
+    // off a centred cover would land past the edge of the screen. A page held
+    // under the finger is not moved, so it does not slip away from the pointer.
+    const onBookState = state => {
+        turning.current = state === 'flipping' ? bookKey : ''
+        if (state === 'read') placeBook(openPage())
+        else if (state === 'flipping' && bookBoxRef.current) bookBoxRef.current.style.transform = ''
+    }
 
     useEffect(() => {
         const init = async () => {
@@ -814,7 +859,8 @@ function BookViewerInner({ onLocaleDiscovered }) {
                 // below the book in-flow; the aside is now a fixed-
                 // Mobile uses flex-col (preset strip on top, book below);
                 // desktop keeps the original side-by-side rail layout.
-                className='relative flex flex-col lg:flex-row h-[calc(100dvh-64px)] overflow-hidden bg-gradient-to-br from-[#F5F5F5] via-[#f0ebe3] font-sans'
+                className={`relative flex flex-col lg:flex-row h-[calc(100dvh-64px)] overflow-hidden font-sans ${room.room}`}
+                style={{ '--serif': jerusalemSerif.style.fontFamily }}
             >
                 {/* MOBILE — top preset strip. Horizontal scroll of mini
                     book-page previews, ~64 px tall. Replaces the
@@ -842,7 +888,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                     above covers the couple's primary need; the rest of
                     DesignControls is admin-only via isAdmin=false). */}
                 <aside
-                    className='hidden lg:flex relative z-20 flex-col shrink-0 h-full w-[380px] bg-white/80 backdrop-blur-md border-l border-white/50'
+                    className={`hidden lg:flex z-20 flex-col shrink-0 h-full w-[380px] book-panel ${room.aside}`}
                 >
                     <div className='flex-1 min-h-0 overflow-hidden'>
                         <DesignControls
@@ -885,7 +931,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                             type='button'
                             onClick={() => insertBlankAfter(null)}
                             disabled={!!blankBusy}
-                            className='mt-3 w-full px-3 py-2 rounded-xl text-[12px] font-bold border border-[#ead9b3] text-[#7a6a52] bg-white hover:bg-[#fbf6ec] disabled:opacity-50'
+                            className={room.blank}
                             title='עמוד ריק עם הרקע של הספר בלבד, בסוף הספר'
                         >
                             {blankBusy === '__end' ? 'מוסיף…' : '+ עמוד ריק בסוף הספר'}
@@ -901,10 +947,15 @@ function BookViewerInner({ onLocaleDiscovered }) {
                     // The flex centering plus min-h-0 lets the book
                     // sit in the middle of whatever vertical space
                     // remains without overflowing the parent.
-                    className='relative z-10 flex-1 flex flex-col items-center justify-center p-4 min-h-0 overflow-hidden'
+                    className={`relative z-10 flex-1 flex flex-col items-center justify-center p-4 min-h-0 overflow-hidden ${room.stage}`}
                 >
+                    <div className={room.title} aria-hidden='true'>
+                        <b>{getMessages(locale).header.designBook}</b>
+                        <i />
+                    </div>
                     <div
-                        className='relative shrink-0'
+                        ref={attachBook}
+                        className={`relative shrink-0 ${room.book}`}
                         style={{
                             width: mode === 'book' && !isMobile ? viewerSize * 2 : viewerSize,
                             height: viewerSize,
@@ -950,7 +1001,9 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                 // so we need the fresh mount to land on
                                 // the FrontCover (which is now the LAST
                                 // child after the RTL reversal below).
-                                key={`${viewerSize}-${isMobile}-${displayPages.length}`}
+                                key={bookKey}
+                                onFlip={event => onBookTurned(event.data)}
+                                onChangeState={event => onBookState(event.data)}
                                 width={viewerSize}
                                 height={viewerSize}
                                 size='fixed'
@@ -1010,8 +1063,8 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                     const pill = {
                                         zIndex: 31,
                                         background: 'rgba(255,255,255,0.94)',
-                                        color: '#7a6a52',
-                                        border: '1px solid #ead9b3',
+                                        color: 'var(--wt-ink)',
+                                        border: '1px solid #c9a460',
                                     }
                                     return (
                                         <div key={entry.id} className={`demo-page border-l border-[#AA8840]/10 relative ${editable ? 'group' : ''}`}>
@@ -1049,7 +1102,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                                     {active && (
                                                         <div
                                                             className='absolute inset-0 pointer-events-none'
-                                                            style={{ outline: '3px solid #AA8840', outlineOffset: '-3px', zIndex: 30 }}
+                                                            style={{ outline: '3px solid var(--wt-primary-solid)', outlineOffset: '-3px', zIndex: 30 }}
                                                         />
                                                     )}
                                                     <button
@@ -1059,9 +1112,9 @@ function BookViewerInner({ onLocaleDiscovered }) {
                                                         className={`absolute top-2 left-2 px-2 py-1 rounded-lg text-[11px] font-bold transition-opacity ${active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                                                         style={{
                                                             zIndex: 31,
-                                                            background: active ? '#AA8840' : 'rgba(255,255,255,0.94)',
-                                                            color: active ? '#fff' : '#7a6a52',
-                                                            border: '1px solid #ead9b3',
+                                                            background: active ? 'var(--wt-primary-solid)' : 'rgba(255,255,255,0.94)',
+                                                            color: active ? '#fff3d8' : 'var(--wt-ink)',
+                                                            border: '1px solid #c9a460',
                                                         }}
                                                     >
                                                         {active ? 'עורך' : blank ? 'עמוד ריק' : 'ערוך עמוד'}
@@ -1145,17 +1198,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                             <button
                                 onClick={() => flipRef.current?.pageFlip().flipNext()}
                                 aria-label='הבא'
-                                className='inline-flex items-center justify-center transition-all hover:scale-105 active:scale-95'
-                                style={{
-                                    width: 44,
-                                    height: 44,
-                                    borderRadius: '50%',
-                                    background: 'rgba(255,255,255,0.92)',
-                                    border: '1px solid rgba(170,136,64,0.35)',
-                                    color: '#aa8840',
-                                    boxShadow: '0 4px 12px -4px rgba(45,30,16,0.18)',
-                                    backdropFilter: 'blur(8px)',
-                                }}
+                                className={room.arrow}
                             >
                                 <svg viewBox='0 0 24 24' className='w-[18px] h-[18px]' fill='none' stroke='currentColor' strokeWidth={1.8}>
                                     <path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
@@ -1164,17 +1207,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                             <button
                                 onClick={() => flipRef.current?.pageFlip().flipPrev()}
                                 aria-label='הקודם'
-                                className='inline-flex items-center justify-center transition-all hover:scale-105 active:scale-95'
-                                style={{
-                                    width: 44,
-                                    height: 44,
-                                    borderRadius: '50%',
-                                    background: 'rgba(255,255,255,0.92)',
-                                    border: '1px solid rgba(170,136,64,0.35)',
-                                    color: '#aa8840',
-                                    boxShadow: '0 4px 12px -4px rgba(45,30,16,0.18)',
-                                    backdropFilter: 'blur(8px)',
-                                }}
+                                className={room.arrow}
                             >
                                 <svg viewBox='0 0 24 24' className='w-[18px] h-[18px]' fill='none' stroke='currentColor' strokeWidth={1.8}>
                                     <path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7' />
@@ -1184,11 +1217,11 @@ function BookViewerInner({ onLocaleDiscovered }) {
                     )}
 
                     {!isMobile && (
-                        <div className='mt-6 z-30'>
+                        <div className='mt-4 z-30'>
                             <button
                                 onClick={() => setShowPrintModal(true)}
                                 disabled={isGenerating}
-                                className='group flex items-center justify-center gap-3 px-8 py-3.5 rounded-2xl gold-shimmer text-white font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed'
+                                className={room.print}
                             >
                                 {isGenerating ? (
                                     <>
@@ -1220,7 +1253,7 @@ function BookViewerInner({ onLocaleDiscovered }) {
                     above is the tabs). */}
                 {mobileCoverEdit && (
                     <div
-                        className='lg:hidden shrink-0 w-full border-t border-[#ead9b3] bg-[#faf8f5] overflow-hidden'
+                        className={`lg:hidden shrink-0 w-full overflow-hidden book-panel ${room.cover}`}
                         style={{ height: `${MOBILE_COVER_PANEL_VH}dvh`, paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
                     >
                         <DesignControls
@@ -1470,8 +1503,8 @@ function MobileModeSwitch({ mode, onModeChange }) {
         { id: 'cover', label: 'כריכה' },
     ]
     return (
-        <div className='lg:hidden shrink-0 w-full bg-white/85 backdrop-blur-md border-b border-[#ead9b3] px-3 py-2'>
-            <div className='bg-[#ebe5da]/60 p-1 rounded-xl flex gap-1 shadow-inner' role='tablist'>
+        <div className={`lg:hidden shrink-0 w-full px-3 py-2 ${room.switch}`}>
+            <div className='flex gap-1' role='tablist'>
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
@@ -1479,9 +1512,6 @@ function MobileModeSwitch({ mode, onModeChange }) {
                         role='tab'
                         aria-selected={mode === tab.id}
                         onClick={() => onModeChange(tab.id)}
-                        className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${
-                            mode === tab.id ? 'bg-white text-[#AA8840] shadow-sm' : 'text-gray-500'
-                        }`}
                     >
                         {tab.label}
                     </button>
@@ -1543,11 +1573,11 @@ function MobilePresetStrip({ styleSettings, onApply, eventType }) {
 
     return (
         <div
-            className='lg:hidden shrink-0 w-full bg-white/80 backdrop-blur-md border-b border-[#ead9b3]'
+            className={`lg:hidden shrink-0 w-full ${room.strip}`}
             style={{ paddingBlock: 8 }}
         >
             <div
-                className='flex items-center gap-2 overflow-x-auto px-3'
+                className='flex items-center gap-3 overflow-x-auto px-3 py-1'
                 style={{
                     scrollbarWidth: 'none',
                     WebkitOverflowScrolling: 'touch',
@@ -1569,11 +1599,8 @@ function MobilePresetStrip({ styleSettings, onApply, eventType }) {
                             onClick={() => onApply(resolved)}
                             title={preset.name}
                             aria-label={preset.name}
-                            className={`shrink-0 relative rounded-md overflow-hidden transition-all active:scale-95 ${
-                                isActive
-                                    ? 'ring-2 ring-[#AA8840]'
-                                    : 'ring-1 ring-[#ead9b3]'
-                            }`}
+                            aria-pressed={isActive}
+                            className='shrink-0 relative rounded-md overflow-hidden transition-all active:scale-95'
                             style={{ width: TILE, height: TILE, scrollSnapAlign: 'start' }}
                         >
                             <BookPageTemplate

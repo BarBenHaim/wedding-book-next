@@ -10,6 +10,7 @@ import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
 import { isSuperAdmin } from '@/lib/superAdmin'
 import { adminShell } from '@/lib/adminShell'
+import { hallFor } from '@/lib/hallRoutes'
 
 // Drawer menu item icons
 const ViewerIcon = () => (
@@ -162,6 +163,9 @@ export default function Header() {
         }
     }
 
+    // Owner and public screens wear the house colours up here (see Hall).
+    const house = Boolean(hallFor(pathname)?.header)
+
     // Close drawer on route change
     useEffect(() => {
         setMenuOpen(false)
@@ -184,7 +188,7 @@ export default function Header() {
 
     return (
         <>
-            <header className='sticky top-0 left-0 right-0 z-50 bg-[#F3F0EA]/85 backdrop-blur-md shadow-sm border-b border-[#2545E0]/10'>
+            <header className={`sticky top-0 left-0 right-0 z-50 ${house ? 'wt-house-header' : 'bg-[#F3F0EA]/85 backdrop-blur-md shadow-sm border-b border-[#2545E0]/10'}`}>
                 <nav className='mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 py-3'>
                     {/* Hamburger — brand blue */}
                     {user && activeId && (
@@ -265,7 +269,7 @@ export default function Header() {
                     {/* Logo */}
                     <button className='cursor-pointer group' onClick={handleLogoClick}>
                         <img
-                            src='/logo-wt.png'
+                            src={house ? '/brand/logo-on-dark.png' : '/logo-wt.png'}
                             alt='Wedding Tales'
                             className='h-9 md:h-10 w-auto transition-all duration-300 group-hover:scale-105 group-hover:drop-shadow-[0_0_8px_rgba(170,136,64,0.4)]'
                         />
@@ -283,7 +287,7 @@ export default function Header() {
 
             {/* Premium mobile drawer */}
             <div
-                className={`fixed top-0 right-0 h-full w-72 max-w-[85vw] bg-gradient-to-b from-[#F5F5F5] to-[#f0ebe3] shadow-2xl z-50 transform transition-transform duration-300 ease-out ${
+                className={`${house ? 'wt-house-drawer ' : ''}fixed top-0 right-0 h-full w-72 max-w-[85vw] bg-gradient-to-b from-[#F5F5F5] to-[#f0ebe3] shadow-2xl z-50 transform transition-transform duration-300 ease-out ${
                     menuOpen ? 'translate-x-0' : 'translate-x-full'
                 }`}
             >

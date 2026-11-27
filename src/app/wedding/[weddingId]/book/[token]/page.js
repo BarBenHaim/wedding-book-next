@@ -46,6 +46,9 @@ import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from '@/i18n/getMessages'
 import { normalizeLocale } from '@/i18n/locales'
 import BookLoader from '@/components/BookLoader/BookLoader'
+import useWorld from '@/components/Hall/useWorld'
+import { worldOfEvent } from '@/lib/eventWorld'
+import hall from './book-hall.module.css'
 
 export default function DigitalEditionPage() {
     const { weddingId, token } = useParams()
@@ -273,14 +276,14 @@ function InvalidScreen() {
     return (
         <div
             className='min-h-screen flex items-center justify-center px-6 text-center'
-            style={{ background: 'radial-gradient(ellipse at 50% 30%, #2a1f17 0%, #14100c 100%)' }}
+            style={{ background: 'linear-gradient(180deg, var(--wt-veil-soft) 30%, var(--wt-night) 100%), var(--wt-art) center / cover no-repeat, var(--wt-night)' }}
         >
-            <div>
-                <svg viewBox='0 0 24 24' className='w-12 h-12 mx-auto mb-4' fill='none' stroke='#2545E0' strokeWidth={1.4}>
+            <div className='rounded-[24px] px-7 py-8' style={{ background: 'var(--wt-veil)', border: '2px solid #d9b265', backdropFilter: 'blur(6px)' }}>
+                <svg viewBox='0 0 24 24' className='w-12 h-12 mx-auto mb-4' fill='none' stroke='#d9b265' strokeWidth={1.4}>
                     <path strokeLinecap='round' strokeLinejoin='round' d='M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z' />
                 </svg>
                 <h2 style={{ color: '#f5ead2', fontSize: '24px', fontWeight: 700, marginBottom: 8 }}>הקישור לא תקף</h2>
-                <p style={{ color: '#9a8665', fontSize: '14px', maxWidth: 320, margin: '0 auto', lineHeight: 1.6 }}>
+                <p style={{ color: '#f1e6cc', fontSize: '15px', maxWidth: 320, margin: '0 auto', lineHeight: 1.6 }}>
                     הקישור שעקבת אחריו פג תוקף או שאינו שייך לספר זה. אם רכשת את הספר — בדוק את האימייל שקיבלת או פנה אלינו.
                 </p>
             </div>
@@ -290,7 +293,10 @@ function InvalidScreen() {
 
 // ─── Main book viewer ───────────────────────────────────────────────────
 function BookViewer({ wedding, entries, weddingId, token, embed }) {
+    useWorld(worldOfEvent(wedding))
     const flipRef = useRef(null)
+    // The box that moves a closed book to the middle.
+    const placeRef = useRef(null)
     const [page, setPage] = useState(null) // flipbook page index — set by onInit/onFlip
     // Skip the landing/welcome screen — the user opted to drop the
     // "you've reached the digital book of…" intro and jump straight
@@ -581,6 +587,17 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
     // smart split expanded an entry into two pages — the "page counter
     // is wrong" bug.
     const totalPages = bookPages.length + 2
+    // A closed book fills one page of a two-page spread. The back cover is page
+    // 0; the front cover is the last page, alone only when the count is even.
+    const closedAt = index => {
+        if (pageSize.isPortrait) return null
+        if (index === 0) return 'back'
+        return index === totalPages - 1 && totalPages % 2 === 0 ? 'front' : null
+    }
+    const placeFor = index => {
+        const closed = closedAt(index)
+        return closed ? `translateX(${closed === 'front' ? pageSize.w / 2 : -pageSize.w / 2}px)` : 'none'
+    }
 
     // RTL flipbook: children run BackCover(0) → pages → FrontCover(N+1)
     // and the reader OPENS on the FrontCover, flipping toward index 0.
@@ -624,7 +641,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
         return (
             <div
                 className='min-h-screen flex items-center justify-center px-6 text-center relative overflow-hidden'
-                style={{ background: 'radial-gradient(ellipse at 50% 30%, #2a1f17 0%, #14100c 100%)' }}
+                style={{ background: 'radial-gradient(ellipse at 50% 30%, var(--wt-primary-solid) 0%, var(--wt-night) 78%)' }}
             >
                 {/* Background romantic image — heavy blur for atmosphere.
                     Mobile uses ebookmobilebg.png (portrait-tuned); desktop
@@ -633,14 +650,10 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                     aria-hidden
                     className='absolute inset-0 pointer-events-none'
                     style={{
-                        backgroundImage: `url(${
-                            pageSize.isPortrait
-                                ? '/backgrounds/ebookmobilebg.webp'
-                                : '/backgrounds/romanticgarden.webp'
-                        })`,
+                        backgroundImage: 'var(--wt-art)',
                         backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        opacity: 0.18,
+                        backgroundPosition: 'center bottom',
+                        opacity: 0.3,
                         filter: 'blur(3px)',
                     }}
                 />
@@ -653,7 +666,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                             style={{
                                 width: 2 + (i % 3),
                                 height: 2 + (i % 3),
-                                background: '#2545E0',
+                                background: '#d9b265',
                                 opacity: 0.4,
                                 top: `${(i * 37) % 100}%`,
                                 left: `${(i * 61) % 100}%`,
@@ -666,17 +679,17 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
 
                 <div className='relative z-10 max-w-md animate-[fadeUp_900ms_ease-out_both]'>
                     {/* Tiny tag */}
-                    <p style={{ color: '#2545E0', fontSize: '11px', letterSpacing: '0.3em', marginBottom: 18 }}>
+                    <p style={{ color: '#d9b265', fontSize: '11px', letterSpacing: '0.3em', marginBottom: 18 }}>
                         WEDDING TALES · ספר הברכות
                     </p>
 
                     {/* Ornament cap */}
                     <div className='flex items-center justify-center gap-2 mb-4'>
-                        <span className='block h-px w-14' style={{ background: 'linear-gradient(to left, transparent, #2545E0, transparent)' }} />
-                        <svg viewBox='0 0 24 24' className='w-3 h-3' fill='#2545E0'>
+                        <span className='block h-px w-14' style={{ background: 'linear-gradient(to left, transparent, #d9b265, transparent)' }} />
+                        <svg viewBox='0 0 24 24' className='w-3 h-3' fill='#d9b265'>
                             <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                         </svg>
-                        <span className='block h-px w-14' style={{ background: 'linear-gradient(to right, transparent, #2545E0, transparent)' }} />
+                        <span className='block h-px w-14' style={{ background: 'linear-gradient(to right, transparent, #d9b265, transparent)' }} />
                     </div>
 
                     {/* Names */}
@@ -716,12 +729,12 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                         onClick={() => setOpened(true)}
                         className='inline-flex items-center justify-center gap-3 transition-all active:scale-[0.98] hover:scale-[1.02]'
                         style={{
-                            background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)',
+                            background: 'linear-gradient(180deg, #fff6e0 0%, #e6c987 100%)',
                             boxShadow: '0 18px 38px -12px rgba(170,136,64,0.6), 0 4px 12px -4px rgba(170,136,64,0.4), inset 0 1px 0 rgba(255,255,255,0.25)',
                             padding: '16px 40px',
                             fontSize: '15px',
-                            fontWeight: 700,
-                            color: '#fff',
+                            fontWeight: 800,
+                            color: 'var(--wt-ink)',
                             borderRadius: 999,
                             letterSpacing: '0.05em',
                         }}
@@ -736,8 +749,8 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                     <div className='flex items-center justify-center mt-7'>
                         <button
                             onClick={share}
-                            className='inline-flex items-center gap-1.5 transition-colors hover:text-[#2545E0]'
-                            style={{ color: '#5A5D75', fontSize: '12px', letterSpacing: '0.05em' }}
+                            className='inline-flex items-center gap-1.5 transition-colors hover:text-[#d9b265]'
+                            style={{ color: '#d9cbe8', fontSize: '13px', letterSpacing: '0.05em' }}
                         >
                             <svg viewBox='0 0 24 24' className='w-[13px] h-[13px]' fill='none' stroke='currentColor' strokeWidth={1.7}>
                                 <path strokeLinecap='round' strokeLinejoin='round' d='M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z' />
@@ -750,7 +763,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                 {shareToast && (
                     <div
                         className='fixed bottom-8 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full text-xs animate-[fadeUp_300ms_ease-out_both] z-50'
-                        style={{ background: 'rgba(37,69,224,0.15)', border: '1px solid rgba(37,69,224,0.5)', color: '#f5ead2', backdropFilter: 'blur(6px)' }}
+                        style={{ background: 'rgba(217,178,101,0.15)', border: '1px solid rgba(217,178,101,0.5)', color: '#f5ead2', backdropFilter: 'blur(6px)' }}
                     >
                         ✓ הקישור הועתק
                     </div>
@@ -779,32 +792,13 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
     }
 
     // ─── Flipbook view ─────────────────────────────────────────────
-    // Mobile gets a dedicated portrait-tuned backdrop
-    // (ebookmobilebg.png) — the desktop garden image is composed
-    // for landscape framing and crops awkwardly on tall viewports.
-    const bgImage = pageSize.isPortrait
-        ? '/backgrounds/ebookmobilebg.webp'
-        : '/backgrounds/romanticgarden.webp'
     return (
         <div
-            className='h-[100dvh] flex flex-col relative overflow-hidden'
-            style={{
-                // Cream paper backdrop with a soft floral wash to
-                // match the brand. The book itself sits on top with
-                // its own halo, so the page bg is intentionally
-                // subdued — it frames, doesn't compete.
-                // h-[100dvh] + overflow-hidden = locked to the actual
-                // visible viewport (dvh tracks mobile browser-chrome
-                // shows/hides, vh would have been lvh = max chrome-
-                // hidden area, overflowing under the URL bar). No
-                // page scroll, no jitter during page flip.
-                background: 'linear-gradient(180deg, #f5ead2 0%, #ebd9b3 100%)',
-                backgroundImage: `url(${bgImage})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                backgroundBlendMode: 'soft-light',
-            }}
+            className={`h-[100dvh] flex flex-col relative overflow-hidden ${hall.page}`}
         >
+            {/* h-[100dvh] with overflow hidden locks the screen to what the
+                phone actually shows, so a page turn never scrolls it. */}
+            <div aria-hidden className={hall.sky} />
             {/* Top brand nav was here — fully removed per the
                 spring 2026 user request. The book + bottom nav +
                 preset strip is the whole experience now; chrome at
@@ -879,8 +873,8 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                         style={{
                             width: 1.5,
                             height: 1.5,
-                            background: '#2545E0',
-                            opacity: 0.25,
+                            background: '#fff3d4',
+                            opacity: 0.5,
                             top: `${(i * 47) % 100}%`,
                             left: `${(i * 71) % 100}%`,
                             animation: `bookfloat ${10 + (i % 4)}s ease-in-out infinite`,
@@ -901,20 +895,19 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                 FrontCover (last child) as its opening view. */}
             <div dir='rtl' className='flex-1 flex items-center justify-center relative z-10 px-0 pt-[108px] sm:pt-[100px]'>
                 {entries.length > 0 ? (
-                    <div
-                        className='relative animate-[bookOpen_500ms_cubic-bezier(0.2,0.8,0.2,1)_both]'
-                        style={{
-                            // box-shadow on the wrapper instead of
-                            // filter:drop-shadow — drop-shadow forces
-                            // the browser to repaint the whole filter
-                            // pipeline on every page-flip frame
-                            // (heavy GPU work, causes the lag the
-                            // user reported). box-shadow stays around
-                            // the wrapper rectangle and renders for
-                            // free at composition time.
-                            boxShadow: '0 30px 60px -10px rgba(45,30,16,0.30), 0 0 40px rgba(37,69,224,0.20)',
-                        }}
-                    >
+                    <div ref={placeRef} style={{ transform: placeFor(page ?? startIndex), transition: 'transform .55s cubic-bezier(.25,.8,.25,1)' }}>
+                    <div className='relative animate-[bookOpen_500ms_cubic-bezier(0.2,0.8,0.2,1)_both]'>
+                        {/* A box-shadow, not a drop-shadow filter, which would
+                            repaint on every frame of a page turn. */}
+                        <div
+                            aria-hidden
+                            className='absolute inset-y-0 pointer-events-none'
+                            style={{
+                                left: closedAt(page ?? startIndex) === 'back' ? pageSize.w : 0,
+                                right: closedAt(page ?? startIndex) === 'front' ? pageSize.w : 0,
+                                boxShadow: '0 30px 60px -10px rgba(45,30,16,0.30), 0 0 40px rgba(217,178,101,0.28)',
+                            }}
+                        />
                         <HTMLFlipBook
                             // Remount when the real (expanded) page count
                             // changes so react-pageflip rebuilds its internal
@@ -955,6 +948,14 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                             maxShadowOpacity={0.4}
                             useMouseEvents={true}
                             onFlip={e => { pageIndexRef.current = e.data; setPage(e.data) }}
+                            // While a page turns the book stands as a full
+                            // spread, so the page does not land off screen.
+                            onChangeState={e => {
+                                const box = placeRef.current
+                                if (!box) return
+                                if (e.data === 'flipping') box.style.transform = 'none'
+                                else if (e.data === 'read') box.style.transform = placeFor(pageIndexRef.current ?? startIndex)
+                            }}
                             onInit={e => {
                                 // Fires on every (re)mount with the real
                                 // landing page — keeps the counter honest
@@ -1005,13 +1006,16 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                             crop out cleanly. */}
                         <div
                             aria-hidden
-                            className='absolute inset-0 pointer-events-none'
+                            className='absolute inset-y-0 pointer-events-none'
                             style={{
+                                left: closedAt(page ?? startIndex) === 'back' ? pageSize.w : 0,
+                                right: closedAt(page ?? startIndex) === 'front' ? pageSize.w : 0,
                                 backgroundImage:
-                                    "repeating-linear-gradient(-30deg, transparent 0 80px, rgba(37,69,224,0.04) 80px 81px)",
+                                    "repeating-linear-gradient(-30deg, transparent 0 80px, rgba(164,128,84,0.05) 80px 81px)",
                                 mixBlendMode: 'overlay',
                             }}
                         />
+                    </div>
                     </div>
                 ) : (
                     <p style={{ color: '#a89378', fontSize: '14px' }}>הספר עדיין ריק.</p>
@@ -1027,39 +1031,20 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                 <button
                     onClick={prev}
                     aria-label='הקודם'
-                    className='inline-flex items-center justify-center transition-all hover:scale-105 active:scale-95'
-                    style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: '50%',
-                        background: 'rgba(253,249,239,0.92)',
-                        border: '1px solid rgba(37,69,224,0.35)',
-                        color: '#2545E0',
-                        boxShadow: '0 4px 12px -4px rgba(45,30,16,0.18)',
-                        backdropFilter: 'blur(8px)',
-                    }}
+                    className={hall.arrow}
                 >
                     <svg viewBox='0 0 24 24' className='w-[18px] h-[18px]' fill='none' stroke='currentColor' strokeWidth={1.8}>
                         <path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
                     </svg>
                 </button>
 
-                <div
-                    className='inline-flex items-center gap-3 rounded-full'
-                    style={{
-                        background: 'rgba(253,249,239,0.92)',
-                        border: '1px solid rgba(37,69,224,0.30)',
-                        padding: '7px 18px',
-                        backdropFilter: 'blur(8px)',
-                        boxShadow: '0 4px 14px -4px rgba(45,30,16,0.15)',
-                    }}
-                >
-                    <svg viewBox='0 0 24 24' className='w-[10px] h-[10px]' fill='#2545E0'>
+                <div className={hall.counter}>
+                    <svg viewBox='0 0 24 24' className='w-[10px] h-[10px]' fill='#d9b265'>
                         <path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' />
                     </svg>
                     <span
                         style={{
-                            color: '#2545E0',
+                            color: '#fff3d4',
                             fontSize: '13px',
                             fontFamily: "'David Libre', 'Frank Ruhl Libre', 'Times New Roman', serif",
                             letterSpacing: '0.12em',
@@ -1074,17 +1059,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                 <button
                     onClick={next}
                     aria-label='הבא'
-                    className='inline-flex items-center justify-center transition-all hover:scale-105 active:scale-95'
-                    style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: '50%',
-                        background: 'rgba(253,249,239,0.92)',
-                        border: '1px solid rgba(37,69,224,0.35)',
-                        color: '#2545E0',
-                        boxShadow: '0 4px 12px -4px rgba(45,30,16,0.18)',
-                        backdropFilter: 'blur(8px)',
-                    }}
+                    className={hall.arrow}
                 >
                     <svg viewBox='0 0 24 24' className='w-[18px] h-[18px]' fill='none' stroke='currentColor' strokeWidth={1.8}>
                         <path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7' />
@@ -1104,7 +1079,7 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
             {shareToast && (
                 <div
                     className='fixed bottom-20 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full text-xs animate-[fadeUp_300ms_ease-out_both] z-50'
-                    style={{ background: 'rgba(37,69,224,0.15)', border: '1px solid rgba(37,69,224,0.5)', color: '#f5ead2', backdropFilter: 'blur(6px)' }}
+                    style={{ background: 'var(--wt-night)', border: '1px solid #d9b265', color: '#fff3d4', backdropFilter: 'blur(6px)' }}
                 >
                     ✓ הקישור הועתק
                 </div>
@@ -1114,8 +1089,8 @@ function BookViewer({ wedding, entries, weddingId, token, embed }) {
                 <div
                     className='fixed bottom-20 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full text-xs z-50'
                     style={{
-                        background: designSave === 'error' ? 'rgba(180,60,60,0.18)' : 'rgba(37,69,224,0.15)',
-                        border: designSave === 'error' ? '1px solid rgba(180,60,60,0.5)' : '1px solid rgba(37,69,224,0.5)',
+                        background: designSave === 'error' ? '#7d1f1f' : 'var(--wt-night)',
+                        border: designSave === 'error' ? '1px solid rgba(180,60,60,0.5)' : '1px solid #d9b265',
                         color: '#f5ead2',
                         backdropFilter: 'blur(6px)',
                     }}
@@ -1165,24 +1140,13 @@ function PresetStrip({ presets, activeStyle, onApply, noCrop = false }) {
             {/* Glass-cream capsule — the strip lives in its OWN fitted
                 container that blends with the book artwork, instead of a
                 bare gradient floating on the page. */}
-            <div
-                style={{
-                    background: 'rgba(253,248,238,0.9)',
-                    border: '1px solid rgba(37,69,224,0.38)',
-                    borderRadius: 22,
-                    backdropFilter: 'blur(10px)',
-                    WebkitBackdropFilter: 'blur(10px)',
-                    boxShadow: '0 10px 34px -12px rgba(45,30,16,0.35), inset 0 1px 0 rgba(255,255,255,0.7)',
-                    paddingTop: 10,
-                    paddingBottom: 4,
-                }}
-            >
+            <div className={hall.capsule}>
             {/* Section caption — quiet, centered, makes the row's
                 purpose obvious without screaming at the reader. */}
             <p
                 className='text-center mb-2 px-4'
                 style={{
-                    color: '#5A5D75',
+                    color: 'var(--wt-ink)',
                     fontSize: '11px',
                     letterSpacing: '0.18em',
                     textTransform: 'uppercase',
@@ -1245,10 +1209,10 @@ function PresetStrip({ presets, activeStyle, onApply, noCrop = false }) {
                                     overflow: 'hidden',
                                     background: '#fff',
                                     border: isActive
-                                        ? '2px solid #2545E0'
-                                        : '1px solid rgba(37,69,224,0.30)',
+                                        ? '3px solid var(--wt-primary-solid)'
+                                        : '1px solid #c9a460',
                                     boxShadow: isActive
-                                        ? '0 8px 18px -6px rgba(170,136,64,0.50), 0 0 0 4px rgba(170,136,64,0.10)'
+                                        ? '0 8px 18px -6px rgba(30,16,66,0.45), 0 0 0 3px #d9b265'
                                         : '0 4px 10px -5px rgba(45,30,16,0.20)',
                                     pointerEvents: 'none',
                                 }}
@@ -1275,7 +1239,7 @@ function PresetStrip({ presets, activeStyle, onApply, noCrop = false }) {
                             <span
                                 className='text-[10.5px] font-semibold whitespace-nowrap max-w-[110px] truncate'
                                 style={{
-                                    color: isActive ? '#2545E0' : '#5A5D75',
+                                    color: isActive ? 'var(--wt-accent)' : '#4f4668',
                                     letterSpacing: '0.02em',
                                 }}
                             >

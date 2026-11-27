@@ -2,6 +2,7 @@
 import './globals.css'
 import Script from 'next/script'
 import Header from '@/components/Header/Header'
+import Hall from '@/components/Hall/Hall'
 import {
     geistSans,
     geistMono,
@@ -57,7 +58,7 @@ export default function RootLayout({ children }) {
                     })(window, document, "clarity", "script", "xhmexj42pw");`}
                 </Script>
                 <Header />
-                {children}
+                <Hall>{children}</Hall>
             </body>
         </html>
     )

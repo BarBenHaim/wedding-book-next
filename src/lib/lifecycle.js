@@ -101,11 +101,11 @@ export function nextMessage({ w, entries = 0, now = Date.now(), sent = {} } = {}
 
 import { emailLogoImg } from './brandAssets'
 
-const INK = '#14183A'
-const ACCENT = '#2545E0'
-const PAPER = '#F3F0EA'
-const LINE = '#E4DFD3'
-const MUTED = '#5A5D75'
+const INK = '#1d1648'
+const ACCENT = '#2c2473'
+const PAPER = '#f3e2bd'
+const LINE = '#dcc28a'
+const MUTED = '#4f4668'
 const FONT = "Arial,'Segoe UI',Helvetica,sans-serif"
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -203,7 +203,7 @@ export function renderLifecycleEmail(kind, ctx, links) {
     ${paras}
     ${buttons}
   </td></tr>
-  <tr><td align="center" style="padding:16px 12px 0;font:400 13.5px/1.6 ${FONT};color:#7A7D93;">אפשר לעזור במשהו? עונים למייל הזה, או <a href="https://wa.me/972515350253" style="color:${INK};font-weight:700;">כותבים לנו בוואטסאפ</a>.</td></tr>
+  <tr><td align="center" style="padding:16px 12px 0;font:400 13.5px/1.6 ${FONT};color:#6d6385;">אפשר לעזור במשהו? עונים למייל הזה, או <a href="https://wa.me/972515350253" style="color:${INK};font-weight:700;">כותבים לנו בוואטסאפ</a>.</td></tr>
 </table>
 </td></tr></table>
 </body></html>`
@@ -230,7 +230,7 @@ export function renderBalancePaidEmail(ctx, links) {
     <p style="margin:0 0 20px;font:400 16px/1.7 ${FONT};color:${MUTED};">${esc(para)}</p>
     ${btn(links.portal, 'כניסה לאזור האישי', true)}
   </td></tr>
-  <tr><td align="center" style="padding:16px 12px 0;font:400 13.5px/1.6 ${FONT};color:#7A7D93;">אפשר לעזור במשהו? עונים למייל הזה, או <a href="https://wa.me/972515350253" style="color:${INK};font-weight:700;">כותבים לנו בוואטסאפ</a>.</td></tr>
+  <tr><td align="center" style="padding:16px 12px 0;font:400 13.5px/1.6 ${FONT};color:#6d6385;">אפשר לעזור במשהו? עונים למייל הזה, או <a href="https://wa.me/972515350253" style="color:${INK};font-weight:700;">כותבים לנו בוואטסאפ</a>.</td></tr>
 </table>
 </td></tr></table>
 </body></html>`

@@ -20,14 +20,14 @@ import { PosterArt } from './PosterSheet'
 
 const heebo = Heebo({ subsets: ['hebrew', 'latin'], weight: ['400', '600', '700', '900'] })
 const SITE = 'https://app.weddingtales.co.il'
-const INK = '#14183A'
-const BLUE = '#2748E8'
+const INK = 'var(--wt-ink)'
 const PARALLEL = 2
 
-const card = { background: '#fff', borderRadius: 22, boxShadow: '0 1px 2px rgba(20,24,58,0.06), 0 14px 30px -22px rgba(20,24,58,0.35)' }
+// the silver frame of the house design, drawn from its art
+const card = { border: 'solid transparent', borderWidth: '18px 22px', borderImage: "url('/admin-theme/frame.webp') 150 185 fill stretch", filter: 'drop-shadow(0 8px 14px rgba(75,38,15,.28))' }
 const pill = (primary, disabled) => ({
-    minHeight: 46, padding: '0 18px', borderRadius: 999, border: primary ? 'none' : `1.5px solid ${INK}`, cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit',
-    fontSize: 15, fontWeight: 800, background: primary ? BLUE : '#fff', color: primary ? '#fff' : INK, opacity: disabled ? 0.55 : 1,
+    minHeight: 46, padding: '0 18px', borderRadius: 999, border: primary ? '2px solid #d9b265' : '1.5px solid #c9a460', cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit',
+    fontSize: 15, fontWeight: 800, background: primary ? 'var(--wt-primary)' : '#fffaf0', color: primary ? '#fff3d8' : INK, opacity: disabled ? 0.55 : 1,
 })
 
 const REASON = {
@@ -184,18 +184,18 @@ export default function LookStudio({ weddingId, w, onBack, onChanged }) {
         </div>
     )
     const waiting = (tile, ratio) => (
-        <div style={{ width: '100%', aspectRatio: ratio, borderRadius: 10, background: '#EEF0FA', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 14, fontSize: 14, fontWeight: 700, color: '#5A5D75' }}>
+        <div style={{ width: '100%', aspectRatio: ratio, borderRadius: 10, background: '#efe3f4', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 14, fontSize: 14, fontWeight: 700, color: '#4f4668' }}>
             {tile?.status === 'error' ? tile.error : tile?.status === 'busy' ? 'מציירים… זה לוקח כחצי דקה' : 'בתור'}
         </div>
     )
 
     return (
-        <div className={heebo.className} dir='rtl' style={{ minHeight: '100vh', background: '#FBF8F2', color: INK, padding: '16px 14px 60px' }}>
+        <div className={`${heebo.className} wt-look`} dir='rtl' style={{ minHeight: '100vh', color: INK, padding: '0 14px 60px' }}>
             <div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                     <div>
                         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900 }}>עיצוב מתמונה אחת</h1>
-                        <p style={{ margin: '4px 0 0', fontSize: 14, color: '#5A5D75', lineHeight: 1.5 }}>מעלים תמונה, ומקבלים כריכות ושלטי "ברכו את" מצוירים סביבה. בוחרים את מה שאוהבים. שום דבר לא משתנה עד שבוחרים.</p>
+                        <p style={{ margin: '4px 0 0', fontSize: 14, color: '#4f4668', lineHeight: 1.5 }}>מעלים תמונה, ומקבלים כריכות ושלטי "ברכו את" מצוירים סביבה. בוחרים את מה שאוהבים. שום דבר לא משתנה עד שבוחרים.</p>
                     </div>
                     <button type='button' onClick={onBack} style={pill(false)}>חזרה</button>
                 </div>
@@ -209,7 +209,7 @@ export default function LookStudio({ weddingId, w, onBack, onChanged }) {
                         role='button'
                         tabIndex={0}
                         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') fileRef.current?.click() }}
-                        style={{ border: '2px dashed #B7BDD9', borderRadius: 18, padding: localUrl ? 10 : '34px 16px', textAlign: 'center', cursor: 'pointer', background: '#F6F7FD', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, flexWrap: 'wrap' }}
+                        style={{ border: '2px dashed #c9b6da', borderRadius: 18, padding: localUrl ? 10 : '34px 16px', textAlign: 'center', cursor: 'pointer', background: '#fcf3df', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, flexWrap: 'wrap' }}
                     >
                         {localUrl ? (
                             <>
@@ -221,7 +221,7 @@ export default function LookStudio({ weddingId, w, onBack, onChanged }) {
                             <span style={{ fontWeight: 800, fontSize: 16 }}>{busy === 'read' ? 'קוראים את התמונה…' : 'לחצו לבחירת תמונה, או גררו לכאן'}</span>
                         )}
                     </div>
-                    <p style={{ margin: 0, fontSize: 13, color: '#5A5D75', lineHeight: 1.5 }}>תמונה ברורה של החוגג (או של הזוג), עם הפנים גלויות, עובדת הכי טוב. כדאי תמונה אחת, בלי הרבה אנשים אחרים.</p>
+                    <p style={{ margin: 0, fontSize: 13, color: '#4f4668', lineHeight: 1.5 }}>תמונה ברורה של החוגג (או של הזוג), עם הפנים גלויות, עובדת הכי טוב. כדאי תמונה אחת, בלי הרבה אנשים אחרים.</p>
                     <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14, lineHeight: 1.5, cursor: 'pointer' }}>
                         <input type='checkbox' checked={consent} onChange={e => setConsent(e.target.checked)} style={{ width: 20, height: 20, marginTop: 2, flexShrink: 0 }} />
                         <span>אני מאשר/ת לשלוח את התמונה לשירות חיצוני ליצירת תמונות (OpenAI), כדי שיצייר ממנה את העיצובים. התמונה לא תפורסם ולא תשמש לשום דבר אחר.</span>
@@ -251,7 +251,7 @@ export default function LookStudio({ weddingId, w, onBack, onChanged }) {
                                         <>
                                             {tile?.status === 'done' ? (
                                                 // eslint-disable-next-line @next/next/no-img-element
-                                                <img src={tile.url} alt={o.name} style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: 10, boxShadow: '0 10px 24px -14px rgba(20,24,58,0.5)' }} />
+                                                <img src={tile.url} alt={o.name} style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: 10, boxShadow: '0 10px 24px -14px rgba(29,22,72,0.5)' }} />
                                             ) : waiting(tile, '1 / 1')}
                                             <button type='button' disabled={tile?.status !== 'done' || Boolean(busy)} onClick={() => pickCover(o)} style={pill(true, tile?.status !== 'done' || Boolean(busy))}>{busy === `cover:${o.id}` ? 'שומרים…' : `הכריכה הזו: ${o.name}`}</button>
                                         </>
@@ -276,7 +276,7 @@ export default function LookStudio({ weddingId, w, onBack, onChanged }) {
                                     ))
                                 })}
                             </div>
-                            <p style={{ margin: '12px 0 0', fontSize: 13, color: '#5A5D75' }}>הקוד לסריקה נוסף לשלט אוטומטית, והוא אמיתי. אחרי הבחירה נפתח השלט להדפסה.</p>
+                            <p style={{ margin: '12px 0 0', fontSize: 13, color: '#4f4668' }}>הקוד לסריקה נוסף לשלט אוטומטית, והוא אמיתי. אחרי הבחירה נפתח השלט להדפסה.</p>
                         </div>
                     </>
                 )}

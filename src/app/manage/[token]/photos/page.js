@@ -24,6 +24,8 @@ import { useParams } from 'next/navigation'
 import { Lock, Check, Loader2, Images, ArrowRight, ChevronRight, ChevronLeft, X, Undo2, ImageOff } from 'lucide-react'
 import { Heebo } from 'next/font/google'
 import BookLoader from '@/components/BookLoader/BookLoader'
+import useWorld from '@/components/Hall/useWorld'
+import { worldOfEvent } from '@/lib/eventWorld'
 import { thumbUrl, fallBackToOriginal } from '@/lib/imgProxy'
 
 const heebo = Heebo({ subsets: ['hebrew'], weight: ['400', '700', '900'] })
@@ -37,7 +39,7 @@ const EVENT_LABEL = {
     brit: 'הברית',
 }
 
-const GOLD = 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)'
+const GOLD = 'var(--wt-primary)'
 const SWIPE_PX = 56
 
 function rotationOf(n) {
@@ -88,6 +90,7 @@ export default function ManagePhotosPage() {
     const { token } = useParams()
     const [status, setStatus] = useState('loading') // loading | invalid | error | ready
     const [wedding, setWedding] = useState(null)
+    useWorld(worldOfEvent(wedding))
     const [entries, setEntries] = useState([])
     const [removedPages, setRemovedPages] = useState([])
     const [tab, setTab] = useState('in') // in | out
@@ -305,13 +308,13 @@ export default function ManagePhotosPage() {
     }
 
     const eventNoun = EVENT_LABEL[wedding?.eventType] || 'האירוע'
-    const page = { background: 'linear-gradient(180deg, #f8f4ec 0%, #fdfaf3 100%)' }
+    const page = { background: 'transparent' }
 
     if (status === 'loading') return <BookLoader />
 
     if (status === 'invalid') {
         return (
-            <div className={`${heebo.className} min-h-screen flex flex-col items-center justify-center text-center px-6`} dir='rtl' style={{ background: '#f8f4ec' }}>
+            <div className={`${heebo.className} min-h-screen flex flex-col items-center justify-center text-center px-6`} dir='rtl' style={{ background: 'transparent' }}>
                 <div className='w-14 h-14 rounded-2xl flex items-center justify-center mb-4' style={{ background: GOLD }}>
                     <Lock size={22} className='text-white' />
                 </div>
@@ -325,7 +328,7 @@ export default function ManagePhotosPage() {
 
     if (status === 'error') {
         return (
-            <div className={`${heebo.className} min-h-screen flex flex-col items-center justify-center text-center px-6`} dir='rtl' style={{ background: '#f8f4ec' }}>
+            <div className={`${heebo.className} min-h-screen flex flex-col items-center justify-center text-center px-6`} dir='rtl' style={{ background: 'transparent' }}>
                 <p className='text-[#7a6a52] text-[14px] mb-3'>לא הצלחנו לטעון את התמונות</p>
                 <button onClick={() => { setStatus('loading'); load() }} className='px-4 py-2 rounded-lg text-white text-[13px] font-bold' style={{ background: GOLD }}>
                     נסו שוב
@@ -349,7 +352,7 @@ export default function ManagePhotosPage() {
 
                 {/* Header */}
                 <div className='flex items-center gap-3 mb-4'>
-                    <div className='w-12 h-12 rounded-2xl flex items-center justify-center shrink-0' style={{ background: GOLD, boxShadow: '0 14px 28px -12px rgba(170,136,64,0.50)' }}>
+                    <div className='w-12 h-12 rounded-2xl flex items-center justify-center shrink-0' style={{ background: GOLD, boxShadow: '0 14px 28px -12px rgba(30,16,66,0.45)' }}>
                         <Images size={21} className='text-white' />
                     </div>
                     <div className='min-w-0'>
@@ -367,7 +370,7 @@ export default function ManagePhotosPage() {
                         </div>
 
                         {/* In the book / taken out */}
-                        <div className='sticky top-0 z-10 -mx-3 sm:-mx-6 px-3 sm:px-6 py-2 mb-2' style={{ background: 'rgba(248,244,236,0.94)', backdropFilter: 'blur(8px)' }}>
+                        <div className='sticky top-0 z-10 -mx-3 sm:-mx-6 px-3 sm:px-6 py-2 mb-2' style={{ background: 'rgba(246,232,201,0.96)', backdropFilter: 'blur(8px)' }}>
                             <div role='tablist' aria-label='אילו תמונות להציג' className='grid grid-cols-2 gap-1 p-1 rounded-2xl bg-[#efe6d2]'>
                                 {[
                                     { key: 'in', label: 'בספר', n: inBook.length },
@@ -499,7 +502,7 @@ export default function ManagePhotosPage() {
                                     onClick={() => bringBack(current)}
                                     disabled={busy.has(current.id)}
                                     className='flex-1 h-12 rounded-2xl inline-flex items-center justify-center gap-2 text-[14.5px] font-bold text-white disabled:opacity-60'
-                                    style={{ background: GOLD }}
+                                    style={{ background: 'linear-gradient(180deg, #fff6e0 0%, #efd9ac 100%)', color: 'var(--wt-ink)' }}
                                 >
                                     {busy.has(current.id) ? <Loader2 size={16} className='animate-spin' /> : <Undo2 size={16} />}
                                     להחזיר לספר

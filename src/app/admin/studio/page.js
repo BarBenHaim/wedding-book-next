@@ -44,6 +44,7 @@ import { listDefaultCovers, uploadDefaultCover, clearDefaultCover } from '@/lib/
 import { PUBLIC_EVENT_TYPES, EVENT_TYPE_META } from '@/lib/onboarding'
 import FramedPhoto from '@/components/FramedPhoto/FramedPhoto'
 import { applyPresetClean } from '@/lib/bookDesignSchema'
+import '../ui/editor.css'
 
 // ── Mock blessings at the three lengths the photo form supports ──
 // Calibrated to read naturally in Hebrew at each length, not just hit
@@ -492,13 +493,7 @@ function StudioContent() {
         <div
             className='min-h-screen px-4 sm:px-6 lg:px-10 py-8 relative'
             dir='rtl'
-            style={{
-                backgroundColor: '#f8f4ec',
-                backgroundImage: [
-                    'radial-gradient(ellipse 1100px 560px at 50% -10%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 55%)',
-                    'radial-gradient(ellipse 600px 600px at 92% 105%, rgba(201,164,78,0.07) 0%, rgba(201,164,78,0) 60%)',
-                ].join(', '),
-            }}
+            style={{ background: "#f3e2bd url('/admin-theme/parchment.webp') repeat" }}
         >
             <div className='max-w-[1400px] mx-auto'>
                 {/* Header */}
@@ -511,7 +506,7 @@ function StudioContent() {
                             className='flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-bold text-white transition-all hover:brightness-105 active:scale-[0.98]'
                             style={{
                                 background: 'linear-gradient(180deg, #2c2473 0%, #171049 100%)',
-                                boxShadow: '0 6px 16px -6px rgba(170,136,64,0.55)',
+                                boxShadow: '0 6px 16px -6px rgba(30,16,66,0.55)',
                             }}
                         >
                             <Wand2 className='w-4 h-4' />
@@ -558,7 +553,7 @@ function StudioContent() {
                     <div
                         className='flex rounded-xl overflow-hidden p-0.5'
                         style={{
-                            background: '#ffffff',
+                            background: '#fdf6e7',
                             border: '1px solid rgba(212,184,103,0.22)',
                             boxShadow: '0 4px 10px -6px rgba(170,136,64,0.20)',
                         }}
@@ -702,7 +697,7 @@ function ActionBar({
         <div
             className='rounded-2xl px-4 py-3 mb-5 flex items-center gap-2.5 flex-wrap'
             style={{
-                background: '#ffffff',
+                background: '#fdf6e7',
                 border: '1px solid rgba(212,184,103,0.22)',
                 boxShadow: '0 8px 20px -16px rgba(170,136,64,0.22)',
             }}
@@ -757,7 +752,7 @@ function ActionBar({
                 title='שכפל את התבנית כתבנית חדשה'
                 className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed'
                 style={{
-                    background: '#ffffff',
+                    background: '#fdf6e7',
                     border: '1px solid #ead9b3',
                     color: '#7a6a52',
                 }}
@@ -770,7 +765,7 @@ function ActionBar({
                 title='בטל שינויים'
                 className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed'
                 style={{
-                    background: '#ffffff',
+                    background: '#fdf6e7',
                     border: '1px solid #ead9b3',
                     color: '#7a6a52',
                 }}
@@ -782,7 +777,7 @@ function ActionBar({
                 disabled={saving}
                 className='inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed'
                 style={{
-                    background: '#ffffff',
+                    background: '#fdf6e7',
                     border: '1px solid #ead9b3',
                     color: '#7a6a52',
                 }}
@@ -890,7 +885,7 @@ function DefaultCoversPanel() {
     return (
         <div
             className='mt-4 rounded-2xl p-4'
-            style={{ background: '#ffffff', border: '1px solid rgba(212,184,103,0.22)', boxShadow: '0 4px 10px -6px rgba(170,136,64,0.2)' }}
+            style={{ background: '#fdf6e7', border: '1px solid rgba(212,184,103,0.22)', boxShadow: '0 4px 10px -6px rgba(170,136,64,0.2)' }}
         >
             <h3 className='text-[13.5px] font-bold' style={{ color: '#5c4a2f' }}>
                 כריכת ברירת מחדל לכל סוג אירוע
@@ -978,16 +973,16 @@ function PresetListPanel({ presets, activeId, onSelect }) {
 
     return (
         <aside
-            className='rounded-2xl overflow-hidden self-start lg:sticky lg:top-6 lg:max-h-[calc(100vh_-_80px)]'
+            className='wt-panel rounded-2xl overflow-hidden self-start lg:sticky lg:top-6 lg:max-h-[calc(100vh_-_80px)]'
             style={{
-                background: '#ffffff',
-                border: '1px solid rgba(212,184,103,0.22)',
-                boxShadow: '0 16px 32px -20px rgba(170,136,64,0.20)',
+                background: '#fdf6e7',
+                border: '1px solid #cfab66',
+                boxShadow: '0 16px 32px -20px rgba(70,40,10,0.45)',
             }}
         >
             <div
                 className='px-4 py-3.5 border-b border-[#f0e8d4]'
-                style={{ background: 'linear-gradient(180deg, #fdfaf3 0%, #ffffff 100%)' }}
+                style={{ background: 'linear-gradient(180deg, #ddd2ea 0%, #c9bddb 100%)' }}
             >
                 <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold'>
                     תבניות
@@ -1098,7 +1093,7 @@ function PreviewPanel({
         <main
             className='rounded-2xl overflow-hidden flex flex-col'
             style={{
-                background: '#ffffff',
+                background: '#fdf6e7',
                 border: '1px solid rgba(212,184,103,0.22)',
                 boxShadow: '0 16px 32px -20px rgba(170,136,64,0.20)',
                 minHeight: '480px',
@@ -1109,7 +1104,7 @@ function PreviewPanel({
                 shrinks. */}
             <div
                 className='px-4 sm:px-5 py-3 border-b border-[#f0e8d4] flex flex-wrap items-center justify-between gap-2'
-                style={{ background: 'linear-gradient(180deg, #fdfaf3 0%, #ffffff 100%)' }}
+                style={{ background: 'linear-gradient(180deg, #ddd2ea 0%, #c9bddb 100%)' }}
             >
                 <div className='flex items-center gap-2.5 min-w-0'>
                     <div
@@ -1208,7 +1203,7 @@ function PreviewPanel({
                                           background:
                                               'linear-gradient(180deg, #2c2473 0%, #171049 100%)',
                                       }
-                                    : { background: '#ffffff' }
+                                    : { background: '#fdf6e7' }
                             }
                         >
                             {len}
@@ -1315,16 +1310,16 @@ function PropertiesPanel({
 
     return (
         <aside
-            className='rounded-2xl overflow-hidden self-start lg:sticky lg:top-6 lg:max-h-[calc(100vh_-_80px)]'
+            className='wt-panel rounded-2xl overflow-hidden self-start lg:sticky lg:top-6 lg:max-h-[calc(100vh_-_80px)]'
             style={{
-                background: '#ffffff',
-                border: '1px solid rgba(212,184,103,0.22)',
-                boxShadow: '0 16px 32px -20px rgba(170,136,64,0.20)',
+                background: '#fdf6e7',
+                border: '1px solid #cfab66',
+                boxShadow: '0 16px 32px -20px rgba(70,40,10,0.45)',
             }}
         >
             <div
                 className='px-4 py-3.5 border-b border-[#f0e8d4]'
-                style={{ background: 'linear-gradient(180deg, #fdfaf3 0%, #ffffff 100%)' }}
+                style={{ background: 'linear-gradient(180deg, #ddd2ea 0%, #c9bddb 100%)' }}
             >
                 <p className='text-[11px] text-[#7a6a52] uppercase tracking-widest font-semibold'>
                     מאפיינים

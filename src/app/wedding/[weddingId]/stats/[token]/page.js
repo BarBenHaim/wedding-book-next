@@ -30,6 +30,8 @@ import {
     CheckCircle2, BookOpen, Lock, RefreshCcw, Sparkles,
 } from 'lucide-react'
 import BookLoader from '@/components/BookLoader/BookLoader'
+import useWorld from '@/components/Hall/useWorld'
+import { worldOfEvent } from '@/lib/eventWorld'
 
 const EVENT_LABEL = {
     wedding: 'החתונה',
@@ -43,6 +45,7 @@ export default function StatsPage() {
     const { weddingId, token } = useParams()
     const [status, setStatus] = useState('loading') // loading | invalid | ready | error
     const [data, setData] = useState(null)
+    useWorld(worldOfEvent(data?.wedding))
     const [refreshing, setRefreshing] = useState(false)
 
     const fetchData = async (initial = false) => {
@@ -93,8 +96,8 @@ export default function StatsPage() {
     }
     if (status === 'invalid') {
         return (
-            <div className='min-h-screen flex flex-col items-center justify-center text-center px-6' style={{ background: '#f8f4ec' }}>
-                <div className='w-14 h-14 rounded-2xl flex items-center justify-center mb-4' style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}>
+            <div className='min-h-screen flex flex-col items-center justify-center text-center px-6' style={{ background: 'transparent' }}>
+                <div className='w-14 h-14 rounded-2xl flex items-center justify-center mb-4' style={{ background: 'var(--wt-primary)' }}>
                     <Lock size={22} className='text-white' />
                 </div>
                 <h2 className='text-[18px] font-bold text-[#1a1410] mb-1.5'>הקישור אינו תקף</h2>
@@ -106,9 +109,9 @@ export default function StatsPage() {
     }
     if (status === 'error' || !data) {
         return (
-            <div className='min-h-screen flex flex-col items-center justify-center text-center px-6' style={{ background: '#f8f4ec' }}>
+            <div className='min-h-screen flex flex-col items-center justify-center text-center px-6' style={{ background: 'transparent' }}>
                 <p className='text-[#7a6a52] text-[14px] mb-3'>שגיאה בטעינת הסטטיסטיקה</p>
-                <button onClick={() => fetchData(false)} className='px-4 py-2 rounded-lg text-white text-[13px] font-bold' style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)' }}>
+                <button onClick={() => fetchData(false)} className='px-4 py-2 rounded-lg text-white text-[13px] font-bold' style={{ background: 'var(--wt-primary)' }}>
                     נסה שוב
                 </button>
             </div>
@@ -120,13 +123,13 @@ export default function StatsPage() {
     const eventNoun = EVENT_LABEL[w.eventType] || EVENT_LABEL.wedding
 
     return (
-        <div className='min-h-screen' dir='rtl' style={{ background: 'linear-gradient(180deg, #f8f4ec 0%, #fdfaf3 100%)' }}>
+        <div className='min-h-screen' dir='rtl' style={{ background: 'transparent' }}>
             <div className='max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-10 py-8'>
 
                 {/* Header */}
                 <div className='flex items-center justify-between flex-wrap gap-4 mb-8'>
                     <div className='flex items-center gap-3'>
-                        <div className='w-14 h-14 rounded-2xl flex items-center justify-center' style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', boxShadow: '0 14px 28px -12px rgba(170,136,64,0.50)' }}>
+                        <div className='w-14 h-14 rounded-2xl flex items-center justify-center' style={{ background: 'var(--wt-primary)', boxShadow: '0 14px 28px -12px rgba(30,16,66,0.45)' }}>
                             <Sparkles size={22} className='text-white' />
                         </div>
                         <div>
@@ -140,7 +143,7 @@ export default function StatsPage() {
                         onClick={() => fetchData(false)}
                         disabled={refreshing}
                         className='inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-[#7a6a52]'
-                        style={{ background: '#fff', border: '1px solid #ead9b3' }}
+                        style={{ background: '#fdf6e7', border: '1px solid #ead9b3' }}
                     >
                         <RefreshCcw size={13} className={refreshing ? 'animate-spin' : ''} /> רענן
                     </button>
@@ -179,17 +182,17 @@ export default function StatsPage() {
                 </div>
 
                 {/* Funnel mini */}
-                <div className='rounded-2xl p-5 mb-6' style={{ background: '#fff', border: '1px solid rgba(212,184,103,0.30)', boxShadow: '0 8px 20px -16px rgba(170,136,64,0.20)' }}>
+                <div className='rounded-2xl p-5 mb-6' style={{ background: '#fdf6e7', border: '1px solid rgba(164,128,84,0.45)', boxShadow: '0 8px 20px -16px rgba(70,40,10,0.28)' }}>
                     <p className='text-[11px] font-bold text-[#7a6a52] uppercase tracking-widest mb-4'>מסע האורח</p>
                     <FunnelBars totals={data.totals} />
                 </div>
 
                 {/* Daily chart */}
-                <div className='rounded-2xl p-5 mb-6' style={{ background: '#fff', border: '1px solid rgba(212,184,103,0.30)', boxShadow: '0 8px 20px -16px rgba(170,136,64,0.20)' }}>
+                <div className='rounded-2xl p-5 mb-6' style={{ background: '#fdf6e7', border: '1px solid rgba(164,128,84,0.45)', boxShadow: '0 8px 20px -16px rgba(70,40,10,0.28)' }}>
                     <div className='flex items-center justify-between mb-4 flex-wrap gap-2'>
                         <p className='text-[11px] font-bold text-[#7a6a52] uppercase tracking-widest'>פעילות לפי יום (30 יום אחרונים)</p>
                         <span className='inline-flex items-center gap-3 text-[10.5px] text-[#7a6a52]'>
-                            <span className='inline-flex items-center gap-1'><span className='w-3 h-2 rounded-sm' style={{ background: 'rgba(170,136,64,0.45)' }} /> סריקות</span>
+                            <span className='inline-flex items-center gap-1'><span className='w-3 h-2 rounded-sm' style={{ background: 'rgba(82,36,127,0.4)' }} /> סריקות</span>
                             <span className='inline-flex items-center gap-1'><span className='w-3 h-2 rounded-sm' style={{ background: '#4f7a3e' }} /> ברכות</span>
                         </span>
                     </div>
@@ -198,15 +201,15 @@ export default function StatsPage() {
 
                 {/* Two-column: recent blessings + view book CTA */}
                 <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
-                    <div className='rounded-2xl p-5' style={{ background: '#fff', border: '1px solid rgba(212,184,103,0.30)', boxShadow: '0 8px 20px -16px rgba(170,136,64,0.20)' }}>
+                    <div className='rounded-2xl p-5' style={{ background: '#fdf6e7', border: '1px solid rgba(164,128,84,0.45)', boxShadow: '0 8px 20px -16px rgba(70,40,10,0.28)' }}>
                         <p className='text-[11px] font-bold text-[#7a6a52] uppercase tracking-widest mb-3'>ברכות אחרונות</p>
                         {data.recentBlessings?.length > 0 ? (
                             <div className='space-y-2'>
                                 {data.recentBlessings.map((b, i) => (
-                                    <div key={i} className='flex items-center justify-between gap-2 px-3 py-2 rounded-lg' style={{ background: '#fdfaf3' }}>
+                                    <div key={i} className='flex items-center justify-between gap-2 px-3 py-2 rounded-lg' style={{ background: '#fcf3df' }}>
                                         <div className='flex items-center gap-2 min-w-0'>
-                                            <div className='w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0' style={{ background: 'linear-gradient(180deg, #efe2b8 0%, #d3b46a 100%)' }}>
-                                                <span className='text-[11px] font-bold text-white'>{(b.from || '?').slice(0, 1)}</span>
+                                            <div className='w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0' style={{ background: 'linear-gradient(180deg, #fff6e0 0%, #efd9ac 100%)' }}>
+                                                <span className='text-[11px] font-bold' style={{ color: 'var(--wt-ink)' }}>{(b.from || '?').slice(0, 1)}</span>
                                             </div>
                                             <span className='text-[13px] text-[#3d2e1a] font-semibold truncate'>{b.from || 'אורח/ת'}</span>
                                         </div>
@@ -221,7 +224,7 @@ export default function StatsPage() {
                         )}
                     </div>
 
-                    <div className='rounded-2xl p-5 flex flex-col justify-between' style={{ background: 'linear-gradient(135deg, rgba(170,136,64,0.10) 0%, rgba(170,136,64,0.02) 100%)', border: '1px solid rgba(212,184,103,0.35)' }}>
+                    <div className='rounded-2xl p-5 flex flex-col justify-between' style={{ background: 'linear-gradient(135deg, rgba(170,136,64,0.10) 0%, rgba(170,136,64,0.02) 100%)', border: '1px solid rgba(164,128,84,0.5)' }}>
                         <div>
                             <p className='text-[11px] font-bold text-[#7a6a52] uppercase tracking-widest mb-3'>ספר הברכות</p>
                             <p className='text-[13px] text-[#3d2e1a] leading-relaxed mb-4'>
@@ -232,7 +235,7 @@ export default function StatsPage() {
                             <a
                                 href={data.digitalEditionLink}
                                 className='inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-white text-[14px] font-bold'
-                                style={{ background: 'linear-gradient(180deg, #d3b46a 0%, #b8893d 100%)', boxShadow: '0 10px 22px -10px rgba(170,136,64,0.45)' }}
+                                style={{ background: 'var(--wt-primary)', boxShadow: '0 10px 22px -10px rgba(82,36,127,0.4)' }}
                             >
                                 <BookOpen size={16} /> צפו בספר הברכות
                             </a>
@@ -255,7 +258,7 @@ export default function StatsPage() {
 
 function BigTile({ icon: Icon, label, value, sub, accent }) {
     return (
-        <div className='rounded-2xl p-4' style={{ background: '#fff', border: '1px solid rgba(212,184,103,0.30)', boxShadow: '0 8px 20px -16px rgba(170,136,64,0.20)' }}>
+        <div className='rounded-2xl p-4' style={{ background: '#fdf6e7', border: '1px solid rgba(164,128,84,0.45)', boxShadow: '0 8px 20px -16px rgba(70,40,10,0.28)' }}>
             <div className='flex items-center gap-2 mb-2'>
                 <div className='w-9 h-9 rounded-xl flex items-center justify-center' style={{ background: `${accent}1a` }}>
                     <Icon size={16} style={{ color: accent }} />
@@ -288,7 +291,7 @@ function FunnelBars({ totals }) {
                         <span className='text-[13px] font-bold' style={{ color: '#1a1410' }}>{s.value}</span>
                     </div>
                     <div className='w-full h-2 rounded-full overflow-hidden' style={{ background: '#f0e8d4' }}>
-                        <div className='h-full rounded-full transition-all' style={{ width: `${(s.value / max) * 100}%`, background: 'linear-gradient(90deg, #d3b46a 0%, #aa8840 100%)' }} />
+                        <div className='h-full rounded-full transition-all' style={{ width: `${(s.value / max) * 100}%`, background: 'linear-gradient(90deg, #6a3aa8 0%, var(--wt-primary-solid) 100%)' }} />
                     </div>
                 </div>
             ))}
@@ -316,7 +319,7 @@ function DailyChart({ daily }) {
             <div className='flex items-end gap-1 h-32 mb-2'>
                 {all.map((d, i) => (
                     <div key={i} className='flex-1 flex flex-col items-center justify-end gap-px' title={`${d.date} · סריקות: ${d.scan} · ברכות: ${d.blessings}`}>
-                        <div className='w-full rounded-t' style={{ height: `${(d.scan / max) * 100}%`, minHeight: d.scan > 0 ? 2 : 0, background: 'rgba(170,136,64,0.45)' }} />
+                        <div className='w-full rounded-t' style={{ height: `${(d.scan / max) * 100}%`, minHeight: d.scan > 0 ? 2 : 0, background: 'rgba(82,36,127,0.4)' }} />
                         <div className='w-full' style={{ height: `${(d.blessings / max) * 30}%`, minHeight: d.blessings > 0 ? 2 : 0, background: '#4f7a3e' }} />
                     </div>
                 ))}

@@ -10,6 +10,7 @@ import { Band } from '../ui/kit'
 import k from '../ui/kit.module.css'
 import { listGuestPresets, saveGuestPreset, deleteGuestPreset } from '@/lib/guestDesignPresets'
 import { Lock, Palette, Save, RefreshCw, Eye, Check, Upload, Smartphone, Tablet, Monitor, Type, Plus, Trash2 } from 'lucide-react'
+import '../ui/editor.css'
 
 // A preset is normally a PALETTE (`design`). The two framed designs are
 // not: they are whole designs — photograph, layout, geometry, type — and
@@ -394,7 +395,7 @@ function Editor() {
     const fileBtn = 'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold bg-[#AA8840]/10 text-[#AA8840] cursor-pointer'
 
     return (
-        <div dir='rtl' className='min-h-screen' style={{ background: '#f8f4ec' }}>
+        <div dir='rtl' className='min-h-screen' style={{ background: "#f3e2bd url('/admin-theme/parchment.webp') repeat" }}>
             <div className='max-w-[1500px] mx-auto px-4 py-8'>
                 <Band title='עיצוב דף הברכה לאורחים' subtitle='פריסטים, צבעים, רקע, וטקסטים, עם תצוגה חיה'>
                     <a href='/admin/studio' className={k.glass}>← לסטודיו</a>
@@ -402,7 +403,7 @@ function Editor() {
 
                 <div className='grid lg:grid-cols-2 gap-6 items-start'>
                     {/* Controls */}
-                    <div className='space-y-4'>
+                    <div className='wt-panel space-y-4'>
                         <div className='bg-white rounded-2xl border border-[#e7dcc6] p-4'>
                             <label className='block text-xs font-bold text-[#7a6a52] mb-2'>בחרו אירוע (לתצוגה והחלה)</label>
                             <select value={selWedding} onChange={e => pickWedding(e.target.value)} className='w-full rounded-xl border border-[#e7dcc6] px-3 py-2.5 text-sm bg-white outline-none focus:border-[#AA8840]'>

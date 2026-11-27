@@ -1,0 +1,41 @@
+/* Dresses the design panels, which are written with utility classes, in the
+   colours of the room. Scoped to .book-panel. The page renderers use none of
+   these classes, so the style thumbnails look exactly like the pages. These
+   rules are unlayered, so they win over the utilities. */
+
+.book-panel .bg-\[\#faf8f5\] { background-color: transparent; }
+.book-panel .bg-white, .book-panel .bg-\[\#F5F5F5\] { background-color: #fdf5e4; }
+.book-panel .bg-white\/90, .book-panel .bg-white\/95 { background-color: rgba(253, 245, 228, .96); }
+
+/* cards: a gold edge and a lavender title bar */
+.book-panel .rounded-xl.border { border-color: #cfab66; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .55), 0 2px 6px -2px rgba(110, 74, 24, .28); }
+.book-panel .from-\[\#AA8840\]\/5 { background-image: linear-gradient(180deg, rgba(222, 210, 234, .95), rgba(198, 186, 216, .85)); border-bottom-color: rgba(164, 128, 84, .5); }
+.book-panel h4 { font-family: var(--serif), 'Noto Serif Hebrew', 'Frank Ruhl Libre', serif; font-size: 16px; font-weight: 900; letter-spacing: 0; text-transform: none; color: var(--wt-ink); }
+
+/* the book / cover tabs */
+.book-panel .bg-\[\#ebe5da\]\/60 { background: var(--wt-bar); border: 2px solid #cfa355; }
+.book-panel .bg-\[\#ebe5da\]\/60 > button { font-family: var(--serif), 'Noto Serif Hebrew', 'Frank Ruhl Libre', serif; color: #fbf0d8; }
+.book-panel .bg-\[\#ebe5da\]\/60 > button.bg-white { color: var(--wt-ink); background: linear-gradient(180deg, #fff6e0, #efd9ac); }
+
+/* ink and accents */
+.book-panel .text-\[\#AA8840\], .book-panel .text-\[\#c9a44e\], .book-panel .text-\[\#7a6a52\] { color: var(--wt-accent); }
+.book-panel .text-gray-400 { color: #7a7090; }
+.book-panel .text-gray-500, .book-panel .text-gray-600 { color: #4f4668; }
+.book-panel .text-gray-800, .book-panel .text-\[\#3d2e1a\] { color: var(--wt-ink); }
+.book-panel .bg-\[\#AA8840\], .book-panel .bg-\[\#c9a44e\] { background-color: var(--wt-primary-solid); }
+.book-panel .border-gray-100, .book-panel .border-gray-200, .book-panel .border-gray-300, .book-panel .border-\[\#f0e6d2\], .book-panel .border-\[\#ead9b3\] { border-color: rgba(164, 128, 84, .45); }
+.book-panel .border-\[\#AA8840\], .book-panel .border-\[\#c9a44e\] { border-color: var(--wt-primary-solid); }
+.book-panel .bg-\[\#AA8840\]\/10 { background-color: rgba(82, 36, 127, .1); }
+
+.book-panel input[type='text'], .book-panel input[type='number'], .book-panel textarea, .book-panel select { background-color: #fffaf0; border-color: #c9a460; color: var(--wt-ink); }
+.book-panel button:focus-visible, .book-panel input:focus-visible, .book-panel select:focus-visible { outline: 3px solid #ffb938; outline-offset: 2px; }
+
+/* the print order window, opened over this screen */
+.wt-print-modal { background: #fdf6e7; border: 2px solid #d9b265; box-shadow: 0 0 0 1px #86621f, 0 30px 60px -20px rgba(20, 10, 50, .7); }
+.wt-print-modal > div:first-child { background: var(--wt-bar); border-bottom: 2px solid #cfa355; }
+.wt-print-modal h2 { font-family: var(--serif), 'Noto Serif Hebrew', 'Frank Ruhl Libre', serif; font-size: 22px; font-weight: 900; color: #fff3d4; }
+.wt-print-modal label { color: var(--wt-ink); font-weight: 700; }
+.wt-print-modal input:not(.bg-red-50), .wt-print-modal select:not(.bg-red-50) { color: var(--wt-ink); background: #fffaf0; border-color: #c9a460; }
+.wt-print-modal .bg-\[\#AA8840\]\/5 { background-color: rgba(164, 128, 84, .12); border-color: rgba(164, 128, 84, .45); }
+.wt-print-modal .text-\[\#AA8840\], .wt-print-modal .text-\[\#AA8840\]\/80 { color: var(--wt-accent); }
+.wt-print-modal button[type='submit'] { color: #fff3d8; border: 2px solid #d9b265; background: var(--wt-primary) !important; }

@@ -7,11 +7,11 @@
 
 import { emailLogoImg } from './brandAssets'
 
-const INK = '#14183A'
-const ACCENT = '#2545E0'
-const PAPER = '#F3F0EA'
-const LINE = '#E4DFD3'
-const MUTED = '#5A5D75'
+const INK = '#1d1648'
+const ACCENT = '#2c2473'
+const PAPER = '#f3e2bd'
+const LINE = '#dcc28a'
+const MUTED = '#4f4668'
 const FONT = "Arial,'Segoe UI',Helvetica,sans-serif"
 
 export const SUPPORT_WHATSAPP = 'https://wa.me/972515350253'
@@ -107,9 +107,9 @@ export function renderWelcomeEmail({
         <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#1F8F58" style="background:#1F8F58;border-radius:999px;padding:6px 14px;font:700 13px/1 ${FONT};color:#FFFFFF;">&#10003;&nbsp; ההזמנה התקבלה</td></tr></table>
       </td></tr>
       <tr><td align="center" style="padding:10px 26px 0;font:800 31px/1.2 ${FONT};color:#FFFFFF;">${escapeHtml(title)}<br>נפתח</td></tr>
-      <tr><td align="center" style="padding:12px 30px 26px;font:400 17px/1.6 ${FONT};color:#C9CDEB;">עכשיו נשאר דבר אחד: לשלוח לאורחים את הקישור.<br>הם כותבים ברכה ומוסיפים תמונה, בשתי דקות מהטלפון.</td></tr>
+      <tr><td align="center" style="padding:12px 30px 26px;font:400 17px/1.6 ${FONT};color:#e8dcf0;">עכשיו נשאר דבר אחד: לשלוח לאורחים את הקישור.<br>הם כותבים ברכה ומוסיפים תמונה, בשתי דקות מהטלפון.</td></tr>
       <tr><td style="padding:0 24px 12px;">${button(whatsappUrl, 'שליחה לאורחים בוואטסאפ', 'light')}</td></tr>
-      <tr><td align="center" style="padding:6px 24px 30px;font:400 13px/1.5 ${FONT};color:#9EA3CC;direction:ltr;word-break:break-all;"><a href="${guestUrl}" style="color:#9EA3CC;text-decoration:underline;">${escapeHtml(guestUrl.replace(/^https?:\/\//, ''))}</a></td></tr>
+      <tr><td align="center" style="padding:6px 24px 30px;font:400 13px/1.5 ${FONT};color:#cbb8dd;direction:ltr;word-break:break-all;"><a href="${guestUrl}" style="color:#cbb8dd;text-decoration:underline;">${escapeHtml(guestUrl.replace(/^https?:\/\//, ''))}</a></td></tr>
     </table>
   </td></tr>
 
@@ -142,7 +142,7 @@ export function renderWelcomeEmail({
   })}
 
   <tr><td align="center" style="padding:6px 24px 8px;font:400 15px/1.7 ${FONT};color:${MUTED};">משהו לא ברור? עונים למייל הזה, או <a href="${SUPPORT_WHATSAPP}" style="color:${INK};font-weight:700;">כותבים לנו בוואטסאפ</a>.</td></tr>
-  <tr><td align="center" style="padding:4px 24px 0;font:400 12px/1.5 ${FONT};color:#8A8DA3;">Wedding Tales · ספרי ברכות מהאירוע</td></tr>
+  <tr><td align="center" style="padding:4px 24px 0;font:400 12px/1.5 ${FONT};color:#857a9c;">Wedding Tales · ספרי ברכות מהאירוע</td></tr>
 
 </table>
 </td></tr></table>

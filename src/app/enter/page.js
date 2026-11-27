@@ -68,7 +68,7 @@ function Enter() {
     return (
         <AuthShell title='נכנסים לספר שלכם' subtitle='עוד רגע זה מוכן.'>
             <div className='flex justify-center py-4' role='status' aria-label='טוען'>
-                <div className='h-10 w-10 animate-spin rounded-full border-[3px]' style={{ borderColor: 'rgba(37,69,224,.2)', borderTopColor: AUTH.accent }} />
+                <div className='h-10 w-10 animate-spin rounded-full border-[3px]' style={{ borderColor: 'rgba(44,36,115,.2)', borderTopColor: AUTH.accent }} />
             </div>
         </AuthShell>
     )

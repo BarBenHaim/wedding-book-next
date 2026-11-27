@@ -126,7 +126,7 @@ export default function CoupleDesignPicker({ activeDesign, onSelect, title = 'ב
                             onClick={() => pick(preset)}
                             disabled={isSaving}
                             title={preset.name}
-                            className='relative rounded-2xl overflow-hidden transition-all hover:scale-[1.02] bg-white'
+                            className='relative rounded-2xl overflow-hidden transition-all hover:scale-[1.02] bg-[#fff]'
                             style={{
                                 border: isActive ? '3px solid #AA8840' : '2px solid #ece3d2',
                                 boxShadow: isActive ? '0 6px 20px rgba(170,136,64,0.28)' : '0 2px 10px rgba(0,0,0,0.06)',
